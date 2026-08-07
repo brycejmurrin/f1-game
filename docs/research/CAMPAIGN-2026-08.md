@@ -21,7 +21,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
-| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). **BOTH remaining failures are now CLOSED and both were test defects:** `menu-keyboard` ×1 (`7bafa71b`, a race on `vt()`'s async reveal) and `tlx-probes` M6 skid (`5c735736`, waiting on a value that could not move — `skids.stamp()` lives in `render()` and the stint never renders). `tlx` has no never-passing test left. NOT YET RUN post-Batch-A/B/C: `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
+| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). **BOTH remaining failures are now CLOSED and both were test defects:** `menu-keyboard` ×1 (`7bafa71b`, a race on `vt()`'s async reveal) and `tlx-probes` M6 skid (`5c735736`, waiting on a value that could not move — `skids.stamp()` lives in `render()` and the stint never renders). **`tlx` 15/15, 0 failed, 8m16s** (2026-08-07 17:00) — the first time that file has ever been fully green. RUNNING NOW, chained serially behind it: `parts` (167 tests), then `modes`, `scenery`, `webgl`, `collision`. STILL NOT RUN: `barriers`, `physics` |
 | W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
 | W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
@@ -182,6 +182,38 @@ while half of them have never been executed — a red test that has never run
 looks identical to a test broken by the move. Burning down the never-observed
 list by group is now a prerequisite of W2, not a follow-up to it.
 
+### The third sibling: a gate that runs INSIDE another job inherits its fate
+
+`tests/physics-characterization.spec.js` pins six-sample traces of four driving
+scenarios and fails when the model's numbers move. It was in no CI job at all —
+not `guards` (browser spec, not node), not `sweeps` (geometry only), not
+`smoke`'s spec list — so **175 commits of deliberate physics work drifted past
+it** (geometric RACE PACE, the PACE regrid, the SPEED STEER taper, the wheelbase
+recentre) and its baseline was ~9 % stale before anyone looked. It had also
+never passed locally. Added in `7bafa71b`, it ran in CI for the first time in
+#253: 42 s, green.
+
+**It was added as a STEP INSIDE `smoke`, and that was wrong in both directions a
+step can be wrong** — corrected to its own job in `8939d135`:
+
+- It ran only AFTER smoke's twelve minutes, so a red smoke meant the gate never
+  executed. That is a fresh instance of the exact class this section is about,
+  introduced by the commit that fixed another instance of it.
+- **GitHub's checks list reports JOBS, not steps.** `7bafa71b`'s message
+  justified the separate step as "a failure reads as *the driving model
+  changed* rather than *smoke went red*" — false at the level anyone reads,
+  since a failure surfaced under the name `Smoke (page boots, __apex responds)`.
+
+The cost that motivated the shortcut was smaller than it looked: smoke is the
+only job installing the browser binaries, but the gate's critical path is
+`sweeps` (~15 min) and `smoke` (13m21s measured on #253), so a parallel job
+costing ~40 s of setup plus 42 s of test adds **zero wall-clock**. One runner is
+the whole price of an independent verdict.
+
+**The generalisable rule**: "is it running?" is not the same question as "can it
+report?" A check reaches a human through the name of the JOB it lives in, and a
+check downstream of a slow gate is silently conditional on that gate passing.
+
 ## OPERATIONAL: the deploy is WEDGED, and the error says how
 
 `pages.yml`'s run #1267 for `a187ecb0` sat in `queued` from 2026-08-06 18:17 —
@@ -275,10 +307,16 @@ the worktree, because `cd` persisted between commands and the "current" run
 silently re-ran the old code. The paths in the output were the only tell. A
 comparison whose two halves are the same half looks exactly like a clean result.
 
-## Open failures blocking W2-verify
+## Open failures blocking W2-verify — ALL CLOSED
+
+**Nothing in this section is still open.** Every entry below is kept with its
+wrong turns intact, because the wrong turns are the transferable part; the
+resolutions are inline. Final state, measured 2026-08-07 17:00:01 on a quiet
+box: **`tlx` 15/15, 0 failed, 8m16s, two workers, no retries and no flakes.**
+The file had never been fully green before.
 
 - **`tlx-probes` — ONE HALF FIXED (`767d3ec7`), ONE HALF NOW A DIFFERENT AND
-  BIGGER QUESTION.** 15/15 → **14 pass, 1 fail**.
+  BIGGER QUESTION.** 15/15 → **14 pass, 1 fail** → **15/15 (`5c735736`)**.
 
   **Fixed: all three canvas screenshots ran against a LIVE render loop.**
   `park()` freezes physics, not rendering, so a `.screenshot()` queues behind an
@@ -498,6 +536,12 @@ and opt-in, so nothing a player touches) and `menu-keyboard`'s `:modal` failure
 the one open item that may be a real product bug). Neither blocks a deploy on
 the evidence available, but the second is a user-facing claim and shipping it
 red is a decision worth making deliberately.
+
+**Both were fixed after the ship, and both were test defects** (`7bafa71b`,
+`5c735736`). The accessibility candidate — the one flagged here as most likely
+to be a real product bug — was a race on `vt()`'s async reveal against a fixed
+`waitForTimeout(300)`. So the deliberate-choice framing was right and the risk
+estimate inside it was wrong in the safe direction.
 
 **CLAUDE.md forbids pushing the deploy branch without review, so this is
 recorded as a recommendation and not acted on.**

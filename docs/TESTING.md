@@ -102,17 +102,46 @@ whether the TLX backend happens to be installed.
 
 **Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
 
-The repo currently has **312 `waitForFunction` calls carrying a timeout across
-104 specs, and not one passes `polling`** — so every one of those bounds is
-decoration. The visible symptom is a test that reports `Test timeout of Nms
-exceeded` while pointing at a line that claims to wait 30 s; `tlx-probes`' M6
-skid spent 344 s inside a 30 s wait that way, and the wrong conclusion drawn
-from it (that `__apex.act()` was hanging) cost two probes before a third
-measured `act()` at 309 ms.
+**319 `waitForFunction` calls across 97 specs still carry a timeout without
+`polling`**, so those bounds are decoration. 43 sites now pass it. The count is
+a RATCHET, not a target — `tests/wait-polling.test.mjs` fails if the population
+grows, and lowering the ceiling as sites are fixed is the intended direction.
+(Count by AST via `tools/wait-polling-lint.mjs`. A grep undercounts the
+multi-line calls; this file said 312 for exactly that reason.)
+
+The visible symptom is a test reporting `Test timeout of Nms exceeded` while
+pointing at a line that claims to wait 30 s. `tlx-probes`' M6 skid spent 344 s
+inside a 30 s wait that way.
 
 The corollary matters as much as the fix: **"this test's explicit waits total N
 seconds, so the missing time must be elsewhere" is not a valid deduction here**
 until the call sites carry `polling`.
+
+### And when a wait still overruns after `polling` — read it as unreachable
+
+The two tests that produced this finding both failed with `Test timeout` and
+had nothing else in common, which is the whole lesson: **a timeout tells you the
+budget ran out, never why.**
+
+| | fault | fix | now |
+|---|---|---|---|
+| `tlx-probes` M9 env | a real wait on a real condition, starved by rAF polling | `{ polling: 100 }` | 72 s |
+| `tlx-probes` M6 skid | waiting on a value that could never move | rewritten | 49 s |
+
+M6 cost four wrong mechanisms — a hanging `act()`, a slow prediction,
+arithmetic in an un-timeouted `evaluate`, rAF starvation — and every one was a
+theory about the WAIT. The answer was in the code being waited on:
+`skids.stamp()` is called from `render()` (`js/game.js:6064`), the stint was
+driven through `act()` which never presents a frame, and 120 steps of full lock
+crashed the car below both stamp gates before the wait even began.
+
+What ended it was an instrument. `tests/manual/skid-probe.spec.js` wraps
+`GLX.drawSkidBatch` before driving and records call count and max `vertCount`,
+because from outside "called with 0" and "never called" are indistinguishable
+and have opposite fixes. **37 seconds, against 360 s of timeouts that said
+nothing.** When a wait overruns and the call site already carries `polling`,
+stop theorising about the wait and go measure whether its condition is reachable
+at all.
 
 ### Turning diagnostics up
 
