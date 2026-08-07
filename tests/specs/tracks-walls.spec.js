@@ -33,7 +33,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // DERIVED, NOT WRITTEN DOWN. Playwright decides the test list at module load,
 // before any page exists, so the ids cannot come from Tracks.LIST in the page —
