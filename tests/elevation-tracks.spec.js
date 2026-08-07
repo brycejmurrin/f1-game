@@ -34,7 +34,7 @@ const BANKED_TRACKS = ["zandvoort", "madrid"];
 // compared against a bare literal goes stale the moment PACE is retuned, and
 // "> 41" against a launch of 40 was a disguised claim that every circuit's
 // start line is flat.
-const FLAT_LAUNCH = 40;    // m/s, flat-out reference run from the start line
+const FLAT_LAUNCH = 40;    // m/s, flat-out reference run on the straightest stretch
 const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
 
 async function startRace(page, id) {
@@ -205,10 +205,35 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         // into the middle of the traffic and shoved 66 m BACKWARDS on the first
         // tick: flatMax came out at 20.3 m/s, a first-corner speed rather than a
         // top speed, and the descent below then "overspeeded" a reference that
-        // was never a top speed at all. Run here, nobody has moved yet and the
-        // start line is ahead of the whole grid.
+        // was never a top speed at all. Still measured BEFORE the scan for that
+        // reason; the placement itself has since moved off the start line — see
+        // below.
         let finite = true;
-        window.__apex.jump(0.0, FLAT_LAUNCH, 0);
+        // TAKEN ON THE STRAIGHTEST STRETCH OF THE LAP, not at frac 0.0. An
+        // unsteered car goes straight while the road turns, so where the
+        // reference STARTS decides how long it survives — and at the start line
+        // that is a property of the circuit's first corner, not of its physics.
+        // Measured: cota lasted 30 steps and paul_ricard 24 before leaving the
+        // road, against monza's and spa's comfortable runs, so the old placement
+        // was silently asking "does this circuit have a long enough pit straight".
+        // Lowering the dwell bar does not fix it: at 24 steps flatMax is barely
+        // distinguishable from the launch speed and the reference stops meaning
+        // anything.
+        //
+        // The lowest-mean-|k| window is the one place every circuit has where an
+        // unsteered car stays on the road. It also beats frac 0.0 on the "clean
+        // air" requirement the original placement was chosen for: rather than
+        // starting ahead of a grid that is about to move, it starts away from
+        // the pack entirely.
+        const prof = window.__apex.trackProfile(300);
+        const WIN = 10;                       // ~1/30 of a lap
+        let flatAt = 0, bestBend = Infinity;
+        for (let i = 0; i < prof.length; i++) {
+          let bend = 0;
+          for (let j = 0; j < WIN; j++) bend += Math.abs(prof[(i + j) % prof.length].k);
+          if (bend < bestBend) { bestBend = bend; flatAt = prof[i].frac; }
+        }
+        window.__apex.jump(flatAt, FLAT_LAUNCH, 0);
         window.__apex.setInput({ steer: 0, throttle: true });
         let flatMax = 0, flatSteps = 0;
         // STOP SAMPLING ONCE THE CAR LEAVES THE ROAD. `steer: 0` held for three
@@ -288,7 +313,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
-        return { dn, up, maxV, flatMax, flatSteps, climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
+        return { dn, up, maxV, flatMax, flatSteps, flatAt: +flatAt.toFixed(3), climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
       }, { FLAT_LAUNCH, CLIMB_LAUNCH });
 
       expect(errors).toEqual([]);
@@ -313,7 +338,8 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       // a single on-road step would make flatMax the launch speed and nothing
       // more, and the ratio below would be comparing against a number that
       // measured nothing.
-      expect(r.flatSteps, "reference run left the road immediately — no usable reference")
+      expect(r.flatSteps,
+        `reference run at frac ${r.flatAt} left the road immediately — no usable reference`)
         .toBeGreaterThan(30);
       expect(r.flatMax, "flat-out reference run was blocked — it lost ground from the launch")
         .toBeGreaterThanOrEqual(FLAT_LAUNCH);
