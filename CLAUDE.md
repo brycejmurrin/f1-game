@@ -51,10 +51,34 @@ exactly that for weeks and every watcher built from it misfired). Match every
 terminal status, not just `passed` — a success-only watcher is silent through
 a crash, and silence looks like "still running". Watch the LOG, never the
 process table (a watcher whose command line contains its own grep pattern
-matches itself). Never `| tail` a live background run — tail buffers to EOF
-and the file stays empty. Adding `|Error:` to the UNTIL pattern makes the
-watcher fire on the first failing test's stack trace — useful for early
-warning, but then re-arm it for the terminal line.
+matches itself — `pgrep -cf "python3 -m http.server"` returned 1 for a box with
+no server on it, and that 1 was the grep). Never `| tail` a live background run
+— tail buffers to EOF and the file stays empty. Adding `|Error:` to the UNTIL
+pattern makes the watcher fire on the first failing test's stack trace — useful
+for early warning, but then re-arm it for the terminal line.
+
+**A long queue needs three things the one-shot pattern above does not have.**
+Measured over a 2026-08-07 run of seven groups, which a container restart killed
+at the 80-minute mark:
+
+- **`Monitor` caps at 30 minutes and `persistent: true` DOES NOT LIFT IT.**
+  Tried twice; both lapsed silently, and a lapsed watcher looks exactly like a
+  quiet one. Pair every Monitor with a `Bash run_in_background` waiter on the
+  queue's own completion marker — that has no cap and is the backstop that
+  actually survives.
+- **Seed the seen-file when you arm it.** A de-duplicating watcher started
+  against a log that already has content emits the ENTIRE backlog as its first
+  event. Run the scan once into the seen-file before entering the loop.
+- **Make the driver resumable, or an interruption costs everything before it.**
+  A driver that walks a fixed list from the top re-runs banked groups after any
+  restart — 86 minutes of `parts` + `modes` that were already in the logs. Skip
+  a group whose log carries the terminal marker the driver itself writes AFTER
+  the run returns. A group that started and died has no such marker and
+  correctly re-runs from scratch: a killed Playwright run banks nothing, and
+  resuming it mid-way would be trusting a partial result the same way a
+  cancelled CI run tempts you to.
+
+`artifacts/logs/queue-driver.sh` is the worked example of all three.
 
 **2. Run the groups the change needs — not all of them.** Ask
 `node tools/pick-tests.mjs [--staged|<paths>]`. Escalate: `npm run test:tiny`
