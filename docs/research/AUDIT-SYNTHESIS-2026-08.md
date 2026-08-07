@@ -5,8 +5,10 @@ over the cleanup session's 13-commit diff, the 11-report survey corpus, the
 rewritten docs, the guard suite, and a restructure move map; adversarial
 skeptics per finding; feasibility checks per move cluster; one synthesizer).
 This is an EXECUTION PLAN, not a description of current behaviour — items are
-worked off against it and it archives when spent. Raw per-agent outputs live in
-the session scratchpad (audit-workflow-raw.json).
+worked off against it and it archives when spent. Raw per-agent outputs:
+[raw/2026-08-audit-workflow.json](raw/2026-08-audit-workflow.json) (35
+confirmed findings with full evidence, 4 feasibility-checked move clusters,
+0 refuted).
 
 ---
 
