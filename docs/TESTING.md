@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/*.spec.js`) + 50 `node --test` unit suites
+111 root Playwright spec files (`tests/*.spec.js`) + 51 `node --test` unit suites
 (`tests/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -653,6 +653,7 @@ what it covers.
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |
 | `test-coverage-audit.test.mjs` | the coverage auditor itself |
 | `pick-tests.test.mjs` | the SELECTOR's own contract, upstream of the taxonomy: `--since <ref>` reads a ref and not a path (it swallowed the ref as a filename and answered "nothing to run" for every diff, for as long as the flag had existed), `--json` reports a `reason` CI can branch on rather than prose that happens to contain a `test:` token, and the default diff base is the DEPLOY branch — `main` is a stale fork here, so merge-basing against it balloons the changed set to most of the repo and the tool gives up silently, dressed as an answer |
+| `test-observed.test.mjs` | the never-run detector's title extraction matches the reporter's EXACTLY. A title derived differently reads as "never observed" forever, and a tool that cries wolf on every spec gets ignored — the same outcome as not having it. Its first version missed Playwright's implicit suite title (a top-level test prints as `file › basename › title`, one inside a describe does not) and reported every describe-less spec as 100% never-run, including one verified green minutes earlier |
 | `cache-bump-only.test.mjs` | the one exemption change-aware CI may make to the infra gate: an `index.html` diff that is PURELY a `?v=N` rewrite is not a load-order change. Line counts are not enough to decide it — `af05fa98` is +156/-156 and smuggles a real markup edit through, so the check pairs lines POSITIONALLY and a reordered script block cannot pass as a bump |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/fixtures.js` do |
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
