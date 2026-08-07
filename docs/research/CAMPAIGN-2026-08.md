@@ -300,7 +300,41 @@ question; nothing asks it.
 |---|---|---|
 | contention, not defects | 6 | all six pass solo, unchanged. One (`lighting-tuner-grade`) has no headroom even alone and needs a measured budget |
 | test defects, fixed & verified | 8 | six of them structurally impossible under any code |
-| open findings | 4 | #37 nurburgring road · #38 vegas/buenos_aires props · #39 wall-drift bound · #40 the PACE literal gap |
+| open findings | 2 | #37 nurburgring road · #40 the PACE literal gap. Two more resolved the same evening — see below |
+
+### The side-flip is fully exonerated — settled by running the tests at the old revision
+
+The evening's two remaining suspicions about `89ce4f2f` (the curvature-sign fix
+that moved kerbs, barriers and corner boards across all 40 circuits) were both
+put to the decisive test: the failing specs themselves, run in a worktree at
+`fdd4082f` — the commit immediately before the flip.
+
+**The wall-drift bound (was #39):** `maxAbsX` reads **23.49 before** the flip
+and **21.31 after**. The `< 20` bound has never been satisfiable — an invented
+round number in a never-run test — and the flip IMPROVED the excursion by
+2.2 m. The fix is a derived bound (a multiple of the ~7.5 m half-width), never
+a raise to 24.
+
+**The racing-line props (was #38):** the vegas and buenos_aires offenders at
+`fdd4082f` are **byte-identical** to HEAD — same fractions, laterals, colours,
+centres. Both pre-date the flip. The circumstantial case had been strong (a
+212-vertex cluster measurably mirrored left→right at exactly vegas's flagged
+arc position), and it was still the wrong prop: the offending triangle's bin
+was unchanged at both revisions. The recorded caveat — *"that is inference, not
+measurement"* — turned out to be the operative sentence, and the lesson is
+worth its own line: **a strong circumstantial pattern at the right location is
+not identification.** Only running the actual test at the old revision was.
+
+**The campaign's product-regression count therefore stands at ZERO**, now
+verified from every direction the evidence pointed: wall containment clean,
+driving model clean, the one containment figure that moved improved, and the
+racing-line props unchanged. What remains from the sweeps is two LONG-STANDING
+scenery defects — vegas's yellow prop 1.10 m over the line (a car would meet
+it) and buenos_aires' foliage at 3.52 m (a car clears it; fix vs a justified
+exemption is a per-circuit call) — plus #37's nurburgring road offender, still
+under investigation as a browser-vs-node banking divergence. All three are on
+the live site today and have been for the defects' whole lives; they are
+ordinary scenery-fix work, not ship blockers.
 
 **Four groups had never run and four came back with something. They are not the
 same four.** `parts` (91 % never-executed) returned twelve. `modes`, `barriers`
