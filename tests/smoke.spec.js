@@ -210,16 +210,40 @@ test.describe("Apex 26 — HUD", () => {
   });
 
   test("minimap canvas has content after race starts", async ({ page }) => {
+    // THE SLOWEST TEST IN THE GROUP, and on CI's software renderer it exceeded
+    // the 240 s budget twice (328 s, then 356 s on retry) while asserting
+    // nothing — a bare timeout, with the car correctly parked at s=0. The other
+    // smoke tests show why: "select screen is a circuit picker" measures 179 s
+    // on that runner and "grid start renders a non-blank frame" 164 s, against
+    // seconds here. goToRace + park alone is most of the budget before this
+    // test asserts anything.
+    test.slow();
     await goToRace(page);
     await park(page, 0);
 
     // The HUD tick (~10 Hz) blits the pre-rendered track outline onto the 2D
     // minimap canvas — wait for that first paint rather than racing it.
+    //
+    // POLL CHEAPLY. This used to read back the WHOLE canvas on every poll, and
+    // Chromium says what that costs: "Multiple readback operations using
+    // getImageData are faster with the willReadFrequently attribute set to
+    // true" — a warning that appeared in the CI console on both attempts. The
+    // context belongs to the game, so the test cannot set that attribute; what
+    // it can do is stop asking for every pixel just to learn whether ANY pixel
+    // is painted. Five 1-pixel strips spread down the canvas cost ~5/height of
+    // a full readback; a closed lap outline cannot cross none of them, and the
+    // exact count below is unchanged. (A SINGLE middle strip would be cheaper
+    // still and is the wrong trade: if it happened to miss, the poll would time
+    // out at 5 s and report a blank minimap that is actually painted.)
     await page.waitForFunction(() => {
       const c = document.querySelector("canvas#minimap");
       if (!c || !c.width) return false;
-      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
-      for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
+      const ctx = c.getContext("2d");
+      for (let k = 1; k <= 5; k++) {
+        const y = Math.floor((c.height * k) / 6);
+        const d = ctx.getImageData(0, y, c.width, 1).data;
+        for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
+      }
       return false;
     }, { timeout: 5000 });
 
