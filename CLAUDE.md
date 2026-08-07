@@ -68,7 +68,17 @@ busy box is a measurement of the machine, not the code — re-run that spec ALON
 before believing it. Check `pgrep -cf pw-browsers` and `/proc/loadavg` (< 3)
 before starting; orphans from a killed run keep eating the box invisibly
 (`node tools/test-bg.mjs --stop`, then `pkill -9 -f 'tools/run-playwright';
-pkill -9 -f pw-browsers` if anything is left).
+pkill -9 -f pw-browsers` if anything is left). Before concluding "orphans",
+check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a second run you
+forgot is indistinguishable from orphans by process count alone.
+
+**ONE Playwright PROCESS at a time**, however many specs it covers. Local runs
+set `reuseExistingServer`, so a second process attaches to the first's
+`python3 -m http.server` rather than starting its own; kill either run and the
+survivor's remaining tests all die `net::ERR_CONNECTION_REFUSED` (measured: 33
+false failures in a row, all of which read like product bugs). To cover more at
+once, hand every spec to ONE process and raise `APEX_WORKERS` — two processes
+also just oversubscribe the four cores.
 
 Three hard edges while a run is in flight:
 - **Don't edit `js/` or `css/`** — the test server serves the working tree, so
