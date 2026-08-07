@@ -21,7 +21,8 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
-| W2 | RESTRUCTURE + change-aware CI | **NEXT** — the W2-fix gate is released |
+| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is BISECT-CLEARED: all three elevation failures reproduce byte-identically at `fdd4082f`, the commit before it. Four test repairs landed (`afd546ed`, `2b2ab54c`, `58614db2`). Verified so far: `agent-view` 117/117, `new-hooks`, `dev-tools`, `headless-api`, `logging`, `camera-driving-hooks`, `quali`, `career`, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. NEXT: `steering` (88, never run), `net` (70, never run) |
+| W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
 | W5 | Bedrock Ph2-4: gen-manifest, renderer port, seal & carve `G` | Planned |
@@ -56,6 +57,43 @@ step lists — it fixes the ORDER and the gates:
    (gap 5), per-spec granularity so the budget admits real work (gap 7),
    retry-inflation-aware caps (gap 8), machine-readable pick-tests output
    (gap 6), and the `?v` bump exemption problem (gap 10).
+
+## The finding that outgrew its wave: HALF THE SUITE HAD NEVER RUN HERE
+
+"A test that never runs is prose" started as a one-line lesson from the stale
+Mexico terrain pin. It is now the campaign's largest measured defect class.
+`tools/test-observed.mjs` (added `2b2ac224`, corrected `9781e26d`) answers it
+mechanically — every title declared in `tests/*.spec.js`, from the AST, against
+every title any log in `artifacts/logs/` has reported a result for.
+
+**First measurement: 564 of 1135 Playwright tests had a recorded local result.
+571 did not.** Ten groups had never run at all; `steering` (88) and `net` (70)
+are the largest. (`artifacts/` is gitignored and local, so this is "what this box
+has never run", not "what has never run anywhere" — a worklist ordered by
+ignorance.)
+
+**Five broken tests found by running them, none findable by reading:**
+
+| Test | What it did | Landed |
+|---|---|---|
+| Mexico terrain pin | asserted a value the tree had moved past | W1.5 |
+| `menu-keyboard` `:modal` | pinned a `<dialog>` conversion whose markup a merge had silently dropped | `0667da63` |
+| `audit.spec.js` reverse-crossing lap | shipped with the fixed frame budget its own commit message calls wrong | `afd546ed` |
+| `elevation-tracks` `flatMax` | measured the length of the start straight, not a top speed | `58614db2` |
+| `elevation-tracks` climb | assertion contradicted its own comment | `2b2ab54c` |
+
+The `flatMax` one is the most instructive: it had been feeding a poisoned
+reference into the descent-overspeed check for its entire life, and three
+circuits failed it for a reason that had nothing to do with elevation. It was
+found by PROBING (six circuits, speed trace plus lateral offset) after two
+plausible-sounding explanations — "COTA's turn-1 climb", then "maybe the car
+doesn't accelerate at all" — both turned out to be wrong. Neither guess would
+have survived a measurement, and neither should have been trusted without one.
+
+**Consequence for the campaign**: the tests/ split (W2 R2) must not move files
+while half of them have never been executed — a red test that has never run
+looks identical to a test broken by the move. Burning down the never-observed
+list by group is now a prerequisite of W2, not a follow-up to it.
 
 ## Design tickets (carried into W2 reconciliation, not mechanical)
 

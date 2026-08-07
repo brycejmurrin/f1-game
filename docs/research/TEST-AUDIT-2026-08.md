@@ -87,7 +87,7 @@ Fixes 1–2 are flagged DEFER in AUDIT-SYNTHESIS ("per-test design decision, not
 20. `tests/race-control.test.mjs:116-126` — the 90 s cap it names is never exercised: add the cap-expiry test (flag drops after the cap once the picture clears).
 21. `tests/carview-parts.spec.js:5` — stale "eight parts categories" title vs the twelve asserted: fix the title.
 
-**Two more found by RUNNING the suite, not by reading it** (landed `75ae72f9`,
+**Five more found by RUNNING the suite, not by reading it** (landed `75ae72f9`,
 `85a91f40`). Both are the audit's own weak-assertion class, and neither was
 visible to a reader — which is the argument for running a converted spec at its
 known-good count rather than trusting a review:
@@ -107,6 +107,34 @@ known-good count rather than trusting a review:
     across the round-trip: measured 54.498 against a `toBeCloseTo(…, 1)`
     tolerance of 0.05, latent until load stretched the gap. **LANDED**: both
     values sampled in one `evaluate`.
+24. `tests/audit.spec.js` — "crossing the line, reversing back over it and
+    re-crossing counts ONE lap" shipped using `step(90)/step(120)/step(150)`
+    while its OWN commit (`7e3bafd3`) says both lap tests "step until the counter
+    moves rather than guessing frame counts — a fixed budget either stops short
+    of the line or sails 100 m past it". The fix was written once, claimed for
+    both, applied to one; the unfixed one then failed exactly as predicted,
+    46 m short. **LANDED** `afd546ed`: the stepping loop is installed into the
+    page once and shared, so the two cannot diverge again, plus the sibling's
+    anti-vacuity check.
+25. `tests/elevation-tracks.spec.js` — the `flatMax` "flat-out reference" was
+    measuring **the length of the start straight**, not a top speed. It holds
+    `steer: 0` for three seconds, which drives straight while the road turns, so
+    on most circuits the car is in the runoff within a second and its speed
+    collapses to ~9 m/s (probed: monza 41.8→22.9 at x=-7.9; paul_ricard
+    38.8→9.1; cota 40.8→9.1; monaco 41.9→10.1; only spa and hungaroring stayed
+    on). That is why cota/paul_ricard "failed" and spa "passed", and it poisoned
+    everything downstream — the descent check compares `maxV` against
+    `flatMax * 1.35`, a reference set by a car in the gravel. **LANDED**
+    `58614db2`: sampling stops when `|x|` exceeds the road half-width, with a
+    minimum on-road dwell so a one-step reference cannot pass as a measurement.
+26. `tests/elevation-tracks.spec.js` — the climb assertion contradicted its own
+    comment: the prose says "just require the car is still moving", the code
+    said `climbGain > 0.5`, which demands ACCELERATION. **LANDED** `2b2ab54c`.
+27. `tests/tracks-walls.spec.js` — two tests each rebuild all 40 circuits inside
+    ONE test case. `test.slow()` (360 s) was still not enough: measured 378 s
+    with the box idle. No timeout value is the right fix — **split per circuit**,
+    which also turns "the walls are broken" into "the walls are broken at Baku".
+    OPEN.
 
 ### 1d. Merges (merge verdicts + merge candidates)
 
