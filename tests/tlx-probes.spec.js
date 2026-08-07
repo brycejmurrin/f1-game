@@ -16,7 +16,46 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/* STOP THE RENDER LOOP BEFORE SCREENSHOTTING THE CANVAS.
+   `park()` freezes PHYSICS, not rendering — the game keeps redrawing every rAF
+   tick, so a `.screenshot()` issued while that is running has to queue behind an
+   endless SwiftShader redraw instead of reading a quiet compositor.
+   tests/smoke.spec.js:35-56 measured the cost of exactly this mistake: 88-96 s
+   solo, 154-214 s under a two-worker suite, and 29-32 s once the loop is
+   stopped first. `headless(true)` (js/game/apex.js) halts render() while the
+   compositor keeps the LAST drawn frame, which is what tests/track-helpers.js
+   already relies on for its stable captures.
+   This file had three canvas screenshots and none of them did it. The
+   corroboration is in its own numbers: M2, the only test here whose cost is
+   dominated by a screenshot, measured 92.6 s solo — inside smoke's recorded
+   88-96 s band — against 125.8 s in a mixed batch, while the non-screenshot
+   tests around it barely moved between the two runs.
+   Present a real frame BEFORE stopping the loop (smoke found 100 ms is not
+   reliably enough on a heavy circuit; every caller below has already waited
+   longer than that or waited on a readiness flag). */
+async function stopRendering(page) {
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.waitForTimeout(50);
+}
+
 test.describe("TLX — boot", () => {
+  /* THE WHOLE FILE HAS NO MARGIN, so the budget is raised for all of it.
+     MEASURED on this box, solo, one process: the thirteen tests that pass run
+     10.6 s … 92.6 s against a 120 s budget — the slowest is at 77 % and the
+     median around 65 s. Nothing here is idle; a TLX boot loads three.js, builds
+     a circuit and renders under SwiftShader, and that cost is the test.
+
+     Two of the fifteen have NEVER passed here — M6 skid (130.3 s, then 140.9 s)
+     and M9 env (130.5 s, then 152.8 s), both `Test timeout of 120000ms
+     exceeded` with no assertion ever reached. That is the point of raising the
+     budget FIRST and alone: both have inner waits of their own (30 s and 60 s)
+     which would fail with a different, specific message, so today the outer
+     timeout fires before either check gets a fair run and we cannot tell a slow
+     test from one asserting something unreachable. The headroom is the
+     instrument, not the verdict — if M6 still fails with room, its own wait
+     will say so in its own words. */
+  test.slow();
+
   test("boots with the TLX backend installed on the GLX object", async ({ page }) => {
     const errors = [];
     page.on("console", (msg) => {
@@ -61,6 +100,7 @@ test.describe("TLX — boot", () => {
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0));
     await page.waitForTimeout(400);
+    await stopRendering(page);
     // Same heuristic as smoke.spec.js: a rendered scene PNG is tens of KB,
     // a blank/solid canvas < ~2 KB.
     const buf = await page.locator("canvas#game").screenshot();
@@ -113,6 +153,7 @@ test.describe("TLX — boot", () => {
     expect(st.targets[0]).toBeGreaterThan(0);
     expect(st.targets[1]).toBeGreaterThan(0);
     // The chain must still produce a real image on the canvas.
+    await stopRendering(page);
     const buf = await page.locator("canvas#game").screenshot();
     expect(buf.length).toBeGreaterThan(5000);
     expect(errors).toEqual([]);
@@ -263,6 +304,9 @@ test.describe("TLX — boot", () => {
     expect(st.env.ready).toBe(true);
     expect(st.readyHook).toBe(true);
     // Still a real image on the canvas (the probe pass must not strand the frame).
+    // Safe to stop the loop here: the probe's own `ready` flag was awaited
+    // above, so the six cube faces are already captured.
+    await stopRendering(page);
     const buf = await page.locator("canvas#game").screenshot();
     expect(buf.length).toBeGreaterThan(5000);
     expect(errors).toEqual([]);
