@@ -24,7 +24,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` **14/15** after `767d3ec7`; `gallery` **78/78**. **`circuit` 64/64, ONE failure — and the SHIP GATE IS SATISFIED.** Both questions registered before that run came back clean: `tracks-walls`'s `monza bounded: 770.4 vs < 60` (a real assertion failure from 02:09, PREDATING the 03:01 side-flip) **did not reproduce**, and the street-wall sweep passed at 134.5 s once it had budget. With `audit`, `autopilot` (monza 42.7 s, suzuka 46.5 s) and `elevation` 47/47 also green, **wall containment across the 40-circuit kerb/barrier side-flip is verified** — the last hole from Batch A/B/C. The single failure was the 40-circuit boundary sweep timing out at 372.8 s, since replaced by the per-circuit split (`93234ab1`). **BOTH remaining failures are now CLOSED and both were test defects:** `menu-keyboard` ×1 (`7bafa71b`, a race on `vt()`'s async reveal) and `tlx-probes` M6 skid (`5c735736`, waiting on a value that could not move — `skids.stamp()` lives in `render()` and the stint never renders). **`tlx` 15/15, 0 failed, 8m16s** (2026-08-07 17:00) — the first time that file has ever been fully green. RUNNING NOW, chained serially behind it: `parts` (167 tests), then `modes`, `scenery`, `webgl`, `collision`. STILL NOT RUN: `barriers`, `physics` |
 | W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
 | W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
-| W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
+| W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify**, and the block is now EVIDENCE rather than caution: the `parts` group ran for the first time and returned SIX tests that could never have passed under any code (see its section below). Moving 175 files while that is still true of other groups makes "broken by the move" and "never worked" indistinguishable. Scope changed since the records were written: **R3 tools/ subdirs — CUT** (churn across 60+ tools and their test-asserted index, zero defects found), **CI selection — taken as its OWN wave, not inside W2** (the driving-model job split showed CI-shape changes have their own failure modes; bundling one with 175 moves makes a red run ambiguous between the two) |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
 | W5 | Bedrock Ph2-4: gen-manifest, renderer port, seal & carve `G` | Planned |
@@ -32,6 +32,43 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 Ship cadence: the deploy branch (`claude/f1-game-project-26h3ng`) advances by
 fast-forward after each green wave, never mid-wave. `main` is a stale diverged
 fork — never touched.
+
+## THE PLAN FROM HERE (2026-08-07 18:00)
+
+Ordered by dependency. Everything in step 1 needs the box, and only one
+Playwright process may hold it.
+
+**1. Finish the burndown** — the prerequisite everything else waits on.
+   1. The serial queue: `tlx` ✅ 15/15, `parts` ✅ 167/167 (12 red, all diagnosed),
+      `modes` in flight, then `scenery`, `webgl`, `collision`.
+   2. **Solo re-run of `parts`' four timeouts.** The prediction is recorded
+      BEFORE the run so it can be wrong: at the measured ~1.9× contention factor
+      all four pass unchanged. If one still fails alone it is a real defect and
+      gets an instrument, never a budget bump.
+   3. **Consolidate the staged fixes** — `19971739` lives in a worktree and has
+      NOT been executed. Cherry-pick, verify `test:parts` alone, confirm the
+      mesh-signature count reaches **0 and not merely lower** (node reproduced
+      17 duplicates where the browser reported 19, and that gap is unexplained),
+      then amend the "UNVERIFIED" line out of the message before pushing.
+   4. `barriers` and `physics` — the last groups never run post-Batch-A/B/C.
+
+**2. W2 restructure**, unblocked by step 1.
+   5. R2 tests/ split — `tools/tests-split.mjs --apply`. Node guards first
+      (load-order, docs-integrity, test-groups, coverage-audit,
+      cross-file-paths): **the guard suite passing IS the proof the lockstep
+      held.** Then browser groups serially. Cache bump LAST.
+   6. R1 audio-panel — a `js/` edit, so it wants a tree with nothing running.
+   7. Ship by fast-forward once green.
+
+**3. Separated out, with reasons.**
+   8. CI change-aware selection — its own wave (see the W2 row).
+   9. A never-observed REPORTER in CI — reports, never gates. The durable
+      output of the `parts` finding.
+  10. W3–W5 Bedrock — the largest remaining commitment, and the one worth
+      re-deciding with today's evidence in hand rather than on the strength of
+      a plan written before it.
+
+**R3 tools/ subdirs is cut.** Recorded here so it stops being re-proposed.
 
 ## W2 — what executes, in order, once W2b's findings are reconciled in
 
@@ -181,6 +218,41 @@ misstate the risk of the ones still unrun.
 while half of them have never been executed — a red test that has never run
 looks identical to a test broken by the move. Burning down the never-observed
 list by group is now a prerequisite of W2, not a follow-up to it.
+
+### The `parts` group, which puts a number on all of it
+
+Run for the first time 2026-08-07: **167/167 executed, 12 FAILED, 46 minutes.**
+Measured against every other log in `artifacts/logs/`: of the 137 titles it
+reported, **12 had ever been seen before and 125 had not — 91 % never-executed.**
+
+All twelve resolved to test defects. **Zero product bugs.** But the useful split
+is not defect-vs-not, it is *could this ever have passed*:
+
+| | count | |
+|---|---|---|
+| **Structurally impossible** — no version of the product could satisfy them | **6** | a 32-triangle ceiling against a sheet that has been 36 at every revision; a wheel-rim comparison that never passed the rim argument; five wheel-side knobs asserted against a `noWheels: true` build; a 4-key helper compared to a 3-key `toEqual` (×2 routes); a deferred global read without loading it; a surname uppercased before a case-sensitive match |
+| **Incoherent with their own setup** | 2 | a world-Y compared to a road-relative constant; the same, differently |
+| **Bare timeouts** | 4 | box contention, see the ~1.9× factor in docs/TESTING.md |
+
+**Only ONE of the six was mechanically detectable.** An AST scan for the dropped
+argument does find it — `-1 buildWheel(7/8) parts-physics.spec.js:896` — but
+among ~22 other `-1` entries that are all deliberate trailing-optional
+omissions. Signal-to-noise ~1:22 at exactly the level where the real bug lived,
+so it was **not shipped**: a guard that cries wolf gets switched off, which
+`tools/fixture-consumer-audit.mjs` already records happening. Repo-wide scans
+for the other detectable classes came back clean (one deferred-global reference
+in 110 specs — the one already fixed; five case-transform sites, four correct).
+
+So the conclusion is not "build better lints". It is that **running a test is
+the only detector for this class**, and the repo has no standing mechanism that
+notices a group has not run in months. `tools/test-observed.mjs` answers the
+question; nothing asks it.
+
+**Proposed, not yet built:** a CI step that REPORTS the never-observed count
+rather than gating on it. Gating is wrong — `artifacts/` is gitignored, so in CI
+every title is legitimately unobserved, which is the exact trap that turned the
+guards job red once already (see the sibling lesson above). A number in the job
+summary, trending, is enough to make a silent group visible.
 
 ### The third sibling: a gate that runs INSIDE another job inherits its fate
 
