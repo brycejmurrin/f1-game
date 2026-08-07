@@ -155,6 +155,17 @@ known-good count rather than trusting a review:
     `$$eval`. Its load-bearing test runs the analysis over the REAL broken file
     (`git show 58614db2:…`) and asserts both sites are still found, so the lint
     cannot quietly stop detecting while its synthetic cases keep passing.
+29. **The environment class**: a guard that only runs on ONE MACHINE. Three
+    added on 2026-08-07 passed locally and could not execute in CI at all —
+    `pick-tests`' `--since HEAD~1` and `evaluate-scope-lint`'s `git show <sha>`
+    both need history the guards job's depth-1 checkout does not have, and
+    `test-observed`'s observed-half needs `artifacts/logs`, which is gitignored
+    and absent there. All three turned the guards job red for environment facts
+    rather than defects. **LANDED** `9cd75f1e` + `0d4cf538`: same properties
+    pinned against things that exist everywhere, and only the half that needs
+    the missing input is skipped. The practice that follows is in
+    docs/TESTING.md — verify an environment-sensitive guard in a
+    `git clone --depth 1` with no `artifacts/` BEFORE landing it.
 
 ### 1d. Merges (merge verdicts + merge candidates)
 

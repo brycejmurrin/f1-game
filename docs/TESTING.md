@@ -368,6 +368,35 @@ out at 123.9 s when one process had it to itself. Load cannot invert like that,
 so the cause is test-order-dependent state. Look for that comparison in the logs
 before either blaming or absolving the machine.
 
+### A guard must run where CI runs it
+
+Three guards added in one day passed locally and could not execute in CI at all.
+They asserted real things; they just assumed this machine. The guards job checks
+out with plain `actions/checkout@v4` — **depth 1** — and `artifacts/` is
+**gitignored**, so in CI:
+
+- `HEAD~1` does not resolve, nor does any older sha (`git show <sha>:file` fails
+  outright, it does not return empty)
+- `artifacts/logs/` does not exist, so anything derived from run logs is
+  legitimately empty rather than wrong
+
+Both turned the guards job red for an environment fact. The fix is not to delete
+the assertion but to pin the same property against something that exists
+everywhere — `HEAD` instead of `HEAD~1`, an inline copy of the shape a historical
+commit had — and to skip only the half that genuinely needs the missing input,
+keeping the rest unconditional.
+
+**Verify it the way CI will run it, before landing:**
+
+```sh
+git clone --depth 1 file://$(pwd) /tmp/cisim   # no history, no artifacts/
+cd /tmp/cisim && node --test tests/<your-guard>.test.mjs
+```
+
+If a guard needs history, the job needs `fetch-depth: 0` — today only the sweeps
+job has it, which is also why `pick-tests`' merge-base default cannot work in
+the guards job.
+
 ### Never run two Playwright processes at once
 
 `playwright.config.js` sets `reuseExistingServer` for local runs, so a second
