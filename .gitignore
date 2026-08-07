@@ -2,6 +2,7 @@
 # local Claude settings — but keep the shared developer skills tracked.
 .claude/*
 !.claude/skills/
+!.claude/workflows/
 
 # Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/
