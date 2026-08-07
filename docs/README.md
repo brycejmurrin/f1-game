@@ -44,7 +44,7 @@ Three kinds of docs live here.
 at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
 
 **What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX never
-reached parity with GLX (no volumetrics, no PCSS, MSAA 1, no `gpuTimer`, no baked
+reached parity with GLX (no volumetrics, MSAA 1, no `gpuTimer`, no baked
 material arrays). The six phase/migration build logs are provenance and live in
 [`archive/webgpu/`](archive/webgpu/).
 
@@ -83,6 +83,13 @@ sit in this table was indexed by nothing and moved to
 | [research/AUDIT-SYNTHESIS-2026-08.md](research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed, marked in place) / RESTRUCTURE / DEFER with all 35 verified findings — driving the post-cleanup hardening; archives when spent. |
 | [research/TEST-AUDIT-2026-08.md](research/TEST-AUDIT-2026-08.md) | The 11-agent test-semantics audit: per-file verdicts for all 162 test files, the corrected group taxonomy, the tests/ split map, and the change-aware CI design with its feasibility gaps — feeds the W2 restructure; archives when spent. |
 | [research/TOTAL-AUDIT-2026-08.md](research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc, synthesized into fix batches — headlined by the live curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; feeds the campaign fix waves; archives when spent. |
+
+`research/raw/` holds the uncompressed evidence behind four of these records —
+the workflows' verbatim per-agent output (`2026-08-audit-workflow.json`,
+`2026-08-redesign-panel.json`, `2026-08-test-audit.json`,
+`2026-08-total-audit.json`). Each dated record cites its own raw file; read
+them when a summary's wording is doing too much work. Nothing else references
+them, and no guard walks `research/`, so they are provenance, not contract.
 
 ## Archive (`archive/`)
 

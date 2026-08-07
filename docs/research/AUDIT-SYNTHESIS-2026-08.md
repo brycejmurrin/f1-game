@@ -45,14 +45,24 @@ Execute in this order, after FIX-NOW lands (item 1 especially — never reorgani
 
 ### R1. Extract MUSIC & SOUND panel → `js/game/audio-panel.js` — **GO** (lowest risk, proves the ratchet works, fully specified)
 
-`js/game.js:6534-6720` (include `:6534` `els.soundbtn.hidden = false;` — the stated 6535 start is off by one) + the boot restore `:7928-7937`. Lockstep, gaps folded in:
-1. Shape: `AudioPanel.create(G)` wires DOM at eval and **returns an `init()`** that game.js calls at the old `:7928` position (netLobby.wire() pattern) — do NOT run setSound/setMusic at create time (~line 2800, before CamModes/DataHub/loadTrack).
-2. game.js: add the one new `G` pair `get/set musicEnabled` (soundOn's pair exists at G:2669); convert the ~15 bare `soundOn` reads in handlers (:6680-6718) to `G.soundOn`.
+**Line numbers RE-MEASURED 2026-08-07** — the fix train moved game.js, and the
+original citations (6534 / 7928 / 2669 / ceiling 7970) no longer resolve. Locate
+by CONTENT, not by number; these are current as of `f0eb7fc0` (game.js 7972
+lines):
+
+`js/game.js:6543-~6727` — from `:6543` `els.soundbtn.hidden = false;` (the
+first of the panel's own statements; note there are two OTHER `els.soundbtn`
+writes at `:2342`/`:2872` that belong to race start/end and must NOT move)
+through the last panel handler (`as-play`), with the `MUSIC & SOUND panel`
+banner comment at `:6571` — plus the boot restore, now `:7944-7945`
+(`setSound(soundOn); setMusic(...)`). Lockstep, gaps folded in:
+1. Shape: `AudioPanel.create(G)` wires DOM at eval and **returns an `init()`** that game.js calls at the old boot-restore position (netLobby.wire() pattern) — do NOT run setSound/setMusic at create time (~line 2800, before CamModes/DataHub/loadTrack).
+2. game.js: add the one new `G` pair `get/set musicEnabled` (soundOn's pair is now at `:2672`); convert the ~15 bare `soundOn` reads in the handlers (now ~`:6697-6727`) to `G.soundOn`.
 3. Do NOT expose `syncAudioPanel` as a global — `js/game/spotify.js:268` calls it if defined; today that branch is dead and must stay dead (or be fixed as a separate deliberate decision).
 4. `tools/manifest.cjs`: FULL entry after `js/game/spotify.js` + HARD_EDGES pair `['js/game/audio-panel.js','js/game.js']` (aerozones pattern, :299).
 5. `index.html`: `<script>` tag at the manifest position (load-order.test.mjs:41/:63 enforce).
 6. `sw.js`: no edit (precache parses tags).
-7. `tests/module-size.test.mjs:40`: lower 7970 → ~7790 (convention, not forced — post-move slack ~204 is under the 400 trip).
+7. `tests/module-size.test.mjs:43`: the ceiling is now **7975** (raised deliberately by the fix train, reason in the comment above it) against a 7972-line file — lower it to ~7795 after the move (convention, not forced; the guard's own slack check trips at 400).
 8. CLAUDE.md file layout: add the row (docs-integrity:309 is a hard guard).
 9. `tools/pick-tests.mjs`: add `audio-panel` to BOTH the audio rule (:78) and the ui rule (:76) — menu-survey/ui-scale/ui-button-touch/menu-keyboard specs all click this panel.
 10. Bump `?v` + version.json LAST; run `test:tiny` → `test:tooling-fast` → `node tools/test-bg.mjs audio` (+ ui if handlers changed).
@@ -68,7 +78,7 @@ Lockstep, feasibility gaps folded in (silent-failure items marked ⚠ — no gua
 6. ⚠ `tests/f1-track-accuracy.spec.js:18` `./data/...` → `../data/...` (browser-only failure; a `../helpers` grep won't find it).
 7. ⚠ `tests/manual/` imports of output-paths (`inspect.spec.js:20`, three gallery specs) + `manual/README.md:8-9` prose.
 8. Vacuous-pass traps — widen regexes to admit `/`: `tests/test-groups.test.mjs:154` and `tests/docs-integrity.test.mjs:343`; plus their flat readdirs (test-groups :83, :92-93, :125; docs-integrity :236-237, :347) → walk specs/+unit/.
-9. `tools/test-coverage-audit.mjs:39` AND its duplicate scan in `tests/test-coverage-audit.test.mjs:60-63`; `tools/fixture-consumer-audit.mjs:37` IMPORTS_FIXTURES + `:52` readSpecs dir (else FLOOR reads 0) AND the synthetic fixtures in `tests/fixture-consumer-audit.test.mjs:15` encoding the old import shape.
+9. `tools/test-coverage-audit.mjs:39` AND its duplicate scan in `tests/test-coverage-audit.test.mjs:60-63`; `tools/fixture-consumer-audit.mjs:42` IMPORTS_FIXTURES + `:58` readSpecs dir (else FLOOR reads 0 — cites re-measured 2026-08-07; the file gained `FLOOR_SLACK`) AND the fixtures in `tests/fixture-consumer-audit.test.mjs` encoding the old import shape — note that suite now ALSO runs the ratchet against the real tests/ tree, so a move breaks it loudly rather than silently.
 10. ⚠ `.github/workflows/ci.yml` sweeps filter `tests/(prop-clipping|...)` → `tests/unit/(...)` (fail-open otherwise).
 11. Hardcoded cross-file reads: `tests/span-kinds.test.mjs:46`, `tests/docs-integrity.test.mjs:217`, prop-clipping/coplanar ROOT-tools paths.
 12. Docs: TESTING.md's 24 path lines; keep count phrases that the updated regexes in test-groups:96-97 and docs-integrity:236-249 still match, in TESTING.md, CLAUDE.md AND README.md simultaneously ("root" wording must go); skills' 20 tests/ paths (guard-enforced); tools/ prose refs (guard-enforced).

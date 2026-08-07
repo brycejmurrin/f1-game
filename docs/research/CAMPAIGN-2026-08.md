@@ -19,8 +19,8 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W1.5 | Test-audit mechanical strengthen batch (guard blind spots + ten weak specs) | **LANDED** `46b999e8`, `89f6889d`, `6112fb74`, `f9bbf479` — caught the stale Mexico terrain pin (a spec that never runs is prose) |
 | W2a | Test-semantics audit workflow (all 162 test files) | **DONE** — record: [TEST-AUDIT-2026-08.md](TEST-AUDIT-2026-08.md) |
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
-| W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **NEXT** — lands before the restructure; A+B share one bump, C is docs/tools |
-| W2 | RESTRUCTURE + change-aware CI | **GATED on W2-fix** — see below |
+| W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
+| W2 | RESTRUCTURE + change-aware CI | **NEXT** — the W2-fix gate is released |
 | W3 | Bedrock Ph0-1: dependency scanner + global registry, `.d.ts` contracts, `tsc --checkJs` CI, `@ts-check` tranche + ratchet | Planned — [ARCHITECTURE-REDESIGN-2026-08.md](ARCHITECTURE-REDESIGN-2026-08.md) is the adopted direction |
 | W4 | Loop-until-dry lens-diverse review of the post-restructure tree, CAP 3 ROUNDS | Planned (shrinks if W2b leaves little) |
 | W5 | Bedrock Ph2-4: gen-manifest, renderer port, seal & carve `G` | Planned |
@@ -58,6 +58,32 @@ step lists — it fixes the ORDER and the gates:
 
 ## Design tickets (carried into W2 reconciliation, not mechanical)
 
+- **BUG WE INTRODUCED — race-control's `capHoldT` leaks across races.**
+  `reset()` does not zero `capHoldT`, and every path that reaches `reset()` is
+  gated on `caution.level !== 0`. So a cap-forced drop in the last 45 s of a
+  race ends the race with `level === 0` and `capHoldT > 0`; nothing decrements
+  it out of race state, and the NEXT race starts with the suppression armed —
+  swallowing its first genuine caution for up to 45 s. Fix: zero `capHoldT` in
+  `reset()` AND widen the guard to `if (caution.level !== 0 || capHoldT)
+  reset();`, plus call `raceCtl.reset()` from `startRace()` (a stale
+  `caution.level` carrying into the next race is the same latent class,
+  pre-existing). Blocked on the browser driver; verify with the node suite
+  `tests/race-control.test.mjs`, which needs a new cross-race case.
+
+- **PRE-EXISTING, CAUSE FOUND — `#track-detail` claims to be a modal and is
+  not.** `index.html` ships `<div id="track-detail" role="dialog"
+  aria-modal="true">`, while `css/track-detail.css` and
+  `js/game/topmodal.js`'s comment both say it "migrated to a real `<dialog>`".
+  `TopModal.scan` selects `dialog.screen`, so it is not wired. The cause is
+  not an oversight: commit `02e4e003` ("Make #track-detail's modal claim
+  true") IS an ancestor of HEAD, but its `index.html` hunk was lost in a later
+  merge — the CSS half survived, the markup half did not (`git log -L` on the
+  line traces past it). Fix: either re-apply that commit's markup hunk plus the
+  `showModal()`/`close()` switch, or drop the `aria-modal="true"` lie and
+  rewrite both comments, keeping the load-bearing `z-index: 400` with a note
+  saying so. The live defect is the false `aria-modal` (Escape still works via
+  TopModal's non-dialog path).
+
 - **FOLLOW-UP TO OUR OWN FIX — race-control's cap re-arm hold is too blunt.**
   `js/game/racecontrol.js` now force-drops a flag at its cap (90 s SC / 30 s
   yellow) and suppresses re-raising for `CAP_REARM_HOLD` (45 s) so the same
@@ -72,13 +98,15 @@ step lists — it fixes the ORDER and the gates:
   the working tree when this was found.
 
 - **City-building `setback` massing is dormant, deliberately.** `building()`'s
-  massing knob is `arch`; six call sites (`js/track/scenery-city.js`'s generated
-  rows plus `suzuka.js`, `monaco.js` ×3, `bahrain.js`) pass a `setback:` key it
-  has never read, so every street circuit was tuned and shipped with the
-  hash-picked archetypes. Honouring it is a change of LOOK, not a cleanup —
-  measured, switching on the generated rows alone adds a severe
-  interpenetration on Baku (clip-audit 31 → 32). Decide it as an art change
-  across all six sites at once, with the clip baselines re-measured.
+  massing knob is `arch`. FIVE call sites still pass a `setback:` boolean it has
+  never read — `suzuka.js:182`, `monaco.js:231/:293/:1159`, `bahrain.js:250`;
+  the sixth, `js/track/scenery-city.js`'s generated rows, had the dead key
+  removed in `d23b70b8` with the reasoning left in place. Every street circuit
+  was tuned and shipped with the hash-picked archetypes, so honouring it is a
+  change of LOOK, not a cleanup — measured, switching on the generated rows
+  alone adds a severe interpenetration on Baku (clip-audit 31 → 32). Decide it
+  as an art change across all six sites at once, with the clip baselines
+  re-measured.
 
 - `tests/camera-driving-hooks.spec.js` spin test asserts nothing; add
   heading-change + sign asserts (test-audit strengthen 1).
@@ -89,11 +117,9 @@ step lists — it fixes the ORDER and the gates:
   map-hooks north-up pin (strengthen 3-5, 10).
 - `parts-livery-contrast` asserts its own inline mirror of buildAtlas — needs a
   real helper export from `js/car/liverytex.js` (+ bump) (strengthen 11).
-- **racecontrol.js SC_MAX/YELLOW_MAX are dead code** (found while working
-  strengthen 20): lowering requires the picture to clear AND `MIN_HOLD` (6 s)
-  always fires before either cap, so the "hard cap on VSC/SC" the comments
-  promise is not implemented. Product decision: force-green at the cap, or
-  delete the clause and fix the comments + test.
+- ~~racecontrol.js SC_MAX/YELLOW_MAX are dead code~~ — DECIDED AND SHIPPED in
+  `89ce4f2f` (force-green at the cap, `tests/race-control.test.mjs` re-pinned).
+  The remaining work is the re-arm refinement at the top of this list.
 - Synthesis §DEFER stands unchanged (js/game rename NO-GO is final; tlx.js
   header collapse on next touch; phone-UA sniff dedup wants a shared file; the
   tombstone-comment house rule).
@@ -103,9 +129,9 @@ step lists — it fixes the ORDER and the gates:
 | Record | Archives when |
 |---|---|
 | AUDIT-SYNTHESIS-2026-08 | W2 steps 2-4 land (FIX-NOW already marked worked off in place) |
-| TEST-AUDIT-2026-08 | W2 steps 1-2 + the CI redesign land |
+| TEST-AUDIT-2026-08 | W2 steps 1-2 + the CI redesign land **AND** its §1c strengthen list is closed — 14 of 21 landed in W1.5, the remaining 7 (items 1-5, 10, 11) are the design tickets above. Without that clause the record would archive with live work inside it |
 | ARCHITECTURE-REDESIGN-2026-08 | Stays — decision record for W3/W5 (Bedrock-with-grafts adopted, ESM the escalation path) |
-| W2b total-audit record | Written on completion; archives when its fix list is worked off |
+| TOTAL-AUDIT-2026-08 | Batch A/B/C are worked off (`89ce4f2f`, `d23b70b8`); archives when §"Feed the restructure" and §Defer are absorbed into W2 |
 | This doc | Campaign completes → `docs/archive/` |
 
 ## Standing rules (unchanged, restated because every wave trips over them)

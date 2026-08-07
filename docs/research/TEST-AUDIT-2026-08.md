@@ -53,6 +53,16 @@ Resulting `test:behaviour` = `world-physics, physics-fixes→(no, physics), acti
 
 ### 1c. Strengthen list (weak/vacuous asserts, file:line + one-line fix)
 
+**STATUS 2026-08-07: 14 of these 21 landed** in the W1.5 batch (commits
+`46b999e8`, `89f6889d`, `6112fb74`, `f9bbf479`) — items 6, 7, 8, 9, 12, 13, 14,
+15, 16, 17, 18, 19, 20, 21. **Still open: 1, 2, 3, 4, 5, 10, 11**, tracked as
+design tickets in CAMPAIGN-2026-08.md (items 3-5 and 10 were deferred only
+because the camera group was running at the time, so they are mechanical, not
+decisions). Item 9's premise is now historical: `FLOOR` is 54 with a
+`FLOOR_SLACK` of 5, and the ratchet runs against the real tree inside
+`tooling-fast`. Landing item 14 also flushed out a genuinely stale pin — the
+Mexico terrain test had been asserting a flatness the circuit stopped having.
+
 Fixes 1–2 are flagged DEFER in AUDIT-SYNTHESIS ("per-test design decision, not a mechanical fix") — carry them as design tickets, not batch edits:
 
 1. `tests/camera-driving-hooks.spec.js:191-193` — spin computes before/after headings, asserts neither: assert `after !== before` and sign against the spin argument.
@@ -102,7 +112,7 @@ Per-file mapping:
 | Destination | Files |
 |---|---|
 | `tests/specs/` | All `*.spec.js` (109 post-merge): the 16 renamed `*-foundation.spec.js`, and every other root spec named in the package.json groups — smoke, dev-tools, logging, headless-api, obs-act-edge, new-hooks, data-lifecycle, telemetry-compare, assets-api, persistence, wake-lock, camera{,-hooks,-driving-hooks,-tuner}, map-hooks, world-physics, longitudinal, elevation-tracks, projection, active-aero, understeer-cue, physics-characterization, physics-fixes, collision{s,-deep,-ai-fixes}, drift, offtrack, debris, race-control, aero-zones, tracks-walls, autopilot, audit, parts-* (all), car-effects, carview-parts, custom-team, garage-aero, presets, sliders, steering, gamepad, touch-steer, tilt-pipeline, steer-migration, ui-audit, ui-button-touch, ui-scale, hud-layout, menu-survey, menu-keyboard, menu-baseline, tracks-visual, props-over-road, terrain-over-road, f1-track-accuracy, scenery-kits, instanced-draw, webgl-probes, lighting-ab, image-grade-visual, lighting-tuner-grade, material-shimmer, tlx-probes, audio-smoke, music-library, season, time-trial, career, quali, agent-view, agent-drive-bench, agent-determinism, multiplayer-* (8), output-paths.spec.js |
-| `tests/unit/` | All 49 `*.test.mjs` + `shared-track-foundation-characterization.test.cjs`: the 34 tooling-fast suites, 7 net-unit suites, 4 sweeps suites, service-worker, webgpu-lifecycle, agentview-api-contract |
+| `tests/unit/` | All 48 `*.test.mjs` + `shared-track-foundation-characterization.test.cjs`: the 34 tooling-fast suites, 7 net-unit suites, 4 sweeps suites, service-worker, webgpu-lifecycle, agentview-api-contract (the breakdown sums to 48; "49" was a miscount in the original record) |
 | `tests/helpers/` | The 7: `fixtures.js`, `track-helpers.js`, `qr-camera.js`, `f1-api-mock.js`, `output-paths.js`, `global-setup.js`, `live-reporter.js` |
 | `tests/data/` | `f1-circuit-reference.geojson` (stays) |
 | `tests/manual/` | stays: `README.md`, `blank-scan.spec.js` (post-merge), `circuits.js`, `galleries/` |

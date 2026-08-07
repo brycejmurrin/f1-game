@@ -24,7 +24,32 @@ fix the finders did catch.
 
 The tree is structurally healthy after the cleanup campaign: the guard suites, the engine/data split, the G-façade discipline, and the docs infrastructure all held up under adversarial audit — 197 findings confirmed, zero net refutations, and roughly 70% of them are prose drift or dead code, not behavior. The single most important discovery **corrects AUDIT-SYNTHESIS-2026-08.md FIX-NOW #3**: the curvature-sign campaign fixed the *labels* (agentview/apex/camera placement) but the retired `+k = right` convention is still **live behavior** in three engine consumers — kerbs built on the outside of every corner (mesh.js:204), tyre barriers on the inside (tracks.js:1549), corner boards inside (tracks.js:1601) — plus the same inversion class in the camera tuner's SIDE/YAW (cam-tune.js:145). The rest of the mess concentrates in four pockets: headers/docs describing retired designs (net signalling's Trystero era, WGX parity claims, the matTexMix "ships at 0" inversion, MQTT/two-backend leftovers); the data hub's freshness story (LIVE tab's refresh defeated by its own cache, hardcoded years); tools that exit 0 while measuring nothing (motion-capture, check-bank, the two fit sweeps clicking dead ids); and a long tail of comment drift in scenery/circuits. Nothing found undermines the restructure plan — R1/R2/R3 remain GO as scoped, and six findings fold cleanly into them.
 
-## Fix now
+## Fix now — BATCHES A, B AND C ALL LANDED 2026-08-07
+
+Worked off in two commits: `89ce4f2f` (A+B+C, bump v1025) and `d23b70b8`
+(the tail, bump v1026). Two things happened in the landing that this record
+is the only durable place to note:
+
+- **A regression the first commit shipped, repaired by the second.**
+  `89ce4f2f` captured an intermediate `js/circuits/paul_ricard.js` whose
+  modelGroup bounds had been widened to the honest 56 m — and those bounds are
+  an atomic road-footprint test, so preflight then rejected the cabanon AND
+  its wall together (299,716 verts vs 299,946). `d23b70b8` splits the wall
+  into its own guarded run; emitted geometry is byte-identical to before.
+- **An art change reverted, not landed.** The train had activated a dormant
+  `setback` massing option in the city generator. `building()` has never read
+  that key, so every street circuit shipped with the hash-picked archetypes;
+  switching it on costs a severe interpenetration on Baku (clip-audit
+  31 → 32, A/B confirmed). Removed with the reasoning in place; the decision
+  is a design ticket in CAMPAIGN-2026-08.md.
+
+One baseline moved, and it was earned: `tools/coplanar-baseline.json`
+interlagos 3 → 2, because un-collapsing the Arquibancadas crowdBanks removed
+a z-fighting spot. Geometry sweeps are green across all 40 circuits.
+
+The list below stands as the record of what was found.
+
+
 
 Everything below is an immediate commit. **Batch A + B touch `js/`, `css/`, `index.html`, `sw.js`, `manifest.json` — land as at most three commits sharing ONE `?v=N` + `version.json` bump as the last edit** (`.claude/skills/bump-cache`), never mid-test-run. **Batch C is docs/tools/spike — no bump.** Run `node tools/verify-track.cjs <id>` for every track/circuit edit; `pick-tests` for the rest.
 
