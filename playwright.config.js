@@ -78,7 +78,7 @@ export default defineConfig({
   // nothing and stay out of default discovery. Run them by explicit path
   // (see tests/manual/README.md).
   testIgnore: ["**/manual/**"],
-  globalSetup: './tests/global-setup.js',
+  globalSetup: './tests/helpers/global-setup.js',
   fullyParallel: true,
   workers: WORKERS,
   // retries:1 hides flakiness the deterministic (mocked network, headless
@@ -134,7 +134,7 @@ export default defineConfig({
   reporter: [
     // Live tail-able progress (see tests/helpers/live-reporter.js): timestamped
     // start/end line per test, written immediately — `tail -f` friendly.
-    ["./tests/live-reporter.js"],
+    ["./tests/helpers/live-reporter.js"],
     ["html", { open: "never", outputFolder: `artifacts/report${SUF}` }],
     ["junit", { outputFile: `artifacts/test-results${SUF}/junit.xml` }],
   ],
