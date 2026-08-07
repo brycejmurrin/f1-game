@@ -26,7 +26,7 @@ tools/README.md                       # the index of all 60+ tools (test-asserte
 **The reference is `docs/TESTING.md`** — every group, every spec, fixtures,
 philosophy. `tests/test-groups.test.mjs` fails if it and `package.json`
 disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
-110 Playwright specs plus 55 `node --test` unit suites; the browser half is
+110 Playwright specs plus 56 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
 
 **1. Run browser groups in the BACKGROUND — never block, never poll.**
@@ -99,8 +99,9 @@ budget instead — 36x its declared bound. It overran on a menu page too. Only a
 predicate that THROWS terminates promptly (11 ms), because the exception
 propagates without polling — which is why an absent global fails fast and a
 plain `false` does not. Pass `{ polling: 100, timeout: N }` for any wait on a
-page that is rendering. The repo has **312 `waitForFunction` calls carrying a
-timeout across 104 specs and NOT ONE passes `polling`**, so today every one of
+page that is rendering. The repo has **353 `waitForFunction` calls carrying a
+timeout and NOT ONE passes `polling`** (counted by AST — a grep undercounts the
+multi-line ones at 312), so today every one of
 those bounds is decorative: a condition that never becomes true burns the whole
 test budget and reports `Test timeout of Nms exceeded` from a line that claims
 to wait 30 s. `tlx-probes`' M6 skid is the worked example — 344 s inside a 30 s
@@ -274,7 +275,7 @@ css/             tokens.css + components/menus/hud/overlays/carsetup/data/tuner/
 index.html       shell — script tags, all static DOM, cache-bust version
 sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
-tests/           110 Playwright specs + 55 `node --test` unit suites (docs/TESTING.md)
+tests/           110 Playwright specs + 56 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
 .claude/         skills/ (task recipes, .claude/skills/README.md) and
                  workflows/ (multi-agent orchestration scripts, README there)
