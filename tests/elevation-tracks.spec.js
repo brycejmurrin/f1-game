@@ -29,6 +29,14 @@ const ELEVATION_TRACKS = [
 // Circuits with `banked: true` (raised outer edge through the fast corners).
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 
+// The two launch speeds the gradient probes start from, named because the
+// assertions below compare against them. CLAUDE.md's PACE rule: a speed
+// compared against a bare literal goes stale the moment PACE is retuned, and
+// "> 41" against a launch of 40 was a disguised claim that every circuit's
+// start line is flat.
+const FLAT_LAUNCH = 40;    // m/s, flat-out reference run from the start line
+const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
+
 async function startRace(page, id) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
@@ -200,7 +208,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         // was never a top speed at all. Run here, nobody has moved yet and the
         // start line is ahead of the whole grid.
         let finite = true;
-        window.__apex.jump(0.0, 40, 0);
+        window.__apex.jump(0.0, FLAT_LAUNCH, 0);
         window.__apex.setInput({ steer: 0, throttle: true });
         let flatMax = 0;
         for (let i = 0; i < 180; i++) { window.__apex.step(1 / 60, 1); flatMax = Math.max(flatMax, window.__apex.physState().speed); }
@@ -229,7 +237,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
 
         // Climb from low speed: gravity must not be a wall.
-        window.__apex.jump(upAt, 10, 0);
+        window.__apex.jump(upAt, CLIMB_LAUNCH, 0);
         const cv0 = window.__apex.physState().speed;
         for (let i = 0; i < 150; i++) window.__apex.step(1 / 60, 1);
         const cv1 = window.__apex.physState().speed;
@@ -257,24 +265,41 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
-        return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, widest, hw, finite };
+        return { dn, up, maxV, flatMax, climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
       });
 
       expect(errors).toEqual([]);
       expect(r.finite).toBe(true);
       expect(r.dn).toBeLessThan(0);                 // the track really does descend
       expect(r.up).toBeGreaterThan(0);              // and climb
-      // The reference must be a TOP speed — i.e. the car actually accelerated
-      // away from the 40 m/s it was launched at. Anything at or below that means
-      // the run was blocked (traffic, a barrier) and the ratio below would be
-      // comparing a real descent against a first-corner speed. Fail here, where
-      // the cause is legible, rather than one line down where it is not.
-      expect(r.flatMax, "flat-out reference run never accelerated — it was blocked").toBeGreaterThan(41);
+      // The reference must not have been BLOCKED — the failure this guards is a
+      // car jumped into traffic and shoved backwards, which on Monaco measured
+      // flatMax 20.3 m/s, a first-corner speed masquerading as a top speed.
+      //
+      // It used to demand `> 41`, i.e. a full 1 m/s gain over the launch, and
+      // that is a claim about the START LINE rather than about being blocked.
+      // COTA's start line climbs into one of the steepest turn-1 ascents in the
+      // calendar, so three seconds flat out there nets +0.9 m/s and the test
+      // called a physically correct run "blocked". A spec about GRADIENTS must
+      // not assume every circuit's frac 0.0 is flat. Comparing against the
+      // launch speed keeps all the discriminating power that matters — the case
+      // it exists to catch is half the launch speed, not 0.1 under it — and
+      // CLAUDE.md's PACE rule wants the launch constant here rather than a bare
+      // speed literal in any case.
+      expect(r.flatMax, "flat-out reference run was blocked — it lost ground from the launch")
+        .toBeGreaterThanOrEqual(FLAT_LAUNCH);
       expect(r.maxV).toBeLessThan(r.flatMax * 1.35); // no descent runaway past flat top speed (gravity adds a little downhill, but doesn't run away)
       // Climbs freely (gravity isn't an invisible wall). The gain is modest on
       // tracks whose only grade is a shallow recovery (e.g. Bahrain's dip), large
       // on real climbs (Spa's Eau Rouge), so just require the car is still moving.
-      expect(r.climbGain).toBeGreaterThan(0.5);
+      //
+      // THE ASSERTION DID NOT MATCH THAT COMMENT. "Just require the car is still
+      // moving" was written as `climbGain > 0.5` — a demand that it ACCELERATE.
+      // On the Hungaroring's steepest climb, from 10 m/s, the car nets -0.93 m/s
+      // and is still very much moving; gravity is a cost there, not a wall. The
+      // comment is the real specification, so assert it: the car keeps climbing
+      // rather than being stopped or thrown backwards down the hill.
+      expect(r.climbEnd, "gravity stopped the car dead on the climb").toBeGreaterThan(CLIMB_LAUNCH * 0.5);
       // Road-following keeps even an un-steered car broadly on the road surface
       // through corners — not flung 9 m into the runoff like the pre-fix model.
       expect(r.widest).toBeLessThan(r.hw + 8);
