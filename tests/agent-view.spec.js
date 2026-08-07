@@ -7,11 +7,19 @@
 // the corner table trustworthy. They deliberately do not assert exact radii for
 // anything except Monaco's hairpin, which is the one corner whose real-world
 // dimension is unambiguous enough to pin.
-import { test, expect } from "./fixtures.js";
+// sharedTest, not test: all 117 tests here go through boot()/load() below and
+// none of them assert first-load behaviour, so they can share ONE booted page
+// per worker instead of paying page.goto("/") + 155 script tags + WebGL init
+// 117 times over. See the sharedTest block in ./fixtures.js for the contract.
+import { sharedTest as test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page) {
+  // The shared page is booted once per worker by the fixture, so the common
+  // case is a no-op. Only navigate if something actually tore the app down.
+  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
+  if (live) return;
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
 }

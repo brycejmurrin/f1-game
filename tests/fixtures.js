@@ -196,4 +196,66 @@ test.afterEach(async ({ page }, testInfo) => {
   } catch (_) { /* page may be closed / __apex absent — best-effort only */ }
 });
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   sharedTest — ONE booted page per worker, reused by every test in the file.
+
+   WHY. Measured on the camera group: 45 tests, 1985 s of test time, and the
+   FASTEST test took 21.7 s. That floor is not assertion work — it is
+   `page.goto("/")` plus ~155 script tags plus WebGL context creation, paid
+   again for every single test. Across the suite that is 294 `goto("/")` calls
+   in 98 spec files, and not one of them used beforeAll. In agent-view.spec.js
+   alone — 117 tests, measured at ~43 min — roughly 40 of those minutes are the
+   same page booting 117 times.
+
+   WHY IT IS SAFE TO REUSE. `__apex.race(id)` is re-entrant against a live page:
+   tests/tracks-walls.spec.js has always raced its way through many circuits in
+   ONE page without reloading, and the all-circuit sweeps do the same. The
+   reload was never required — it was just the default `page` fixture's scope.
+
+   WHEN NOT TO USE IT. Anything asserting FIRST-LOAD behaviour: the boot
+   sequence itself, the service worker, the shell version guard, PWA install,
+   `localStorage` migrations. Those want a virgin page — keep importing `test`.
+   The opt-in is deliberate: this is not a silent change of meaning for 54
+   existing spec files.
+
+   WHAT IT RESETS between tests is deliberately SHALLOW — held input, headless
+   mode, the frozen flag, open dialogs, log level. It does NOT try to rewind
+   settings or `localStorage`: GameStore caches those in memory, so a truthful
+   reset there means a reload, which is the cost being removed. A spec that
+   needs a specific setting must set it, which is what `load()`-style helpers
+   already do.
+   ───────────────────────────────────────────────────────────────────────── */
+export const sharedTest = base.extend({
+  // Worker-scoped: created once, reused until the worker exits.
+  _bootedPage: [async ({ browser }, use) => {
+    const context = await browser.newContext();
+    await installMocks(context);
+    context.on("page", captureConsole);
+    const page = await context.newPage();
+    captureConsole(page);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+    await use(page);
+    await context.close();
+  }, { scope: "worker" }],
+
+  page: async ({ _bootedPage, viewport }, use) => {
+    if (viewport) await _bootedPage.setViewportSize(viewport);
+    await _bootedPage.evaluate(() => {
+      const a = window.__apex;
+      // Best-effort per hook: a missing one must not fail the RESET, or one
+      // renamed debug hook silently turns every later test in the file red.
+      if (a) {
+        try { a.clearInput(); } catch (_) {}
+        try { a.headless(false); } catch (_) {}
+        try { a.logLevel("warn"); } catch (_) {}
+      }
+      try {
+        document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+      } catch (_) {}
+    });
+    await use(_bootedPage);
+  },
+});
+
 export { expect };
