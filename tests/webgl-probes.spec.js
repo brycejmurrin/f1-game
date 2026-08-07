@@ -24,17 +24,14 @@ test.describe("WebGL renderer probes", () => {
     await page.evaluate(() => window.__apex?.setTimeOfDay("default")).catch(() => {});
   });
 
-  test("GLX.hdrMode() returns a boolean", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
-    // GLX is a top-level const (not window.GLX) — access by name in page scope
-    const hdrMode = await page.evaluate(() => typeof GLX !== "undefined" ? GLX.hdrMode() : undefined);
-    // SwiftShader may return false (no HDR), but it must be a boolean either way
-    expect(typeof hdrMode).toBe("boolean");
-  });
-
   test("dynamic player shadow uses the current-frame car transform", async ({ page }) => {
     await loadRace(page, "madrid");
+    // Folded hdrMode() contract (was a standalone typeof-only test — same
+    // coverage, one fewer page boot). GLX is a top-level const (not
+    // window.GLX) — access by name in page scope. SwiftShader may report
+    // false (no HDR), but it must be a boolean either way.
+    const hdrMode = await page.evaluate(() => typeof GLX !== "undefined" ? GLX.hdrMode() : undefined);
+    expect(typeof hdrMode).toBe("boolean");
     await page.waitForTimeout(300);
     const result = await page.evaluate(async () => {
       const frames = (n) => new Promise((resolve) => {
@@ -76,29 +73,24 @@ test.describe("WebGL renderer probes", () => {
     expect(result.minDistance).toBeLessThan(5);
   });
 
-  test("lightState() returns expected shape after race()", async ({ page }) => {
+  test("setTimeOfDay night increases numLights on track with floodlights", async ({ page }) => {
     await loadRace(page);
-    const ls = await page.evaluate(() => window.__apex.lightState());
 
+    // Folded lightState() shape contract (was a standalone shape-only test —
+    // same coverage, one fewer page boot): the fields the behavioural asserts
+    // below rely on must exist with the right types after race().
+    const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls).toHaveProperty("numLights");
     expect(typeof ls.numLights).toBe("number");
-
     expect(ls).toHaveProperty("ambientSky");
     expect(Array.isArray(ls.ambientSky)).toBe(true);
     expect(ls.ambientSky.length).toBe(3);
-
     expect(ls).toHaveProperty("ambientGround");
     expect(Array.isArray(ls.ambientGround)).toBe(true);
     expect(ls.ambientGround.length).toBe(3);
-
     expect(ls).toHaveProperty("sunColor");
-
     expect(ls).toHaveProperty("exposure");
     expect(typeof ls.exposure).toBe("number");
-  });
-
-  test("setTimeOfDay night increases numLights on track with floodlights", async ({ page }) => {
-    await loadRace(page);
 
     await page.evaluate(() => window.__apex.setTimeOfDay("day"));
     // Wait for day lighting to settle (numLights typically drops to 0)

@@ -70,22 +70,53 @@ for (const [trackId, themeName] of [
   ["qatar", "night-event"],
 ]) {
   test(`${trackId} emits validated ${themeName} kit facilities`, async ({ page }) => {
+    await page.addInitScript((id) => {
+      // Capture the RESOLVED theme handed to this track's scenery(api)
+      // callback. Unlike the binding test above, the callback is WRAPPED, not
+      // replaced, so real kit placement still runs and the facility asserts
+      // below stay meaningful.
+      const defs = [];
+      defs.push = function (...entries) {
+        for (const def of entries) {
+          if (def.id !== id || typeof def.scenery !== "function") continue;
+          const scenery = def.scenery;
+          def.scenery = (api) => {
+            window.__resolvedSceneryTheme =
+              api.sceneryTheme ? api.sceneryTheme.name : null;
+            return scenery(api);
+          };
+        }
+        return Array.prototype.push.apply(this, entries);
+      };
+      window.TrackDefs = defs;
+    }, trackId);
     await page.goto("/");
     await page.waitForFunction(() => window.__apex?.race);
     const state = await page.evaluate(([id]) => {
+      window.__resolvedSceneryTheme = null;
       window.__apex.headless(true);
       window.__apex.race(id, "day", "dry");
       return {
+        theme: window.__resolvedSceneryTheme,
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
       };
     }, [trackId, themeName]);
 
+    // SceneryThemes.resolve falls back to "neutral" for an unknown name and
+    // tracks.js falls back per track kind — either silent substitution must
+    // fail here, not just produce differently-tinted facilities.
+    expect(state.theme, `${trackId} resolves the ${themeName} theme`).toBe(themeName);
+
     const emitted = state.models.emitted.filter((entry) =>
       entry.id.startsWith(`kit:${trackId}:`));
     expect(emitted.length).toBeGreaterThanOrEqual(2);
-    expect(emitted.every((entry) =>
-      !entry.vertices || entry.vertices <= 50000)).toBe(true);
+    // Every kit emission records a numeric vertex count (models.js modelGroup);
+    // a missing field must fail the bound, not pass it vacuously.
+    for (const entry of emitted) {
+      expect(typeof entry.vertices, `${entry.id} records vertices`).toBe("number");
+      expect(entry.vertices, `${entry.id} within vertex budget`).toBeLessThanOrEqual(50000);
+    }
     for (const bucket of ["invalid", "suppressed", "unsafe"])
       expect(state.models[bucket].filter((entry) =>
         entry.id.startsWith(`kit:${trackId}:`))).toEqual([]);

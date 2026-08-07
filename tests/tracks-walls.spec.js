@@ -35,20 +35,23 @@ test.describe("Apex 26 — track boundaries", () => {
   });
 
   test("street circuits are walled tight; open circuits keep runoff", async ({ page }) => {
+    // Only the five street circuits are asserted, so only those five are built
+    // (a previous version built all ~40 circuits for the same five asserts).
+    const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"];
+    const ids = ONLY_TRACK ? STREET.filter((id) => id === ONLY_TRACK) : STREET;
+    test.skip(ids.length === 0, `TRACK=${ONLY_TRACK} is not a street circuit`);
     await load(page);
-    const ids = await trackIds(page);
-    const stats = {};
-    for (const id of ids) {
-      stats[id] = await page.evaluate((tid) => {
-        window.__apex.race(tid, "day", "dry");
-        return window.__apex.wallStats();
-      }, id);
-    }
     // Street circuits: the WIDEST boundary still hugs the edge (no big runoff).
-    for (const id of ["monaco", "singapore", "vegas", "baku", "jeddah"]) {
-      if (!stats[id]) continue;
-      expect(stats[id].street, `${id} flagged street`).toBe(true);
-      expect(stats[id].minOverHw, `${id} barrier near edge`).toBeLessThan(3);
+    for (const id of ids) {
+      const r = await page.evaluate((tid) => {
+        const ok = window.__apex.race(tid, "day", "dry");
+        if (!ok) return { failed: `race("${tid}") returned ${String(ok)}` };
+        return { stats: window.__apex.wallStats() };
+      }, id);
+      expect(r.failed, `${id} must build for the street-wall check`).toBeUndefined();
+      expect(r.stats, `${id} wallStats`).not.toBeNull();
+      expect(r.stats.street, `${id} flagged street`).toBe(true);
+      expect(r.stats.minOverHw, `${id} barrier near edge`).toBeLessThan(3);
     }
   });
 
@@ -66,7 +69,7 @@ test.describe("Apex 26 — track boundaries", () => {
     for (const id of ["monaco", "monza", "baku", "spa"]) {
       const r = await page.evaluate((tid) => {
         const ok = window.__apex.race(tid, "day", "dry");
-        if (!ok) return { skip: true };
+        if (!ok) return { skip: true, reason: `race("${tid}") returned ${String(ok)}` };
         window.__apex.go();
         window.__apex.setPhysics({ drift: 0.3 });
         let finite = true, maxAbsX = 0;
@@ -86,7 +89,9 @@ test.describe("Apex 26 — track boundaries", () => {
         window.__apex.clearInput();
         return { finite, maxAbsX };
       }, id);
-      if (r.skip) continue;
+      // A track whose race() failed must not silently vanish from the sweep.
+      expect(r.skip, `${id}: ${r.reason || "race() failed"} — the edge-ram sweep never ran`)
+        .toBeFalsy();
       expect(r.finite, `${id} finite`).toBe(true);
       expect(r.maxAbsX, `${id} bounded`).toBeLessThan(60);
     }

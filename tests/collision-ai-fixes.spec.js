@@ -115,20 +115,36 @@ test.describe("wall contact penalty on open circuits", () => {
     await loadRace(page, "monza");
     const result = await page.evaluate(() => {
       window.__apex.headless(true);
-      const obs0 = window.__apex.reset(0.05, 20, 0);
-      // Jump past the right barrier (wall logic clamps x during the next update)
-      window.__apex.jump(0.05, 20, obs0.wallR + 0.8);
-      // Steer into the wall for 10 frames — pushIn penalty scrubs speed
-      let speedAfter = 20;
-      for (let i = 0; i < 10; i++) {
-        const o = window.__apex.act({ steer: 1.0, throttle: false, brake: false }, 1 / 60, 1);
-        speedAfter = o.speed;
-      }
+      // One coasting episode: same start frac, same 20 m/s, same 10 ticks.
+      const run = (lateralOf, steer) => {
+        const obs0 = window.__apex.reset(0.05, 20, 0);
+        window.__apex.jump(0.05, 20, lateralOf(obs0));
+        let speed = 20;
+        for (let i = 0; i < 10; i++) {
+          const o = window.__apex.act({ steer, throttle: false, brake: false }, 1 / 60, 1);
+          speed = o.speed;
+        }
+        return speed;
+      };
+      // Control: lane centre, steering straight — decays by coasting drag alone.
+      const control = run(() => 0, 0);
+      // Wall run: pinned past the right barrier, steering hard into it — decays
+      // by the same drag PLUS the pushIn wall scrub this test exists to catch.
+      const scrubbed = run((o) => o.wallR + 0.8, 1.0);
       window.__apex.headless(false);
-      return { speedBefore: 20, speedAfter };
+      return { control, scrubbed };
     });
-    // Wall scrub should have reduced speed noticeably
-    expect(result.speedAfter).toBeLessThan(result.speedBefore);
+    // Anti-vacuity: the control run stayed a coasting run (drag alone cannot
+    // eat a quarter of 20 m/s in 10 ticks; if it did, the margin below would
+    // be measuring the wrong thing).
+    expect(result.control).toBeGreaterThan(15);
+    // The open-circuit pushIn scrub is pushIn * 16 m/s^2 (game.js updateCar),
+    // so 10 ticks at full lock removes ~16 * 10/60 = 2.7 m/s beyond what the
+    // control loses. Margin 1.0 m/s: well under the ~2.7 the scrub must
+    // deliver (no false failure on retunes), well above drag/slip noise —
+    // coasting drag alone (the old test's only discriminator) cannot produce
+    // it, which is exactly what the control run makes this assert prove.
+    expect(result.scrubbed).toBeLessThan(result.control - 1.0);
   });
 
   test("a car wedged against the barrier is auto-rescued back onto the track", async ({ page }) => {

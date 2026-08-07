@@ -240,10 +240,13 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
     if (r.terr.max > TOL) offenders.push(
       `${trk} TERRAIN ${r.terr.max}m over road @${JSON.stringify(r.terr.fr)} worst=${JSON.stringify(r.terr.worst)}`
     );
-    // Road mesh: small overs are the verge-shoulder chord bug; large overs
-    // (>1.5 m) are intentional track crossovers (Suzuka figure-8, Madrid,
-    // Zandvoort), where the road legitimately bridges over a lower part.
-    if (r.road.max > TOL && r.road.max < 1.5) offenders.push(
+    // Road mesh: small overs are the verge-shoulder chord bug everywhere.
+    // Overs >=1.5 m are exempt ONLY on the known crossover tracks (Suzuka
+    // figure-8, Madrid, Zandvoort — the same CROSSOVER_TRACKS set the in-page
+    // frac-distance filter uses), where the road legitimately bridges over a
+    // lower section; on any other track a big face over the line is simply a
+    // bigger defect, not a crossover.
+    if (r.road.max > TOL && (r.road.max < 1.5 || !CROSSOVER_TRACKS.has(trk))) offenders.push(
       `${trk} ROAD ${r.road.max}m over road @${JSON.stringify(r.road.fr)} worst=${JSON.stringify(r.road.worst)}`
     );
   }
