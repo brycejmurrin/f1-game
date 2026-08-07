@@ -219,6 +219,36 @@ test("source comments reference only files that exist", () => {
     "a source comment points at a path that no longer exists — update it, or add a justified SOURCE_EXEMPT entry");
 });
 
+test("tests/manual/README.md indexes every suite in that directory, and only real ones", () => {
+  // tests/manual/ is EXCLUDED from default discovery (testIgnore in
+  // playwright.config.js), so its contents are precisely the files nothing else
+  // checks — no group names them, no coverage audit claims them. That README's
+  // table is their only index, which makes it the one place drift is invisible.
+  //
+  // It drifted the day this was written: act-probe.spec.js landed and the table
+  // did not notice. Found by opening the file, not by anything going red — the
+  // same species as every other rule in this repo that lives only in prose.
+  const dir = path.join(ROOT, "tests/manual");
+  const readme = read("tests/manual/README.md");
+  const specs = [];
+  (function walk(sub) {
+    for (const e of fs.readdirSync(path.join(dir, sub), { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(sub, e.name));
+      else if (e.name.endsWith(".spec.js")) specs.push(path.join(sub, e.name).split(path.sep).join("/"));
+    }
+  })("");
+
+  const missing = specs.filter((s) => !readme.includes(s) && !readme.includes(path.posix.basename(s)));
+  assert.deepEqual(missing, [],
+    "a suite in tests/manual/ is absent from its README table — nothing else indexes these files");
+
+  // The other direction: a row naming a file that has gone. An index that lists
+  // what is not there is as misleading as one that omits what is.
+  const listed = [...readme.matchAll(/`([A-Za-z0-9_/-]+\.spec\.js)`/g)].map((m) => m[1]);
+  const ghosts = listed.filter((n) => !specs.some((s) => s === n || s.endsWith(`/${n}`) || path.posix.basename(s) === n));
+  assert.deepEqual(ghosts, [], "the manual README lists a suite that no longer exists");
+});
+
 test("skills reference only files that exist", () => {
   const broken = [];
   for (const doc of SKILL_DOCS)
