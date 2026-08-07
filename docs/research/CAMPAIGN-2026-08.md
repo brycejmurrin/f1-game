@@ -291,6 +291,33 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   circuit rather than sliding along it, so marks may never be laid.
   **No pre-Batch baseline exists** — M6 has never run on this box, before or
   after — so it cannot yet be called a regression.
+  **PROBE RESULT (`77cf5d4d`, run `47666f59`): candidate (a) is DISPROVEN as
+  stated, and the probe that disproved it was itself unfaithful.**
+  `act({steer:1,throttle:true}, 1/60, 120)` measures **309 ms** — slowest single
+  step 129 ms, and that is step #0, first-call warmup. Nothing hangs. The
+  manoeuvre reproduces exactly: off the road at step #32, rescue at #80, ending
+  `x=13.9 rescueT=0.667` — M6's failure state byte for byte. Only the TIME does
+  not reproduce. Both controls behaved as designed (`steer 0.3` never triggers
+  rescue; `steer 1.0`×25 never leaves the road, max |x| 4.86), so neither step
+  count nor full lock is the variable.
+
+  **But it ran as `[headless]`.** `act-probe.spec.js` is not in `RENDER_SPECS`,
+  so all three cases used the default GLX backend, while M6 runs under TLX —
+  `tlx-probes.spec.js:10-14` installs `apex26.gfxBackend="three"` and
+  `apex26.tlxForceGL="1"` via `addInitScript` in a `beforeEach`. The probe
+  therefore cleared `act()` under a renderer M6 does not use. A control that
+  does not reproduce the environment is not a control, and the only thing that
+  caught it was the project tag in the reporter output.
+  A second unfaithfulness, self-inflicted: the probe called `jump(0.1, 70, 0)`
+  where M6 calls `jump(0.1, 70)`. `jump(frac, speed, lateral)` writes `x` only
+  when `lateral !== undefined`, so M6 starts from the car's existing lateral
+  offset and the probe from the centreline — a different trajectory.
+
+  What the source rules out: `act()` calls `update(d)`, pure physics with no
+  renderer work, so the backend cannot change `act()`'s own cost. That points
+  the missing ~240 s at `goto` or `race("monza")` under TLX rather than at the
+  stepping. A TLX-faithful re-probe timing every await separately is running.
+
   A further narrowing from the suite itself: across every `act()` call site,
   full lock (`steer: 1`) is never held for more than **25 steps**. M6 holds it
   for **120** — nearly five times longer, which is what it takes to leave the
