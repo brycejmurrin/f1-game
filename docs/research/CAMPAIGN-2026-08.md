@@ -354,7 +354,28 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   wrong, which would make it the first product bug of the day; every other
   failure has been the test's fault. Confirm solo before believing it.
 
-## Ship queue — PR vs fast-forward, decided on the evidence
+## SHIPPED 2026-08-07 — `a187ecb0..bb6e73a2`, 74 commits, fast-forward
+
+Landed clean, no merge commit. Cache invariant checked first (`version.json`
+build 1029, every `?v` in `index.html` at 1029, no stragglers) because a stale
+bump is how a deploy silently serves old code. PR #13 closed with the ship
+record rather than merged — its title described one early commit, so merging it
+would have written a merge commit that misdescribes 74. All five PRs open this
+morning are now closed.
+
+**Two known-red tests shipped, deliberately and on the record:**
+`menu-keyboard`'s `:modal` assertion (focus containment on the track-detail
+dialog — an accessibility behaviour, and the one open candidate for a real
+product bug) and `tlx-probes`' M6 skid (a test defect, and TLX is deferred and
+opt-in so no player path touches it).
+
+**A cadence correction worth keeping:** the four CI runs cancelled earlier today
+were `pull_request` runs, and `ci.yml`'s `cancel-in-progress` is
+`${{ github.event_name == 'pull_request' }}` — push runs never cancel, and the
+concurrency group is per-ref regardless. Feature-branch pushes were never the
+hazard; only a second push to the deploy branch is.
+
+## The decision, as it was taken (PR vs fast-forward)
 
 Measured 2026-08-07: deploy is `a187ecb0`, the work branch `6a495374`, **67
 commits ahead and 0 behind — a clean fast-forward**.
