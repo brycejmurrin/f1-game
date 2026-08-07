@@ -338,10 +338,18 @@ test("CLAUDE.md's active branch is a branch that exists, and names the deploy br
 test("every npm test:* group names specs that exist", () => {
   const pkg = JSON.parse(read("package.json"));
   const missing = [];
+  // Admits SUBDIRECTORIES. Before the tests/ split (AUDIT-SYNTHESIS §R2) this
+  // read `tests/[A-Za-z0-9_*-]+\.` — which stops matching the moment specs live
+  // under tests/specs/, leaving `missing` empty and this test green while
+  // checking nothing at all. `seen` below is what stops that being repeatable:
+  // this repo's groups name well over a hundred files, so a pattern that finds
+  // none of them is broken by definition.
+  let seen = 0;
   for (const [name, cmd] of Object.entries(pkg.scripts)) {
     if (!name.startsWith("test:")) continue;
-    for (const m of cmd.matchAll(/tests\/[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
+    for (const m of cmd.matchAll(/tests\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
       const ref = m[0];
+      seen++;
       if (ref.includes("*")) {                       // glob: at least one match must exist
         const re = new RegExp("^" + path.basename(ref).replace(/\*/g, ".*") + "$");
         if (!ls("tests", re).length) missing.push(`${name}: glob ${ref} matches nothing`);
@@ -350,6 +358,9 @@ test("every npm test:* group names specs that exist", () => {
       }
     }
   }
+  assert.ok(seen > 100,
+    `the spec-path pattern matched only ${seen} references across the test:* groups — ` +
+    "it has gone stale against the paths in package.json, so this test is checking nothing");
   assert.deepEqual(missing, [], "an npm test group points at a spec that no longer exists");
 });
 

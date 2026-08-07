@@ -146,18 +146,48 @@ test("no test:* group pins a --project that excludes one of the specs it names",
 
   const scripts = JSON.parse(read("package.json")).scripts || {};
   const offenders = [];
+  // The path pattern admits SUBDIRECTORIES. It used to be `tests/([a-z0-9-]+)`,
+  // which the tests/ split (AUDIT-SYNTHESIS §R2) would have stopped matching
+  // entirely — the loop body would never run, `offenders` would stay empty, and
+  // this test would have gone on passing while checking nothing. `matched`
+  // below is the part that makes that impossible to repeat: a pattern that
+  // finds nothing is a broken pattern, not a clean repo.
+  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
+  let matched = 0;
   for (const [name, cmd] of Object.entries(scripts)) {
     const proj = cmd.match(/--project=(\w+)/);
     if (!proj) continue;                       // no pin, both projects are eligible
     const wants = proj[1];
     if (wants !== "render" && wants !== "headless") continue;
-    for (const m of cmd.matchAll(/tests\/([a-z0-9-]+)\.spec\.js/g)) {
+    for (const m of cmd.matchAll(SPEC_REF)) {
+      matched++;
       const spec = m[1];
       const inRender = render.has(spec);
       if (wants === "render" && !inRender) offenders.push(`${name}: ${spec} is not in RENDER_SPECS`);
       if (wants === "headless" && inRender) offenders.push(`${name}: ${spec} IS in RENDER_SPECS`);
     }
   }
+  // WHY the input set is empty matters more than the output set being empty.
+  //
+  // This guard is DORMANT today, measured: the only scripts carrying
+  // `--project=` are test:render and test:headless, and both run a whole
+  // project without naming a single spec, so `matched` is 0. That is the RIGHT
+  // reason to find nothing — the bug in the header was fixed by removing
+  // test:tiny's pin, and the guard is here for the shape's return.
+  //
+  // It is one character away from the WRONG reason. The old pattern was
+  // `tests/([a-z0-9-]+)`, which the tests/ split stops matching entirely, and
+  // this test would have gone on passing on the strength of a broken regex.
+  // So: if nothing matched, prove that nothing was there to match.
+  if (matched === 0) {
+    for (const [name, cmd] of Object.entries(scripts)) {
+      if (!/--project=(render|headless)\b/.test(cmd)) continue;
+      assert.ok(!/tests\//.test(cmd),
+        `${name} pins a --project AND names paths under tests/, but the spec pattern ` +
+        `matched none of them — the pattern is stale, not the repo clean`);
+    }
+  }
+
   assert.deepEqual(offenders, [],
     "a test:* group names a spec its pinned --project cannot match, so that spec never runs");
 });

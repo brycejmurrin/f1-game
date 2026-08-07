@@ -27,7 +27,22 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Walk up for package.json rather than counting ".." — this file is scheduled
+// to move (tests/ split, AUDIT-SYNTHESIS §R2), and a hop count that is wrong at
+// the new depth still resolves to a real directory, so the failure arrives as
+// "js/net/qr.js not found" from somewhere unrelated. See tests/output-paths.js
+// for the same anchor and the fuller reasoning.
+function repoRoot(from) {
+  let dir = from;
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const up = path.dirname(dir);
+    if (up === dir) throw new Error(`no package.json above ${from} — cannot locate the repo root`);
+    dir = up;
+  }
+}
+
+const ROOT = repoRoot(path.dirname(fileURLToPath(import.meta.url)));
 
 // A real invite code, at the length the compact codec actually produces.
 export const CODE = "APEX1.s." + "aB3-_x9Zq".repeat(26).slice(0, 232);
