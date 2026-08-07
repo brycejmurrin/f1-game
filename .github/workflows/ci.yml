@@ -239,7 +239,7 @@ jobs:
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
           echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|tests/(prop-clipping|road-under-floor|coplanar-faces|shared-track-foundation))'; then
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|tests/unit/(prop-clipping|road-under-floor|coplanar-faces|shared-track-foundation))'; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools or a sweep suite"
           else
