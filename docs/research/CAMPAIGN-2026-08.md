@@ -291,9 +291,17 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
   circuit rather than sliding along it, so marks may never be laid.
   **No pre-Batch baseline exists** — M6 has never run on this box, before or
   after — so it cannot yet be called a regression.
-  Next: probe `act()` directly with increasing N and time each; if it hangs,
-  bisect against `fdd4082f`; only then choose a fix. Do NOT redesign the test
-  first — that would paper over an agent-API bug with the test that found it.
+  A further narrowing from the suite itself: across every `act()` call site,
+  full lock (`steer: 1`) is never held for more than **25 steps**. M6 holds it
+  for **120** — nearly five times longer, which is what it takes to leave the
+  circuit rather than merely slide. No other test reaches an off-track rescue
+  state through this API, which is why nothing else has ever hit this.
+  Next: **`tests/manual/act-probe.spec.js`** (committed `77cf5d4d`, queued to
+  run) steps one frame at a time and times each, with `steer 0.3`×120 and
+  `steer 1.0`×25 as controls, so the answer is a step index and the two
+  candidates separate by construction. If it hangs, bisect against `fdd4082f`;
+  only then choose a fix. Do NOT redesign the test first — that would paper over
+  an agent-API bug with the test that found it.
   **`767d3ec7`'s commit message frames M6 as possibly-just-slow; that is now
   disproven and the record is corrected here.**
 
