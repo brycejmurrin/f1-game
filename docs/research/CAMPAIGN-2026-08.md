@@ -21,7 +21,7 @@ dated record in this directory (`raw/` holds the uncompressed evidence).
 | W2b | Total-audit workflow (all code + all docs) | **DONE** — 197 verified findings: [TOTAL-AUDIT-2026-08.md](TOTAL-AUDIT-2026-08.md). Survived a mid-run token-limit crash via cached resume with slimmed (haiku, batched) verification |
 | W2-fix | The total-audit's Batch A/B/C fix train (headline: the LIVE curvature-sign trio in the track engine — kerbs/barriers/corner boards on the wrong side — plus the session-verified jump()/IncidentSim authority bug, career slot overwrite, racecontrol dead caps, DRIZZLE tier, matTexMix truth cluster) | **LANDED** `89ce4f2f` (A+B+C together, bump v1025) + `d23b70b8` (tail, bump v1026). The tail also REPAIRED a regression the first commit shipped — an intermediate paul_ricard.js whose widened modelGroup bounds made preflight reject the cabanon AND its wall (299,716 vs 299,946 verts) — and REVERTED an art change it had smuggled in (city-building `setback` massing; see the design ticket below). Geometry sweeps green across all 40 circuits; browser groups running |
 | W2-perf | Shared-page test fixture (`sharedTest`) — kill the per-test page boot | **LANDED** `e52bb772`, `9b91f807`, `3fa9d047`, `75ae72f9`, `85a91f40`. Settled at **6 specs / 284 tests** on the shared page after 8/405 was tried and two specs reverted. Headline: `agent-view` **117/117 in 11m16s against ~43 min** before. Also green: `new-hooks` 56/56, `headless-api` 24/24, `logging` 6/6. `career` (101) and `quali` (20) reverted — both drive MENU SCREENS, which is the axis that decides reuse; `dev-tools` + `camera-driving-hooks` verifying. Full rationale, the three conversion edges and the load-inversion diagnostic are in [docs/TESTING.md](../TESTING.md) |
-| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** OPEN FAILURES: `tlx-probes` ×2 and `menu-keyboard` ×1 (both below). NOT YET RUN post-Batch-A/B/C: **`tracks-walls` + `autopilot`** (the `circuit` run was SIGTERM'd at 07:58 and never completed — the largest remaining hole, and the one place a red result could still be a product bug), `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
+| W2-verify | Run the browser groups against the live track-engine changes, ordered by ignorance | **IN FLIGHT** — `89ce4f2f`'s kerb/barrier side-flip is verified from BOTH directions: bisect-cleared locally (all three elevation failures reproduce byte-identically at `fdd4082f`) and CI's per-circuit geometry sweep green throughout. **CI #204 is fully green — guards, sweeps AND smoke.** Verified: `agent-view` 117/117, `steering` 96/96, `api` 193/193, `smoke`+`net` 79/79, shared-fixture set 101/101, `camera` 45/45, `elevation-tracks` 47/47 (after 3 repairs), `smoke` 9/9, plus `audio`/`debris`/`ab`/`paths`/`map`/`baseline`/`shimmer` inside the 56-test tail batch, plus node-only `net-unit` 99/99, `agent-contract`, `service-worker`, `webgpu-lifecycle`. **Execution integrity checked, not assumed: every green group's count equals its declared total, with zero skips, zero retries and zero flakes.** `tlx` now **14/15** after `767d3ec7`; `gallery` **78/78**. OPEN FAILURES: `tlx-probes` M6 skid (hung, not slow — now a possible agent-API bug, see below) and `menu-keyboard` ×1. **`circuit` (64 tests) RUNNING** — it carries the two questions that matter most: whether `tracks-walls`'s `monza bounded: 770.4 vs < 60` reproduces (a real assertion failure, from 02:09, PREDATING the 03:01 side-flip and never re-run since), and whether its two 40-circuit sweeps now fit `test.slow()`'s 360 s — they were only ever measured against 120 s, since `test.slow()` was not added until 06:58 (`afd546ed`). NOT YET RUN post-Batch-A/B/C: `parts`, `modes`, `scenery`, `webgl`, `barriers`, `collision`, `physics` |
 | W2-step0 | Make the tests/ split's SILENT failures loud — before the split | **LANDED** `d6f09674`. R2's lockstep marks five items "no guard turns red"; a guard that arrives after the commit it protects has protected nothing. `tools/cross-file-paths.mjs` + guard: every relative reference in `tests/`+`tools/` (static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)`) must resolve — **137 refs across 239 files, green**. espree, not grep: two test files build fixtures out of source text containing import statements, and a guard with false positives gets switched off. **`output-paths.spec.js` could not have detected the move breaking it** — it asserted against `resolve(import.meta.dirname, "..")`, the identical expression the module under test uses, so both sides move together and agree; post-split both resolve to `tests/`, galleries land in the test tree, and `existsSync(dir)` passes too because `galleryDir()` CREATES what it returns. Both modules now walk up for `package.json`. Two vacuous-pass regexes widened to admit subdirectories, each with a tripwire. **Live finding:** `test-groups`' pinned-`--project` check has ZERO inputs — only `test:render`/`test:headless` carry `--project` and neither names a spec, so its loop body has never run. It is a regression guard for a bug fixed by removing the pin that fed it. It HAS an assertion, so `assert-audit` cannot see it — a fourth category beyond asserting/implicit/vacuous: **structurally unreachable**. It now asserts WHY its input set is empty |
 | W2-assert | "A test that asserts nothing is prose too" — the third sibling of the never-run finding | **LANDED** `3eadb40d` + `a50c18ae`. Gallery split **VERIFIED 78/78, zero skips, zero retries** — 34 portrait + 34 landscape + the 10 merged large-screen tests, all green, including the ten that were committed unrun. `tools/assert-audit.mjs` grades every declared test **asserting / implicit / vacuous** and flags empty `.catch(() => {})`. Tree: **1152 tests, 0 vacuous, 40 implicit-only**. The gallery specs were the whole of the implicit set: `ui-audit` (34) and `ui-desktop` (5) are PNG harnesses whose ticks were being read as `test:ui` coverage. `ui-desktop` is merged into `ui-audit` as two viewport rows and deleted; `ui-audit` moves to an on-demand `test:gallery` group (test-audit §1a/§1d, executed early because W2-verify surfaced it). `tests/assert-audit.test.mjs` is the ratchet. **The tool's own first version was 20% false** — a body-only scan called hud-audit's eight steer-mode tests vacuous because they assert only through `assertHud()`; helper-following to a fixpoint is the tool, and two guard cases pin it |
 | W2 | RESTRUCTURE + change-aware CI | **BLOCKED on W2-verify** — see "the finding that outgrew its wave" below. Moving files while half the suite has never been executed makes a never-run red test indistinguishable from one the move broke |
@@ -240,45 +240,67 @@ fast-forward after each green wave" assumes the shipping mechanism works. For
 
 ## Open failures blocking W2-verify
 
-- **`tlx-probes` ×2 — TWO DIFFERENT CAUSES, and neither is contention alone.**
-  Both reported ~130.4 s, which is the 120 s budget (`playwright.config.js:89`;
-  no test in the file is marked `test.slow()`) plus ~10 s of failure handling —
-  so both ran out of clock without an assertion ever failing.
-  **M9 env probe (:266) is a real test defect.** Three tests in the file
-  screenshot `canvas#game` — :66, :116, :266 — and NONE calls `headless(true)`
-  first. Their durations are the tell: M2 (:66, screenshot) **125.8 s, passed
-  with essentially zero margin**, M8 (:116, screenshot) 78.5 s, M9 (:266,
-  screenshot) **timed out**, against 85-92 s for the heavy non-screenshot tests.
-  `tests/smoke.spec.js:35-56` already records the measurement — `park()` freezes
-  physics but the render loop keeps running, so a `.screenshot()` queues behind
-  an endless SwiftShader redraw: 88-96 s solo, 154-214 s under two workers,
-  **29-32 s once `headless(true)` stops the loop first** — and
-  `tests/track-helpers.js:117` already relies on the compositor keeping the last
-  drawn frame. Ten specs use the pattern; tlx-probes is not one of them. So this
-  is not an undocumented lesson, it is a documented one that was missed three
-  times in one file.
-  **MEASURED, and it lands inside the recorded band.** A re-run of tlx-probes
-  alone gives M2 (screenshot) **92.6 s against 125.8 s in the batch**, while M4
-  (no screenshot) is **41.9 s against 38.8 s** — unchanged. smoke.spec.js's
-  recorded figures for the identical mistake are 88-96 s solo, 154-214 s under a
-  2-worker suite, **29-32 s once `headless(true)` stops the loop first**. 92.6
-  sits inside 88-96. The diagnosis is therefore confirmed against this repo's own
-  prior measurement rather than against reasoning, and the fix predicts ~30 s.
-  NOTE the solo run is NOT a contention control: both runs use 2 workers, and in
-  the batch TLX shared its worker pair with lighter specs, so this run is if
-  anything harder on the renderer. What it measures is repeatability.
-  **M6 skid (:188) is a different thing**: no screenshot, but `race("monza")` +
-  120 `act()` steps + a wait for a presented frame carrying the skid batch. It
-  sits above the file's 85-92 s band with extra work bolted on.
-  A blanket `test.slow()` on the file would therefore be the WRONG fix — it
-  papers over the rendering mistake and leaves M2 one bad second from red.
-  Order: solo baseline → apply the settle-then-`headless(true)` pattern at all
-  three sites → decide M6 from the measurement → re-run solo → commit. Nothing
-  lands unrun (`58614db2`).
+- **`tlx-probes` — ONE HALF FIXED (`767d3ec7`), ONE HALF NOW A DIFFERENT AND
+  BIGGER QUESTION.** 15/15 → **14 pass, 1 fail**.
+
+  **Fixed: all three canvas screenshots ran against a LIVE render loop.**
+  `park()` freezes physics, not rendering, so a `.screenshot()` queues behind an
+  endless SwiftShader redraw. `tests/smoke.spec.js:35-56` had already measured
+  exactly this — 88-96 s solo, 154-214 s under two workers, **29-32 s once
+  `headless(true)` stops the loop** — and `tests/track-helpers.js:117` already
+  relies on the compositor keeping the last drawn frame. Ten specs use the
+  pattern; tlx-probes used it at none of its three sites. Measured before and
+  after, the three screenshot tests each dropped 25-33 s and nothing else moved:
+
+  | test | before | after |
+  |---|---|---|
+  | M2 world geometry | 92.6 s | **59.5 s** |
+  | M8 post chain | 81.2 s | **55.7 s** |
+  | M9 env probe | 152.8 s FAIL | **128.0 s PASS** |
+
+  M9 needed BOTH changes: 128.0 s still exceeds the 120 s default, so
+  `test.slow()` is what makes it pass rather than an optional extra. The
+  file-wide budget is separately justified — the thirteen passing tests spanned
+  10.6-92.6 s against 120 s, a median around 65 s and the slowest at 77 %.
+
+  **NOT fixed, and no longer a budget problem: M6 skid is HUNG.** It failed
+  again at **371.2 s against a 360 s budget** — tripling the budget changed only
+  the number in the message. Two facts locate it precisely. It did NOT fail on
+  its own inner `waitForFunction(skidVerts > 0, {timeout: 30_000})`, which would
+  print `Timeout 30000ms exceeded`; and its explicit waits total only
+  30+60+30 = 120 s, so the missing ~240 s sits inside an un-timeouted
+  `page.evaluate`. `freeze(true)` is trivial, which leaves exactly:
+
+  ```js
+  window.__apex.jump(0.1, 70);
+  window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 120);
+  ```
+
+  Deterministic across both failures, byte-identical: `s=644.0730245379482`,
+  `x=13.899999618530273`, `speed=2.552148177582885`, `rescueT=0.6333333333333336`
+  — 13.9 m off the centreline, nearly stopped, mid-rescue.
+
+  Two candidates, NOT yet separated, and the order matters:
+  (a) **PRODUCT** — `__apex.act()` hangs or degrades when an incident engages
+  mid-batch. Batch A/B/C changed `jump()` to clear
+  `rescueT`/`wallT`/`wrongT`/`wrongWay`/`offT` and call `IncidentSim.release`,
+  and this test jumps then immediately drives full lock into the barrier,
+  re-arming that machinery. If real it is an agent-API bug far beyond this file;
+  `agent-view` passed 117/117 but nothing there drives into a wall.
+  (b) **TEST DESIGN** — full lock at 70 m/s for 120 steps drives the car OFF the
+  circuit rather than sliding along it, so marks may never be laid.
+  **No pre-Batch baseline exists** — M6 has never run on this box, before or
+  after — so it cannot yet be called a regression.
+  Next: probe `act()` directly with increasing N and time each; if it hangs,
+  bisect against `fdd4082f`; only then choose a fix. Do NOT redesign the test
+  first — that would paper over an agent-API bug with the test that found it.
+  **`767d3ec7`'s commit message frames M6 as possibly-just-slow; that is now
+  disproven and the record is corrected here.**
+
   Follow-on worth considering: nothing MECHANICALLY stops the next spec
-  screenshotting a live render loop. That is the same shape as the three lints
+  screenshotting a live render loop. That is the same shape as the four lints
   already in `test:tooling-fast`, and this file is the evidence that a rule
-  living only in a comment gets missed.
+  living only in a comment gets missed — three times, in one file.
 
 - **`menu-keyboard` ×1 — the only genuine ASSERTION failure outstanding.**
   "Tab cannot escape the track-detail dialog into the select screen behind it"
