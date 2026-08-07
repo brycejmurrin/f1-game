@@ -26,6 +26,23 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
       const supports = [-1, 1].map((side) => {
         const lat = side * supportLat;
         const ground = window.__apex.groundY(0.45, lat);
+        // MEASURE THE CONTRACT foundation() ACTUALLY OFFERS. It fills from the
+        // cap DOWN TO THE LOWEST terrain sample under the leg's own footprint
+        // (js/circuits/montreal.js, the casino footbridge) — so the foot sits
+        // at the minimum over that patch, which is by definition <= a single
+        // centre-point reading. Comparing it against one point measures local
+        // relief, not grounding, and Île Notre-Dame is not as level as
+        // "flatTerrain" suggests: terrain at lat -12 is 0.114 and at +12 is
+        // -0.302, 41.6 cm apart. When the curvature-sign fix put each pier on
+        // the other side, the left one landed on the rougher patch and a 5 cm
+        // point-tolerance failed at 6.3 cm — with the pier correctly founded.
+        // Sample the same footprint the legs are built over instead: +-1.2 m
+        // along (the two legs) and +-0.35 m across.
+        const dFrac = 1.2 / window.__apex.info().total;
+        let lowest = Infinity;
+        for (const df of [-dFrac, 0, dFrac])
+          for (const dl of [-0.35, 0, 0.35])
+            lowest = Math.min(lowest, window.__apex.groundY(0.45 + df, lat + dl).terrainY);
         const footX = node.x + node.rx * lat;
         const footZ = node.z + node.rz * lat;
         const ys = [];
@@ -36,7 +53,7 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
             ys.push(props[i + 1]);
         }
         return {
-          side, lat, groundY: ground.terrainY, roadY: ground.roadY,
+          side, lat, groundY: ground.terrainY, footprintLowY: lowest, roadY: ground.roadY,
           count: ys.length,
           finite: ys.every(Number.isFinite),
           minY: Math.min(...ys),
@@ -94,11 +111,28 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
     expect(session.models.emitted.filter((entry) => entry.water).length).toBeGreaterThan(0);
 
     for (const support of session.supports) {
-      expect(support.finite).toBe(true);
-      expect(support.count).toBeGreaterThanOrEqual(8);
-      expect(Math.abs(support.minY - support.groundY)).toBeLessThanOrEqual(0.05);
-      expect(Math.abs(support.maxY - (support.roadY + 8))).toBeLessThanOrEqual(0.15);
-      expect(Math.abs(support.lat)).toBeGreaterThanOrEqual(12);
+      // NAME THE SIDE AND SHOW THE NUMBERS. These ran for a long time as bare
+      // comparisons, and when one finally failed it said "expected <= 0.05,
+      // received 0.0633" with no way to tell WHICH pier, at what height, above
+      // what ground — so the first move was a probe that reproduced what the
+      // test already knew. A footbridge has two piers and they do not stand on
+      // the same patch of grass; the side is half the diagnosis.
+      const where = `${support.side < 0 ? "left" : "right"} pier ` +
+        `(lat ${support.lat}, minY ${support.minY?.toFixed?.(4)}, ` +
+        `footprintLow ${support.footprintLowY?.toFixed?.(4)}, ` +
+        `centreTerrain ${support.groundY?.toFixed?.(4)}, roadY ${support.roadY?.toFixed?.(4)})`;
+      expect(support.finite, `${where} finite`).toBe(true);
+      expect(support.count, `${where} vertex count`).toBeGreaterThanOrEqual(8);
+      // Against the footprint minimum, not the centre point — see the sampling
+      // note above. Still a real check: a floating pier reads POSITIVE here and
+      // a pier buried below its own footprint reads negative, and both fail.
+      expect(support.minY - support.footprintLowY, `${where} foot meets the ground`)
+        .toBeGreaterThanOrEqual(-0.05);
+      expect(support.minY - support.footprintLowY, `${where} foot is not floating`)
+        .toBeLessThanOrEqual(0.05);
+      expect(Math.abs(support.maxY - (support.roadY + 8)), `${where} deck height`)
+        .toBeLessThanOrEqual(0.15);
+      expect(Math.abs(support.lat), `${where} clears the road`).toBeGreaterThanOrEqual(12);
     }
   }
 
