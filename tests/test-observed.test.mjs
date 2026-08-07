@@ -47,6 +47,30 @@ test("sharedTest declarations are counted like test declarations", () => {
   assert.equal(t.full, "tests/smoke.spec.js › smoke.spec.js › shared thing");
 });
 
+test("a loop-generated title becomes a PATTERN, not a dropped declaration", () => {
+  // 16 specs declare tests as test(`${id}: …`) inside a for-of over a track
+  // list. Dropping them undercounts the denominator AND reports the spec as
+  // fully observed — elevation-tracks read as 5 declared when it runs 47, so
+  // the whole `circuit` group reported 0/20 against an actual 64.
+  const src = "for (const id of X) { test(`${id}: holds on the grade`, async () => {}); }";
+  const [t] = titlesIn(src, "tests/smoke.spec.js");
+  assert.equal(t.dynamic, true);
+  assert.ok(t.pattern.test("tests/smoke.spec.js › smoke.spec.js › cota: holds on the grade"));
+  assert.ok(t.pattern.test("tests/smoke.spec.js › smoke.spec.js › spa: holds on the grade"));
+  // and does not swallow an unrelated title from the same file
+  assert.ok(!t.pattern.test("tests/smoke.spec.js › smoke.spec.js › something else"));
+});
+
+test("regex metacharacters in a template's literal chunks are escaped", () => {
+  // A title containing "(" or "+" would otherwise build an invalid or
+  // over-matching pattern — and the repo has plenty: "slope gravity behaves +
+  // road-following holds on the grade".
+  const src = "test(`${id}: a + b (c)`, async () => {});";
+  const [t] = titlesIn(src, "tests/smoke.spec.js");
+  assert.ok(t.pattern.test("tests/smoke.spec.js › smoke.spec.js › x: a + b (c)"));
+  assert.ok(!t.pattern.test("tests/smoke.spec.js › smoke.spec.js › x: a  b  c "));
+});
+
 test("skipped tests are declared but not counted as unobserved", () => {
   // A skipped test is unobserved BY INTENT. Counting it beside the accidental
   // ones is how the accidental ones get lost in the noise.
