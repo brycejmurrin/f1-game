@@ -79,6 +79,41 @@ narrow is a missed regression, one that is too wide costs minutes.
 | single spec | `npm test -- tests/<file>.spec.js` |
 | single unit suite | `node --test tests/<file>.test.mjs` |
 
+### A `waitForFunction` timeout does not bound the wait
+
+Playwright polls a `waitForFunction` predicate on `requestAnimationFrame` by
+default. A page running the game loop under SwiftShader starves that poll badly
+enough that the **declared timeout never fires**, and the wait runs until the
+TEST budget kills it.
+
+Measured (`tests/manual/timeout-probe.spec.js`), all with `{ timeout: 3000 }`
+against a predicate that can never be true:
+
+| page state | actual |
+|---|---|
+| parked Monza, rendering | **109,665 ms** — 36x the declared bound |
+| menu page | also overran |
+| predicate that THROWS | **11 ms** — terminates promptly |
+
+The throwing case is the tell: an exception propagates without polling, so an
+absent global fails fast while a plain `false` does not. That is why a wait on
+`GLX.__tlx.fxState().skidVerts > 0` behaves completely differently depending on
+whether the TLX backend happens to be installed.
+
+**Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
+
+The repo currently has **312 `waitForFunction` calls carrying a timeout across
+104 specs, and not one passes `polling`** — so every one of those bounds is
+decoration. The visible symptom is a test that reports `Test timeout of Nms
+exceeded` while pointing at a line that claims to wait 30 s; `tlx-probes`' M6
+skid spent 344 s inside a 30 s wait that way, and the wrong conclusion drawn
+from it (that `__apex.act()` was hanging) cost two probes before a third
+measured `act()` at 309 ms.
+
+The corollary matters as much as the fix: **"this test's explicit waits total N
+seconds, so the missing time must be elsewhere" is not a valid deduction here**
+until the call sites carry `polling`.
+
 ### Turning diagnostics up
 
 Levels come from `js/log.js`. `APEX_LOG` is written to `localStorage` before any

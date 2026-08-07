@@ -90,6 +90,23 @@ Three hard edges while a run is in flight:
 - **Don't hand a subagent a test run** — give it a flat prohibition ("report it
   unverified"), not a load threshold it will check once and outrun.
 
+**A `waitForFunction` timeout DOES NOT BOUND THE WAIT on a rendering page.**
+Playwright polls the predicate on `requestAnimationFrame` by default, and a page
+running the game loop under SwiftShader starves that poll badly enough that the
+declared timeout never gets to fire. MEASURED: `{ timeout: 3000 }` against a
+never-true predicate ran **109,665 ms** on a parked Monza and died on the TEST
+budget instead — 36x its declared bound. It overran on a menu page too. Only a
+predicate that THROWS terminates promptly (11 ms), because the exception
+propagates without polling — which is why an absent global fails fast and a
+plain `false` does not. Pass `{ polling: 100, timeout: N }` for any wait on a
+page that is rendering. The repo has **312 `waitForFunction` calls carrying a
+timeout across 104 specs and NOT ONE passes `polling`**, so today every one of
+those bounds is decorative: a condition that never becomes true burns the whole
+test budget and reports `Test timeout of Nms exceeded` from a line that claims
+to wait 30 s. `tlx-probes`' M6 skid is the worked example — 344 s inside a 30 s
+wait. Reasoning of the form "this test's explicit waits total N seconds, so the
+time must be elsewhere" is UNSOUND until the call sites are fixed.
+
 Write tests against `__apex` hooks, not rendering magnitudes; prefer relative
 assertions ("faster on tarmac than grass") over absolute thresholds. New-test
 checklist and the two-project (headless/render) split: `docs/TESTING.md`.
