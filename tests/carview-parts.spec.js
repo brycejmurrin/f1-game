@@ -2,7 +2,7 @@
 // The isolated car viewer exposes every parts category for manual audits.
 import { test, expect } from "@playwright/test";
 
-test("car viewer exposes controls for all eight parts categories", async ({ page }) => {
+test("car viewer exposes controls for all twelve parts categories", async ({ page }) => {
   await page.goto("/tools/carview.html?team=mclaren");
   await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15_000 });
 

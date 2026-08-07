@@ -38,7 +38,9 @@ test.describe("Budget system — display", () => {
     await openSetup(page);
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain("600");
-    expect(text).toContain("600");
+    // Nothing is spent at defaults, so remaining equals the cap (setup-ui.js
+    // renders "BUDGET: <remaining> / <cap> cr remaining").
+    expect(text).toContain("600 / 600 cr remaining");
     await page.screenshot({ path: galleryPath("parts-budget", "budget-default.png") });
   });
 

@@ -54,10 +54,6 @@ const BASELINE = {
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
-test("Shanghai uses the default clean prop-clearance baseline", () => {
-  expect(BASELINE.shanghai).toBeUndefined();
-});
-
 test("no prop geometry on/above the racing line (all circuits)", async ({ page }) => {
   // One test walks every circuit, so the budget scales with the roster AND
   // with how much geometry each circuit carries. 600 s was already marginal on

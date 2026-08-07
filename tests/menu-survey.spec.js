@@ -57,7 +57,7 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("30 settings menu — default (steer TILT)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    await cycleTo(page, "pm-steer", "TILT");
+    expect(await cycleTo(page, "pm-steer", "TILT")).toContain("TILT");
     await shot(page, "portrait-30-settings-tilt");
   });
 
@@ -78,8 +78,8 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("33 settings menu — GEARS MANUAL (tilt)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    await cycleTo(page, "pm-steer", "TILT");        // GEARS only active in tilt
-    await cycleTo(page, "pm-gears", "MANUAL");
+    expect(await cycleTo(page, "pm-steer", "TILT")).toContain("TILT"); // GEARS only active in tilt
+    expect(await cycleTo(page, "pm-gears", "MANUAL")).toContain("MANUAL");
     await shot(page, "portrait-33-settings-gears-manual");
   });
 
@@ -93,6 +93,12 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await page.waitForTimeout(120);
     await page.evaluate(() => document.getElementById("as-music-off").click());
     await page.evaluate(() => document.getElementById("as-sound-off").click());
+    // The OFF half of each switch must now carry the selected ("active") ring —
+    // game.js toggles it in the audio-sheet sync; AriaState mirrors it to aria-pressed.
+    expect(await page.evaluate(() => ({
+      music: document.getElementById("as-music-off").classList.contains("active"),
+      sound: document.getElementById("as-sound-off").classList.contains("active"),
+    }))).toEqual({ music: true, sound: true });
     await page.evaluate(() => document.getElementById("as-close").click());
     await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
@@ -101,7 +107,7 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("35 settings menu — RESOLUTION pinned", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    await cycleTo(page, "pm-res", "HIGH");
+    expect(await cycleTo(page, "pm-res", "HIGH")).toContain("HIGH");
     await shot(page, "portrait-35-settings-res-high");
   });
 
@@ -111,6 +117,10 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await clickId(page, "pm-lighting");
     await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { timeout: 8_000 });
     await page.waitForTimeout(400);
+    // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
+    expect(await page.evaluate(() =>
+      document.querySelectorAll("#lt-rows input[type=range]").length
+    )).toBeGreaterThan(0);
     await shot(page, "portrait-36-lighting-tuner");
   });
 });
@@ -120,7 +130,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
 
   async function startDriving(page, mode /* "touch"|"buttons"|"tilt" */) {
     await openSettings(page);                 // race bahrain + open settings
-    await cycleTo(page, "pm-steer", mode);
+    expect(await cycleTo(page, "pm-steer", mode)).toContain(mode.toUpperCase());
     await page.evaluate(() => {
       document.getElementById("pm-settings-close").click();
       document.getElementById("pm-resume").click();
@@ -132,12 +142,17 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("40 HUD — touch controls", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await startDriving(page, "touch");
+    // Touch steering active: the body carries the steer-touch layout class.
+    expect(await page.evaluate(() => document.body.classList.contains("steer-touch"))).toBe(true);
     await shot(page, "landscape-40-hud-touch");
   });
 
   test("41 HUD — button steering controls", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await startDriving(page, "buttons");
+    // Button steering active: the steer buttons are actually on screen.
+    await expect(page.locator("#btn-steer-left")).toBeVisible();
+    await expect(page.locator("#btn-steer-right")).toBeVisible();
     await shot(page, "landscape-41-hud-buttons");
   });
 
@@ -149,6 +164,9 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.waitForTimeout(300);
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
     await page.waitForTimeout(300);
+    // hud-hidden strips the HUD and leaves only the restore eye (css/overlays.css).
+    await expect(page.locator("#hud")).toBeHidden();
+    await expect(page.locator("#hud-restore")).toBeVisible();
     await shot(page, "landscape-42-hud-hidden");
   });
 
@@ -159,7 +177,10 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
-    await page.locator("#campicker").waitFor({ state: "visible" }).catch(() => {});
+    await page.locator("#campicker").waitFor({ state: "visible" });
+    // The grid built a button per camera mode and highlights exactly the current one.
+    expect(await page.locator("#campicker button").count()).toBeGreaterThanOrEqual(10);
+    expect(await page.locator("#campicker button.active").count()).toBe(1);
     await page.waitForTimeout(300);
     await shot(page, "landscape-43-camera-picker");
   });

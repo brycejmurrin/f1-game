@@ -213,8 +213,26 @@ test.describe("Apex 26 — HUD", () => {
     await goToRace(page);
     await park(page, 0);
 
-    // The minimap canvas should have been painted (width/height > 0)
-    const minimapBox = await page.locator("canvas#minimap").boundingBox();
-    expect(minimapBox?.width).toBeGreaterThan(0);
+    // The HUD tick (~10 Hz) blits the pre-rendered track outline onto the 2D
+    // minimap canvas — wait for that first paint rather than racing it.
+    await page.waitForFunction(() => {
+      const c = document.querySelector("canvas#minimap");
+      if (!c || !c.width) return false;
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
+      return false;
+    }, { timeout: 5000 });
+
+    // A drawn outline is a 2px stroke around the whole lap, so a painted map
+    // has hundreds of non-transparent pixels; a blank canvas has zero. Count
+    // above a small floor rather than matching exact colours — sector tints
+    // and car dots vary per run.
+    const painted = await page.locator("canvas#minimap").evaluate((c) => {
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+      return n;
+    });
+    expect(painted).toBeGreaterThan(200);
   });
 });
