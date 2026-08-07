@@ -1,7 +1,9 @@
 /*
- * Apex 26 — WebGL2 renderer.
- * One standard lit shader (hemisphere ambient + lambert sun + exp2 fog),
- * a sky shader (fullscreen triangle via gl_VertexID) and a blob-shadow quad.
+ * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps,
+ * shadow maps, procedural materials, wet road, fog), the procedural sky and
+ * the FX passes — ~13 programs. GLSL sources live in js/render/shaders/
+ * (chunks/lit/sky/fx/post); the post, shadow and chunked-scenery subsystems
+ * are split into js/render/glx/.
  */
 "use strict";
 

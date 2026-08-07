@@ -171,7 +171,9 @@ const NetRendezvous = (function () {
   // makes the room code the secret, exactly as the invite code is today. Nobody
   // sweeping the broker learns anything.
   //
-  // NOT WIRED UP. seal/open/topicFor have no production caller: swap() posts
+  // seal()/open() ARE wired on the public room-code path — NetNostr.
+  // directExchange seals every exchange. Still unsealed: topicFor (no
+  // production caller) and the private worker path — swap() posts
   // through httpPut(), which sends plain JSON. The blocker is not the crypto,
   // it is worker/rendezvous.js's single-writer rule — it rejects a second
   // `offer` by comparing the STORED payload against the incoming one, and

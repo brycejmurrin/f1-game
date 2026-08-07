@@ -1,16 +1,21 @@
 /*
- * Apex 26 — Gfx: the renderer backend seam (WebGPU migration, Phase 0).
+ * Apex 26 — Gfx: the renderer backend seam.
  *
- * WebGL2 (GLX) is the default renderer. game.js uses this selection seam only
- * when `apex26.gfxBackend=webgpu` explicitly opts into WebGPU; `Gfx.create()`
- * then feature-detects WebGPU and returns a WGX backend implementing the
- * interface below. On absence or ANY failure it returns `null`, and THE CALLER
- * falls back to GLX. This module deliberately does NOT reference GLX — keeping
- * the fallback decision in game.js avoids coupling the two backends here.
+ * THREE backends stand behind this seam:
+ *   GLX  (WebGL2)          the DEFAULT — everyone gets it, no opt-in.
+ *   TLX  (three.js/TSL)    opt-in via localStorage apex26.gfxBackend="three".
+ *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu"; FROZEN and
+ *                          not at GLX parity (no volumetrics/PCSS/MSAA/gpuTimer).
+ *
+ * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
+ * injects their files at boot (see DEFERRED/BACKEND_FILES in game.js) only when
+ * the matching opt-in is set, then calls `Gfx.create()`, which returns a ready
+ * TLX or WGX backend implementing the interface below — or `null` on absence
+ * or ANY failure, and THE CALLER falls back to GLX. This module deliberately
+ * does NOT reference GLX — keeping the fallback decision in game.js avoids
+ * coupling the backends here.
  *
  * NO build step, no ES modules: "use strict" IIFE assigning one global `Gfx`.
- * Load order in index.html:
- *     wgsl-chunks.js -> wgx.js -> gfx.js -> ... -> game.js
  * `Gfx` is inert until game.js calls it; nothing here runs at load time.
  *
  * ─────────────────────────────────────────────────────────────────────────────
@@ -92,11 +97,12 @@ const Gfx = (function () {
   /**
    * create(canvas, opts) -> Promise<backend | null>
    *
-   * Resolves to a ready WebGPU backend (implementing the interface above) when
-   * WebGPU is present, permitted, and initialises cleanly. Resolves to `null`
-   * on: no navigator.gpu, user opt-out (localStorage apex26.gfxBackend=webgl2),
-   * WGX not loaded, or ANY init failure. On null the CALLER must fall back to
-   * GLX, e.g.:
+   * Resolves to a ready opt-in backend (implementing the interface above):
+   * TLX when apex26.gfxBackend="three", else WGX when WebGPU is present,
+   * permitted, and initialises cleanly. Resolves to `null` on: no opt-in
+   * backend available, no navigator.gpu, user opt-out (apex26.gfxBackend=
+   * "webgl2"), backend not loaded, or ANY init failure. On null the CALLER
+   * must fall back to GLX, e.g.:
    *
    *     let gfx = await Gfx.create(canvas);
    *     if (!gfx) { if (!GLX.init(canvas)) { showNoGl(); return; } gfx = GLX; }

@@ -87,7 +87,7 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
-    /* ── the 28 uniforms (glx.js drawSky upload, defaults :969-1003) ───────── */
+    /* ── the 28 uniforms (glx.js drawSky upload, defaults :1292-1326) ──────── */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
       zenith:        uniform(new THREE.Vector3(0.18, 0.40, 0.78)),
@@ -120,7 +120,7 @@
     };
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
-     * glx.js:969-1003 upload exactly (each frameSky field maps to the same-
+     * glx.js:1292-1326 upload exactly (each frameSky field maps to the same-
      * named uniform; stars is the bool->float night flag). Takes whatever
      * invViewProj the frame carries — the env-probe pass (M9) swaps it. */
     function update(sky) {

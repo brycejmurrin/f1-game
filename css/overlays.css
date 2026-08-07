@@ -637,11 +637,10 @@ body.hud-hidden #hud-restore { display: block; }
    ICE-gathered SDP, compressed. Nobody is going to retype that, so the boxes
    are monospace, selectable, scrollable, and paired with copy buttons; the
    layout assumes the code is moved by clipboard, not by eye. */
-/* Above the main menu (#overlay, z-index 20) that opens it — and above the
-   team picker (36), since both can be reached from the same screen. Without an
-   explicit z-index the sheet renders BEHIND the menu: still "visible" to a
-   query, but every click lands on the menu instead, which reads as a dead
-   button rather than a stacking bug. */
+/* #vsfriend is a top-layer <dialog class="screen"> now: showModal() stacks it
+   over the main menu (#overlay, z-index 20) and any other open sheet, so it
+   needs no z-index of its own (`:modal` outranks every z value — see
+   js/game/uilayers.js / topmodal.js for the ladder). */
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
 #vsfriend .vs-hint {
   margin: 4px 0 0;

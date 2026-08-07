@@ -72,36 +72,39 @@ test("cinematic fov overrideable via opts", async ({ page }) => {
   expect(res.fov).toBe(65);
 });
 
-test("cinematic camera outside right corner (k>0)", async ({ page }) => {
+test("cinematic camera outside left corner (k>0)", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page, "monaco");
-  // Find a right-hand corner (positive curvature)
+  // Find a LEFT-hand corner: +k bends the road left (measured — see the
+  // corner-table note in js/game/agentview.js; the old "+k = right" labels
+  // were backwards, and this spec pinned the camera to the INSIDE with them).
   const res = await page.evaluate(() => {
     const profile = __apex.trackProfile(200);
-    const rightCorner = profile.find(p => p.k > 0.02);
-    if (!rightCorner) return null;
-    return __apex.cinematic(rightCorner.frac);
-  });
-  // Monaco has right-hand corners — a null here means trackProfile/curvature
-  // regressed, so assert non-null instead of silently passing (was `if (res)`).
-  expect(res).not.toBeNull();
-  // For a right-hand corner (k>0), az should be negative (camera on the left/outside)
-  expect(res.az).toBeLessThan(0);
-});
-
-test("cinematic camera outside left corner (k<0)", async ({ page }) => {
-  await page.setViewportSize(VIEWPORT);
-  await loadTrack(page, "monaco");
-  const res = await page.evaluate(() => {
-    const profile = __apex.trackProfile(200);
-    const leftCorner = profile.find(p => p.k < -0.02);
+    const leftCorner = profile.find(p => p.k > 0.02);
     if (!leftCorner) return null;
     return __apex.cinematic(leftCorner.frac);
   });
-  // Monaco has left-hand corners — assert non-null instead of silently passing.
+  // Monaco has left-hand corners — a null here means trackProfile/curvature
+  // regressed, so assert non-null instead of silently passing (was `if (res)`).
   expect(res).not.toBeNull();
-  // For a left-hand corner (k<0), az should be positive (camera on the right/outside)
+  // Outside of a left-hander (k>0) is the RIGHT side of the road; orbit()'s
+  // az>0 is the right side → az positive.
   expect(res.az).toBeGreaterThan(0);
+});
+
+test("cinematic camera outside right corner (k<0)", async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await loadTrack(page, "monaco");
+  const res = await page.evaluate(() => {
+    const profile = __apex.trackProfile(200);
+    const rightCorner = profile.find(p => p.k < -0.02);
+    if (!rightCorner) return null;
+    return __apex.cinematic(rightCorner.frac);
+  });
+  // Monaco has right-hand corners — assert non-null instead of silently passing.
+  expect(res).not.toBeNull();
+  // Outside of a right-hander (k<0) is the LEFT side → az negative.
+  expect(res.az).toBeLessThan(0);
 });
 
 // ── carOrbit() ────────────────────────────────────────────────────────────────

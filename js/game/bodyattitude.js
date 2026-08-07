@@ -52,7 +52,9 @@ const PITCH_GAIN  = 0.00095;           // rad per (m/s²) of longitudinal accel
 const PITCH_MAX   = 0.024;             // ≈1.4° cap
 const ROLL_OMEGA  = 7;                 // rad/s spring rate — cornering lean
 const ROLL_MAX    = 0.055;             // ≈3.1° cap at full lateral grip
-const LAT_MAX     = 22;                // m/s² cornering grip (mirrors game.js)
+const LAT_MAX     = PhysicsConsts.LAT_MAX;  // m/s² cornering grip — the model's own
+                                       //   number (physics-consts loads first), so a
+                                       //   retune can't desync the visual roll model
 const HEAVE_OMEGA = 20;                // rad/s (≈3.2 Hz natural freq). Was 12 (≈1.9 Hz) —
                                        //   dead on the road ripple's 1.6-2.8 Hz band at
                                        //   racing speed (tracks.js undulate, 30-52 m short

@@ -67,8 +67,9 @@ const STEP = 4;
 //
 // The response is sublinear (much of a lap is cornering-limited by
 // sqrt(latMax/k), which this does not scale), so do not solve for it
-// algebraically. Re-measure with artifacts/tmp/quali-calibrate.mjs — it reads this
-// constant and reports the fit — whenever the driving model changes.
+// algebraically. Re-measure whenever the driving model changes: drive a clean
+// lap, compare against qualiSim()'s field times, and trim this constant until
+// pole sits just ahead of a good driven lap.
 const QUALI_TRIM = 0.75;
 
 // How far a driver's one-lap execution can stray, before consistency scales it.

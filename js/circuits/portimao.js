@@ -41,8 +41,9 @@
       sunDir:        [0.38, 0.72, 0.28],
     },
     // THE defining feature: Portimão is a rollercoaster. Blind crests, sudden
-    // drops and a pit straight that plunges downhill into Turn 1. These are the
-    // biggest authored elevation deltas of any circuit in this batch.
+    // drops and a pit straight that plunges downhill into Turn 1. The most
+    // authored elevation bumps (six) and the largest summed rise of any circuit
+    // in this batch (Kyalami's single range is a touch larger).
     elevations: [
       { s: 0.045, halfM: 260, rise: -14.0 },  // the drop into Turn 1
       { s: 0.20, halfM: 300, rise: 11.0 },    // climb to the Turn 3 crest

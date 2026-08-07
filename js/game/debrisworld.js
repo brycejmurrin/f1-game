@@ -865,8 +865,8 @@ function updatePanels(dt, px, pz) {
 }
 
 // ── B1: hazard query — settled bodies resting ON the racing surface ─────────
-// Deterministic read of the side-world consumed by the game.js caution state
-// machine. A body counts when it is (a) asleep (isSleeping), (b) roughly at road
+// Deterministic read of the side-world consumed by the caution state machine
+// (js/game/racecontrol.js). A body counts when it is (a) asleep (isSleeping), (b) roughly at road
 // height, and (c) inside the road half-width once projected back to (s, lat).
 // A3 cones count ONLY after being knocked FURN_DISTURB_M off their placed home —
 // an untouched apex cone is scene dressing, not a yellow-flag hazard. Returns

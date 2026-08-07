@@ -290,6 +290,7 @@ const HARD_EDGES = [
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
   ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
+  ["js/game/physics-consts.js", "js/game/bodyattitude.js"], // LAT_MAX read at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval

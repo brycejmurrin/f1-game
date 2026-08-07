@@ -41,9 +41,10 @@ fn hash3(p_in: vec3<f32>) -> f32 {
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }`;
 
-  // ── vnoise: value noise + 4-octave fbm (mirror SKY_FS vnoise2/fbm, glx:926) ──
-  // Depends on `hash` (uses hash2). This is the leaf that is duplicated in GLSL
-  // today as vnoise/vnoise2 — here it lives once.
+  // ── vnoise: value noise + 4-octave fbm (mirror of GLXChunks.vnoise in
+  //    js/render/shaders/chunks.js) ──
+  // Depends on `hash` (uses hash2). The old GLSL vnoise/vnoise2 duplication is
+  // gone — the sky-family GLSL copy lives once there, under this chunk's name.
   const vnoise = `
 fn vnoise(p_in: vec2<f32>) -> f32 {
   let i = floor(p_in);

@@ -32,7 +32,8 @@
       { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 },
       { t: 70, l: 90 },
     ],
-    // Undulating amphitheatre (~36 m): SF high → T1 plunge → climb mid → home.
+    // Undulating amphitheatre (~38 m full range: mid crest +16 → T1 basin −22;
+    // SF plateau +14).
     elevations: [
       { s: 0.00, halfM: 240, rise: 14 },   // SF plateau high
       { s: 0.12, halfM: 340, rise: -22 },  // T1 plunge / T2–4 basin low

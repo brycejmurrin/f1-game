@@ -60,7 +60,7 @@ void main() {
   // Flat UV'd quads sitting slightly proud of the bodywork, sampling a canvas-
   // baked RGBA atlas (transparent where there's no mark). Lit by sun + hemisphere
   // ambient so a decal sits INTO the paint's shading instead of floating flat;
-  // uDecalGlow lifts bright marks so white sponsors read at night.
+  // uGlow lifts bright marks so white sponsors read at night.
   const DECAL_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;

@@ -1388,7 +1388,7 @@ const WGX = (function () {
       // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
       // the shadow box is snapped around (game.js shadow pass; glides with the
       // camera so the LIT distance fade never jumps on a box recentre), w =
-      // shadowRange (SHADOW DISTANCE knob, box half-size in m — same 64 fallback
+      // shadowRange (SHADOW DISTANCE knob, box half-size in m — same 80 fallback
       // as GLX uShadowRange).
       const sctr = f.shadowCtr || f.eye || [0, 0, 0];
       d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];

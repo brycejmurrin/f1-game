@@ -1,6 +1,7 @@
-/* Apex 26 — main game: state machine, physics, AI, race logic, HUD.
+/* Apex 26 — main game: state machine, physics, AI, race logic.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
-   Car3D,Input,GameAudio,F1API,DataHub; optionally Gfx/WGX for WebGPU. */
+   Car3D,Input,GameAudio,F1API,DataHub; Gfx selects the opt-in TLX (three.js)
+   or WGX (WebGPU) backends, injected at boot — GLX otherwise. */
 (async function () {
 "use strict";
 
@@ -36,12 +37,13 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection. WebGPU is OPT-IN: only tried when the user set
-// apex26.gfxBackend=webgpu AND the browser exposes WebGPU. Anything else — and
-// ANY WebGPU init failure — uses the WebGL2 backend (GLX) exactly as before, so
-// the default path stays byte-for-byte identical (this async IIFE only actually
-// awaits when opted in; otherwise it runs fully synchronously). `gfx` is the
-// handle every later renderer call goes through; on the default path gfx===GLX.
+// Renderer selection. TWO opt-in backends behind the Gfx seam: TLX (three.js/
+// TSL) when apex26.gfxBackend="three", WGX (WebGPU, frozen) when ="webgpu" AND
+// the browser exposes WebGPU. Anything else — and ANY opt-in init failure —
+// uses the WebGL2 backend (GLX) exactly as before, so the default path stays
+// byte-for-byte identical (this async IIFE only actually awaits when opted in;
+// otherwise it runs fully synchronously). `gfx` is the handle every later
+// renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
 // order — each group has eval-time dependencies inside it, which the <script>
@@ -818,7 +820,7 @@ function onPeerQuali(d) {
   // The lap is done; the live clock for it is now noise.
   if (d && d.driverId != null) qualiLive.delete(d.driverId);
   if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
-  if (session !== "quali" && !isQuali()) return;
+  if (!isQuali()) return;
   const mine = player && player.best < Infinity ? player.best : 0;
   quali.simulate(qualiDriven(mine));
   if (!$("quali").hidden) quali.build();
@@ -4287,7 +4289,6 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer && isQuali() && state === "race" && c.lapTime > 0) {
     netReportQualiLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
   }
-  c.wheelAngle = (c.wheelAngle || 0) + c.speed / 0.34 * dt;
 
   // Sector detection (curated splits via sectorAt). Must run before finish-line
   // timing resets so a forward S3→S1 crossing records the completed S3 split.
@@ -4370,9 +4371,8 @@ function updateCar(c, dt, ranked) {
     if (c.lap > 0) {
       c.lap--;
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
-      // Re-crossing forward will re-announce and re-report this lap, so it must
-      // not also count as a fresh completion for the race result.
-      if (c.finished && c.lap <= lapsTarget) { c.finished = false; c.finishT = 0; }
+      // (A finished car cannot get here — updateCar early-outs it long before
+      // the crossing logic — so no `c.finished` undo is needed.)
       if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
     }
   }
@@ -5764,7 +5764,7 @@ function render(dt) {
   const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
     CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting in
   // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
-  // shadow — only the body mesh is skipped. Bumper hides everything as before.
+  // shadow — only the body mesh is skipped.
   const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];

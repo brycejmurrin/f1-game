@@ -133,9 +133,10 @@ const api = {
     G.frozen = true;   // hold the scene still for a deterministic screenshot
     return r;
   },
-  // Like park(), but orients the camera toward the horizon so clouds and sky
-  // gradient are clearly visible. Eye sits 7 m above track; target is 25 m ahead
-  // and 14 m higher — giving ~24° upward tilt, centred in the FOV-75 frustum.
+  // Like park(), but orients the camera toward the sky so clouds and the sky
+  // gradient are clearly visible. Eye sits 3.5 m above track; target is 20 m
+  // ahead and 34 m higher — ~58° up in a FOV-78 sky frustum, so the horizon
+  // drops to the lower third and the frame fills with sky.
   // Returns the same value as park(), or false when the track isn't loaded yet.
   sky(frac, lateral) {
     const r = this.park(frac, lateral);
@@ -157,9 +158,11 @@ const api = {
     G.camFov = 75;
     return r;
   },
-  // Get or set the player camera mode (CHASE / FAR / COCKPIT / HOOD). Called with
-  // no argument it returns the current mode; with a mode id ("cockpit"), label, or
-  // index it switches and persists. Mirrors the in-game CAM button / C key.
+  // Get or set the player camera mode (any of the 13 CAM_MODES ids — chase, far,
+  // drift, cockpit, hood, overhead, heli, reverse, side, cinematic, low, tcam,
+  // rear). Called with no argument it returns the current mode; with a mode id
+  // ("cockpit"), label, or index it switches and persists. Mirrors the in-game
+  // CAM button / C key.
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
@@ -315,7 +318,8 @@ const api = {
   },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
   // heading offset angle (rad, relative to track tangent), local curvature k
-  // (rad/m, +=right turn), half-width hw (m), speed (m/s) and arc position s.
+  // (rad/m, +=LEFT turn — measured in agentview.js's corner table; spline's old
+  // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
     Tracks.sample(G.track, G.player.s, smp);
@@ -337,7 +341,7 @@ const api = {
     };
   },
   // Look-ahead road sampler for closed-loop driving (the autopilot harness):
-  // curvature k (rad/m, +=right) and half-width hw at distAhead metres in front of
+  // curvature k (rad/m, +=LEFT) and half-width hw at distAhead metres in front of
   // the player. Pass an array of distances to get one reading each, e.g. for
   // picking the sharpest corner inside a braking window. Pure read — no state change.
   scan(distAhead) {
@@ -674,11 +678,14 @@ const api = {
     if (!G.track) return false;
     const fr = ((frac % 1) + 1) % 1;
     const k = Tracks.curvature(G.track, fr * G.track.total);
-    // Outside of a right-hand (k>0) corner is the left side → az negative (cam left)
-    // Outside of a left-hand (k<0) corner is the right side → az positive (cam right)
+    // +k is a LEFT-hand bend (measured — agentview.js corner-table note), whose
+    // outside is the RIGHT side of the road; orbit()'s az>0 is the right side.
+    // So az = +sign(k)·mag puts the camera on the outside, shooting across the
+    // apex. (This read -sign(k) for as long as the old "+k = right" comment
+    // lived: the cinematic cam sat on the INSIDE of every corner.)
     // Strength scales with |k| up to a tight-hairpin cap so the angle doesn't over-rotate.
     const kAbs = Math.min(Math.abs(k), 0.05);
-    const baseAz = k === 0 ? 35 : -(Math.sign(k)) * (70 + 40 * kAbs / 0.05);
+    const baseAz = k === 0 ? 35 : Math.sign(k) * (70 + 40 * kAbs / 0.05);
     const az = baseAz + (opts.azOff || 0);
     const dist = opts.dist != null ? opts.dist : 60;
     const el   = opts.el   != null ? opts.el   : 18;
@@ -851,9 +858,9 @@ const api = {
       apex.sort((p, q) => p.k - q.k);                 // then back into lap order
       apex.forEach((c, i) => {
         const k = kv[c.k];
-        // Outside of a right-hander (k>0) is camera-left (az<0); left-hander → az>0.
+        // Outside of a LEFT-hander (k>0) is the right side → az>0 (see cinematic()).
         // Auto-angle ignores azOffset (the corner geometry dictates the side).
-        const az = -(Math.sign(k)) * (70 + 40 * Math.min(Math.abs(k), 0.05) / 0.05);
+        const az = Math.sign(k) * (70 + 40 * Math.min(Math.abs(k), 0.05) / 0.05);
         shots.push({ frac: +(c.k / tn).toFixed(4), az: +az.toFixed(1), el, dist, label: `corner-${String(i + 1).padStart(2, "0")}` });
       });
       return shots;

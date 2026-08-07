@@ -193,9 +193,10 @@
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
 
 /* ---------- end of season (#career-offers) ---------- */
-/* A .dim modal over #career (z-index 25), the same relationship #quali has to the
-   screen that opened it — the hub is still where you are, this is the decision on
-   top of it. 30 matches #results/#standings, the other "the session is over" sheets.
+/* A .dim top-layer <dialog> over #career (z-index 25), the same relationship
+   #quali has to the screen that opened it — the hub is still where you are,
+   this is the decision on top of it (showModal() stacks it; no z-index needed,
+   like #results/#standings, the other "the session is over" sheets).
    The summary card is a plain .cr-card and the headings are .sel-label: nothing
    here needs a vocabulary of its own, only the offer rows are new. */
 #career-offers { --sheet-w: 620px; }
@@ -346,8 +347,8 @@
 
 /* ---------- how it works (#career-guide) ---------- */
 /* A reading sheet, so it is narrower than the hub and its prose gets a real
-   measure rather than the full 1020px the career page runs at. Sits above
-   #career at the same z-index as the history sheet — both are read-only modals
+   measure rather than the full 1020px the career page runs at. A top-layer
+   <dialog> over #career, like the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
 #career-guide { --sheet-w: 560px; }
 #cg-body { display: flex; flex-direction: column; gap: 4px; }

@@ -9,8 +9,10 @@
 //
 // Sign conventions (see Tracks.curvature + the heading model):
 //   x      metres, + = right of the centreline
-//   k      rad/m,  + = right-hand corner
-//   inside of a corner is the sign(k) side; outside is -sign(k).
+//   k      rad/m,  + = LEFT-hand corner (measured — see the corner-table note
+//          in js/game/agentview.js; the old "+ = right" label was backwards)
+//   outside of a corner is the +sign(k) side; inside is -sign(k) — which is
+//   what the assertions below always used.
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
@@ -166,20 +168,23 @@ test.describe("Apex 26 — steering", () => {
     }
     expect(Math.abs(k0)).toBeGreaterThan(0.02);
 
-    // Isolate the DRIVER's authority from the DRIVING-HELP assist: with the assist
-    // off, coasting drifts to the outside, and holding inward lock must pull the
-    // car clearly toward the inside — proving manual steering controls the line.
+    // Isolate the DRIVER's authority from the DRIVING-HELP assist: with the
+    // assist off, held lock must move the car clearly further in the steered
+    // direction than coasting does — proving manual steering controls the line.
+    // (lockDir = +sign(k) was named "inward" when "+k = right-hand corner" was
+    // believed; under the measured convention it is the outside. The assertion
+    // never cared which side — it measures authority relative to coasting.)
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-    const inward = Math.sign(k0);
+    const lockDir = Math.sign(k0);
     const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 75 });
-    const held = await run(page, { frac, speed: 22, steer: inward, throttle: false, ticks: 75 });
+    const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 75 });
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
 
-    const dxZero = zero.after.x - zero.before.x;   // drifts outward (−sign(k))
-    const dxHeld = held.after.x - held.before.x;   // should be far more inward
-    // Steering must move the car at least 2 m further toward the inside than
-    // coasting does — i.e. the driver genuinely controls the line.
-    expect((dxHeld - dxZero) * inward).toBeGreaterThan(2);
+    const dxZero = zero.after.x - zero.before.x;
+    const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir
+    // Held lock must move the car at least 2 m further toward the steered side
+    // than coasting does — i.e. the driver genuinely controls the line.
+    expect((dxHeld - dxZero) * lockDir).toBeGreaterThan(2);
   });
 
   test("direction: +steer goes right, −steer goes left on a straight", async ({ page }) => {

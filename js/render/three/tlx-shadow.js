@@ -25,7 +25,7 @@
  * textureSampleCompare on WebGPU.
  *
  * TODO M4-PCSS: GLX builds a 512² R16F min-of-4 blocker map from the sun
- * depth texture through a COMPARE-OFF sampler object (glx/shadow.js:147-178)
+ * depth texture through a COMPARE-OFF sampler object (glx/shadow.js:151-182)
  * for the PCSS-lite penumbra search. three has no per-use sampler override —
  * a texture with compareFunction set is ALWAYS declared sampler2DShadow /
  * textureSampleCompare, so the same depth texture cannot also be read as a

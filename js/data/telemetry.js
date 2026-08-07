@@ -1281,7 +1281,6 @@ const DataTelemetry = (function () {
     const series = others.map(function (lane) { return deltaSamplesFor(view, lane); });
     let mn = 0, mx = 0;
     series.forEach(function (s) { if (s.mn < mn) mn = s.mn; if (s.mx > mx) mx = s.mx; });
-    view._delta = series[0];    // gauge scrub uses the primary compare series
     const span = Math.max(0.15, mx - mn);
     const X = function (t) { return chartX(view, t, W); };
     const Y = function (v) { return pad + (mx - v) / span * (H - 2 * pad); };

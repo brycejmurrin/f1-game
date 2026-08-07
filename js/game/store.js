@@ -9,7 +9,7 @@ const GameStore = (function () {
 const store = {
   _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
   rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
-  // NON-NULL once a write has failed: the DOMException name ("QuotaExceededError",
+  // NON-NULL once a read or write has failed: the DOMException name ("QuotaExceededError",
   // "SecurityError", …). See the comment on set().
   broken: null,
   get(k, d) {

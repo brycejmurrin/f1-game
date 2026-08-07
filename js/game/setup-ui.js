@@ -1,6 +1,6 @@
 /* Apex 26 — the GARAGE screen UI for js/game.js (#carsetup): everything about
    WHO you are and WHAT you drive. Stat bars, the tab column (TEAM & DRIVER,
-   the 8 parts categories, LIVERY), option rows + credits budget, livery
+   the 12 parts categories, LIVERY), option rows + credits budget, livery
    swatches and the inline livery creator. The select screen owns WHERE you
    race and links here; race settings own HOW a race runs.
    Pure DOM assembly; live state (sound, budget flag, selected team/driver,

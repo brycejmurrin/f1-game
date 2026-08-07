@@ -13,7 +13,8 @@
 
    Conventions (repeated in every payload, because an agent cannot be assumed to
    have read this file): metres, m/s, seconds, radians unless a key says
-   otherwise; +x is right of the centreline; +k is a right-hand turn; a rival's
+   otherwise; +x is right of the centreline; +k is a LEFT-hand turn (measured —
+   see the corner-table note below); a rival's
    `lateralM` is relative to the PLAYER, not the centreline.
 */
 const AgentView = (function () {
@@ -916,7 +917,7 @@ const AgentView = (function () {
         // Being punished and unable to perceive it is the worst kind of blind
         // spot: an agent that cannot see `cuts`/`penalty` cannot learn to stop
         // doing the thing being penalised. Three cuts are free; from the fourth
-        // on, every cut costs +5 s (js/game.js ~2178).
+        // on, every cut costs +5 s (js/game.js ~3655).
         penalties: {
           cuts: p.cuts || 0,
           freeCutsLeft: Math.max(0, 3 - (p.cuts || 0)),
@@ -2307,7 +2308,7 @@ const AgentView = (function () {
           + "speed and you keep the position loss.",
         ],
         units: "metres, m/s, seconds, degrees where a key says Deg. +x is right "
-             + "of the centreline; +k is a right-hand turn.",
+             + "of the centreline; +k is a LEFT-hand turn.",
         note: "STATIC facts about the game. How the CAR behaves is not described "
             + "here on purpose — learn it by calling rollout()/act() and reading "
             + "world(), which stays true when the physics is retuned.",
@@ -2443,7 +2444,7 @@ const AgentView = (function () {
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
         cli: "node tools/agent.mjs <track> <help|world|field|scene|atmosphere|"
-             + "describe|query|render|track|car|survey|rollout> [flags]",
+             + "objective|model|describe|query|render|track|car|survey|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "

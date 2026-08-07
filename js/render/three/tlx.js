@@ -507,7 +507,7 @@ const TLX = (function () {
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
       // ── M8: frame state the post chain consumes at present() (the GLX
-      // frameInvProj/frameInvVP/frameSunVS/… latch — glx.js:666-682). All
+      // frameInvProj/frameInvVP/frameSunVS/… latch — glx.js:839-857). All
       // POINTERS into the game's stable per-frame arrays; nulled every
       // begin() so a probe-less path (setup preview, menus) self-disables
       // SSAO/SSR/godray rather than reconstructing with stale matrices. ─────
@@ -530,7 +530,7 @@ const TLX = (function () {
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
 
-      // ── M9 env-probe frame state (glx.js:62-81 port) ─────────────────────
+      // ── M9 env-probe frame state (glx.js:72-88 port) ─────────────────────
       // A CubeCamera owns the 6 face sub-cameras with the correct cube-face
       // orientations (fov 90, aspect 1, near 0.4, far 900 — GLX's
       // perspectiveTo(π/2, 1, 0.4, 900)). envFaceBegin positions it at the
@@ -589,7 +589,7 @@ const TLX = (function () {
         g.setAttribute("mat", new THREE.BufferAttribute(
           new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
         // Road track-space coords (arc-length s, signed lateral x, half-width),
-        // GLX attribute location 4 (glx.js:435-468). tsl-lit's roadMarkings()
+        // GLX attribute location 4 (glx.js:469-478, :505). tsl-lit's roadMarkings()
         // paints the edge lines and the dashed centre line analytically from
         // these, so a road mesh WITHOUT them renders as bare tarmac — which is
         // exactly what this backend did until now. ALWAYS present, zero-filled
@@ -930,7 +930,7 @@ const TLX = (function () {
             lit.updateFrame(frame);
             // M9: env-probe strength. 0 until a full cube has captured; forced
             // 0 on a probe-less preview (frame.noEnv) even if a stale cube
-            // lingers — glx.js:864-867 1:1 (fallback mirrors TUNE_DEFS
+            // lingers — glx.js:1037-1044 1:1 (fallback mirrors TUNE_DEFS
             // carEnvCube def 0). Held off while rendering INTO the cube.
             if (lit.setEnvStr) {
               const _T = frame.tune;
@@ -945,7 +945,7 @@ const TLX = (function () {
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
-          // M8: latch the post chain's frame inputs (glx.js:666-682). The
+          // M8: latch the post chain's frame inputs (glx.js:839-857). The
           // viewProj is the _frameVP COPY — immune to a swapped frame array.
           _postF.proj = (frame && frame.proj) || null;
           _postF.invProj = (frame && frame.invProj) || null;

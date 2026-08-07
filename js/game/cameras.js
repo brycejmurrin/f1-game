@@ -128,9 +128,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = 46;
   } else if (mode === "heli") {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
-    // upcoming bend so it looks across the apex.
+    // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
+    // agentview.js corner-table note) whose outside is +r; this read -1 for
+    // kA>0 while the old "+k = right" comment lived, hovering on the INSIDE.
     Tracks.sample(track, wrapS(s - 26), cvB);
-    const sgn = kA > 0.001 ? -1 : kA < -0.001 ? 1 : 1;
+    const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
     eye = [cvB.p[0] + cvB.r[0] * hl * sgn, cvB.p[1] + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
     tgt = [p[0], p[1] + 0.8, p[2]];
@@ -151,7 +153,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // full disorienting loops. Auto-picks the outside of the bend; on a straight it
     // slowly drifts a three-quarter angle. Angle is measured around the car from
     // the track tangent, so the framing reads consistently corner to corner.
-    const base = kA === 0 ? 0.6 : (kA > 0 ? -1 : 1) * 1.15;
+    // +kA = LEFT bend → outside is +r → positive angle (same fix as heli above).
+    const base = kA === 0 ? 0.6 : (kA > 0 ? 1 : -1) * 1.15;
     const a = base + Math.sin(now * 0.00022) * 0.5;
     // Cap the WHOLE orbit radius at the street-canyon corridor — since
     // |cos a|,|sin a| ≤ 1, capping od itself bounds BOTH axes by the corridor

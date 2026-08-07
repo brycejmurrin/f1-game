@@ -44,7 +44,8 @@
       { t: 70, l: 65 }, { t: -80, l: 70 }, { t: 70, l: 65 }, { t: -75, l: 70, w: 4.8 }, { t: -40, l: 120 },
     ],
     // Climb to Casino Square, then the plunge down through Mirabeau and the
-    // tunnel toward the harbour (~42 m top-to-bottom). Street circuit: barriers,
+    // tunnel toward the harbour (40 m top-to-bottom as authored; real Monaco
+    // is ~42 m). Street circuit: barriers,
     // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.10, halfM: 340, rise: 30 }, { s: 0.55, halfM: 220, rise: -10 }],
     // Monaco does not have a constant road width — it pinches through Loews and

@@ -103,9 +103,7 @@ float vnoise(vec2 p) {
 vec3 acesTonemap(vec3 x) {
   float a = uAcesA, b = uAcesB, c = uAcesC, d = uAcesD, e = uAcesE;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-// Lift-gamma-gain colour grade: very mild S-curve per channel.`;
+}`;
 
   return { hash, vnoise, surfaceNoise, ignoise, tonemap };
 })();

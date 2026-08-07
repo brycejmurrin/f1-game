@@ -604,8 +604,8 @@ const GameAudio = (function () {
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
 
   function startRain(gain) {
-    // Optional gain: the drizzle weather tier passes a low level (soft patter);
-    // undefined keeps the full storm loudness. Re-targets live if already
+    // Optional gain for a softer tier (no live caller passes one today — both
+    // call sites use the full 0.065). Re-targets live if already
     // running, so a mid-race wet↔rain flip fades the loop instead of sticking.
     const g = gain == null ? 0.065 : gain;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
