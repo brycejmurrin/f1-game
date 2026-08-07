@@ -66,11 +66,14 @@ Mexico terrain pin. It is now the campaign's largest measured defect class.
 mechanically — every title declared in `tests/*.spec.js`, from the AST, against
 every title any log in `artifacts/logs/` has reported a result for.
 
-**First measurement: 564 of 1135 Playwright tests had a recorded local result.
-571 did not.** Ten groups had never run at all; `steering` (88) and `net` (70)
-are the largest. (`artifacts/` is gitignored and local, so this is "what this box
-has never run", not "what has never run anywhere" — a worklist ordered by
-ignorance.)
+**Measured 2026-08-07: 578 of 1152 Playwright tests have a recorded local
+result. 574 do not.** Ten groups had never run at all; `steering` (88) and
+`net` (70) are the largest. (The first figure quoted here was 564 of 1135 — the
+denominator was wrong because the detector silently dropped every
+loop-generated `test(\`${id}: …\`)` declaration, 17 of them across 16 specs.
+Corrected in `9781e26d`; the observed count also rose as groups were run.)
+`artifacts/` is gitignored and local, so this is "what this box has never run",
+not "what has never run anywhere" — a worklist ordered by ignorance.
 
 **Five broken tests found by running them, none findable by reading:**
 
@@ -79,8 +82,9 @@ ignorance.)
 | Mexico terrain pin | asserted a value the tree had moved past | W1.5 |
 | `menu-keyboard` `:modal` | pinned a `<dialog>` conversion whose markup a merge had silently dropped | `0667da63` |
 | `audit.spec.js` reverse-crossing lap | shipped with the fixed frame budget its own commit message calls wrong | `afd546ed` |
-| `elevation-tracks` `flatMax` | measured the length of the start straight, not a top speed | `58614db2` |
+| `elevation-tracks` `flatMax` | measured the length of the start straight, not a top speed | `58614db2` — the road-edge bound works (monaco/monza/spa now pass); the dwell threshold beside it does not, see strengthen 25 |
 | `elevation-tracks` climb | assertion contradicted its own comment | `2b2ab54c` |
+| **(mine)** all 47 elevation tracks | `58614db2` read Node-side constants inside `page.evaluate` and was committed WITHOUT BEING RUN — one commit after this section was written. Four green tracks went red and it presented as a physics regression | `0f458925`, guarded by `466ba98a` |
 
 The `flatMax` one is the most instructive: it had been feeding a poisoned
 reference into the descent-overspeed check for its entire life, and three

@@ -124,9 +124,16 @@ known-good count rather than trusting a review:
     38.8→9.1; cota 40.8→9.1; monaco 41.9→10.1; only spa and hungaroring stayed
     on). That is why cota/paul_ricard "failed" and spa "passed", and it poisoned
     everything downstream — the descent check compares `maxV` against
-    `flatMax * 1.35`, a reference set by a car in the gravel. **LANDED**
-    `58614db2`: sampling stops when `|x|` exceeds the road half-width, with a
-    minimum on-road dwell so a one-step reference cannot pass as a measurement.
+    `flatMax * 1.35`, a reference set by a car in the gravel. **PARTIAL** —
+    `58614db2` + `0f458925`: sampling stops when `|x|` exceeds the road
+    half-width, and that half works: monaco, monza and spa all ran off the road
+    in the probe and all pass now. The accompanying minimum on-road dwell does
+    NOT: I picked `> 30` steps out of the air on a single data point, and cota
+    lands on exactly 30 — the same "threshold with no basis" the original `> 41`
+    was criticised for, one layer down. cota's start-line straight is simply too
+    short to yield half a second on the road, so no dwell number fixes it; the
+    reference has to be taken on the STRAIGHTEST stretch of the lap (lowest mean
+    `|k|` over a window, via `trackProfile`) rather than at frac 0.0. OPEN.
 26. `tests/elevation-tracks.spec.js` — the climb assertion contradicted its own
     comment: the prose says "just require the car is still moving", the code
     said `climbGain > 0.5`, which demands ACCELERATION. **LANDED** `2b2ab54c`.
@@ -135,6 +142,19 @@ known-good count rather than trusting a review:
     with the box idle. No timeout value is the right fix — **split per circuit**,
     which also turns "the walls are broken" into "the walls are broken at Baku".
     OPEN.
+28. **A whole CLASS, not one test**: a `page.evaluate()` callback that closes
+    over a Node-side binding. Playwright does not CALL that callback — it
+    serialises it, ships it to the browser and evaluates it there, so a module
+    `const` read inside is a `ReferenceError` in the page, not a closure, and
+    the test fails for a reason unrelated to what it asserts. Self-inflicted:
+    `58614db2` did this with two launch constants and killed all 47 elevation
+    tracks, four of which had been green, and it presented as a physics
+    regression. **LANDED** `466ba98a` — `tools/evaluate-scope-lint.mjs`
+    (eslint-scope, the same free-reference analysis `extract-module.mjs`
+    already uses) across `evaluate`/`evaluateHandle`/`waitForFunction`/`$eval`/
+    `$$eval`. Its load-bearing test runs the analysis over the REAL broken file
+    (`git show 58614db2:…`) and asserts both sites are still found, so the lint
+    cannot quietly stop detecting while its synthetic cases keep passing.
 
 ### 1d. Merges (merge verdicts + merge candidates)
 
