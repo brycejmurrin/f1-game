@@ -193,7 +193,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await startRace(page, id);
-      const r = await page.evaluate(() => {
+      const r = await page.evaluate(({ FLAT_LAUNCH, CLIMB_LAUNCH }) => {
         // Reference flat-out top speed (measured, not a hardcoded VMAX) so the
         // descent-overspeed check below is relative and survives a PACE/VMAX retune.
         //
@@ -289,7 +289,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
         return { dn, up, maxV, flatMax, flatSteps, climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
-      });
+      }, { FLAT_LAUNCH, CLIMB_LAUNCH });
 
       expect(errors).toEqual([]);
       expect(r.finite).toBe(true);
