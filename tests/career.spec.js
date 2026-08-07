@@ -1,13 +1,32 @@
 // @ts-check
 // CAREER mode: the save, the mode axes, the hub, and the isolation guarantees
 // that keep Grand Prix and Time Trial untouched by a career existing.
-import { test, expect } from "@playwright/test";
+import { sharedTest as test, expect } from "./fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function boot(page) {
+// ALWAYS navigates. Required after page.addInitScript(): an init script only
+// runs on the NEXT navigation, so a conditional boot would silently skip it and
+// the test would assert against un-seeded storage — passing or failing for the
+// wrong reason. Every addInitScript site below pairs with this, not boot().
+async function bootFresh(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+}
+
+// Shared page (see sharedTest in ./fixtures.js): reuses the booted app and
+// wipes CAREER state instead of reloading. Career keeps its save in a module
+// `let` as well as in localStorage, so clearing storage alone would leave the
+// previous test's career live in memory — Career.clear() drops both, returning
+// the page to free play, which is what a fresh boot gave us.
+async function boot(page) {
+  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
+  if (!live) return bootFresh(page);
+  await page.evaluate(() => {
+    try { Career.clear(); } catch (_) {}
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith("apex26.career")) localStorage.removeItem(k);
+  });
 }
 
 // A career started through the hook rather than the setup screen — most specs
@@ -107,7 +126,7 @@ test.describe("Career — save", () => {
         season: { round: 3, pts: { SAI: 12 }, teamPts: { williams: 12 } },
       }));
     });
-    await boot(page);
+    await bootFresh(page);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")));
     expect(saved.v).toBe(1);
     expect(saved.season.pts["williams:0"]).toBe(12);   // remapped onto the stable id
@@ -138,7 +157,7 @@ test.describe("Career — save", () => {
         season: { round: 2, pts: { "haas:1": 4 }, teamPts: { haas: 4 } },
       }));
     });
-    await boot(page);
+    await bootFresh(page);
     const season = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.season")));
     expect(season.round).toBe(7);
     expect(season.pts["mclaren:0"]).toBe(99);
@@ -154,7 +173,7 @@ test.describe("Career — isolation", () => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.parts.haas", JSON.stringify({ engine: "stock", aero: "low" }));
     });
-    await boot(page);
+    await bootFresh(page);
     await startCareer(page, { teamId: "haas", seat: 1, seed: 1 });
     const changed = await page.evaluate(() => {
       const c = window.__apex.career();
@@ -560,7 +579,7 @@ test.describe("Career — the garage", () => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.parts.haas", JSON.stringify({ engine: "stock", aero: "low" }));
     });
-    await boot(page);
+    await bootFresh(page);
     await startCareer(page, { teamId: "haas", seat: 1, seed: 3 });
     await page.evaluate(() => window.__apex.careerMoney(99999));
     await openGarage(page);
@@ -665,7 +684,7 @@ test.describe("Career — MY TEAM", () => {
     // gridDrivers() must return team.drivers untouched outside a MY TEAM career,
     // or picking MY TEAM in a Grand Prix would silently add a second entry.
     await page.addInitScript(() => localStorage.setItem("apex26.team", "11"));
-    await boot(page);
+    await bootFresh(page);
     await page.evaluate(() => { window.__apex.seed(2); window.__apex.race("monza"); });
     const grid = await page.evaluate(() => window.__apex.fieldState());
     const mine = grid.filter((c) => c.team === "custom");

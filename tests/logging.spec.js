@@ -7,7 +7,7 @@
  * that holds object references, a namespace that prints its own tag twice. None
  * of those throw, so nothing else in the suite would notice.
  */
-import { test, expect } from "./fixtures.js";
+import { sharedTest as test, expect } from "./fixtures.js";
 
 test.describe("Log", () => {
   test("is live before any game module evaluates", async ({ racePage }) => {

@@ -225,7 +225,7 @@ test.afterEach(async ({ page }, testInfo) => {
    needs a specific setting must set it, which is what `load()`-style helpers
    already do.
    ───────────────────────────────────────────────────────────────────────── */
-export const sharedTest = base.extend({
+export const sharedTest = test.extend({
   // Worker-scoped: created once, reused until the worker exits.
   _bootedPage: [async ({ browser }, use) => {
     const context = await browser.newContext();
@@ -265,6 +265,33 @@ export const sharedTest = base.extend({
     });
     await use(_bootedPage);
   },
+
+  // The two loader fixtures re-declared against the shared page. Without these
+  // a spec that switches to sharedTest would still pay a goto("/") per test
+  // through the INHERITED versions, which is the whole cost being removed —
+  // and logging.spec.js and friends reach the app only through loadTrack, so
+  // they could not opt in at all.
+  racePage: async ({ page }, use) => {
+    await ensureLive(page);
+    await use(page);
+  },
+
+  loadTrack: async ({ page }, use) => {
+    await use(async (id = "monza", tod = "day", wx = "dry") => {
+      await ensureLive(page);
+      await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
+      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
+      await page.evaluate(() => window.__apex.go());
+    });
+  },
 });
+
+/** Navigate only if the app is not already live on the shared page. */
+async function ensureLive(page) {
+  const live = await page.evaluate(() => window.__apex != null).catch(() => false);
+  if (live) return;
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+}
 
 export { expect };
