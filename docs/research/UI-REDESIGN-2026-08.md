@@ -11,6 +11,12 @@ behaviour is in `docs/LAYOUT-AUDIT.md` (mechanism), `docs/COMPONENTS.md`
 its measured costs). This document argues that those three describe **three
 systems doing one job**, and proposes collapsing them to one.
 
+> **REVISION 2026-08-08 — read §9 before acting on §2 or §3.** An adversarial
+> review of this document found four errors in it, two of them load-bearing:
+> the claim that the tap ladder does not scale is FALSE, and `--u` as first
+> drafted would have introduced a container-query overflow bug. §9 records what
+> was wrong and what replaces it. The corrected type scale is in §9, not §3.
+
 ---
 
 ## 1. The diagnosis: it is not a list of bugs
@@ -255,3 +261,188 @@ only safe once step 1 has left no raw px behind.
 mid-fade, and dropping three desktop columns to boot timeouts — all three fixed
 2026-08-08). A cell going green→red between builds is a regression with an
 address, and that is the only reason to trust any of the numbers above.
+
+---
+
+## 9. Revision — what this document got wrong
+
+Written 2026-08-08 after an adversarial review of §2–§4 against the CSS specs
+and the source. Four errors, two of them load-bearing. The corrections stand;
+the sections above are kept unedited so the reasoning that produced the errors
+stays visible.
+
+### 9.1 "The tap ladder is deliberately NOT scaled today" — FALSE
+
+`css/tokens.css` says the *token* does not multiply by the scale. It then states
+the painted result outright: `--tap: 52px` inside `zoom: 1.15` **paints at
+59.8px**. The tap target already scales — at the consumption site rather than
+the declaration site. Measured live: a `.track-row` given `min-height: var(--tap)`
+paints at 60px on a coarse pointer, not 52.
+
+This matters twice. It means §2's table understated what `zoom` does correctly,
+and it means the `--u` migration must decide the question explicitly rather than
+inherit it. **The ceiling should scale and the floor must not**: a fingertip is a
+physical constant, and WCAG 2.5.8's understanding text is explicit that the
+requirement "is independent of the zoom factor of the page". So:
+
+```css
+--tap:    max(44px, calc(52 * var(--u)));
+--chip-h: max(40px, calc(46 * var(--u)));
+```
+
+The bare `44px`/`40px` are lint allow-list entries with that reason. This also
+closes a live hole: at UI SIZE 80%, `52 x 0.8 = 41.6px`, under both Apple's HIG
+floor and this project's own stated intent.
+
+A third member of the `--cs-sheet-w` / `--dock-w` family falls out of the same
+fact: `--tap` paints **59.8px inside a sheet and 52px in the data hub**, because
+the hub is outside every zoomed subtree. One token, two touch targets.
+
+### 9.2 `--u` as drafted would break container queries — the real error
+
+`css/components.css` argues, correctly, that under `zoom` "at 130% you need 30%
+more REAL width to afford two columns, which is the honest answer". Under a `--u`
+length token that stops being true: the sheet's inline size is real px and
+`@container sheet (min-width: 620px)` compares real px, so at 150% a sheet flips
+to two columns at the same real width **while its contents are 50% bigger**. That
+is an overflow bug this document would have introduced, in five files.
+
+The fix is to express container thresholds in `em` on a container whose
+`font-size` comes from `--u`. CSS Containment 3 §5.1: *"Relative length units in
+container query conditions are evaluated based on the computed values of the
+query container"* — explicitly unlike media queries. The condition grammar
+rejects `var()`; it accepts `em`.
+
+```css
+.sheet { font-size: var(--t-body); container: sheet / inline-size; }
+@container sheet (min-width: 38.75em) { /* 620px at 1.0, 713 at 1.15, 930 at 1.5 */ }
+```
+
+This is strictly better than what `zoom` gives, because it is specified
+behaviour rather than the thing engines disagree about — see 9.5.
+
+### 9.3 Anchor `--u` to `rem`, not `px`
+
+```css
+.u-menu { --u: calc(var(--ui-scale)  * 0.0625rem); }   /* 1 unit == 1px at a 16px root */
+.u-hud  { --u: calc(var(--hud-scale) * 0.0625rem); }
+```
+
+Authoring is unchanged — `calc(16 * var(--u))` is still "16px at defaults" — but
+the game's slider and the browser's font-size setting then **compose** instead of
+one shutting the other out. Requires never setting a root font-size.
+
+Related, and it undercuts §5 of `UI-SCALE-AND-ZOOM.md`: that document argues the
+in-game slider settles the `px`-vs-`rem` question. It does not. WCAG 1.4.4's
+sufficient technique G178 requires on-page controls that resize text **up to
+200%**; this slider runs 80–150%, i.e. 1.30x from its shipped 115% default. It
+does not discharge 1.4.4. The shell also ships `maximum-scale=1, user-scalable=no`,
+which MDN and the axe `meta-viewport` rule both call an accessibility failure —
+inert on iOS since iOS 10, honoured on Android Chrome.
+
+### 9.4 The type scale in §3 has the same defect it diagnoses
+
+§3 proposed 12/14/16/19/24/34/48 at ~1.2. The bottom three steps are **2px, 2px**
+— sub-perceptual, and therefore a re-creation of the 11/12/13 failure one notch
+up. A constant ratio always does this: it compounds multiplicatively, so it gives
+invisible steps at the small end and cliffs at the top.
+
+Six hand-set rungs, ratio rising 1.23 -> 1.41, every adjacent pair >= 3px apart:
+
+| token | px | replaces |
+|---|---|---|
+| `--t-label` | 13 | 8, 9, 10, 11 |
+| `--t-body` | 16 | 12, 13 |
+| `--t-lead` | 20 | 14, 15, 17, 18 |
+| `--t-title` | 26 | 20, 22 |
+| `--t-hero` | 34 | *(the gap)* |
+| `--t-brand` | 48 | 48+ |
+
+The seventh rung (units, chip superscripts) becomes a **relative modifier**,
+`.t-unit { font-size: 0.78em }`, not a global token — a global micro rung is
+exactly what became the body rung last time.
+
+Two corrections to §1's evidence while here. "Nothing between 20 and 48" is true
+of the eight screens sampled, **not of the stylesheet** — 22px x4, 24px x2 and
+28px x3 exist. And the count is ~260 raw `font-size` declarations against 2,046
+raw `px` occurrences overall, so §8's "type first, subtractive, no behaviour
+change" is ~250 edits and is **not** behaviour-neutral: raising the floor from
+8-9px to 13px will cost a row on some 393px-tall screens. Label it a deliberate
+change.
+
+**No `clamp()` on the ladder.** WCAG failure technique F94 names viewport units
+in `font-size` as a 1.4.4 failure, and the conformance rule that falls out of the
+arithmetic is that max must be <= 2.5x min. This ladder spans 13->48 = 3.7x, so a
+single fluid expression across it fails. `cqi` is right in exactly three places —
+text that must fit a box it cannot wrap out of (`#announce`, the `#title`
+wordmark, the big HUD digits) — and only with a `--u`-anchored minimum.
+
+### 9.5 Why the conclusion survives anyway
+
+The strongest case for keeping `zoom` is that four declarations reach ~2,046 raw
+px sites while `--u` reaches only what someone migrated — and a half-migration is
+worse than the thing it replaces, which this document already concedes.
+
+What decides it is not that `zoom` is bad. It is where the residual risk sits.
+`csswg-drafts#10268` — "[css-viewport] [css-contain] Zoom and container queries",
+open since 2024-04-29 — records that **Safari disagrees with Chrome and Firefox**
+on zoom x container-query behaviour. The primary target is iOS Safari; the entire
+test suite is Chromium; `@container sheet` is used in five files. The mechanism's
+one unresolved interop question sits exactly on the axis with zero observability
+— the same structural blind spot as A13.
+
+`--u`'s residual risk is "has this file been migrated yet", which a lint answers
+deterministically. **Trade an unobservable risk for an observable one.**
+
+Two process corrections follow. Retire `zoom` **per scope, not globally**: it is
+four selectors (`.sheet`, `#overlay > *`, the HUD cluster list, `.dock`), and each
+can be dropped the day the lint reports zero un-allow-listed bare px in the files
+that feed it. And register the tokens with `@property` (`--ui-scale`/`--hud-scale`
+as `<number>`, `--u` as `<length>`) — an unregistered custom property that goes
+invalid at computed-value time takes the whole consuming declaration down, and
+for a `font-size` fed by a custom property the fallback is the *initial* value,
+which flattens the entire type hierarchy rather than breaking one rule.
+
+### 9.6 What the modern-CSS research changed
+
+The premise of "adopt newer CSS to delete hand-written layout JS" is mostly
+**wrong here**, and that is worth recording so it is not re-litigated. The layout
+JS in this repo produces **lengths and ratios** (`scrollTop/max`, thumb height in
+px); every shipping CSS feature evaluated produces **booleans**.
+
+- **`@container scroll-state()`** would express `scrollfade.js`'s fade predicate
+  exactly — but it is boolean-only, so `--sf-h`/`--sf-y` stay in JS; a container
+  query cannot style its own container, and the fade is a mask on the `.pane`
+  itself; and there is no Safari version, with WebKit's standards-position open
+  since 2023. **Parked.**
+- **Anchor positioning** would delete three lines of CSS and zero lines of JS.
+  `web-features#3558` ("Anchored Fixed position elements is broken in Safari")
+  is open, `#campicker` is `position: fixed`, and its anchor is in a different
+  zoom space. **Parked.**
+- **Popover** deletes ~10–15 lines in `cam-modes.js` and, contrary to
+  `UI-SCALE-AND-ZOOM.md` §5c, deletes **none** of `ariastate.js` — `aria-pressed`
+  is a toggle state, `aria-expanded` is a disclosure relationship, and the 24
+  option-group chips are neither. Behind a feature detect only: `[popover]`'s
+  `display: none` is a UA rule, so an unsupporting engine leaves `#campicker`
+  permanently over the race.
+- **`@starting-style`** would delete nothing — the dialog fade is already pure
+  CSS — and its exit half needs `overlay`, which is Chrome-only.
+
+What *is* worth taking: `text-box-trim: trim-both; text-box-edge: cap alphabetic`
+(Safari 18.2) removes the hand-tuned asymmetric padding around the heavy italic
+headings; `inert` on the five non-dialog screens; and **an `@supports` idiom at
+all** — there are currently **zero `@supports` blocks in 6,365 lines of CSS**,
+which is why every candidate above reads as all-or-nothing instead of as a
+progressive layer. Land one before anything risky is proposed.
+
+### 9.7 Corrections to §1's inventory
+
+- There are **three** screens outside every zoomed subtree, not two: `#overlay`,
+  `#datahub` and **`#track-detail`** (`class="screen dim"` with no `.sheet`).
+- The `<canvas>` elements inside zoomed sheets are replaced elements, so `zoom`
+  multiplies their *natural size* and resamples them. `#vs-qr` is 320x320 painted
+  at 368x368 through a non-integer scale — **a QR code, read by another phone's
+  camera**. Same class: `#sel-preview-map`, `#sel-preview-elev`, `#minimap`
+  (which renders at ~0.36x its device pixels at the default HUD scale, and gets
+  worse as the user asks for a bigger HUD). None size their backing store from
+  `devicePixelRatio`. `--u` fixes this class; `zoom` cannot.
