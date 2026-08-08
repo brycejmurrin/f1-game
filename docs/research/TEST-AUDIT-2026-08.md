@@ -10,7 +10,7 @@ drops) is [raw/2026-08-test-audit.json](raw/2026-08-test-audit.json).
 
 ---
 
-Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` §1–2, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/unit/test-groups.test.mjs`, `tests/unit/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/research/AUDIT-SYNTHESIS-2026-08.md` §R2.
+Everything below is grounded in the files read this session: `package.json` test scripts, `docs/TESTING.md` §1–2, `tools/pick-tests.mjs` (RULES + `--since`), `.github/workflows/ci.yml` (full header), `tests/unit/test-groups.test.mjs`, `tests/unit/test-coverage-audit.test.mjs`, `playwright.config.js`, and `docs/archive/research/AUDIT-SYNTHESIS-2026-08.md` §R2.
 
 # Test taxonomy, tests/ split map, and change-aware CI design
 
