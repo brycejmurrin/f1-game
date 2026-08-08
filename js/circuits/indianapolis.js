@@ -397,6 +397,47 @@
       // opposite side of the track from all that permanent concrete seating.
       spectatorHill(0.085, 0.150, -1, 26,
         { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
+
+      // =====================================================================
+      // 7. ENRICHMENT — additive detail that fills genuine gaps without
+      //    disturbing the curated sections above. Idiom preserved: dead flat,
+      //    blue/white/red bucket-seat bands, permanent concrete on the oval and
+      //    race-week temporary furniture in the infield.
+      // =====================================================================
+      // 7a. The oval bowl does not stop dead where the tall front-straight wall
+      //     ends (~s0.19): the seating tapers DOWN through the Turn 1 exit as
+      //     the track peels off into the infield. Two shorter, lower-tier
+      //     segments close that daylight so the wall reads as one continuous
+      //     sweep rather than a slab cut off mid-air.
+      for (const [s, tiers, liv, len, gap] of [
+        [0.198, 2, "concrete", 84, 13],
+        [0.222, 1, "alu", 64, 15],
+      ]) {
+        grandstandEx(s, 1, gap, len, null, null, {
+          livery: liv, tiers, roof: null, endWalls: tiers === 1, pylons: false,
+        });
+      }
+      // Carry the blue/white/red bucket-seat bands over those two segments so
+      // the added stands read as Speedway seating, not a grey terrace.
+      for (let i = 0; i < 5; i++) {
+        const s = (0.188 + i * 0.011) % 1;
+        const a = anchor(K(s), 1, 15);
+        out._mat = MAT.FABRIC;
+        for (let t = 0; t < 3; t++) {
+          addBox(out, vadd(vadd(a.c, a.r, t * 2.2), a.u, 4 + t * 2.6),
+            [2.0, 0.9, 60], SEAT[(i + t) % 3], [a.r, a.u, a.t]);
+        }
+        out._mat = 0;
+      }
+      // 7b. One more TEMPORARY infield stand — a bolted bleacher carrying the
+      //     same bucket bands — at the road-course corner near s0.40, filling
+      //     the long empty run between the s0.29 bleacher and the s0.51
+      //     scaffold. Temporary, because everything in the infield is.
+      bleacher(0.392, 0.408, 1, 20, {
+        rows: 7, step: 8, density: 0.40,
+        plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
+        crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
+      });
     },
   }
   );

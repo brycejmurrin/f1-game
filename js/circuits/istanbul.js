@@ -165,6 +165,20 @@
       marshalPost(K(0.380), -1, 10);
       marshalPost(K(0.425), -1, 10);
       cameraTower(K(0.398), -1, 14, { h: 20 });   // the inside camera the corner is always shot from
+      // The Turn 8 GRANDSTAND crowning the amphitheatre — the roofed upper deck
+      // the brief calls for, set back ABOVE the earth terracing and the flag
+      // crown (terracing is the lower bowl out to ~46 m, flags at 50 m, this
+      // stand stands behind them at 54 m up the banked outside). Three ~46 m
+      // sections so the run follows the long left instead of cutting its chord
+      // across it. Crimson shell for the sea-of-red Turkish crowd; the hero
+      // centre section carries the hospitality suites. Reinforcing Turn 8's
+      // dominance over the rest of the lap is exactly the brief's instruction.
+      for (const [i, s] of [[0, 0.360], [1, 0.400], [2, 0.440]]) {
+        grandstandEx(s, 1, 54, 46, null, null, {
+          livery: i === 1 ? "crimson" : "sandstone",
+          tiers: 2, roof: "cantilever", suites: i === 1, endWalls: true, pylons: true,
+        });
+      }
       // The long sweep is where the crowd banks are, so keep the inside open —
       // that open infield is part of why the corner reads as enormous.
 

@@ -235,10 +235,15 @@
       sunTerrace(0.222, 0.262, -1, 19, 5);
       sunTerrace(0.492, 0.522, 1, 21, 5);
       sunTerrace(0.674, 0.708, -1, 19, 6);
+      // The stadium section — the wrap of terracing through Europcar and the
+      // final corners (the New Holland / La Caixa grandstand bank) that turns the
+      // last sector into an amphitheatre. Open raked concrete, like the rest.
+      sunTerrace(0.826, 0.868, -1, 19, 6);
+      sunTerrace(0.876, 0.912,  1, 18, 5);
       sunTerrace(0.916, 0.948, 1, 17, 5);
-      // Fabric shade sails pulled over the back rows of the two biggest
-      // terraces — nothing else here is soft or curved, so they read instantly.
-      for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30]]) {
+      // Fabric shade sails pulled over the back rows of the biggest terraces —
+      // nothing else here is soft or curved, so they read instantly.
+      for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30], [0.845, -1, 33]]) {
         const a = anchor(K(s), side, gap);
         sailCanopy(a.c, [a.r, a.u, a.t],
           { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
@@ -349,9 +354,15 @@
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
       hedge(0.020, 0.075, 1, 15, 2.6, [0.19, 0.37, 0.19]);
       hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
+      // Europcar (T9, s≈0.80) — the brief calls for gardened hedge banding and a
+      // cypress rank on BOTH sides here, the manicured strip before the run down
+      // to the stadium section.
+      hedge(0.782, 0.822, 1, 15, 2.6, [0.19, 0.37, 0.19]);
+      hedge(0.780, 0.820, -1, 15, 2.6, [0.18, 0.36, 0.18]);
       {
         const CYP = [0.13, 0.28, 0.15], CYP_D = [0.10, 0.22, 0.13];
-        for (const [s0, side, gap] of [[0.960, -1, 21], [0.028, 1, 20], [0.680, -1, 21]]) {
+        for (const [s0, side, gap] of [[0.960, -1, 21], [0.028, 1, 20], [0.680, -1, 21],
+                                       [0.788, -1, 21], [0.806, 1, 20]]) {
           for (let i = 0; i < 7; i++) {
             const a = anchor(K(s0 + i * 0.006), side, gap + (i & 1) * 2.5);
             const b = [a.r, a.u, a.t];

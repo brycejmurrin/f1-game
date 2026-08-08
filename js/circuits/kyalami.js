@@ -135,6 +135,8 @@
         ["kyalami-earth-crowthorne", 0.115, -1, 26, 22, 90],
         ["kyalami-earth-esses", 0.330, 1, 30, 18, 70],
         ["kyalami-earth-leeukop", 0.590, -1, 34, 20, 76],
+        ["kyalami-earth-barbecue", 0.250, 1, 28, 16, 62],  // worn walkway on the descent
+        ["kyalami-earth-climb", 0.470, 1, 44, 20, 80],     // laterite approach below the climb terrace
       ]) groundPatch(K(s), side, d, [w, 0.16, l], EARTH, { id, samples: 6 });
 
       // =====================================================================
@@ -297,6 +299,11 @@
         { id: "kyalami-barbecue-gravel", samples: 6 });
       tyreWall(0.240, 0.272, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.250), 1, 9);
+      // General-admission grass bank on the inside of Barbecue — a low, sparse
+      // veld terrace, not a stand, so it fills the corner without wooding or
+      // walling the open highveld the brief insists on. Sits in front of the
+      // laterite walkway scar added above.
+      spectatorHill(0.230, 0.290, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
 
       groundPatch(K(0.565), 1, 5, [26, 0.18, 34], EARTH,
         { id: "kyalami-leeukop-gravel", samples: 6 });
@@ -309,6 +316,11 @@
       marshalPost(K(0.880), 1, 9);
 
       spectatorHill(0.42, 0.52, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+      // The brief's "second run of terracing on the climb": the same corrugated
+      // lean-to vernacular as the main-straight terraces, set BEHIND and above
+      // the grass bank so the climb reads as a stepped enclosure (grass GA in
+      // front, covered concrete terrace up the slope) rather than one bare bank.
+      ironTerrace("kyalami-terrace-climb", K(0.470), 1, 30, 10, { rows: 6 });
 
       // =====================================================================
       // 4. BOUNDARIES

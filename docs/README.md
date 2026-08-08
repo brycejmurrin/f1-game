@@ -59,7 +59,7 @@ and `js/game/incidentsim.js` implement.
 
 ## Research (cited, but not a description of behaviour)
 
-The docs that survive here (sixteen at last count — the table below is the
+The docs that survive here (fifteen at last count — the table below is the
 authoritative list) are cited from source, from `CLAUDE.md` or from
 each other — that citation is what keeps them live. Everything else that used to
 sit in this table was indexed by nothing and moved to
@@ -84,16 +84,16 @@ sit in this table was indexed by nothing and moved to
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
 | [research/CAMPAIGN-2026-08.md](research/CAMPAIGN-2026-08.md) | THE live plan of record for the cleanup & hardening campaign: wave status, the W2 execution order and gates, the design-ticket register, and which dated record owns which piece. Start here. |
-| [archive/research/AUDIT-SYNTHESIS-2026-08.md](archive/research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed, marked in place) / RESTRUCTURE / DEFER with all 35 verified findings — driving the post-cleanup hardening; archives when spent. |
 | [research/TEST-AUDIT-2026-08.md](research/TEST-AUDIT-2026-08.md) | The 11-agent test-semantics audit: per-file verdicts for all 162 test files, the corrected group taxonomy, the tests/ split map, and the change-aware CI design with its feasibility gaps — feeds the W2 restructure; archives when spent. |
-| [archive/research/TOTAL-AUDIT-2026-08.md](archive/research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc, synthesized into fix batches — headlined by the live curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; feeds the campaign fix waves; archives when spent. |
 
-`research/raw/` holds the uncompressed evidence behind four of these records —
-the workflows' verbatim per-agent output (`2026-08-audit-workflow.json`,
-`2026-08-redesign-panel.json`, `2026-08-test-audit.json`,
-`2026-08-total-audit.json`). Each dated record cites its own raw file; read
-them when a summary's wording is doing too much work. Nothing else references
-them, and no guard walks `research/`, so they are provenance, not contract.
+The four workflows' verbatim per-agent output now lives together in
+[`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,
+`2026-08-redesign-panel.json`, `2026-08-test-audit.json` and
+`2026-08-total-audit.json`. Each dated record cites its own raw file; the two
+whose parent record is still live (the redesign panel behind ARCHITECTURE-REDESIGN,
+the test audit behind TEST-AUDIT) link across into the archive. Read them when a
+summary's wording is doing too much work. Nothing else references them, and no
+guard walks them, so they are provenance, not contract.
 
 ## Archive (`archive/`)
 
@@ -101,11 +101,17 @@ Provenance only. Nothing here describes current structure, and no live doc
 depends on it for current structure (two research docs cite archived
 investigations as historical companions — see the research row below).
 
+The two dated audit records below archived per the campaign's Record lifecycle
+once their fix/restructure items landed; their raw evidence sits in
+`archive/research/raw/`.
+
 | Path | What it is |
 |---|---|
 | [archive/superpowers/](archive/superpowers/) | 16 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan, maintainability review and four phase build logs. |
 | [archive/research/](archive/research/) | Twelve investigations kept for provenance — no live doc depends on them for current structure, though two research docs cite them as historical companions (ASSET-API-RESEARCH.md → RENDERING-IMPROVEMENTS.md, SCENE-GRAPH-PLAN.md → EXTERNAL-MODEL-SOURCES.md): steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
+| [archive/research/AUDIT-SYNTHESIS-2026-08.md](archive/research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed) / RESTRUCTURE / DEFER over 35 verified findings; drove the post-cleanup hardening. Archived once its restructure items landed. |
+| [archive/research/TOTAL-AUDIT-2026-08.md](archive/research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc — headlined by the curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; drove the campaign fix waves. Archived once Batch A/B/C worked off. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 107-member contract now. |
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register — the not-fixed backlog as recorded at the time, kept as provenance for what was found and what has since been worked off. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives and measurements, verbatim. The standing review distilled from it lives at [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md). |

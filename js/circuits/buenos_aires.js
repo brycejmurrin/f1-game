@@ -204,6 +204,15 @@
       broadcastCompound(K(0.908), 1, 72, { vans: 2, dishes: 2, mastH: 9 });
       // Argentine light-blue-and-white hoardings.
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, CELESTE);
+      // Celeste-and-white hoarding run down the ~800 m pit straight — brief §4:
+      // "hoarding run down the pit straight". Three corner billboards left
+      // hundreds of metres of the longest straight on the lap reading empty;
+      // this lines it in the circuit's own celeste/white/navy, the one splash
+      // of livery the pampa gives it. sponsorHoarding self-rejects on tarmac.
+      sponsorHoarding(0.945, 0.055, -1, 3.6, {
+        h: 1.2, step: 12,
+        palette: [CELESTE, [0.94, 0.93, 0.90], [0.10, 0.28, 0.52]],
+      });
 
       // =====================================================================
       // 4. CORNERS
