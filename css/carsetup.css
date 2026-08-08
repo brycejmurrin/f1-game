@@ -761,6 +761,17 @@
    adds no specificity and source order decides. Desktop keeps its density. */
 body:not(.desktop) .cs-tab-lbl,
 body:not(.desktop) .cs-tab-cur { font-size: 12px; }
+/* AND THEREFORE A WIDER TRACK. The grid floor is minmax(88px, 1fr), sized for
+   the 10px desktop label; the rule above raises the touch label to 12px without
+   giving it anywhere to go. Measured on an iPad portrait (834x1194):
+   "SUSPENSION" needs 83px and gets 64 — 88px track minus 20px of .cs-tab
+   padding and 2px of border — so it renders "SUSPENSI…", the exact case
+   docs/LAYOUT-AUDIT.md names. 83 + 20 + 2 = 105; 112 leaves headroom for the
+   longest label plus the letter-spacing.
+   The cost is one fewer column on a narrow sheet, which `max-height: 48%`
+   already bounds. A category you cannot read is worse than a column you cannot
+   fit — this rail is how you navigate the screen. */
+body:not(.desktop) #cs-tabs { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
 body:not(.desktop) .cs-opt-tag { font-size: 11px; }
 body:not(.desktop) .cs-opt-desc { font-size: 13px; }
 body:not(.desktop) .cs-delta { font-size: 11px; }

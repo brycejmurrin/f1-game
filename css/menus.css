@@ -140,11 +140,15 @@
 #menu-meta { margin-top: 16px; gap: 6px; }
 #audiostate { color: var(--dim); font-size: 12px; }
 #audiostate:empty { display: none; }
-/* #menu-brand is a stretch-aligned flex column, so a bare button would span the
-   whole brand width. `align-self: flex-start` keeps it to its own content and
-   lets it sit under the audio line as one more small-print item rather than as
-   a full-width bar. It is on the --tap ladder via .minibtn. */
-#soundbtn { align-self: flex-start; width: auto; margin: 2px 0 0; min-height: var(--tap); }
+/* NO `align-self` HERE — the chip must follow #menu-meta's own alignment, which
+   is `center` in portrait and `flex-start` in landscape. Pinning it to
+   flex-start looked right in landscape and put it hard against the left edge of
+   a CENTRED composition in portrait, with the title, subtitle and disclaimer all
+   centred around it (measured 393x852: disclaimer left 25, subtitle left 52,
+   button left 25). `width: auto` is what actually stops it spanning the column;
+   `min-height` puts it on the touch ladder, which .minibtn does not do on its
+   own — it is padding-sized, and this measured 40 CSS px without it. */
+#soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
 #disclaimer { color: var(--dim); font-size: 11px; margin: 0; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
