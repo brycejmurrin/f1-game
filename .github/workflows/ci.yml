@@ -404,7 +404,19 @@ jobs:
     # timeout, and NAMES every spec it skips — silent truncation would read as
     # "covered".
     continue-on-error: true
-    timeout-minutes: 20
+    # 26, DERIVED, not guessed — and 20 was wrong. The budget models the
+    # EXPECTED cost (one failure at 120 s + nine passes at 79.7 s = ~14 min),
+    # but the TRUE worst case is every selected test hitting the per-test
+    # timeout: 10 x 120 s = 20 min, plus ~4 min of setup (npm ci + chromium)
+    # = ~24 min. At 20 the job would have been CANCELLED in that case — and
+    # this workflow's own header records that a cancelled job reads as "0
+    # failures" and once hid a dead deploy. An advisory job that dies of its
+    # own cap teaches nothing; 26 covers the worst case with margin, and the
+    # budget (not the cap) stays the thing that bounds the selection.
+    #
+    # Re-derive this if the budget, the per-test timeout, or the retry count
+    # changes: cap >= (tests x per-test timeout) + setup + margin.
+    timeout-minutes: 26
     steps:
       - uses: actions/checkout@v4
         with:
