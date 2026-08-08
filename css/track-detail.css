@@ -101,7 +101,22 @@
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+/* ALL LANDSCAPE, not `max-height: 560px`. The base hides #track-detail-panel and
+   exactly three branches turn it back on — portrait, this one, and the >=900x600
+   one below. With a 560px ceiling here, every landscape window that is taller
+   than 560 and not also >=900 wide AND >=600 tall matched NONE of them, and the
+   panel — DRS zones, the corner list, the elevation strip, the flags — was
+   `display: none` with no way to reach it.
+   CONFIRMED at 860x580: dialog open, panel 0x0 and display:none, holding 448
+   characters of populated content. And the hole is wider than the 39px band
+   docs/LAYOUT-AUDIT.md predicted: 860x700 is landscape, taller than 560 and
+   narrower than 900, so it missed too.
+   Dropping the ceiling closes it by construction rather than by picking a
+   fourth number: landscape now always matches here, and the >=900x600 block
+   below — later in source, equal specificity — still wins where it applies and
+   upgrades the panel from 220px to 260px. css/menus.css:159-161 records fixing
+   this same 560/599/600 seam for #overlay; it was never carried to this file. */
+@media (orientation: landscape) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 10px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   #track-detail-panel { display: flex; flex: 0 0 220px; max-width: 220px; overflow-y: auto; }
