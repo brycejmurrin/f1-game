@@ -1277,11 +1277,20 @@ const Tracks = (function () {
         const o = side * (hw[kk] + dd);
         return [px[kk] + rx * o, pz[kk] + rz * o];
       };
+      // Barrier-clear AND road-clear, against the WHOLE lap. The distance is
+      // measured from the anchor segment's edge, but a park circuit loops back
+      // on itself: buenos_aires planted woodland 30 m off one straight and a
+      // tree landed with its canopy 8.8 m from the CENTRELINE of the parallel
+      // stretch across the loop — 3.5 m of foliage over that road's verge.
+      // onTrack() is the world-space test against every segment, so a spot
+      // that clears its own road but overhangs another one is rejected the
+      // same way a fence conflict is: push out, or drop the tree.
+      const ok = (p) => barrierClear(p[0], p[1], crown) && !onTrack(p[0], p[1], crown);
       let p = at(dist);
-      if (barrierClear(p[0], p[1], crown)) return dist;
+      if (ok(p)) return dist;
       for (let extra = 1.5; extra <= 12; extra += 1.5) {
         p = at(dist + extra);
-        if (barrierClear(p[0], p[1], crown)) return dist + extra;
+        if (ok(p)) return dist + extra;
       }
       return null;
     };
@@ -1503,28 +1512,53 @@ const Tracks = (function () {
       // Barriers are straight panels — span a few nodes each instead of one box
       // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
       const WH = 1.1, WT = 0.4, STEP = 2;
+      const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      const panel = (kA, kB, col, side) => {
+        const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
+        const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
+        const oA = side * (hw[kA] + barrierOffset), oB = side * (hw[kB] + barrierOffset);
+        const ax = px[kA] + rA[0] * oA, ay = py[kA], az = pz[kA] + rA[2] * oA;
+        const bx = px[kB] + rB[0] * oB, by = py[kB], bz = pz[kB] + rB[2] * oB;
+        const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
+        const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
+        const f = norm([bx - ax, by - ay, bz - az]);
+        const rr = norm(cross(f, upOf(track, kA)));
+        instance(`street-barrier|${col.join(",")}`,
+          { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+          (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+          { kind: "streetBarrier", k: kA, side });
+        return [cx, cz];
+      };
       for (const side of [-1, 1]) {
         for (let k = 0; k < n; k += STEP) {
-          const kn = (k + STEP) % n;
-          const r0 = [track.rx[k], track.ry[k], track.rz[k]];
-          const r1 = [track.rx[kn], track.ry[kn], track.rz[kn]];
-          const u0 = upOf(track, k);
-          const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
-          const o0 = side * (hw[k] + barrierOffset), o1 = side * (hw[kn] + barrierOffset);
-          const ax = px[k] + r0[0] * o0, ay = py[k], az = pz[k] + r0[2] * o0;
-          const bx = px[kn] + r1[0] * o1, by = py[kn], bz = pz[kn] + r1[2] * o1;
-          const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
-          const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
-          const f = norm([bx - ax, by - ay, bz - az]);
-          const rr = norm(cross(f, u0));
+          const kn = (k + STEP) % n, km = (k + 1) % n;
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
           // Every panel is the same 0.4 x 1.1 m cross-section; only its length
           // and livery colour vary. One model per colour (three by day, one at
           // night) covers a whole street lap, with length on the node scale.
-          instance(`street-barrier|${col.join(",")}`,
-            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
-            (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
-            { kind: "streetBarrier", k, side });
+          //
+          // A STRAIGHT panel chord-cuts the inside of a bend: at the skipped
+          // middle node the chord sags INWARD from the nominal barrier line,
+          // and the props-over-road audit samples the FULL road-mesh surface
+          // (kerbs + verge, to 75% of its width) — vegas frac 0.678 measured
+          // the chord 0.43 m inside its own line, hanging the 1.1 m panel
+          // over the verge. Where the chord's midpoint gives up more than
+          // 0.1 m of the gap, emit two single-node panels that follow the
+          // curve instead — the cost lands only on the handful of apex spans.
+          const oM = side * (hw[km] + barrierOffset);
+          const qx = (px[k] + track.rx[k] * side * (hw[k] + barrierOffset)
+                    + px[kn] + track.rx[kn] * side * (hw[kn] + barrierOffset)) / 2;
+          const qz = (pz[k] + track.rz[k] * side * (hw[k] + barrierOffset)
+                    + pz[kn] + track.rz[kn] * side * (hw[kn] + barrierOffset)) / 2;
+          const exm = px[km] + track.rx[km] * side * hw[km];
+          const ezm = pz[km] + track.rz[km] * side * hw[km];
+          const clearM = ((qx - exm) * track.rx[km] + (qz - ezm) * track.rz[km]) * side;
+          if (clearM < barrierOffset - 0.1) {
+            panel(k, km, col, side);
+            panel(km, kn, col, side);
+          } else {
+            panel(k, kn, col, side);
+          }
         }
       }
       // Record the boundary for EVERY node (the geometry loop steps by 2, which
