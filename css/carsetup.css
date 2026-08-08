@@ -460,7 +460,13 @@
    the right answer there — it has the height to spend and no width. */
 #cs-inner {
   --pair-at: 400px;
-  --pair-split: minmax(112px, 27%);
+  /* 28%, not 27%. At 27% a 529px desktop sheet gave the rail 142px, which left
+     the category label 67px against the 70px "SUSPENSION" needs at the 10px
+     desktop size — truncated by THREE pixels. Here the share binds, not the
+     floor (142 > 112), so widening the floor cannot fix the desktop case; only
+     the share can. 28% -> 148px, label 73px. See the touch floor at the end of
+     this file for the same defect at the other end of the ladder. */
+  --pair-split: minmax(112px, 28%);
   --pair-gap: var(--gap);
 }
 
@@ -775,7 +781,7 @@ body:not(.desktop) .cs-tab-cur { font-size: 12px; }
    NOTE FOR THE NEXT EDITOR: a `body:not(.desktop) #cs-tabs` rule cannot fix
    this. `#cs-inner[data-pair="on"] #cs-tabs` is two IDs and wins; that was the
    first attempt and it computed to the same 86px. */
-body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 27%); }
+body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
 body:not(.desktop) .cs-opt-tag { font-size: 11px; }
 body:not(.desktop) .cs-opt-desc { font-size: 13px; }
 body:not(.desktop) .cs-delta { font-size: 11px; }
