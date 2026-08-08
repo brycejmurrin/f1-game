@@ -15,6 +15,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/car/render-car.mjs`. |
 | **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump. |
+| **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
 | **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
 | **career-mode** | DRIVER / MY TEAM career — saves, economy, R&D, quali/reliability weekend flow. |
