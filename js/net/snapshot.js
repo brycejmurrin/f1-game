@@ -140,11 +140,6 @@ const NetSnapshot = (function () {
     return { type: TYPE_SNAPSHOT, tick: dv.getUint32(1), cars };
   }
 
-  function packetType(bytes) {
-    const dv = toView(bytes);
-    return (dv && dv.byteLength) ? dv.getUint8(0) : 0;
-  }
-
   function toView(bytes) {
     if (!bytes) return null;
     if (bytes instanceof DataView) return bytes;
@@ -300,7 +295,7 @@ const NetSnapshot = (function () {
 
   return {
     TYPE_SNAPSHOT, CAR_BYTES,
-    encodeSnapshot, decodeSnapshot, packetType,
+    encodeSnapshot, decodeSnapshot,
     // Shared with session.js, which decodes off the same channel.
     toView,
     createInterp,

@@ -428,9 +428,10 @@ instances what it can and bakes `bakeOnly`, and nothing is a flag day.
   9 for the per-instance colour, not the "attributes 5–8" this list predicted —
   which is itself evidence it was written after this paragraph.
 
-  What ACTUALLY remains for S3 on GLX is one call site: `js/game.js:5018` still
-  draws scenery as `gfx.drawChunked(track.meshes.props, …)` against the fused
-  soup, and `drawInstanced` has NEVER appeared in game.js in this repo's
+  What ACTUALLY remains for S3 on GLX is one call site: the
+  `gfx.drawChunked(track.meshes.props, …)` in game.js's render loop still draws
+  scenery against the fused soup, and `drawInstanced` has NEVER appeared in
+  game.js in this repo's
   history — so this is unwired, not wired-and-reverted. Before wiring it, fix
   `cullInstances` (`glx.js:1211-1234`): it calls `src.subarray()` per visible
   instance per frame off a growable JS array, which on Vegas's 80,796 nodes is

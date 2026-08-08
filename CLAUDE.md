@@ -123,14 +123,15 @@ budget instead — 36x its declared bound. It overran on a menu page too. Only a
 predicate that THROWS terminates promptly (11 ms), because the exception
 propagates without polling — which is why an absent global fails fast and a
 plain `false` does not. Pass `{ polling: 100, timeout: N }` for any wait on a
-page that is rendering. The repo has **318 `waitForFunction` calls carrying a
-timeout and NOT ONE passes `polling`** (counted by AST — a grep undercounts the
-multi-line ones at 312), so today every one of
-those bounds is decorative: a condition that never becomes true burns the whole
-test budget and reports `Test timeout of Nms exceeded` from a line that claims
-to wait 30 s. `tlx-probes`' M6 skid is the worked example — 344 s inside a 30 s
-wait. Reasoning of the form "this test's explicit waits total N seconds, so the
-time must be elsewhere" is UNSOUND until the call sites are fixed.
+page that is rendering. Most of the suite's `waitForFunction` bounds are still
+decorative — a condition that never becomes true burns the whole test budget and
+reports `Test timeout of Nms exceeded` from a line that claims to wait 30 s
+(`tlx-probes`' M6 skid was the worked example — 344 s inside a 30 s wait). The
+`polling` fix is in active, ratcheted adoption; `docs/TESTING.md` owns the live
+count of fixed-vs-decorative sites (`tests/unit/wait-polling.test.mjs` guards it,
+so the number lives there, not here). Reasoning of the form "this test's explicit
+waits total N seconds, so the time must be elsewhere" is UNSOUND until the call
+sites carry `polling`.
 
 And once they are fixed, a wait that still overruns is telling you the CONDITION
 is unreachable, not that the page is slow. M6 skid took four wrong mechanisms
