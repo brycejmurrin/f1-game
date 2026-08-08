@@ -15,7 +15,7 @@ recommendation from the designs plus both scorecards. The full outputs are
 compressed in §The three designs and §Judge scores; the synthesis is included
 verbatim in §Synthesis. The uncompressed panel output (all three full designs
 and both complete scorecards) is
-[raw/2026-08-redesign-panel.json](raw/2026-08-redesign-panel.json).
+[`archive/research/raw/2026-08-redesign-panel.json`](../archive/research/raw/2026-08-redesign-panel.json).
 
 **DECISION: Bedrock-with-grafts is the adopted direction. Native ESM
 (Graphline) is not rejected — it is kept as the documented escalation path,

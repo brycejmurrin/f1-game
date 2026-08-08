@@ -8,7 +8,8 @@ archives to `docs/archive/` alongside the records it indexes.
 Method note: every wave's inputs came from `Workflow`-orchestrated agent fleets
 (scripts committed in `.claude/workflows/`), with every finding adversarially
 verified before being believed, and every workflow's output saved verbatim as a
-dated record in this directory (`raw/` holds the uncompressed evidence).
+dated record in this directory (the uncompressed evidence is consolidated in
+`docs/archive/research/raw/`).
 
 ## Wave status
 
@@ -976,7 +977,7 @@ b8295474 made ranges and points agree on whatever a def declares.
 | TOTAL-AUDIT-2026-08 | Batch A/B/C are worked off (`89ce4f2f`, `d23b70b8`); archives when §"Feed the restructure" and §Defer are absorbed into W2 |
 | RESEARCH-WAVE-2026-08 | With this doc — it is the survey/perf wave's evidence, and its open items are live renderer/circuit tasks |
 | This doc | Campaign completes → `docs/archive/` |
-| `research/raw/*.json` | With their parent record — they are its uncompressed evidence and mean nothing alone |
+| `research/raw/*.json` | **Done** — all four consolidated in `docs/archive/research/raw/` as verbatim provenance (they mean nothing alone); the two whose parent record is still live (redesign-panel → ARCHITECTURE-REDESIGN, test-audit → TEST-AUDIT) link across into the archive |
 
 ### The archive move itself, and the one thing that is NOT guarded
 
