@@ -50,6 +50,48 @@ await new Promise(r => setTimeout(r, 500));         // 3. let layout settle
    A live game page in the MCP browser held **21.7% CPU** and was a measurable
    contributor to a `test-solo` refusal and one false test failure.
 
+### Verify the instrument before you trust it
+
+One `evaluate_script` that proves the harness is measuring what you think. If any
+line is wrong, every number after it is too:
+
+```js
+return { viewport: innerWidth + 'x' + innerHeight, dpr: devicePixelRatio,
+  coarse: matchMedia('(pointer: coarse)').matches,
+  bodyClass: document.body.className || '(none = touch)',
+  tapRoot: getComputedStyle(document.documentElement).getPropertyValue('--tap').trim(),  // expect 44px
+  tapBody: getComputedStyle(document.body).getPropertyValue('--tap').trim(),             // expect 52px on touch
+  uiScale: getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim(),
+  build: document.querySelector('script[src*="game.js"]').src.match(/v=(\d+)/)[1] };     // vs version.json
+```
+
+`tapRoot` and `tapBody` differing IS the calibration — if they match you are on a
+desktop pointer, not the touch ladder. `build` catches a stale cache before it
+costs you a debugging round.
+
+### The three tools worth using that are not screenshots
+
+- **`take_snapshot`** — the a11y tree as text, with uids. The tool's own guidance
+  is *"Prefer taking a snapshot over taking a screenshot"*, and it is dramatically
+  cheaper: the title screen is **14 lines** against a 2556x1179 PNG. It also shows
+  what a screenshot cannot — accessible names, roles, pressed/checked state, and
+  the ABSENCE of landmarks. Use it as the default structural probe and reach for a
+  screenshot only when the question is visual.
+- **`list_console_messages`** (`types: ["error","warn"]`) — the layout-audit probe
+  asks "did the page throw", and an interactive sweep should too. A layout that
+  only looks right because a script died is not right.
+- **`lighthouse_audit`** (`mode: "snapshot"`) — accessibility/SEO/best-practices
+  scoring on the CURRENT state without a reload. Excludes performance, which is
+  `performance_start_trace`. Expensive; do not run it while a Playwright suite is.
+
+**`resize_page` does not reliably take on this page** — measured, it reported the
+old viewport back. Use `emulate` with the full descriptor string instead; that
+works every time.
+
+**Serve on a port the test suite is not using.** Playwright starts its own server;
+if you also need one, pick a different port (3457) so a survey can never interfere
+with a run in flight.
+
 ---
 
 ## 1. Enumerate screens FROM SOURCE, never from a hand-kept list
