@@ -364,6 +364,34 @@ under investigation as a browser-vs-node banking divergence. All three are on
 the live site today and have been for the defects' whole lives; they are
 ordinary scenery-fix work, not ship blockers.
 
+**CLOSED 2026-08-08 — both scenery defects fixed at the mechanism, and
+`props-over-road` PASSES for the first time in the record.** Root-caused
+offline through `tools/track-build-vm.cjs` (the sweeps' own harness — the
+per-primitive emitter stacks named both call sites in one run each):
+
+- **vegas was not a prop at all — it was the street-barrier itself.** The
+  panels are straight boxes spanning two nodes, and on the inside of a bend
+  the chord SAGS INWARD from its own barrier line (0.43 m measured at frac
+  0.678 against `barrierGap: 1.0`); the audit walks the full road mesh to 75 %
+  of its width, and the 1.1 m panel hung over the verge it samples. Fix in
+  `js/track/tracks.js`: an apex span whose chord gives up more than 0.1 m of
+  the gap at the skipped middle node is emitted as two single-node panels
+  that follow the curve. Cost lands only on apex spans. One coplanar spot was
+  the price (vegas 66 → 67, the same top-face seam class every existing panel
+  joint already contributes — re-baselined with the reason in
+  `tests/unit/coplanar-faces.test.mjs`).
+- **buenos_aires was a CROSS-SEGMENT overhang.** The circuit plants its park
+  woodland 30 m off the road — but the circuit loops back on itself, and a
+  tree planted off one straight landed with its canopy 8.8 m from the
+  centreline of the parallel stretch across the loop. `clearTreeDist` checked
+  recorded barriers only; candidate positions now also have to clear the ROAD
+  anywhere on the lap (`onTrack()`, the world-space segment test) — push out
+  or drop, exactly as a fence conflict.
+
+Verified: offending geometry gone from both VM builds, all 40 circuits build
+headlessly, `props-over-road` green in the browser (1/1, solo), remaining
+sweeps green unchanged. Shipped on the work branch with cache 1033.
+
 **Four groups had never run and four came back with something. They are not the
 same four.** `parts` (91 % never-executed) returned twelve. `modes`, `barriers`
 and `physics` — equally unrun — returned one contended timeout between them and
