@@ -619,10 +619,17 @@
       }
 
       // 8f. Park furniture details — lake-edge vegetation clusters.
+      // INTERLEAVED with section 5's lakeside cluster (the `[[0.40, 1], [0.24,
+      // -1]]` loop above), not stacked on it. Both walk si = i - 2 in steps of
+      // 0.01 over the SAME two (s, side) pairs, so the first four of these five
+      // shared an arc with one of those four exactly, 2 m further out and 3 m
+      // taller in the same colour — eight interpenetrating trunks. The half-step
+      // keeps every tree the author placed and puts them BETWEEN their
+      // neighbours, which is what a second "details" pass was for.
       for (const [s, sd, colL] of [[0.40, 1, LEAF_L], [0.24, -1, LEAF_L]]) {
         for (let i = 0; i < 5; i++) {
           const si = i - 2;
-          tree(K(s + si * 0.01), sd, 72 + i * 8, 15 + i * 0.8, colL);
+          tree(K(s + (si + 0.5) * 0.01), sd, 72 + i * 8, 15 + i * 0.8, colL);
         }
       }
 

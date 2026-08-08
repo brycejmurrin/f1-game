@@ -338,8 +338,10 @@
       }
 
       // THE PARK LAKE. The autódromo sits inside a municipal park built around
-      // water, and the long Curvón runs past it. A flat green outfield gives
-      // none of that away.
+      // water. A flat green outfield gives none of that away.
+      // NOT the Curvón, which this comment used to name: that corner is at
+      // 0.380 on this file's own evidence (its bankZones entry, its terrace and
+      // its gravel patch all sit there) and the lake is a quarter-lap away.
       groundPatch(K(0.655), 1, 74, [40, 0.16, 90], [0.30, 0.42, 0.26],
         { id: "baires-lake-shore", samples: 8 });
       waterSurface(K(0.655), 1, 96, [30, 0.18, 74], [0.24, 0.40, 0.44],
