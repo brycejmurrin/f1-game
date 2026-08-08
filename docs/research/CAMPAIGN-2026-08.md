@@ -870,6 +870,63 @@ accept that most runs will never report.
   header collapse on next touch; phone-UA sniff dedup wants a shared file; the
   tombstone-comment house rule).
 
+## The subsystem surveys (2026-08-08) — six reads, and what survived verification
+
+The campaign's own reading had never opened whole subsystems: `js/net/`,
+`js/game/`'s side-worlds, `js/render/`'s backends, `js/car/`, `js/circuits/`.
+Six agents were sent to read them in full and report findings with mechanisms.
+**Every finding was re-derived against the source before anything was applied**,
+and the re-derivation mattered in both directions — it killed some claims and it
+widened others.
+
+**Landed (fba33659) — four defects, each with a mechanism:**
+
+| Finding | Mechanism |
+|---|---|
+| `js/net/netplay.js` receive side ungated | The file declares its authority model as `ownsRaceControl()`/`ownsClassification()`; the SEND side obeyed it, the RECEIVE side obeyed nothing. The star topology protects the GUESTS, not the host — a host holds one session per guest and bound these handlers to every one. A guest could set the host's `netStart`, apply a caution, or fill "the host's classification". The EVENT-channel twin of a STATE-channel bug the same file already fixed and documented. |
+| `js/net/session.js` timeout leaked its transport | `pump()` set `alive = false` without closing the transport, and `close()` opens with `if (!alive) return;` — so after the death clock fired NOTHING could tear it down. Every timed-out peer left an RTCPeerConnection and two data channels open for the tab's life. |
+| `js/game/debrisworld.js` panel leak | `live = false` appeared only inside `if (p.broken)`, so a promoted panel that never broke was freed by nothing. Ten of those exhaust `PANEL_CAP` and breakable barriers are gone for the session. |
+| `js/game/quali.js` PACE mismatch | The G façade hands quali the friction-circle constants promising it runs "off the SAME numbers the driving model uses". It took a bare `G.ACCEL` while its ceiling is the pace-scaled `G.vTop()`, so the modelled field reached a halved cap at undiminished pace-5 acceleration. Fixed at the source with `aTop()`. |
+
+**Landed (b8295474) — the one that was bigger than reported.** Two code paths
+answered "which space are this def's scenery numbers in": `sceneryFrac()`
+consulted the def, both scenery call sites of `range()` hard-coded `"source"`.
+Invisible unless a def declares `"racing"` AND `reverse: true`. Kyalami's
+Crowthorne gravel is a POINT at racing 0.078; the tyre wall written on the next
+line to back it is a RANGE at 0.060-0.098, landing at 0.912-0.950 — and since
+`guardrail`/`fence`/`tyreWall` feed `recordBarrier`, this moved collision
+geometry, not just props. Now one answer, `TrackSpace.scenerySpace(def)`.
+
+**Two corrections to my own re-derivation, both worth keeping:**
+
+1. I alarmed at **22 affected circuits** and was wrong. I had grepped source
+   files, where monza's `reverse: false, // ...(was auto-audit reverse:true)`
+   matches a search for `reverse: true`. Counting from the RESOLVED defs gives
+   exactly the two the survey said. *Grep the resolved object, not the file that
+   declares it.*
+2. The regression guard's anti-vacuity clause rejected my first draft of it. I
+   checked monaco's remap on `0.10-0.18`; a reversed remap sends `s` to `phi-s`
+   and swaps the ends back, so **any pair summing to `startFrac` (0.28) maps to
+   itself**. The check would have asserted nothing. Every fix in this batch was
+   then proved by reintroducing the exact bug in a worktree at HEAD and watching
+   the new test go red.
+
+**Blast radius, measured rather than argued.** Only three defs reach
+`transformSceneryApi` at all. Built each plus two controls before and after,
+comparing prop vertex counts and a hash of `barL`/`barR`: kyalami and
+paul_ricard changed; monaco, monza and spa are byte-identical.
+
+**Batch B (`claude/survey-batch-b`)** carries the lower-stakes half: stale
+corner numbers in vegas checked against `CircuitMarkings.vegas`, the
+buenos_aires lake comment, imola's species comment, Audi's colour hex, monza's
+duplicated lakeside tree loop (interleaved, not deleted), and `liverytex`'s
+private copy of the roster — where `redbull` and `racingbulls` were BOTH "RB".
+
+**Deferred as tasks, not applied:** the monza / spa / suzuka scenery re-anchors
+(#42) and monaco's declared coordinate space (#43). Both need per-circuit
+measured work and a scenery browser group; #43 is only now safe because
+b8295474 made ranges and points agree on whatever a def declares.
+
 ## Record lifecycle
 
 | Record | Archives when |
