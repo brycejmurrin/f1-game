@@ -90,23 +90,17 @@
       //    Painted as ground patches so they read flat, not as scenery.
       // =====================================================================
       for (const [id, s, side, w, l] of [
-        // Signes and Verrerie have the vastest run-off on the calendar — bays of
-        // painted tarmac reaching the best part of a hundred metres back — so the
-        // hero corners get correspondingly wide patches rather than a token verge.
-        ["pr-runoff-verrerie", 0.070, 1, 82, 150],
-        ["pr-runoff-mistral", 0.440, -1, 70, 130],
-        ["pr-runoff-signes", 0.565, 1, 92, 170],
-        ["pr-runoff-beausset", 0.720, -1, 66, 120],
-        ["pr-runoff-village", 0.905, 1, 64, 120],
+        ["pr-runoff-verrerie", 0.070, 1, 60, 130],
+        ["pr-runoff-mistral", 0.440, -1, 54, 120],
+        ["pr-runoff-signes", 0.565, 1, 66, 150],
+        ["pr-runoff-beausset", 0.720, -1, 52, 110],
+        ["pr-runoff-village", 0.905, 1, 50, 110],
       ]) {
-        // Red band nearest the road, blue beyond it, then a deeper-blue outer
-        // apron so the painted zone fades out rather than ending on a hard line.
-        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], RED,
+        // Red band nearest the road, blue beyond it.
+        groundPatch(K(s), side, 4, [w * 0.35, 0.18, l], RED,
           { id: id + "-red", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE,
+        groundPatch(K(s), side, 4 + w * 0.35, [w * 0.65, 0.18, l * 1.1], BLUE,
           { id: id + "-blue", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], BLUE_D,
-          { id: id + "-blue-outer", samples: 8 });
       }
 
       // The corner patches alone leave the rest of the lap green, which is the
@@ -118,23 +112,14 @@
       // stops all that blue reading as a swimming pool from the air.
       for (const side of [-1, 1]) {
         let i = 0;
-        along(0.0, 1.0, 15, (k, spacing) => {
+        along(0.0, 1.0, 18, (k, spacing) => {
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
           runoffApron(k, side, 2.5, [9, 0.16, seg], RED);
           runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
           runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? BLUE_D : [0.33, 0.38, 0.60]);
-          // Outer apron — the blue keeps going out to where the barriers finally
-          // sit, so the painted zone reads as acres rather than a mown strip.
-          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? [0.31, 0.36, 0.58] : BLUE_D);
           if (i % 3 === 0) {
             const a = anchor(k, side, 26);
             addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
-          }
-          // A second lane-line further out, offset in phase, so the Blue Zone
-          // reads as a marked run-off surface and never as open water.
-          if (i % 3 === 1) {
-            const a = anchor(k, side, 58);
-            addBox(out, vadd(a.c, a.u, 0.20), [20, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
           }
           i++;
         });
@@ -304,10 +289,6 @@
       bleacher(0.545, 0.590, 1, 72, { rows: 8 });
       bleacher(0.890, 0.930, -1, 58, { rows: 7 });
       bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
-      // Two more rakes marooned out in the blue zone, the way Paul Ricard's
-      // corner seating always is — no shell, no roof, the paint showing under it.
-      bleacher(0.115, 0.150, -1, 52, { rows: 6, step: 8 });   // exit of the Verrerie esses
-      bleacher(0.470, 0.505, -1, 56, { rows: 6, step: 8 });   // opposite the Mistral chicane
       spectatorHill(0.68, 0.76, 1, 60, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
       for (const s of [0.070, 0.560, 0.905]) marshalPost(K(s), -1, 12);
       for (const s of [0.44, 0.72]) marshalPost(K(s), 1, 12);
@@ -360,17 +341,9 @@
         { id: "paul-ricard-airfield-apron", samples: 10 });
       groundPatch(K(0.50), 1, 196, [22, 0.16, 300], [0.44, 0.45, 0.46],
         { id: "paul-ricard-runway", samples: 10 });
-      // The taxiway linking apron to runway — a narrower concrete ribbon in the
-      // strip between them, with yellow centreline dashes down it.
-      groundPatch(K(0.50), 1, 166, [30, 0.16, 280], [0.52, 0.52, 0.51],
-        { id: "paul-ricard-taxiway", samples: 10 });
       for (let i = 0; i < 9; i++) {
         const a = anchor(K(0.40 + i * 0.025), 1, 196);
         addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
-      }
-      for (let i = 0; i < 10; i++) {
-        const a = anchor(K(0.41 + i * 0.020), 1, 166);
-        addBox(out, vadd(a.c, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
       }
       {
         const a = anchor(K(0.50), 1, 150);
@@ -567,19 +540,6 @@
           ["lav-east",    0.380,  1, 168, 12, 1],
           ["vine-mistral", 0.480, -1, 118, 14, 0],
           ["lav-west",    0.880,  1, 148, 10, 1],
-          // Further Bandol parcels filling the open plateau out to the ridges —
-          // the vineyards here genuinely run to the horizon, so a handful of
-          // token rows would read as a garden. Kept clear of the turbines above.
-          ["vine-verrerie", 0.110, -1, 130, 18, 0],
-          ["lav-north-e",   0.170,  1, 124, 10, 1],
-          ["lav-t2",        0.260,  1, 130, 12, 1],
-          ["vine-signes",   0.590, -1, 128, 18, 0],
-          ["vine-beausset", 0.735,  1, 112, 14, 0],
-          ["lav-far-w",     0.860, -1, 152, 12, 1],
-          ["vine-far-e",    0.340, -1, 150, 16, 0],
-          ["vine-t2-out",   0.200,  1, 152, 12, 0],
-          ["lav-signes-o",  0.610,  1, 150, 12, 1],
-          ["vine-beau2",    0.780, -1, 122, 14, 0],
         ]) {
           // Bare tilled ground under the parcel, so rows sit on soil not grass.
           groundPatch(K(s), side, gap, [rows * 4.5, 0.15, 120], SOIL,

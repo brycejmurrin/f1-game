@@ -68,7 +68,7 @@
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, runoffApron,
-        cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
+        cameraTower, sponsorHoarding, signBoard, groundedSegments,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -148,11 +148,8 @@
       hillsideTerrace(0.035, 0.095, 1, 16, { rows: 8, density: 0.6 });   // Turn 1 amphitheatre
       hillsideTerrace(0.470, 0.530, -1, 18, { rows: 6 });
       hillsideTerrace(0.835, 0.890, 1, 16, { rows: 7 });
-      // The brief names 0.28-0.36 R and 0.62-0.70 L as terracing cut into the
-      // slope, not grass banks — broad concrete steps with the raw red cut face
-      // above the top row, on the opposing hillsides of the middle sector.
-      hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
-      hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
+      spectatorHill(0.28, 0.36, 1, 15, { rows: 4, rise: 1.3, depth: 1.9, density: 0.42, step: 8 });
+      spectatorHill(0.62, 0.70, -1, 15, { rows: 4, rise: 1.3, depth: 1.9, density: 0.42, step: 8 });
 
       // =====================================================================
       // 3. PIT COMPLEX — the pit building sits on the ridge at the top of the
@@ -267,31 +264,6 @@
       groundPatch(K(0.900), 1, 5, [24, 0.18, 32], EARTH,
         { id: "portimao-final-gravel", samples: 6 });
       marshalPost(K(0.895), -1, 9);
-
-      // Painted kerbs — the one splash of saturated colour on a red-earth lap,
-      // and Portimão paints them hard: alternating red/white at most apexes with
-      // blue/white and yellow/white kerbs mixed through the esses, the way the
-      // real circuit's rollercoaster corners are picked out for the cameras.
-      // No SAFER rail on these (safer:false); the armco already sits back at
-      // gap 7, and these are the flat/serrated painted kerbs at the road edge.
-      {
-        const RK = [0.86, 0.13, 0.14], WK = [0.95, 0.95, 0.93];
-        const BK = [0.14, 0.28, 0.62], YK = [0.90, 0.72, 0.12];
-        for (const [s0, s1, side, red] of [
-          [0.034, 0.078,  1, RK],   // Turn 1 apex (gravel + tyre wall sit on -1)
-          [0.034, 0.076, -1, RK],   // Turn 1 exit kerb
-          [0.135, 0.176, -1, BK],   // the downhill esses
-          [0.190, 0.234,  1, YK],   // Turn 3 crest
-          [0.284, 0.322, -1, RK],   // Turn 5 (tyre wall on +1)
-          [0.360, 0.402,  1, BK],   // middle-sector chicane
-          [0.468, 0.512,  1, RK],
-          [0.560, 0.602, -1, YK],
-          [0.624, 0.664,  1, RK],   // Turn 11 (tyre wall on -1)
-          [0.758, 0.800, -1, BK],
-          [0.884, 0.922, -1, RK],   // final corner apex (gravel on +1)
-          [0.884, 0.920,  1, RK],   // final corner exit
-        ]) bankedKerbStrip(s0, s1, side, { safer: false, step: 3.0, kerbRed: red, kerbWht: WK });
-      }
 
       // Between the traps, the verge is not grass either. The whole site is cut
       // out of red Algarve soil, so a bare earth shoulder runs the length of the
