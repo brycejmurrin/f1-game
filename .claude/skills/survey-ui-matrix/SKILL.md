@@ -153,8 +153,16 @@ function truncIn(root) {
 // TRAP 3: getBoundingClientRect() inside `.sheet` returns ZOOMED px
 //   (zoom: var(--ui-scale)). Divide by el.currentCSSZoom for CSS px. A row that
 //   paints 60px is 52 CSS px at the 1.15 default — it PASSES a 52px floor.
+// TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
+//   full-height tab that is merely NARROW is not a small target. Scoring on the
+//   minimum produced two false alarms out of three findings in one sweep —
+//   `.dh-tab-live` at 44x52 (fine: a short label on a full-height tab) and
+//   `.sel-chip` at 85x45 (fine: --chip-h is deliberately one step below --tap).
+//   Report BOTH dimensions and judge height against the ladder; use the
+//   min only for the WCAG 24x24 test, which really is both-axes.
 function tapsIn(root) {
   const floor = parseFloat(getComputedStyle(document.body).getPropertyValue('--tap')) || 44;
+  const chip  = parseFloat(getComputedStyle(document.body).getPropertyValue('--chip-h')) || floor;
   const SEL = "button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
   const out = [];
   for (const el of root.querySelectorAll(SEL)) {
@@ -163,12 +171,16 @@ function tapsIn(root) {
     const lab = el.closest('label');
     if (lab) { const lr = lab.getBoundingClientRect(); r = { width: Math.max(r.width, lr.width), height: Math.max(r.height, lr.height) }; }
     const z = el.currentCSSZoom || 1;
-    const cssMin = Math.min(r.width, r.height) / z;          // CSS px, not painted
-    if (cssMin < floor - 0.5)
-      out.push({ el: el.id || String(el.className).split(' ')[0], cssPx: Math.round(cssMin),
-                 wcagFail: cssMin < 24 });                    // SC 2.5.8 AA floor
+    const w = r.width / z, h = r.height / z;                 // CSS px, not painted
+    const wcagFail = Math.min(w, h) < 24;                    // SC 2.5.8 AA — both axes
+    // 1.5px of slack: the zoom division rounds (52 x 1.15 = 59.8 -> 51.99).
+    const shortForLadder = h < chip - 1.5;
+    if (wcagFail || shortForLadder)
+      out.push({ el: el.id || String(el.className).split(' ')[0],
+                 w: Math.round(w), h: Math.round(h), wcagFail,
+                 note: h < floor - 1.5 && h >= chip - 1.5 ? 'chip-height, check if deliberate' : '' });
   }
-  return { floor, under: out };
+  return { floor, chip, under: out };
 }
 
 // (d) DOCUMENT OVERFLOW — always a bug on a fixed-viewport game.
@@ -270,6 +282,8 @@ re-bless them deliberately rather than by reflex.
 ## Common mistakes
 
 - Reading `--tap` from `:root` — returns the desktop floor on every device.
+- Scoring a tap target on `min(width, height)` — a full-height tab that is merely
+  narrow reads as a small target. Two of three findings in one sweep were this.
 - Treating a scroller as a clipper — mass false positives.
 - Comparing a `getBoundingClientRect()` height against a CSS-px token without
   dividing by `currentCSSZoom` — everything inside `.sheet` looks 15% too big.

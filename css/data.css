@@ -152,7 +152,14 @@
 @keyframes dh-spin { to { transform: rotate(360deg); } }
 .dh-loading-text { font-size: var(--fs-2); letter-spacing: 0.2em; }
 .dh-error-msg { font-size: var(--fs-4); text-align: center; max-width: 360px; }
-.dh-retry { padding: 8px 22px; }
+/* ON THE LADDER. Measured 91x42 on a 393px phone — the only control in the hub
+   that was short of the 52px touch floor (.dh-tab is already on it, and the
+   chips take --chip-h deliberately). It is the recovery button on an error
+   state, i.e. the one control on screen when the hub has nothing else to offer,
+   so it is the worst one to under-size. The hub sits outside every zoomed
+   subtree, so unlike a sheet control this number does not grow with UI SIZE —
+   42px is 42px at every setting. */
+.dh-retry { padding: 8px 22px; min-height: var(--tap); }
 .dh-empty { padding: 30px 12px; text-align: center; color: #8a8a95; font-size: var(--fs-4); }
 .dh-footnote { margin-top: 16px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: #6a6a75; text-align: right; }
 
