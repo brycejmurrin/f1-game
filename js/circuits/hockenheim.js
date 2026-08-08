@@ -129,6 +129,18 @@
           });
         }
       }
+      // Deep Hardtwald rank on the old blast — a third belt set well back with
+      // the tallest, darkest firs, so the corridor reads as a plantation that
+      // runs hundreds of metres deep rather than a thin screen with sky behind
+      // it. Kept sparse (8 m) so it stays a backdrop mass, not doubled trunks.
+      for (const [s0, s1] of [[0.075, 0.305], [0.505, 0.765]]) {
+        for (const side of [-1, 1]) {
+          forestEdge(s0, s1, side, 42, {
+            density: 0.2, hMin: 26, hMax: 42, pineFrac: 0.96,
+            col: PINE_D, col2: PINE_D,
+          });
+        }
+      }
       every(20, (k) => {
         const s = k / n;
         if (inStadium(s)) return;
@@ -233,6 +245,59 @@
           addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 21), [0.2, 6.6, 12.6],
             [0.62, 0.72, 0.80], b);                                        // lit picture
         }, { required: true });
+      }
+
+      // The MERCEDES-TRIBÜNE — the Motodrom's one covered HERO stand, a taller
+      // roofed upper tier rising behind the open concrete terracing at the
+      // Mercedes/Sachs corner. The ring below stays continuous; this only marks
+      // the main tribune the whole bowl is named for, its deep cantilever roof
+      // and bright name fascia riding clear above the terrace roof band.
+      {
+        const a = anchor(K(0.828), 1, 28);
+        const b = [a.r, a.u, a.t];
+        const roofB = tiltBasis(a, -0.10);   // roof falls forward over the rake
+        modelGroup("hockenheim-mercedes-tribune", {
+          center: vadd(vadd(a.c, a.r, -6), a.u, 13), size: [34, 30, 56], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Rear shell wall carrying the crown, standing behind the terrace.
+          addBox(stage, vadd(vadd(a.c, a.r, 6), a.u, 12.5), [2.0, 25, 48],
+            [0.60, 0.60, 0.58], b);
+          stage._mat = MAT.GLASS;
+          // Glazed press / hospitality band under the roof.
+          addBox(stage, vadd(vadd(a.c, a.r, 1), a.u, 21.5), [10, 3.4, 46],
+            [0.34, 0.45, 0.54], b);
+          stage._mat = MAT.METAL;
+          for (let d = 0; d < 4; d++)                          // rear columns
+            addCyl(stage, vadd(vadd(a.c, a.r, 6), a.t, (d - 1.5) * 14),
+              0.34, 25, [0.42, 0.43, 0.46], 6, b);
+          // Deep cantilever roof reaching forward over the terrace, tilted.
+          addBox(stage, vadd(vadd(a.c, a.r, -4), a.u, 25.5), [30, 0.7, 50],
+            [0.30, 0.31, 0.34], roofB);
+          // Bright name fascia hung under the leading eave — the board that
+          // names the stand, the one saturated element the grey bowl carries.
+          addBox(stage, vadd(vadd(a.c, a.r, -18), a.u, 23.6), [1.2, 2.6, 48],
+            [0.88, 0.88, 0.86], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -18.1), a.u, 23.6), [1.0, 1.6, 42],
+            [0.10, 0.12, 0.16], b);
+          stage._mat = 0;
+        });
+      }
+      // Flag masts along the Motodrom rim — the pennant line above the crowd
+      // that every stadium shot of the bowl catches. Thin, standing well in
+      // front of the first terrace row so they never reach tarmac or terracing.
+      {
+        const FLAG = [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90],
+                      [0.10, 0.30, 0.62], [0.96, 0.78, 0.08]];
+        let fi = 0;
+        along(0.805, 0.935, 16, (k) => {
+          const a = anchor(k, 1, 10.5);
+          const b = [a.r, a.u, a.t];
+          addCyl(out, a.c, 0.10, 11, [0.80, 0.81, 0.83], 5, b);
+          addBox(out, vadd(vadd(a.c, a.u, 9.4), a.t, 1.2), [0.12, 1.5, 2.4],
+            FLAG[fi & 3], b);
+          fi++;
+        });
       }
 
       // =====================================================================

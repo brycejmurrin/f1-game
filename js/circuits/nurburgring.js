@@ -133,6 +133,18 @@
           });
         }
       }
+      // A third, deepest spruce rank set well back — the Eifel plantation is
+      // dense and runs for kilometres, so the back half of the lap wants a dark
+      // wall of firs behind the near belts, not sky. Sparse (8 m) to stay a
+      // backdrop mass rather than doubling the trunk count on every straight.
+      for (const [s0, s1] of [[0.215, 0.605], [0.650, 0.925]]) {
+        for (const side of [-1, 1]) {
+          forestEdge(s0, s1, side, 41, {
+            density: 0.2, hMin: 24, hMax: 40, pineFrac: 0.97,
+            col: FIR_D, col2: FIR_D,
+          });
+        }
+      }
       every(20, (k) => {
         const s = k / n;
         if (openArena(s)) return;
@@ -260,6 +272,32 @@
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.960, -1, 11, 96, null, null, { livery: "concrete", endWalls: true });
+      // The MERCEDES-BENZ TRIBÜNE header — the pale name board and star roundel
+      // mounted along the front of the main stand's cantilever roof. The stand
+      // itself is one of a dozen dark-steel boxes on the fleet; this board is
+      // what makes it read as the Nürburgring's named main tribune, the one
+      // saturated marker on an otherwise grey start/finish straight.
+      {
+        const a = anchor(K(0.998), -1, 12);
+        const b = [a.r, a.u, a.t];
+        const discB = [a.u, a.r, a.t];   // flat badge facing across to the track
+        modelGroup("nurburgring-mercedes-tribune-header", {
+          center: vadd(a.c, a.u, 15), size: [10, 34, 64], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          // Pale name fascia running the covered length of the stand front.
+          addBox(stage, vadd(a.c, a.u, 17.6), [1.1, 3.2, 60], [0.90, 0.90, 0.88], b);
+          addBox(stage, vadd(vadd(a.c, a.r, 0.3), a.u, 17.6), [0.9, 1.9, 52],
+            [0.16, 0.18, 0.22], b);                                     // lettering band
+          // The star roundel at centre — a silver disc on a dark backing,
+          // the badge the whole stand is named for.
+          addCyl(stage, vadd(vadd(a.c, a.r, 0.4), a.u, 19.6), 3.0, 0.35,
+            [0.20, 0.21, 0.24], 8, discB);
+          addCyl(stage, vadd(vadd(a.c, a.r, 0.8), a.u, 19.6), 2.5, 0.3,
+            [0.82, 0.83, 0.85], 8, discB);
+          stage._mat = 0;
+        });
+      }
 
       // ring°boulevard — the glass-and-steel leisure complex bolted onto the
       // back of the paddock in 2009 and the one genuinely MODERN thing on this

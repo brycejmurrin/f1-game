@@ -453,6 +453,21 @@
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.45, col: PINE, col2: LEAF_D });
       }
+      // A taller BACK RANK on the wooded hillside above the Arrabbiate, stepped
+      // behind the front treeline and the cypress ranks, so the valley wall on
+      // the outside of the circuit's signature corners reads with real depth.
+      forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.5, col: PINE_D, col2: LEAF_D });
+
+      // =====================================================================
+      // 8. SAN DONATO GRANDSTAND — the big covered stand on the outside of Turn
+      //    1, above the poured terracing: a raked two-tier crimson deck with a
+      //    cantilever roof and a glazed hospitality band, the shot every start
+      //    is framed on. It sits back up the hill behind the terrazza, not on
+      //    top of it — added above the curated corner, not in place of it.
+      // =====================================================================
+      grandstandEx(0.074, -1, 36, 88, null, null,
+        { livery: "crimson", tiers: 2, roof: "cantilever", suites: true,
+          endWalls: true, pylons: true });
     },
   }
   );

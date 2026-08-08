@@ -496,6 +496,46 @@
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 10, { density: 0.74, hMin: 12, hMax: 22, pineFrac: 0.22, col: FIR, col2: OAK });
       }
+      // A taller BACK RANK stepped off the front treeline through the Boot, so
+      // the wooded slopes read with depth rather than as one wall of trunks —
+      // this is the part of the lap that plunges into and climbs out of the
+      // forest, the Glen's enclosed-in-the-trees identity.
+      for (const side of [-1, 1])
+        forestEdge(0.50, 0.66, side, 24, { density: 0.25, hMin: 16, hMax: 27, pineFrac: 0.42, col: FIR, col2: SCARLET });
+
+      // =====================================================================
+      // 8. ENRICHMENT — a permanent stand at the 90, and the main gate.
+      // =====================================================================
+      // The permanent covered stand at Turn 1 ("the 90"), distinct from the
+      // club-built timber bleachers: a light steel deck with a cantilever roof,
+      // the one piece of proper grandstand infrastructure on the lap.
+      grandstandEx(0.108, -1, 14, 48, null, null,
+        { livery: "alu", roof: "cantilever", endWalls: true, pylons: true, h: 9 });
+      // THE MAIN GATE — the Glen's entrance off the county road: a pair of
+      // fieldstone piers carrying a green-painted timber sign board over the
+      // drive, with the little clapboard toll/ticket booth beside it where you
+      // paid to come in. Public-works stone and lumber, like everything here.
+      {
+        const a = anchor(K(0.935), 1, 78), b = [a.r, a.u, a.t];
+        const STONE = [0.54, 0.51, 0.46], SIGN = [0.24, 0.34, 0.26];
+        modelGroup("glen-main-gate", {
+          center: vadd(a.c, a.u, 3), size: [22, 8, 16], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (const dt of [-6.5, 6.5])
+            seat.box(stage, vadd(a.c, a.t, dt), [1.4, 5.4, 1.4], STONE, b);   // fieldstone piers
+          stage._mat = MAT.WOOD;
+          seat.box(stage, vadd(a.c, a.u, 5.0), [0.35, 1.8, 13.4], SIGN, b);   // sign board over the drive
+          seat.box(stage, vadd(a.c, a.u, 4.55), [0.55, 0.3, 13.4], WEATHERED, b);
+          // The toll / ticket booth off to one side: a small gabled clapboard hut.
+          const booth = vadd(a.c, a.t, 11);
+          seat.box(stage, booth, [3.2, 2.8, 3.2], [0.58, 0.56, 0.50], b);
+          seat.box(stage, vadd(vadd(booth, a.r, -1.7), a.u, 1.4), [0.2, 1.1, 1.2], SIGN, b);  // service window
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(booth, a.u, 2.8), [3.6, 1.1, 3.6], [0.40, 0.36, 0.32], b);
+          stage._mat = 0;
+        });
+      }
     },
   }
   );

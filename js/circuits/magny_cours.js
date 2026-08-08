@@ -154,6 +154,31 @@
             [0.30, 0.23, 0.16], [a.r, a.u, a.t]);
         }
       }
+      // Nivernais BOSQUETS — the tight tree copses that stand in the corner of
+      // a field where a plough can't turn, or over a spring the farmer leaves
+      // alone. The brief forbids scattered woodland, so these are the opposite:
+      // deliberately CLUSTERED (5-7 broadleaf on one field corner, then bare
+      // field again), which is exactly how a copse reads against the poplar
+      // ROWS. tree() self-rejects on tarmac and clears trackside barriers.
+      const copse = (k0, side, dist0, cnt) => {
+        for (let i = 0; i < cnt; i++) {
+          const jk = k0 + (i - (cnt >> 1)) * 2;
+          const jd = dist0 + ((i % 3) - 1) * 4 + hash(k0 * 13 + i) * 3;
+          const h = 10 + hash(k0 * 7 + i * 5) * 6;
+          tree(jk, side, jd, h, hash(k0 + i) < 0.5 ? LEAF : LEAF_D);
+        }
+      };
+      copse(K(0.16), 1, 58, 6);
+      copse(K(0.36), -1, 60, 7);
+      copse(K(0.66), -1, 54, 6);
+      copse(K(0.86), 1, 58, 6);
+      // Two more parcels to thicken the outfield patchwork on the emptier left
+      // flank — a colza strip and a stubble field, brief §6 ("vary the field
+      // patches between green pasture and ploughed/stubble tone").
+      groundPatch(K(0.34), -1, 96, [120, 0.18, 170], COLZA,
+        { id: "magny-field-colza-n2", samples: 9 });
+      groundPatch(K(0.64), -1, 92, [110, 0.18, 160], STUBBLE,
+        { id: "magny-field-stubble-e2", samples: 9 });
 
       // =====================================================================
       // 2. PIT COMPLEX — Magny-Cours was rebuilt in 1991 as the centrepiece of
