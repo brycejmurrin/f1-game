@@ -84,7 +84,7 @@ export function moveMap(root = ROOT) {
 
 const SCAN_DIRS = ["tests", "tools"];
 const EXTS = new Set([".js", ".mjs", ".cjs"]);
-const SKIP_DIR = /(^|\/)(node_modules|galleries)$/;
+const SKIP_DIR = /(^|\/)(node_modules|galleries|worktrees)$/;
 
 function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

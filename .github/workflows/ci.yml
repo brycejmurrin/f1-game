@@ -385,3 +385,76 @@ jobs:
             artifacts/report-*/
           retention-days: 7
           if-no-files-found: ignore
+
+  selected:
+    name: Selected specs (advisory, change-aware)
+    runs-on: ubuntu-latest
+    # ADVISORY BY CONSTRUCTION — `continue-on-error` at the job level: this job
+    # REPORTS what a per-spec selection finds and never gates a merge or the
+    # deploy. Gating on a selection would mean a red that depends on which
+    # files changed, which is a flake by another name; the gates stay guards /
+    # sweeps / smoke / driving-model.
+    #
+    # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
+    # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
+    # Hence retries 0 and --timeout=120000 here — the selector's settings, not
+    # smoke's gate settings (240 s, one retry): a retry only doubles the cost
+    # of the news this job exists to deliver. tools/select-specs.mjs decomposes
+    # pick-tests' groups into specs, fits them to the budget surviving one
+    # timeout, and NAMES every spec it skips — silent truncation would read as
+    # "covered".
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Select specs for this push's diff
+        id: sel
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          skip() { echo "specs=" >> "$GITHUB_OUTPUT"; echo "SKIPPING SELECTION: $1"; exit 0; }
+          # Same fail-safe ladder as the sweeps filter — but where sweeps falls
+          # back to RUNNING (it gates), an advisory selector falls back to
+          # SKIPPING: the full-run duty belongs to the gates, and an advisory
+          # job re-running everything would just burn a runner to say nothing.
+          [ "$EVENT" = "push" ] || skip "event is '$EVENT', not a push"
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) skip "no before-sha (new branch or first push)" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || skip "before-sha $BEFORE unreachable (force push?)"
+          node tools/select-specs.mjs --since "$BEFORE" --json > sel.json || skip "selector failed"
+          node -e '
+            const r = require("./sel.json");
+            const specs = r.selected.map((s) => s.file).join(" ");
+            console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
+            console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs`);
+            for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `specs=${specs}\n`);
+          '
+      - name: Install browser
+        if: steps.sel.outputs.specs != ''
+        run: npx playwright install --with-deps chromium
+      - name: Run the selection
+        if: steps.sel.outputs.specs != ''
+        env:
+          APEX_WORKERS: 1
+        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-selected
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
