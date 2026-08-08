@@ -22,7 +22,10 @@ first — added now it makes a known iOS crash worse.
 ## 1. The measurement that decides everything
 
 Every scenery emitter appends triangles into one shared buffer. There is no
-instancing anywhere in GLX (`grep drawElementsInstanced js/render/` → nothing);
+instancing anywhere in GLX (that parenthetical used to read "`grep
+drawElementsInstanced js/render/` → nothing" and is now FALSE — see the S3 note
+in §6: the GLX consumer was written after this section and the same grep now
+returns `glx.js:1254` and `glx/shadow.js:218`);
 `createChunkedMesh` only *spatially bins* an already-fused soup for frustum
 culling. So a prop placed 1,788 times costs 1,788 × its full vertex count.
 
@@ -355,9 +358,10 @@ is that it turned an estimate into a per-emitter measurement, and the same
 
 ### S3 is now unblocked from the data side: `graph.batches()`
 
-Neither candidate backend can instance yet — GLX has no `drawElementsInstanced`
-anywhere, and TLX's own header says *"InstancedMesh batching of repeated
-geometries lands with the lit material (M3+)"*. Rather than pick one and write
+When this was written neither candidate backend could instance — GLX had no
+`drawElementsInstanced` anywhere, and TLX's own header says *"InstancedMesh
+batching of repeated geometries lands with the lit material (M3+)"*.
+**GLX's half has since been written and this paragraph did not keep up.** Rather than pick one and write
 the same thing twice, the graph now emits the handoff **both** need:
 
 ```js
@@ -412,10 +416,26 @@ instances what it can and bakes `bakeOnly`, and nothing is a flag day.
   masses and the baked models the asset pack now places — one at a time, each gated by `npm run test:graph-parity`. Apply the
   five rules above. The broadleaf vegetation will likely hit `pine`'s
   affine-parameter wall; the city masses and facade furniture should not.
-- **S3's data side is DONE** — `graph.batches()` above. What remains is one
-  consumer per backend: GLX via `drawElementsInstanced` (attributes 5–8 are free;
-  WebGL2 core, no extension) plus the same treatment in the three shadow passes,
-  and TLX via `InstancedMesh` when its lit material lands at M3.
+- **S3's data side is DONE** — `graph.batches()` above. **So is GLX's consumer
+  side**, which this list previously described as remaining work: `glx.js:1128`
+  `createInstancedBatch`, `:1211` `cullInstances`, `:1254`
+  `drawElementsInstanced`, `glx/shadow.js:212` `castShadowInstanced`, the
+  divisor attributes documented at `shaders/lit.js:21`, the façade entries in
+  `render/gfx.js`, and five real assertions in
+  `tests/specs/instanced-draw.spec.js` (batches > 0, instance count matches the
+  payload, colour buffer matches, an empty frustum culls everything, a
+  containing frustum keeps everything). Note the implementation used attribute
+  9 for the per-instance colour, not the "attributes 5–8" this list predicted —
+  which is itself evidence it was written after this paragraph.
+
+  What ACTUALLY remains for S3 on GLX is one call site: `js/game.js:5018` still
+  draws scenery as `gfx.drawChunked(track.meshes.props, …)` against the fused
+  soup, and `drawInstanced` has NEVER appeared in game.js in this repo's
+  history — so this is unwired, not wired-and-reverted. Before wiring it, fix
+  `cullInstances` (`glx.js:1211-1234`): it calls `src.subarray()` per visible
+  instance per frame off a growable JS array, which on Vegas's 80,796 nodes is
+  tens of thousands of allocations a frame — the GC churn `glx.js:98-104` keeps
+  scratch arrays to avoid. TLX still needs `InstancedMesh` at M3.
 - **S4 gains a prerequisite it did not have**: re-parameterise affine emitters to
   be scale-linear *before* raising their detail, or the detail will not instance
   either.
