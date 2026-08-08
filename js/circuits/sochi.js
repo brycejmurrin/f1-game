@@ -69,7 +69,7 @@
         tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
-        cameraTower, sponsorHoarding, signBoard,
+        cameraTower, sponsorHoarding, signBoard, cypress,
         addBox, addCyl, addCone, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -495,6 +495,71 @@
       cameraTower(K(0.085), 1, 60, { h: 20 });
       cameraTower(K(0.545), -1, 30, { h: 17 });
       cameraTower(K(0.815), 1, 26, { h: 17 });
+
+      // =====================================================================
+      // 8. SHAYBA ARENA — the fifth 2014 venue, and the one with a silhouette
+      //    none of the others has: a round "puck" (shayba = hockey puck) wrapped
+      //    in a spiralling banded ribbon facade, sat low under a shallow domed
+      //    cap. It rings the same park cluster as Bolshoy and Adler, so it goes
+      //    in the venue band on the right of the Turn 2 loop, probed clear.
+      // =====================================================================
+      {
+        const a = anchor(K(0.245), 1, 152);
+        const b = [a.r, a.u, a.t];
+        modelGroup("sochi-shayba-arena", {
+          center: vadd(a.c, a.u, 12), size: [64, 26, 64], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Base drum.
+          addCyl(stage, a.c, 29, 9, [0.82, 0.84, 0.88], 16, b);
+          stage._mat = MAT.METAL;
+          // The swirl: banded ribbon frustums climbing the drum, each stepped in
+          // slightly and alternating a cool blue-grey against the white so the
+          // spiral reads from any angle — the facade IS the recognition.
+          const band = [[0.90, 0.92, 0.95], [0.40, 0.54, 0.70], [0.86, 0.88, 0.92]];
+          for (let i = 0; i < 4; i++) {
+            const r0 = 30 - i * 1.3, r1 = 29.4 - i * 1.3;
+            addFrustum(stage, vadd(a.c, a.u, 1.4 + i * 2.1), r0, r1, 2.0,
+              band[i % band.length], 16, b);
+          }
+          stage._mat = MAT.GLASS;
+          // Glazed entrance band at ground level facing the park.
+          addFrustum(stage, vadd(a.c, a.u, 0.4), 29.6, 29.2, 3.4, [0.24, 0.34, 0.46], 16, b);
+          stage._mat = MAT.METAL;
+          // Shallow domed cap oversailing the drum.
+          addCyl(stage, vadd(a.c, a.u, 9), 25, 6, [0.88, 0.90, 0.94], 16, b);
+          addCyl(stage, vadd(a.c, a.u, 15), 12, 3.4, [0.84, 0.86, 0.90], 12, b);
+          stage._mat = 0;
+        });
+      }
+
+      // =====================================================================
+      // 9. FORMAL LANDSCAPING — the park is designed ground, not wild: ordered
+      //    ranks of clipped columnar trees on the OUTER LOOP only (the plaza
+      //    stays paving + architecture per the brief), plus formal ornamental
+      //    bedding framed by clipped hedge borders at the plaza edges. Sochi's
+      //    Black Sea promenades really are lined with cypress avenues, so the
+      //    columnar spire is the right species as well as the right discipline.
+      // =====================================================================
+      const CYP = [0.16, 0.34, 0.20], CYP_D = [0.13, 0.29, 0.18];
+      for (const [s0, s1, side, dist, h] of [
+        [0.320, 0.395, -1, 15, 11],
+        [0.330, 0.405,  1, 16, 11],
+        [0.620, 0.700, -1, 15, 12],
+        [0.635, 0.715,  1, 17, 11],
+      ]) along(s0, s1, 12, (k) => cypress(k, side, dist, h + hash(k * 5) * 1.6,
+        hash(k * 9) < 0.5 ? CYP : CYP_D, { slim: 0.85 }));
+      // Formal ornamental beds — low clipped hedge borders framing a coloured
+      // bedding panel, laid as geometric parterre at the plaza approaches. No
+      // trees here: this is landscaped civic ground, not planting run wild.
+      for (const [id, s, side, gap] of [
+        ["approach", 0.300, 1, 8], ["north", 0.235, 1, 32],
+      ]) {
+        groundPatch(K(s), side, gap, [10, 0.14, 44], [0.24, 0.42, 0.22],
+          { id: `sochi-parterre-${id}`, samples: 5 });
+        hedge(s - 0.018, s + 0.018, side, gap - 1.2, 0.9, [0.15, 0.34, 0.18]);
+        hedge(s - 0.018, s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
+      }
     },
   }
   );
