@@ -285,6 +285,24 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .pane-pair[data-pair="on"] .pair-main { grid-column: 2; grid-row: 2 / 4; min-height: 0; }
 .pane-pair[data-pair="on"] > .sheet-foot { grid-column: 1; grid-row: 3; }
 
+/* A FOOT UNDER BOTH COLUMNS — the opt-out for a pair whose side slot is a RAIL.
+   The default above puts the action bar in the SIDE column, which is right when
+   that column is CONTENT (#select's preview card, #career's left pane) and
+   wrong when it is a narrow rail. The garage is the wrong case: its rail is
+   `minmax(112px, 27%)` (css/carsetup.css) while BACK+DONE need ~161px, so the
+   bar wrapped to two rows and — measured at 852x393, the primary play shape —
+   the foot came out 132px tall beside an 88px category rail. The action bar was
+   half again as tall as the twelve categories it sat next to, on the screen
+   with the least height in the app.
+   A slot on the primitive, not a fourth patch in carsetup.css: the same defect
+   ("the action bar steals a row from the list") has already been found three
+   times in three files, which is why .pane-pair exists at all.
+   Specificity is (0,4,0) against the primitive's (0,3,0), so it wins on its own
+   — no id, no !important. .pair-main stops spanning into row 3 because in this
+   shape the foot is underneath it too. */
+.pane-pair.pair-foot-full[data-pair="on"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+.pane-pair.pair-foot-full[data-pair="on"] .pair-main { grid-row: 2; }
+
 /* ---------- pane: a scroll region ---------- */
 .pane {
   overflow-y: auto;

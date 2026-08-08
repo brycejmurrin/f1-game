@@ -305,16 +305,44 @@
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
   max-height: 50%; object-fit: contain;
 }
+/* SCROLLS RATHER THAN CLIPS. `overflow: hidden` here made the card's last chip
+   row UNREACHABLE: measured at 852x393, #sel-preview-info ran 12px past this
+   box, which had 11px of live scroll range and no way to use it — "5 DRS zones"
+   and "T1 slowest" were sliced through the middle by the BACK/START bar. The
+   content existed, it scrolled, and no gesture could reach it.
+   `safe center` REPLACES the child's `margin-block: auto`. Auto margins centre
+   by absorbing free space, and when there is none they push the overflow out
+   BOTH ends — and the start edge of a scroll container cannot be scrolled to,
+   so centring-by-margin inside a scroller hides the top irrecoverably. That is
+   the same trap css/tokens.css documents for #overlay. Declared as the
+   progressive pair: an engine that rejects `safe center` must fall back to
+   `center`, not to `normal`. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
-  overflow: hidden;
+  overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column;
+  justify-content: center;
+  justify-content: safe center;
   padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
 }
 /* The label sits at the top; the card takes the rest of the column and centres
    itself in it, so a pane taller than the card has its spare height split
    above and below rather than pooled at the bottom. */
+/* The centring moved to the parent's `safe center` (above). An auto margin here
+   would re-take the unreachable-start-edge bug the moment the card outgrows the
+   column, which is the case this whole branch exists for. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
-  margin-block: auto;
+  margin-block: 0;
+  /* KNOWN TRADE, recorded rather than hidden. Under `overflow: hidden` the card
+     was force-shrunk to the column and silently lost 12px off the bottom, with
+     no gesture able to reach it. With the parent scrolling, nothing is
+     unreachable — but the card also stops being force-shrunk, so it takes its
+     natural height and ~84px scrolls instead of ~12px vanishing.
+     That is the right way round: unreachable content is a defect, a short
+     scroll is an affordance. Making it shrink AND scroll needs a definite
+     height on this column, which the flex chain does not currently provide
+     (`max-height: 100%` here resolves against an indefinite height and is
+     inert — measured, not assumed). Revisit with the height mechanism in
+     docs/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
   padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
@@ -657,6 +685,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
+  /* ON THE TOUCH LADDER, like every other primary control. This family was the
+     one that opted out: padding alone gave 45px, measured at 852x393, against a
+     --tap of 52 on a coarse pointer — and it is the longest list in the game
+     (40 rows) on the screen players use most. It is also absent from the
+     tap-target group in css/components.css, which is how it stayed 7px short.
+     A full-bleed row clears WCAG 2.2 SC 2.5.8's 24px floor either way; this is
+     the house comfort floor, which is the one the density ladder exists for. */
+  min-height: var(--tap);
   width: 100%; padding: 9px 12px;
   text-align: left; cursor: pointer;
   border: none; border-radius: 0;
@@ -744,7 +780,22 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;
   padding-inline: 6px; min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* WRAP, DO NOT ELLIPSISE. These chips sit in `repeat(3, minmax(0, 1fr))`
+     (#rs-laps/#rs-weather/#rs-diff above), and a 1fr track with a 0 floor
+     shrinks below its own label — so `nowrap` + `text-overflow: ellipsis` cut
+     SIX of them on the primary play shape. Measured at 852x393, needed vs the
+     52px the column gave: "CLOUDY" 62, "57 (FULL)" 58, "DEFAULT" 57,
+     "NORMAL" 57, "WET" 54, "RAIN" 54.
+     A truncated settings chip is worse than a two-line one: this screen is seen
+     before every race and the label IS the setting — "CLOUD)" is not a weather
+     option. Wrapping cannot hide anything, and it cannot overflow the track
+     either, which is why it is preferred here over widening the columns to
+     min-content (that would push the three-across row past its section on a
+     narrow sheet, trading a clipped label for a clipped ROW).
+     `min-height: var(--chip-h)` on .sel-chip already floors the box, so a
+     one-line chip is unchanged; only the long labels grow. */
+  white-space: normal; overflow-wrap: break-word; text-wrap: balance;
+  line-height: 1.15;
 }
 
 /* ---------- customize my team ---------- */

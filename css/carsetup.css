@@ -435,7 +435,12 @@
        leading one (not reachable by anything).
      wrap        — and in a rail this narrow the honest answer is to let them
        stack rather than to shave a tap target below --tap. */
-#carsetup .sheet-foot { justify-content: safe center; flex-wrap: wrap; }
+/* The foot spans the sheet now (`.pair-foot-full`, css/components.css), so this
+   is an ordinary action bar again: BACK at the leading edge, DONE at the
+   trailing one. `safe center` + `flex-wrap` were compensating for a 124px box
+   that no longer exists — 161px of buttons in a ~460px bar has nothing to
+   overflow, and wrapping was what made the foot 132px tall. */
+#carsetup .sheet-foot { justify-content: space-between; }
 
 /* THE COLUMNS COME FROM `.pane-pair` (css/components.css) — the shared
    list-detail primitive. This screen used to spell the whole thing out itself,
@@ -485,9 +490,14 @@
      beside the title, and the bar becomes a full-width rule under it. Stacking
      all three (title / bar / readout) cost a whole option row of height. */
   #cs-budget-wrap { display: contents; }
-  #cs-budget-row { flex: 1 1 200px; min-width: 0; }
+  #cs-budget-row { flex: 1 1 200px; min-width: 0; flex-wrap: wrap; row-gap: 4px; }
   #cs-budget-bar { flex: 0 0 100%; order: 2; }
-  #cs-budget { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* WRAP, DO NOT ELLIPSISE. Measured at 852x393: "BUDGET: 600 / 600 cr
+     remaining" needs 200px and this row gave it 183, so it rendered as
+     "…600 cr rema…". That readout is the one number that constrains every
+     choice on the screen, and it shares the row with FREE BUILD. A second line
+     costs ~16px of header; the foot fix above just returned ~76px. */
+  #cs-budget { white-space: normal; overflow: visible; flex: 1 1 100%; }
   #cs-stats-inner { flex: 1 1 100%; order: 3; }   /* stats get their own row */
 
 }
@@ -543,7 +553,22 @@
   position: absolute;
   left: calc(var(--safe-l) + var(--gap));
   bottom: calc(var(--safe-b) + var(--gap));
-  right: calc(var(--safe-r) + var(--cs-sheet-w) + var(--gap));
+  /* MULTIPLY BY --ui-scale: THE PANEL PAINTS BIGGER THAN ITS CSS WIDTH.
+     #cs-inner is inside `.sheet`, which carries `zoom: var(--ui-scale)`
+     (css/components.css). #cs-stack is NOT — it is a child of #carsetup, which
+     is unzoomed. So one variable is read from two different coordinate spaces:
+     the panel's CSS width never moves (460px at 852 wide) while its PAINTED
+     width goes 460 -> 529 -> 598 -> 690 across the slider, and the bar reserved
+     the unscaled number.
+     Measured on the primary play shape (852x393), overlap of the camera bar by
+     the panel:  100% -8px (clear) | 115% +61px | 130% +130px | 150% +222px.
+     115% is the SHIPPED DEFAULT on a coarse pointer, so CAMERA and ACTIVE AERO
+     sat under the panel out of the box on the shape the game is played in.
+     This is the deferred `--cs-sheet-w` defect in docs/research/UI-SCALE-AND-ZOOM.md
+     §5b, and the fix is the one that section prescribes: the correction belongs
+     at the CONSUMPTION site, because the two consumers are in different zoom
+     spaces and no single declared value can be right for both. */
+  right: calc(var(--safe-r) + var(--cs-sheet-w) * var(--ui-scale) + var(--gap));
   z-index: 2;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
 }
@@ -565,6 +590,7 @@
   font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
   background: rgba(12,12,16,0.62); color: rgba(255,255,255,0.62);
   border: 1px solid rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   min-height: 30px;
 }
@@ -588,6 +614,7 @@
   padding: 8px 10px; border-radius: var(--r-sm);
   background: rgba(10,10,14,0.86);
   border: 1px solid rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   max-width: 100%;
 }
@@ -627,6 +654,7 @@
   padding: 5px 10px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.62);
   border: 1px solid rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   min-height: 30px;
 }
@@ -664,6 +692,7 @@
   padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.62); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   /* Touch targets: the visual chip stays small, the hit area does not. */
   min-height: 30px;
