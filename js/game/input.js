@@ -1119,6 +1119,24 @@ const Input = (function () {
     // overlay or stopPropagation between here and the button can't swallow it.
     window.addEventListener("pointerup", function (e) { holdReleasePointer(e.pointerId); }, true);
     window.addEventListener("pointercancel", function (e) { holdReleasePointer(e.pointerId); }, true);
+    // Net #4, and the only one that is not built on pointer events: WebKit
+    // under heavy multi-touch is known to occasionally drop a pointerup
+    // outright while still delivering the touch-event lift — and iOS never
+    // reuses pointerIds, so the ghost id in a hold set is PERMANENT. Worse,
+    // a fresh press+release cannot clear it: the new id is added and removed
+    // while the ghost keeps the set non-empty, so apply(false) never runs —
+    // the exact "throttle stays on no matter what I press" shape a player
+    // reported after an off-track rescue in buttons mode (a moment of frantic
+    // multi-touch plus a camera snap). TouchEvent.touches is ground truth the
+    // pointer stream cannot contradict: zero touches on the glass means
+    // nothing is held, whatever the pointer bookkeeping believes. A finger
+    // still down keeps touches.length > 0, so a legitimate hold survives.
+    window.addEventListener("touchend", function (e) {
+      if (e.touches.length === 0) holdReleaseAll();
+    }, true);
+    window.addEventListener("touchcancel", function (e) {
+      if (e.touches.length === 0) holdReleaseAll();
+    }, true);
 
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
