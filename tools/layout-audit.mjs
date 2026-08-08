@@ -490,7 +490,18 @@ const PROBE = (rootSel) => {
   // The tap floor is the project's own `--tap` token, not a hard 44: the density
   // ladder in css/tokens.css drops it to 40 on a landscape phone deliberately,
   // and a probe that argues with a design decision every run gets ignored.
-  const tapFloor = parseFloat(getComputedStyle(document.documentElement)
+  //
+  // READ IT OFF <body>, NOT :root. THE TOUCH LADDER IS DECLARED ON `body`, not
+  // on `:root` — `css/tokens.css` raises the floor with
+  // `body:not(.desktop) { --tap: 52px }`, because the class game.js toggles
+  // lives there. Asking `documentElement` therefore returns the 44px DESKTOP
+  // floor on every device, phones included, and this probe spent its whole life
+  // measuring touch layouts against the mouse target. Measured on a 852x393
+  // coarse-pointer phone: :root says 44px, body says 52px. That 8px is not a
+  // rounding difference — it is the entire touch ladder, so every "soft" count
+  // this tool has ever reported for a phone was an UNDERCOUNT, and the circuit
+  // list's 45px rows passed a floor they miss by 7px.
+  const tapFloor = parseFloat(getComputedStyle(document.body)
     .getPropertyValue("--tap")) || 44;
   out.tapFloor = tapFloor;
   // Two thresholds, because they mean different things. WCAG 2.2 SC 2.5.8 (AA)
@@ -720,7 +731,15 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 120)));
   let booted = false;
   try {
-    await page.goto(base, { waitUntil: "domcontentloaded" });
+    // 90s, NOT the 30s default. The three largest desktop viewports
+    // (1440x900, 1920x1080, 1920x937) ALL failed `page.goto` at exactly 30000ms
+    // in the 2026-08-08 sweep — 114 cells, every screen in three columns,
+    // recorded as "boot failed" and read at a glance as a broken app. They are
+    // the three biggest WebGL surfaces in the matrix and `--jobs=3` had them
+    // competing against each other on a 4-core SwiftShader box: the failure is a
+    // measurement of the machine, not of the page. docs/LAYOUT-AUDIT.md already
+    // records the same trap costing 98 cells once before.
+    await page.goto(base, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 60000 });
     // Stop the render loop first: the 3D scene starves the compositor, which
     // makes every later wait and every screenshot an order slower.
@@ -775,7 +794,33 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         errors = [];
       }
       await screen.open(page);
-      await page.waitForTimeout(400);
+      // WAIT FOR THE OPEN TRANSITION, DO NOT GUESS AT IT. Every `.screen` is a
+      // <dialog> that fades in (js/game/topmodal.js), and a flat 400ms measured
+      // it MID-FADE on a loaded box: the probe's own `visible()` test reads
+      // `opacity: 0` and reports the root absent. That is what produced
+      // `rootPresent: false` on 19 of 38 screens per viewport in the 2026-08-08
+      // sweep, while their sheets measured normally two lines later — a cell
+      // that looks like a missing screen and is really a stopwatch. Measured
+      // live on #pmsettings at 852x393: opacity 0 at 800 ms, 1 by ~1.2 s.
+      //
+      // `polling` is mandatory, not decoration. Playwright polls a predicate on
+      // requestAnimationFrame by default, and a page running the game loop
+      // starves that poll badly enough that the declared timeout never fires
+      // (CLAUDE.md measures a 3s wait running 109,665 ms). The render loop is
+      // stopped here, but a wait that only bounds itself when the caller
+      // remembers a flag is not bounded.
+      //
+      // Swallow the timeout deliberately: a screen that genuinely never becomes
+      // visible must still be MEASURED and reported as absent. Turning that
+      // into a thrown "skipped" would hide a real defect behind a harness error.
+      await page.waitForFunction((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return true;   // no root at all is a finding, not something to wait for
+        const anims = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
+        if (anims.some((a) => a.playState === "running")) return false;
+        return getComputedStyle(el).opacity !== "0";
+      }, screen.root, { polling: 50, timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(150);
       // Simulate the notch by writing the tokens the layout is built on, then
       // let it reflow. Applied per cell rather than once per context because a
       // cell may reload the page (see the reset check above).
