@@ -123,7 +123,7 @@ budget instead — 36x its declared bound. It overran on a menu page too. Only a
 predicate that THROWS terminates promptly (11 ms), because the exception
 propagates without polling — which is why an absent global fails fast and a
 plain `false` does not. Pass `{ polling: 100, timeout: N }` for any wait on a
-page that is rendering. The repo has **353 `waitForFunction` calls carrying a
+page that is rendering. The repo has **318 `waitForFunction` calls carrying a
 timeout and NOT ONE passes `polling`** (counted by AST — a grep undercounts the
 multi-line ones at 312), so today every one of
 those bounds is decorative: a condition that never becomes true burns the whole

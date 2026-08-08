@@ -51,7 +51,28 @@ let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
 // like) moves it.
 let _floorMs = 16.7;
 const FLOOR_DOWN_A = 0.3, FLOOR_UP_A = 0.02;
-const DEGRADE_OVER = 2.3, RESTORE_UNDER = 4.2;   // ...the floor — 19 / 12.5 at the 16.7 ms default
+// DEGRADE_OVER sits ABOVE the floor; RESTORE_WITHIN also sits above it, just
+// barely. That asymmetry is the fix for a governor that could only ever go one
+// way. RESTORE_UNDER used to be 4.2 ms BELOW the floor, and `_frameEMA <
+// _floorMs - 4.2` is UNSATISFIABLE: `_floorMs` chases dt down at alpha 0.3 and
+// up at 0.02 while `_frameEMA` moves at 0.1 in both directions, so from their
+// shared 16.7 start `_floorMs <= _frameEMA` is an invariant and the EMA can
+// never get 4.2 ms below a floor that is already at or under it. Simulated
+// over 60 million frames across constant 8.3/16.7/33.3, bimodal, uniform
+// 1-96 ms and load-then-recover sequences: the predicate fired ZERO times and
+// its closest approach was exactly 4.2000 ms — i.e. RESTORE_UNDER itself, at
+// every steady state. So any device that degraded once stayed degraded for the
+// whole session, and the crash sentinel's pre-drop at js/game.js could never
+// climb back either.
+//
+// The reason no statistic over dt could have worked: the frame INTERVAL is
+// clamped from below by vsync. A frame costing 4 ms and one costing 15 ms both
+// report 16.7 ms on a 60 Hz panel, so headroom is invisible in the interval by
+// construction. Degrade works because slowness genuinely stretches the
+// interval; restore cannot be the mirror of it. What IS observable is the EMA
+// settling back ONTO the floor — that means frames have stopped missing — so
+// restore asks for exactly that, and the up-step is verified like the down-step.
+const DEGRADE_OVER = 2.3, RESTORE_WITHIN = 0.6;   // degrade at floor+2.3; restore once the EMA is back within 0.6 of the floor
 
 // MAKE THE DEGRADE CAUSAL. The derived budget above is the right model but
 // takes a couple of seconds to settle; this is the net for while it does, and
@@ -171,7 +192,14 @@ function tick(dtMs) {
   // Verify the last step before taking a new one.
   if (_pendingVerify) {
     const v = _pendingVerify; _pendingVerify = null;
-    if (_frameEMA > v.ema - VERIFY_MARGIN) {
+    // A DOWN step is a bet that frames get cheaper: revert unless the EMA fell
+    // by at least VERIFY_MARGIN. An UP step is the opposite bet — that the
+    // headroom was real — so it is judged the other way round: revert if the
+    // EMA got WORSE by that margin. Same instrument, mirrored, because a step
+    // that made things worse should be undone whichever direction it went.
+    const failed = v.up ? (_frameEMA > v.ema + VERIFY_MARGIN)
+                        : (_frameEMA > v.ema - VERIFY_MARGIN);
+    if (failed) {
       if (v.kind === "scale") _gfx.setRenderScale(v.prev);
       else _perfTier = v.prev;
       _govCool = VERIFY_COOL;
@@ -179,7 +207,7 @@ function tick(dtMs) {
     }
   }
 
-  const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs - RESTORE_UNDER;
+  const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     if (cur > 0.5) {
@@ -192,10 +220,25 @@ function tick(dtMs) {
       _perfTier++; _govCool = 90; _downHold = 600;
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
-    if (cur < 1) { if (_gfx.setRenderScale(Math.min(1, cur + 0.06))) _govCool = 240; }
+    // The up-step is VERIFIED like the down-step. Restoring is a guess that the
+    // headroom is real, and the same _pendingVerify machinery that reverts a
+    // useless cut reverts a premature restore one evaluation later — without
+    // it, a governor that can finally go up could climb straight back into the
+    // frame misses it just escaped, which is the oscillation the header warns
+    // about arriving from the other side.
+    if (cur < 1) {
+      const next = Math.min(1, cur + 0.06);
+      if (_gfx.setRenderScale(next)) {
+        _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
+        _govCool = 240;
+      }
+    }
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s — and never below the crash-sentinel floor.
-    else if (_perfTier > _perfTierFloor) { _perfTier--; _govCool = 240; }
+    else if (_perfTier > _perfTierFloor) {
+      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA, up: true };
+      _perfTier--; _govCool = 240;
+    }
   }
 }
 

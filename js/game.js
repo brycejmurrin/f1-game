@@ -923,6 +923,11 @@ let _leadHuman = null;
 // `at` is lights-out on OUR clock; now() reads the same clock the session
 // converted it into. Null solo, and cleared the moment the race starts.
 let netStart = null;
+// The SESSION's clock, not the page's — netplay nulls it between sessions so a
+// deadline computed against a previous session's clock cannot fire instantly in
+// the next one. Backing store for the G.netNow accessor below; it was written
+// straight onto the facade as an undeclared property until this line existed.
+let netNow = null;
 let playerMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
 let playerAeroLoad = 0.5;   // 0..1 wing size — how far active aero trades (see xVmaxGain)
 let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/otTimeFor)
@@ -2755,6 +2760,15 @@ const G = {
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
+  // DECLARED, not an expando. js/net/netplay.js and js/game/apex.js write
+  // G.netNow at four sites and read it at three, and it appeared NOWHERE in
+  // this file — it existed only because JS lets you add a property to an
+  // object. That is the countT shape all over again, and the whole premise of
+  // this facade is that its members are declared in one place. It is also what
+  // would make an Object.seal(G) throw rather than no-op, since every writer is
+  // a strict-mode IIFE. A session's clock, not the page's: netplay nulls it
+  // between sessions so a stale value cannot date a fresh session's deadlines.
+  get netNow() { return netNow; }, set netNow(v) { netNow = v; },
   // The countdown clock and how many lamps are lit. netStartArm has always
   // written G.countT and, with no accessor here, it has always gone nowhere —
   // an expando on the façade that nothing reads. Invisible until now only
