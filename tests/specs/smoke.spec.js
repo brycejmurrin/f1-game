@@ -198,10 +198,17 @@ test.describe("Apex 26 — HUD", () => {
     await goToRace(page);
     await park(page, 0);
     await page.evaluate(() => window.__apex.jump(0, 80, 0));
-    // Wait for the HUD tick to flush the new speed value into the DOM
+    // Wait for the HUD tick to flush the new speed value into the DOM.
+    // `polling` IS LOAD-BEARING, not decoration. Playwright polls a predicate on
+    // requestAnimationFrame by default, and this page is running the game loop
+    // under SwiftShader — which starves that poll badly enough that the declared
+    // bound never gets to fire (CLAUDE.md measures a 3 s wait running 109,665 ms).
+    // Measured here: solo on a quiet box this test took 102.7 s of a 120 s
+    // budget, i.e. 14% from failing with zero contention, and it is the test that
+    // failed first the moment anything else touched the CPU.
     await page.waitForFunction(
       () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      { timeout: 3000 }
+      { polling: 100, timeout: 3000 }
     );
 
     const speed = await page.locator("#hud-speed-n").innerText();
