@@ -42,7 +42,12 @@ const CEILINGS = {
   // label. Bug-explaining comments are the one growth the ratchet tolerates.)
   // Lowered from 7975 after the R1 audio-panel extraction (AUDIT-SYNTHESIS)
   // took the MUSIC & SOUND panel out — the ratchet follows the file down.
-  "js/game.js": 7795,
+  // 7795 -> 7804 for aTop(): the ground-truth acceleration next to vTop(), plus
+  // the comment recording the mismatch it fixes (js/game/quali.js modelled the
+  // field at pace-5 acceleration into a pace-scaled ceiling). It belongs beside
+  // vTop()/vStd()/aStd() and nowhere else, so this is a bug-explaining growth of
+  // exactly the kind the note above tolerates — not a feature.
+  "js/game.js": 7804,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

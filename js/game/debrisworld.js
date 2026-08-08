@@ -148,6 +148,16 @@ const PANEL_LAT = 0.12, PANEL_HY = 0.5, PANEL_LEN = 0.75;
 const PANEL_MASS = 12;         // kg-ish — heavy enough to look solid, light enough to scatter
 const PANEL_BREAK = 1400;      // N — solved contact force on a panel that snaps its joint
 const PANEL_REST_DESPAWN_S = 6;// broken panel asleep this long → freed back
+// An UNBROKEN panel is untouched for this long → freed back. It has to exist,
+// because a promoted panel that never breaks used to be freed by NOTHING: the
+// only `live = false` sat inside `if (p.broken)`, so every hard hit that failed
+// to clear PANEL_BREAK leaked a body pair permanently, and ten of those retired
+// breakable barriers for the rest of the session. Longer than the broken timer
+// because this one is armed and waiting for a second hit, not litter — but it
+// still has to expire, since `far` alone never fires for a car that stays put.
+// Freeing one is invisible: it is joint-pinned at its home, geometrically the
+// static barrier it replaced, and never a collision surface for the car.
+const PANEL_IDLE_DESPAWN_S = 20;
 const PANEL_SEV_MIN = 8;       // only genuinely hard wall hits promote panels (gentle scrapes don't)
 // B3 marble-grip tuning (subtle — a few % over a settled marble cluster)
 const MARBLE_GRIP_R = 2.6;     // m — radius around the player that counts settled marbles
@@ -832,7 +842,10 @@ function updatePanels(dt, px, pz) {
     if (!p.live) continue;
     if (!p.broken && p.joint && p.force > PANEL_BREAK) {
       try { world.removeImpulseJoint(p.joint, true); } catch (e) {}
-      p.joint = null; p.broken = true; _panelsBroken++;
+      // Zeroed on the transition: restT was counting IDLE time under the
+      // unbroken rule, and carrying that into the broken rule would despawn a
+      // freshly-scattered panel on its first sleeping tick.
+      p.joint = null; p.broken = true; p.restT = 0; _panelsBroken++;
       // Seeded scatter kick (game state only, no wall clock / Math.random).
       const r = rng32((Math.imul(_tick + 1, 0x27D4EB2F) ^ Math.imul((p.s | 0) + 1, 0x9E3779B1)
                      ^ Math.imul(_panelSeq + 1, 0x85EBCA6B)) | 0);
@@ -844,16 +857,30 @@ function updatePanels(dt, px, pz) {
       _v.x = (r() - 0.5) * 8; _v.y = (r() - 0.5) * 8; _v.z = (r() - 0.5) * 8;
       p.body.setAngvel(_v, true);
     }
+    // Both states age out, on their own clock. Broken panels are litter and go
+    // when they have settled; unbroken ones are still pinned at their home, so
+    // "idle" is measured by nothing having touched them (force is zeroed every
+    // tick in drainForces, so a non-zero value means a contact THIS tick).
     if (p.broken) {
       if (p.body.isSleeping()) p.restT += dt; else p.restT = 0;
-      const t = p.body.translation();
-      const dx = t.x - px, dz = t.z - pz;
-      const far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
-      if (p.restT > PANEL_REST_DESPAWN_S || far) {
-        try { world.removeRigidBody(p.body); } catch (e) {}
-        try { world.removeRigidBody(p.anchor); } catch (e) {}
-        p.live = false; p.body = null; p.anchor = null; changed = true;
+    } else {
+      if (p.force > 0) p.restT = 0; else p.restT += dt;
+    }
+    const t = p.body.translation();
+    const dx = t.x - px, dz = t.z - pz;
+    const far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
+    if (far || p.restT > (p.broken ? PANEL_REST_DESPAWN_S : PANEL_IDLE_DESPAWN_S)) {
+      // An unbroken panel still owns its joint; remove it before the bodies, or
+      // Rapier is left holding a joint whose ends have gone.
+      if (p.joint) {
+        try { world.removeImpulseJoint(p.joint, true); } catch (e) { /* ignored:
+          this throws only if Rapier already dropped the joint, which is the
+          state the call is trying to reach. */ }
+        p.joint = null;
       }
+      try { world.removeRigidBody(p.body); } catch (e) {}
+      try { world.removeRigidBody(p.anchor); } catch (e) {}
+      p.live = false; p.body = null; p.anchor = null; changed = true;
     }
   }
   if (changed) {

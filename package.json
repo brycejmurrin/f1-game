@@ -38,7 +38,7 @@
     "rtc:e2e": "node tools/net/rtc-e2e.mjs",
     "rtc:e2e-3p": "node tools/net/rtc-e2e-3p.mjs",
     "rtc:e2e-3p-relay": "node tools/net/rtc-e2e-3p.mjs --relay",
-    "test:net-unit": "node --test tests/unit/net-transport.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-session.test.mjs",
+    "test:net-unit": "node --test tests/unit/net-transport.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-session.test.mjs tests/unit/net-authority.test.mjs",
     "test:paths": "node tools/run-playwright.mjs tests/specs/output-paths.spec.js",
     "test:service-worker": "node --test tests/unit/service-worker.test.mjs",
     "test:webgpu-lifecycle": "node --test tests/unit/webgpu-lifecycle.test.mjs",

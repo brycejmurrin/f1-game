@@ -221,3 +221,44 @@ test("a throwing state handler does not kill the session", () => {
   assert.equal(second, 1, "the other handler should still run");
   assert.equal(p.b.alive(), true, "a consumer bug is not a disconnect");
 });
+
+test("a session that times out CLOSES ITS TRANSPORT, not just its bookkeeping", () => {
+  // The leak, found by a survey read of the file: the timeout branch in pump()
+  // set `alive = false` and fired the close handlers but never touched the
+  // transport — and close() below it opens with `if (!alive) return;`, so once
+  // the death clock had fired NOTHING could ever tear the connection down.
+  // A peer that vanished (rather than saying BYE) therefore left its
+  // RTCPeerConnection and both data channels open for the life of the tab, and
+  // every timed-out session added another set. Invisible from the game: the
+  // rival goes back to the AI either way, which is exactly why it survived.
+  //
+  // Asserted on the TRANSPORT, because that is the resource that leaked. The
+  // spy wraps ONE side of a real loopback pair rather than standing alone: a
+  // lone transport is never heard from, so its death clock never starts (see
+  // "a slow connect is never mistaken for a disconnect") and a test built that
+  // way passes while asserting nothing at all. The peer has to talk first.
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(11) });
+  let closedTimes = 0;
+  const spy = Object.create(ta);
+  spy.close = () => { closedTimes++; ta.close(); };
+  const a = NetSession.create({ transport: spy, pingEveryMs: 100, timeoutMs: 500 });
+  const b = NetSession.create({ transport: tb, pingEveryMs: 100 });
+  const whys = [];
+  a.onClose((w) => whys.push(w));
+
+  // Talk normally, so A has actually heard from B and the death clock starts.
+  for (let t = 0; t < 600; t++) { a.pump(t); b.pump(t); }
+  assert.equal(a.alive(), true, "the pair must be healthy before the wire is pulled");
+  assert.equal(closedTimes, 0, "nothing closes a healthy transport");
+
+  // Pull the wire: B stops pumping entirely and A hears nothing more.
+  for (let t = 600; t < 3000; t++) a.pump(t);
+
+  assert.equal(a.alive(), false, "A must have noticed the silence");
+  assert.deepEqual(whys, ["timeout"], "the close reason must still be `timeout`");
+  assert.equal(closedTimes, 1, "the transport must be closed exactly once on timeout");
+  // And the guard that made this unrecoverable stays honest: the `!alive`
+  // early return in close() must not let a later close() double-close.
+  a.close();
+  assert.equal(closedTimes, 1, "close() after a timeout must not close the transport again");
+});

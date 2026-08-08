@@ -1,6 +1,6 @@
 # Testing reference
 
-110 root Playwright spec files (`tests/specs/*.spec.js`) + 59 `node --test` unit suites
+110 root Playwright spec files (`tests/specs/*.spec.js`) + 60 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -778,6 +778,7 @@ what it covers.
 | `net-qr.test.mjs` | the QR encoder, checked by jsQR — a decoder that is not ours |
 | `net-snapshot.test.mjs` | the 13 B/car wire format and the interpolation buffer, including the short-way wraps |
 | `net-session.test.mjs` | clock sync, routing and liveness over a fake wire |
+| `net-authority.test.mjs` | who may declare what: START/CAUTION/RESULT are the host's, over a stub-`G` NetPlay |
 | `net-rendezvous.test.mjs` | the room-code client against a real relay |
 | `net-trystero-api.test.mjs` | the vendored Trystero surface actually used |
 

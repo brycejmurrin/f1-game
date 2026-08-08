@@ -330,7 +330,18 @@ const NetPlay = (function () {
           eventLog.push({ type: name, data: d, from: id });
           if (eventLog.length > 32) eventLog.shift();
           if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
-          if (name === EV.START && d && d.at != null) armStart(d.at, d.hold);
+          // START, RESULT and CAUTION are the HOST'S to declare, so this side
+          // may only obey them when it is not the one that declares them. The
+          // send sides have always been gated (nameTheMoment and reportCaution
+          // both refuse unless host); the receive sides were not, and the star
+          // topology does not cover that gap — it protects the guests, who only
+          // ever hear from the host, and leaves the HOST exposed, because the
+          // host registers these handlers on every guest's session. A guest
+          // could set the host's netStart, apply a caution to the host's race,
+          // or fill the field marked "the host's classification, if sent".
+          // Stated with the predicate rather than `role === "guest"` so a third
+          // role later changes ownsRaceControl() and not four call sites.
+          if (name === EV.START && d && d.at != null && !ownsRaceControl()) armStart(d.at, d.hold);
           // The guest's circuit is up. If the host was already holding for it
           // (hostStart ran first, which is the normal order), name the moment
           // now — this is the earliest instant every side can act on one.
@@ -344,8 +355,8 @@ const NetPlay = (function () {
           if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
           if (name === EV.QLIVE && d && G.onPeerQualiLive) G.onPeerQualiLive(d);
           if (name === EV.LAP && d) peerLaps.push(d);
-          if (name === EV.RESULT && d) peerResult = d;
-          if (name === EV.CAUTION && d && G.applyCaution) G.applyCaution(d);
+          if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
+          if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
     }

@@ -321,6 +321,14 @@ function dashKph(v) { return vStd(v) * 3.6; }
 // full-throttle getaway peaks at ACCEL * 0.5 = 3.5 m/s^2, so the launch-wheelspin
 // smoke's bare 4.5 floor could never fire at all — see A16.
 function aStd(a) { return a / Math.max(PACE, 0.05); }
+// And the other direction: what the car ACTUALLY pulls on the ground right now,
+// as vTop() is what it actually tops out at. Anything modelling the car from
+// outside the driving loop needs this, not the bare constant — js/game/quali.js
+// took `G.ACCEL` and so simulated a field that accelerated at pace-5 rates into
+// a pace-scaled vTop() ceiling, which is exactly the mismatch the G façade's own
+// comment promises does not exist ("off the SAME numbers the driving model
+// uses"). Floored like vTop(): standingLoss() divides by it.
+function aTop()  { return ACCEL * Math.max(PACE, 0.05); }
 // Player steering inputs into the dynamic model below. WHEELBASE is the real
 // axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
 // harder/faster (the RESPONSE slider). STEER_EXPO shapes the input: >1 = gentle
@@ -2735,8 +2743,12 @@ const G = {
   // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
+  // LAT_MAX and BRAKE are absolute in the driving model (cornering grip and
+  // braking do not scale with pace — only acceleration and top speed do), so
+  // they pass through as constants; acceleration goes through aTop().
   LAT_MAX, ACCEL, BRAKE,
   vTop: () => vTop(),
+  aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,

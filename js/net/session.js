@@ -193,6 +193,17 @@ const NetSession = (function () {
       // a slow connect is never mistaken for a disconnect.
       if (alive && lastHeardAt != null && now - lastHeardAt > cfg.timeoutMs) {
         alive = false;
+        // Close the TRANSPORT too, not just this session's bookkeeping. The
+        // early `if (!alive) return;` in close() below means that once the
+        // death clock has fired, nothing can ever tear the transport down
+        // afterwards — so a peer that timed out (rather than saying BYE) left
+        // its RTCPeerConnection and both data channels open for the life of
+        // the tab, and every timed-out session added another. Same order as
+        // close(): transport first, handlers after, so a handler that inspects
+        // the connection sees it already gone either way.
+        try { transport.close(); } catch (e) { /* ignored: a transport that
+          throws on close is already gone, and this path exists precisely
+          because the peer stopped answering. Nothing left to report to. */ }
         fire(closeHandlers, "timeout");
       }
       return alive;

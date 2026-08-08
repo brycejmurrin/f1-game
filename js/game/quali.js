@@ -93,7 +93,11 @@ function create(G) {
     const m = Math.max(8, Math.floor(n / STEP));
     const ds = total / m;
     const latMax = G.LAT_MAX * grip;
-    const accel = G.ACCEL * grip;
+    // aTop(), not the bare ACCEL: the straight-line ceiling below is G.vTop(),
+    // which IS pace-scaled, so a bare ACCEL had the modelled field reaching a
+    // halved cap at undiminished pace-5 acceleration — simulated times that
+    // drifted away from driven ones the moment the pace slider left 5.
+    const accel = G.aTop() * grip;
     const brake = G.BRAKE * grip;
 
     // 1. cornering limit at each sample
@@ -146,7 +150,10 @@ function create(G) {
   // difference, v/(2a). Roughly two and a half seconds at F1 pace, and it
   // applies to every modelled car exactly as it applies to the driven one.
   function standingLoss(cap) {
-    return cap / (2 * Math.max(G.ACCEL || 12, 1));
+    // Same scale as `cap`, which comes from G.vTop(): both pace-scaled, so the
+    // standing loss stays ~2.5 s at every pace instead of ballooning as the
+    // numerator shrank against a fixed denominator.
+    return cap / (2 * Math.max(G.aTop() || 12, 1));
   }
 
   // One car's qualifying lap. Deterministic for a given (seed, round, car).
