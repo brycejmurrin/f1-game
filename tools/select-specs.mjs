@@ -26,12 +26,41 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests } from "./select-budget.mjs";
+import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The advisory job's settings, per select-budget's table: a retry only doubles
 // the cost of the news the job exists to deliver.
 export const ADVISORY = { retries: 0, perTestTimeoutSec: 120 };
+
+/** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
+ *  THE COST MODEL'S BLIND SPOT, measured on CI run 31233088772: the selector
+ *  billed every test at ~80 s, but 8 of the 10 specs it picked declare their
+ *  own test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout —
+ *  so a "14-minute" selection signed up for 3-7 minutes per test and failed
+ *  the job. A spec that reserves more than the advisory per-test budget
+ *  cannot be billed at advisory rates and is excluded by name. */
+export function maxDeclaredTimeout(file) {
+  let ast;
+  try {
+    ast = espree.parse(fs.readFileSync(path.join(ROOT, file), "utf8"),
+      { ecmaVersion: "latest", sourceType: "module" });
+  } catch { return 0; }
+  let max = 0;
+  const walk = (x) => {
+    if (!x || typeof x !== "object") return;
+    if (Array.isArray(x)) return x.forEach(walk);
+    if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
+        && x.callee.object?.name === "test" && x.callee.property?.name === "setTimeout"
+        && x.arguments?.[0]?.type === "Literal" && typeof x.arguments[0].value === "number") {
+      max = Math.max(max, x.arguments[0].value);
+    }
+    for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
+  };
+  walk(ast);
+  return max;
+}
 
 /** tests/specs/*.spec.js named by the given npm scripts (globs expanded). */
 export function specsOf(scriptNames, scripts) {
@@ -53,17 +82,25 @@ export function specsOf(scriptNames, scripts) {
 export function fit(specs, budgetMin) {
   const m = { ...MEASURED, ...ADVISORY };
   const cap = capacity(budgetMin, 1, m);
-  const counted = specs
-    .map((file) => ({ file, tests: declaredTests(file) }))
-    .filter((r) => r.tests != null)
-    .sort((a, b) => a.tests - b.tests);
+  const counted = [], overBudgetSpecs = [];
+  for (const file of specs) {
+    const tests = declaredTests(file);
+    if (tests == null) continue;
+    const own = maxDeclaredTimeout(file);
+    if (own > ADVISORY.perTestTimeoutSec * 1000) {
+      overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
+      continue;
+    }
+    counted.push({ file, tests });
+  }
+  counted.sort((a, b) => a.tests - b.tests);
   const selected = [], skipped = [];
   let used = 0;
   for (const r of counted) {
     if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; }
     else skipped.push(r);
   }
-  return { selected, skipped, testsSelected: used, testsFit: cap.tests, cap };
+  return { selected, skipped, overBudgetSpecs, testsSelected: used, testsFit: cap.tests, cap };
 }
 
 export function select(changedRef, budgetMin = 15) {
@@ -94,6 +131,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   console.error(`${r.changed} changed file(s) -> groups: ${r.groups.join(", ") || "(none)"}`);
   console.error(`budget fits ${r.testsFit} tests (retries ${ADVISORY.retries}, ` +
     `${ADVISORY.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
+  for (const s of r.overBudgetSpecs) console.error(
+    `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > advisory ${ADVISORY.perTestTimeoutSec}s): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.selected) console.log(s.file);
 }

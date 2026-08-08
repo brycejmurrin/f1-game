@@ -8,7 +8,7 @@
 // lie the coverage reporter exists to catch from the other side.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, ADVISORY } from "../../tools/select-specs.mjs";
+import { specsOf, fit, maxDeclaredTimeout, ADVISORY } from "../../tools/select-specs.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
 const SCRIPTS = {
@@ -38,6 +38,22 @@ test("fit cuts at the budget and names every skipped spec", () => {
   assert.equal(r.selected.length + r.skipped.length, 2, "every spec lands in selected or skipped");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
+});
+
+test("a spec that reserves more than the advisory timeout is EXCLUDED by name", () => {
+  // The cost model's blind spot, measured on CI run 31233088772: the selector
+  // billed every test at ~80 s while 8 of its 10 picks declared their own
+  // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
+  // the "14-minute" selection failed the job. imola-foundation (420 s) is the
+  // worst standing example; if its budget ever drops below the advisory
+  // timeout this pin should move to whichever spec then holds the title.
+  const own = maxDeclaredTimeout("tests/specs/imola-foundation.spec.js");
+  assert.ok(own > ADVISORY.perTestTimeoutSec * 1000,
+    `imola-foundation now declares ${own} ms — find a new worst example for this pin`);
+  const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/smoke.spec.js"], 15);
+  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
+  assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/smoke.spec.js"],
+    "the spec that fits the advisory budget must still be selected");
 });
 
 test("the advisory settings match select-budget's recommendation", () => {
