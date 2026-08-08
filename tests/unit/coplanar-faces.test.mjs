@@ -42,6 +42,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // compresses until adjacent footprints share volume and their facades — panes,
 // rails, mullions — end up on one plane. That needs a PLACEMENT fix, not a
 // standoff constant, so the caps carry it until then.
+//
+// vegas 66 -> 67 (2026-08-08): the street-barrier chord-cut fix splits apex
+// spans into two single-node panels that follow the curve, and the new joint
+// abuts two same-height panel tops — the identical seam class every existing
+// panel joint on the lap already contributes. The alternative was a 1.1 m
+// barrier hanging over the racing surface (the props-over-road failure this
+// baseline's +1 paid for). A deliberate trade, not drift.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
