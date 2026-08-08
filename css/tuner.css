@@ -30,7 +30,21 @@
 :root { --dock-w: 0px; --dock-px: 0px; }
 body:has(#lighting:not([hidden])),
 body:has(#camtune:not([hidden])) {
-  --dock-w: min(88vw, 380px);
+  /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
+     space (see --dock-px below), and a bare viewport unit resolves against the
+     UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
+     101vw at the 1.15 that ships on a coarse pointer. Measured on a 393x852
+     phone before this: #lighting-inner declared 345.8px, painted 397.7px, and
+     with `right: 8px` its left edge landed at -14 — the panel hung off the
+     screen. #camtune-inner had the identical -14.
+     --vwz (css/tokens.css) is 1vw / --ui-scale, so `88 * --vwz` renders at
+     exactly 88vw at EVERY setting. The 380px cap needs no correction: px scale
+     correctly, and on desktop (--ui-scale 1) the cap governs anyway, so nothing
+     there moves.
+     This is the second of the two viewport-unit-inside-zoom defects
+     docs/research/UI-SCALE-AND-ZOOM.md §5b deferred; --cs-sheet-w was the
+     other, fixed earlier this session. */
+  --dock-w: min(calc(88 * var(--vwz)), 380px);
   /* WHAT THE PANEL PAINTS, WHICH IS NOT WHAT IT DECLARES — use this, not
      --dock-w, to position anything against the dock.
      #lighting-inner is a `.sheet`, and css/components.css puts
