@@ -8,7 +8,7 @@
 // lie the coverage reporter exists to catch from the other side.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, ADVISORY } from "../../tools/select-specs.mjs";
+import { specsOf, fit, maxDeclaredTimeout, TRACKED, ADVISORY } from "../../tools/select-specs.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
 const SCRIPTS = {
@@ -54,6 +54,24 @@ test("a spec that reserves more than the advisory timeout is EXCLUDED by name", 
   assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/smoke.spec.js"],
     "the spec that fits the advisory budget must still be selected");
+});
+
+test("TRACKED covers the paths that make a selection meaningless", () => {
+  // The measured hole: tests/helpers/fixtures.js is imported by ~59 specs, but
+  // pick-tests routes ^tests/ to `audit` (not a browser group), so before this
+  // list a change to the file EVERY spec depends on selected ZERO specs and the
+  // job reported nothing to run — silent exactly when everything is affected.
+  // Datadog TIA calls these "tracked files"; Fowler's account of Google Testar
+  // records the same blind spot for data-driven inputs.
+  for (const f of ["tests/helpers/fixtures.js", "package.json", "playwright.config.js",
+                   "tools/manifest.cjs", "index.html", "version.json",
+                   "tests/data/physics-baseline.json", ".github/workflows/ci.yml"])
+    assert.ok(TRACKED.some((re) => re.test(f)), `${f} must be a tracked path`);
+  // ...and does NOT swallow ordinary source or spec edits, or the selector is
+  // a full-run trigger wearing a selector's name.
+  for (const f of ["js/game.js", "js/track/tracks.js", "tests/specs/smoke.spec.js",
+                   "css/hud.css", "docs/TESTING.md"])
+    assert.ok(!TRACKED.some((re) => re.test(f)), `${f} must NOT be tracked`);
 });
 
 test("the advisory settings match select-budget's recommendation", () => {

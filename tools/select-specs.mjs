@@ -103,6 +103,27 @@ export function fit(specs, budgetMin) {
   return { selected, skipped, overBudgetSpecs, testsSelected: used, testsFit: cap.tests, cap };
 }
 
+// TRACKED (infra) PATHS — a change here makes the SELECTION ITSELF untrustworthy,
+// so the honest answer is "this job cannot help; the gates cover it", never a
+// quiet empty selection. Named after Datadog TIA's "tracked files" and Fowler's
+// account of Google Testar, which records the same blind spot: a tool that
+// derives impact from code cannot see impact arriving through data or config.
+//
+// The hole this closes, measured: tests/helpers/fixtures.js is imported by 59
+// specs, but pick-tests routes ^tests/ to `audit` — not a browser group — so
+// editing the file EVERY spec depends on selected ZERO specs and the job said
+// nothing to run. A selector that is silent precisely when everything is
+// affected is worse than no selector.
+export const TRACKED = [
+  /^package(-lock)?\.json$/,          // scripts + dependency versions
+  /^playwright\.config\.js$/,         // projects, timeouts, the reporter
+  /^tools\/(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs)$/,
+  /^tests\/helpers\//,                // every spec's fixture, mocks, global setup
+  /^\.github\//,                      // the job that runs the selection
+  /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
+  /^tests\/data\//,                   // data-driven inputs: no import graph sees these
+];
+
 export function select(changedRef, budgetMin = 15) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
@@ -114,8 +135,15 @@ export function select(changedRef, budgetMin = 15) {
   // Same three-way contract as pick-tests --json: "unmatched" means files
   // changed but no rule claimed them — the selection is NOT trustworthy and
   // the caller must fall back to a full run, not to running nothing.
-  const reason = !changed.length ? "none" : (g.size ? "matched" : "unmatched");
-  return { reason, changed: changed.length, groups: browserGroups, ...fit(specs, budgetMin) };
+  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)));
+  const reason = !changed.length ? "none"
+    : tracked.length ? "infra"
+    : (g.size ? "matched" : "unmatched");
+  const r = { reason, changed: changed.length, tracked, groups: browserGroups,
+              ...fit(specs, budgetMin) };
+  // On "infra" the selection is reported but NOT run — the gates own that push.
+  if (reason === "infra") { r.skipped = [...r.selected, ...r.skipped]; r.selected = []; r.testsSelected = 0; }
+  return r;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -128,7 +156,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const bi = argv.indexOf("--budget-min");
   const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : 15);
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
-  console.error(`${r.changed} changed file(s) -> groups: ${r.groups.join(", ") || "(none)"}`);
+  console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
+  if (r.reason === "infra") console.error(
+    `SELECTION NOT MEANINGFUL: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
+    `(${r.tracked.slice(0, 4).join(", ")}${r.tracked.length > 4 ? ", …" : ""}) — a change there can affect ` +
+    `any spec, so nothing is selected and the GATES own this push.`);
+  if (r.reason === "unmatched") console.error(
+    "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
   console.error(`budget fits ${r.testsFit} tests (retries ${ADVISORY.retries}, ` +
     `${ADVISORY.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
   for (const s of r.overBudgetSpecs) console.error(
