@@ -218,11 +218,44 @@ if (o) { o.hidden = false; o.style.removeProperty('display'); }
 document.body.classList.remove('in-race');
 ```
 
-Routes are click-chains: select `["mb-race"]`, garage `["mb-race","sel-go"]`,
-race settings `["mb-race","sel-go","cs-done"]`, career `["mb-career"]`, settings
-`["mb-settings"]`, help `["mb-help"]`, VS friend `["mb-vs"]`. **Never
-`page.reload()` mid-sweep** — it destroys the execution context and every
-subsequent cell fails with a harness error that reads like a layout bug.
+**There are 27 screen roots.** Seventeen `<dialog>`, three `<div class="screen">`,
+seven bare overlays. Sweeping the seven or eight you can reach from the title in
+two clicks is the easy half and is NOT the survey — the defects this session found
+were on the shapes and screens nobody had opened.
+
+| root | route |
+|---|---|
+| `#overlay` | boot |
+| `#select` | `mb-race` |
+| `#carsetup` | `mb-race`, `sel-go` |
+| `#race-settings` | `mb-race`, `sel-go`, `cs-done` |
+| `#career` | `mb-career` |
+| `#pmsettings` | `mb-settings` |
+| `#howtoplay` | `mb-help` |
+| `#vsfriend` | `mb-vs` |
+| `#datahub` | `mb-data` (+ its 6 tabs: schedule/standings/lastrace/live/telemetry/export) |
+| `#teampicker` | garage → TEAM tab → `cs-team-card` |
+| `#customize` | garage → TEAM tab → `cs-customize` |
+| `#advanced` | settings → `pm-advanced` |
+| `#audioset` | settings → `pm-audio` |
+| `#lighting` | settings → `pm-lighting` |
+| `#spotifypanel` | shown directly (no account needed) |
+| `#track-detail` | select → click `sel-preview-map` |
+| `#pausemenu` | in-race → `pausebtn` |
+| `#standings` | in-race → pause → `pm-standings` |
+| `#camtune` | pause → camera tuner |
+| `#photo-controls` | photo mode |
+| `#hud` | in-race (+ the 3 steering modes via `pm-steer`) |
+| `#quali` | race settings → QUALIFYING LAP on → `rs-go` |
+| `#results` | `__apex.finishRace()` |
+| `#career-guide` | career → HOW CAREER WORKS |
+| `#career-history` | career → SEASON BY SEASON |
+| `#career-offers` | `__apex.careerRollover()` → `cr-go` |
+| `#carsetup` sub-tabs | ENGINE / LIVERY / TEAM / WHEELS — four different layouts on one root |
+
+**Never `page.reload()` mid-sweep** — it destroys the execution context and every
+subsequent cell fails with a harness error that reads like a layout bug. Reach
+in-race screens with `__apex.race(id)` + `go()` + `jump()`, not by reloading.
 
 ---
 
