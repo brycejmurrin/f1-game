@@ -47,7 +47,12 @@ const CEILINGS = {
   // field at pace-5 acceleration into a pace-scaled ceiling). It belongs beside
   // vTop()/vStd()/aStd() and nowhere else, so this is a bug-explaining growth of
   // exactly the kind the note above tolerates — not a feature.
-  "js/game.js": 7804,
+  // 7804 -> 7810 for the G.netNow accessor + backing store + the comment saying
+  // why: netplay/apex wrote G.netNow at four sites and this file declared it
+  // NOWHERE, so it existed only as an expando (the countT bug's shape, and what
+  // would make an Object.seal(G) throw). Declaring a member the façade already
+  // pretends to own is the ratchet-tolerated growth, not a feature.
+  "js/game.js": 7810,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

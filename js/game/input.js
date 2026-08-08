@@ -1205,7 +1205,7 @@ const Input = (function () {
             // button entirely — so the car accelerates with btn:0 and no pointer
             // net is involved at all. Without these two the readout cannot tell
             // a reporter which one they are looking at.
-            // Same predicate as js/game.js:276's autoThrottle(), computed from
+            // Same predicate as autoThrottle() in js/game.js, computed from
             // this module's own state rather than asked for across the boundary.
             "\nmode:" + s.steerMode +
             "  auto:" + ((touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off");
