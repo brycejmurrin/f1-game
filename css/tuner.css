@@ -9,7 +9,7 @@
    `{`. The rule it ate was the `:root` no-panel defaults below, the ones this
    file's own comment promises are "0 when no panel is docked". A dropped rule
    is not a parse error and produces no warning; the sheet just quietly stops
-   containing it. tests/css-comments.test.mjs now catches the shape.
+   containing it. tests/unit/css-comments.test.mjs now catches the shape.
 
    Split from css/style.css (lines 132-256 of the original); the <link>
    order in index.html preserves the original source order, so the cascade

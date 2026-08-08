@@ -301,7 +301,7 @@
 /* NOTE: a stray `}` here used to close `@layer components` early, leaving
    everything below — the slot picker, sponsors, the facility, extra funds —
    UNLAYERED, and unlayered rules outrank every layer in the project.
-   See tests/css-layers.test.mjs. */
+   See tests/unit/css-layers.test.mjs. */
 
 /* ---------- the slot picker ---------- */
 /* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS

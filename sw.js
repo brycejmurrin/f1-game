@@ -44,7 +44,7 @@ async function precacheAssetLists() {
     // (tools/manifest.cjs DEFERRED) — so the tag parser below cannot see them.
     // OPTIONAL for the same reason as the vendored three.js underneath: a GLX
     // user never runs a byte of this, and an install must not fail over it.
-    // tests/load-order.test.mjs asserts this list stays equal to DEFERRED.
+    // tests/unit/load-order.test.mjs asserts this list stays equal to DEFERRED.
     "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js",
     "js/render/webgpu/wgsl-fx.js",

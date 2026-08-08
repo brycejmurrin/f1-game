@@ -209,7 +209,7 @@
      docs/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
      is only acceptable when that dump says so on purpose.
      ONLY THE STEPS WITH A REAL CONSUMER ARE DECLARED BELOW.
-     tests/css-tokens.test.mjs fails a defined-but-unread custom property, on
+     tests/unit/css-tokens.test.mjs fails a defined-but-unread custom property, on
      purpose ("an unread token is an invitation to use a value nobody has been
      maintaining") — so --fs-7 stays in the table above only, and gets its
      `--fs-N: …;` line added by whichever future file's migration is its

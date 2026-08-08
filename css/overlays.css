@@ -630,7 +630,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 /* NOTE: the layer's closing brace used to be HERE, so everything below — the
    whole VS FRIEND lobby — was unlayered, and unlayered rules outrank every
-   cascade layer in the project. See tests/css-layers.test.mjs. */
+   cascade layer in the project. See tests/unit/css-layers.test.mjs. */
 
 /* ── VS FRIEND lobby ────────────────────────────────────────────────────────
    The invite/answer codes are a few hundred characters of base64 — a full
