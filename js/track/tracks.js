@@ -293,13 +293,13 @@ const Tracks = (function () {
                         "spectatorHill", "sponsorHoarding",
                         "bleacher", "scaffoldStand", "terrace", "tieredBowl"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
-        const range = TrackSpace.range(def, s0, s1, "source");
+        const range = TrackSpace.sceneryRange(def, s0, s1);
         return f(range.s0, range.s1, SIDE(side), ...r);
       };
     }
     // (s0, s1, stepM, fn): fraction range, no side
     if (api.along) w.along = (s0, s1, ...r) => {
-      const range = TrackSpace.range(def, s0, s1, "source");
+      const range = TrackSpace.sceneryRange(def, s0, s1);
       return api.along(range.s0, range.s1, ...r);
     };
     // (s, …): single fraction, no side (gantry / underpass portal)

@@ -47,6 +47,53 @@ test("TrackSpace converts nodes, samples source data, and preserves legacy scene
   assert.ok(Math.abs(TrackSpace.sceneryFrac({ startFrac: 0.25, sceneryCoordinates: "racing" }, 0.4) - 0.4) < 1e-12);
 });
 
+test("a def's POINT and RANGE scenery are read in the SAME coordinate space", () => {
+  // The bug this pins: sceneryFrac()/sceneryNode() consulted
+  // def.sceneryCoordinates while BOTH scenery call sites of range() passed a
+  // hard-coded "source". On a def declaring "racing" AND reverse:true the two
+  // therefore disagreed, and only that pair of flags exposed it — which is why
+  // it survived: exactly two circuits declare it, kyalami and paul_ricard.
+  // Measured on kyalami (startFrac 0.01): its Crowthorne gravel is a POINT at
+  // racing 0.078 and the tyre wall written to back it is a RANGE at
+  // 0.060-0.098, which landed at 0.912-0.950 — most of a lap away and on the
+  // other side. guardrail/fence/tyreWall feed recordBarrier, so barL/barR
+  // moved with them; this was a collision defect, not just a visual one.
+  const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
+  const DEFS = [
+    { startFrac: 0.01, reverse: true, sceneryCoordinates: "racing" },   // kyalami
+    { startFrac: 0.03, reverse: true, sceneryCoordinates: "racing" },   // paul_ricard
+    { startFrac: 0.28, reverse: true, sceneryCoordinates: "source" },   // monaco
+    { startFrac: 0.0125, sceneryCoordinates: "racing" },                // a forward def
+    { startFrac: 0.25, reverse: true },                                 // the legacy default
+    { startFrac: 0.4 },                                                 // ...and forward
+  ];
+  for (const def of DEFS) {
+    for (const [s0, s1] of [[0.06, 0.098], [0.10, 0.18], [0.42, 0.52]]) {
+      const r = TrackSpace.sceneryRange(def, s0, s1);
+      const ends = [TrackSpace.sceneryFrac(def, s0), TrackSpace.sceneryFrac(def, s1)].sort();
+      // A range's two ends must land exactly where the same two numbers would
+      // land as points. Sorted, because a reversed remap legitimately swaps
+      // them so [s0,s1] stays a short forward arc rather than wrapping.
+      assert.deepEqual([r.s0, r.s1].sort(), ends,
+        `range and point disagree for ${JSON.stringify(def)} on ${s0}-${s1}`);
+    }
+  }
+  // ANTI-VACUITY: the agreement above must not be "both are the identity".
+  // A source-space def has to actually MOVE its ranges, or this test would
+  // pass just as well against a range() that had stopped mapping anything.
+  // NOT 0.10-0.18 on monaco: a reversed remap sends s to phi-s and then swaps
+  // the ends back, so any pair summing to phi (0.28 here) maps to ITSELF. The
+  // first draft of this check used exactly that pair and failed — correctly.
+  const moved = TrackSpace.sceneryRange(DEFS[2], 0.42, 0.52);
+  assert.ok(Math.abs(moved.s0 - 0.42) > 0.01 && Math.abs(moved.s1 - 0.52) > 0.01,
+    `a source-space def must still remap its ranges — got ${JSON.stringify(moved)}`);
+  // And the two spaces must remain distinguishable at all.
+  assert.equal(TrackSpace.scenerySpace(DEFS[0]), "racing");
+  assert.equal(TrackSpace.scenerySpace(DEFS[2]), "source");
+  assert.equal(TrackSpace.scenerySpace(DEFS[4]), "source", "legacy: reversed defaults to source");
+  assert.equal(TrackSpace.scenerySpace(DEFS[5]), "racing", "legacy: forward defaults to racing");
+});
+
 test("Miami declares explicit racing scenery and source-mapped Turnpike elevation", () => {
   const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
   const [miami] = loadGlobal(MANIFEST.circuitPath("miami"), "TrackDefs");

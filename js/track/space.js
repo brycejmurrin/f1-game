@@ -40,22 +40,43 @@ const TrackSpace = (function () {
     return sampler(toSourceFrac(def, racingFrac));
   }
 
-  // Existing definitions are inconsistent by design: forward-lap scenery has
-  // historically been interpreted in racing space while reversed scenery is
-  // remapped from the source trace. New migrations can opt into an explicit
-  // coordinate contract without moving legacy landmarks globally.
-  function sceneryFrac(def, authoredFrac) {
+  // WHICH SPACE a def's scenery numbers are written in — the ONE answer, so
+  // that the point path and the range path below cannot disagree about it.
+  // They did: sceneryFrac()/sceneryNode() consulted def.sceneryCoordinates
+  // while both scenery call sites of range() passed a hard-coded "source", so
+  // on a def declaring "racing" AND reverse:true the point emitters stayed put
+  // and the range emitters were mirrored about startFrac. Exactly two circuits
+  // declare that pair, kyalami and paul_ricard, and both were wrong: kyalami's
+  // Crowthorne gravel is a POINT at racing 0.078 and the tyre wall written to
+  // back it is a RANGE at 0.060-0.098, which was landing at 0.912-0.950 — most
+  // of a lap away, on the other side. Not merely cosmetic, either:
+  // guardrail/fence/tyreWall feed recordBarrier, so barL/barR went with them.
+  function scenerySpace(def) {
     const mode = def && def.sceneryCoordinates;
-    if (mode === "racing") return wrap01(authoredFrac);
-    if (mode === "source") return toRacingFrac(def, authoredFrac);
-    return def && def.reverse ? toRacingFrac(def, authoredFrac) : wrap01(authoredFrac);
+    if (mode === "racing" || mode === "source") return mode;
+    // The legacy default, unchanged: forward-lap scenery has always been read
+    // as racing space and reversed scenery as the source trace. New defs opt
+    // into an explicit contract without moving legacy landmarks globally.
+    return def && def.reverse ? "source" : "racing";
+  }
+
+  function sceneryFrac(def, authoredFrac) {
+    return scenerySpace(def) === "racing"
+      ? wrap01(authoredFrac) : toRacingFrac(def, authoredFrac);
   }
 
   function sceneryNode(def, node, count) {
-    const mode = def && def.sceneryCoordinates;
-    if (mode === "racing" || (!mode && !(def && def.reverse)))
-      return ((Math.round(node) % count) + count) % count;
-    return sourceNodeToRacing(def, node, count);
+    return scenerySpace(def) === "racing"
+      ? ((Math.round(node) % count) + count) % count
+      : sourceNodeToRacing(def, node, count);
+  }
+
+  // The range twin of sceneryFrac. Every SCENERY call site must use this and
+  // never range() directly. range() keeps its explicit space parameter because
+  // resolve()'s hwZones remap genuinely is source-space by convention, and that
+  // call has nothing to do with what a def says about its scenery.
+  function sceneryRange(def, s0, s1) {
+    return range(def, s0, s1, scenerySpace(def));
   }
 
   function range(def, s0, s1, coordinateSpace) {
@@ -71,6 +92,6 @@ const TrackSpace = (function () {
   return {
     wrap01, toRacingFrac, toSourceFrac,
     sourceNodeToRacing, racingNodeToSource, sampleSource,
-    sceneryFrac, sceneryNode, range,
+    scenerySpace, sceneryFrac, sceneryNode, sceneryRange, range,
   };
 })();
