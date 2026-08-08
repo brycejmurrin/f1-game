@@ -140,6 +140,11 @@
 #menu-meta { margin-top: 16px; gap: 6px; }
 #audiostate { color: var(--dim); font-size: 12px; }
 #audiostate:empty { display: none; }
+/* #menu-brand is a stretch-aligned flex column, so a bare button would span the
+   whole brand width. `align-self: flex-start` keeps it to its own content and
+   lets it sit under the audio line as one more small-print item rather than as
+   a full-width bar. It is on the --tap ladder via .minibtn. */
+#soundbtn { align-self: flex-start; width: auto; margin: 2px 0 0; min-height: var(--tap); }
 #disclaimer { color: var(--dim); font-size: 11px; margin: 0; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to

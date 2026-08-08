@@ -2352,7 +2352,7 @@ function startRace() {
   // matter (MUSIC, SOUND EFFECTS) live in SETTINGS > MUSIC & SOUND. Turning
   // both off is silence, so the master needs no mid-race button of its own —
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
-  els.soundbtn.hidden = true;
+  // (#soundbtn rides #overlay now — see css/overlays.css for why.)
   document.body.classList.add("in-race");
   holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
@@ -2900,7 +2900,7 @@ function quitToMenu() {
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   Particles.rainShow(false);
-  els.soundbtn.hidden = false;
+  // (#soundbtn returns with #overlay above — no write needed.)
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
   if (soundOn) GameAudio.startMusic(-1);

@@ -568,12 +568,15 @@ body.hud-hidden #hud-restore { display: block; }
   background: rgba(225, 6, 0, 0.75);
   border-color: rgba(255, 255, 255, 0.35);
 }
-#soundbtn {
-  position: fixed;
-  top: calc(8px + var(--sat));
-  right: calc(10px + var(--sar));
-  z-index: 22;
-}
+/* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
+   un-hid it on every NON-RACE screen — so a title-screen control floated over
+   the top-right corner of the garage, the circuit picker, career and the data
+   hub, colliding with whatever those screens put there (measured: CAREER MODES
+   and FREE BUILD). It now lives inside #menu-meta (index.html), so it hides and
+   shows with the title screen and needs no fixed position, no z-index, and no
+   safe-area compensation of its own. Sizing comes from .minibtn; the only rule
+   it still needs is the one below, in css/menus.css, that stops it stretching
+   to the full width of the brand column. */
 
 /* ---------- results / standings rows ----------
    The shell (header + scrolling body + pinned action bar) is the shared .sheet

@@ -16,11 +16,17 @@ const AudioPanel = (() => {
   function create(G) {
     const { $, els, store } = G;
 
-    els.soundbtn.hidden = false;
+    // (No `hidden = false` here any more: #soundbtn is a child of #overlay, so
+    // its visibility is the title screen's, not this module's. It carried a
+    // `hidden` attribute purely so it would not flash before boot, and it no
+    // longer needs one.)
     function setSound(b) {
       G.soundOn = b; store.set("sound", b);
       GameAudio.setEnabled(b);
       els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
+      // Mirror the state for assistive tech — it is a real toggle button now
+      // that AriaState does not own (it is not in an option group).
+      els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
       else {
         if (G.state === "menu") GameAudio.startMusic(-1);
