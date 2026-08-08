@@ -1135,6 +1135,36 @@ const Input = (function () {
     wireHold("btn-steer-left", function (v) { btnSteerLeft = v; });
     wireHold("btn-steer-right", function (v) { btnSteerRight = v; });
 
+    // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
+    // phone: a player reported the throttle behaving always-on after an
+    // off-track rescue in BUTTONS mode, and four instrumented emulation runs
+    // could not reproduce it — every latch net held. debugState() names which
+    // source (key/btn/pad) is asserting throttle at any moment, but a phone
+    // has no console, so this puts that answer ON SCREEN. Opt-in only:
+    // ?inputdebug=1 in the URL, or localStorage apex26.inputDebug = "1".
+    try {
+      const want = /[?&]inputdebug=1/.test(location.search) ||
+        localStorage.getItem("apex26.inputDebug") === "1";
+      if (want) {
+        const d = document.createElement("div");
+        d.id = "input-debug";
+        d.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:9998;" +
+          "background:rgba(0,0,0,.65);color:#9f9;padding:4px 8px;border-radius:6px;" +
+          "font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;pointer-events:none;" +
+          "white-space:pre";
+        document.body.appendChild(d);
+        setInterval(function () {
+          const s = debugState();
+          d.textContent =
+            "THR " + (s.throttle ? "ON " : "off") +
+            "  key:" + +s.key.throttle + " btn:" + +s.btn.throttle + " pad:" + +s.pad.throttle +
+            "\nBRK " + (s.braking ? "ON " : "off") +
+            "  key:" + +s.key.brake + " btn:" + +s.btn.brake + " pad:" + +s.pad.brake +
+            "\nheld ptrs [" + s.holdPointers.join(",") + "]";
+        }, 250);
+      }
+    } catch (_) {}
+
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.addEventListener === "function") {
       screen.orientation.addEventListener("change", onScreenRotate);

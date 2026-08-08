@@ -1069,6 +1069,14 @@ tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
 on" report.
 
+**On-screen variant for a phone with no console:** load the game with
+`?inputdebug=1` (or set `localStorage["apex26.inputDebug"] = "1"`) and a small
+fixed readout renders in the bottom-left, refreshed 4×/s: THR/BRK with the
+key/btn/pad source flags and the held-pointer counts. Built for the buttons-mode
+"throttle stuck on after an off-track rescue" report, which four instrumented
+emulation runs could not reproduce — when it happens live, the readout names
+the asserting source on the spot.
+
 ---
 
 ## Scenario setup (collision / AI tests)
