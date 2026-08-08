@@ -52,6 +52,17 @@ async function beachAndAwaitRescue(page) {
 }
 
 async function sample(page, seconds) {
+  // Run 3 found NO error overlay — the loop is not throwing — so the freeze is
+  // either rAF not firing at all or tickBody running but skipping the car.
+  // A probe-owned rAF counter separates them: it shares nothing with the game.
+  // The RECOVERED banner is the other half — announceT counts down INSIDE
+  // tickBody, so a banner still visible seconds later convicts tickBody.
+  await page.evaluate(() => {
+    const w = /** @type {any} */ (window);
+    w.__probeRaf = 0;
+    const spin = () => { w.__probeRaf++; requestAnimationFrame(spin); };
+    requestAnimationFrame(spin);
+  });
   const rows = [];
   for (let i = 0; i < seconds * 4; i++) {
     rows.push(await page.evaluate(() => {
@@ -68,6 +79,8 @@ async function sample(page, seconds) {
         // car at all. `s` advancing at ~speed*dt says the sim is live; frozen
         // `s` convicts the loop, not the throttle.
         s: +p.s.toFixed(1), state: info.state,
+        raf: /** @type {any} */ (window).__probeRaf,
+        banner: !document.getElementById("announce")?.hidden,
       };
     }));
     await page.waitForTimeout(250);
@@ -101,6 +114,12 @@ function verdict(rows, label) {
   if (Math.abs(dS) < 1 && rows[0].speed > 5) console.log(
     `NOTE(${label}): s moved ${dS.toFixed(1)} m in ${(rows.length / 4).toFixed(0)}s at ` +
     `${rows[0].speed} m/s — the sim is NOT stepping this car; the constant speed is a frozen readout`);
+  const dRaf = rows[rows.length - 1].raf - rows[0].raf;
+  console.log(`RAF(${label}): ${dRaf} probe-owned frames across the sample window; ` +
+    `banner ${rows[0].banner}->${rows[rows.length - 1].banner}` +
+    (dRaf < 10 ? " — rAF ITSELF is starved; the game loop never gets a frame"
+     : rows[rows.length - 1].banner ? " — rAF fires but the banner never hides: tickBody runs without advancing announceT/physics, or stalls before them"
+     : " — rAF fires and the banner cleared: tickBody runs; the car alone is skipped"));
   console.log(
     last.btnThrottle ? `VERDICT(${label}): btn.throttle STILL TRUE after release — INPUT LATCH (new mechanism)`
     : last.throttle ? `VERDICT(${label}): throttle asserted by key/pad, not btn — see the source flags`
