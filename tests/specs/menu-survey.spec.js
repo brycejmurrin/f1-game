@@ -11,6 +11,12 @@
 // frame, and the actionability hit-test on a button layered over that canvas can
 // spin until the test timeout even though the button is perfectly clickable.
 // In-page clicks fire the handler directly; we then poll the DOM for the result.
+//
+// Every waitForFunction here passes `polling` for the same reason: Playwright
+// polls on requestAnimationFrame by default, and a page driving the game loop
+// under SwiftShader starves that poll, so a declared timeout never gets to fire.
+// Measured 2026-08-08 — "40 HUD" reported `Timeout 10000ms exceeded` after 79s
+// under a loaded box, and passed in 38s alone. Timer polling, not a bigger bound.
 import { test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
@@ -18,7 +24,7 @@ const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, { polling: 100, timeout: 10_000 });
 }
 async function shot(page, name) {
   await page.waitForTimeout(250);
@@ -31,14 +37,14 @@ const labelOf = (page, id) => page.evaluate((id) => document.getElementById(id).
 // Race + park, then reveal the pause SETTINGS sub-menu.
 async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.evaluate(({ track, tod, wx }) => window.__apex.race(track, tod, wx), { track, tod, wx });
-  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { timeout: 10_000 });
+  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => {
     window.__apex.park(0.1);
     const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
     document.getElementById("pausemenu").hidden = false;
     document.getElementById("pm-settings").click();
   });
-  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 8_000 });
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
@@ -115,7 +121,7 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
     await clickId(page, "pm-lighting");
-    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { timeout: 8_000 });
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: 8_000 });
     await page.waitForTimeout(400);
     // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
     expect(await page.evaluate(() =>
@@ -159,7 +165,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("42 HUD hidden (clean screen)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
@@ -173,7 +179,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("43 camera picker grid", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
