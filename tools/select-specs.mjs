@@ -26,6 +26,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests } from "./select-budget.mjs";
+import { referencesIn } from "./cross-file-paths.mjs";
 import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -118,13 +119,60 @@ export const TRACKED = [
   /^package(-lock)?\.json$/,          // scripts + dependency versions
   /^playwright\.config\.js$/,         // projects, timeouts, the reporter
   /^tools\/(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs)$/,
-  /^tests\/helpers\//,                // every spec's fixture, mocks, global setup
+  /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
   /^tests\/data\//,                   // data-driven inputs: no import graph sees these
 ];
 
-export function select(changedRef, budgetMin = 15) {
+// ─── import graph (Playwright's --only-changed, computed here) ────────────────
+//
+// Playwright ships `--only-changed=<ref>`, which walks the suite's IMPORT graph
+// to find affected specs. In most repos that would replace the path RULES
+// wholesale. Here it would find almost nothing: Apex 26's specs do not import
+// js/ at all — they load the game over HTTP — so no import graph can connect
+// js/game.js to a spec. The two are complementary, not competing: RULES cover
+// source -> spec (invisible to any import graph in an IIFE + script-tag app),
+// and the graph covers helper/spec -> spec PRECISELY, which is exactly where
+// the RULES are weakest (^tests/ routes to `audit` and nothing else).
+export function specsImporting(changed, root = ROOT) {
+  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.js$/.test(f));
+  if (!narrow.length) return [];
+  const dir = path.join(root, "tests", "specs");
+  const hit = [];
+  for (const name of fs.readdirSync(dir).filter((f) => f.endsWith(".spec.js"))) {
+    const rel = `tests/specs/${name}`;
+    let refs = [];
+    try { refs = referencesIn(fs.readFileSync(path.join(dir, name), "utf8"), rel).refs || []; }
+    catch { continue; }
+    for (const r of refs) {
+      const target = path.posix.normalize(path.posix.join("tests/specs", r.spec));
+      if (narrow.includes(target)) { hit.push(rel); break; }
+    }
+  }
+  return hit;
+}
+
+// ALWAYS-RUN, and FAIL-FAST ORDER. Both are standard TIA practice this
+// selector lacked. Fowler's survey records Microsoft's TIA and Google's Testar
+// each running newly-added and previously-failing tests UNCONDITIONALLY: a new
+// test has no history to select on, and a test that failed last time is the
+// single best predictor of failing again. Playwright's own CI guidance is the
+// ordering half — run the changed specs FIRST so the likeliest failure reports
+// first, since an advisory job's value is entirely in how early it speaks.
+//
+// Priority, highest first:
+//   0  the spec file itself is in the diff (you just edited it)
+//   1  it failed on the previous run (carried in via --failed-from)
+//   2  it imports a helper that changed (import graph)
+//   3  a pick-tests RULE routed its group here
+export function prioritise(specs, { changedSpecs = [], failed = [], imported = [] } = {}) {
+  const rank = (f) => changedSpecs.includes(f) ? 0 : failed.includes(f) ? 1
+    : imported.includes(f) ? 2 : 3;
+  return [...specs].sort((a, b) => rank(a.file) - rank(b.file) || a.tests - b.tests);
+}
+
+export function select(changedRef, budgetMin = 15, opts = {}) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
@@ -136,11 +184,20 @@ export function select(changedRef, budgetMin = 15) {
   // changed but no rule claimed them — the selection is NOT trustworthy and
   // the caller must fall back to a full run, not to running nothing.
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)));
+  // The three always-run inputs, unioned into the candidate set BEFORE the cut
+  // so they compete for the budget on merit rather than being bolted on after.
+  const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
+    && fs.existsSync(path.join(ROOT, f)));
+  const imported = specsImporting(changed);
+  const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const candidates = [...new Set([...changedSpecs, ...failed, ...imported, ...specs])];
   const reason = !changed.length ? "none"
     : tracked.length ? "infra"
-    : (g.size ? "matched" : "unmatched");
+    : (g.size || candidates.length ? "matched" : "unmatched");
+  const cut = fit(candidates, budgetMin);
   const r = { reason, changed: changed.length, tracked, groups: browserGroups,
-              ...fit(specs, budgetMin) };
+              changedSpecs, imported, failed, ...cut,
+              selected: prioritise(cut.selected, { changedSpecs, failed, imported }) };
   // On "infra" the selection is reported but NOT run — the gates own that push.
   if (reason === "infra") { r.skipped = [...r.selected, ...r.skipped]; r.selected = []; r.testsSelected = 0; }
   return r;
@@ -154,7 +211,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");
-  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : 15);
+  // Previously-failing specs, one path per line — CI carries this across runs
+  // (actions/cache) so the best single failure predictor survives the runner.
+  const fi = argv.indexOf("--failed-from");
+  let failed = [];
+  if (fi >= 0 && argv[fi + 1]) {
+    try { failed = fs.readFileSync(argv[fi + 1], "utf8").split("\n").map((s) => s.trim()).filter(Boolean); }
+    catch { /* absent on the first run, and on any run after a cache miss */ }
+  }
+  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : 15, { failed });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(

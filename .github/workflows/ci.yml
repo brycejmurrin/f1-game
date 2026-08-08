@@ -426,6 +426,19 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
+      # records Microsoft's TIA and Google's Testar both re-running the last
+      # run's failures unconditionally — a test that just failed is the single
+      # best predictor of failing again, and a fresh runner otherwise forgets.
+      # restore-keys makes a miss harmless: the file is simply absent and the
+      # selector proceeds without it.
+      - name: Restore last run's failing specs
+        uses: actions/cache/restore@v4
+        with:
+          path: .selected-failed.txt
+          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            selected-failed-${{ github.ref_name }}-
       - name: Select specs for this push's diff
         id: sel
         env:
@@ -443,7 +456,7 @@ jobs:
             ""|0000000000000000000000000000000000000000) skip "no before-sha (new branch or first push)" ;;
           esac
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || skip "before-sha $BEFORE unreachable (force push?)"
-          node tools/select-specs.mjs --since "$BEFORE" --json > sel.json || skip "selector failed"
+          node tools/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json || skip "selector failed"
           node -e '
             const r = require("./sel.json");
             const specs = r.selected.map((s) => s.file).join(" ");
@@ -460,6 +473,31 @@ jobs:
         env:
           APEX_WORKERS: 1
         run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000
+      # Record what failed so the NEXT run hoists it to the front. junit.xml is
+      # the machine-readable half of the reporter set playwright.config already
+      # writes; parsing it here keeps the tool free of CI-specific formats.
+      - name: Record failing specs for the next run
+        if: always() && steps.sel.outputs.specs != ''
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const out = new Set();
+            for (const d of fs.readdirSync("artifacts").filter((d) => d.startsWith("test-results-"))) {
+              const f = path.join("artifacts", d, "junit.xml");
+              if (!fs.existsSync(f)) continue;
+              const xml = fs.readFileSync(f, "utf8");
+              for (const m of xml.matchAll(/<testcase[^>]*\bclassname="([^"]+)"[^>]*>\s*<(?:failure|error)\b/g))
+                out.add(m[1].split(" ")[0]);
+            }
+            fs.writeFileSync(".selected-failed.txt", [...out].join("\n"));
+            console.log(out.size ? `carrying ${out.size} failing spec(s) forward` : "no failures to carry");
+          ' || true
+      - name: Save failing specs
+        if: always() && steps.sel.outputs.specs != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .selected-failed.txt
+          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

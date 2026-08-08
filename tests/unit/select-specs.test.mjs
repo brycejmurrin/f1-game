@@ -8,7 +8,8 @@
 // lie the coverage reporter exists to catch from the other side.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, TRACKED, ADVISORY } from "../../tools/select-specs.mjs";
+import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED, ADVISORY } from "../../tools/select-specs.mjs";
+import { recall } from "../../tools/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
 const SCRIPTS = {
@@ -72,6 +73,51 @@ test("TRACKED covers the paths that make a selection meaningless", () => {
   for (const f of ["js/game.js", "js/track/tracks.js", "tests/specs/smoke.spec.js",
                    "css/hud.css", "docs/TESTING.md"])
     assert.ok(!TRACKED.some((re) => re.test(f)), `${f} must NOT be tracked`);
+});
+
+test("the import graph finds specs a path RULE cannot — helper -> spec", () => {
+  // Playwright's --only-changed walks the import graph; here it would find
+  // almost nothing (specs load the game over HTTP, so no graph reaches js/),
+  // but it is exactly right for helper -> spec, where the RULES are weakest:
+  // ^tests/ routes to `audit` and nothing else.
+  const hit = specsImporting(["tests/helpers/qr-camera.js"]);
+  assert.ok(hit.includes("tests/specs/multiplayer-scan.spec.js"), `got ${hit.join(", ")}`);
+  assert.ok(hit.length < 10, "a NARROW helper must not fan out to the whole suite");
+  assert.deepEqual(specsImporting(["js/game.js"]), [],
+    "js/ is invisible to the import graph in this architecture — say so by returning nothing");
+});
+
+test("fail-fast order: edited, then previously-failed, then imported, then routed", () => {
+  // Fowler's TIA survey records Microsoft and Google Testar both running
+  // newly-added and previously-failing tests unconditionally; Playwright's CI
+  // guidance is the ordering half. An advisory job's whole value is how EARLY
+  // it speaks, so the likeliest failure must run first.
+  const specs = [{ file: "d.spec.js", tests: 1 }, { file: "c.spec.js", tests: 1 },
+                 { file: "b.spec.js", tests: 1 }, { file: "a.spec.js", tests: 1 }];
+  const got = prioritise(specs, { changedSpecs: ["a.spec.js"], failed: ["b.spec.js"],
+                                  imported: ["c.spec.js"] });
+  assert.deepEqual(got.map((s) => s.file), ["a.spec.js", "b.spec.js", "c.spec.js", "d.spec.js"]);
+});
+
+test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
+  // The metric Facebook's Predictive Test Selection reports separately and for
+  // good reason: their model catches >99.9% of faulty CHANGES while catching
+  // only >95% of individual test failures, because a bad change is usually
+  // caught by several tests. So a selector is judged on whether the regression
+  // would still have been reported — never on how much of the suite it copies.
+  //
+  // A "silent miss" is the one true failure: the catching spec neither selected
+  // nor named. Being unaffordable (a 25-minute sweep) or infra is fine — those
+  // are honest answers the gates then own. This ratchet caught a REAL routing
+  // bug on its first run: js/track/tracks.js holds buildProps but did not route
+  // to `scenery`, so the two specs that reported both of 2026-08-08's scenery
+  // defects were silently absent.
+  const rows = recall();
+  const silent = rows.filter((r) => !r.hit && !r.named && r.reason !== "infra");
+  assert.deepEqual(silent.map((r) => `${r.name} -> ${r.catches}`), [],
+    "a spec that caught a real regression was dropped with no word — fix the routing, " +
+    "the budget, or the case, but never leave the selector silent");
+  assert.ok(rows.length >= 5, "the case history is the harness — do not let it shrink");
 });
 
 test("the advisory settings match select-budget's recommendation", () => {

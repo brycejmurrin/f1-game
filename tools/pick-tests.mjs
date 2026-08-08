@@ -62,8 +62,17 @@ export const RULES = [
 
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["scenery", "sweeps"], "prop placement and the full-fleet clip audits"],
+  // `scenery` belongs here and was MISSING, found by tools/select-recall.mjs
+  // replaying real regressions: js/track/tracks.js holds buildProps (street
+  // barriers, treelines, the instance() emitters), and BOTH scenery defects
+  // fixed on 2026-08-08 — the vegas barrier over the racing line and the
+  // buenos_aires cross-segment tree — were changes to THIS file caught by
+  // props-over-road/terrain-over-road, which live only in `test:scenery`.
+  // Routing it to circuit+physics+sweeps+foundation ran everything except the
+  // two specs that actually report the class of bug the file produces.
   [/^js\/track\/(tracks|mesh|spline|surface|geom|graph)\.js/,
-   ["circuit", "physics", "sweeps", "foundation"], "road geometry reaches walls, elevation, physics and every circuit's foundation"],
+   ["circuit", "physics", "sweeps", "foundation", "scenery"],
+   "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
   [/^js\/track\/space\.js/, ["physics"], "world<->track projection"],
   [/^js\/track\/(markings|maps|geo-paths)\.js/, ["map", "circuit"], "layout metadata"],
   [/^js\/circuits\//, ["circuit", "scenery", "foundation"], "a circuit def: walls, its scenery callback, and its own foundation spec"],
