@@ -90,17 +90,23 @@
       //    Painted as ground patches so they read flat, not as scenery.
       // =====================================================================
       for (const [id, s, side, w, l] of [
-        ["pr-runoff-verrerie", 0.070, 1, 60, 130],
-        ["pr-runoff-mistral", 0.440, -1, 54, 120],
-        ["pr-runoff-signes", 0.565, 1, 66, 150],
-        ["pr-runoff-beausset", 0.720, -1, 52, 110],
-        ["pr-runoff-village", 0.905, 1, 50, 110],
+        // Signes and Verrerie have the vastest run-off on the calendar — bays of
+        // painted tarmac reaching the best part of a hundred metres back — so the
+        // hero corners get correspondingly wide patches rather than a token verge.
+        ["pr-runoff-verrerie", 0.070, 1, 82, 150],
+        ["pr-runoff-mistral", 0.440, -1, 70, 130],
+        ["pr-runoff-signes", 0.565, 1, 92, 170],
+        ["pr-runoff-beausset", 0.720, -1, 66, 120],
+        ["pr-runoff-village", 0.905, 1, 64, 120],
       ]) {
-        // Red band nearest the road, blue beyond it.
-        groundPatch(K(s), side, 4, [w * 0.35, 0.18, l], RED,
+        // Red band nearest the road, blue beyond it, then a deeper-blue outer
+        // apron so the painted zone fades out rather than ending on a hard line.
+        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], RED,
           { id: id + "-red", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.35, [w * 0.65, 0.18, l * 1.1], BLUE,
+        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE,
           { id: id + "-blue", samples: 8 });
+        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], BLUE_D,
+          { id: id + "-blue-outer", samples: 8 });
       }
 
       // The corner patches alone leave the rest of the lap green, which is the
@@ -112,14 +118,23 @@
       // stops all that blue reading as a swimming pool from the air.
       for (const side of [-1, 1]) {
         let i = 0;
-        along(0.0, 1.0, 18, (k, spacing) => {
+        along(0.0, 1.0, 15, (k, spacing) => {
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
           runoffApron(k, side, 2.5, [9, 0.16, seg], RED);
           runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
           runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? BLUE_D : [0.33, 0.38, 0.60]);
+          // Outer apron — the blue keeps going out to where the barriers finally
+          // sit, so the painted zone reads as acres rather than a mown strip.
+          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? [0.31, 0.36, 0.58] : BLUE_D);
           if (i % 3 === 0) {
             const a = anchor(k, side, 26);
             addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
+          }
+          // A second lane-line further out, offset in phase, so the Blue Zone
+          // reads as a marked run-off surface and never as open water.
+          if (i % 3 === 1) {
+            const a = anchor(k, side, 58);
+            addBox(out, vadd(a.c, a.u, 0.20), [20, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
           }
           i++;
         });
@@ -289,6 +304,10 @@
       bleacher(0.545, 0.590, 1, 72, { rows: 8 });
       bleacher(0.890, 0.930, -1, 58, { rows: 7 });
       bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
+      // Two more rakes marooned out in the blue zone, the way Paul Ricard's
+      // corner seating always is — no shell, no roof, the paint showing under it.
+      bleacher(0.115, 0.150, -1, 52, { rows: 6, step: 8 });   // exit of the Verrerie esses
+      bleacher(0.470, 0.505, -1, 56, { rows: 6, step: 8 });   // opposite the Mistral chicane
       spectatorHill(0.68, 0.76, 1, 60, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
       for (const s of [0.070, 0.560, 0.905]) marshalPost(K(s), -1, 12);
       for (const s of [0.44, 0.72]) marshalPost(K(s), 1, 12);
@@ -341,9 +360,17 @@
         { id: "paul-ricard-airfield-apron", samples: 10 });
       groundPatch(K(0.50), 1, 196, [22, 0.16, 300], [0.44, 0.45, 0.46],
         { id: "paul-ricard-runway", samples: 10 });
+      // The taxiway linking apron to runway — a narrower concrete ribbon in the
+      // strip between them, with yellow centreline dashes down it.
+      groundPatch(K(0.50), 1, 166, [30, 0.16, 280], [0.52, 0.52, 0.51],
+        { id: "paul-ricard-taxiway", samples: 10 });
       for (let i = 0; i < 9; i++) {
         const a = anchor(K(0.40 + i * 0.025), 1, 196);
         addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
+      }
+      for (let i = 0; i < 10; i++) {
+        const a = anchor(K(0.41 + i * 0.020), 1, 166);
+        addBox(out, vadd(a.c, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
       }
       {
         const a = anchor(K(0.50), 1, 150);
@@ -413,6 +440,60 @@
           stage._mat = 0;
         });
       }
+
+      // Wind turbines on the plateau — the éoliennes standing over the bleached
+      // limestone above Le Castellet are the only tall man-made silhouette on
+      // this horizon besides the aerodrome tower, and a row of them turning in
+      // the mistral is unmistakably this plateau. Placed far out on the open
+      // ground the backdrop ridges close off, well clear of the runoff, the
+      // vineyards and the aerodrome. Each is one atomic group; the rotor plane
+      // faces along the track tangent so it reads broadside from most of the lap.
+      const windTurbine = (id, s, side, dist, h) => {
+        const a = anchor(K(s), side, dist);
+        const b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 46)) return;
+        const HUB = [0.90, 0.90, 0.92], BLADE = [0.95, 0.95, 0.95];
+        modelGroup(id, {
+          center: vadd(a.c, a.u, h * 0.6), size: [h * 1.3, h * 1.7, h * 1.3], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          // Tapered tubular tower.
+          addFrustum(stage, a.c, 2.4, 1.15, h, WHITE, 9, b);
+          const top = vadd(a.c, a.u, h);
+          // Nacelle, with the rotor hub on a short spinner off its upwind face.
+          addBox(stage, top, [2.6, 2.4, 6.2], HUB, b);
+          const hub = vadd(top, a.t, -3.6);
+          addCyl(stage, hub, 0.78, 1.3, HUB, 8, [a.r, a.t, a.u]);
+          const bl = h * 0.46, phase = hash(dist * 3 + s * 90) * 1.2;
+          for (let i = 0; i < 3; i++) {
+            const ang = i * 2.0944 + phase, cA = Math.cos(ang), sA = Math.sin(ang);
+            // dir is the blade's radial axis in the rotor plane; perp completes an
+            // orthonormal basis with it and a.t (the rotor's own axis), so the
+            // blade box can never shear into a non-finite vertex.
+            const dir = [], perp = [];
+            for (let ax = 0; ax < 3; ax++) {
+              dir[ax] = a.r[ax] * cA + a.u[ax] * sA;
+              perp[ax] = -a.r[ax] * sA + a.u[ax] * cA;
+            }
+            // Long thin blade: thin out of the rotor plane (a.t), some chord in it.
+            addBox(stage, vadd(hub, dir, bl * 0.5 + 1.0), [0.4, bl, 0.9], BLADE,
+              [a.t, dir, perp]);
+          }
+          stage._mat = 0;
+        });
+      };
+      for (const [id, s, side, dist, h] of [
+        ["pr-turbine-1", 0.150, -1, 170, 52],
+        ["pr-turbine-2", 0.225, -1, 198, 46],
+        ["pr-turbine-3", 0.315,  1, 190, 50],
+        ["pr-turbine-4", 0.640, -1, 178, 54],
+        ["pr-turbine-5", 0.760, -1, 160, 48],
+        ["pr-turbine-6", 0.845,  1, 172, 50],
+        ["pr-turbine-7", 0.055,  1, 184, 46],
+        ["pr-turbine-8", 0.430, -1, 176, 48],
+        ["pr-turbine-9", 0.905, -1, 158, 50],
+      ]) windTurbine(id, s, side, dist, h);
+
       // The paddock is not a field with trucks parked on it, it is a hectare of
       // bare hardstanding with white bay lines painted on it. That expanse of
       // grey — with the odd motorhome adrift in the middle of it — is as much
@@ -486,6 +567,19 @@
           ["lav-east",    0.380,  1, 168, 12, 1],
           ["vine-mistral", 0.480, -1, 118, 14, 0],
           ["lav-west",    0.880,  1, 148, 10, 1],
+          // Further Bandol parcels filling the open plateau out to the ridges —
+          // the vineyards here genuinely run to the horizon, so a handful of
+          // token rows would read as a garden. Kept clear of the turbines above.
+          ["vine-verrerie", 0.110, -1, 130, 18, 0],
+          ["lav-north-e",   0.170,  1, 124, 10, 1],
+          ["lav-t2",        0.260,  1, 130, 12, 1],
+          ["vine-signes",   0.590, -1, 128, 18, 0],
+          ["vine-beausset", 0.735,  1, 112, 14, 0],
+          ["lav-far-w",     0.860, -1, 152, 12, 1],
+          ["vine-far-e",    0.340, -1, 150, 16, 0],
+          ["vine-t2-out",   0.200,  1, 152, 12, 0],
+          ["lav-signes-o",  0.610,  1, 150, 12, 1],
+          ["vine-beau2",    0.780, -1, 122, 14, 0],
         ]) {
           // Bare tilled ground under the parcel, so rows sit on soil not grass.
           groundPatch(K(s), side, gap, [rows * 4.5, 0.15, 120], SOIL,

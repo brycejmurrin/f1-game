@@ -308,6 +308,15 @@
       broadcastCompound(K(0.908), 1, 78, { vans: 2, dishes: 2, mastH: 9 });
       // Brazilian green-and-gold hoardings.
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.10, 0.44, 0.24]);
+      // The continuous green-and-gold hoarding RUN the brief calls for, low
+      // against the barrier down the whole pit straight — the advertising line
+      // the taller billboards and the flag rank stand behind. Sits at gap 5.5,
+      // in front of the flags (gap 7) and billboards (gap 8), so it layers with
+      // them instead of colliding. Brazil's flag colours: green, gold, blue, white.
+      sponsorHoarding(0.955, 0.055, -1, 5.5, {
+        h: 1.5, step: 11,
+        palette: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88]],
+      });
 
       // =====================================================================
       // 5. CORNERS — sand traps rather than gravel, which is what a circuit

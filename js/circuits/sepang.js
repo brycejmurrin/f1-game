@@ -420,6 +420,28 @@
             addCyl(stage, vadd(a.c, a.t, (p - 1) * 11), 0.18, 4.6, [0.72, 0.72, 0.74], 6, b);
         });
       }
+      // The same slatted shade run behind the T1 and T15 satellite stands — at
+      // Sepang every path between the enclosures is roofed against the sun and
+      // the monsoon, so those spectator clusters get covered walkways too. Single
+      // 30 m bays set well back behind each stand, so neither crosses a
+      // doubling-back stretch of the lap the way the dropped 90 m run did.
+      for (const [id, s, side, gap] of [
+        ["t1", 0.072, 1, 52],
+        ["t15", 0.900, -1, 46],
+      ]) {
+        const a = anchor(K(s), side, gap);
+        const b = [a.r, a.u, a.t];
+        modelGroup(`sepang-shade-walk-${id}`, {
+          center: vadd(a.c, a.u, 3), size: [9, 8, 30], basis: b,
+        }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, 4.6), [6.4, 0.35, 28], [0.90, 0.88, 0.82], b);
+          for (let l = 0; l < 3; l++)
+            addBox(stage, vadd(vadd(a.c, a.r, (l - 1) * 2.2), a.u, 5.0),
+              [0.9, 0.5, 28], [0.72, 0.71, 0.66], b);
+          for (let p = 0; p < 3; p++)
+            addCyl(stage, vadd(a.c, a.t, (p - 1) * 11), 0.18, 4.6, [0.72, 0.72, 0.74], 6, b);
+        });
+      }
 
       // Sponsor boards and the broadcast masts. Saturated tropical greens and
       // reds — the equatorial light here washes everything pale, so the only

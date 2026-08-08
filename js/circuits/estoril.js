@@ -256,6 +256,10 @@
       };
       scaffoldStand("estoril-stand-pit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
       scaffoldStand("estoril-stand-t1", K(0.078), -1, 22, 11, { rows: 4 });
+      // The brief puts scaffold terraces on BOTH sides of the 0.02-0.20 stretch;
+      // the outside of the Turn 1/Turn 2 sequence had none. A shorter open rake
+      // there closes that gap without crowding the pines behind it.
+      scaffoldStand("estoril-stand-esses", K(0.140), 1, 20, 9, { rows: 4 });
       scaffoldStand("estoril-stand-parabolica", K(0.900), 1, 18, 14, { rows: 5, awning: true });
       // A single masonry terrace at the line for contrast with all that tube —
       // uncovered, terracotta-fronted, the one permanent structure.
