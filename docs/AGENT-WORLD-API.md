@@ -459,7 +459,7 @@ wooded scenes and the docs say so.
 `carView()` returns team identity, livery colours, the full parts spec with its
 stat effects, the per-team chassis silhouette knobs, and geometry **measured
 from a real `Car3D.build`** — 5.95 m long, 2.10 m wide, 1.01 m tall, 3.30 m
-wheelbase. That is everything `tools/render-car.mjs` conveys except appearance
+wheelbase. That is everything `tools/car/render-car.mjs` conveys except appearance
 itself: reflections, decal placement and whether a paint scheme reads are still
 render questions, and the tool stays for them.
 

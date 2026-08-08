@@ -29,9 +29,9 @@ guessing.
 ## The tool
 
 ```sh
-node tools/motion-capture.mjs <track> [seconds] [speed] [outdir]
-node tools/motion-capture.mjs monaco 4 50
-node tools/motion-capture.mjs spa 4 70   # still starts at jump(0.05) — see below
+node tools/capture/motion-capture.mjs <track> [seconds] [speed] [outdir]
+node tools/capture/motion-capture.mjs monaco 4 50
+node tools/capture/motion-capture.mjs spa 4 70   # still starts at jump(0.05) — see below
 ```
 
 **No start-frac CLI** — the tool always `jump(0.05, speed)`. To capture Eau Rouge
@@ -60,9 +60,9 @@ It records a throttle-held chase-cam clip, extracts frames, and prints:
 Prove a fix reduces flicker, don't assume it:
 
 ```sh
-node tools/motion-capture.mjs monaco 4 50      # on your branch → note p90
+node tools/capture/motion-capture.mjs monaco 4 50      # on your branch → note p90
 # revert the change (e.g. git stash the glx/game edit, or flip the constant back)
-node tools/motion-capture.mjs monaco 4 50      # baseline → note p90
+node tools/capture/motion-capture.mjs monaco 4 50      # baseline → note p90
 ```
 
 Real result from the near-plane depth fix (0.2 → 0.3): **p90 0.21 → 0.00**

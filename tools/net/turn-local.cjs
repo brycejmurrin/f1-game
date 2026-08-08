@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // turn-local.cjs — a TURN server on localhost, so the RELAY leg can be tested.
 //
-//   npm i --no-save node-turn && node tools/turn-local.cjs [--debug]
-//   node tools/rtc-e2e-3p.mjs --relay --turn=turn:127.0.0.1:3478,apex,apex
+//   npm i --no-save node-turn && node tools/net/turn-local.cjs [--debug]
+//   node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:127.0.0.1:3478,apex,apex
 //
 // WHY THIS EXISTS. On one machine — and on most home networks — ICE forms a
 // direct host pair instantly and TURN is never touched. So the relay leg is

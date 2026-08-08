@@ -35,9 +35,9 @@
     "test:agent-contract": "node --test tests/unit/agentview-api-contract.test.mjs",
     "test:map": "node tools/run-playwright.mjs tests/specs/map-hooks.spec.js",
     "test:net": "node tools/run-playwright.mjs tests/specs/multiplayer-roles.spec.js tests/specs/multiplayer-session.spec.js tests/specs/multiplayer-lobby.spec.js tests/specs/multiplayer-scan.spec.js tests/specs/multiplayer-scan-cancel.spec.js tests/specs/multiplayer-room.spec.js tests/specs/multiplayer-seats.spec.js tests/specs/multiplayer-npeer.spec.js",
-    "rtc:e2e": "node tools/rtc-e2e.mjs",
-    "rtc:e2e-3p": "node tools/rtc-e2e-3p.mjs",
-    "rtc:e2e-3p-relay": "node tools/rtc-e2e-3p.mjs --relay",
+    "rtc:e2e": "node tools/net/rtc-e2e.mjs",
+    "rtc:e2e-3p": "node tools/net/rtc-e2e-3p.mjs",
+    "rtc:e2e-3p-relay": "node tools/net/rtc-e2e-3p.mjs --relay",
     "test:net-unit": "node --test tests/unit/net-transport.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-session.test.mjs",
     "test:paths": "node tools/run-playwright.mjs tests/specs/output-paths.spec.js",
     "test:service-worker": "node --test tests/unit/service-worker.test.mjs",
@@ -55,7 +55,7 @@
     "test:audit": "node tools/test-coverage-audit.mjs",
     "test:pick": "node tools/pick-tests.mjs",
     "test:bg": "node tools/test-bg.mjs",
-    "ab:light": "node tools/ab-lighting.mjs"
+    "ab:light": "node tools/lighting/ab-lighting.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

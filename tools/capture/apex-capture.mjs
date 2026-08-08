@@ -10,15 +10,15 @@
 // single browser share a GPU process and contend; N chromium.launch()s
 // actually parallelize. Extra Python servers only helped asset fetch.
 //
-//   node tools/apex-capture.mjs cameras [track] [outdir]
-//   node tools/apex-capture.mjs modes   [outdir]
-//   node tools/apex-capture.mjs tracks  [outdir] [id ...]
-//   node tools/apex-capture.mjs identity [outdir] [id ...]   # aerial+tour+eye
-//   node tools/apex-capture.mjs lap-tour [track] [speed] [outdir] [weather=wet] [tod=dusk]
+//   node tools/capture/apex-capture.mjs cameras [track] [outdir]
+//   node tools/capture/apex-capture.mjs modes   [outdir]
+//   node tools/capture/apex-capture.mjs tracks  [outdir] [id ...]
+//   node tools/capture/apex-capture.mjs identity [outdir] [id ...]   # aerial+tour+eye
+//   node tools/capture/apex-capture.mjs lap-tour [track] [speed] [outdir] [weather=wet] [tod=dusk]
 //
 // Env: APEX_WORKERS=N  (default 2 for identity/tracks — 4+ OOMs SwiftShader on laptops)
 // Logs/redirects: use artifacts/tmp/ (never /tmp) — e.g.
-//   node tools/apex-capture.mjs identity scratch/captures/apex-capture/identity > artifacts/tmp/apex-identity.log 2>&1 &
+//   node tools/capture/apex-capture.mjs identity scratch/captures/apex-capture/identity > artifacts/tmp/apex-identity.log 2>&1 &
 // Default output roots when [outdir] is omitted:
 //   cameras  -> scratch/captures/apex-capture/cameras
 //   tracks   -> scratch/captures/apex-capture/tracks
@@ -34,7 +34,7 @@ import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 

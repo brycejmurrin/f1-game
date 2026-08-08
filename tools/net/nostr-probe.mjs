@@ -2,8 +2,8 @@
 // nostr-probe.mjs — WHICH RELAYS WILL ACTUALLY CARRY OUR SIGNALLING?
 //
 //   npm i --no-save ws @noble/curves
-//   node tools/nostr-probe.mjs
-//   node tools/nostr-probe.mjs wss://a wss://b
+//   node tools/net/nostr-probe.mjs
+//   node tools/net/nostr-probe.mjs wss://a wss://b
 //
 // WHY THIS EXISTS. The shipped relay list in js/net/nostr.js has been changed
 // three times, each on a different piece of reasoning, and every time the

@@ -2,23 +2,23 @@
 
 Every hand-tuned lighting constant, what it *physically* does, and the metric
 that must move when you change it. The machine-readable version of this table
-lives in `tools/ab-lighting.mjs` (`KNOBS`) — each entry pins the EXACT source
+lives in `tools/lighting/ab-lighting.mjs` (`KNOBS`) — each entry pins the EXACT source
 string, an alternate value, a canonical scene, and an expected metric
 direction.
 
 ```sh
-node tools/ab-lighting.mjs list          # the catalog (marks which knobs are value-sweepable)
-node tools/ab-lighting.mjs run all       # render A/B for every knob → scratch/captures/ab-lighting/
-node tools/ab-lighting.mjs run lampFog.base pcss.penScale
+node tools/lighting/ab-lighting.mjs list          # the catalog (marks which knobs are value-sweepable)
+node tools/lighting/ab-lighting.mjs run all       # render A/B for every knob → scratch/captures/ab-lighting/
+node tools/lighting/ab-lighting.mjs run lampFog.base pcss.penScale
 npm run test:ab                          # fast invariants + catalog integrity
 ```
 
 ## Dialling a value in (the tuning loop)
 
 ```sh
-node tools/ab-lighting.mjs sweep lamp.radius 24 30 40   # render candidates → labelled strip + metrics
-node tools/ab-lighting.mjs try lamp.bleed "<full replacement string>"   # structural knobs
-node tools/ab-lighting.mjs apply lamp.radius 40         # adopt the winner
+node tools/lighting/ab-lighting.mjs sweep lamp.radius 24 30 40   # render candidates → labelled strip + metrics
+node tools/lighting/ab-lighting.mjs try lamp.bleed "<full replacement string>"   # structural knobs
+node tools/lighting/ab-lighting.mjs apply lamp.radius 40         # adopt the winner
 ```
 
 `sweep` works on any knob whose `find`/`b` differ by exactly one number (the

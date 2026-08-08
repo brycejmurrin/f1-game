@@ -455,9 +455,24 @@ test("every tool named in tools/README.md exists on disk", () => {
 test("the tools index lists every tool", () => {
   // Underscore-prefixed scripts are transient agent scratch by convention
   // (.gitignore: tools/_*.mjs) and are deliberately not indexed.
+  //
+  // WALKS SUBDIRECTORIES since the R3 family move (tools/net|car|capture|
+  // lighting) — a moved tool must not silently exit the index guard. A file
+  // in a subdir passes when the README names the FILE or names its SUBDIR
+  // with a trailing slash (a family header covers its members the way
+  // grouped notation covers renderer files).
   const index = read("tools/README.md");
-  const missing = fs.readdirSync(path.join(ROOT, "tools"))
-    .filter((f) => f !== "README.md" && !f.startsWith("_") && !index.includes(f));
+  const missing = [];
+  for (const e of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true })) {
+    if (e.name === "README.md" || e.name.startsWith("_")) continue;
+    if (!e.isDirectory()) {
+      if (!index.includes(e.name)) missing.push(e.name);
+      continue;
+    }
+    for (const f of fs.readdirSync(path.join(ROOT, "tools", e.name)))
+      if (!f.startsWith("_") && !index.includes(f) && !index.includes(`${e.name}/`))
+        missing.push(`${e.name}/${f}`);
+  }
   assert.deepEqual(missing, [], "a tool exists on disk but is not in tools/README.md");
 });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // rtc-e2e.mjs — a REAL WebRTC handshake between two pages.
 //
-//   node tools/rtc-e2e.mjs
+//   node tools/net/rtc-e2e.mjs
 //
 // This covers the one path nothing else in the repo can: tests/unit/net-*.test.mjs
 // run over the loopback transport, which has no SDP at all, and

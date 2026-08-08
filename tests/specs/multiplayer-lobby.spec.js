@@ -179,7 +179,7 @@ test.describe("VS FRIEND lobby", () => {
       await menu(page);
       // A REAL code, but built directly rather than by driving a handshake:
       // encodeCode needs no peer connection, and the fake transport has no .pc
-      // to make one with. The handshake itself is covered by tools/rtc-e2e.mjs
+      // to make one with. The handshake itself is covered by tools/net/rtc-e2e.mjs
       // against two real browsers; what is under test here is the link.
       // Bare identifier, not window.NetHandshake: the modules are top-level
       // `const` in classic scripts, which land in the global LEXICAL scope and

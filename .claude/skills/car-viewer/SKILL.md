@@ -9,7 +9,7 @@ A track-free way to look at just the car. Two front-ends over the same page:
 
 - **Interactive:** open `tools/carview.html?…` in a browser — drag to orbit, wheel
   to zoom, dropdowns for team/livery/parts/lighting, keys for tod/exposure.
-- **Headless (what you'll usually use):** `tools/render-car.mjs` loads that page,
+- **Headless (what you'll usually use):** `tools/car/render-car.mjs` loads that page,
   screenshots it from named preset angles (or a custom one), and writes a PNG per
   view + an `index.html` contact sheet under `scratch/renders/cars/<team>/`.
 
@@ -29,13 +29,13 @@ python3 -m http.server 3456        # or: npx serve -l 3456 .
 ## Headless render
 
 ```sh
-node tools/render-car.mjs [--views=a,b,c] [options]
+node tools/car/render-car.mjs [--views=a,b,c] [options]
 # examples:
-node tools/render-car.mjs                                   # mclaren, hero shot
-node tools/render-car.mjs --team=ferrari --views=all        # every angle, contact sheet
-node tools/render-car.mjs --team=redbull --views=tail,side --tod=night
-node tools/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail
-node tools/render-car.mjs --team=mclaren --az=205 --el=18 --dist=6 --rig=rim   # custom angle + lighting
+node tools/car/render-car.mjs                                   # mclaren, hero shot
+node tools/car/render-car.mjs --team=ferrari --views=all        # every angle, contact sheet
+node tools/car/render-car.mjs --team=redbull --views=tail,side --tod=night
+node tools/car/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail
+node tools/car/render-car.mjs --team=mclaren --az=205 --el=18 --dist=6 --rig=rim   # custom angle + lighting
 ```
 
 Then **Read the PNG(s)** it prints (e.g. `scratch/renders/cars/ferrari/side.png`) to
@@ -47,7 +47,7 @@ the static grid from `js/car/teams.js`):
 
 ```sh
 grep -oP 'id: "\K[^"]+' js/car/teams.js | while read -r t; do
-  node tools/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
+  node tools/car/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
 done
 ```
 
@@ -78,8 +78,8 @@ az/el/dist per category. `--preset=list` prints all names.
   sponsor placement across the whole flank.
 
 ```sh
-node tools/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic   # 3 shots, one part
-node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme       # 3 shots, one wing
+node tools/car/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic   # 3 shots, one part
+node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme       # 3 shots, one wing
 ```
 
 ### Lighting comparison (`--lightset=day,dusk,night`)
@@ -87,14 +87,14 @@ Renders EVERY shot (from `--preset` or `--views`) at each listed time-of-day and
 lays the contact sheet out as a grid — rows = shot, columns = tod — instead of a
 flat list, so a lighting change is actually scannable at a glance:
 ```sh
-node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night   # 3x3 grid
+node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night   # 3x3 grid
 ```
 
 ### Options
 - Car: `--team=` `--livery=` `--num=` and any part to inspect its geometry:
   `--engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=`
   (option ids are in `js/car/parts.js`).
-  `tools/render-car.mjs` currently CLI-parses these 8 of the 12 catalog
+  `tools/car/render-car.mjs` currently CLI-parses these 8 of the 12 catalog
   categories; `tools/carview.html` has all 12 (including exhaust, floor,
   cockpit, wheels) through the interactive picker/page API.
 - Lighting: `--tod=day|dusk|dawn|night|void` · `--rig=studio|3point|rim|topdown|none`

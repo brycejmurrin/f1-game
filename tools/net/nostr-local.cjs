@@ -2,7 +2,7 @@
 // nostr-local.cjs — a Nostr relay on localhost, so the ROOM CODE path can be
 // tested without depending on somebody else's server.
 //
-//   npm i --no-save ws && node tools/nostr-local.cjs
+//   npm i --no-save ws && node tools/net/nostr-local.cjs
 //   then point the game at it:  localStorage apex26.nostrRelays = ["ws://127.0.0.1:7448"]
 //
 // WHY. Room codes are the one part of this game that leans on infrastructure

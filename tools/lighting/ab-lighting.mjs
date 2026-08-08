@@ -7,10 +7,10 @@
 // produced a VISIBLE whole-frame change, and writes a side-by-side composite +
 // metrics JSON to scratch/captures/ab-lighting/.
 //
-//   node tools/ab-lighting.mjs list                    # print the knob catalog
-//   node tools/ab-lighting.mjs run all                 # A/B every knob
-//   node tools/ab-lighting.mjs run lampFog.base pcss.penScale ...
-//   node tools/ab-lighting.mjs run all --out scratch/captures/custom-ab # custom output dir
+//   node tools/lighting/ab-lighting.mjs list                    # print the knob catalog
+//   node tools/lighting/ab-lighting.mjs run all                 # A/B every knob
+//   node tools/lighting/ab-lighting.mjs run lampFog.base pcss.penScale ...
+//   node tools/lighting/ab-lighting.mjs run all --out scratch/captures/custom-ab # custom output dir
 //
 // Exit code 1 if any knob produces NO visible change — "this constant no
 // longer does anything" is a caught regression, not a silent one. Per-lamp
@@ -24,7 +24,7 @@ import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -447,7 +447,7 @@ async function main() {
     //    literal shared with another knob can never be corrupted, and the swap
     //    happens even when the applied value IS the current b (a placeholder
     //    keeps the two replacements from colliding).
-    const selfPath = `${ROOT}/tools/ab-lighting.mjs`;
+    const selfPath = `${ROOT}/tools/lighting/ab-lighting.mjs`;
     const self = readFileSync(selfPath, "utf8");
     const findLit = JSON.stringify(knob.find), bLit = JSON.stringify(knob.b);
     const idTag = `id: ${JSON.stringify(knob.id)}`;
@@ -533,7 +533,7 @@ async function main() {
     await strip(meterPage, entries, stripPath);
     await browser.close();
     console.log(`\nstrip: ${stripPath}`);
-    console.log(`pick a value, then: node tools/ab-lighting.mjs apply ${knob.id} <value>`);
+    console.log(`pick a value, then: node tools/lighting/ab-lighting.mjs apply ${knob.id} <value>`);
     return;
   }
   const ids = rest.length && rest[0] !== "all" ? rest : KNOBS.map((k) => k.id);

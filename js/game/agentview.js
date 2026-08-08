@@ -1096,7 +1096,7 @@ const AgentView = (function () {
     });
     const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender;
     // ── carView() — the car, without rendering it ───────────────────────────
-    // Replaces tools/render-car.mjs for everything except "does it LOOK right":
+    // Replaces tools/car/render-car.mjs for everything except "does it LOOK right":
     // team identity, livery, the full parts spec and what it does to the car,
     // the chassis silhouette knobs, and measured geometry from a real build.
     function carView(opts) {
@@ -1202,7 +1202,7 @@ const AgentView = (function () {
         partGeometry: (o.detail === "parts" || o.detail === "all") ? parts : undefined,
         partCount: parts ? parts.length : undefined,
         note: "everything the car viewer shows except appearance itself — for a "
-              + "visual check use tools/render-car.mjs. "
+              + "visual check use tools/car/render-car.mjs. "
               + 'Pass {detail:"parts"} for per-part measured boxes.',
       };
     }

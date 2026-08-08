@@ -105,7 +105,7 @@ const NetSession = (function () {
       // A round trip this long is not a network measurement, it is a stalled
       // tab or a starved CPU — and an offset derived from it would misplace
       // every subsequent snapshot in the interpolation buffer. Observed for
-      // real: tools/rtc-e2e.mjs saw a 15 s RTT on a loaded box. Drop it and
+      // real: tools/net/rtc-e2e.mjs saw a 15 s RTT on a loaded box. Drop it and
       // wait for a sane exchange; the previous best estimate keeps working.
       if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
       samples.push({ rtt, offset });

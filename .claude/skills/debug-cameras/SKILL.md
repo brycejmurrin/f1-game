@@ -88,9 +88,9 @@ node tools/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge
 node tools/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (markings.js)
 
 # lap tour — chase cam at every 5% of a circuit (20 shots in order):
-node tools/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
-node tools/apex-capture.mjs lap-tour monaco 55       # slower speed for tighter street circuit
-node tools/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # custom outdir
+node tools/capture/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
+node tools/capture/apex-capture.mjs lap-tour monaco 55       # slower speed for tighter street circuit
+node tools/capture/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # custom outdir
 ```
 ```js
 // in a Playwright page or the dev console — frame + freeze + (screenshot):

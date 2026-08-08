@@ -13,7 +13,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
-| **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/render-car.mjs`. |
+| **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/car/render-car.mjs`. |
 | **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
 | **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
@@ -24,7 +24,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
 | **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
 | **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
-| **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/motion-capture.mjs`. |
+| **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
 | **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
 | **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |
 | **lighting-tuner** | Scene lighting — `lightTune`, time-of-day/weather, `lightState`, orbit shots. |
@@ -36,7 +36,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **asset-pack** | Baking/verifying `assets/pack`, MAT layers, `matTexMix`, procedural fallback. |
 | **pwa-cache-service-worker** | `sw.js` precache, `version.json` network-first, DEFERRED optional assets, stale PWA. |
 
-The debug-* skills pair with `tools/apex-eval.mjs` / `tools/apex-capture.mjs` so
+The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture.mjs` so
 changes are validated visually, not just asserted.
 
 Output paths: batch/test under `artifacts/`, human-reviewed captures under

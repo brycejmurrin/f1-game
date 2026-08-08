@@ -616,7 +616,7 @@ float sampleShadow(vec3 wpos) {
   float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
   float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
   // Shared by the static map below AND the car map at the bottom — the A/B
-  // harness (tools/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
+  // harness (tools/lighting/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
   // site, so keep the bias term factored here rather than repeating the clamp.
   float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
   float z = sc.z - biasTerm;

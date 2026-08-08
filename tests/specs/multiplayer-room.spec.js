@@ -15,7 +15,7 @@
 //
 // The far side is played by __apex.lobbyPeerEvent, which sends lobby events as
 // the other person over the loopback transport. A real second browser is
-// covered by tools/rtc-e2e.mjs; this is about the rules.
+// covered by tools/net/rtc-e2e.mjs; this is about the rules.
 import { test, expect } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };

@@ -9,7 +9,7 @@
 //   python3 -m http.server 3456      (or: npx serve -l 3456 .)
 //
 // Usage:
-//   node tools/render-car.mjs [--views=a,b,c] [options]
+//   node tools/car/render-car.mjs [--views=a,b,c] [options]
 //
 // Views (orbit az: 0 = behind, 180 = head-on):
 //   hero [DEFAULT]  rear-3/4        front   rear    side
@@ -25,7 +25,7 @@
 //   engine, suspension, brakes, tyres, ers, gearbox, fuel
 //                       each category's audited best angle + two ±36° offsets
 //   livery              side / front-3-quarter / rear-3-quarter — paint & sponsors
-// List all: node tools/render-car.mjs --preset=list
+// List all: node tools/car/render-car.mjs --preset=list
 //
 // --lightset=day,dusk,night  render EVERY shot at each listed tod (fans out the
 //   shot count ×N) and lays out the contact sheet as a grid (rows = shot,
@@ -52,13 +52,13 @@
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
 // Examples:
-//   node tools/render-car.mjs                                  # mclaren hero shot
-//   node tools/render-car.mjs --team=redbull --views=all --tod=night --exp=1.2
-//   node tools/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail,side
-//   node tools/render-car.mjs --team=ferrari --az=205 --el=18 --dist=3.8 --intensity=2
-//   node tools/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic     # 3 shots, one part
-//   node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme         # 3 shots, one wing
-//   node tools/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
+//   node tools/car/render-car.mjs                                  # mclaren hero shot
+//   node tools/car/render-car.mjs --team=redbull --views=all --tod=night --exp=1.2
+//   node tools/car/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail,side
+//   node tools/car/render-car.mjs --team=ferrari --az=205 --el=18 --dist=3.8 --intensity=2
+//   node tools/car/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic     # 3 shots, one part
+//   node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme         # 3 shots, one wing
+//   node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
@@ -68,10 +68,10 @@ import {
   assertSafePathToken,
   resolveContainedChild,
   resolveRepoDefault,
-} from './output-paths.mjs';
+} from '../output-paths.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, '..');
+const ROOT = resolve(HERE, '..', '..');
 const arg = (k, d) => {
   const hit = process.argv.find(a => a === `--${k}` || a.startsWith(`--${k}=`));
   if (!hit) return d;

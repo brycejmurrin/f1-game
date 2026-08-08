@@ -15,7 +15,7 @@
 // below you" so that join-order-wins at four players is the same line of code.
 //
 // The far side is played by __apex.lobbyPeerEvent, exactly as in
-// multiplayer-room.spec.js. A real second browser is tools/rtc-e2e.mjs.
+// multiplayer-room.spec.js. A real second browser is tools/net/rtc-e2e.mjs.
 import { test, expect } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };

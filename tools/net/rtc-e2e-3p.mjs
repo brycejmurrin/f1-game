@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // rtc-e2e-3p.mjs — THREE peers, over real WebRTC, in one room.
 //
-//   node tools/rtc-e2e-3p.mjs
+//   node tools/net/rtc-e2e-3p.mjs
 //
 // The two-peer harness next door proves the handshake and that two people can
 // see each other drive. This proves the thing that is genuinely new and that

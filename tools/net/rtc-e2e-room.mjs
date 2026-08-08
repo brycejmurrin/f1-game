@@ -2,8 +2,8 @@
 // rtc-e2e-room.mjs — the ROOM CODE path, end to end, against a relay we run.
 //
 //   npm i --no-save ws
-//   node tools/nostr-local.cjs &
-//   node tools/rtc-e2e-room.mjs [--peers=3]
+//   node tools/net/nostr-local.cjs &
+//   node tools/net/rtc-e2e-room.mjs [--peers=3]
 //
 // This is the path that had NO test of any kind. js/net/nostr.js's exchange()
 // is unreachable from the suite — the loopback transport has no SDP and the

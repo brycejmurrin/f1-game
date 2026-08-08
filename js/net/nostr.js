@@ -569,7 +569,7 @@ const NetNostr = (function () {
           // intermittent. A real console showed ours: two with dead DNS, one
           // timing out, one rate-limiting. Being able to say otherwise is both
           // the fix for that and what makes this path testable at all, against
-          // a relay on localhost (tools/nostr-local.cjs).
+          // a relay on localhost (tools/net/nostr-local.cjs).
           room = mod.joinRoom(Object.assign(
             { appId: APP_ID, password: code },
             relayUrls() ? { relayConfig: { urls: relayUrls() } } : null,

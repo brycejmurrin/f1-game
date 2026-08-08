@@ -4,9 +4,9 @@
 // JPEG (~5 KB). The cheap way to eyeball the car
 // model without a full-frame screenshot pipeline.
 //
-//   node tools/carshot.mjs [az] [tod] [teamIdx] [outPath]
-//   node tools/carshot.mjs 40 night 2 artifacts/tmp/car.jpg
-//   node tools/carshot.mjs 130 day 1          # ferrari, day, default out
+//   node tools/car/carshot.mjs [az] [tod] [teamIdx] [outPath]
+//   node tools/car/carshot.mjs 40 night 2 artifacts/tmp/car.jpg
+//   node tools/car/carshot.mjs 130 day 1          # ferrari, day, default out
 //
 // az: orbit azimuth (0 = behind, 180 = head-on). tod: day|dusk|night|default.
 // teamIdx: Teams.LIST index (0 merc, 1 ferrari, 2 mclaren, ...).
@@ -17,7 +17,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
 const { chromium } = require("playwright");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

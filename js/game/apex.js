@@ -2158,7 +2158,7 @@ const api = {
   // directly. Exposed because that path had NO test of any kind: exchange() is
   // unreachable from the suite (the loopback has no SDP, the lobby specs use a
   // fake transport), so every change to it shipped on reasoning alone — which
-  // is exactly how four separate regressions got out. tools/rtc-e2e-room.mjs
+  // is exactly how four separate regressions got out. tools/net/rtc-e2e-room.mjs
   // drives these against a relay on localhost, where a failure is ours by
   // construction rather than somebody else's server having a bad day.
   lobbyCodeHost() {

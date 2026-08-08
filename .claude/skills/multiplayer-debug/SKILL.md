@@ -64,8 +64,8 @@ Commands:
 ```sh
 npm run test:net-unit
 node tools/test-bg.mjs net
-node tools/rtc-e2e.mjs
-node tools/rtc-e2e-3p.mjs
+node tools/net/rtc-e2e.mjs
+node tools/net/rtc-e2e-3p.mjs
 ```
 
 Read first:

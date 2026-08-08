@@ -97,7 +97,7 @@ Commands:
 ```sh
 npm run test:parts                              # parts physics + garage specs
 node tools/audit-parts.mjs [--cats=engine,aero] # every option + factory preset PNGs
-node tools/render-car.mjs --team=mclaren --preset=wing --aero=extreme
+node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 python3 -m http.server 3456                       # for carview.html / render tools
 ```
 
@@ -130,7 +130,7 @@ Related skills: **`car-viewer`**, **`career-mode`**, **`tune-physics`**, **`debu
 
 6. **Visual verify.** Server on 3456, then:
    ```sh
-   node tools/render-car.mjs --team=ferrari --preset=livery --views=tail
+   node tools/car/render-car.mjs --team=ferrari --preset=livery --views=tail
    node tools/audit-parts.mjs --cats=aero
    ```
    Or interactively: `tools/carview.html?team=mclaren&aero=extreme`.

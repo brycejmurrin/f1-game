@@ -19,9 +19,9 @@ node tools/apex-eval.mjs monaco "a.camera()"
 node tools/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/apex-capture.mjs cameras [track] [outdir]   # 12 camera modes (see below; omits drift)
-node tools/apex-capture.mjs modes   [outdir]           # menu / race day,wet,night / results / time-trial
-node tools/apex-capture.mjs tracks  [outdir] [id ...]  # one orbit shot per circuit
+node tools/capture/apex-capture.mjs cameras [track] [outdir]   # 12 camera modes (see below; omits drift)
+node tools/capture/apex-capture.mjs modes   [outdir]           # menu / race day,wet,night / results / time-trial
+node tools/capture/apex-capture.mjs tracks  [outdir] [id ...]  # one orbit shot per circuit
 ```
 
 ## Single framed screenshot (`shot.mjs`)
@@ -73,7 +73,7 @@ The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/game/tables.js`):
 `park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep
 with `previewCam(mode, frac)` (mode FIRST — it is validated first and the call
 silently returns `false` if the arguments are swapped) or a fork of
-`tools/apex-capture.mjs`.
+`tools/capture/apex-capture.mjs`.
 
 To include **drift**, append it to the `CAMS` array in `apex-capture.mjs` (or
 run a one-off):
@@ -88,7 +88,7 @@ or a `previewCam` loop (see **debug-cameras**).
 
 ## Why one server + Chromium workers
 
-`tools/apex-capture.mjs` uses **one async Node static server** and fans jobs
+`tools/capture/apex-capture.mjs` uses **one async Node static server** and fans jobs
 across separate Chromium worker processes. For sweeps (12 camera modes, 40
 tracks, day/night/wet variants), the shared server handles concurrent asset
 GETs while workers pull the next job as they finish. Extra Python servers only

@@ -1,7 +1,7 @@
 // Lighting A/B invariants — the fast, always-on companion to the offline
-// variant harness (tools/ab-lighting.mjs). Two layers:
+// variant harness (tools/lighting/ab-lighting.mjs). Two layers:
 //
-// 1. CATALOG INTEGRITY: every knob in tools/ab-lighting.mjs must match its
+// 1. CATALOG INTEGRITY: every knob in tools/lighting/ab-lighting.mjs must match its
 //    source file EXACTLY ONCE. Retuning or renaming a lighting constant
 //    without updating the catalog fails here, immediately — so the A/B
 //    harness can never silently rot.
@@ -12,7 +12,7 @@
 //    budget, the PCSS rig, and the TOD exposure table.
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
-import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/ab-lighting.mjs";
+import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 

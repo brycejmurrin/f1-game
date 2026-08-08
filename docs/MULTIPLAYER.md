@@ -73,7 +73,7 @@ directExchange() reads only `["EVENT", …]` frames and ignores OK=false, so a
 pool refusing every event is a silent wait until the timeout. Measured on
 hardware (legacy branch): all six shipped relays healthy, wellorder answering
 "blocked: spam not permitted", both players on spinners. Pick relays with
-tools/nostr-probe.mjs — which tests the only criterion that decides this,
+tools/net/nostr-probe.mjs — which tests the only criterion that decides this,
 whether a relay accepts an ephemeral event from an UNKNOWN pubkey — never by
 reputation or uptime
 

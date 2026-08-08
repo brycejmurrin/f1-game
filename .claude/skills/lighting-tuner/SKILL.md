@@ -60,7 +60,7 @@ __apex.lightState()
 
 ## One-off inspection
 
-`tools/apex-eval.mjs` and `tools/apex-capture.mjs` launch **Chromium via
+`tools/apex-eval.mjs` and `tools/capture/apex-capture.mjs` launch **Chromium via
 Playwright** — they need a browser install (`npx playwright install chromium`).
 
 ```sh
@@ -92,9 +92,9 @@ diff artifacts/tmp/before.json artifacts/tmp/after.json
 
 ```sh
 # Screenshot the same corner in day vs night to compare visually
-node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
+node tools/capture/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
 # (edit applyRaceSettings)
-node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
+node tools/capture/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
 ```
 
 Or via `apex-eval` in a single script:

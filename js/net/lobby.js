@@ -1094,7 +1094,7 @@ const NetLobby = (function () {
       // key. As PEER_ONE, accepting a second guest overwrote the first and
       // ALSO left a phantom "peer" entry that no session ever answers for —
       // so peersReady() could never be true and START was unreachable. Found
-      // by tools/rtc-e2e-3p, which is the only thing that can see it.
+      // by tools/net/rtc-e2e-3p, which is the only thing that can see it.
       if (res.peer) _peers.set(pendingId || PEER_ONE, res.peer);
       waitForOpen();
       return res;

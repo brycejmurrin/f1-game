@@ -74,6 +74,17 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **output-paths.mjs** | Path-containment helpers enforcing the `artifacts/` vs `scratch/` output contract; `tests/specs/output-paths.spec.js` gates it. | — |
 | **lighting-campaign/** | Batch lighting-sweep runner + its captures, driven by `tests/unit/lighting-campaign.test.mjs`. | lighting-tuner |
 
+## Subdirectories (R3 families)
+
+Four self-contained families live in subdirectories; everything else stays
+flat (manifest.cjs, carview.html, the test infra and every baseline/audit are
+deliberately NOT moved — their consumers hardcode the flat paths):
+
+- `net/` — WebRTC/Nostr end-to-end harnesses: rtc-e2e.mjs, rtc-e2e-3p.mjs, rtc-e2e-room.mjs, nostr-local.cjs, nostr-probe.mjs, turn-local.cjs
+- `car/` — car renders: render-car.mjs, carshot.mjs
+- `capture/` — frame capture: apex-capture.mjs, motion-capture.mjs
+- `lighting/` — ab-lighting.mjs (lighting-campaign/ was already its own package)
+
 ## Conventions
 
 - **The capture tools are a family, not duplicates.** `apex-capture.mjs` is the
@@ -130,7 +141,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
   has no SDP and the lobby specs use a fake transport, so four regressions
   shipped through that gap before this existed. Against a relay we run, a
   failure is ours by construction rather than somebody's server having a bad
-  day. Needs `tools/nostr-local.cjs` running. `--delay=SECONDS` makes the host
+  day. Needs `tools/net/nostr-local.cjs` running. `--delay=SECONDS` makes the host
   sit on its offer before any guest joins, which is what a human carrying a
   six-character code across a room actually does — the harness otherwise joins
   within a second of hosting and cannot model it. (Measured: 45 s still

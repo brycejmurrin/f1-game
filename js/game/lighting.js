@@ -47,7 +47,7 @@ function floodColor(theme, id) {
 // the in-race LIGHTING TUNER panel (pause menu) and settable via
 // __apex.lightTune({id: value}). The `def` values ARE the shipped tuning —
 // the driver code reads LT.<id> instead of a literal, so panel, dev hook and
-// the offline A/B harness (tools/ab-lighting.mjs targets these def values)
+// the offline A/B harness (tools/lighting/ab-lighting.mjs targets these def values)
 // all move the same single source of truth. Non-default values persist in
 // localStorage (apex26.lightTune). `rebuild: true` entries are baked into the
 // per-track light records — changing one invalidates track._lights so
