@@ -960,7 +960,6 @@ void main() {
     color *= mix(vec3(1.0), vec3(0.90, 0.96, 1.12), uShadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
   }
 
-  // Reflected view ray — reused by the wet-road lamp reflections and the sky env.
 
   // ── Physically-based punctual lights (floodlights / street lamps) ─────────
   // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard

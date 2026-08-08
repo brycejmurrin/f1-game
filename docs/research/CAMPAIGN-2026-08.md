@@ -694,6 +694,45 @@ The file had never been fully green before.
   wrong, which would make it the first product bug of the day; every other
   failure has been the test's fault. Confirm solo before believing it.
 
+## SHIPPED 2026-08-08 — `788a2bb4..4ceb31b4`, 13 commits, fast-forward → build 1039
+
+The subsystem-survey + research-wave defects, landed clean (fast-forward, no
+merge into the deploy branch's own history). Full research residue:
+[`RESEARCH-WAVE-2026-08.md`](RESEARCH-WAVE-2026-08.md) and the survey section
+above.
+
+**What shipped, every finding re-derived against source before landing:**
+
+| Fix | Mechanism |
+|---|---|
+| perf governor could never restore | `_floorMs ≤ _frameEMA` invariant made the restore branch unreachable — one-way degrade, all session. Proven over 60 M frames; restore re-measured from the floor, up-step verified, missing test added. |
+| multiplayer authority gap | `netplay.js` receive side obeyed no authority; a guest could set the host's `netStart`, apply a caution, or fill its classification. The star topology protects guests, not the host. |
+| leaked WebRTC transport | `session.js` timeout marked the session dead without closing the transport, and `close()`'s `!alive` guard then never could — a peer connection per timed-out peer, for the tab's life. |
+| debris panel leak | promoted barrier panels that never broke were freed by nothing; ten and `PANEL_CAP` exhausts, breakable barriers gone for the session. |
+| quali PACE mismatch | quali took bare `ACCEL` into a pace-scaled `vTop()` ceiling; fixed at source with `aTop()`. |
+| scenery coordinate split | point and range emitters read different spaces on kyalami/paul_ricard — barriers most of a lap off. Geometry measurably improved (paul_ricard clipping → 0); baselines ratcheted down. |
+| `G.netNow` expando | written at 4 sites, declared nowhere — the countT shape, and what would make `Object.seal(G)` throw. Declared. |
+| `lostpointercapture` net | moved to the document per PE3 §9.5 (the event fires there, not at the removed element) — the throttle-bug's most likely remaining latch path. |
+
+Also: the circuit-comment batch (stale corner numbers vs `CircuitMarkings`, the
+liverytex roster that had `redbull`/`racingbulls` both "RB"), and
+`tools/test-solo.mjs` — the "re-run alone on a quiet box" rule as a command that
+refuses to measure a loaded box, after four `career.spec.js` timeouts at load 20
+proved (solo, at load 3.5) to be pure contention.
+
+**Two mistakes, both now with a guardrail.** A verification worktree grew into a
+parallel branch before being merged back and deleted; and two pushes skipped
+full `test:tooling-fast` and hit ratchet failures CI caught (module-size,
+comment-citations) — the discipline is now "full tooling-fast before any push
+that touches `js/`, and the worktree needs `node_modules` linked or its runs are
+worthless".
+
+**Open after this wave** (tasks, not lost): renderer #46-49 (wire the instanced
+path — the 413→71 MB VRAM prize — the uniform budget, the GPU-time governor
+signal, chunked IBO), monaco's coordinate space #43 (now unblocked by the
+coordinate fix), the monza/spa/suzuka re-anchors #42, and the wave-2 research
+threads still in flight (see RESEARCH-WAVE-2026-08 §"Wave 2").
+
 ## SHIPPED 2026-08-07 — `a187ecb0..bb6e73a2`, 74 commits, fast-forward
 
 Landed clean, no merge commit. Cache invariant checked first (`version.json`
@@ -935,6 +974,7 @@ b8295474 made ranges and points agree on whatever a def declares.
 | TEST-AUDIT-2026-08 | W2 steps 1-2 + the CI redesign land **AND** its §1c strengthen list is closed — 14 of 21 landed in W1.5, the remaining 7 (items 1-5, 10, 11) are the design tickets above. Without that clause the record would archive with live work inside it |
 | ARCHITECTURE-REDESIGN-2026-08 | Stays — decision record for W3/W5 (Bedrock-with-grafts adopted, ESM the escalation path) |
 | TOTAL-AUDIT-2026-08 | Batch A/B/C are worked off (`89ce4f2f`, `d23b70b8`); archives when §"Feed the restructure" and §Defer are absorbed into W2 |
+| RESEARCH-WAVE-2026-08 | With this doc — it is the survey/perf wave's evidence, and its open items are live renderer/circuit tasks |
 | This doc | Campaign completes → `docs/archive/` |
 | `research/raw/*.json` | With their parent record — they are its uncompressed evidence and mean nothing alone |
 

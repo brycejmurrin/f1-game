@@ -102,9 +102,6 @@ const NetNostr = (function () {
    * of the game standing on somebody else's servers, and when they are down the
    * lobby has to fall back to the link, not break.
    */
-  // localStorage apex26.nostrRelays = ["wss://…", …] — an explicit relay list,
-  // used verbatim (Trystero prefixes wss:// only onto ITS defaults, so a
-  // ws://127.0.0.1 fixture works here and nowhere else).
   // OUR OWN RELAY LIST, not Trystero's.
   //
   // Its getRelays() picks a subset of its defaults DETERMINISTICALLY, from a

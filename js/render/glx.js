@@ -94,7 +94,6 @@ const GLX = (function () {
   let frameEye = null;
   let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
   let frameLights = null;
-  let frameGroundMist = 0;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -857,7 +856,6 @@ const GLX = (function () {
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
-    frameGroundMist = frame.groundMist != null ? frame.groundMist : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the

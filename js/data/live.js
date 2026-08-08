@@ -293,7 +293,7 @@ const DataLive = (function () {
       renderRows();
     }
 
-    return { loadLive, stopLiveAuto, resumeLiveAuto };
+    return { loadLive, stopLiveAuto };
   }
   return { create };
 })();
