@@ -75,6 +75,20 @@ async function sample(page, seconds) {
   return rows;
 }
 
+// Run 2 convicted the LOOP: s moved 0.0 m in 4 s at ~16 m/s, state still
+// "race" — the sim stops stepping at the rescue frame. tick() re-arms rAF
+// FIRST and reports the body's exception to index.html's #__err_overlay with
+// the full stack, so if tickBody is throwing every frame post-rescue, the
+// crashing line is sitting in that element. Dump it.
+async function dumpErrorOverlay(page, label) {
+  const txt = await page.evaluate(() =>
+    document.getElementById("__err_overlay")?.textContent || null);
+  console.log(txt
+    ? `ERROR OVERLAY(${label}):\n${txt}`
+    : `ERROR OVERLAY(${label}): none — the loop is not throwing; the freeze is elsewhere`);
+  return txt;
+}
+
 function verdict(rows, label) {
   const last = rows[rows.length - 1];
   const dSpeed = last.speed - rows[0].speed;
@@ -114,6 +128,7 @@ test("gas held through the rescue, then released — who asserts throttle after?
   await page.waitForTimeout(300);
 
   const rows = await sample(page, 4);
+  await dumpErrorOverlay(page, "held-through-rescue");
   const { last } = verdict(rows, "held-through-rescue");
   expect(rows.length).toBeGreaterThan(0);
   // The probe's product is the verdict; this assertion pins only the half that
@@ -127,6 +142,7 @@ test("no touch at all — does a rescue alone make the car drive itself?", async
   await beachAndAwaitRescue(page);
   console.log("RESCUED with no input ever pressed");
   const rows = await sample(page, 4);
+  await dumpErrorOverlay(page, "no-input");
   verdict(rows, "no-input");
   expect(rows.length).toBeGreaterThan(0);
 });
