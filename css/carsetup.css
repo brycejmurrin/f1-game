@@ -782,6 +782,25 @@ body:not(.desktop) .cs-tab-cur { font-size: 12px; }
    this. `#cs-inner[data-pair="on"] #cs-tabs` is two IDs and wins; that was the
    first attempt and it computed to the same 86px. */
 body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
+
+/* THE PREVIEW CONTROLS ARE SIZED BY POINTER, NOT BY WIDTH. #cs-cam, #cs-aero and
+   the view buttons sit at `min-height: 30px`, raised to 34px by a
+   `@media (max-width: 1000px)` block. That gates a TOUCH question on WIDTH, and
+   it is inverted: a 393px phone gets 34px while an iPad landscape at 1194px —
+   also touch, also thumbs — falls out of the branch and keeps 30px. Measured
+   there: #cs-cam 86x31, #cs-aero 157x31, on a device with maxTouchPoints > 0
+   and a --tap of 52.
+   --chip-h (46), not --tap: these float over the live car preview and the
+   canvas is the thing the screen exists to show, so they take the documented
+   rung one step below the primary floor rather than the floor itself. Width
+   still decides their PADDING and type above; only the target floor moves here.
+   docs/LAYOUT-AUDIT.md states the rule this restores: "Input modality is not
+   size. A 1024px iPad is not a desktop." */
+body:not(.desktop) #cs-cam,
+body:not(.desktop) #cs-aero,
+body:not(.desktop) .cs-view-btn,
+body:not(.desktop) .cs-view-zoom,
+body:not(.desktop) .cs-view-nudge { min-height: var(--chip-h); }
 body:not(.desktop) .cs-opt-tag { font-size: 11px; }
 body:not(.desktop) .cs-opt-desc { font-size: 13px; }
 body:not(.desktop) .cs-delta { font-size: 11px; }
