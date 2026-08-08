@@ -137,3 +137,62 @@ test("floorMs is exposed for live inspection (__apex.renderScale())", () => {
   assert.equal(typeof PerfGov.floorMs, "function");
   assert.equal(PerfGov.floorMs(), 16.7, "starts at the same 60 fps default fpsEMA does");
 });
+
+// ── the restore path, which had no test and therefore had no floor under it ──
+
+test("RESTORE IS REACHABLE AT ALL: the predicate is satisfiable for some input", () => {
+  // This is the test whose absence let a dead branch ship. The old condition was
+  // `_frameEMA < _floorMs - RESTORE_UNDER` with RESTORE_UNDER = 4.2, i.e. the
+  // EMA had to get 4.2 ms BELOW the floor. But `_floorMs` chases dt down at
+  // alpha 0.3 and up at 0.02 while `_frameEMA` moves at 0.1 both ways, so from
+  // their shared 16.7 ms start `_floorMs <= _frameEMA` is an invariant — and the
+  // branch could never be entered, on any device, for any frame sequence.
+  // Simulated over 60 million frames before the fix: zero firings, closest
+  // approach exactly 4.2000 ms.
+  //
+  // Asserted as a PROPERTY of the constants rather than by replaying frames, so
+  // it keeps holding if the smoothing rates are retuned: restore must trigger
+  // at or above the floor, because below it is unreachable by construction.
+  const src = SRC;
+  const degradeOver = Number(/DEGRADE_OVER\s*=\s*([\d.]+)/.exec(src)[1]);
+  const restoreWithin = Number(/RESTORE_WITHIN\s*=\s*([\d.]+)/.exec(src)[1]);
+  assert.ok(/const degradeAt = _floorMs \+ DEGRADE_OVER, restoreAt = _floorMs \+ RESTORE_WITHIN;/.test(src),
+    "restore must be measured UPWARD from the floor — downward is unreachable");
+  assert.ok(restoreWithin > 0, `RESTORE_WITHIN must be above the floor, got ${restoreWithin}`);
+  assert.ok(restoreWithin < degradeOver,
+    `restore (${restoreWithin}) must be tighter than degrade (${degradeOver}) or the two branches overlap and it will hunt`);
+});
+
+test("a device that degraded RECOVERS once the frames come good again", () => {
+  // The behavioural half. A heavy stint drives the scale down; then perfect
+  // 60 Hz frames must bring it back. Before the fix this ended at 0.9 forever:
+  // one bad minute — a heavy circuit start, a rain squall, a thermal dip — cost
+  // the player sharpness for the whole session, and the crash sentinel's
+  // pre-drop could never climb back either.
+  // dt is COUPLED to scale, exactly as in the GPU-bound test above — a cut has
+  // to genuinely buy frame time or the causal check correctly reverts it and
+  // there is nothing to restore FROM.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 1200);
+  const degraded = scale();
+  assert.ok(degraded < 1, `the heavy stint must degrade something first, got ${degraded}`);
+
+  // The load lifts: the device is now comfortably inside its budget at ANY
+  // scale, so the coupling no longer bites and frames arrive at a clean 60 Hz.
+  feed(PerfGov, () => 16.7, 9000);                  // 150 s of flawless frames
+  assert.ok(scale() > degraded,
+    `scale must climb back after sustained clean frames — degraded to ${degraded}, ended at ${scale()}`);
+  assert.equal(scale(), 1, "sustained perfect frames should restore all the way to full resolution");
+});
+
+test("restore does NOT fire while frames are still missing", () => {
+  // The other side of the same coin: a restore that triggers under load would
+  // reintroduce the ~1 Hz oscillation the governor's header describes, from the
+  // opposite direction. Frames stay bad, so the scale must never climb.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 1200);
+  const degraded = scale();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 6000);   // still heavy
+  assert.ok(scale() <= degraded,
+    `scale must not climb while frames are still missing — was ${degraded}, ended at ${scale()}`);
+});

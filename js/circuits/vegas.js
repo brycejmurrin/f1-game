@@ -227,8 +227,8 @@
       // Add concrete top-rail accents, debris fences, and marshal posts to dress it.
       fence(0.0, 0.07, 1, 1.4, 3.6, [0.55, 0.56, 0.60]);             // pit/paddock straight
       fence(0.83, 0.91, -1, 1.4, 3.6, [0.55, 0.56, 0.60]);          // neon final straight
-      guardrail(0.16, 0.21, 1, 1.0, [0.80, 0.80, 0.84]);            // T5 hard-right armco
-      guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T12 onto the Strip
+      guardrail(0.16, 0.21, 1, 1.0, [0.80, 0.80, 0.84]);            // T3 hard-right armco
+      guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
       tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
       tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
       // Debris fencing above the concrete barrier, right round the lap. The Strip

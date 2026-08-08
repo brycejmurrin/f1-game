@@ -86,7 +86,13 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      color: [0.055, 0.058, 0.065], color2: [0.98, 0.28, 0.05],    /* black #0E0F10 / Audi red-orange #FA4700 (2026 black car, red-orange + titanium) */
+      /* black #0E0F10 / Audi red-orange #FA470D (2026 black car, red-orange +
+         titanium). The hex used to read #FA4700 and did not describe the value:
+         0.98 and 0.28 round to FA and 47 exactly, but 0.05 is 0D, not 00. The
+         HEX is corrected rather than the float, because changing the float
+         restyles a shipped livery on an inference about which of the two the
+         author fat-fingered. */
+      color: [0.055, 0.058, 0.065], color2: [0.98, 0.28, 0.05],
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [

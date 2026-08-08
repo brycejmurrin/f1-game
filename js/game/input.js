@@ -1119,10 +1119,29 @@ const Input = (function () {
     // overlay or stopPropagation between here and the button can't swallow it.
     window.addEventListener("pointerup", function (e) { holdReleasePointer(e.pointerId); }, true);
     window.addEventListener("pointercancel", function (e) { holdReleasePointer(e.pointerId); }, true);
+    // Net #3b, and it belongs on the DOCUMENT rather than on the button. The
+    // per-element `lostpointercapture` listener further up claims to cover the
+    // case where a held button is hidden or removed mid-hold — but Pointer
+    // Events 3 §9.5 says that when a capture target is no longer connected the
+    // override is set to THE DOCUMENT, and the resulting lostpointercapture is
+    // "fired at the document". An element-bound listener therefore cannot
+    // receive the very event it was added for. (For the `hidden` case the spec
+    // owes no implicit release at all, since hiding does not disconnect.)
+    // That matters here specifically: js/game.js hides #btn-throttle whenever
+    // auto-throttle turns on, which is exactly the hidden-mid-hold shape.
+    document.addEventListener("lostpointercapture", function (e) {
+      holdReleasePointer(e.pointerId);
+    }, true);
     // Net #4, and the only one that is not built on pointer events: WebKit
-    // under heavy multi-touch is known to occasionally drop a pointerup
-    // outright while still delivering the touch-event lift — and iOS never
-    // reuses pointerIds, so the ghost id in a hold set is PERMANENT. Worse,
+    // under heavy multi-touch can leave a pointer with no pointerup and no
+    // pointercancel (w3c/pointerevents#407 tracks that as a real, unfixed
+    // cross-engine class) while still delivering the touch-event lift. A ghost
+    // id then sits in a hold set indefinitely. The comment here used to assert
+    // "iOS never reuses pointerIds, so the ghost is PERMANENT" — UNSOURCED, and
+    // PE3 only requires uniqueness among ACTIVE pointers, so an id may well be
+    // recycled later. The fix does not depend on it either way; only the
+    // severity did, and an unsourced platform absolute in a comment is how the
+    // next person gets misled. Worse,
     // a fresh press+release cannot clear it: the new id is added and removed
     // while the ghost keeps the set non-empty, so apply(false) never runs —
     // the exact "throttle stays on no matter what I press" shape a player
@@ -1178,7 +1197,18 @@ const Input = (function () {
             "  key:" + +s.key.throttle + " btn:" + +s.btn.throttle + " pad:" + +s.pad.throttle +
             "\nBRK " + (s.braking ? "ON " : "off") +
             "  key:" + +s.key.brake + " btn:" + +s.btn.brake + " pad:" + +s.pad.brake +
-            "\nheld ptrs [" + s.holdPointers.join(",") + "]";
+            "\nheld ptrs [" + s.holdPointers.join(",") + "]" +
+            // steerMode and auto are the two fields that separate the two very
+            // different bugs that both read as "the throttle is stuck on": a
+            // latched hold button (btn:1 with no finger down) versus TOUCH mode,
+            // where js/game.js applies throttle by itself and removes the GAS
+            // button entirely — so the car accelerates with btn:0 and no pointer
+            // net is involved at all. Without these two the readout cannot tell
+            // a reporter which one they are looking at.
+            // Same predicate as autoThrottle() in js/game.js, computed from
+            // this module's own state rather than asked for across the boundary.
+            "\nmode:" + s.steerMode +
+            "  auto:" + ((touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off");
         }, 250);
       }
     } catch (_) {}

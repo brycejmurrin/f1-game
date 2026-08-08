@@ -152,7 +152,12 @@ const TrackSceneryData = (function () {
     interlagos:  { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },                 // warm subtropical
     zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },   // coastal dune scrub — thin + pale
     redbull:     { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },                 // lush emerald alpine spruce
-    imola:       { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // riverbank poplar/willow/oak
+    // The comment used to read "riverbank poplar/willow/oak", which is the real
+    // Santerno bank but NOT what this row selects — `cypress` is the columnar
+    // spire model catalunya/istanbul use for pine and monza for its avenue.
+    // Left as cypress rather than silently restyling a shipped circuit; if the
+    // riverbank species was the intent, that is a deliberate visual change.
+    imola:       { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // columnar spires
     hungaroring: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },   // dry straw-olive, dusty bowl
     cota:        { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer

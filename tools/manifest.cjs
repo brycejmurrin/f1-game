@@ -291,6 +291,10 @@ const HARD_EDGES = [
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/game/physics-consts.js", "js/game/bodyattitude.js"], // LAT_MAX read at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
+  // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
+  // carry its own copy of the roster (a SHORT table that had drifted), and
+  // reading the real one makes the order load-bearing rather than tidy.
+  ["js/car/teams.js", "js/car/liverytex.js"],
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)

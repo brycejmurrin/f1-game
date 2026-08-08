@@ -44,12 +44,20 @@ const LiveryTex = (function () {
     cadillac: 11,
   };
 
-  // Short codes for the generic-monogram fallback crest.
-  const SHORT = {
-    mercedes: "MER", ferrari: "SF", mclaren: "MCL", redbull: "RB",
-    alpine: "ALP", racingbulls: "RB", haas: "HAAS", williams: "WIL",
-    audi: "AUDI", astonmartin: "AMR", cadillac: "CAD",
+  // Short codes for the generic-monogram fallback crest, and the id list the
+  // logo loader kicks off with. BOTH come from Teams.LIST — this file used to
+  // keep its own SHORT table and it had drifted: `redbull` and `racingbulls`
+  // were BOTH "RB" (one monogram for two teams), and four of eleven disagreed
+  // with the roster (ferrari SF vs FER, haas HAAS vs HAA, audi AUDI vs AUD,
+  // redbull RB vs RBR). Latent, because drawCrest only reaches crestGeneric
+  // when CRESTS[teamId] is absent and all eleven teams have a bespoke crest —
+  // but a second copy of data the roster already owns is how a twelfth team
+  // ships with the wrong letters on it.
+  const teamShort = (id) => {
+    const t = (typeof Teams !== "undefined" && Teams.LIST || []).find((x) => x.id === id);
+    return (t && t.short) || String(id || "").slice(0, 3).toUpperCase();
   };
+  const teamIds = () => (typeof Teams !== "undefined" && Teams.LIST || []).map((t) => t.id);
 
   // Invented, plausible fake sponsor wordmarks per team (titleA, titleB, wing,
   // strip get the first four; strip repeats a couple for a long thin band).
@@ -716,7 +724,7 @@ const LiveryTex = (function () {
     ctx.strokeStyle = css(accent);
     ctx.lineWidth = f.S(0.05);
     ctx.strokeRect(f.X(0.06), f.Y(0.2), f.S(0.88), f.S(0.6));
-    drawWordmark(ctx, SHORT[teamId] || teamId.slice(0, 3),
+    drawWordmark(ctx, teamShort(teamId),
       { x: f.X(0.06), y: f.Y(0.2), w: f.S(0.88), h: f.S(0.6) }, ink,
       { align: "center", pad: f.S(0.06) });
     ctx.restore();
@@ -793,8 +801,11 @@ const LiveryTex = (function () {
   // loadLogos too, or all 11 PNGs load twice). Loading here means any consumer
   // that loads liverytex.js on its own — tools/carview.html, the crest sheets,
   // tests — gets the real marks instead of silently falling back to the vector
-  // crests. The team ids come from SHORT, the canonical list in this file.
-  try { loadLogos(Object.keys(SHORT)); } catch (_) {}
+  // crests. The team ids come from Teams.LIST — the roster is the canonical
+  // list, and js/car/teams.js loads before this file (manifest HARD_EDGES).
+  try { loadLogos(teamIds()); } catch (_) { /* ignored: a roster that is not
+    loaded yet just means no marks prefetch here; onLogosReady still fires for
+    any later registerMark, and every crest falls back to the vector form. */ }
 
   // Register a mark at RUNTIME for one team — how MY TEAM's uploaded logo gets
   // in. Same slot the shipped files use, so everything downstream (halo, the
