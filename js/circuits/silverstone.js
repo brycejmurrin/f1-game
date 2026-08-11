@@ -52,7 +52,7 @@
       { frac: 0.9199, angleDeg: 3.0, widthM: 100 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, px, pz, pyMin, place, backdrop, every, onTrack, hash, pal,
+      const { out, MAT, n, ds, px, pz, pyMin, place, backdrop, every, onTrack, hash, pal,
               grandstandEx, building, motorhome, hedge, billboard, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
@@ -1062,6 +1062,95 @@
           out._mat = 0;
           addBox(out, vadd(vadd(c, a.u, 8.6), a.t, 1.3), [0.08, 1.2, 2.2],
                  SPONSOR[((i + 4) % SPONSOR.length + SPONSOR.length) % SPONSOR.length], b);
+        }
+      }
+
+      // ---- THE CAMPSITES ---------------------------------------------------
+      // The British Grand Prix is a camping festival with a race attached:
+      // Woodlands, Whittlebury and the rest put tens of thousands of people in
+      // the fields around the circuit for the weekend, and from the track the
+      // outfield is a horizon of tents, caravans and flags. The circuit had
+      // hedgerows, farm buildings and silos out there — correct for a Tuesday
+      // in February, wrong for race weekend, and it left every wide shot
+      // looking like an empty airfield.
+      //
+      // Deliberately BEYOND the farmland band (gap 130-210) so the hedgerow /
+      // field structure still reads first, and deliberately cheap per unit: a
+      // ridge tent is one prism, so a thousand-tent field stays affordable.
+      {
+        const TENT = [
+          [0.82, 0.28, 0.20], [0.20, 0.36, 0.62], [0.86, 0.84, 0.78],
+          [0.24, 0.48, 0.28], [0.90, 0.72, 0.20], [0.52, 0.30, 0.56],
+        ];
+        const VAN  = [0.88, 0.87, 0.83], VAN_D = [0.76, 0.76, 0.74];
+        const AWN  = [0.30, 0.34, 0.40];
+        // Four fields, sited where the real campsites sit relative to the lap:
+        // Woodlands out past Stowe/Vale, Whittlebury behind Brooklands/Luffield,
+        // plus the Copse-side and Becketts-side overflow.
+        for (const [s0, s1, side, gap, rows] of [
+          [0.055, 0.135,  1, 138, 5],   // Copse / Maggotts side
+          [0.300, 0.395, -1, 152, 6],   // Hangar Straight / Stowe — Woodlands
+          [0.470, 0.560,  1, 146, 5],   // Vale / Club overflow
+          [0.760, 0.860, -1, 134, 5],   // Brooklands / Luffield — Whittlebury
+        ]) {
+          const span = (s1 - s0 + 1) % 1;
+          // Pitch spacing in METRES, not in nodes. Deriving cols from the node
+          // count put one column every ~90 m and produced 30 tents a field —
+          // a lay-by, not a campsite. span*n*ds is the field's arc length.
+          const cols = Math.max(8, Math.round(span * n * ds / 12));
+          for (let c = 0; c < cols; c++) {
+            const sf = (s0 + span * (c / cols)) % 1;
+            const kk = k(sf);
+            for (let r = 0; r < rows; r++) {
+              const hv = hash(kk * 31 + r * 7 + gap);
+              if (hv < 0.18) continue;                    // gaps: lanes and gaps
+              const a = anchor(kk, side, gap + r * 11 + (c % 2) * 3.5);
+              if (onTrack(a.c[0], a.c[2], 26)) continue;
+              const b = [a.r, a.u, a.t];
+              if (hv > 0.86) {
+                // Caravan / camper with a pull-out awning beside it.
+                addBox(out, vadd(a.c, a.u, 1.35), [2.4, 2.7, 6.2],
+                       hv > 0.93 ? VAN_D : VAN, b);
+                addBox(out, vadd(a.c, a.u, 2.85), [2.6, 0.3, 6.4], VAN_D, b);
+                out._mat = MAT.FABRIC;
+                addBox(out, vadd(vadd(a.c, a.r, -2.6), a.u, 2.2),
+                       [2.8, 0.18, 4.0], AWN, b);
+                out._mat = 0;
+              } else {
+                // Ridge tent — one prism, the whole point of the budget.
+                const w = 2.2 + hv * 1.6, ln = 2.6 + hv * 2.2;
+                out._mat = MAT.FABRIC;
+                addPrism(out, vadd(a.c, a.u, 0.75), [w, 1.5 + hv * 0.7, ln],
+                         TENT[Math.floor(hv * 997) % TENT.length], b);
+                out._mat = 0;
+              }
+            }
+            // Flagpoles — the campsite banner forest, one per few pitches.
+            if (hash(kk * 13 + gap) > 0.72) {
+              const a = anchor(kk, side, gap - 5);
+              if (!onTrack(a.c[0], a.c[2], 22)) {
+                const b = [a.r, a.u, a.t];
+                addCyl(out, a.c, 0.07, 6.2, [0.80, 0.80, 0.82], 4, b);
+                out._mat = MAT.FABRIC;
+                addBox(out, vadd(vadd(a.c, a.u, 5.0), a.t, 0.9), [0.06, 0.9, 1.6],
+                       TENT[Math.floor(hash(kk * 5) * 997) % TENT.length], b);
+                out._mat = 0;
+              }
+            }
+          }
+          // A marquee / catering tent per field — the one big white mass that
+          // tells you this is an organised site and not a lay-by.
+          const mk = k((s0 + span * 0.5) % 1);
+          const ma = anchor(mk, side, gap + rows * 11 + 14);
+          if (!onTrack(ma.c[0], ma.c[2], 30)) {
+            const mb = [ma.r, ma.u, ma.t];
+            out._mat = MAT.FABRIC;
+            addPrism(out, vadd(ma.c, ma.u, 2.6), [14, 4.2, 26],
+                     [0.92, 0.91, 0.87], mb);
+            out._mat = 0;
+            addBox(out, vadd(ma.c, ma.u, 0.5), [14.4, 1.0, 26.4],
+                   [0.84, 0.83, 0.79], mb);
+          }
         }
       }
     },
