@@ -64,3 +64,21 @@ materials:
   directly trackside; a very cheap and very unmistakable silhouette.
 - **East Harmon Zone** holds the Main Grandstand, opposite the pit lane, and is
   where the pre/post-race ceremonies happen.
+
+
+## Outcome
+
+Most of the researched list was already built: the Sphere, the Bellagio hotel
+with its lake and an 18-jet fountain show spread across the full frontage,
+Caesars, the Venetian, the High Roller, the Eiffel replica, and the Harmon
+grandstands. One landmark was missing.
+
+**Paris Las Vegas is a two-landmark resort and only one was modelled.** The
+half-scale Eiffel was there; the enormous ornate **Montgolfier balloon** that
+sits at street level in front of it, carrying the marquee, was not. On the
+Strip the balloon reads *bigger* than the tower does, because it is down at eye
+height on the pavement while the tower is 130 m up and half sky. Built as a
+stacked-frustum envelope in Second-Empire red and gold — widest a third of the
+way up, then closing to the crown — with blue vertical **gore ribs** (the thing
+that makes it a balloon and not a bulb), the basket slung underneath on its
+rigging, and the marquee plinth it stands on.

@@ -63,6 +63,20 @@
         [0.70, 0.74, 0.54], [0.90, 0.62, 0.30], [0.82, 0.46, 0.56], [0.74, 0.68, 0.54],
         [0.84, 0.34, 0.30], [0.96, 0.84, 0.34], [0.42, 0.62, 0.58], [0.90, 0.90, 0.85],
       ];
+      // Unrendered structural blockwork. The palette above is entirely PAINTED,
+      // and a hillside where every house is painted is the one thing that reads
+      // as a film set rather than São Paulo. In reality a house gets rendered
+      // and painted when its owner can afford it, so a real morro is roughly
+      // half raw red-brown ceramic block, and the painted houses read as
+      // punctuation against that. These are the raw tones.
+      const RAW = [
+        [0.52, 0.31, 0.24], [0.58, 0.35, 0.26], [0.47, 0.28, 0.22],
+        [0.55, 0.38, 0.30], [0.50, 0.33, 0.27], [0.61, 0.40, 0.29],
+      ];
+      // Grey unpainted render/screed — the intermediate state, walls done but
+      // no colour on them yet.
+      const SCREED = [[0.62, 0.60, 0.56], [0.56, 0.55, 0.52]];
+
       // -- Bespoke: favela patch — dense cluster of small stacked colourful houses
       // climbing a green slope, each with a flat laje roof, occasional upper room,
       // and a rooftop water tank (caixa d'água). Grounded via anchor + slope rise. --
@@ -83,11 +97,38 @@
               const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
               const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
               stage._mat = MAT.CONCRETE;
-              addBox(stage, vadd(base, a.u, h / 2), [w, h, d], FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length], bv);
+              // Finish state per house: ~46% raw block, ~14% bare screed, the
+              // rest painted. Keyed off the house's own hash so it is stable
+              // across builds and so an upper storey can differ from the floor
+              // below it — which is exactly what happens when a family adds a
+              // room years later and never gets round to painting it.
+              const fin = hash(k * 41 + r * 23 + c * 19);
+              const wallCol = fin < 0.46 ? RAW[(r * 3 + c) % RAW.length]
+                            : fin < 0.60 ? SCREED[(r + c) % SCREED.length]
+                            : FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length];
+              addBox(stage, vadd(base, a.u, h / 2), [w, h, d], wallCol, bv);
               if (hash(k * 17 + r + c) > 0.50) {
                 const h2 = 2.8 + hash(k + c * 7) * 2.6;
+                const fin2 = hash(k * 43 + r * 7 + c * 31);
                 addBox(stage, vadd(base, a.u, h + h2 / 2), [w * 0.72, h2, d * 0.72],
-                       FAV[(r + c + 1) % FAV.length], bv);
+                       fin2 < 0.62 ? RAW[(r + c * 2) % RAW.length]
+                                   : FAV[(r + c + 1) % FAV.length], bv);
+              }
+              // Satellite dish — ubiquitous, and the one rooftop object that
+              // dates the place to now rather than to any decade.
+              if (hash(k * 53 + r * 13 + c * 7) > 0.62) {
+                addCyl(stage, vadd(vadd(base, a.u, h + 0.5), a.t, d * 0.30),
+                       0.42, 0.14, [0.88, 0.87, 0.84], 7, bv);
+              }
+              // Exposed rebar stubs on an unfinished top slab — the laje left
+              // ready for a storey that may never come. Raw houses only.
+              if (fin < 0.46 && hash(k * 59 + r * 3 + c * 11) > 0.68) {
+                stage._mat = MAT.RUST;
+                for (const [dx, dz] of [[-w * 0.3, -d * 0.3], [w * 0.3, d * 0.3]]) {
+                  addCyl(stage, vadd(vadd(vadd(base, a.r, dx), a.t, dz), a.u, h),
+                         0.05, 0.85, [0.45, 0.30, 0.20], 4, bv);
+                }
+                stage._mat = MAT.CONCRETE;
               }
               if (hash(k * 23 + r * 3 + c) > 0.48) {
                 stage._mat = MAT.RUST;
