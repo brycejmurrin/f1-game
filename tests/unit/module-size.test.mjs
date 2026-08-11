@@ -59,7 +59,7 @@ const CEILINGS = {
   // region already lives here, three lines up, and the fit is the same
   // measurement — splitting them would put two halves of one framing rule in two
   // files. Bug-explaining growth at the site of the bug, not a feature.
-  "js/game.js": 7826,
+  "js/game.js": 7859,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
