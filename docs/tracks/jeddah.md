@@ -40,3 +40,17 @@ The world's fastest street circuit: long flat-out sweeps and the lengthy flowing
 - Hero silhouettes by shape alone: Fountain = single thin tall glowing column far offshore; Floating Mosque; yachts = low hulls + mast spikes; skyline = inland lit-window slabs.
 - Keep the Red Sea open on the outside (R) of the early/mid lap (~s 0.05–0.40): no seaward cityFront/backdrop there — sea, mosque, and fountain must read.
 - City mass stays inland (L); only thin seaward frontage near the start/finish pocket.
+
+## Research pass — findings (not yet built)
+
+- **King Fahd's Fountain** is Jeddah's defining landmark and it is *out at sea*
+  — roughly 1 km offshore, throwing seawater **312 m** into the air, floodlit,
+  and it runs **in the evening only**. Jeddah is a night race, so it should be
+  visible: a lit vertical plume far out on the Red Sea horizon, taller than
+  anything built on the corniche. It is the tallest fountain in the world and
+  nothing else on this circuit reads as unmistakably Jeddah.
+- **The corniche itself** — the Red Sea waterfront the whole lap runs along.
+  Water should be on the seaward side for most of the circuit.
+- **Jeddah Yacht Club** and marina, at the harbour end.
+- 6.174 km, 27 corners — the fastest street circuit on the calendar; the
+  long walled canyons between corners are the defining *shape*.

@@ -37,3 +37,17 @@ Semi-permanent parkland circuit on public roads. Fast, flowing layout with long 
 - Use bright, saturated kerb boxes (red `[0.80,0.15,0.15]` / white) densely at T1 and the chicane complex.
 - Keep everything level — convey speed and openness through wide run-offs and long sightlines, not elevation.
 - Crowd-tint grandstands with a warm speckle so they read as packed banks against the green.
+
+## Research pass — findings (not yet built)
+
+- **The Melbourne CBD skyline is the backdrop**, and F1.com leads with it — a
+  cluster of genuinely tall towers ~3 km north, seen across the lake. It should
+  read as one dense clump in ONE direction, not a ring: the other horizons are
+  low suburban Melbourne and Port Phillip Bay.
+- **Albert Park Lake** is the thing the circuit is wrapped around; the track
+  runs Aughtie Drive and Lakeside Drive *around* it. Water on the infield side
+  for a large part of the lap.
+- **Albert Park Golf Course** occupies part of the parkland — open mown
+  fairways, scattered specimen trees, bunkers.
+- Parkland planting is the Melbourne mix: mature **Moreton Bay figs**, gums and
+  rows of **palms** along the drives — not northern-European broadleaf.
