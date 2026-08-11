@@ -29,7 +29,7 @@ per track — it is the last edit before a commit that ships JS.
 | # | Circuit | Researched | Brief | Dressed | Verified |
 |---|---------|-----------|-------|---------|----------|
 | 1 | bahrain | ✓ | ✓ | ✓ | ✓ |
-| 2 | monaco | | | | |
+| 2 | monaco | ✓ | ✓ | ✓ | ✓ |
 | 3 | silverstone | | | | |
 | 4 | spa | | | | |
 | 5 | monza | | | | |
