@@ -144,7 +144,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    already centres its contents and had ~12px of margin to spend. */
 .lt-help-toggle {
   display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
-  min-height: 24px;
+  min-height: var(--tap-min);
   font-size: 11px; opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
@@ -164,6 +164,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   flex-shrink: 0;
 }
 #lt-tabs .lt-tab, #ct-modes .lt-tab {
+  /* No explicit height before: padding + 10px text came to ~24, which is ON the
+     floor and therefore under it at any scale below 100%. 225 cells of the
+     1900-cell matrix failed on this one selector. */
+  min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
@@ -199,7 +203,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
@@ -250,7 +254,9 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 }
 .tune-label b { color: var(--red); font-size: 13px; }
 .tune-row input[type="range"] {
-  width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
+  /* --tap-min, not 24px: this sat exactly on the WCAG floor, so any UI SIZE below
+     100% put it under (19px at 80). See css/tokens.css. */
+  width: 100%; margin: 0; accent-color: var(--red); height: var(--tap-min); cursor: pointer;
 }
 /* ---------- MUSIC & SOUND panel ----------
    Two sections, each a header row with a small ON/OFF beside it and one slider
@@ -403,7 +409,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      precisely where they get tapped. 24 is the floor, and the row has the pixel
      to give — the panel does not get shorter for it. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
-    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: 24px;
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
@@ -419,7 +425,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs::-webkit-scrollbar { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot { margin-top: 6px; padding-top: 6px; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; }
+  /* The floor applies to the shrunken foot too: 12px text in 6px padding comes to
+     ~27 own px, which is 21-23 ACTUAL px at UI SIZE 80% — RESET, COPY VALUES and
+     DONE were the last three controls under the WCAG floor in the 1900-cell run. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; min-height: var(--tap-min); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
 
@@ -494,7 +503,13 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot button {
     margin: 0; min-width: 0;
-    padding: 5px 6px; font-size: 11px; min-height: 0;
+    /* --tap-min, NOT 0. `min-height: 0` here was cancelling the floor the block
+       above sets, and this rule wins on both order and the child combinator — so
+       on a landscape phone (852 wide, so the rail applies) at UI SIZE 80% RESET,
+       COPY VALUES and DONE measured 21-23 ACTUAL px, under WCAG 2.5.8's 24. The
+       intent of the 0 was to let the buttons shrink in the rail, and they still
+       do: --tap-min only floors the axis a thumb needs. */
+    padding: 5px 6px; font-size: 11px; min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > #lt-close { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
