@@ -39,11 +39,22 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // cameras.js declares `const GameCams`, which lands in the context's lexical
 // scope rather than on the global object — read it back by evaluating its name.
 // Same shape as tests/unit/race-control.test.mjs.
-function loadGameCams(Tracks) {
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, console, Tracks });
+function loadGameCams(Tracks, CamTune) {
+  const globals = { Math, JSON, Object, Array, Number, console, Tracks };
+  // Left UNDEFINED unless a test supplies one — cameras.js guards every use with
+  // `typeof CamTune !== "undefined"`, so an absent tuner is the shipped default.
+  if (CamTune) globals.CamTune = CamTune;
+  const ctx = vm.createContext(globals);
   vm.runInContext(readFileSync(join(ROOT, "js/game/cameras.js"), "utf8"), ctx,
     { filename: "js/game/cameras.js" });
   return vm.runInContext("GameCams", ctx);
+}
+
+/* The CAMERA TUNER's HEIGHT knob, reduced to what this file needs: translate the
+   EYE only, leaving the aim point alone. That is exactly what js/game/cam-tune.js
+   apply() does for `height` (the aim stays put so the car cannot leave frame). */
+function camTuneHeight(dh) {
+  return { get: () => 0, apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; } };
 }
 
 /* A straight track running along +Z with the elevation profile `heightAt(s)`.
@@ -185,6 +196,36 @@ test("far chase gets the same treatment", () => {
   const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
   assert.ok(rawBob > 0.05, `reference rig should bob, got ${rawBob.toFixed(4)}°`);
   assert.ok(bob < rawBob / 4, `far pitch bob ${bob.toFixed(4)}° vs raw ${rawBob.toFixed(4)}°`);
+});
+
+test("a camera LOWERED into the ground clamp does not ride a node staircase", () => {
+  // THE REPORTED BUG. surface.heightAt() rounds its node index, so asking it once
+  // per frame makes the clamp floor a staircase with one step per ~4 m node. At
+  // the shipped framing the eye rides ~0.5 m clear of that floor and never sees
+  // it — which is why this hid behind every default-valued test. Lower the eye
+  // with the CAMERA TUNER and it lands ON the floor, inheriting the steps: on a
+  // gradient each one is nodeSpacing x grade (0.45 m measured on Monaco),
+  // snapping ~11 times a second at racing speed. Flat road is immune (adjacent
+  // nodes are level), and a parked car is immune (nothing crosses a node), which
+  // is exactly the "fast judder only while climbing" signature.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5));
+
+  // Sample far finer than the 4 m node spacing, or the staircase aliases away.
+  const ys = [];
+  for (let s = 1000; s < 1120; s += 0.25) ys.push(chaseAt(cams, track, s).eye[1]);
+  const d = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+
+  const held = d.filter((v) => Math.abs(v) < 1e-9).length;
+  const snaps = d.filter((v) => Math.abs(v) > 0.2).length;
+  // A staircase is mostly-flat with occasional big jumps; a slide is neither.
+  assert.equal(snaps, 0, `eye snapped ${snaps} time(s), max jump ${Math.max(...d.map(Math.abs)).toFixed(3)} m`);
+  assert.ok(held < d.length * 0.25, `eye held flat for ${held}/${d.length} samples — that is a staircase`);
+
+  // ...and it must genuinely be sitting on the clamp, or the test proves nothing.
+  const free = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5e-9));
+  assert.ok(chaseAt(cams, track, 1050).eye[1] > chaseAt(free, track, 1050).eye[1] - 1.5 + 0.05,
+    "the lowered eye was never actually caught by the clamp — nothing was exercised");
 });
 
 test("the ground clamp still catches an eye below the surface", () => {
