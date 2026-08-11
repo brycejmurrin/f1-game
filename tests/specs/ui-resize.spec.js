@@ -238,17 +238,30 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       const state = await page.evaluate(() => {
         const el = document.getElementById("lighting-inner");
         const cs = getComputedStyle(el);
+        const tabs = el.querySelector(".lt-tabs");
         return {
           density: el.dataset.density || null,
           compactAt: cs.getPropertyValue("--compact-at").trim(),
           pad: cs.getPropertyValue("--pad").trim(),
           mediaWouldFire: window.matchMedia("(orientation: landscape) and (max-height: 560px)").matches,
+          // The tuner's own compact head, which used to sit behind
+          // `@media (max-height: 620px)` and so never fired here either. Its
+          // headline effect is the category chips becoming ONE scrolling strip
+          // instead of a wrapped block — worth ~110px of slider room.
+          heightQueryWouldFire: window.matchMedia("(max-height: 620px)").matches,
+          tabsNoWrap: tabs ? getComputedStyle(tabs).flexWrap : null,
+          tabsScrollX: tabs ? tabs.scrollWidth > tabs.clientWidth + 1 : null,
           footReachable: (() => {
             const f = el.querySelector(".sheet-foot");
             return !!f && f.getBoundingClientRect().bottom <= window.innerHeight + 1;
           })(),
         };
       });
+
+      expect(state.heightQueryWouldFire,
+        "the max-height query this block used to live behind does NOT fire here").toBe(false);
+      expect(state.tabsNoWrap, "yet the category chips are the single scrolling strip").toBe("nowrap");
+      expect(state.tabsScrollX, "and that strip really does pan sideways").toBe(true);
 
       expect(state.compactAt, "the tuner declares its own threshold").toBe("620px");
       expect(state.mediaWouldFire, "the viewport query does NOT fire here — that is the point")

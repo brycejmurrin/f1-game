@@ -363,44 +363,65 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   position: sticky; bottom: 0; z-index: 2;
 }
 
-/* ---------- short screens (landscape phones): compact tuner head ----------
-   The tuner is docked full-height, so on a ~390px-tall landscape phone the head
-   is what starves #lt-rows. Shrink every fixed row and — the big one — run the
-   category chips as a single horizontally-scrolling strip instead of a 5-row
-   wrapped block, which alone gives ~110px back to the sliders. */
-@media (max-height: 620px) {
-  #lighting-inner, #camtune-inner { padding: 10px 14px; }
-  #lt-head, #ct-head { margin-bottom: 2px; }
-  #lt-head h2, #ct-head h2 { font-size: 16px; }
-  #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
-  #lt-profile, #ct-profile { font-size: 10px; }
-  .lt-preview-row { gap: 3px; margin: 2px 0; }
-  .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
+/* ---------- SHORT PANEL: compact tuner head ----------
+   The tuner is docked full-height, so when the panel is short the head is what
+   starves #lt-rows. Shrink every fixed row and — the big one — run the category
+   chips as a single horizontally-scrolling strip instead of a 5-row wrapped
+   block, which alone gives ~110px back to the sliders.
+
+   THIS USED TO BE `@media (max-height: 620px)` AND THAT WAS THE WRONG QUESTION.
+   The query reads the VIEWPORT; these panels are `.sheet` and carry
+   `zoom: var(--ui-scale)`, so their own height is the viewport's divided by the
+   scale. On a 393x659 phone at UI SIZE 115% the query read 659, declined to
+   compact anything, and the panel's own height was 573 — short by any standard
+   its own CSS would recognise. The RESET/COPY/DONE bar ended up at y=842, off a
+   659px screen, behind 178 sliders.
+
+   `data-density` is measured in the panel's own units against the `--compact-at`
+   declared above (620, matching the number this block used to hard-code), so the
+   same intent now holds at every scale. Step 2 of the migration order in
+   docs/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md.
+
+   The selectors are scoped rather than the block being wrapped, because CSS
+   nesting is used nowhere in this codebase (`:is()` and `:has()` are). Both this
+   block and the wide-and-short rail block below take the SAME prefix on purpose:
+   the rail block overrides several of these rules and only wins by being later,
+   which requires equal specificity. Scoping one and not the other would have
+   silently broken the rail layout. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] { padding: 10px 14px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head h2 { font-size: 16px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-profile,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-profile { font-size: 10px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row { gap: 3px; margin: 2px 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
   /* min-height, not more padding: the short-panel branch squeezes these to 23px
      tall, one pixel under WCAG 2.2 SC 2.5.8's 24, and a landscape phone is
      precisely where they get tapped. 24 is the floor, and the row has the pixel
      to give — the panel does not get shorter for it. */
-  .lt-preview-row .opt-btn {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
     padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: 24px;
   }
-  .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts
      that wrap. */
-  .lt-tabs {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
     display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
     touch-action: pan-x;
     margin: 0 -14px 4px; padding: 5px 14px 6px;
     scrollbar-width: none;
   }
-  #lt-tabs .lt-tab, #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
-  .lt-tabs::-webkit-scrollbar { display: none; }
-  #lighting-inner .sheet-foot, #camtune-inner .sheet-foot { margin-top: 6px; padding-top: 6px; }
-  #lighting-inner .sheet-foot button,
-  #camtune-inner .sheet-foot button { padding: 6px 10px; font-size: 12px; }
-  #lighting-inner .adv-item, #camtune-inner .adv-item { margin: 5px 0; }
-  #lt-json { height: 54px; }
-}
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-tabs .lt-tab,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs::-webkit-scrollbar { display: none; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot { margin-top: 6px; padding-top: 6px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
 
 /* ---------- short AND wide: put the chrome in a rail ----------
    Compacting the head was not enough. Measured on a 852x393 phone the panel is
@@ -415,27 +436,27 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    the scene it exists to preview keeps the rest of the screen. The category
    chips become a vertical list here — the horizontal strip above is a
    short-panel compromise, and this layout has the room to show them all. */
-@media (min-width: 720px) and (max-height: 620px) {
+@media (min-width: 720px) {
   /* the rail layout is wider — and --dock-w is how everything else finds out */
-  body:has(#lighting:not([hidden])) { --dock-w: min(70vw, 560px); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body:has(#lighting:not([hidden])) { --dock-w: min(70vw, 560px); }
   /* ...EXCEPT while flying, where --dock-w is overridden above. The rail exists
      to show twelve categories and their sliders side by side, which is worth
      560px when the panel IS the screen; in FREE CAMERA the screen is the scene.
      At the narrower flying width the two-column rail no longer fits, so put the
      panel back into its tall single-column form. */
-  body.photo-mode:not(.pc-nopanel) #lighting-inner {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner {
     display: flex; flex-direction: column;
   }
-  body.photo-mode:not(.pc-nopanel) #lt-rail { display: contents; }
-  body.photo-mode:not(.pc-nopanel) #lt-rows { max-height: none; }
-  body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-rail { display: contents; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-rows { max-height: none; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot {
     display: flex; flex-wrap: wrap; margin-top: 6px; padding-top: 6px;
   }
-  body.photo-mode:not(.pc-nopanel) #lighting-inner .lt-tabs {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner .lt-tabs {
     display: flex; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
   }
-  body.photo-mode:not(.pc-nopanel) #lt-tabs .lt-tab { white-space: nowrap; flex: 0 0 auto; }
-  #lighting-inner {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-tabs .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
     display: grid;
     grid-template-columns: 210px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
@@ -450,55 +471,55 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      painted underneath RESET ALL / COPY VALUES / DONE. The rail scrolls, so it
      never needed the second row — the foot's height is exactly what row 2 is
      for. */
-  #lt-rail {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rail {
     display: flex; flex-direction: column;
     grid-column: 1; grid-row: 1;
     min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
   }
-  #lt-rows {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rows {
     grid-column: 2; grid-row: 1;
     min-height: 0; max-height: none;
   }
-  #lt-json { grid-column: 2; grid-row: 2; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { grid-column: 2; grid-row: 2; }
   /* The action bar is the foot of the RAIL, so its height comes out of the
      rail's column and not out of the slider list beside it. Compact, because
      every pixel it takes here is a pixel of row 1 — which is the sliders.
      Two columns with DONE spanning both: three flex items at `1 1 84px` in a
      210px rail wrapped 2 + 1, stranding DONE. Spanning it is the same shape,
      stated on purpose — and it makes the primary action the widest target. */
-  #lighting-inner > .sheet-foot {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot {
     grid-column: 1; grid-row: 2;
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-top: 0; gap: 5px; padding: 6px 0 0;
   }
-  #lighting-inner > .sheet-foot button {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot button {
     margin: 0; min-width: 0;
     padding: 5px 6px; font-size: 11px; min-height: 0;
   }
-  #lighting-inner > .sheet-foot > #lt-close { grid-column: 1 / -1; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > #lt-close { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
-  #lighting-inner .lt-tabs {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow: visible; touch-action: auto;
     margin: 2px 0 4px; padding: 0;
     background: none; border-bottom: none;
   }
-  #lighting-inner #lt-tabs .lt-tab { white-space: normal; justify-content: center; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-tabs .lt-tab { white-space: normal; justify-content: center; }
   /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
      button and costing the rail a whole extra line. */
-  #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
-  #lt-head h2 { font-size: 15px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2 { font-size: 15px; }
   /* THREE equal columns for the five chips: 3 + 2, never 4 + 1. This row was
      flex, so the fifth option (TRACK / CLOUD) wrapped alone onto line two and
      stretched the full width of the rail, reading as a different kind of
      control rather than one more chip. The label takes its own full-width row
      above them. */
-  #lighting-inner .lt-preview-row {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
   }
-  #lighting-inner .lt-preview-lbl { grid-column: 1 / -1; width: auto; }
-  #lighting-inner .lt-preview-row .opt-btn { min-width: 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { grid-column: 1 / -1; width: auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn { min-width: 0; }
 }
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
