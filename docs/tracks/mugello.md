@@ -54,3 +54,35 @@ Roughly 40 m of range, and it is used constantly — this circuit is never level
 - Give the pit complex one continuous roof and a red trim band, and nothing else. Ferrari's circuit is neat, not flashy.
 - Bank the Arrabbiate visibly and set them on a rising ground plane; the corners only make sense uphill.
 - One casale with its cypress pair is enough architecture in the outfield — do not scatter buildings across the hillside.
+
+## Research pass — the vine quilt
+
+Mugello already planted the cypress and the olives, which is two of the three
+things that make this landscape. The third was missing: these hills are worked
+farmland, quilted with **vine rows**. Cypress and olive alone read as "somewhere
+warm"; the vine quilt is what makes it Tuscany.
+
+Seven vineyard blocks, gap 96–132, following the pattern that measured clean at
+Imola — the read is entirely in the repetition:
+- rows **parallel and evenly spaced**, each stepping out and shearing slightly
+  so the block follows a contour rather than looking like a printed grid;
+- **bare tilled soil** under each row (the ground between vines is worked
+  earth, and that stripe is half the read);
+- **end posts** on the wire — the detail that says *trained vine*, not *hedge*.
+
+### Casali — attempted, and deliberately not shipped
+
+Tuscan stone farmhouses belong here and were built (rough stone under a shallow
+terracotta pitch with deep eaves, a square tower end, shuttered windows, a
+cypress pair at the gate). **They are not in the circuit.** Wherever they went
+they landed on the existing olive and cypress planting, and `clip-audit` counted
+it: mugello 17 → 18 severe. A bisect named the casali (the vineyards measured
+innocent) and the spot list named the collision — `addBox × addCone` at frac
+0.64. Moving them out to gap 158–176 did not help.
+
+The blocker is structural: **a circuit file cannot reserve ground before
+building on it.** `indexSolid` is engine-internal and not on the scenery api,
+so any large prop placed in vegetated outfield risks growing through a tree.
+Fixing that properly — exposing a footprint-reservation call to circuit files —
+would unblock casali here, Silverstone's campsites at a sensible distance, and
+anything similar on the remaining classics.

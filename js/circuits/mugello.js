@@ -66,6 +66,67 @@
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
+      // Mugello already plants the cypress and the olives, which is two of the
+      // three things that make this landscape. The third was missing: the
+      // hills are worked farmland, quilted with VINE ROWS and punctuated by
+      // stone CASALI. Cypress and olive alone read as "somewhere warm"; add
+      // the vine quilt and the farmhouses and it can only be Tuscany.
+      //
+      // Vine rows follow the Imola pattern, which measures clean on
+      // coplanar-audit: the read is entirely in the repetition, so rows must be
+      // parallel and evenly spaced, each stepping out and shearing slightly to
+      // follow a contour, over bare tilled soil, with end posts on the wire.
+      {
+        const VINE     = [0.27, 0.37, 0.20];
+        const VINE_DRY = [0.33, 0.41, 0.23];
+        const SOIL     = [0.46, 0.35, 0.25];
+        const POST     = [0.53, 0.45, 0.33];
+        for (const [sf, side, gap, rows, len, ang] of [
+          [0.115,  1,  98, 8, 68,  0.09],
+          [0.180, -1, 132, 6, 54, -0.07],
+          [0.310, -1, 104, 7, 62,  0.06],
+          [0.455,  1, 126, 6, 58, -0.05],
+          [0.585,  1,  96, 8, 66,  0.08],
+          [0.720, -1, 118, 7, 60, -0.06],
+          [0.865, -1, 100, 6, 52,  0.07],
+        ]) {
+          const kk = K(sf), a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 30)) continue;
+          for (let r = 0; r < rows; r++) {
+            const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
+            if (onTrack(a.c[0], a.c[2], 24)) continue;
+            const b = [a.r, a.u, a.t];
+            const hv = hash(kk * 19 + r * 31);
+            const rowLen = len * (0.85 + hv * 0.24);
+            addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
+            out._mat = MAT.FOLIAGE;
+            addBox(out, vadd(a.c, a.u, 1.05), [1.5, 1.5, rowLen],
+                   hv < 0.5 ? VINE : VINE_DRY, b);
+            out._mat = 0;
+            out._mat = MAT.WOOD;
+            for (const e of [-rowLen / 2, rowLen / 2]) {
+              addCyl(out, vadd(a.c, a.t, e), 0.10, 2.0, POST, 4, b);
+            }
+            out._mat = 0;
+          }
+        }
+
+        // NO CASALI, and this is a deliberate omission rather than an
+        // oversight. Tuscan stone farmhouses belong in this landscape and were
+        // built here — but wherever they went they landed on the existing
+        // olive and cypress planting, and clip-audit counted it: mugello 17 ->
+        // 18 severe, with the bisect naming the casali (the vineyards measured
+        // innocent) and the spot list naming the collision as addBox x addCone
+        // at frac 0.64. Pushing them out to gap 158-176 did not help, and a
+        // circuit file cannot reserve a footprint — `indexSolid` is internal to
+        // the engine and is not on the scenery api.
+        //
+        // Fixing this properly means giving circuit files a way to clear
+        // ground before building on it. Until then the vineyards carry the
+        // worked-farmland read on their own, and they measure clean.
+      }
+
       const PINE = [0.12, 0.29, 0.15], PINE_D = [0.09, 0.23, 0.13];
       const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.17];
       const GRAVEL = [0.68, 0.61, 0.44];

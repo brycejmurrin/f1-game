@@ -55,6 +55,18 @@ those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
    fill the rest with plain sunk boxes.** The boxes lose the sky mirror, which
    is a real downgrade, but 40 z-fighting sheets is not a trade worth making.
 
+**`grep -i` under-detects: names are localised.** `grep -i biosphere` misses
+`Biosphère` and `grep -i castle` misses `Burg` — both nearly cost a duplicate
+build of a landmark that was already there (Montreal's dome, the Nürburg). Grep
+for the LOCAL word too, and check `modelGroup` ids.
+
+**The structural gap worth fixing.** A circuit file cannot reserve ground before
+building on it: `indexSolid` is engine-internal and not on the 107-member
+scenery api. So any large prop placed in vegetated outfield risks growing
+through a tree, and the only workarounds are to move it past all planting
+(worked for Silverstone's campsites) or not build it (Mugello's casali).
+Exposing a footprint-reservation call to circuit files would unblock both.
+
 **Bisect rather than reason.** Every one of these was found by disabling one
 emitter and re-measuring, and in four cases (Zandvoort's stage, Montreal's
 Floralies, Suzuka's shrine, Shanghai's paddy boxes) the part that *looked*
@@ -157,15 +169,15 @@ Guards last run green at build 1075: `test:tiny` 71/71, `test:tooling-fast`
 | 22 | mexico | ✓ | ✓ | ✓ | ✓ |
 | 23 | qatar | ✓ | ✓ | ✓ | ✓ |
 | 24 | abudhabi | ✓ | ✓ | ✓ | ✓ |
-| 25 | hockenheim | | | | |
-| 26 | nurburgring | | | | |
-| 27 | catalunya | | | | |
-| 28 | sepang | | | | |
+| 25 | hockenheim | ✓ | ✓ | ✓ | ✓ |
+| 26 | nurburgring | ✓ | ✓ | ✓ | ✓ |
+| 27 | catalunya | ✓ | ✓ | ✓ | ✓ |
+| 28 | sepang | ✓ | ✓ | ✓ | ✓ |
 | 29 | istanbul | | | | |
 | 30 | paul_ricard | | | | |
 | 31 | portimao | | | | |
 | 32 | sochi | | | | |
-| 33 | mugello | | | | |
+| 33 | mugello | ✓ | ✓ | ✓ | ✓ |
 | 34 | magny_cours | | | | |
 | 35 | estoril | | | | |
 | 36 | kyalami | | | | |
