@@ -52,3 +52,10 @@ Big ~55–65 m swing per lap (cosine bumps on the GPS path); the bowl makes clim
 - Tint grandstands and gantry banners Red Bull red/navy; concentrate stands at the start, T3 crest, and the final stadium bowl.
 - Scatter tall narrow cone-boxes as pine forest along the descending mid-sector; add a long smooth-green ski-jump-style ramp box on one far hillside.
 - Use green-tinted run-off pans rather than grey asphalt aprons to keep the alpine-green theme dominant.
+
+
+## Research pass — verified, already covered
+
+The Styrian setting, the forested hills and meadows, the Red Bull Ring's
+"Wing" building and the **giant charging-bull statue** on the hillside above
+the lower sector are all present. **Nothing added.**

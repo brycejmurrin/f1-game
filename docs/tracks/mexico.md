@@ -69,3 +69,14 @@ Peraltada line survives as real **banking** into the final corners (6° at
   snowcaps) under denser thin-air haze; keep city towers secondary and further back.
 - Lead the entry with the **lucha-libre statue** box as a small cultural Easter egg.
 - Bank the final Peraltada/Estadio corners with the road (6° easing to 5°), kerbs tilted with it.
+
+
+## Research pass — verified, already covered
+
+The Foro Sol stadium section, the Peralta banking, the crowd, the jacarandas
+and the **Popocatépetl / Iztaccíhuatl** twin-volcano silhouette on the
+high-altitude Sierra Nevada horizon are all modelled. **Nothing added.**
+
+Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
+Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in
+desert — the generic "Mexico = cacti" instinct should be resisted.
