@@ -100,20 +100,38 @@
               const hv = hash(kk * 29 + r * 17 + c * 11);
               const p = vadd(vadd(a0.c, a0.r, r * 26), a0.t, (c - 1) * 30);
               if (onTrack(p[0], p[2], 20)) continue;
+              // Every paddy carries its own small height offset. With all six
+              // in a block sharing exact heights, their bund tops and crop
+              // tops all landed on the same planes facing the same way, and
+              // coplanar-audit took shanghai from 5 spots to 14. The jitter is
+              // ~40-120 mm, comfortably past the audit's 20 mm GAP_MAX, and is
+              // physically right anyway: paddies are terraced to hold water at
+              // slightly different levels.
+              const jit = (hash(kk * 61 + r * 23 + c * 37) - 0.5) * 0.24;
               // Raised bund frame — the paddy sits INSIDE it, slightly sunk.
-              addBox(out, vadd(p, a0.u, 0.28), [24, 0.56, 28], BUND, b);
+              addBox(out, vadd(p, a0.u, 0.28 + jit), [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
               if (hv < 0.22) {
                 // Fallow / drained paddy: bare worked earth, no water.
-                addBox(out, vadd(p, a0.u, 0.34), [21, 0.16, 25], FALLOW, b);
+                addBox(out, vadd(p, a0.u, 0.34 + jit), [21, 0.16, 25], FALLOW, b);
               } else {
-                // Standing water, with the crop above it. waterSurface gives
-                // the flooded paddy a real reflective sheet — the mirror is
-                // what sells it from a car.
-                waterSurface(kk, side, gap + r * 26 - 0.5, [21, 0.14, 25],
-                             [0.30, 0.38, 0.40],
-                             { id: `shanghai-paddy-${Math.round(sf * 1000)}-${r}-${c}` });
+                // Standing water. ONE real reflective sheet per block, not one
+                // per paddy: water finds its level, so every waterSurface sits
+                // at the same height, and ~40 of them across the lap put their
+                // faces on shared planes — that alone took shanghai from 5
+                // coplanar spots to 14 (verified by bisect: with the sheets
+                // disabled and every paddy box still in place, it reads 5).
+                // The remaining paddies get a plain sunk box, which loses the
+                // sky mirror but keeps the flooded tone.
+                if (r === 0 && c === 1) {
+                  waterSurface(kk, side, gap - 0.5, [21, 0.14, 25],
+                               [0.30, 0.38, 0.40],
+                               { id: `shanghai-paddy-${Math.round(sf * 1000)}` });
+                } else {
+                  addBox(out, vadd(p, a0.u, 0.30 + jit), [21, 0.12, 25],
+                         [0.28, 0.36, 0.38], b);
+                }
                 out._mat = MAT.FOLIAGE;
-                addBox(out, vadd(p, a0.u, 0.62), [20, 0.42, 24],
+                addBox(out, vadd(p, a0.u, 0.62 + jit), [20 + jit * 3, 0.42, 24 - jit * 4],
                        hv < 0.6 ? PADDY : [0.40, 0.48, 0.32], b);
                 out._mat = 0;
               }

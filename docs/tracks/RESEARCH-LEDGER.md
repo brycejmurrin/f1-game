@@ -47,6 +47,19 @@ those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
    gap or radius helped: the fight is *internal to the emitter*. Changing a
    shared emitter used by Suzuka, Vegas and Montreal is not a circuit-file
    change, so the wheel was dropped instead.
+5. **`waterSurface()` does not tile.** Water finds its level, so every sheet
+   sits at the SAME height — put ~40 of them across a lap and their faces share
+   planes. Shanghai's rice paddies used one sheet per paddy and went 5 → 14
+   spots; a bisect with the sheets disabled and every paddy box still in place
+   read 5, which isolated it exactly. **Use one real sheet per water body and
+   fill the rest with plain sunk boxes.** The boxes lose the sky mirror, which
+   is a real downgrade, but 40 z-fighting sheets is not a trade worth making.
+
+**Bisect rather than reason.** Every one of these was found by disabling one
+emitter and re-measuring, and in four cases (Zandvoort's stage, Montreal's
+Floralies, Suzuka's shrine, Shanghai's paddy boxes) the part that *looked*
+guilty was innocent. A measurement costs 1–3 min; a wrong theory costs an hour.
+Seven consecutive theories about Montreal's Calder were all wrong.
 
 ### What got given up, honestly
 
