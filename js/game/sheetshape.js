@@ -156,7 +156,16 @@ window.SheetShape = (function () {
      fire for it — measured: at 1000x462 the garage sat on data-density="normal"
      at UI SIZE 150% while its own height was 297px, well inside the compact
      tier. Watch where the property is written instead. Cheap: documentElement's
-     own style attribute changes about as often as a settings slider moves. */
+     own style attribute changes about as often as a settings slider moves.
+
+     STATUS, measured 2026-08-08 by stubbing this observer out: the garage no
+     longer needs it. `--cs-sheet-w` is now derived from `--ui-scale`, so a scale
+     change really does resize the sheet and the ResizeObserver above fires by
+     itself — tests/specs/ui-resize.spec.js stays green without this. Kept
+     because it is the GENERAL answer and that derivation is a property of one
+     stylesheet: any sheet whose box does not happen to depend on the scale would
+     go stale again, silently, exactly as the garage did. Belt-and-braces, and
+     labelled as such rather than left looking load-bearing. */
   function reclassify() {
     seen.forEach((el) => {
       const r = el.getBoundingClientRect();

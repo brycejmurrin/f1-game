@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
 // Ratchet: specs importing tests/helpers/fixtures.js must not fall below this.
-export const FLOOR = 54;
+export const FLOOR = 60;
 
 // The other failure mode: migrate a batch of specs, never raise the floor, and
 // the ratchet silently stops ratcheting (it sat at 31 while real adoption was
