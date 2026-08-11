@@ -175,7 +175,7 @@ Guards last run green at build 1075: `test:tiny` 71/71, `test:tooling-fast`
 | 28 | sepang | ✓ | ✓ | ✓ | ✓ |
 | 29 | istanbul | | | | |
 | 30 | paul_ricard | | | | |
-| 31 | portimao | | | | |
+| 31 | portimao | ✓ | ✓ | ✓ | ✓ |
 | 32 | sochi | | | | |
 | 33 | mugello | ✓ | ✓ | ✓ | ✓ |
 | 34 | magny_cours | | | | |
