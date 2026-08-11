@@ -24,6 +24,19 @@ and that track should be redone from its first unticked column.
 Cache-bust (`?v=N` + `version.json`) is bumped ONCE at the end of a batch, not
 per track — it is the last edit before a commit that ships JS.
 
+## Where this stands
+
+- **Fully done** (researched → brief → dressed → `verify-track` OK → committed):
+  bahrain, monaco, silverstone, spa, monza, suzuka.
+- **Researched, findings written into the brief, not yet dressed:** singapore,
+  cota, interlagos, vegas, zandvoort, jeddah, albert_park, imola, montreal.
+  Each of these has a "Research pass — findings (not yet built)" section naming
+  exactly what to build; start there, no re-research needed.
+- **Not started:** the remaining 25.
+
+Guards last run green at build 1073: `test:tiny` 71/71, `test:tooling-fast`
+350/350.
+
 ## Status
 
 | # | Circuit | Researched | Brief | Dressed | Verified |
@@ -34,18 +47,18 @@ per track — it is the last edit before a commit that ships JS.
 | 4 | spa | ✓ | ✓ | ✓ | ✓ |
 | 5 | monza | ✓ | ✓ | ✓ | ✓ |
 | 6 | suzuka | ✓ | ✓ | ✓ | ✓ |
-| 7 | singapore | | | | |
-| 8 | cota | | | | |
-| 9 | interlagos | | | | |
-| 10 | vegas | | | | |
+| 7 | singapore | ✓ | ✓ | | |
+| 8 | cota | ✓ | ✓ | | |
+| 9 | interlagos | ✓ | ✓ | | |
+| 10 | vegas | ✓ | ✓ | | |
 | 11 | madrid | | | | |
-| 12 | zandvoort | | | | |
-| 13 | jeddah | | | | |
-| 14 | albert_park | | | | |
+| 12 | zandvoort | ✓ | ✓ | | |
+| 13 | jeddah | ✓ | ✓ | | |
+| 14 | albert_park | ✓ | ✓ | | |
 | 15 | shanghai | | | | |
 | 16 | miami | | | | |
-| 17 | imola | | | | |
-| 18 | montreal | | | | |
+| 17 | imola | ✓ | ✓ | | |
+| 18 | montreal | ✓ | ✓ | | |
 | 19 | redbull | | | | |
 | 20 | hungaroring | | | | |
 | 21 | baku | | | | |
