@@ -51,3 +51,19 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
 - Tint grandstand top rows orange to evoke the Dutch crowd; concentrate stands at Tarzan, the bankings, and pit straight.
 - Scatter tall thin wind-turbine pole-boxes and a few tiny beach-hut boxes on the seaward horizon for coastal flavour.
 - Keep undulation alive: vary box heights along the ground so no stretch reads dead flat.
+
+## Research pass — findings (not yet built)
+
+- **The circuit is IN the dunes**, north of the town and hard against the North
+  Sea coast — not beside them. Sand should intrude into the outfield
+  everywhere: marram-grassed dune ridges crowding the barriers, blown sand on
+  the run-offs, no trees of any size on the seaward side.
+- **The two banked corners** are the modern signature: **Tarzanbocht** (Turn 1,
+  in use since 1948, the great overtaking corner) and the **Arie
+  Luyendykbocht**, the banked final turn onto the straight. Both deserve
+  visibly banked geometry and banked kerbing, not flat corners with a camber
+  number.
+- **Orange.** The Dutch crowd is the most monochrome in F1 — grandstands,
+  flares and general admission all read as one orange mass. Crowd colour here
+  should be deliberately unvaried, which is the opposite of the usual advice.
+- The North Sea itself sits low on the horizon beyond the seaward dune line.

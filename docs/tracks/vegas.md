@@ -46,3 +46,21 @@ Essentially flat — Strip and surrounding streets sit at one grade. Only trivia
 - Make the Strip straight feel vast — taller, denser, warmer box clusters than the Sphere sector to contrast the canyon vs. the open paddock.
 - Saturate accents (magenta/cyan/gold) but keep asphalt and sky near-black so glow pops.
 - Wet-look neon as thin emissive strips on the verge only (never centerline / tarmac pools).
+
+## Research pass — findings (not yet built)
+
+Wikipedia's own landmark list for the Las Vegas Strip Circuit: **MSG Sphere,
+Caesars Palace, Bellagio, and Paris Las Vegas**. Add from the venue's own
+materials:
+
+- **The Bellagio fountains** — the circuit runs right past the fountain lake,
+  and the Bellagio Fountain Club is built around that view. The lake, the
+  fountain jets and the arc of the hotel behind it are one composed landmark,
+  not three props.
+- **The Sphere** at T-Mobile Turn 5 — the whole exterior is an LED display, so
+  the ledFacadeBands treatment applies here more literally than anywhere else
+  on the calendar.
+- **Paris Las Vegas** — half-scale Eiffel Tower and Montgolfier balloon sign,
+  directly trackside; a very cheap and very unmistakable silhouette.
+- **East Harmon Zone** holds the Main Grandstand, opposite the pit lane, and is
+  where the pre/post-race ceremonies happen.
