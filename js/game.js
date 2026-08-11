@@ -3395,6 +3395,14 @@ function updateCar(c, dt, ranked) {
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     vmax *= 1 + bandFactor;
   }
+  // Caution: under VSC / safety car the whole field runs to a delta pace, not
+  // racing speed — the AI used to blast through a caution at full tilt. Cautions
+  // are a race setting (off by default), so a normal race is unchanged. A
+  // fraction of the pace-scaled top speed, so it rides OVERALL SPEED like the rest.
+  if (!c.human && raceCtl) {
+    const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
+    if (lvl >= 2) vmax = Math.min(vmax, VMAX * PACE * (lvl === 3 ? 0.45 : 0.6));
+  }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
   // in our lane, and a "stuck" timer. Shared by the braking and steering logic

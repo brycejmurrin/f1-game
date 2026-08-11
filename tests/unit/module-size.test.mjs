@@ -60,7 +60,7 @@ const CEILINGS = {
   // measurement — splitting them would put two halves of one framing rule in two
   // files. Bug-explaining growth at the site of the bug, not a feature.
   // game.js: concurrent camera/preview work + wheel-to-wheel racecraft.
-  "js/game.js": 7888,
+  "js/game.js": 7896,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
