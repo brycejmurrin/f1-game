@@ -4897,10 +4897,19 @@ function renderSetupPreview(dt) {
   // The docked #cs-inner panel covers the right portion of the canvas, so the
   // car only ever gets (1 - panelFrac) of the frustum. Read the panel's live
   // pixel width so this tracks every breakpoint/viewport automatically.
+  // WHICH WAY DOES THE PANEL LEAVE ROOM? It docks to the RIGHT on a wide screen
+  // and to the TOP on a tall one, because a portrait phone has no width to give
+  // and plenty of height — so the gap the car gets is either beside the panel or
+  // below it. Measure both and shift along the axis that actually has the room;
+  // shifting the wrong one is what left the car invisible behind a full-width
+  // sheet in portrait.
   const canvasEl = $("game"), panelEl = $("cs-inner");
-  let panelFrac = 0;
-  if (canvasEl && panelEl && canvasEl.clientWidth > 0) {
-    panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
+  let panelFrac = 0, panelFracY = 0;
+  if (canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
+    const pr = panelEl.getBoundingClientRect();
+    const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
+    if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
+    else panelFracY = clamp(pr.bottom / ch, 0, 0.85);
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF was chosen so the
   // car cleared the full frustum — but a third of that frustum is behind the
@@ -4922,9 +4931,13 @@ function renderSetupPreview(dt) {
                setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe];
   M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
-  // frustum horizontally (off-axis / "lens shift") so the car renders centered
-  // in the VISIBLE left region instead.
-  _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
+  // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
+  // region instead — sideways when the panel is docked to an edge, downwards
+  // when it sits across the top. col2 row0 shifts NDC.x, col2 row1 shifts NDC.y;
+  // in both cases a positive value moves the image the OTHER way, which is why
+  // the car ends up at -frac, the centre of the gap the panel is not covering.
+  _spProj[8] = panelFrac;
+  _spProj[9] = panelFracY;
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];

@@ -69,6 +69,50 @@
   /* Never wider than the safe box; the formula above decides the rest. */
   width: var(--cs-sheet-w);
 }
+/* ---------- portrait: split the OTHER way ---------- */
+/* A portrait phone has no width to give the car — `min(100%)` above hands the
+   panel the whole 393px and the car is left rendering behind an opaque sheet,
+   which is what the gallery shot showed: a sliver of orange behind the category
+   grid and nothing else. But portrait has height to spare, which is the one
+   axis the docked layout never uses. So dock to the TOP instead of the side and
+   give the car a band along the bottom.
+
+   `orientation`, not the sheet's own `data-shape`: shape is measured FROM the
+   sheet's box, and a rule that resizes the sheet would feed its own input —
+   62% height could flip it back to `wide` and oscillate. The viewport's
+   orientation is an outside fact and cannot loop. It is also the one question
+   here that `zoom` does not distort: portrait is portrait at every UI SIZE.
+
+   renderSetupPreview reads #cs-inner's live rect and shifts the frustum DOWN
+   when the gap is below rather than beside — the two halves of this have to
+   agree, so if you change the split here, that is the other end of it. */
+/* NO CAR BAND IN PORTRAIT — MEASURED, NOT ASSUMED. Docking to the top and
+   giving the car a strip along the bottom is the obviously right idea (portrait
+   has height and no width, and the frustum shift below already supports it),
+   and it does not fit. At the fit distance the car is ~29% of the frame tall,
+   so the band cannot be under ~30%; at 31% on a 393x852 phone the option list
+   measured ZERO fully-visible rows, and at 38% the header overflowed its own
+   grid track and clipped DONE. The head, the category grid and the foot have
+   already spent the height.
+
+   What would pay for it: the category grid is four rows of three in portrait,
+   and the lighting tuner solves the same problem by running its chips as one
+   horizontally-scrolling strip (~110px back, see css/tuner.css). Do that first,
+   then the band is affordable. renderSetupPreview already shifts the frustum
+   down when the panel leaves room below, so the engine half is done and waiting.
+
+   Kept from the attempt, because it stands on its own: the stat block goes to
+   two columns in portrait. Four label+bar+number groups each need barely half
+   the width, and portrait's ~367px container sits under the 400px the container
+   query uses to add the second column — the right threshold for the option
+   list, the wrong one for these. */
+@media (orientation: portrait) {
+  /* #cs-inner in front deliberately. The base `#cs-stats-inner` rule that sets
+     one column lives further down this file, and at equal specificity the later
+     rule wins — written bare, this one measured as one 247px column and did
+     nothing. */
+  #cs-inner #cs-stats-inner { grid-template-columns: 1fr 1fr; }
+}
 
 /* ---------- header ---------- */
 /* .sheet-head is a space-between row; the setup header is a stack of three

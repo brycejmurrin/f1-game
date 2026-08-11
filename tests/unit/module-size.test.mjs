@@ -59,7 +59,12 @@ const CEILINGS = {
   // region already lives here, three lines up, and the fit is the same
   // measurement — splitting them would put two halves of one framing rule in two
   // files. Bug-explaining growth at the site of the bug, not a feature.
-  "js/game.js": 7826,
+  // 7826 -> 7839 for the portrait split: the preview has to know WHICH WAY the
+  // panel left room, because on a tall screen it docks to the top and the car
+  // gets a band below rather than a column beside. The horizontal lens shift it
+  // pairs with is four lines away; splitting them would put one framing decision
+  // in two files. Bug-explaining growth at the site of the bug, not a feature.
+  "js/game.js": 7839,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
