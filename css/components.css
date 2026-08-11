@@ -200,6 +200,27 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-rule);
   pointer-events: none;
 }
+/* ---------- the SHORT sheet ---------- */
+/* `data-density` is written by js/game/sheetshape.js from the sheet's height in
+   its OWN units — the header there explains why neither a media query nor the
+   `sheet` container can answer this (one is blind to `zoom`, the other to
+   height). This is the tier that consumes it.
+
+   WHY IT EXISTS. Measured in the garage at 1000x462, head+foot as a share of the
+   sheet: 46% at UI SIZE 100%, 59% at 130%, 68% at 150% — because `zoom` scales
+   padding exactly as fast as it scales text while the sheet's height stays
+   pinned to the viewport. At 150% that left ONE option row on screen. Raising UI
+   SIZE is a request for bigger TEXT, not bigger chrome, so on a short sheet the
+   chrome gives its vertical padding back to the content. Horizontal padding is
+   untouched: width is not the axis that is scarce here, and taking it would
+   re-introduce the truncation this same session spent its time removing. */
+.sheet[data-density="compact"] .sheet-head {
+  padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
+  gap: calc(var(--gap) * 0.6);
+}
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(13px, calc(3 * var(--vhz)), 18px); }
+.sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
+.sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
   width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is

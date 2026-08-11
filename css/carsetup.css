@@ -821,4 +821,24 @@ body:not(.desktop) .cs-cam-lbl,
 body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
 body:not(.desktop) .cs-cam-caret { font-size: 11px; }
 body:not(.desktop) #cs-unlimited { font-size: 12px; }
+
+/* ---------- the SHORT garage head ---------- */
+/* `data-density="compact"` (js/game/sheetshape.js) means the sheet is short in
+   its OWN units — which is what UI SIZE 150% does to any screen, since `zoom`
+   shrinks the coordinate space the CSS is written in while the viewport stays
+   put. Measured at 1000x462 and UI SIZE 150%, in own units: a 297px sheet whose
+   head took 142px, of which #cs-budget-row was 66 and the stat block 52 — more
+   between them than the option list was left with, and the list was down to a
+   SINGLE row.
+
+   The budget line gives its dedicated row back. `flex: 1 1 100%` above is the
+   right answer when WIDTH is the scarce axis (it stopped "…600 cr rema…"), and
+   the wrong one when HEIGHT is: 200px is the width that readout actually needs,
+   so ask for exactly that and let it share the line with FREE BUILD when the row
+   can seat both — it wraps on its own if it cannot, so nothing re-truncates.
+   Specificity is deliberate: the rule it overrides is a bare #id inside a
+   container query, and a matching-weight selector here would silently lose. */
+#cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
+#cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
+#cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
 } /* @layer components */

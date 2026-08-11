@@ -59,6 +59,28 @@ window.SheetShape = (function () {
     if (el.dataset.pair !== next) el.dataset.pair = next;
   }
 
+  /* THE THIRD ANSWER: is the sheet SHORT — and short in the units its own CSS
+   * is written in, which is not the same question as "is the viewport short".
+   * `.sheet` carries `zoom: var(--ui-scale)`, so at UI SIZE 150% a 462px-tall
+   * viewport gives the layout a 297px sheet while a media query still reads 462.
+   * The same physical squeeze needs a different `max-height` at every scale,
+   * which is why no @media can express it — and `container: sheet / inline-size`
+   * cannot either, since an inline-size container is blind to height.
+   *
+   * MEASURED, garage at 1000x462, the head+foot share of the sheet: 46% at UI
+   * SIZE 100%, 59% at 130%, 68% at 150% — the extra size went to padding and
+   * chrome, so raising UI SIZE to read better left ONE option row on screen.
+   * Dividing the measured height by the element's own zoom is what makes this
+   * answerable at all; getBoundingClientRect is in visual px, the CSS is not. */
+  const SHORT_ON = 380, SHORT_OFF = 420;   // hysteresis, same reason as the others
+
+  function classifyDensity(el, hOwn) {
+    const was = el.dataset.density === "compact";
+    const now = was ? hOwn < SHORT_OFF : hOwn < SHORT_ON;
+    const next = now ? "compact" : "normal";
+    if (el.dataset.density !== next) el.dataset.density = next;
+  }
+
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
     const ratio = h / w;
@@ -67,6 +89,7 @@ window.SheetShape = (function () {
       : (ratio >= TALL_ON ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
     classifyPair(el, w);
+    classifyDensity(el, h / (el.currentCSSZoom || 1));
   }
 
   let ro = null;
@@ -113,6 +136,27 @@ window.SheetShape = (function () {
       { attributes: true, attributeFilter: ["hidden"], subtree: true });
   }
 
+  /* UI SIZE MUST RE-MEASURE, AND THE ResizeObserver WILL NOT DO IT.
+     `--ui-scale` is an inline style on documentElement (game.js applyScale) that
+     lands as `zoom` on every .sheet. That changes the units the sheet's CSS is
+     written in without moving its visual box, and the observer above did not
+     fire for it — measured: at 1000x462 the garage sat on data-density="normal"
+     at UI SIZE 150% while its own height was 297px, well inside the compact
+     tier. Watch where the property is written instead. Cheap: documentElement's
+     own style attribute changes about as often as a settings slider moves. */
+  function reclassify() {
+    seen.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      classify(el, r.width, r.height);
+    });
+  }
+
+  function watchScale() {
+    if (typeof MutationObserver !== "function") return;
+    new MutationObserver(reclassify).observe(document.documentElement,
+      { attributes: true, attributeFilter: ["style"] });
+  }
+
   function init() {
     if (typeof ResizeObserver === "function") {
       ro = new ResizeObserver((entries) => {
@@ -124,6 +168,7 @@ window.SheetShape = (function () {
     }
     scan();
     watchVisibility();
+    watchScale();
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {
@@ -140,5 +185,5 @@ window.SheetShape = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, observe, shapeOf: (el) => (el && el.dataset.shape) || null };
+  return { scan, observe, reclassify, shapeOf: (el) => (el && el.dataset.shape) || null };
 })();
