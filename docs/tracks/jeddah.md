@@ -54,3 +54,25 @@ The world's fastest street circuit: long flat-out sweeps and the lengthy flowing
 - **Jeddah Yacht Club** and marina, at the harbour end.
 - 6.174 km, 27 corners — the fastest street circuit on the calendar; the
   long walled canyons between corners are the defining *shape*.
+
+
+## Outcome
+
+The banked findings were **already built**: King Fahd's Fountain is modelled at
+its real 312 m as a lit offshore plume, the corniche and Red Sea run down the
+seaward side, and there is a marina with a yacht-club building.
+
+The gap was Jeddah's **architecture**. The inland side was generic modern city
+mass, and Jeddah has the one building type on the calendar that cannot be
+mistaken for anywhere else: **Al-Balad**, the UNESCO-listed old town. Tall
+narrow coral-stone tower houses, four to six storeys, packed shoulder to
+shoulder — and hung off their faces, tier upon tier of **roshan**: deep
+projecting bay windows of carved wooden lattice, traditionally painted a soft
+teal-green against the pale coral stone.
+
+**The roshan are the building.** A plain coral box is just a beige box, so the
+lattice is modelled explicitly — bay, vertical mullions, and the shallow
+pitched hood over each one (roshan are roofed). Ground floors stay blank; the
+lattice starts at first floor, as it does in Al-Balad. Sited inland and set
+well back at gap 150–200, because Al-Balad is a few km from the Corniche: this
+is the old town *on the skyline behind* the modern city, not a trackside façade.

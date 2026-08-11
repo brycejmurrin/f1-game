@@ -68,3 +68,31 @@ venue, not a normal paddock landscape:
 - **Downtown Montreal's skyline** across the St Lawrence.
 - Parc Jean-Drapeau is **lush gardens and public artworks**, so the infield
   should read as landscaped parkland rather than service compound.
+
+
+## Outcome
+
+Most of the banked list was **already built**: the Biosphère geodesic dome, the
+Olympic Rowing Basin, the Casino pavilions, the downtown skyline and Habitat 67.
+
+Two Expo-67 things were missing.
+
+**Calder's *Trois disques* (1967)** — commissioned for Expo 67, formally
+*Trois disques*, universally called *L'Homme*. Parc Jean-Drapeau is full of
+public art and the circuit had none of it; this is the piece that is a landmark
+in its own right. It stands on the Île Sainte-Hélène side, so it reads across
+the water. Two things make it recognisable and both are easy to get wrong:
+- It is built from **flat plates splaying outward from a narrow waist**. With
+  no arbitrary-axis rotation available, each leg is stepped outward as it
+  descends; at this distance the stagger reads as a lean.
+- It is **unpainted stainless steel** — *not* the vermilion or black most
+  Calder stabiles wear. A red one here would be the wrong sculpture.
+- The three discs are flat cylinders standing on edge, with the basis permuted
+  so they read as plates rather than drums.
+
+**The Jardins des Floralies** — the infield of Île Notre-Dame is not service
+compound, it is a formal ornamental garden laid out for the 1980 Floralies
+Internationales, with canals, footbridges and massed bedding. The thing that
+must read is that the planting is **geometric**: rectangular parterres in
+blocks of single strong colour, edged in clipped green, on gravel walks.
+Scattered bushes would say *park*; blocks say *Floralies*.

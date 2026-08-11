@@ -26,13 +26,19 @@ per track — it is the last edit before a commit that ships JS.
 
 ## Where this stands
 
-- **Fully done** (researched → brief → dressed → `verify-track` OK → committed):
-  bahrain, monaco, silverstone, spa, monza, suzuka.
-- **Researched, findings written into the brief, not yet dressed:** singapore,
+- **Fully done** (researched → brief → dressed → `verify-track` OK → committed),
+  **15 circuits**: bahrain, monaco, silverstone, spa, monza, suzuka, singapore,
   cota, interlagos, vegas, zandvoort, jeddah, albert_park, imola, montreal.
-  Each of these has a "Research pass — findings (not yet built)" section naming
-  exactly what to build; start there, no re-research needed.
 - **Not started:** the remaining 25.
+
+**A pattern worth carrying forward.** In the second batch of nine, *most* banked
+findings turned out to be **already implemented** — Zandvoort had all four,
+COTA had both landmarks, Jeddah's 312 m fountain and Albert Park's golf course
+and CBD skyline were all there. The value came from the second look: audit
+first, and when the obvious landmark is already built, ask what the *place*
+has that the circuit doesn't (Al-Balad's roshan, Imola's vine rows, Interlagos'
+unpainted blockwork, the Floralies parterres). Grep before you build — and note
+that `grep -i biosphere` misses `Biosphère`, which nearly cost a duplicate.
 
 Guards last run green at build 1073: `test:tiny` 71/71, `test:tooling-fast`
 350/350.
@@ -53,12 +59,12 @@ Guards last run green at build 1073: `test:tiny` 71/71, `test:tooling-fast`
 | 10 | vegas | ✓ | ✓ | ✓ | ✓ |
 | 11 | madrid | | | | |
 | 12 | zandvoort | ✓ | ✓ | ✓ | ✓ |
-| 13 | jeddah | ✓ | ✓ | | |
-| 14 | albert_park | ✓ | ✓ | | |
+| 13 | jeddah | ✓ | ✓ | ✓ | ✓ |
+| 14 | albert_park | ✓ | ✓ | ✓ | ✓ |
 | 15 | shanghai | | | | |
 | 16 | miami | | | | |
-| 17 | imola | ✓ | ✓ | | |
-| 18 | montreal | ✓ | ✓ | | |
+| 17 | imola | ✓ | ✓ | ✓ | ✓ |
+| 18 | montreal | ✓ | ✓ | ✓ | ✓ |
 | 19 | redbull | | | | |
 | 20 | hungaroring | | | | |
 | 21 | baku | | | | |
