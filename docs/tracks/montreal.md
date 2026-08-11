@@ -50,3 +50,21 @@ Clockwise; s=0.0 at start/finish on the main straight.
 - Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with Bienvenue/Bonjour Québec signage.
 - Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper.
 - Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.
+
+## Research pass — findings (not yet built)
+
+The circuit is on **Île Notre-Dame**, an artificial island in the St Lawrence
+built for **Expo 67**, inside Parc Jean-Drapeau. That origin is the key to the
+setting — everything around it is either Expo-era architecture or a rowing
+venue, not a normal paddock landscape:
+
+- **The Olympic Rowing Basin** (1976) runs alongside the circuit — the largest
+  artificial rowing basin in North America. Long, dead-straight, still water.
+- **The Biosphère** — Buckminster Fuller's geodesic dome from Expo 67, on the
+  neighbouring Île Sainte-Hélène. A steel sphere lattice with nothing else like
+  it on the calendar.
+- **Casino de Montréal** — the former French and Quebec Expo 67 pavilions,
+  right on Île Notre-Dame.
+- **Downtown Montreal's skyline** across the St Lawrence.
+- Parc Jean-Drapeau is **lush gardens and public artworks**, so the infield
+  should read as landscaped parkland rather than service compound.

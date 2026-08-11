@@ -40,3 +40,20 @@ Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00�
 - Keep the first third flat, then ramp ground-box tops up for Piratella/Acque Minerali and drop them into Rivazza.
 - Thin far mountain rings before stacking hero riverside / hollow / crest geometry.
 - A small bronze statue box on a green lawn near Tamburello reads as the Senna memorial — a quiet landmark.
+
+## Research pass — findings (not yet built)
+
+- **The Santerno river borders the circuit on the paddock side** — it is what
+  the place was originally named after (Autodromo di Imola → Dino Ferrari,
+  1970 → Enzo e Dino Ferrari, 1988). Running water along the paddock boundary
+  is a real, checkable feature, not decoration.
+- The setting is **rolling hills, plains and hillside vineyards**, dropping
+  into the Santerno valley. Vineyard rows on the higher ground behind Acque
+  Minerali / Piratella are very Emilia-Romagna and cheap to read (parallel
+  low rows following the contour).
+- **Imola is Ferrari's home circuit** and 60 km from Maranello: the crowd is a
+  *tifosi* crowd, so red should dominate the stands, banners and flags far more
+  than at a neutral venue.
+- Named features worth checking: **Tosa** (slow uphill bend), **Piratella**
+  (blind crest), **Acque Minerali** (the rollercoaster dip — named for the
+  mineral-water park it runs through), **Rivazza**.
