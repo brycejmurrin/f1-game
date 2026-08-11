@@ -32,7 +32,7 @@ per track — it is the last edit before a commit that ships JS.
 | 2 | monaco | ✓ | ✓ | ✓ | ✓ |
 | 3 | silverstone | ✓ | ✓ | ✓ | ✓ |
 | 4 | spa | ✓ | ✓ | ✓ | ✓ |
-| 5 | monza | | | | |
+| 5 | monza | ✓ | ✓ | ✓ | ✓ |
 | 6 | suzuka | | | | |
 | 7 | singapore | | | | |
 | 8 | cota | | | | |
