@@ -368,15 +368,36 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // surface by construction.
   if (mode !== "cockpit" && mode !== "hood" && track.surface) {
     const n = track.n;
-    const k = ((Math.round(s / track.total * n) % n) + n) % n;
-    // lateral distance of the eye from this node's centreline
-    const ex = eye[0] - track.px[k], ez = eye[2] - track.pz[k];
-    const lat = ex * track.rx[k] + ez * track.rz[k];
-    const beyond = Math.max(0, Math.abs(lat) - track.hw[k]);
+    // INTERPOLATE THE FLOOR BETWEEN NODES. surface.heightAt() rounds its node
+    // index and reads py at that node, so asking it once at Math.round(s) makes
+    // the floor a STAIRCASE with one step per ~4 m node. That is invisible while
+    // the eye rides clear of it — which it does at the shipped framing, by about
+    // half a metre on Monaco — and it is why this went unnoticed. Drop the eye
+    // into the clamp (the CAMERA TUNER's HEIGHT/DISTANCE do exactly that, which
+    // is the whole point of applying them above this) and the eye inherits the
+    // staircase: on a gradient each step is nodeSpacing x grade, MEASURED at
+    // 0.45 m on Beau Rivage, snapping ~11 times a second at racing speed. It
+    // vanishes when parked and on the flat (adjacent nodes are level there), so
+    // it reads as a fast vertical judder that only happens while climbing.
+    //
+    // Sampling both neighbours and lerping makes the floor continuous, so a
+    // lowered camera SLIDES along the terrain instead of stepping down it.
+    // js/track/mesh.js banking() lerps for exactly this reason ("so cars and
+    // cameras do not jump between the road mesh's ~4 m longitudinal nodes") —
+    // this clamp simply never got the same treatment.
+    const pos = (((s % track.total) + track.total) % track.total) / track.total * n;
+    const k0 = Math.floor(pos) % n, k1 = (k0 + 1) % n, kf = pos - Math.floor(pos);
+    // Lateral offset of the eye, measured against the INTERPOLATED frame at s
+    // (cvA still holds that sample) rather than one node's — same reason: a
+    // per-node frame steps the lateral reading too.
+    const ex = eye[0] - cvA.p[0], ez = eye[2] - cvA.p[2];
+    const lat = ex * cvA.r[0] + ez * cvA.r[2];
+    const beyond = Math.max(0, Math.abs(lat) - cvA.hw);
     // Pooled out-param — this runs once per frame for every camera mode, and
     // banking() allocates a fresh { dy, roll } for any caller that omits it.
     const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr) : null;
-    const ground = track.surface.heightAt(k, beyond) + (bank ? bank.dy : 0);
+    const ground = lerp(track.surface.heightAt(k0, beyond),
+                        track.surface.heightAt(k1, beyond), kf) + (bank ? bank.dy : 0);
     const MIN_CLEAR = 0.8;
     if (eye[1] < ground + MIN_CLEAR) eye[1] = ground + MIN_CLEAR;
   }
