@@ -61,7 +61,7 @@ not.
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `mb-`, `rs-`, `no-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`) is one file each and needs no map.
 
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,

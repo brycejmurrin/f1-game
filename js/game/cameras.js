@@ -156,7 +156,25 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const dep = extra.deploy ? 1 : 0;
   const spN = clamp(spd / VMAX, 0, 1);
   Tracks.sample(track, wrapS(s), cvA);
-  const p = [cvA.p[0] + cvA.r[0] * x, cvA.p[1] + bankDy, cvA.p[2] + cvA.r[2] * x];
+  // WHICH ELEVATION A CAMERA READS. Tracks.sample lerps py between the ~4 m
+  // nodes, which is only C0 — the height is continuous but its slope jumps at
+  // every node, so any eye built on it steps its vertical velocity ~11 times a
+  // second on a gradient (see centreY). chase/far were moved onto the C1 curve
+  // when that was diagnosed; every other world-facing mode was left on the raw
+  // sample and MEASURED spiky at stock framing on Monaco's climb — drift 8.6,
+  // heli 9.4, tcam/rear/cinematic/reverse 10.2 (worst vertical acceleration as a
+  // multiple of its own rms; a smooth curve stays near 3).
+  //
+  // cockpit and hood deliberately keep the RAW sample. They are bolted to the
+  // car, the car body is drawn from the raw profile, and an eye that disagreed
+  // with the chassis by even a centimetre would float in the cockpit — matching
+  // the car matters more there than smoothness, and riding the car's own bumps
+  // is what an onboard camera is FOR.
+  const onboard = mode === "cockpit" || mode === "hood";
+  const elevY = (at) => (onboard ? null : centreY(track, at));
+  const p = [cvA.p[0] + cvA.r[0] * x,
+             (onboard ? cvA.p[1] : centreY(track, s)) + bankDy,
+             cvA.p[2] + cvA.r[2] * x];
   const t = cvA.t, r = cvA.r;
   // Curved look-ahead: aim at the actual centreline `d` m up the road — it bends
   // with the corner — instead of a straight tangent extrapolation, so the chase
@@ -165,7 +183,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const aheadPt = (d, h, lat) => {
     Tracks.sample(track, wrapS(s + d), cvB);
     const lx = lat || 0;
-    return [cvB.p[0] + cvB.r[0] * lx, cvB.p[1] + (h || 0), cvB.p[2] + cvB.r[2] * lx];
+    const ey = elevY(s + d);
+    return [cvB.p[0] + cvB.r[0] * lx, (ey === null ? cvB.p[1] : ey) + (h || 0), cvB.p[2] + cvB.r[2] * lx];
   };
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
@@ -248,7 +267,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     Tracks.sample(track, wrapS(s - 26), cvB);
     const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
-    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, cvB.p[1] + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
+    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, centreY(track, s - 26) + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
     tgt = [p[0], p[1] + 0.8, p[2]];
     fov = 36 + dep * 2;
   } else if (mode === "reverse") {
@@ -282,7 +301,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
     const cx = x * 0.3;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 10) + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
     tgt = [p[0], p[1] + 0.6, p[2]];
     fov = lerp(55, 68, spN);
   } else if (mode === "tcam") {
@@ -304,7 +323,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const slipN = clamp((extra.slipLat || 0) / 8, -1, 1);
     Tracks.sample(track, wrapS(s - 6.2), cvB);
     const cx = x * 0.5 - slipN * 5.5;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 6.2) + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
     tgt = [p[0], p[1] + 0.75, p[2]];
     fov = lerp(55, 70, spN) + dep * 3;
   } else {

@@ -201,7 +201,18 @@ const api = {
     const m = String(mode).toLowerCase();
     if (!CAM_MODES.some((c) => c.id === m)) return false;
     const s = (((frac % 1) + 1) % 1) * G.track.total;
-    const v = camVantage(m, s, lat, speed, 0, {});
+    // Pass a CAR POSE, exactly as render() and snapGameCam() do. Without one the
+    // chase/onboard rigs silently fall back to their ROAD-FRAME branch — a
+    // different rig from the one the game ever shows — so this hook previewed
+    // framing no player sees, and a camera investigation that trusted it measured
+    // the wrong code path for hours while reporting everything as clean. The pose
+    // is synthesised from the requested (s, lat) since previewCam deliberately
+    // does not move the car: centre + right*lat for the position, and the road
+    // tangent's heading, which is what a car sitting at that point would have.
+    Tracks.sample(G.track, s, smp);
+    const px = smp.p[0] + smp.r[0] * lat, pz = smp.p[2] + smp.r[2] * lat;
+    const head = Math.atan2(smp.t[0], smp.t[2]);
+    const v = camVantage(m, s, lat, speed, 0, { carPos: [px, pz], carHead: head });
     G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
   },
@@ -417,6 +428,14 @@ const api = {
     const axFrac = Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
     return {
       s: G.player.s, x: G.player.x, speed: G.player.speed, prog: G.player.prog,
+      // WORLD POSITION, full precision. The car has been world-space authoritative
+      // for a while, but this hook only ever reported the ARC frame — so anything
+      // reconstructing what the renderer does (the camera rig reads px/pz, not s)
+      // had to guess. wsInfo() exposes them rounded to 0.1 m, which is a display
+      // aid and far too coarse to difference: a camera-judder investigation needed
+      // sub-millimetre and had to abandon this hook entirely. Raw here; round at
+      // the call site if you want to print them.
+      px: G.player.px, pz: G.player.pz,
       head: G.player.head, vLat: G.player.vLat || 0,
       // yawRate (rad/s) belongs beside vLat: they are the pair every hook that
       // perturbs the car writes together — spin() and nudge() both zero or set

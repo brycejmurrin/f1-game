@@ -7638,6 +7638,22 @@ $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false)
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
+// BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
+// own, so a stale shell (or a service worker serving a cached generation) can run
+// old JS with nothing on screen to say so — during one camera-bug hunt a fix was
+// deployed three times while the reporter kept testing the previous build, and
+// neither side could tell. Read from the stylesheet's ?v=, which is the build
+// whose assets ACTUALLY loaded, rather than a constant compiled into the markup:
+// a string in the HTML would go stale with the HTML and confirm the wrong thing.
+{
+  const tag = $("pm-build");
+  if (tag) {
+    const link = document.querySelector('link[rel="stylesheet"][href*="?v="]');
+    const m = link && link.href.match(/[?&]v=(\d+)/);
+    tag.textContent = m ? `build ${m[1]}` : "build unknown";
+  }
+}
+
 // One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
