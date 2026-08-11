@@ -52,7 +52,14 @@ const CEILINGS = {
   // NOWHERE, so it existed only as an expando (the countT bug's shape, and what
   // would make an Object.seal(G) throw). Declaring a member the façade already
   // pretends to own is the ratchet-tolerated growth, not a feature.
-  "js/game.js": 7810,
+  // 7810 -> 7826 for the garage turntable's fit-to-visible-region distance, plus
+  // the comment recording what was wrong: SP_DIST_DEF framed the car against the
+  // WHOLE frustum while the docked panel covers a third of it, so every broadside
+  // swing ran the wings off both edges. The lens shift that creates the visible
+  // region already lives here, three lines up, and the fit is the same
+  // measurement — splitting them would put two halves of one framing rule in two
+  // files. Bug-explaining growth at the site of the bug, not a feature.
+  "js/game.js": 7826,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

@@ -4661,6 +4661,10 @@ let setupPreviewOn = false, setupPreviewAz = 0.6;
 // Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
 // target at y 0.35 is an elevation of atan2(1.65, 8.5).
 const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+// Half the car's BROADSIDE footprint (~5.95 m drawn, measured on screen at
+// 1440x900) plus ~12% margin. renderSetupPreview holds the auto-turntable at
+// whatever distance keeps this inside the visible half-width.
+const SP_FIT_HALF_W = 3.35;
 let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
 let setupPreviewSpin = true;
 // GARAGE active-aero demo. `setupPreviewXOn` is the button; `setupPreviewAeroX`
@@ -4887,28 +4891,40 @@ function renderSetupPreview(dt) {
   applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
-  // Pulled back + a touch wider than a "hero shot" distance so the whole
-  // ~5.4 m car (nose to rear wing) clears the frustum at any turntable angle.
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
   const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
+  // The docked #cs-inner panel covers the right portion of the canvas, so the
+  // car only ever gets (1 - panelFrac) of the frustum. Read the panel's live
+  // pixel width so this tracks every breakpoint/viewport automatically.
+  const canvasEl = $("game"), panelEl = $("cs-inner");
+  let panelFrac = 0;
+  if (canvasEl && panelEl && canvasEl.clientWidth > 0) {
+    panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
+  }
+  // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF was chosen so the
+  // car cleared the full frustum — but a third of that frustum is behind the
+  // panel, so the turntable put the front wing off the left edge and the rear
+  // wing under the panel every time it swung broadside (measured at 1440x900).
+  // Two numbers in the old note were wrong: the drawn car is ~5.95 m across at
+  // broadside, not 5.4 m (the wings are the wide part), and the margin has to
+  // come out of the VISIBLE half-width. Hold the turntable at whatever distance
+  // keeps that inside it. Only the AUTOMATIC view self-frames — picking a preset
+  // or zooming clears setupPreviewSpin, and from there the distance is theirs.
+  const spFitD = SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - panelFrac), 0.05);
+  const spDist = setupPreviewSpin
+    ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
   // PAN shifts the orbit centre and the look-at together, so strafing tracks
   // along the car instead of swinging the aim off it — the difference between
   // "walk down the flank" and "turn your head at the far end of the pit box".
-  const eye = [setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * setupPreviewDist * spCe,
-               setupPreviewOrbit[1] + setupPreviewPan[1] + setupPreviewDist * spSe,
-               setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * setupPreviewDist * spCe];
+  const eye = [setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe,
+               setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe,
+               setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe];
   M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
-  // The docked #cs-inner panel covers the right portion of the canvas — an
-  // on-axis camera centers the car behind it, half-cropped. Shift the
-  // frustum horizontally (off-axis / "lens shift") so the car renders
-  // centered in the VISIBLE left region instead. Read the panel's live
-  // pixel width so this tracks every breakpoint/viewport automatically.
-  const canvasEl = $("game"), panelEl = $("cs-inner");
-  if (canvasEl && panelEl && canvasEl.clientWidth > 0) {
-    const panelFrac = clamp(panelEl.getBoundingClientRect().width / canvasEl.clientWidth, 0, 0.85);
-    _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
-  }
+  // An on-axis camera centers the car behind the panel, half-cropped. Shift the
+  // frustum horizontally (off-axis / "lens shift") so the car renders centered
+  // in the VISIBLE left region instead.
+  _spProj[8] = panelFrac;   // see mat4 perspectiveTo layout: col2 row0 shifts NDC.x
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];

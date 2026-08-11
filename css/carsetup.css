@@ -55,8 +55,16 @@
    show you — gets the other two thirds instead of floating in the corner of the
    left half. Capped, not proportional: past ~1600px the panel does not need to
    keep growing, it just needs to stop crowding. */
+/* 420, not 460. The panel is a list of radio buttons; the car is the thing the
+   screen exists for, and 460 was leaving it 968px of a 1440px viewport — not
+   enough for the turntable to swing broadside without the wings running off both
+   edges. 420 is the tightest the panel goes while STILL clearing `--pair-at`
+   (400px + the 2px border = 402), so the rail survives with 18px to spare; below
+   that the sheet drops to the stacked phone layout and the option list halves.
+   Paired with the +3% rail share below, so the categories keep their pixel width
+   and the width comes out of the option column, which had the slack. */
 @media (min-width: 1100px) {
-  #carsetup { --cs-sheet-w: min(38vw, 460px); }
+  #carsetup { --cs-sheet-w: min(100%, 420px); }
 }
 /* A MOUSE ALWAYS GETS THE TWO-PANE PANEL. Below 1100px the sheet falls back to a
    430px floor, and 430 is four pixels under the width the rail needs — so a
@@ -466,7 +474,12 @@
      floor (142 > 112), so widening the floor cannot fix the desktop case; only
      the share can. 28% -> 148px, label 73px. See the touch floor at the end of
      this file for the same defect at the other end of the ladder. */
-  --pair-split: minmax(112px, 28%);
+  /* 31%, not 28%: the sheet lost 40px to the car above, and the rail is the
+     column that cannot absorb it — 28% of the narrower sheet would have put the
+     label back under what "SUSPENSION" needs. At 31% the rail is 130px on a
+     1440px desktop, a shade WIDER than the 128px it had at 460, and the 40px
+     comes out of the option list (276px), whose rows are short. */
+  --pair-split: minmax(112px, 31%);
   --pair-gap: var(--gap);
 }
 
