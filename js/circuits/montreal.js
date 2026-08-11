@@ -553,28 +553,48 @@
             // Four plate legs splaying out from the waist. No arbitrary-axis
             // rotation available here, so each leg is stepped outward as it
             // descends — at this distance the stagger reads as a lean.
-            for (const [dr, dt] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-              for (let i = 0; i < 7; i++) {
-                const f = i / 6;
-                const spread = 1.2 + f * 6.2;
-                addBox(stage,
-                  vadd(vadd(vadd(a.c, a.r, dr * spread), a.t, dt * spread),
-                       a.u, 10.5 - f * 10.0),
-                  [0.55 + dr * 0.0, 2.0, 2.6 - f * 0.6],
-                  i % 2 ? STEEL : STEEL_D, b);
+            // Each leg gets its OWN spread scale. With all four on identical
+            // spreads, legs sharing a dr sat at the same r and legs sharing a
+            // dt sat at the same t — either way their side faces landed on one
+            // plane. Varying thickness alone did not fix it because the t-faces
+            // depend on the splay, not the thickness. Desynchronising the
+            // splay moves every plane apart at once.
+            // Legs as round tapering members, not flat plates. Calder's real
+            // stabile IS plate steel, but four plate legs converging on one
+            // waist put faces on shared planes no matter how the splay,
+            // thickness or depth was varied — five separate attempts, all
+            // still +1 on coplanar-audit. A frustum has no flat side face to
+            // share, so the fight cannot occur. At this distance (gap 210,
+            // across the water) the silhouette is what carries the sculpture,
+            // and the splay reads the same.
+            const LEGS = [[-1, -1, 1.00], [1, -1, 1.07], [-1, 1, 1.14], [1, 1, 1.21]];
+            for (const [dr, dt, sc] of LEGS) {
+              for (let i = 0; i < 6; i++) {
+                const f = i / 5, f2 = (i + 1) / 5;
+                const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
+                const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
+                const mid = [(s1 + s2) / 2, (y1 + y2) / 2];
+                addFrustum(stage,
+                  vadd(vadd(vadd(a.c, a.r, dr * mid[0]), a.t, dt * mid[0]),
+                       a.u, mid[1]),
+                  0.85 - f * 0.22, 0.85 - f2 * 0.22, Math.abs(y1 - y2) + 0.4,
+                  i % 2 ? STEEL : STEEL_D, 7, b);
               }
             }
-            // The waist, and the upright plate body above it.
-            addBox(stage, vadd(a.c, a.u, 11.0), [3.0, 2.2, 4.0], STEEL, b);
-            addBox(stage, vadd(a.c, a.u, 14.5), [0.7, 6.0, 5.4], STEEL, b);
-            addBox(stage, vadd(vadd(a.c, a.t, 2.6), a.u, 16.0), [0.65, 5.0, 3.2], STEEL_D, b);
-            // THE THREE DISCS. Flat cylinders standing on edge — the basis is
-            // permuted so the disc axis lies across the sculpture, which is
-            // what makes them read as plates rather than as drums.
+            // Waist and body as round members, and ONE disc rather than three.
+            // Three overlapping 14-segment disc rims share facet normals, and
+            // together with the flat body plates they kept montreal at +1 on
+            // coplanar-audit through seven attempts (thickness offsets, depth
+            // offsets, splay desync, relocating the whole sculpture). Rounding
+            // the body and reducing to a single disc removes the last cluster
+            // of parallel flat faces. It is a simplification of Calder's real
+            // plate-steel form, and it is the honest trade: the ratchet exists
+            // to stop exactly this kind of drift, and a decorative landmark is
+            // not worth spending the budget it protects.
+            addFrustum(stage, vadd(a.c, a.u, 11.0), 1.5, 1.1, 2.4, STEEL, 9, b);
+            addFrustum(stage, vadd(a.c, a.u, 14.6), 1.1, 0.7, 5.6, STEEL, 9, b);
             const disc = [a.u, a.r, a.t];
-            addCyl(stage, vadd(a.c, a.u, 19.0), 3.4, 0.35, STEEL, 14, disc);
-            addCyl(stage, vadd(vadd(a.c, a.t, -4.2), a.u, 16.2), 2.5, 0.32, STEEL_D, 14, disc);
-            addCyl(stage, vadd(vadd(a.c, a.t, 4.6), a.u, 13.4), 2.0, 0.30, STEEL, 14, disc);
+            addCyl(stage, vadd(a.c, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
             stage._mat = 0;
           });
         }
@@ -596,7 +616,12 @@
         const EDGE = [0.20, 0.40, 0.20];
         const GRAVEL = [0.74, 0.71, 0.64];
         for (const [sf, side, gap] of [
-          [0.205, 1, 54], [0.245, 1, 72], [0.560, 1, 60], [0.600, 1, 80],
+          // Block gaps must clear each other. Rows step out 11 m x3, so a block
+          // at gap G occupies G..G+22 plus a 10.4 m parterre width — the first
+          // cut paired 54/72 and 60/80, which overlapped (76 vs 72, 82 vs 80)
+          // and put two identical gravel pads at the same height on one plane.
+          // That was montreal's +1 coplanar spot in CI.
+          [0.205, 1, 54], [0.245, 1, 92], [0.560, 1, 60], [0.600, 1, 98],
         ]) {
           const kk = K(sf), a0 = anchor(kk, side, gap);
           if (onTrack(a0.c[0], a0.c[2], 26)) continue;

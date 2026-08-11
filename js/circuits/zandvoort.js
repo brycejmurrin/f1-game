@@ -551,7 +551,14 @@
       // Stage where the DJ sets run between sessions. Both sit behind the
       // paddock side, so they read on the main-straight skyline above the
       // (deliberately modest) pit building without crowding it.
-      ferrisWheel(K(0.028), -1, 128, 30);
+      // NO FERRIS WHEEL, deliberately. The Dutch GP does have one and it was
+      // modelled here, but the shared ferrisWheel() emitter carries coplanar
+      // geometry of its own: adding it took zandvoort from 3 same-facing
+      // coplanar spots to 4 (and from 3 pairs to 15), and moving or resizing it
+      // does not help because the fight is internal to the emitter. Fixing that
+      // means changing a shared emitter used by Suzuka, Vegas and Montreal,
+      // which is not a change to make from a circuit file. The Fanzone stage
+      // below carries the festival read on its own.
       {
         const a = anchor(K(0.062), -1, 104), b = [a.r, a.u, a.t];
         const ORANJE = [0.96, 0.46, 0.06];

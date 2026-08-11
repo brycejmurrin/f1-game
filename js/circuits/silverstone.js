@@ -1088,19 +1088,36 @@
         // Woodlands out past Stowe/Vale, Whittlebury behind Brooklands/Luffield,
         // plus the Copse-side and Becketts-side overflow.
         for (const [s0, s1, side, gap, rows] of [
-          [0.055, 0.135,  1, 138, 5],   // Copse / Maggotts side
-          [0.300, 0.395, -1, 152, 6],   // Hangar Straight / Stowe — Woodlands
-          [0.470, 0.560,  1, 146, 5],   // Vale / Club overflow
-          [0.760, 0.860, -1, 134, 5],   // Brooklands / Luffield — Whittlebury
+          // Gaps are chosen to CLEAR the existing far hedgerows, which sit at
+          // 105/120/150/155/160/165 on specific arcs. The first cut put field 2
+          // (rows from 152) across the s0.28-0.32 hedge at 165, and field 3
+          // (rows from 146) across the s0.48-0.52 hedge at 155 — tents grew
+          // straight through both, which is what tripped CI's prop-clipping
+          // ratchet (silverstone 19 -> 21 severe). Moved out past them.
+          [0.055, 0.135,  1, 196, 5],   // Copse / Maggotts side
+          [0.300, 0.395, -1, 208, 6],   // Hangar Straight / Stowe — Woodlands
+          [0.470, 0.560,  1, 202, 5],   // Vale / Club overflow
+          [0.760, 0.860, -1, 192, 5],   // Brooklands / Luffield — Whittlebury
         ]) {
           const span = (s1 - s0 + 1) % 1;
           // Pitch spacing in METRES, not in nodes. Deriving cols from the node
           // count put one column every ~90 m and produced 30 tents a field —
           // a lay-by, not a campsite. span*n*ds is the field's arc length.
           const cols = Math.max(8, Math.round(span * n * ds / 12));
+          // Column pitch is nominal CENTRELINE arc length, but these fields sit
+          // 130-175 m out — and on the inside of a bend the anchors compress
+          // far below that, so tents pitched at a fixed 12 m step grew through
+          // each other. That is what tripped CI's prop-clipping ratchet
+          // (silverstone 19 -> 21 severe); it is the same compression that took
+          // Monza's park wall from 8 coplanar spots to 22. Measure the real
+          // step and drop a column that lands too close to the one before it.
+          let prevC = null;
           for (let c = 0; c < cols; c++) {
             const sf = (s0 + span * (c / cols)) % 1;
             const kk = k(sf);
+            const probe = anchor(kk, side, gap);
+            if (prevC && Math.hypot(probe.c[0] - prevC[0], probe.c[2] - prevC[2]) < 7) continue;
+            prevC = probe.c;
             for (let r = 0; r < rows; r++) {
               const hv = hash(kk * 31 + r * 7 + gap);
               if (hv < 0.18) continue;                    // gaps: lanes and gaps
@@ -1127,7 +1144,7 @@
             }
             // Flagpoles — the campsite banner forest, one per few pitches.
             if (hash(kk * 13 + gap) > 0.72) {
-              const a = anchor(kk, side, gap - 5);
+              const a = anchor(kk, side, gap - 3);
               if (!onTrack(a.c[0], a.c[2], 22)) {
                 const b = [a.r, a.u, a.t];
                 addCyl(out, a.c, 0.07, 6.2, [0.80, 0.80, 0.82], 4, b);

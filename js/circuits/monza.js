@@ -97,40 +97,43 @@
       // circuit had the trees and the Villa but not the thing that makes them
       // a park rather than a forest, so the outfield read as open countryside.
       //
-      // Run in three arcs behind the treeline (gap 62-78) rather than lap-wide:
-      // the wall should be something you catch through the pines, not a fence
-      // around the racing. Rendered brick-warm so it separates from the grey
-      // concrete of the Sopraelevata ruin, which is the other long low mass
-      // out there.
+      // Built on the engine's `wall()` emitter, NOT on a hand-rolled box loop.
+      // The first version walked the arc itself and emitted a fixed-length
+      // panel per node, which overlapped its neighbour wherever the anchors
+      // compress on the inside of a bend — two same-colour side faces on one
+      // plane, facing the same way, which is a guaranteed z-fight. It took
+      // monza from 8 coplanar spots to 22 and CI caught it. Shortening the
+      // panel got it to 10; measuring the true anchor step made it 15. The
+      // hand-rolled approach was simply the wrong tool. `wall()` walks with
+      // `along()` and carries the along-track length in the node SCALE, so
+      // consecutive segments abut exactly instead of guessing at a spacing.
+      //
+      // Three arcs behind the treeline rather than lap-wide: the wall should be
+      // something caught THROUGH the pines, not a fence around the racing.
+      // Brick-warm, so it separates from the grey concrete of the Sopraelevata
+      // ruin, which is the other long low mass out there.
       {
-        const BRICK   = [0.56, 0.40, 0.32];
-        const BRICK_W = [0.62, 0.45, 0.36];
-        const CAP     = [0.70, 0.68, 0.62];
+        const BRICK = [0.56, 0.40, 0.32];
+        const CAP   = [0.70, 0.68, 0.62];
         for (const [s0, s1, side, gap] of [
           [0.100, 0.235, -1, 68],
           [0.415, 0.545,  1, 74],
           [0.640, 0.780, -1, 62],
         ]) {
+          wall(s0, s1, side, gap, 2.6, BRICK, 0.55);
+          // Piers: isolated masonry posts every ~34 m, proud of the wall in
+          // both width and height so none of their faces share a plane with
+          // it. Sparse and free-standing, so they cannot seam against each
+          // other the way the old per-node panels did.
           const span = (s1 - s0 + 1) % 1;
-          const steps = Math.max(8, Math.round(span * n * ds / 9));
-          for (let i = 0; i < steps; i++) {
-            const sf = (s0 + span * (i / steps)) % 1;
-            const a = anchor(K(sf), side, gap);
+          const count = Math.max(3, Math.round(span * n * ds / 34));
+          for (let i = 0; i <= count; i++) {
+            const a = anchor(K((s0 + span * (i / count)) % 1), side, gap);
             if (onTrack(a.c[0], a.c[2], 20)) continue;
             const b = [a.r, a.u, a.t];
-            const hv = hash(i * 17 + gap);
             out._mat = MAT.STONE;
-            // Wall panel, slightly uneven in height — this is 19th-century
-            // brickwork on undulating ground, not a precast barrier.
-            const wh = 2.5 + hv * 0.35;
-            addBox(out, vadd(a.c, a.u, wh * 0.5), [0.55, wh, 9.4],
-                   hv < 0.45 ? BRICK_W : BRICK, b);
-            addBox(out, vadd(a.c, a.u, wh + 0.11), [0.78, 0.22, 9.5], CAP, b);
-            // Pier every fourth panel.
-            if (i % 4 === 0) {
-              addBox(out, vadd(a.c, a.u, (wh + 0.5) * 0.5), [0.95, wh + 0.5, 1.1], BRICK, b);
-              addBox(out, vadd(a.c, a.u, wh + 0.72), [1.15, 0.3, 1.3], CAP, b);
-            }
+            addBox(out, vadd(a.c, a.u, 1.55), [0.95, 3.1, 1.1], BRICK, b);
+            addBox(out, vadd(a.c, a.u, 3.25), [1.15, 0.3, 1.3], CAP, b);
             out._mat = 0;
           }
         }
@@ -151,7 +154,6 @@
                 addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 6.1), [0.7, 0.9, 0.8], STONE, b);
               }
               stage._mat = MAT.METAL;
-              // Two gate leaves of vertical railings, standing open.
               for (const [t, sgn] of [[-3.6, -1], [3.6, 1]]) {
                 for (let r = 0; r < 7; r++) {
                   addCyl(stage, vadd(vadd(vadd(a.c, a.t, t + sgn * r * 0.42),

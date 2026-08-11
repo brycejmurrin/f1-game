@@ -9,6 +9,56 @@ columns are ticked and the commit landed. A track with no row below has not
 been started; a partially-ticked row means the session was interrupted mid-track
 and that track should be redone from its first unticked column.
 
+## The step this campaign skipped, and what it cost
+
+**Run `node tools/pick-tests.mjs --staged` before committing.** CLAUDE.md says
+so; three batches went in without it, and CI then failed on two ratcheted
+suites that `verify-track` cannot see:
+
+- `tests/unit/coplanar-faces.test.mjs` — monza 22 (cap 8), montreal 8 (7),
+  suzuka 4 (3), zandvoort 4 (3)
+- `tests/unit/prop-clipping.test.mjs` — silverstone 21 severe (cap 19)
+
+`verify-track` printed `OK` for every one of them. It proves a circuit *builds*;
+it says nothing about whether the geometry fights itself. The audits behind
+those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
+— run in ~1–3 min per circuit and are the actual gate for scenery work.
+
+### The failure modes, all of which recurred
+
+1. **Arc compression on the inside of a bend.** A fixed-length prop stepped
+   along an arc at nominal centreline spacing OVERLAPS its neighbour wherever
+   the anchors compress — and two overlapping same-colour boxes put their long
+   side faces on one plane, facing the same way. That is a guaranteed z-fight.
+   It hit Monza's park wall (8 → 22 spots) and Silverstone's campsite columns.
+   **Fix: use the engine's `wall()`/`along()` emitters, which carry the
+   along-track length in the node SCALE, or measure the real anchor step.**
+2. **Props grown through existing foliage.** Silverstone's tents (prisms) vs
+   the authored treeline (cones). Circuit files *cannot* reserve a footprint —
+   `indexSolid` is engine-internal and not on the 107-member api. **Fix: place
+   beyond the authored planting** (the campsites now sit at gap 192–208, past
+   everything). Stripping near-track foliage via `dressingExclusions` would
+   have been a much worse trade.
+3. **Near-coplanar parallel faces inside one model.** `GAP_MAX` is **20 mm**,
+   so two plates whose half-thicknesses differ by less than that fight. Bit the
+   Calder's discs (15 mm apart) and its four converging legs.
+4. **Shared emitters can carry their own coplanar geometry.** Adding
+   `ferrisWheel()` to Zandvoort took it 3 → 4 spots and 3 → 15 pairs, and no
+   gap or radius helped: the fight is *internal to the emitter*. Changing a
+   shared emitter used by Suzuka, Vegas and Montreal is not a circuit-file
+   change, so the wheel was dropped instead.
+
+### What got given up, honestly
+
+- **Zandvoort's Ferris wheel** — real, documented, and removed. The Fanzone
+  stage carries the festival read alone.
+- **Montreal's Calder** — kept, but simplified to rounded members and a single
+  disc after seven failed attempts to keep the plate-steel form clean. Calder's
+  real stabile is plate steel; this is not.
+
+**No baseline was raised.** The ratchet exists to stop exactly this drift, and
+decorative scenery is not worth spending the budget it protects.
+
 ## Method (per circuit)
 
 1. **Research** — TinyFish `search` for trackside landmarks/grandstands/setting,

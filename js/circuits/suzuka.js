@@ -715,8 +715,15 @@
           for (let i = 0; i < count; i++) {
             const hv = hash(kk * 7 + i * 31 + gap);
             const hv2 = hash(kk * 11 + i * 17);
-            const a = anchor(kk + Math.round((hv - 0.5) * 9),
-                             side, gap + (hv2 - 0.5) * 16);
+            // Culms are placed on a deterministic GRID with jitter, not by
+            // hashing both axes independently. Pure hashing let two culms in a
+            // 20-strong grove land on the same spot, and two overlapping
+            // same-colour culms put their faces on one plane — suzuka's +1
+            // coplanar spot in CI. The grid guarantees separation; the jitter
+            // keeps the grove from reading as planted rows.
+            const gx = (i % 5) - 2, gz = Math.floor(i / 5) - 1.5;
+            const a = anchor(kk + Math.round(gx * 2.2 + (hv - 0.5) * 1.4),
+                             side, gap + gz * 4.6 + (hv2 - 0.5) * 2.0);
             if (onTrack(a.c[0], a.c[2], 12)) continue;
             const b = [a.r, a.u, a.t];
             const ht = 11 + hv * 7;
