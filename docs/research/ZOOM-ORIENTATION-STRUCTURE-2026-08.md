@@ -121,6 +121,36 @@ hub are different judgements — and flattening them during a coordinate-space
 change would confuse two independent risks. Collapse afterwards, with the survey
 as the check.
 
+## Done, and what was deliberately left
+
+Steps 1-4 landed. `tokens.css`, `tuner.css` (2), `menus.css` (3) and
+`responsive.css` (2) now decide height with `data-density`, resolved per element
+against a `--compact-at` — `@property … inherits: false`, because declared
+plainly it cascaded into every sheet and moved their thresholds from 380 to 600.
+Screens outside `.sheet` get a document-level twin on `body`
+(`innerHeight / --ui-scale`), which is what `#overlay` needed: its zoom sits on
+its children, so it has none of its own to divide by.
+
+Every scope is a `:where()`. That is not stylistic — a plain ancestor prefix
+adds a class and an attribute to every selector in the block, and that was
+enough for `#sel-inner`'s height cap to start beating a rule it had always lost
+to. `:where()` carries zero specificity, so the cascade is untouched and the
+only change is the condition.
+
+**`#hud-sectors` is left on its media query, and that is a decision rather than
+an omission.** It is the LAST zoom-blind height rule, it is genuinely wrong (the
+element carries `zoom: var(--hud-scale)`, so at HUD SIZE 150% on a 700px screen
+its own height is 467 while the query reads 700), and it is exactly ONE rule
+setting a top offset, a font size and a padding. The fix would be a second
+document-level classifier — `data-hud-density` from `innerHeight / --hud-scale`
+— duplicating the body one for a single consumer. That is machinery for
+symmetry, not for a defect anybody can see.
+
+**Trigger to revisit:** a SECOND rule appears that is height-conditioned and
+governs a `--hud-scale`-zoomed element (`.hud-top`, `.hud-gaps`, `.hud-bottom`,
+`#minimap`, `#hud-flag`, `#hud-sectors`, `#lights`, `#announce`, `.dock`). At
+two the classifier pays for itself; at one it does not.
+
 ## The honest counter-argument
 
 Nine queries is a small number, and eight of them are not currently causing a
