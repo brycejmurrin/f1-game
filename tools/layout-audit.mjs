@@ -143,6 +143,14 @@ const SCREENS = [
   // the tuner panels and every career sub-screen had never been measured once.
   // A screen nobody measures is exactly where the last four bugs were found.
 
+  // THE CIRCUIT DETAIL DIALOG, absent from this list until 2026-08-08 — 38 screens
+  // were being surveyed and this was not one of them, which is how a landscape
+  // dead-band in it survived a 380-cell run and had to be found by hand. It opens
+  // from the preview MAP in #select, not from a button with its own id.
+  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", open: async (p) => {
+      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await p.click("#sel-preview-map");
+      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 }); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
