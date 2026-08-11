@@ -150,6 +150,9 @@
    own — it is padding-sized, and this measured 40 CSS px without it. */
 #soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
 #disclaimer { color: var(--dim); font-size: 11px; margin: 0; }
+/* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
+   "which version am I running", not a label anyone should read while racing. */
+.build-tag { color: var(--dim); font-size: 11px; margin: 4px 0 0; text-align: center; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and

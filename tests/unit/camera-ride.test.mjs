@@ -257,6 +257,33 @@ test("the camera path is C1 — no node-rate or clamp-handover acceleration spik
   }
 });
 
+test("EVERY world-facing camera mode is C1 on a gradient", () => {
+  // chase/far were fixed first, and the rest were left on the raw sample. That
+  // was worse, not better: MEASURED at stock framing on Monaco's climb, drift
+  // read 8.6, heli 9.4 and tcam/rear/cinematic/reverse 10.2 — i.e. a player who
+  // never touched the CAMERA TUNER still got the judder, just in a different
+  // mode. This sweeps the lot so a new mode cannot quietly join them.
+  //
+  // cockpit and hood are excluded ON PURPOSE: they are bolted to the car and
+  // must match the raw profile the chassis is drawn from. Riding the car's own
+  // bumps is what an onboard camera is for.
+  const MODES = ["chase", "far", "drift", "overhead", "heli", "reverse", "side",
+                 "cinematic", "low", "tcam", "rear"];
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const bad = [];
+  for (const mode of MODES) {
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s, mode).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    if (!(spike < 6)) bad.push(`${mode} ${spike.toFixed(1)}x`);
+  }
+  assert.deepEqual(bad, [], `these modes step their vertical velocity at node rate: ${bad.join(", ")}`);
+});
+
 test("the soft floor never lets the eye end up below the hard floor", () => {
   // Softening the clamp handover must not weaken what the clamp is FOR. The
   // blend may only ever push the eye up.

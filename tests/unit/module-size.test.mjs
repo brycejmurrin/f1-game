@@ -64,7 +64,16 @@ const CEILINGS = {
   // gets a band below rather than a column beside. The horizontal lens shift it
   // pairs with is four lines away; splitting them would put one framing decision
   // in two files. Bug-explaining growth at the site of the bug, not a feature.
-  "js/game.js": 7839,
+  // 7839 -> 7855 for the pause-menu BUILD NUMBER. index.html carries no ?v= of
+  // its own, so a stale shell or a cached service-worker generation runs old JS
+  // with nothing on screen to say which build is executing — during one camera
+  // investigation a fix was deployed three times while the reporter kept testing
+  // the previous build, and neither side could tell. Eight lines of wiring plus
+  // the reason. It reads the ?v= off the live stylesheet link, so it has to run
+  // where the pause menu is wired; extracting it would put a two-line DOM write
+  // in its own file, ahead of a manifest entry, a script tag and a precache
+  // seed. Diagnostic growth that prevents a repeat, not a feature.
+  "js/game.js": 7855,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
