@@ -115,7 +115,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    the end of this file). Everywhere else it must not exist as a box at all, or
    it would become the flex item and the panel would size its head/tabs/rows as
    one block instead of letting #lt-rows be the only thing that gives. */
-#lt-rail { display: contents; }
+#lt-rail, #ct-rail { display: contents; }
 
 /* min-height must be a real floor, not 0. Every other child is intrinsically
    sized (flex-shrink can't take a flex item below its content height), so
@@ -480,12 +480,12 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      painted underneath RESET ALL / COPY VALUES / DONE. The rail scrolls, so it
      never needed the second row — the foot's height is exactly what row 2 is
      for. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rail {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rail, #ct-rail) {
     display: flex; flex-direction: column;
     grid-column: 1; grid-row: 1;
     min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rows {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
     grid-column: 2; grid-row: 1;
     min-height: 0; max-height: none;
   }
