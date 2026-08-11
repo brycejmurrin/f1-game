@@ -347,6 +347,22 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   font-size: 12px; letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+/* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
+   the overflow so the panel itself never scrolls (see the head of this file),
+   and when it cannot — head plus foot taller than the panel — the panel becomes
+   the scroller and takes RESET/COPY/DONE down with it. MEASURED on a 393x659
+   phone at UI SIZE 115%: the foot sat at y=842, 183px below the viewport, behind
+   178 sliders. Sticky is the invariant rather than another threshold: whatever
+   the head does at whatever zoom, the bar stays on screen.
+   `--compact-at` beside it hands this panel's own short-height threshold to
+   js/game/sheetshape.js — 620 to match the media query below, because the
+   viewport height that query reads is blind to `zoom` and the sheet's own height
+   at UI SIZE 115% on that phone was 557 while the query still read 659. */
+#lighting-inner, #camtune-inner { --compact-at: 620px; }
+#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot {
+  position: sticky; bottom: 0; z-index: 2;
+}
+
 /* ---------- short screens (landscape phones): compact tuner head ----------
    The tuner is docked full-height, so on a ~390px-tall landscape phone the head
    is what starves #lt-rows. Shrink every fixed row and — the big one — run the

@@ -71,12 +71,25 @@ window.SheetShape = (function () {
    * SIZE 100%, 59% at 130%, 68% at 150% — the extra size went to padding and
    * chrome, so raising UI SIZE to read better left ONE option row on screen.
    * Dividing the measured height by the element's own zoom is what makes this
-   * answerable at all; getBoundingClientRect is in visual px, the CSS is not. */
-  const SHORT_ON = 380, SHORT_OFF = 420;   // hysteresis, same reason as the others
+   * answerable at all; getBoundingClientRect is in visual px, the CSS is not.
+   *
+   * The threshold is per-sheet, declared as `--compact-at` exactly like
+   * `--pair-at` above and for the same reason: screens disagree only about the
+   * NUMBER. A generic sheet is short under 380px of its own height; the lighting
+   * tuner is short under 620, because its head carries twelve tab chips and a
+   * preview row before a single slider appears. MEASURED on a 393x659 phone at
+   * UI SIZE 115%: the tuner's own height is 557px, its `@media (max-height:
+   * 620px)` compact head read 659 and never fired, and the RESET/COPY/DONE bar
+   * sat at y=842 — below a 659px viewport, reachable only by scrolling the whole
+   * panel past 178 sliders, which is the exact failure that file's header says
+   * the fixed footer fixed. */
+  const SHORT_DEFAULT = 380, SHORT_HYST = 40;   // hysteresis, same reason as the others
 
   function classifyDensity(el, hOwn) {
+    const raw = getComputedStyle(el).getPropertyValue("--compact-at");
+    const at = parseFloat(raw) || SHORT_DEFAULT;
     const was = el.dataset.density === "compact";
-    const now = was ? hOwn < SHORT_OFF : hOwn < SHORT_ON;
+    const now = was ? hOwn < at + SHORT_HYST : hOwn < at;
     const next = now ? "compact" : "normal";
     if (el.dataset.density !== next) el.dataset.density = next;
   }
