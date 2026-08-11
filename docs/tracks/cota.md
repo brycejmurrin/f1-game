@@ -66,14 +66,27 @@ pale dusty green-gray.
 - Dust the mid-distance with sparse **dark-green oak/cedar clusters** over dry grass;
   fade everything into thin warm haze at the edges.
 
-## Research pass — findings (not yet built)
+## Research pass — outcome
 
-- **The COTA Observation Tower** is the circuit's defining structure: **251 ft
-  / 77 m**, on the *outside* of the track near **Turns 16–18**, with the
-  observation deck 22 storeys up. Verify the in-game tower matches this height,
-  position and side — it is the silhouette the whole venue is read by.
-- **Austin360 Amphitheater** sits at the **base of the tower** — an open-air
-  concert bowl seating 14,000. A tower without the amphitheatre wrapped round
-  its foot is only half of that landmark.
-- **Turn 1 is a 133 ft hill** — the steepest, most-photographed feature of the
-  lap. Worth checking the modelled gradient against that figure.
+Checked the three researched figures against what was already built. COTA turned
+out to be in better shape than expected: **both** landmarks were already
+modelled and correctly sited.
+
+- **The Observation Tower** was already at T16–18 on the right, built as the
+  Miró Rivera design (pale tapered shaft, red tube veil cascading into the
+  stage canopy). ✅ position and form — but its **height was wrong**. COTA
+  publishes **251 ft (76.5 m) at the highest point, with the deck 22 storeys
+  up**. The deck was correctly at 70 m, but the crown then carried an 8 m mast
+  with a beacon at deck+16, topping out near **86 m** — ~12 % over the one
+  dimension the venue actually states. **Fixed:** the cone and finial now land
+  the tip at exactly 76.5 m.
+- **Austin360 Amphitheater** was already there and already wrapped round the
+  tower's foot (proscenium shell, three-arc fan canopy, LED video wall, PA
+  line-array towers, speckled lawn crowd). ✅ nothing to do.
+- **Turn 1's 133 ft hill — NOT changed, and deliberately so.** The def puts
+  Big Red at racing s≈0.108 with `rise: 18` (plus `segs[0].h: 30`), against a
+  quoted 133 ft ≈ 40.5 m. That may well be understated, but `elevations` is
+  **physics, not scenery**: it moves the racing line, lap times and the
+  reference times the AI is calibrated against. It should be changed as a
+  deliberate handling decision with a physics re-check, not folded into a
+  scenery pass. Flagged here for that separate call.

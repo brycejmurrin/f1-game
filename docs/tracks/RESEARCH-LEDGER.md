@@ -47,8 +47,8 @@ Guards last run green at build 1073: `test:tiny` 71/71, `test:tooling-fast`
 | 4 | spa | ✓ | ✓ | ✓ | ✓ |
 | 5 | monza | ✓ | ✓ | ✓ | ✓ |
 | 6 | suzuka | ✓ | ✓ | ✓ | ✓ |
-| 7 | singapore | ✓ | ✓ | | |
-| 8 | cota | ✓ | ✓ | | |
+| 7 | singapore | ✓ | ✓ | ✓ | ✓ |
+| 8 | cota | ✓ | ✓ | ✓ | ✓ |
 | 9 | interlagos | ✓ | ✓ | | |
 | 10 | vegas | ✓ | ✓ | | |
 | 11 | madrid | | | | |
