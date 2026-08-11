@@ -16,6 +16,16 @@ const TrackMesh = (function () {
   const { cross, MAT } = TrackGeom;
   const { curvature } = TrackSpline;
   const lerp = (a, b, t) => a + (b - a) * t;
+  // Uniform Catmull-Rom through p1..p2. C1 where a lerp is only C0, passes
+  // through every node, and reproduces a straight line exactly on collinear
+  // input — so it is a drop-in wherever a continuous SLOPE is wanted and the
+  // node values must still be honoured. Used by banking()'s `smooth` path.
+  const catmull = (p0, p1, p2, p3, t) => {
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t
+      + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+      + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  };
 
   function upOf(track, k) {
     const t = [track.tx[k], track.ty[k], track.tz[k]];
@@ -252,7 +262,16 @@ const TrackMesh = (function () {
   // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
   // in place and returned, so per-frame callers (once per car) avoid allocating a
   // fresh object each call. Still returns null on non-banked sections.
-  function banking(track, s, x, out) {
+  // `smooth` (optional): interpolate the lift with Catmull-Rom instead of a
+  // straight lerp. The lerp keeps the value continuous, which is all a CAR needs
+  // — it rides the road mesh, and that mesh IS piecewise-linear through these
+  // same nodes, so matching it exactly is correct. A CAMERA is different: it has
+  // no obligation to the facets, and a C0 lift means its vertical velocity jumps
+  // at every node. MEASURED in chase through Madrid's 24 % banked bowl, at stock
+  // framing: worst vertical acceleration 27x its own rms, i.e. plainly
+  // discontinuous, and 60x the size of the residue left on Monaco's climb after
+  // the elevation was smoothed. Camera call sites opt in; nothing else changes.
+  function banking(track, s, x, out, smooth) {
     const bp = track.bankP;
     if (!bp) return null;
     const n = track.n, L = track.total;
@@ -260,9 +279,14 @@ const TrackMesh = (function () {
     const k = Math.floor(pos) % n, j = (k + 1) % n, f = pos - Math.floor(pos);
     // Interpolate the signed cross-track lift so cars and cameras do not jump
     // between the road mesh's ~4 m longitudinal nodes.
-    const signedLift = lerp(bp.lift[k] * bp.bsign[k], bp.lift[j] * bp.bsign[j], f);
+    const sl = (i) => bp.lift[i] * bp.bsign[i];
+    const signedLift = smooth
+      ? catmull(sl((k - 1 + n) % n), sl(k), sl(j), sl((k + 2) % n), f)
+      : lerp(sl(k), sl(j), f);
     if (!signedLift) return null;
-    const w = lerp(track.hw[k], track.hw[j], f);
+    const w = smooth
+      ? catmull(track.hw[(k - 1 + n) % n], track.hw[k], track.hw[j], track.hw[(k + 2) % n], f)
+      : lerp(track.hw[k], track.hw[j], f);
     const cx = x < -w ? -w : x > w ? w : x;
     const o = out || {};
     // Pivot around the centreline: inner and outer edges move equally in

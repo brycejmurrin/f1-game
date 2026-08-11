@@ -2154,7 +2154,7 @@ function isFloodActiveSession() {
 // throttle past the start"). Shared by startRace() and __apex.snapCam().
 function snapGameCam() {
   if (!player || !track) return;
-  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
+  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
@@ -5164,7 +5164,7 @@ function render(dt) {
     // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
     // alone deliberately rather than reworked blind.
     // ride the bank with the car so the camera doesn't sink into the banked road
-    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam);
+    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam, true);  // true = SMOOTH lift, camera only (mesh.js banking)
     const bankDy = bankCam ? bankCam.dy : 0;
     const mode = CAM_MODES[camMode].id;
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
