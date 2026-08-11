@@ -838,6 +838,26 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    can seat both — it wraps on its own if it cannot, so nothing re-truncates.
    Specificity is deliberate: the rule it overrides is a bare #id inside a
    container query, and a matching-weight selector here would silently lose. */
+/* UNDOCK WHEN THE GAP STOPS BEING WORTH IT. The panel is docked so the left of
+   the viewport stays clear for the car, and that bargain only pays while the gap
+   is big enough to show one. At UI SIZE 150% on a 1000px-wide viewport the panel
+   needs 500px of its OWN units to keep the two-pane layout (--pair-at is 400),
+   which is 750 visual px — leaving the car 242, too small to read a car in and
+   too small to be worth the squeeze it puts on the option list.
+
+   Both halves lose in that state, so stop splitting: give the sheet the width
+   and let the panel be a full screen. The alternative — holding the visual width
+   constant so the car keeps its share — puts the panel at 280 own px, under
+   --pair-at, which collapses the rail into the wrapping grid this tier exists to
+   prevent. Docked stays the default at every size where the gap is real; only
+   the short sheet, where it is not, undocks. */
+#carsetup:has(#cs-inner[data-density="compact"]) { place-items: stretch center; }
+#cs-inner[data-density="compact"] { width: 100%; }
+/* The camera bar goes with the preview it aims. It is positioned against the
+   DOCKED edge (`right: ... + --cs-sheet-w * --ui-scale`), so once the sheet is
+   full-width that anchor puts it over the foot — measured, it landed on top of
+   BACK — and it would be steering a car that nothing is showing. */
+#carsetup:has(#cs-inner[data-density="compact"]) #cs-stack { display: none; }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
