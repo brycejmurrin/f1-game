@@ -65,7 +65,7 @@
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, addFrustum, groundYAt, onTrack, forestEdge, backdrop,
+              addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, onTrack, forestEdge, backdrop,
               MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -688,6 +688,107 @@
         { rows: 4, density: 0.55 }); // Spoon
       spectatorHill(0.84 - hillHalf(36), 0.84 + hillHalf(36), 1, 8,
         { rows: 4, density: 0.5 });  // 130R
+
+      // ── BAMBOO GROVES ────────────────────────────────────────────────────
+      // Suzuka sits in the foothills of the Suzuka mountains in Mie, and the
+      // circuit already plants the sugi (cedar) that covers those hills. What
+      // was missing is the OTHER half of that landscape: at the edge of every
+      // Japanese hill plantation, where the cedar thins toward cleared ground,
+      // there is bamboo — and it looks nothing like a tree. Tall, bare, pale,
+      // absurdly slender culms in a dense stand with the foliage all held in
+      // the top third. Cedar and bamboo side by side is the read; cedar alone
+      // could be Oregon.
+      {
+        const CULM   = [0.62, 0.66, 0.36];
+        const CULM_D = [0.52, 0.58, 0.30];
+        const LEAF   = [0.30, 0.52, 0.24];
+        const LEAF_L = [0.38, 0.60, 0.28];
+        for (const [sf, side, gap] of [
+          [0.118, -1, 44], [0.152, -1, 52], [0.196,  1, 46],
+          [0.335,  1, 58], [0.408, -1, 50], [0.523,  1, 42],
+          [0.596, -1, 56], [0.678,  1, 48], [0.742, -1, 44],
+          [0.878,  1, 54],
+        ]) {
+          const kk = K(sf);
+          // A grove is 14-22 culms in a tight clump, not a scatter.
+          const count = 14 + Math.floor(hash(kk * 13 + gap) * 9);
+          for (let i = 0; i < count; i++) {
+            const hv = hash(kk * 7 + i * 31 + gap);
+            const hv2 = hash(kk * 11 + i * 17);
+            const a = anchor(kk + Math.round((hv - 0.5) * 9),
+                             side, gap + (hv2 - 0.5) * 16);
+            if (onTrack(a.c[0], a.c[2], 12)) continue;
+            const b = [a.r, a.u, a.t];
+            const ht = 11 + hv * 7;
+            out._mat = MAT.WOOD;
+            // The culm itself: very thin, very tall, faintly leaning.
+            addCyl(out, a.c, 0.10 + hv2 * 0.05, ht,
+                   hv < 0.5 ? CULM : CULM_D, 4, b);
+            out._mat = MAT.FOLIAGE;
+            // Foliage only in the top third — that is the whole silhouette.
+            addCone(out, vadd(a.c, a.u, ht * 0.66), 0.85 + hv2 * 0.7, ht * 0.34,
+                    hv2 < 0.5 ? LEAF : LEAF_L, 5, b);
+            addCone(out, vadd(a.c, a.u, ht * 0.84), 0.6 + hv * 0.45, ht * 0.2,
+                    LEAF_L, 5, b);
+            out._mat = 0;
+          }
+        }
+      }
+
+      // ── HILLSIDE SHRINE AND TORII ────────────────────────────────────────
+      // Mie is Shinto country — Ise Jingu is an hour down the road — and a
+      // small wooded shrine with a vermilion torii at the foot of its steps is
+      // as ordinary in this landscape as a church spire in the Ardennes. One,
+      // set back on the wooded rise outside the Spoon side of the lap, where
+      // it reads against the cedar rather than competing with the Ferris wheel
+      // that owns the main-straight skyline.
+      {
+        const a = anchor(K(0.648), -1, 96);
+        if (!onTrack(a.c[0], a.c[2], 24)) {
+          const b = [a.r, a.u, a.t];
+          const VERM  = [0.74, 0.18, 0.12];
+          const TIMB  = [0.40, 0.28, 0.19];
+          const ROOF  = [0.28, 0.30, 0.28];
+          const WALL  = [0.80, 0.78, 0.72];
+          modelGroup("suzuka-shrine", {
+            center: vadd(a.c, a.u, 4.5), size: [22, 12, 14], basis: b,
+          }, (stage) => {
+            // Torii: two slightly-splayed pillars, a curved-up kasagi lintel
+            // above a second straight nuki beam. The proportions are the read.
+            stage._mat = MAT.WOOD;
+            for (const t of [-2.9, 2.9]) {
+              addCyl(stage, vadd(a.c, a.t, t), 0.30, 5.2, VERM, 6, b);
+            }
+            addBox(stage, vadd(a.c, a.u, 5.35), [0.42, 0.40, 8.0], VERM, b);
+            addBox(stage, vadd(a.c, a.u, 5.72), [0.56, 0.26, 8.9], [0.60, 0.14, 0.10], b);
+            addBox(stage, vadd(a.c, a.u, 4.15), [0.34, 0.32, 6.6], VERM, b);
+            // Stone steps climbing away from the torii to the honden.
+            stage._mat = MAT.STONE;
+            for (let i = 0; i < 6; i++) {
+              addBox(stage, vadd(vadd(a.c, a.r, 2.2 + i * 1.5), a.u, 0.22 + i * 0.42),
+                     [1.5, 0.44, 4.2], [0.72, 0.71, 0.66], b);
+            }
+            // A pair of stone lanterns flanking the approach.
+            for (const t of [-3.4, 3.4]) {
+              const lc = vadd(vadd(a.c, a.t, t), a.r, 1.4);
+              addCyl(stage, lc, 0.24, 1.1, [0.70, 0.69, 0.64], 6, b);
+              addBox(stage, vadd(lc, a.u, 1.5), [0.62, 0.62, 0.62], [0.76, 0.75, 0.70], b);
+              addPyramid(stage, vadd(lc, a.u, 2.1), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
+            }
+            // The shrine building itself: timber box under a heavy dark hip
+            // roof with deep overhanging eaves — the eaves are the silhouette.
+            stage._mat = MAT.WOOD;
+            const hc = vadd(vadd(a.c, a.r, 12.5), a.u, 2.6);
+            addBox(stage, hc, [6.0, 3.4, 8.0], WALL, b);
+            for (const t of [-3.2, 3.2]) {
+              addCyl(stage, vadd(vadd(hc, a.t, t), a.u, -1.7), 0.22, 3.4, TIMB, 5, b);
+            }
+            stage._mat = 0;
+            addPrism(stage, vadd(hc, a.u, 2.7), [8.6, 2.6, 10.4], ROOF, b);
+            addBox(stage, vadd(hc, a.u, 1.5), [8.8, 0.34, 10.6], TIMB, b);
+          });
+        }
+      }
     },
   }
   );
