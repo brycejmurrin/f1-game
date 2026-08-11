@@ -59,6 +59,41 @@ window.SheetShape = (function () {
     if (el.dataset.pair !== next) el.dataset.pair = next;
   }
 
+  /* THE THIRD ANSWER: is the sheet SHORT — and short in the units its own CSS
+   * is written in, which is not the same question as "is the viewport short".
+   * `.sheet` carries `zoom: var(--ui-scale)`, so at UI SIZE 150% a 462px-tall
+   * viewport gives the layout a 297px sheet while a media query still reads 462.
+   * The same physical squeeze needs a different `max-height` at every scale,
+   * which is why no @media can express it — and `container: sheet / inline-size`
+   * cannot either, since an inline-size container is blind to height.
+   *
+   * MEASURED, garage at 1000x462, the head+foot share of the sheet: 46% at UI
+   * SIZE 100%, 59% at 130%, 68% at 150% — the extra size went to padding and
+   * chrome, so raising UI SIZE to read better left ONE option row on screen.
+   * Dividing the measured height by the element's own zoom is what makes this
+   * answerable at all; getBoundingClientRect is in visual px, the CSS is not.
+   *
+   * The threshold is per-sheet, declared as `--compact-at` exactly like
+   * `--pair-at` above and for the same reason: screens disagree only about the
+   * NUMBER. A generic sheet is short under 380px of its own height; the lighting
+   * tuner is short under 620, because its head carries twelve tab chips and a
+   * preview row before a single slider appears. MEASURED on a 393x659 phone at
+   * UI SIZE 115%: the tuner's own height is 557px, its `@media (max-height:
+   * 620px)` compact head read 659 and never fired, and the RESET/COPY/DONE bar
+   * sat at y=842 — below a 659px viewport, reachable only by scrolling the whole
+   * panel past 178 sliders, which is the exact failure that file's header says
+   * the fixed footer fixed. */
+  const SHORT_DEFAULT = 380, SHORT_HYST = 40;   // hysteresis, same reason as the others
+
+  function classifyDensity(el, hOwn) {
+    const raw = getComputedStyle(el).getPropertyValue("--compact-at");
+    const at = parseFloat(raw) || SHORT_DEFAULT;
+    const was = el.dataset.density === "compact";
+    const now = was ? hOwn < at + SHORT_HYST : hOwn < at;
+    const next = now ? "compact" : "normal";
+    if (el.dataset.density !== next) el.dataset.density = next;
+  }
+
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
     const ratio = h / w;
@@ -67,6 +102,7 @@ window.SheetShape = (function () {
       : (ratio >= TALL_ON ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
     classifyPair(el, w);
+    classifyDensity(el, h / (el.currentCSSZoom || 1));
   }
 
   let ro = null;
@@ -113,6 +149,62 @@ window.SheetShape = (function () {
       { attributes: true, attributeFilter: ["hidden"], subtree: true });
   }
 
+  /* UI SIZE MUST RE-MEASURE, AND THE ResizeObserver WILL NOT DO IT.
+     `--ui-scale` is an inline style on documentElement (game.js applyScale) that
+     lands as `zoom` on every .sheet. That changes the units the sheet's CSS is
+     written in without moving its visual box, and the observer above did not
+     fire for it — measured: at 1000x462 the garage sat on data-density="normal"
+     at UI SIZE 150% while its own height was 297px, well inside the compact
+     tier. Watch where the property is written instead. Cheap: documentElement's
+     own style attribute changes about as often as a settings slider moves.
+
+     STATUS, measured 2026-08-08 by stubbing this observer out: the garage no
+     longer needs it. `--cs-sheet-w` is now derived from `--ui-scale`, so a scale
+     change really does resize the sheet and the ResizeObserver above fires by
+     itself — tests/specs/ui-resize.spec.js stays green without this. Kept
+     because it is the GENERAL answer and that derivation is a property of one
+     stylesheet: any sheet whose box does not happen to depend on the scale would
+     go stale again, silently, exactly as the garage did. Belt-and-braces, and
+     labelled as such rather than left looking load-bearing. */
+  /* THE SAME ANSWER FOR THE SCREENS THAT ARE NOT SHEETS.
+   * `#overlay` is one of two screens outside `.sheet`, and the zoom sits on its
+   * CHILDREN (`#overlay > *`, css/menus.css) rather than on itself — so it has
+   * no `currentCSSZoom` of its own to divide by, and the per-element route above
+   * cannot answer for it. The question is still the same one though: how much
+   * height is there, measured in the units its contents are laid out in.
+   *
+   * That is a document-level fact — every zoomed child shares one --ui-scale —
+   * so it resolves once onto body, and CSS reads it as
+   * `body[data-density="compact"]`. It is NOT the same number as any one sheet's
+   * answer and must not be confused with it: a sheet asks about its own box,
+   * this asks about the viewport.
+   *
+   * Why it matters for #overlay specifically: those rules choose between one and
+   * two grid columns. At UI SIZE 150% the children are half again as large while
+   * the box they sit in is not, so the height at which two columns stop fitting
+   * moves — and `@media (max-height: 599px)` cannot see that it moved. */
+  function classifyBody() {
+    const b = document.body;
+    if (!b) return;
+    const scale = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    classifyDensity(b, window.innerHeight / scale);
+  }
+
+  function reclassify() {
+    seen.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      classify(el, r.width, r.height);
+    });
+    classifyBody();
+  }
+
+  function watchScale() {
+    if (typeof MutationObserver !== "function") return;
+    new MutationObserver(reclassify).observe(document.documentElement,
+      { attributes: true, attributeFilter: ["style"] });
+  }
+
   function init() {
     if (typeof ResizeObserver === "function") {
       ro = new ResizeObserver((entries) => {
@@ -123,7 +215,14 @@ window.SheetShape = (function () {
       });
     }
     scan();
+    classifyBody();
+    // body's own box does not change when the viewport does (it is the
+    // viewport), so the ResizeObserver above never fires for it — a plain
+    // resize listener is the honest way to hear about it.
+    addEventListener("resize", classifyBody, { passive: true });
+    addEventListener("orientationchange", classifyBody, { passive: true });
     watchVisibility();
+    watchScale();
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {
@@ -140,5 +239,5 @@ window.SheetShape = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, observe, shapeOf: (el) => (el && el.dataset.shape) || null };
+  return { scan, observe, reclassify, shapeOf: (el) => (el && el.dataset.shape) || null };
 })();
