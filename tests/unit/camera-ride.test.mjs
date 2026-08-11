@@ -228,6 +228,48 @@ test("a camera LOWERED into the ground clamp does not ride a node staircase", ()
     "the lowered eye was never actually caught by the clamp — nothing was exercised");
 });
 
+test("the camera path is C1 — no node-rate or clamp-handover acceleration spikes", () => {
+  // The two defects a position-driven judder is made of, and neither shows up in
+  // a position or even a velocity check:
+  //   1. elevation lerped between ~4 m nodes is only C0, so vertical VELOCITY
+  //      steps at every node boundary (~11 Hz at racing speed);
+  //   2. a hard max() ground clamp is C0 too, so its slope jumps every time the
+  //      eye engages or disengages the floor.
+  // Both are invisible at the shipped framing — the eye rides clear of the floor
+  // and the rig sits several degrees nose-down, so these differences are noise.
+  // Lower and shorten the rig with the CAMERA TUNER and they become the signal.
+  //
+  // The instrument is the ratio of the WORST vertical acceleration to its own
+  // rms: a smooth curve keeps that small, while a discontinuity is a spike by
+  // definition. Ratio, not an absolute bound, so the test says "no kinks" rather
+  // than pinning a particular hill's steepness.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  for (const dh of [0, -1.5]) {
+    const cams = loadGameCams(makeTracksStub(track), dh ? camTuneHeight(dh) : null);
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    assert.ok(spike < 6,
+      `HEIGHT ${dh}: worst vertical acceleration is ${spike.toFixed(1)}x its own rms — that is a discontinuity, not a curve`);
+  }
+});
+
+test("the soft floor never lets the eye end up below the hard floor", () => {
+  // Softening the clamp handover must not weaken what the clamp is FOR. The
+  // blend may only ever push the eye up.
+  const track = makeTrack((s) => (s > 2000 ? -6 : 0));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-4));
+  for (let s = 1900; s < 2200; s += 2) {
+    const v = chaseAt(cams, track, s);
+    const groundHere = (s > 2000 ? -6 : 0) - 0.12;
+    assert.ok(v.eye[1] >= groundHere + 0.8 - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} below the floor ${(groundHere + 0.8).toFixed(3)} at s=${s}`);
+  }
+});
+
 test("the ground clamp still catches an eye below the surface", () => {
   // The smoothing must not cost the eye its terrain floor. A track whose road
   // drops away sharply under the eye is the case the clamp exists for.
