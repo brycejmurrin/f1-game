@@ -32,6 +32,84 @@ const COCKPIT_EYE_FWD = 0.32, COCKPIT_EYE_UP = 0.99;
 // `back` so near/far chase scale together. Flip the sign to switch sides.
 const CHASE_SIDE_FRAC = 0.3;
 
+// ---- chase RIDE HEIGHT / GRADE ---------------------------------------------
+// How the chase rigs decide their vertical framing. They used to take it from
+// two independent point samples of the centreline — the eye from the road
+// `back` m behind, the target from the road at (or ahead of) the car — so the
+// rig's pitch was a finite DIFFERENCE of the elevation profile over ~12 m. That
+// is the one operator that AMPLIFIES short wavelengths, and this profile has
+// them on purpose: on top of the authored cosine bumps, buildCenterline adds a
+// "fine surface undulation" of three harmonics at 30-110 m wavelengths
+// (js/track/tracks.js) so the road isn't mathematically flat between corners.
+// The car is meant to ride that. The camera differentiating it is not.
+//
+// On flat road that difference is a constant nobody can see, which is why the
+// bug only shows up on a hill. Put a real gradient under it and it stops being
+// constant: MEASURED on Monaco's climb out of Sainte Dévote (16 % over the rig's
+// own 5.8 m) the chase pitch swung ±0.93° in the 10-60 m band — roughly 1-2 Hz
+// at racing speed, reversing every 17 m. That is the "camera bobs up and down
+// going up the incline" report.
+//
+// So the rig is built from ONE smoothed height and ONE smoothed gradient rather
+// than from two raw samples:
+//
+//     eyeY = rideY(s) - back * grade + eyeUp
+//
+// The pitch now depends only on `grade`, so nothing differentiates the ripple.
+// On flat road (grade 0) and on ANY constant slope this reproduces the old
+// framing to the millimetre — a Hann average of a straight line is the line, and
+// -back*grade is exactly what the old sample `back` m behind returned. It can
+// only differ where the profile BENDS, which is exactly where the bob was, and
+// even there it stays within 0.28 m of eye height and 1.0° of pitch on every
+// circuit measured. What it removes is 78-90 % of the pitch bob band
+// (monaco/spa/redbull/suzuka), and because the eye no longer sits on individual
+// ripple peaks it GAINS ground-clamp margin rather than spending it (Spa's worst
+// case 0.04 m → 0.15 m).
+//
+// rideY is a 7-tap Hann average 60 m wide: a null at the 30 m harmonic (which
+// carries nearly all the vertical acceleration, bob scaling as amplitude ÷
+// wavelength²) and effectively transparent to real terrain — a 340 m cosine
+// bump like Monaco's loses 7 cm at its crest. RIDE_GRADE is the half-baseline
+// the slope is measured over; ±40 m is long enough to be steady and short
+// enough that the camera pitches for the hill it is ON, not one it can't see.
+// Nothing else changes: the car, the physics, the road mesh and every other
+// camera mode still read the raw profile, so the undulation you feel through
+// the car is untouched. It just stops steering the horizon.
+//
+// Offsets are metres of arc either side; weights are 0.5(1+cos(πd/30)). The two
+// zero-weight end taps are dropped rather than summed for nothing.
+const RIDE_OFF = [-22.5, -15, -7.5, 0, 7.5, 15, 22.5];
+const RIDE_W = [0.1464, 0.5, 0.8536, 1, 0.8536, 0.5, 0.1464];
+const RIDE_WSUM = 4.0;                    // == RIDE_W summed
+const RIDE_SPAN = 60;                     // full window width, for the short-lap guard
+const RIDE_GRADE = 40;                    // half-baseline the road slope is read over
+
+// Centreline height alone at arc `s` — the height component of Tracks.sample
+// without the tangent/right/half-width lerps this never looks at. Called 21x a
+// frame in chase (three times through rideY), which is why it skips sample().
+function centreY(track, s) {
+  const n = track.n, L = track.total;
+  let v = s % L; if (v < 0) v += L;
+  const fi = v / L * n;
+  const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+  return track.py[i] + (track.py[j] - track.py[i]) * f;
+}
+function rideY(track, s) {
+  // A window wider than the lap would fold the profile onto itself; no shipped
+  // circuit is remotely that short, but the raw height is the honest answer.
+  if (!track.py || track.total < RIDE_SPAN * 2) return centreY(track, s);
+  let acc = 0;
+  for (let k = 0; k < RIDE_OFF.length; k++) acc += centreY(track, s + RIDE_OFF[k]) * RIDE_W[k];
+  return acc / RIDE_WSUM;
+}
+// Road slope (rise per metre, + uphill) over a ±RIDE_GRADE baseline of the
+// SMOOTHED profile — smoothed at the endpoints too, or a ripple peak landing on
+// one of them would put the bob straight back in through the gradient.
+function rideGrade(track, s) {
+  if (!track.py || track.total < RIDE_GRADE * 4) return 0;
+  return (rideY(track, s + RIDE_GRADE) - rideY(track, s - RIDE_GRADE)) / (2 * RIDE_GRADE);
+}
+
 // vantage(track, mode, s, x, spd, now, extra) → { eye, tgt, fov }
 // extra — { bankDy (banking lift), deploy (ERS FOV kick), slipLat (lateral
 // slip m/s, for the drift cam) } — all optional and treated as 0 when absent.
@@ -201,6 +279,22 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const eyeUp = far ? 4.2 : 2.1;
     Tracks.sample(track, wrapS(s - back), cvB);
     const cx = x * 0.5;
+    // Vertical framing from one smoothed height + one smoothed gradient (see the
+    // RIDE HEIGHT / GRADE block above) instead of two raw centreline samples, so
+    // the rig's pitch can't differentiate the road's fine undulation. BOTH ends
+    // come off the same pair on purpose: smoothing only the eye would leave the
+    // target chasing the raw ripple, and with a lookAt rig a target that bobs
+    // ROTATES the whole view — the car would sit still while the horizon pumped,
+    // which is the more sickening half of the same artefact.
+    const lead = far ? 9 : 6;
+    const tgtUp = far ? 1.0 : 0.7;
+    const rideC = rideY(track, s), grade = rideGrade(track, s);
+    const rideEye = rideC - back * grade;          // road under the eye, smoothed
+    // The two branches aim at different points and always have: the free-world
+    // rig aims at the road AT the car, the road-frame one `lead` m up the road
+    // (that is what aheadPt returns). Each keeps its own, so this change is only
+    // ever the ripple coming out — not a re-aim.
+    const rideTgtAhead = rideC + lead * grade;
     if (extra.carPos) {
       // FREE-WORLD CHASE: sit behind the CAR, along the CAR's heading, and look
       // where the CAR is pointing. This used to sit an arc-distance back along
@@ -219,9 +313,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // the car's own forward path.
       const rx = hz, rz = -hx;
       const side = back * CHASE_SIDE_FRAC;
-      const lead = far ? 9 : 6;
-      eye = [extra.carPos[0] - hx * back + rx * side, cvB.p[1] + eyeUp + bankDy, extra.carPos[1] - hz * back + rz * side];
-      tgt = [extra.carPos[0] + hx * lead, p[1] + (far ? 1.0 : 0.7), extra.carPos[1] + hz * lead];
+      eye = [extra.carPos[0] - hx * back + rx * side, rideEye + eyeUp + bankDy, extra.carPos[1] - hz * back + rz * side];
+      tgt = [extra.carPos[0] + hx * lead, rideC + bankDy + tgtUp, extra.carPos[1] + hz * lead];
       // CORNER LEAD (CAMERA TUNER, opt-in, default 0). Blend the whole rig toward
       // the road-frame chase below — eye an arc-distance back along the ROAD, aim
       // at the curved centreline ahead — so the camera leads and swings INTO the
@@ -230,14 +323,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // it moves where the camera looks, never the car (px/pz/(s,x) are untouched).
       const lead2 = (typeof CamTune !== "undefined") ? clamp(CamTune.get(mode, "cornerLead") || 0, 0, 1) : 0;
       if (lead2 > 0) {
-        const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = cvB.p[1] + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
-        const tgtR = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+        // The road-frame rig this blends toward takes its heights from the same
+        // smoothed pair, or turning cornerLead up would fade the bob back in.
+        // aheadPt is called for its XZ only, so its height argument is 0.
+        const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = rideEye + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
+        const tgtR = aheadPt(lead, 0, x * 0.4);
+        tgtR[1] = rideTgtAhead + tgtUp;
         eye = [lerp(eye[0], eyeR0, lead2), lerp(eye[1], eyeR1, lead2), lerp(eye[2], eyeR2, lead2)];
         tgt = [lerp(tgt[0], tgtR[0], lead2), lerp(tgt[1], tgtR[1], lead2), lerp(tgt[2], tgtR[2], lead2)];
       }
     } else {
-      eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
-      tgt = aheadPt(far ? 9 : 6, far ? 1.0 : 0.7, x * 0.4);
+      eye = [cvB.p[0] + cvB.r[0] * cx, rideEye + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
+      tgt = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
+      tgt[1] = rideTgtAhead + tgtUp;
     }
     // Gentle speed→FOV (was 52..66, a 14° zoom that read as the camera
     // "shifting" with speed): halve the swing so the world doesn't breathe as
