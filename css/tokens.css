@@ -95,6 +95,16 @@
    whole effect. This is the only way to animate a gradient at all: the gradient
    itself is not an animatable value, but a typed custom property inside it is. */
 @property --sheen { syntax: "<percentage>"; inherits: false; initial-value: -30%; }
+/* THE SHORT-SHEET THRESHOLD, read by js/game/sheetshape.js to decide
+   data-density. `inherits: false` is the whole point, exactly as it is for
+   --sf-h above: a plain custom property inherits, and the moment #overlay's
+   document-level 600px was declared on body it cascaded into every .sheet and
+   moved their thresholds from 380 to 600 — the garage went compact at UI SIZE
+   100% on a 1000x462 viewport, which tests/specs/ui-resize.spec.js caught
+   immediately. Registered non-inherited, each element answers for itself: the
+   initial value is the generic sheet's 380, #lighting-inner/#camtune-inner
+   declare 620, body declares 600, and none of them leak into the others. */
+@property --compact-at { syntax: "<length>"; inherits: false; initial-value: 380px; }
 
 @layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */

@@ -166,11 +166,37 @@ window.SheetShape = (function () {
      stylesheet: any sheet whose box does not happen to depend on the scale would
      go stale again, silently, exactly as the garage did. Belt-and-braces, and
      labelled as such rather than left looking load-bearing. */
+  /* THE SAME ANSWER FOR THE SCREENS THAT ARE NOT SHEETS.
+   * `#overlay` is one of two screens outside `.sheet`, and the zoom sits on its
+   * CHILDREN (`#overlay > *`, css/menus.css) rather than on itself — so it has
+   * no `currentCSSZoom` of its own to divide by, and the per-element route above
+   * cannot answer for it. The question is still the same one though: how much
+   * height is there, measured in the units its contents are laid out in.
+   *
+   * That is a document-level fact — every zoomed child shares one --ui-scale —
+   * so it resolves once onto body, and CSS reads it as
+   * `body[data-density="compact"]`. It is NOT the same number as any one sheet's
+   * answer and must not be confused with it: a sheet asks about its own box,
+   * this asks about the viewport.
+   *
+   * Why it matters for #overlay specifically: those rules choose between one and
+   * two grid columns. At UI SIZE 150% the children are half again as large while
+   * the box they sit in is not, so the height at which two columns stop fitting
+   * moves — and `@media (max-height: 599px)` cannot see that it moved. */
+  function classifyBody() {
+    const b = document.body;
+    if (!b) return;
+    const scale = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    classifyDensity(b, window.innerHeight / scale);
+  }
+
   function reclassify() {
     seen.forEach((el) => {
       const r = el.getBoundingClientRect();
       classify(el, r.width, r.height);
     });
+    classifyBody();
   }
 
   function watchScale() {
@@ -189,6 +215,12 @@ window.SheetShape = (function () {
       });
     }
     scan();
+    classifyBody();
+    // body's own box does not change when the viewport does (it is the
+    // viewport), so the ResizeObserver above never fires for it — a plain
+    // resize listener is the honest way to hear about it.
+    addEventListener("resize", classifyBody, { passive: true });
+    addEventListener("orientationchange", classifyBody, { passive: true });
     watchVisibility();
     watchScale();
     // A screen that builds its sheet later (the data hub) still gets measured.
