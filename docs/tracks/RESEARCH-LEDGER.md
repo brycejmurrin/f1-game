@@ -31,7 +31,7 @@ per track — it is the last edit before a commit that ships JS.
 | 1 | bahrain | ✓ | ✓ | ✓ | ✓ |
 | 2 | monaco | ✓ | ✓ | ✓ | ✓ |
 | 3 | silverstone | ✓ | ✓ | ✓ | ✓ |
-| 4 | spa | | | | |
+| 4 | spa | ✓ | ✓ | ✓ | ✓ |
 | 5 | monza | | | | |
 | 6 | suzuka | | | | |
 | 7 | singapore | | | | |
