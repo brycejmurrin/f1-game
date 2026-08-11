@@ -201,4 +201,60 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     }, null, { polling: 50, timeout: 5_000 });
     expect((await readState(page)).density, "back to normal when the scale drops").toBe("normal");
   });
+
+  test("the density tier reaches the spacing tokens, where a media query cannot",
+    async ({ page }) => {
+      // css/tokens.css tightens --pad/--gap/--gut behind
+      // `(orientation: landscape) and (max-height: 560px)`, which reads the
+      // VIEWPORT while every .sheet is written in units divided by --ui-scale.
+      // The gap between the two is widest for a sheet with a large
+      // `--compact-at`: the lighting tuner declares 620 because its head carries
+      // twelve tab chips before the first slider. On a 393x659 phone at UI SIZE
+      // 115% its own height is ~573 — short by its own standard — while the
+      // media query reads 659 and declines to tighten anything.
+      await page.setViewportSize({ width: 393, height: 659 });
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.uiScale(115));
+
+      // Through the pause ladder, the way a player reaches it — opening the
+      // panel by clearing `hidden` gives a real but desynced panel.
+      await page.evaluate(() => window.__apex.race("monza"));
+      await page.waitForFunction(() => {
+        try { return window.__apex.info().track != null; } catch (_) { return false; }
+      }, null, { polling: 100, timeout: 20_000 });
+      await page.evaluate(() => {
+        window.__apex.park(0.1);
+        document.getElementById("pausemenu").hidden = false;
+        document.getElementById("pm-settings").click();
+      });
+      await page.waitForFunction(() => !document.getElementById("pmsettings").hidden,
+        { polling: 50, timeout: 8_000 });
+      await page.evaluate(() => document.getElementById("pm-lighting").click());
+      await page.waitForFunction(() => !document.getElementById("lighting").hidden,
+        { polling: 50, timeout: 8_000 });
+      await page.waitForTimeout(500);
+
+      const state = await page.evaluate(() => {
+        const el = document.getElementById("lighting-inner");
+        const cs = getComputedStyle(el);
+        return {
+          density: el.dataset.density || null,
+          compactAt: cs.getPropertyValue("--compact-at").trim(),
+          pad: cs.getPropertyValue("--pad").trim(),
+          mediaWouldFire: window.matchMedia("(orientation: landscape) and (max-height: 560px)").matches,
+          footReachable: (() => {
+            const f = el.querySelector(".sheet-foot");
+            return !!f && f.getBoundingClientRect().bottom <= window.innerHeight + 1;
+          })(),
+        };
+      });
+
+      expect(state.compactAt, "the tuner declares its own threshold").toBe("620px");
+      expect(state.mediaWouldFire, "the viewport query does NOT fire here — that is the point")
+        .toBe(false);
+      expect(state.density, "but the sheet is short in its own units").toBe("compact");
+      expect(state.pad, "so the compact spacing applies anyway").toBe("13px");
+      expect(state.footReachable, "and the action bar stays on screen").toBe(true);
+    });
 });

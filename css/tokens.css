@@ -549,4 +549,29 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
     --gut: 8px;
   }
 }
+/* THE SAME TIGHTENING, DECIDED IN THE SHEET'S OWN UNITS.
+   The query above reads the VIEWPORT, and every `.sheet` carries
+   `zoom: var(--ui-scale)` — so the two are measuring in different spaces and
+   disagree exactly when it matters. At UI SIZE 150% on a 1000x600 screen the
+   query reads 600, declines to tighten, and hands roomy 22px padding to a sheet
+   whose own height is 400px. That is the same coordinate-space fault that put
+   the lighting tuner's action bar off the bottom of a phone
+   (docs/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md has the full inventory).
+
+   `data-density` is the answer that can see both: js/game/sheetshape.js divides
+   the measured height by the element's own zoom, against a per-sheet
+   `--compact-at`. A sheet that is short in the units its CSS is written in gets
+   the tighter spacing whatever the viewport says.
+
+   THE VIEWPORT QUERY STAYS, and is not redundant. It also serves `#overlay`,
+   which is one of the two screens outside `.sheet` and therefore carries no
+   `data-density` — deleting it would leave the title screen roomy on a landscape
+   phone. The two overlap harmlessly: where both apply they set the same three
+   numbers. Bringing #overlay under the attribute is the next step in that doc's
+   migration order, not this one. */
+.sheet[data-density="compact"] {
+  --pad: 13px;
+  --gap: 8px;
+  --gut: 8px;
+}
 } /* @layer base */
