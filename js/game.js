@@ -3526,11 +3526,11 @@ function updateCar(c, dt, ranked) {
     // grip — otherwise it carries dry entry speed and runs wide in the rain.
     const vCorner = Math.sqrt(LAT_MAX * bankMu * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
-    // queue behind the car blocking our lane (prog-based, so it's immune to the
-    // frame-to-frame rank swapping of near-even cars): cap our pace to it and
-    // brake if closing fast, so we tuck in behind instead of ramming.
+    // queue behind the car blocking our lane (prog-based, immune to rank swaps):
+    // cap our pace to it, braking if closing fast, so we tuck behind not ram. On
+    // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
     if (blocker && blockerGap < 16) {
-      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - 6, -6, 8));
+      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - (track.street ? 12 : 6), -6, 8));
       if (c.speed > blocker.speed + 3) braking = true;
     }
     // when wedged in/stopped, power out instead of braking
