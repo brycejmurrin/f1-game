@@ -41,43 +41,33 @@
      (38vw) is what put the TOP chip underneath the panel on a notched phone:
      the bar starts after the safe-area inset, so "38% of the viewport" is not
      38% of the room it actually has. */
-  --cs-sheet-w: min(100%, max(430px, 54vw), 500px);
+  /* ONE ZOOM-AWARE FORMULA, replacing the three-branch width ladder that used to
+     live here (a base, a >=1100px cap, a <1100px desktop floor). Read it as: the
+     panel takes what is left after the car keeps 320 VISUAL px, floored at what
+     the rail needs and capped where the panel stops benefiting.
+
+     WHY THE ARITHMETIC IS IN TWO UNIT SPACES. This value is consumed as the
+     WIDTH of #cs-inner, which carries `zoom: var(--ui-scale)` — so it is in the
+     sheet's own units, while the car's share is a fact about the SCREEN. Hence
+     `100 * var(--vwz)` for the viewport in own units and `320px / --ui-scale`
+     for the car's visual reserve expressed in them. The old ladder was written
+     entirely in own units, so at UI SIZE 150% on a 1000px viewport it asked for
+     500 own px = 750 VISUAL, leaving the car 242px and the option list one row.
+     Same ladder, same numbers, three different answers depending on a zoom it
+     could not see.
+
+     Measured with this formula (viewport, scale -> car px): 1440/1.0 -> 1020,
+     1440/1.5 -> 810, 1000/1.15 -> 517, 1000/1.5 -> 370, 852/1.15 -> 369. The
+     410px floor is what keeps `--pair-at` (400 + 2px border) satisfied so the
+     rail never collapses into the stacked grid; `min(100%)` hands a portrait
+     phone the full width, which is the right answer there and what it already
+     did. */
+  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), 420px));
 }
 #cs-inner {
   pointer-events: auto;
-  /* Never wider than the safe box, never wider than 500px, and on a landscape
-     screen it gives up whatever the car needs (~46% of the viewport). */
+  /* Never wider than the safe box; the formula above decides the rest. */
   width: var(--cs-sheet-w);
-}
-/* THE CAR IS THE HERO, and on a wide screen the panel was still taking 500px of
-   a 1440px viewport for a list of radio buttons. Give the sheet a smaller share
-   the moment there is room, and the car — the thing the whole screen exists to
-   show you — gets the other two thirds instead of floating in the corner of the
-   left half. Capped, not proportional: past ~1600px the panel does not need to
-   keep growing, it just needs to stop crowding. */
-/* 420, not 460. The panel is a list of radio buttons; the car is the thing the
-   screen exists for, and 460 was leaving it 968px of a 1440px viewport — not
-   enough for the turntable to swing broadside without the wings running off both
-   edges. 420 is the tightest the panel goes while STILL clearing `--pair-at`
-   (400px + the 2px border = 402), so the rail survives with 18px to spare; below
-   that the sheet drops to the stacked phone layout and the option list halves.
-   Paired with the +3% rail share below, so the categories keep their pixel width
-   and the width comes out of the option column, which had the slack. */
-@media (min-width: 1100px) {
-  #carsetup { --cs-sheet-w: min(100%, 420px); }
-}
-/* A MOUSE ALWAYS GETS THE TWO-PANE PANEL. Below 1100px the sheet falls back to a
-   430px floor, and 430 is four pixels under the width the rail needs — so a
-   desktop window narrower than ~815px, or a maximised one at 125%+ browser zoom
-   (the same thing measured in CSS pixels), quietly served the phone's stacked
-   layout: categories in a wrapping grid on top, options squeezed under them.
-   That trade buys vertical room a phone needs and a desktop does not. Floor the
-   sheet at 460px here — the same width a 1440px screen gives it — so the rail is
-   what a desktop gets at every window size it can realistically have. Scoped to
-   body.desktop (set from `pointer: coarse` in game.js), so a touch device's own
-   width ladder is untouched. */
-@media (max-width: 1099px) {
-  body.desktop #carsetup { --cs-sheet-w: min(100%, max(460px, 54vw), 500px); }
 }
 
 /* ---------- header ---------- */
@@ -838,26 +828,22 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    can seat both — it wraps on its own if it cannot, so nothing re-truncates.
    Specificity is deliberate: the rule it overrides is a bare #id inside a
    container query, and a matching-weight selector here would silently lose. */
-/* UNDOCK WHEN THE GAP STOPS BEING WORTH IT. The panel is docked so the left of
-   the viewport stays clear for the car, and that bargain only pays while the gap
-   is big enough to show one. At UI SIZE 150% on a 1000px-wide viewport the panel
-   needs 500px of its OWN units to keep the two-pane layout (--pair-at is 400),
-   which is 750 visual px — leaving the car 242, too small to read a car in and
-   too small to be worth the squeeze it puts on the option list.
-
-   Both halves lose in that state, so stop splitting: give the sheet the width
-   and let the panel be a full screen. The alternative — holding the visual width
-   constant so the car keeps its share — puts the panel at 280 own px, under
-   --pair-at, which collapses the rail into the wrapping grid this tier exists to
-   prevent. Docked stays the default at every size where the gap is real; only
-   the short sheet, where it is not, undocks. */
-#carsetup:has(#cs-inner[data-density="compact"]) { place-items: stretch center; }
-#cs-inner[data-density="compact"] { width: 100%; }
-/* The camera bar goes with the preview it aims. It is positioned against the
-   DOCKED edge (`right: ... + --cs-sheet-w * --ui-scale`), so once the sheet is
-   full-width that anchor puts it over the foot — measured, it landed on top of
-   BACK — and it would be steering a car that nothing is showing. */
-#carsetup:has(#cs-inner[data-density="compact"]) #cs-stack { display: none; }
+/* The width formula at the top of this file now reserves 320 VISUAL px for the
+   car at every zoom, so the panel no longer starves it and there is nothing to
+   undock from. An earlier pass here DID undock on a short sheet; it was keyed on
+   data-density, which answers a HEIGHT question, while "is the gap worth
+   keeping" is a WIDTH one — and on an 852x393 landscape phone that threw away a
+   369px car preview that was perfectly good. Reverted deliberately, recorded so
+   the next person does not re-derive it. */
+/* THE LIST COMPACTS TOO, not just the chrome above it. Reserving the car its
+   320 visual px makes the panel narrower, and a narrower option row WRAPS —
+   name, badge, delta chips and price stack instead of sitting on one line — so
+   buying the car its space with row height would just move the readability
+   problem. Measured at 1000x462, UI SIZE 150%: 8px row padding and a 4px delta
+   gap put one option on screen; at 4px/2px, two fit with their descriptions. */
+#cs-inner[data-density="compact"] .cs-opt { padding: 4px 9px; }
+#cs-inner[data-density="compact"] .cs-opt-deltas { margin-top: 2px; gap: 3px; }
+#cs-inner[data-density="compact"] #cs-options { gap: calc(var(--gap) * 0.45); }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
