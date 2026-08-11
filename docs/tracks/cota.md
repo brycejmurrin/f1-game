@@ -65,3 +65,15 @@ pale dusty green-gray.
   landmark cluster.
 - Dust the mid-distance with sparse **dark-green oak/cedar clusters** over dry grass;
   fade everything into thin warm haze at the edges.
+
+## Research pass — findings (not yet built)
+
+- **The COTA Observation Tower** is the circuit's defining structure: **251 ft
+  / 77 m**, on the *outside* of the track near **Turns 16–18**, with the
+  observation deck 22 storeys up. Verify the in-game tower matches this height,
+  position and side — it is the silhouette the whole venue is read by.
+- **Austin360 Amphitheater** sits at the **base of the tower** — an open-air
+  concert bowl seating 14,000. A tower without the amphitheatre wrapped round
+  its foot is only half of that landmark.
+- **Turn 1 is a 133 ft hill** — the steepest, most-photographed feature of the
+  lap. Worth checking the modelled gradient against that figure.
