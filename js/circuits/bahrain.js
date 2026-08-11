@@ -48,6 +48,7 @@
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
+        modelGroup, groundPatch, bleacher, onTrack,
         circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -800,6 +801,147 @@
       // hospitality row. Placed well back of the paddock buildings (gap 100)
       // so its footprint clears the hospitality/windTower cluster ahead of it.
       broadcastCompound(K(0.965), -1, 100, { vans: 4, dishes: 3, mastH: 10 });
+
+      // ── THE DRAG STRIP ───────────────────────────────────────────────────
+      // BIC is not one circuit, it is a motorsport COMPLEX: six tracks share
+      // the site, and the 1.2 km quarter-mile drag strip is the one the locals
+      // actually use every week. It runs parallel to the pit straight out past
+      // the paddock, and from a car on the main straight it is the only thing
+      // breaking the emptiness on that side — a second pale ribbon lying in the
+      // sand with its own light tree and its own little stands.
+      //
+      // The circuit had no trace of it, which left the whole west side of the
+      // lap reading as untouched desert when the real place is built up out
+      // there. Guarded segment-by-segment with onTrack(): the strip is longer
+      // than the straight it parallels, so its far ends run past the circuit's
+      // own geometry and must not be drawn over tarmac.
+      (function dragStrip() {
+        const PREP   = [0.24, 0.23, 0.24];   // rubbered-in launch surface
+        const LANE   = [0.30, 0.29, 0.30];
+        const STRIPE = [0.88, 0.87, 0.82];
+        const WALL   = [0.80, 0.79, 0.74];
+        const GAP    = 178;                  // metres out past the paddock
+        // Re-anchor EVERY panel. A first cut laid 900 m of ribbon off one
+        // anchor's basis, which is a flat plane — and the desert here sags
+        // ~3 m by 110 m out and keeps going, so the far end of the strip
+        // visibly lifted off the ground in the aerial. Walking the anchor
+        // along the straight instead makes the strip follow the terrain (and
+        // follow the complex round the ends, which is what the real one does).
+        // Confined to the genuinely straight stretch of the pit straight
+        // (~650 m at 0.93→0.05). Re-anchoring follows the track, so running it
+        // any further wrapped the strip around the outside of Turn 1 and Turn
+        // 15 — and a drag strip that bends is not a drag strip. Shorter and
+        // straight beats longer and curved.
+        const S0 = 0.930, S1 = 0.050, STEPS = 26;
+        const span = (S1 - S0 + 1) % 1;
+        const pts = [];
+        for (let i = 0; i <= STEPS; i++) {
+          const sf = (S0 + span * (i / STEPS)) % 1;
+          pts.push(anchor(K(sf), -1, GAP));
+        }
+        for (let i = 0; i < STEPS; i++) {
+          const a = pts[i], nx = pts[i + 1];
+          const b = [a.r, a.u, a.t];
+          const seglen = Math.hypot(nx.c[0] - a.c[0], nx.c[2] - a.c[2]) + 0.6;
+          const c = [(a.c[0] + nx.c[0]) / 2, (a.c[1] + nx.c[1]) / 2, (a.c[2] + nx.c[2]) / 2];
+          if (onTrack(c[0], c[2], 34)) continue;
+          // Rubber builds up toward the start line at the i=0 end.
+          const near = Math.max(0, 1 - i / (STEPS * 0.55));
+          const surf = [
+            LANE[0] + (PREP[0] - LANE[0]) * near,
+            LANE[1] + (PREP[1] - LANE[1]) * near,
+            LANE[2] + (PREP[2] - LANE[2]) * near];
+          for (const lane of [-5.2, 5.2]) {
+            addBox(out, vadd(vadd(c, a.r, lane), a.u, 0.10),
+              [9.4, 0.18, seglen], surf, b);
+          }
+          addBox(out, vadd(c, a.u, 0.16), [0.5, 0.16, seglen], STRIPE, b);
+          for (const sd of [-11.4, 11.4]) {
+            addBox(out, vadd(vadd(c, a.r, sd), a.u, 0.55),
+              [0.4, 1.1, seglen], WALL, b);
+          }
+        }
+        // The Christmas tree — the single most recognisable object on any drag
+        // strip, and unmistakable at night: a stack of lenses per lane, two
+        // pre-stage, three staged ambers, then green over red.
+        const st = pts[1], stb = [st.r, st.u, st.t];
+        if (!onTrack(st.c[0], st.c[2], 26)) {
+          modelGroup("bahrain-drag-tree", {
+            center: vadd(st.c, st.u, 3.4), size: [13, 8, 3], basis: stb,
+          }, (stage) => {
+            addBox(stage, vadd(st.c, st.u, 3.2), [1.0, 6.4, 0.6], [0.20, 0.20, 0.22], stb);
+            const LENS = [
+              [0.9,  [1.25, 0.62, 0.10]], [1.45, [1.25, 0.62, 0.10]],
+              [2.35, [1.35, 0.72, 0.12]], [3.05, [1.35, 0.72, 0.12]],
+              [3.75, [1.35, 0.72, 0.12]], [4.60, [0.25, 1.30, 0.35]],
+              [5.35, [1.30, 0.18, 0.14]],
+            ];
+            stage._mat = MAT.METAL;
+            for (const lane of [-5.2, 5.2]) {
+              for (const [hgt, col] of LENS) {
+                addBox(stage, vadd(vadd(st.c, st.r, lane), st.u, hgt),
+                  [0.62, 0.5, 0.5], col, stb);
+              }
+            }
+            stage._mat = 0;
+          });
+        }
+        // Starter/timing box beside the tree, and open bleachers down the
+        // launch area — drag racing crowds sit at the start, not the finish.
+        const tow = vadd(st.c, st.r, -20);
+        if (!onTrack(tow[0], tow[2], 22)) {
+          addBox(out, vadd(tow, st.u, 4.0), [7, 8, 9], [0.86, 0.85, 0.80], stb);
+          addBox(out, vadd(tow, st.u, 6.6), [7.4, 2.0, 9.4], WIN_COOL, stb);
+          addBox(out, vadd(tow, st.u, 8.3), [8, 0.5, 10], [0.72, 0.71, 0.68], stb);
+        }
+        for (let i = 2; i < 12; i += 2) {
+          const p = pts[i], pb = [p.r, p.u, p.t];
+          const sc = vadd(p.c, p.r, -22);
+          if (onTrack(sc[0], sc[2], 20)) continue;
+          for (let r = 0; r < 4; r++) {
+            addBox(out, vadd(vadd(sc, p.r, -r * 1.5), p.u, 0.6 + r * 0.75),
+              [1.4, 0.3, 40], [0.74, 0.72, 0.66], pb);
+          }
+        }
+        // Its own flood masts — the strip runs at night like the GP does.
+        for (const i of [3, 11, 18, 25]) {
+          const p = pts[i], pb = [p.r, p.u, p.t];
+          const fc = vadd(p.c, p.r, 18);
+          if (onTrack(fc[0], fc[2], 24)) continue;
+          addCyl(out, fc, 0.55, 28, [0.72, 0.72, 0.74], 6, pb);
+          addBox(out, vadd(fc, p.u, 28.6), [4.4, 1.0, 1.6], FLOOD, pb);
+        }
+      })();
+
+      // ── LIMESTONE SHELVES — the rock the circuit was cut out of ──────────
+      // Sakhir is not a sand sea. The site is rocky desert pavement over a
+      // limestone shelf, and levelling it took two thousand tonnes of blasting
+      // — crushed on site because the road network could not carry it away.
+      // The lap was dressed entirely in soft dune mounds, which is the wrong
+      // desert: it gave the horizon no hard edge anywhere. These are low
+      // flat-topped ledges with a bright sunlit cap over a darker shadowed
+      // face, sparse enough that the dunes still own the skyline.
+      for (const [sf, side, gap, w, len, h] of [
+        [0.135,  1, 82,  26,  46, 2.6],
+        [0.225, -1, 96,  34,  62, 3.4],
+        [0.345,  1, 74,  22,  38, 2.1],
+        [0.475, -1, 88,  30,  54, 3.0],
+        [0.605,  1, 92,  28,  50, 2.4],
+        [0.705, -1, 78,  24,  42, 2.8],
+        [0.845,  1, 86,  32,  58, 3.2],
+      ]) {
+        const k = K(sf), a = anchor(k, side, gap + w * 0.5), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 30)) continue;
+        const hv = hash(k * 41 + gap);
+        // Two offset slabs make a stepped ledge rather than a single block.
+        addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len],
+          [0.60 + hv * 0.05, 0.55 + hv * 0.04, 0.45], b);
+        addBox(out, vadd(vadd(a.c, a.u, h + 0.35), a.r, w * 0.16),
+          [w * 0.62, 0.7, len * 0.74], [0.72 + hv * 0.06, 0.67, 0.55], b);
+        // Scree skirt at the foot, where the blasted rock spilled.
+        addBox(out, vadd(a.c, a.u, 0.22), [w * 1.22, 0.44, len * 1.1],
+          [0.56, 0.50, 0.40], b);
+      }
 
       // (No encircling Manama city ring: the brief makes Sakhir an isolated
       // desert island — the mountain() dune bands own the horizon. The single

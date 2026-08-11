@@ -5,6 +5,13 @@
 ## 1. Setting
 The circuit sits in the open Sakhir desert south of Manama — flat, exposed sand and scrub, no city skyline. The complex is an isolated island of asphalt and concrete ringed by gravel run-offs, with sculpted artificial dunes and sparse desert planting separating the track from the bare sand beyond. The defining built feature is the **Sakhir Tower**, a ~10-storey building wrapped full-height in video LEDs, standing over the Turn 1 braking zone — not the paddock.
 
+**Two research facts that change how the surroundings should be modelled:**
+
+- **The ground is rock, not sand sea.** Tilke chose Sakhir partly because it offered *some* elevation, and levelling it meant blasting ~2,000 tonnes of rock — crushed on site, because moving it would have wrecked the local road network. Sakhir is rocky desert pavement over a limestone shelf. Dressing the lap purely in soft dune mounds gives the horizon no hard edge; low flat-topped **limestone ledges** (bright sunlit cap, darker shadowed face, scree skirt at the foot) are what the real ground does between the dunes. Blown sand around the track is held down with a sprayed **adhesive crust**, so the apron ringing the circuit reads darker and harder than open desert.
+- **BIC is a complex, not a circuit.** Six tracks share the site: the Grand Prix layout, the Outer, Endurance and Paddock circuits, the "Oasis" Inner circuit (its own pit lane and paddock, used by the F2/Porsche support fields), a flat oval, and a **1.2 km drag strip**. The drag strip is the one that matters visually — it lies parallel to the pit straight out past the paddock, and from the main straight it is the only built thing on that side. Model it with its twin prepped lanes (rubbered dark toward the start line), guard walls, low bleachers at the *launch* end, a starter/timing box, and the **Christmas tree** light stack — two pre-stage ambers, three staged ambers, green over red, per lane. At night it is unmistakable.
+
+Other named specifics: **Turn 1 is officially the Michael Schumacher corner** (renamed 2014). Capacity ~70,000. Track surface is graywacke shipped from Bayston Hill quarry, Shropshire — the same aggregate as Yas Marina. Tilke placed deliberate emphasis on **local Gulf architecture** in the buildings and grandstands (barjeel wind-towers, arabesque marquees — both already modelled).
+
 ## 2. Atmosphere & palette
 Black night sky lit by banks of white floodlights; the track reads as bright grey asphalt against warm sand under cool artificial light. Palette suggestions:
 - Sky / horizon: deep indigo-black `[0.04, 0.05, 0.10]`
@@ -32,6 +39,8 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 | 0.62 | L | far | Marshal/timing huts: small white cubes, ~4 m |
 | 0.80 | R | mid | Back-straight catch-fence + tall flood ring |
 | 0.95 | L | close | Pit entry wall + garage roofline returning to start |
+| 0.015 | L | very far (~180 m) | **Drag strip**: twin prepped lanes parallel to the pit straight, darkening toward the start line; guard walls, centre stripe, launch-end bleachers, starter box, and the **Christmas tree** light stack (2 pre-stage + 3 staged ambers, green, red — per lane). Its own 28 m flood masts |
+| 0.135 / 0.225 / 0.345 / 0.475 / 0.605 / 0.705 / 0.845 | alternating | far (74–96 m) | **Limestone shelves**: low stepped flat-topped ledges, bright sunlit cap over a darker face, scree skirt at the foot — the rocky pavement the circuit was blasted out of. Sparse, so the dune bands keep the skyline |
 
 ## 5. Track features
 Near-flat, with modest real camber in the fast sweeps (3–4°: T1, T4, the T5–T7 sweep, T10, the final right). Signature corners: **Turn 1** right-hand hairpin (heavy braking, prime overtake), **Turn 4** right hairpin after the Turn 3 kink/DRS, the flowing **Turns 5-6-7 sweep**, **Turn 8** downhill right hairpin, and the technical double-apex **Turns 9-10**. Wide asphalt with generous gravel/asphalt run-off; bold red-white sawtooth kerbs at every apex and exit.
