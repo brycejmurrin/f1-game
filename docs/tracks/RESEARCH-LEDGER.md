@@ -97,6 +97,93 @@ Seven consecutive theories about Montreal's Calder were all wrong.
 **No baseline was raised.** The ratchet exists to stop exactly this drift, and
 decorative scenery is not worth spending the budget it protects.
 
+## Racing direction — the audit, and the one circuit that was backwards
+
+A second campaign asked a different question: does each circuit run the way the
+real one does? **39 of 40 did. Singapore did not** — Marina Bay races
+anti-clockwise and the game drove it clockwise, so the whole lap played
+mirrored: measured **11 right / 6 left** against a real 12 left / 7 right.
+
+**`tests/specs/f1-track-accuracy.spec.js` could not see it, and passed.** It
+compares the game against a pinned `bacinger/f1-circuits` GeoJSON and checks
+`directionMatch` — but the game's path was IMPORTED from that dataset, so when
+the upstream line is drawn backwards both sides are backwards together and
+agree. The spec's own comment admits the premise: *"GeoJSON line order is not a
+race-direction guarantee."* Real-world direction enters at exactly one place,
+`RACE_DIRECTION_OVERRIDES`, which covered three circuits. It now covers four.
+
+**How the outlier was isolated, without trusting a sign convention.** Run the
+same `signedArea()` over the same frame for all eleven circuits that are
+anti-clockwise in reality: ten compute anti-clockwise, `sg-2008` alone computes
+clockwise. That is calibrated in-frame, so it cannot be a convention error —
+and this repo has shipped a curvature sign backwards for months before, so
+"calibrate, never reason about handedness" is the rule that found this.
+
+**Two probes that did NOT work, recorded so nobody rebuilds them.** Deriving
+Turn 1's hand from `track.curv` at `def.turns[0]` scored 4/9 against circuits
+whose Turn 1 is not in dispute; redoing it with a heading-derived measure scored
+4/10. Both polarities were ~coin-flip, so both were discarded rather than
+picking the one that flattered the conclusion. The likely cause is that
+`def.turns[0]` is not Turn 1 after `startFrac` rotation — Montreal and COTA both
+read ≈0.01, i.e. straight road. **Whole-lap integrals (shoelace winding, net
+heading change) are reliable here; per-corner probes are not.**
+
+**Suzuka is a figure-of-eight and has no single direction.** Wikipedia's list is
+the only compound entry in 77 circuits: *"Part clockwise and part anti-clockwise
+(figure of eight)."* The geometry proves it — every other circuit measures
+netLaps ±1.00, **Suzuka measures −0.00**, because the two lobes cancel, and its
+signed area is 0.060 of its bounding box, 2.6× smaller than the next lowest. Any
+automated CW/CCW audit is asking Suzuka a question it cannot answer, which is
+what the `was auto-audit reverse:true` comment in its def is a scar from. It is
+right-dominant (measured 9R/7L, real 10R/8L) and already correct. **Do not
+"fix" it.**
+
+**Sources: do not trust one dataset, or even one tier.** A re-verification pass
+deliberately avoiding Wikipedia's list found `lapmeta` has Miami clockwise
+(wrong) and `worldsbk.com` — an official series site — has Portimão
+anti-clockwise (wrong). All three of Miami, Portimão and Mugello are correct in
+this repo. Prefer the circuit operator: Monza's own site states *"Direction of
+travel: clockwise"*, the Hungaroring's track-use terms state *"Traffic on the
+Track is one-way, moving clockwise."*
+
+**Kyalami's direction is era-dependent and the repo is right.** The operator
+records the 1961–87 circuit as clockwise and says the track was *"flipped"* in
+1989 to anti-clockwise. The game models the classic layout, and `reverse: true`
+plus the `za-1961` override give it clockwise. A naive pass that reads only the
+current circuit would break this.
+
+### What reversing a circuit actually costs
+
+Flipping `reverse` is never a one-line change, because RACING-space coordinates
+are tied to the direction of travel:
+
+- **`startFrac` does NOT move.** `toSourceFrac` maps racing 0 to source `phi`
+  under both branches, so the start line stays put. Verified, not assumed.
+- **`CircuitMarkings` must be mirrored by hand** (`f → 1-f`, re-sorted). The
+  header says sectors/turns are authored in racing space and never fmap'd, so
+  all 19 Singapore apexes would otherwise sit on the wrong corners.
+- **Racing-space scenery must be mirrored**, or every landmark lands on the far
+  side of the lap. `sceneryCoordinates: "racing"` cannot simply flip meaning:
+  kyalami and paul_ricard author against the lap they already drive reversed,
+  while singapore authored against its forward one. Hence `sceneryLapMirror`,
+  which mirrors `s → -s`, `k → -k` and swaps ranges. Sides need no help —
+  `transformSceneryApi` already negates `side` for reversed defs, which is
+  exactly the flip a mirrored anchor needs to land back on the same kerb.
+
+### Two bugs the Singapore fix uncovered
+
+1. **`resolve()` silently dropped `sceneryLapMirror`.** The def is copied
+   field-by-field, so a new field that isn't listed reads `undefined` at every
+   consumer — and `lapMirror()`'s fallback (`false`) is a legitimate value, so
+   nothing complained. The scenery placed unmirrored and Marina Bay Sands landed
+   in the road, where `modelGroup` suppressed it as `"footprint rejected"`.
+   There is already a comment there naming five earlier victims of this exact
+   trap; this was the sixth. **Any new def field must be added to that copy.**
+   The vertex delta was the only signal — 958,411 → 910,037.
+2. **`waterBand`/`waterSurface` were absent from `transformSceneryApi`.** A
+   latent gap for any reversed circuit using water; Singapore is the first, with
+   four Marina Bay bands. Added to the range and node+side lists.
+
 ## Method (per circuit)
 
 1. **Research** — TinyFish `search` for trackside landmarks/grandstands/setting,

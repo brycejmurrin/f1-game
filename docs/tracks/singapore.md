@@ -1,6 +1,24 @@
 # Marina Bay Street Circuit — Singapore
 
-**Setting:** NIGHT race · **Theme:** street_night
+**Setting:** NIGHT race · **Theme:** street_night · **Direction:** ANTI-CLOCKWISE
+
+> **Direction, and how it was wrong for a long time.** This brief has said
+> "cars run anticlockwise" since it was written, and the circuit drove
+> *clockwise* anyway — the imported centreline is digitised backwards, and
+> `js/circuits/singapore.js` had no `reverse` flag at all, the only circuit in
+> the repo with none. The lap therefore played mirrored: 11 right / 6 left
+> against a real 12 left / 7 right, Turn 1 taken as a right when Marina Bay's
+> Turn 1 is a sharp left. Fixed with `reverse: true` + `sceneryLapMirror: true`
+> + a mirrored marking table + the `sg-2008` race-direction override.
+>
+> The accuracy spec could not catch it: it compares the game against the same
+> upstream GeoJSON the path came from, so both sides were backwards and agreed.
+> See the direction section of `docs/tracks/RESEARCH-LEDGER.md`.
+>
+> Sourcing, away from that dataset: Pirelli — "an asphalt-covered street circuit
+> on which cars are driving anti-clockwise"; Singapore's National Library Board
+> — "the cars would run anti-clockwise"; f1-fansite — "Driving direction:
+> Counterclockwise".
 
 ## 1. Setting
 A floodlit night street race threading the public roads around Marina Bay in downtown Singapore. Cars run anticlockwise past harbourside boulevards, low road bridges, and a wall of illuminated skyscrapers reflected in black bay water. Dense, humid, neon-soaked, and hemmed in by concrete barriers on every side.
