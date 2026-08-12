@@ -115,12 +115,15 @@
       { t: 0, l: 200 }, { t: -95, l: 70 }, { t: 90, l: 80 }, { t: -80, l: 60 }, { t: 60, l: 70 }, { t: -90, l: 90 },
       { t: 0, l: 180 }, { t: -90, l: 70 }, { t: -90, l: 70 }, { t: 85, l: 60 }, { t: -95, l: 80 },
     ],
-    // Elevations are source-trace fractions. Keep reclaimed-land Singapore nearly
-    // flat, with only the Sheares underpass dip (racing s≈0.10) and Anderson
-    // Bridge rise (racing s≈0.62).
+    // Elevations are source-trace fractions, remapped through TrackSpace.toRacingFrac
+    // at load time (js/track/tracks.js ~2454) — with this circuit's reverse:true that
+    // remap is racing = wrap01(startFrac - source), NOT source - startFrac. The two s
+    // values below solve that inverse for the intended racing positions: the Sheares
+    // underpass dip (racing s≈0.10) and Anderson Bridge rise (racing s≈0.62). Keep
+    // reclaimed-land Singapore nearly flat otherwise.
     elevations: [
-      { s: 0.6075, halfM: 120, rise: -2.5 },
-      { s: 0.1275, halfM: 120, rise: 2.5 },
+      { s: 0.4075, halfM: 120, rise: -2.5 },
+      { s: 0.8875, halfM: 120, rise: 2.5 },
     ],
     // Marina Bay runs on real city streets: the bay-front boulevards are wide,
     // the Turn 1-3 complex, the Anderson Bridge link and the Esplanade squeeze
