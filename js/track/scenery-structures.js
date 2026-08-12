@@ -46,11 +46,18 @@ const SceneryStructures = (function () {
         }
         // One model per (thickness, height, colour) — i.e. per wall SPAN, however
         // long — with the along-track length carried by the node scale. base sunk
-        // 0.4 — no slope float
+        // 0.4 — no slope float. A proud coping rail along the top (a shade darker)
+        // gives the slab a cast shadow-line instead of a flat blank face; it is
+        // uniform per span so it rides the same baked model — no key change, no
+        // per-runtime cost.
         const wallCol = col || [0.78, 0.78, 0.80];
+        const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
         ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
-          (rec) => rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol),
+          (rec) => {
+            rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol);   // slab
+            rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
+          },
           { kind: "wall", k, side });
       });
     };
