@@ -374,11 +374,19 @@ function openTrackDetail() {
     }
   }
 
-  // Turns list
+  // Turns list — class from TrackMaps (radius + heading sweep), not raw |k|.
+  // Literal tdc-* class names kept here so docs/COMPONENTS.md inventory still
+  // sees them (dynamic "tdc-" + x would look unused to the audit).
+  const TDC_CLS = {
+    HAIRPIN: "tdc-hairpin",
+    SLOW: "tdc-slow",
+    MEDIUM: "tdc-medium",
+    FAST: "tdc-fast"
+  };
   const list = document.getElementById("track-detail-list");
   list.innerHTML = crns.map(function (c) {
-    const cls = c.v > 0.025 ? "tdc-hairpin" : c.v > 0.013 ? "tdc-slow" : c.v > 0.008 ? "tdc-medium" : "tdc-fast";
-    const lbl = c.v > 0.025 ? "HAIRPIN" : c.v > 0.013 ? "SLOW" : c.v > 0.008 ? "MEDIUM" : "FAST";
+    const lbl = c.cls || "MEDIUM";
+    const cls = TDC_CLS[lbl] || "tdc-medium";
     return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
   }).join("");
 
@@ -418,7 +426,7 @@ function openTrackDetail() {
     cv.style.height = cv.height + "px";
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
-      width: 5, pad: 30, corners: true, cornerR: 12, cornerFont: 13,
+      width: 5, pad: 42, corners: true, cornerR: 6, cornerFont: 12,
       sectors: true, drs: true
     });
   });

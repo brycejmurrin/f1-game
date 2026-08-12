@@ -71,7 +71,11 @@ window.CircuitMarkings = (function () {
   },
   monza: {
     sectors: [0.28, 0.62],
-    turns: [0.0962, 0.1022, 0.3057, 0.3122, 0.3692, 0.3827, 0.4322, 0.6177, 0.6497, 0.8217, 0.8387],
+    // FIA 11 turns: Rettifilo, Curva Grande (was missing — mild R~174 peak at
+    // ~0.129), Roggia, Lesmo 1/2, Ascari L/R/L, Parabolica. Dropped the
+    // Serraglio kink (0.432) and the dual Parabolica sample so the count stays
+    // 11 and T3 reads FAST. Sources: SI / Pit Lane / DIY Sim Monza guides.
+    turns: [0.0962, 0.1022, 0.1288, 0.3057, 0.3122, 0.3692, 0.3827, 0.6177, 0.6309, 0.6497, 0.8387],
   },
   qatar: {
     sectors: [0.3, 0.65],

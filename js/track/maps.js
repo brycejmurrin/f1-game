@@ -22,6 +22,85 @@ const TrackMaps = (function () {
   // F1 sector colours (S1 = purple, S2 = red, S3 = yellow-green)
   const SECTOR_COLORS = ["#c084fc", "#e10600", "#a3e635"];
 
+  // Turn-class colours — match css/track-detail.css .tdc-* so the map and the
+  // TURNS chips agree.
+  const CLASS_COLORS = {
+    HAIRPIN: "#f87171",
+    SLOW: "#fb923c",
+    MEDIUM: "#facc15",
+    FAST: "#4ade80"
+  };
+
+  // Classify from approximate apex radius (m) + heading sweep (deg).
+  // Peak |curvature| alone called every chicane a HAIRPIN (Rettifilo, Bus Stop);
+  // real hairpins (La Source, Loews) are very tight AND reverse heading.
+  // Pouhon-class sweepers can show large angle at R~30 — those stay SLOW/MEDIUM,
+  // not HAIRPIN (threshold R < 28). Fast sweeps sit at R ≳ 85 m.
+  // Calibrated 2026-08 against Monza/Spa/Monaco guides + measured centreline.
+  function classifyCorner(rM, angDeg) {
+    if (rM < 28 && angDeg >= 110) return "HAIRPIN";
+    if (rM >= 85) return "FAST";
+    if (rM < 50) return "SLOW";
+    return "MEDIUM";
+  }
+
+  // Peak |k|, radius, and heading change around a lap fraction. Window ±50 m
+  // finds the local apex when a curated mark is slightly off the peak.
+  function measureApex(tr, frac) {
+    const total = tr.total, n = tr.n, ds = total / n;
+    const f = (((frac % 1) + 1) % 1);
+    const s0 = f * total;
+    let kPeak = Math.abs(Tracks.curvature(tr, s0)), sPeak = s0;
+    for (let d = -50; d <= 50; d += 2) {
+      const s = ((s0 + d) % total + total) % total;
+      const k = Math.abs(Tracks.curvature(tr, s));
+      if (k > kPeak) { kPeak = k; sPeak = s; }
+    }
+    const thr = Math.max(0.0035, kPeak * 0.3);
+    let a = sPeak, b = sPeak;
+    for (let step = 0; step < 100; step++) {
+      const s = ((sPeak - (step + 1) * ds) % total + total) % total;
+      if (Math.abs(Tracks.curvature(tr, s)) < thr) break;
+      a = s;
+    }
+    for (let step = 0; step < 100; step++) {
+      const s = ((sPeak + (step + 1) * ds) % total + total) % total;
+      if (Math.abs(Tracks.curvature(tr, s)) < thr) break;
+      b = s;
+    }
+    let len = (b - a + total) % total;
+    if (len < ds) len = ds;
+    const steps = Math.max(10, Math.round(len / ds));
+    let dHead = 0, prev = null;
+    for (let j = 0; j <= steps; j++) {
+      const s = (a + (len * j / steps)) % total;
+      const fi = s / total * n;
+      const i = Math.floor(fi) % n, jj = (i + 1) % n, ff = fi - Math.floor(fi);
+      const tx = tr.tx[i] + (tr.tx[jj] - tr.tx[i]) * ff;
+      const tz = tr.tz[i] + (tr.tz[jj] - tr.tz[i]) * ff;
+      const h = Math.atan2(tz, tx);
+      if (prev != null) {
+        let dh = h - prev;
+        while (dh > Math.PI) dh -= 2 * Math.PI;
+        while (dh < -Math.PI) dh += 2 * Math.PI;
+        dHead += dh;
+      }
+      prev = h;
+    }
+    const ang = Math.abs(dHead) * 180 / Math.PI;
+    const r = kPeak > 1e-6 ? 1 / kPeak : 999;
+    return { v: kPeak, r: r, ang: ang, cls: classifyCorner(r, ang), fPeak: ((sPeak / total) % 1 + 1) % 1 };
+  }
+
+  function cornerAt(tr, frac, n) {
+    const m = tr.map.length;
+    const f = (((frac % 1) + 1) % 1);
+    const idx = Math.floor(f * m) % m;
+    const mp = tr.map[idx];
+    const mes = measureApex(tr, f);
+    return { n: n, x: mp[0], y: mp[1], v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls };
+  }
+
   // Build the outline + corner list once from the spline engine, then cache.
   function compute(def) {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
@@ -34,22 +113,12 @@ const TrackMaps = (function () {
       const tr = Tracks.buildCenterline(def);
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
-        const m = tr.map.length;
-        // Prefer curated FIA turn apexes when present on the def.
-        // `v` is |curvature| at the apex — same units detectCorners stores —
-        // so the track-detail TURNS list (and the select-screen "slowest"
-        // fact) can classify HAIRPIN/SLOW/MEDIUM/FAST. Hard-coding v:0 made
-        // every curated turn read as FAST and every "slowest" callout as T1.
+        // Prefer curated FIA turn apexes when present on the def. Each corner
+        // carries radius + heading-sweep class (see classifyCorner) — not bare
+        // peak |k|, which painted every chicane as HAIRPIN.
         let crns;
         if (def.turns && def.turns.length) {
-          const total = tr.total;
-          crns = def.turns.map(function (frac, i) {
-            const f = (((frac % 1) + 1) % 1);
-            const idx = Math.floor(f * m) % m;
-            const mp = tr.map[idx];
-            const v = Math.abs(Tracks.curvature(tr, f * total));
-            return { n: i + 1, x: mp[0], y: mp[1], v: v };
-          });
+          crns = def.turns.map(function (frac, i) { return cornerAt(tr, frac, i + 1); });
         } else {
           crns = detectCorners(tr);
         }
@@ -176,9 +245,8 @@ const TrackMaps = (function () {
       }
     }
     return merged.map(function (p, i) {
-      const idx = Math.floor((p.k / n) * m) % m;
-      const mp = tr.map[idx];
-      return { n: i + 1, x: mp[0], y: mp[1], v: p.v };
+      const frac = p.k / n;
+      return cornerAt(tr, frac, i + 1);
     });
   }
 
@@ -205,6 +273,7 @@ const TrackMaps = (function () {
     const ox = (W - spanx * sc) / 2, oy = (H - spany * sc) / 2;
     function PX(x) { return ox + (x - minx) * sc; }
     function PY(y) { return oy + (y - miny) * sc; }
+    const cx = PX((minx + maxx) / 2), cy = PY((miny + maxy) / 2);
 
     const width = opts.width || 3;
     g.lineJoin = "round"; g.lineCap = "round";
@@ -281,23 +350,88 @@ const TrackMaps = (function () {
       g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
     }
 
-    // numbered corner markers (large preview only)
-    if (opts.corners) {
-      const cs = data.corners, r = opts.cornerR || 8;
-      g.font = "700 " + (opts.cornerFont || 10) + "px system-ui, sans-serif";
-      g.textAlign = "center"; g.textBaseline = "middle";
+      // Numbered corner markers — class-coloured rings, labels pushed OUTWARD
+      // from the circuit centroid so stacked chicanes stay readable. A second
+      // pass nudges any two labels that still collide.
+      if (opts.corners) {
+      const cs = data.corners;
+      const rDot = opts.cornerR || 7;
+      const labelR0 = Math.max(20, rDot + 14);
+      const fontPx = opts.cornerFont || 12;
+      const labels = [];
       for (let i = 0; i < cs.length; i++) {
         const x = PX(cs[i].x), y = PY(cs[i].y);
-        g.fillStyle = "rgba(10,10,16,0.9)";
-        g.strokeStyle = opts.cornerColor || "#fff"; g.lineWidth = 1.5;
-        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
-        g.fillStyle = "#fff";
-        g.fillText(String(cs[i].n), x, y + 0.5);
+        const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
+        const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+        let dx = x - cx, dy = y - cy;
+        const len = Math.hypot(dx, dy) || 1;
+        dx /= len; dy /= len;
+        // Alternate radial distance for neighbours so T1/T2 chicanes don't stack.
+        const labelR = labelR0 + (i % 2) * 8;
+        labels.push({ i: i, x: x, y: y, dx: dx, dy: dy, lx: x + dx * labelR, ly: y + dy * labelR, col: col, n: cs[i].n });
+      }
+      // Separate colliding labels (min 16 px centre distance).
+      for (let pass = 0; pass < 4; pass++) {
+        for (let i = 0; i < labels.length; i++) {
+          for (let j = i + 1; j < labels.length; j++) {
+            const a = labels[i], b = labels[j];
+            let vx = b.lx - a.lx, vy = b.ly - a.ly;
+            let d = Math.hypot(vx, vy);
+            if (d < 16 && d > 1e-3) {
+              const push = (16 - d) / 2;
+              vx /= d; vy /= d;
+              a.lx -= vx * push; a.ly -= vy * push;
+              b.lx += vx * push; b.ly += vy * push;
+            } else if (d <= 1e-3) {
+              a.lx -= 8; b.lx += 8;
+            }
+          }
+        }
+      }
+      g.font = "700 " + fontPx + "px system-ui, sans-serif";
+      g.textAlign = "center"; g.textBaseline = "middle";
+      for (let i = 0; i < labels.length; i++) {
+        const L = labels[i];
+        g.strokeStyle = "rgba(255,255,255,0.35)";
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(L.x + L.dx * (rDot + 1), L.y + L.dy * (rDot + 1));
+        g.lineTo(L.lx, L.ly);
+        g.stroke();
+        g.fillStyle = "rgba(10,10,16,0.92)";
+        g.strokeStyle = L.col; g.lineWidth = 2.25;
+        g.beginPath(); g.arc(L.x, L.y, rDot, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.fillStyle = "rgba(10,10,16,0.88)";
+        g.beginPath(); g.arc(L.lx, L.ly, fontPx * 0.78, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = L.col; g.lineWidth = 1.25;
+        g.stroke();
+        g.fillStyle = L.col;
+        g.fillText(String(L.n), L.lx, L.ly + 0.5);
+      }
+      // Compact class legend (large preview only).
+      if (W >= 280 && H >= 200) {
+        const legend = ["HAIRPIN", "SLOW", "MEDIUM", "FAST"];
+        g.font = "600 9px system-ui, sans-serif";
+        g.textAlign = "left"; g.textBaseline = "middle";
+        let lx = 8, ly = H - 10;
+        for (let i = legend.length - 1; i >= 0; i--) {
+          const name = legend[i];
+          const col = CLASS_COLORS[name];
+          const tw = g.measureText(name).width;
+          g.fillStyle = col;
+          g.beginPath(); g.arc(lx + 4, ly, 3.5, 0, Math.PI * 2); g.fill();
+          g.fillStyle = "rgba(220,220,230,0.85)";
+          g.fillText(name, lx + 11, ly);
+          lx += tw + 22;
+        }
       }
       g.textAlign = "left";
     }
     return true;
   }
 
-  return { outline, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, SECTOR_COLORS };
+  return {
+    outline, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
+    SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex
+  };
 })();
