@@ -1306,6 +1306,11 @@ const Input = (function () {
   return {
     init,
     reset,
+    // Drop every held on-screen button through its closure (ghost-pointer purge).
+    // Lighter than reset() — leaves steer mode / tilt calibration / pad state
+    // intact — for the one moment a held throttle must not survive: an off-track
+    // rescue that repositions the car (see rescuePlayer in game.js).
+    releaseHolds: holdReleaseAll,
     debugState,
     poll: pollGamepad,
     rumble,

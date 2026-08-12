@@ -4580,6 +4580,13 @@ function rescuePlayer(c) {
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
   // on track must not announce itself here.
   if (c.local) {
+    // Drop any held on-screen control button. A rescue is a discrete reposition,
+    // and it's the one moment a stuck hold-button latch (an iOS ghost pointer
+    // formed during the frantic multi-touch of going off-track) could leave the
+    // throttle asserted after recovery — the "throttle stays on after an
+    // off-track rescue in BUTTONS mode" report. A live finger re-presses next
+    // frame; touch-mode auto-throttle is unaffected.
+    Input.releaseHolds();
     announce("RECOVERED", 1.2);
     if (soundOn) GameAudio.offtrack();
   }

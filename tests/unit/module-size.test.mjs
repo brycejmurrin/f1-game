@@ -77,7 +77,11 @@ const CEILINGS = {
   // Merged with the ACTIVE AERO flap distance gate from the other branch;
   // the file carries both sets of lines, so neither side's number fits it.
   // Set from the merged file: 7944.
-  "js/game.js": 7944,
+  // 7944 -> 7951: rescuePlayer now drops held on-screen buttons on a local
+  // rescue (Input.releaseHolds), fixing the "throttle stays on after an
+  // off-track rescue in BUTTONS mode" report — the comment records the bug at
+  // its site, the one growth this ratchet tolerates.
+  "js/game.js": 7951,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
