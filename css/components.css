@@ -660,7 +660,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 /* Tap targets. Listed by control class rather than a blanket `.panel button`
    so the deliberately dense LIGHTING TUNER rows keep their own sizing. */
 .bigbtn, .sel-edit,
-.sheet-body > button, .pm-group button,
+.sheet-body > button, .pm-group button, .pm-doors button,
 #advanced-inner :is(.opt-btn, .preset-btn),
 .cs-tab, .cs-opt, #campicker button, .cs-unlimited-btn, .adv-more-btn {
   min-height: var(--tap);
@@ -878,6 +878,26 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      longer means rewriting grid coordinates. */
   .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+/* SHORT SHEET: DROP TO TWO COLUMNS. Measured at 852×393 / UI SIZE 115% (the
+   shipped touch default): three columns put DISPLAY ~94px past the sheet floor
+   and left RESOLUTION / ACTIVE AERO only reachable after a non-obvious scroll,
+   while MORE doors sat at 36px because they were missing the tap floor (fixed
+   above). Two columns + a spanning doors row matches the portrait compact case
+   that already works, and fits DRIVING + DISPLAY above the fold on the play
+   shape. Only when data-density is compact — roomy sheets keep the 3-col pack. */
+.sheet[data-density="compact"] .pm-groups {
+  grid-template-columns: 1fr 1fr;
+}
+.sheet[data-density="compact"] .pm-doors {
+  grid-column: 1 / -1;
+  margin-top: var(--gap); padding-top: var(--gap);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+/* Compact DISPLAY: drop the disabled/hidden controls' visual weight and tighten
+   the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
+.sheet[data-density="compact"] .pm-group button { margin: 2px 0; }
+.sheet[data-density="compact"] .pm-group .tune-row { margin: 2px 0; }
+.sheet[data-density="compact"] .pm-group-h { margin-bottom: 4px; padding-bottom: 2px; }
 /* THE ELLIPSIS STAYS AT 620 AND DOES NOT FOLLOW THE COLUMN COUNT DOWN.
    It used to ride along in the same block, which was safe while three columns
    meant 620/3 ≈ 190 units each — wide enough that `nowrap` costs nothing.
@@ -885,9 +905,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    above records 4 of 13 labels WRAPPING. Under `nowrap` those four do not wrap,
    they get cut — and a settings button reads "RESOLUTION: AUTO", so the half
    that gets cut is the VALUE. Wrapping to two lines is a cost; losing the answer
-   is a defect. They are separate questions and now they are separate blocks. */
+   is a defect. They are separate questions and now they are separate blocks.
+   Keep min-height: the padding shrink is for density, not for shrinking the
+   thumb target — without the floor, MORE doors read 36px on a 52px ladder. */
 @container sheet (min-width: 620px) {
-  #pmsettings-inner button { font-size: var(--fs-2); padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pmsettings-inner button {
+    font-size: var(--fs-2); padding: 8px 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-height: var(--tap);
+  }
 }
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is
    the only button in this foot, so nothing needs to out-shout anything.) */

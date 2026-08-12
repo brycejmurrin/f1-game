@@ -933,7 +933,12 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    press once a session, sitting next to the list you came to the screen to read.
    Only where the sheet is short. At any comfortable height it keeps the full
    ladder, because there the 52 costs nothing. */
-#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--tap-min); }
+/* Chip floor, not --tap-min. Measured 852×393 @115%: --tap-min landed at 28px
+   painted — under the house chip ladder (46 on touch) and a hard miss for a
+   labeled toggle. --chip-h is the secondary-control rung already used by cam/
+   aero chips on touch; full --tap stays off here so the header does not reclaim
+   the third of the panel the comment above documented. */
+#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--chip-h); }
 /* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
    nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
    same fact, exactly, in text — the bar is a glanceable for a number that is

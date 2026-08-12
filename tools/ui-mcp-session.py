@@ -244,7 +244,7 @@ def main() -> None:
         print(c.text(c.call("emulate", {"viewport": "852x393x3,mobile,touch,landscape"})))
 
         print("→ navigate")
-        print(c.text(c.call("navigate_page", {"url": "http://127.0.0.1:3456/?v=1116"})))
+        print(c.text(c.call("navigate_page", {"url": "http://127.0.0.1:3456/?v=1117"})))
 
         print("→ boot harness")
         harness = c.eval_json(BOOT)
