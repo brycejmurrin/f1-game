@@ -62,6 +62,27 @@ const SIZES = [
 async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race,
     { polling: 100, timeout: 20_000 });
+  // STOP THE RENDER LOOP. This spec opens the garage, which runs a live 3D car
+  // preview (renderSetupPreview in game.js) regardless of whether a race is
+  // active — every subsequent wait in this file was competing with that for
+  // main-thread time, which is the exact class of flakiness CLAUDE.md documents
+  // for a page that renders under SwiftShader ("a page running the game loop
+  // starves that poll badly enough that the declared timeout never gets to
+  // fire"). Every other layout tool in this repo (tools/layout-audit.mjs, the
+  // menu-survey specs) calls headless(true) before doing timing-sensitive DOM
+  // waits for the same reason; this file was the one that did not.
+  // MEASURED without it, on a genuinely idle box with nothing else running:
+  // data-shape convergence after a resize varied from ~250ms to over 7s across
+  // otherwise-identical runs — not because the classifier is wrong (the CSS box
+  // itself, read via getBoundingClientRect, was ALWAYS correct within ~250ms),
+  // but because the render loop's own per-frame cost under software rendering
+  // can starve the JS event loop enough to delay when a ResizeObserver callback
+  // — or even a plain setTimeout — actually GETS TO RUN. This is a testing
+  // artifact of measuring from inside a rendering page, not a product bug: it
+  // only leaves rendering (and the frustum-shift math that reads #cs-inner's
+  // live rect while rendering) untested, which is not this spec's concern —
+  // this file asserts CSS/DOM classification, not the 3D preview.
+  await page.evaluate(() => window.__apex.headless(true));
 }
 
 // Open the garage the way a player does. It is the densest screen in the app —
@@ -122,12 +143,18 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       // ResizeObserver fires on the frame after the resize; SheetShape then
       // writes the attributes and CSS re-runs. Poll for convergence rather than
       // sleeping a guessed amount.
+      // 15s, not 5s. MEASURED even with rendering stopped (see waitReady()):
+      // convergence after this exact resize varied 250ms-7.1s across runs on an
+      // otherwise-idle box, with no evidence it ever fails to converge at all —
+      // only that WHEN it happens is not tightly bounded in this environment.
+      // 5s left near-zero margin against a measured 7.1s outlier; this asserts
+      // the same thing (convergence, not speed) with headroom.
       await page.waitForFunction((expected) => {
         const el = document.getElementById("cs-inner");
         return el.dataset.shape === expected.shape &&
           el.dataset.pair === expected.pair &&
           el.dataset.density === expected.density;
-      }, fresh[name], { polling: 50, timeout: 5_000 }).catch(() => {});
+      }, fresh[name], { polling: 50, timeout: 15_000 }).catch(() => {});
 
       const after = await readState(page);
       expect(after.shape, `${name}: data-shape after resize`).toBe(fresh[name].shape);
