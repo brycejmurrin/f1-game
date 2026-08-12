@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MEASURE = path.join(ROOT, "tools/cdmcp-measure.py");
 const LAMPS = path.join(ROOT, "tools/cdmcp-lamps.py");
+const LAMPS_TUNE = path.join(ROOT, "tools/cdmcp-lamps-tune.py");
 const CLI = path.join(ROOT, "tools/cdmcp-cli.py");
 const BG = path.join(ROOT, "tools/cdmcp-bg.mjs");
 
@@ -45,6 +46,31 @@ test("cdmcp-lamps.py exists with terminal-marker log contract", () => {
   assert.match(py, /--status/);
 });
 
+test("cdmcp-lamps-tune.py asserts dens + warmth + energy with terminal marker", () => {
+  assert.ok(fs.existsSync(LAMPS_TUNE));
+  const py = fs.readFileSync(LAMPS_TUNE, "utf8");
+  assert.match(py, /= run (passed|failed|timedout|interrupted)/);
+  assert.match(py, /artifacts\/logs\/cdmcp-lamps-tune\.log/);
+  assert.match(py, /lampDensity/);
+  assert.match(py, /lampTemp/);
+  assert.match(py, /poolEnergy/);
+  assert.match(py, /meanLampRGB/);
+  assert.match(py, /rOverB/);
+  assert.match(py, /--bg/);
+  assert.match(py, /--port/);
+  assert.match(py, /APEX_PORT/);
+});
+
+test("apex lightState documents meanLampRGB / bakedLights / lampPosts probes", () => {
+  const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
+  assert.match(apex, /meanLampRGB/);
+  assert.match(apex, /bakedLights/);
+  assert.match(apex, /lampPosts/);
+  const hooks = fs.readFileSync(path.join(ROOT, "docs/DEBUG-HOOKS.md"), "utf8");
+  assert.match(hooks, /meanLampRGB/);
+  assert.match(hooks, /cdmcp-lamps-tune/);
+});
+
 test("cdmcp-measure --help exits 0 and lists profiles", () => {
   const r = spawnSync("python3", [MEASURE, "--help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
@@ -61,6 +87,14 @@ test("cdmcp-lamps --help exits 0 and mentions background mode", () => {
   assert.match(r.stdout, /APEX_PORT|--only/);
 });
 
+test("cdmcp-lamps-tune --help exits 0 and lists slider assertions", () => {
+  const r = spawnSync("python3", [LAMPS_TUNE, "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /--bg/);
+  assert.match(r.stdout, /--port/);
+  assert.match(r.stdout, /lampTemp|LAMP TEMPERATURE|warmth/i);
+});
+
 test("cdmcp-measure and cdmcp-lamps honour APEX_PORT in --help defaults", () => {
   const env = { ...process.env, APEX_PORT: "3462" };
   const m = spawnSync("python3", [MEASURE, "--help"], { encoding: "utf8", env });
@@ -69,6 +103,9 @@ test("cdmcp-measure and cdmcp-lamps honour APEX_PORT in --help defaults", () => 
   const l = spawnSync("python3", [LAMPS, "--help"], { encoding: "utf8", env });
   assert.equal(l.status, 0, l.stderr);
   assert.match(l.stdout, /3462/);
+  const t = spawnSync("python3", [LAMPS_TUNE, "--help"], { encoding: "utf8", env });
+  assert.equal(t.status, 0, t.stderr);
+  assert.match(t.stdout, /3462/);
 });
 
 test("cdmcp-lamps.py documents --port and APEX_PORT", () => {

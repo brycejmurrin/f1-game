@@ -426,15 +426,14 @@ body:not(.desktop) {
    the CSS default and the JS default cannot disagree — and unlike the
    `.desktop` class, which is added at boot, it is right on the FIRST paint.
 
-    1.0 is the shipped default on every pointer. Touch used to ship at 1.15, but
-   after the 2026-08 type floor raised micro/body to ≥14px CSS (so 90% UI SIZE
-   still paints ≥12px), that 15% zoom made the title and sheets read as "zoomed
-   in" on phones — measured on the live 1144 deploy. Players who want bigger
-   still have SETTINGS ▸ DISPLAY ▸ UI SIZE up to 150%. */
+   1.0 is the shipped default on every pointer. Touch used to ship at 1.15, and
+   UI SIZE's floor briefly sat at 90% then 80% — players still pegged the
+   slider left and wanted more "zoom out". Floor is 50%; default stays 100%.
+   SETTINGS ▸ DISPLAY ▸ UI SIZE still goes up to 150%. */
 :root { --ui-scale: 1; --hud-scale: 1; }
-/* Coarse-pointer used to force 1.15 here; left at 1 so first paint matches the
-   JS scaleDefault() (also 100). The media query stays as the place a future
-   touch-only default would live, so the CSS/JS agreement note above still holds. */
+/* Coarse-pointer used to force 1.15 here; left at 1 so first paint matches
+   scaleDefault() (100). The media query stays as the place a future touch-only
+   default would live, so the CSS/JS agreement note above still holds. */
 @media (pointer: coarse) {
   :root { --ui-scale: 1; --hud-scale: 1; }
 }

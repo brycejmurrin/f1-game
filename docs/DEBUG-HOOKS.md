@@ -360,7 +360,7 @@ azimuth twist). Returns `orbit()`'s framing plus the chosen `az` and curvature
 __apex.cinematic(0.22, { dist: 80 }); // outside-of-corner framing at 22%
 ```
 
-### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights, bakedLights, lampPosts}`
+### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights, meanLampRGB, bakedLights, lampPosts, …}`
 Lighting snapshot for the current frame: hemisphere ambient (sky/ground), the
 **scene** sun colour (`frameSky.sunColor` may differ — the sky keeps a warm sun
 for dusk glow while the scene sun is dimmed at night), tone-map `exposure`, how
@@ -371,9 +371,16 @@ and how many mast fixtures the scenery pass registered (`lampPosts`).
 **LAMP COUNT** / AI traffic moves `numLights`. Reading only `numLights` to
 check density is a false no-op — with a full grid it sticks near `lampCull`
 (def 28) even when density doubles the baked set.
+
+Lamp-slider probes (for Chromium MCP / `tools/cdmcp-lamps-tune.py`):
+- `meanLampRGB` — mean RGB of the **culled** `frame.lights` set this frame
+  (after `lampTemp` / twilight / `lampLevel` scaling). Warm `lampTemp` raises R/B.
+- `bakedLights` — count of the cached `track._lights` records (pre-cull).
+- `lampPosts` — mast/lens registry length (`track.lampPosts`).
 ```js
 __apex.race("singapore"); __apex.lightState();
-// → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:28, bakedLights:64, … }
+// → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:28,
+//     meanLampRGB:[…], bakedLights:210, lampPosts:200, … }
 ```
 
 ### `lightTune(o?) → {id: value, …}`
