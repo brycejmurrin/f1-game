@@ -821,11 +821,31 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   border-radius: var(--r-md);
   overflow-x: hidden;
 }
+/* Sticky ALL / SEASON / CLASSICS filter — sticky so it stays while the 40-row
+   list scrolls. Reuses .sel-chip chrome already shared with race-settings. */
+#sel-track-filter {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 10px;
+  background: color-mix(in oklab, var(--panel) 92%, #000);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+#sel-track-filter .sel-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  font-size: 12px;
+  padding: 6px 10px;
+  letter-spacing: 0.06em;
+}
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {
   #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; overscroll-behavior-y: contain; }
 }
+/* Compact: hide the meta line so rows pack tighter without losing the name. */
+.sheet[data-density="compact"] .track-row-meta { display: none; }
+.sheet[data-density="compact"] .track-row { padding-block: 7px; }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
   /* ON THE TOUCH LADDER, like every other primary control. This family was the

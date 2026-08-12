@@ -212,19 +212,13 @@ journal; this is what remains.
   `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait is deliberately excluded,
   with the measured `.hud-top`/pausebtn overlap documented as unreachable
   behind the full-screen `#rotate-device` block.
-- **The A13 zoom/rect sites are all still open.** UI SIZE is `zoom` on four
-  subtrees, and four call sites mix zoomed and unzoomed coordinate spaces: the
-  garage lens shift (zoomed `#cs-inner` rect over unzoomed canvas width),
-  `menunav`'s `nearestPane()` (viewport point vs zoomed pane rects) and its
-  wheel delta (viewport `deltaY` onto local `scrollTop`), and `sheetshape`'s
-  `classifyPair()` (viewport rect width vs a local-space `--pair-at`
-  threshold — the one where pre-26.4 WebKit is *right* and Chrome is wrong, so
-  the Chromium suite has no baseline for it). No shared `currentCSSZoom`
-  helper exists yet, and it is necessary but not sufficient: two sites need
-  the opposite conversion. Related: **the data hub does not scale at all** —
-  `#datahub` sits outside every zoomed subtree and `css/data.css` has zero
-  `zoom` declarations; the helper must land before that changes, or the hub's
-  scrubber becomes a new A13 site.
+- **A13 zoom/rect sites — closed.** `js/game/css-zoom.js` (`CssZoom`) is the
+  shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
+  `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
+  `renderSetupPreview`), `menunav` `nearestPane` + wheel→`scrollTop`,
+  `sheetshape` thresholds via `localBox` (clientWidth, engine-safe). **Data hub
+  now scales:** `.dh-card { zoom: var(--ui-scale) }` with `--svhz`-based heights;
+  telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
 ### Found by the 2026-08 whole-codebase survey (unverified beyond a code read)

@@ -76,7 +76,7 @@ file changes a screen owned by another.
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
-- `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` — `hud` + `responsive` (+ `tokens`)
+- `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
 - `.minibtn` — `menus` + `responsive`
 - `.cs-stat-*` (4 classes) — `carsetup` + `menus` + `responsive`

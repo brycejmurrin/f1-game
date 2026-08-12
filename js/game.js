@@ -4984,7 +4984,9 @@ function renderSetupPreview(dt) {
   const canvasEl = $("game"), panelEl = $("cs-inner");
   let panelFrac = 0, panelFracY = 0;
   if (canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
-    const pr = panelEl.getBoundingClientRect();
+    // Visual coverage vs the unzoomed canvas (A13). viewportRect scales up on
+    // engines where gBCR is still local under CSS zoom.
+    const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
     const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
     if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
     else panelFracY = clamp(pr.bottom / ch, 0, 0.85);

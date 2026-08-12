@@ -301,6 +301,7 @@ function buildSetup() {
   optsEl.textContent = "";
   if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
+  optsEl.classList.remove("cs-liv-grid");
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const factorySetup = Parts.getFactorySetup(team);
@@ -433,7 +434,12 @@ function livSwatch(liv) {
 // instantly. Player-created liveries get a delete affordance; a CREATE row opens
 // the inline creator.
 function buildLiveryOptions(container, team) {
-  if (csLivCreating) { buildLiveryCreator(container, team); return; }
+  if (csLivCreating) {
+    container.classList.remove("cs-liv-grid");
+    buildLiveryCreator(container, team);
+    return;
+  }
+  container.classList.add("cs-liv-grid");
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
 
@@ -467,6 +473,7 @@ function buildLiveryOptions(container, team) {
     row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
     row.setAttribute("aria-label", "Select " + liv.name + " livery");
+    row.title = liv.name;
     row.setAttribute("aria-pressed", active ? "true" : "false");
     // Every row gets the wrap now: custom rows carry edit+delete, stock rows a
     // duplicate ("start from this") button that prefills the creator.

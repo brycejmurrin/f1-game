@@ -120,6 +120,37 @@ function buildTeamPicker() {
 // is exactly such a moment (see js/game/scrollfade.js).
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
+// Circuit list filter: all / championship calendar / retired classics.
+// Persisted so a player who only races classics does not re-tap every open.
+let trackFilter = store.get("trackFilter", "all");
+if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
+
+function trackFilterBar() {
+  const bar = document.createElement("div");
+  bar.id = "sel-track-filter";
+  bar.className = "sel-chip-row";
+  bar.setAttribute("role", "tablist");
+  bar.setAttribute("aria-label", "Circuit filter");
+  [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]].forEach(([id, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sel-chip" + (trackFilter === id ? " active" : "");
+    b.dataset.filter = id;
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", trackFilter === id ? "true" : "false");
+    b.textContent = label;
+    b.onclick = (e) => {
+      e.stopPropagation();
+      trackFilter = id;
+      store.set("trackFilter", id);
+      if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+      vt(() => { buildSelect(); tickUi(); });
+    };
+    bar.appendChild(b);
+  });
+  return bar;
+}
+
 function buildSelect() {
   // ONE QUESTION: WHERE. The car summary and its GARAGE button that used to
   // share this screen are gone (index.html) — WHO and WHAT are chosen in the
@@ -161,10 +192,15 @@ function buildSelect() {
     }
   } else {
     els.selTracks.textContent = "";
+    els.selTracks.appendChild(trackFilterBar());
     // Two groups: the championship calendar, then the retired circuits. Only the
     // header changes — every row is a normal, selectable track either way.
+    // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
+    // Tracks.LIST — selection still indexes into the full list.
     let group = null;
     Tracks.LIST.forEach((t, i) => {
+      if (trackFilter === "season" && t.classic) return;
+      if (trackFilter === "classic" && !t.classic) return;
       const g = t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;

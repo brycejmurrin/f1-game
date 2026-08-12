@@ -22,6 +22,12 @@
 
 .dh-card {
   width: min(760px, 100%);
+  /* UI SIZE applies here — the hub used to sit outside every zoomed subtree
+     (ARCHITECTURE-REVIEW A13/A14), so SETTINGS ▸ UI SIZE never touched it.
+     Same contract as `.sheet`: zoom on the card, not the full-bleed overlay,
+     so safe-area insets on `.dh-overlay` stay in viewport px. Heights below
+     use --svhz / --vwz so they stay a constant fraction of the screen. */
+  zoom: var(--ui-scale);
   /* Always fill most of the viewport — content scrolls inside.
      THE MIN MAY NOT EXCEED THE MAX. `calc(100svh - 60px)` is 599px on an iPhone
      15 Pro upright, while the max below — the viewport less the real notch and
@@ -30,9 +36,10 @@
      panel inside it ran 16px under the home indicator, with the close button
      2px under the Dynamic Island. Both only on a device with insets, which is
      why nothing caught it until the audit started simulating them.
-     Sharing one custom property means the two can no longer disagree. */
-  --dh-safe-h: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
-  min-height: clamp(300px, calc(100svh - 60px), min(900px, var(--dh-safe-h)));
+     Sharing one custom property means the two can no longer disagree.
+     Dividers use --svhz so UI SIZE cancels (zoom × 1svh/--ui-scale). */
+  --dh-safe-h: calc(100 * var(--svhz) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale) - 2 * var(--gut));
+  min-height: clamp(300px, calc(100 * var(--svhz) - 60px / var(--ui-scale)), min(900px, var(--dh-safe-h)));
   max-height: var(--dh-safe-h);
   display: flex; flex-direction: column;
   /* same elevation ladder as the menu sheets (see css/tokens.css) */
@@ -56,7 +63,7 @@
 @media (min-width: 900px) and (min-height: 700px) {
   .dh-card {
     min-height: 420px;
-    max-height: min(880px, calc(100svh - 2 * var(--gut) - var(--sat) - var(--sab)));
+    max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
   }
 }
 
@@ -172,9 +179,8 @@
    that was short of the 52px touch floor (.dh-tab is already on it, and the
    chips take --chip-h deliberately). It is the recovery button on an error
    state, i.e. the one control on screen when the hub has nothing else to offer,
-   so it is the worst one to under-size. The hub sits outside every zoomed
-   subtree, so unlike a sheet control this number does not grow with UI SIZE —
-   42px is 42px at every setting. */
+   so it is the worst one to under-size. .dh-card now carries UI SIZE zoom, so
+   --tap grows with the setting the same way sheet controls do. */
 .dh-retry { padding: 8px 22px; min-height: var(--tap); }
 .dh-empty { padding: 30px 12px; text-align: center; color: #8a8a95; font-size: var(--fs-4); }
 .dh-footnote { margin-top: 16px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: #6a6a75; text-align: right; }
