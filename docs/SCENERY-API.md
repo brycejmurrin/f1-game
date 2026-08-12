@@ -217,15 +217,25 @@ model and records `reason: "vertex budget exceeded"`.
 ### Shared dressing exclusions
 
 Generic city, foliage, lamps, and floodlights can be disabled by racing-lap
-sector and side without changing defaults:
+sector and side without changing defaults. `"lamps"` and `"floodlights"` stay
+distinct so a circuit can clear decorative clutter without killing night pools;
+`"lighting"` is the umbrella that matches either:
 
 ```js
 dressingExclusions: [
   { kinds: ["city", "lamps"], s0: 0.12, s1: 0.24, side: 1 },
   { kind: "foliage", s0: 0.92, s1: 0.08 }, // wraparound, both sides
   { kind: "floodlights", s0: 0, s1: 1 },
+  { kind: "lighting", s0: 0.40, s1: 0.55 }, // both lamps + floodlights
 ]
 ```
+
+The shared furniture `streetLamp()` dressing pass is retired — the generic mast
+pass already draws street-style posts / flood banks (keyed off `fz.lamp`) and
+fills `track.lampPosts`. A bare `"lamps"` exclusion is therefore a geometry
+no-op today (kept so existing circuit rules still parse); `"floodlights"` still
+gates the light-bearing mast pass. `streetLamp` remains on the scenery `api`
+for bespoke circuit calls.
 
 ## What `api` gives you
 

@@ -93,3 +93,14 @@ test("every build-only knob carries rebuild:true", () => {
     "dragging their slider does NOTHING until the track reloads. Add `rebuild: true` to their\n" +
     "TUNE_DEFS entry in js/game/lighting.js:\n  " + offenders.join("\n  "));
 });
+
+test("LAMPS tuner group merges the old FLOODLIGHTS + LAMP BEHAVIOUR tabs", () => {
+  const defs = tuneDefs();
+  const lamp = defs.filter((d) => d.group === "LAMPS");
+  assert.ok(lamp.length >= 20, `expected unified LAMPS tab, got ${lamp.length}`);
+  assert.equal(defs.filter((d) => d.group === "FLOODLIGHTS").length, 0);
+  assert.equal(defs.filter((d) => d.group === "LAMP BEHAVIOUR").length, 0);
+  assert.ok(lamp.some((d) => d.id === "lampLevel" && d.section === "POOLS"));
+  assert.ok(lamp.some((d) => d.id === "lampCull" && d.section === "BEHAVIOUR"));
+  assert.equal(defs.find((d) => d.id === "floodDay").label, "DAYTIME LAMPS");
+});

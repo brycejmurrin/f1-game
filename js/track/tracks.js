@@ -1347,13 +1347,27 @@ const Tracks = (function () {
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
+    // Dressing exclusion kinds. "lamps" and "floodlights" stay distinct rule
+    // labels (furniture streetLamp vs light-bearing mast pass) so a circuit can
+    // clear decorative columns without killing night pools. "lighting" is the
+    // umbrella that matches EITHER. The furniture streetLamp pass no longer
+    // runs — the mast pass already uses fz.lamp style — so a bare "lamps"
+    // exclusion is now a geometry no-op but still parses for old rules.
+    const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
     const dressingExcluded = (kind, k, side) => {
       const rules = def.dressingExclusions;
       if (!rules || !rules.length) return false;
       const frac = (((k % n) + n) % n) / n;
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
-        if (!kinds.includes("all") && !kinds.includes(kind)) continue;
+        let hit = kinds.includes("all") || kinds.includes(kind);
+        // Umbrella: rule "lighting" matches a lamps OR floodlights query;
+        // query "lighting" matches a rule that names either concrete kind.
+        if (!hit && LIGHTING_KINDS[kind]) {
+          if (kind === "lighting") hit = kinds.some((knd) => knd === "lamps" || knd === "floodlights" || knd === "lighting");
+          else hit = kinds.includes("lighting");
+        }
+        if (!hit) continue;
         if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
         const s0 = TrackSpace.wrap01(rule.s0 == null ? 0 : rule.s0);
         const s1 = TrackSpace.wrap01(rule.s1 == null ? 1 : rule.s1);
@@ -1729,22 +1743,15 @@ const Tracks = (function () {
       else if (kind === "plane") plane(k, side, d, h, col);
       else tree(k, side, d, h, col, crownForm !== "round" ? { crown: crownForm } : undefined);
     };
-    // Lamp posts — streets / modern / desert. Alternate sides, set behind the
-    // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts
-    // roll a DIFFERENT head style than the track's base lamp — real circuits mix
-    // eras/replacements rather than one uniform style down the whole lap (was
-    // every single post on a track using the exact same style).
-    const LAMP_STYLES = ["arm", "globe", "post"];
-    if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
-      for (const side of [-1, 1]) {
-        if (dressingExcluded("lamps", k, side)) continue;
-        const roll = hash(k * 19 + side * 5.5);
-        const style = roll > 0.88
-          ? LAMP_STYLES[Math.floor(hash(k * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
-          : fz.lamp;
-        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(k * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, style);
-      }
-    });
+    // Lamp posts — the SEPARATE furniture streetLamp() pass is retired. The
+    // generic mast pass below already draws street-style slim posts / flood
+    // banks (using fz.lamp for globe vs arm vs post on street themes) AND fills
+    // track.lampPosts. A second streetLamp() line every ~26 m was a duplicate
+    // pole row that never emitted light — the "lamps vs floodlights" confusion.
+    // dressingExclusions kind "lamps" is kept as a parseable no-op so existing
+    // circuit rules do not break; kind "floodlights" still gates the mast pass.
+    // (streetLamp stays on the scenery api for bespoke circuit calls.)
+
     // Roadside trees — every circuit, per-track species/tint, set back behind the
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
     // staggered depths, each with its own varied colour) so the treeline reads as
