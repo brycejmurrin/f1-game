@@ -247,7 +247,9 @@
      grid. The cap is what stops a long catalogue from starving the list. */
   flex: 0 0 auto; min-height: 0;
   max-height: 48%;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  /* min(...) floor — see #sel-teams in css/menus.css: a bare px floor cannot
+     shrink below itself, so a narrow strip overflows instead of re-flowing. */
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr));
   gap: calc(var(--gap) * 0.5); align-content: start;
 }
 #cs-options {
@@ -523,6 +525,25 @@
    the right answer there — it has the height to spend and no width. */
 #cs-inner {
   --pair-at: 400px;
+  /* 480, NOT THE 380 EVERY OTHER SHEET USES. `--compact-at` asks "is this sheet
+     short in its own units", and the honest threshold is different per screen
+     because what a screen must fit before its content starts is different. The
+     garage carries the most fixed furniture in the app — title, budget bar and
+     readout, a four-number stat block, a twelve-category strip, and a two-button
+     action bar — which comes to ~320 own units in the normal tier. A sheet under
+     480 therefore has under 160 left for the parts list, and a part row is 62:
+     under three of them, on the screen whose entire purpose is comparing parts.
+     MEASURED, portrait iPhone at UI SIZE 100% — the shipped default, the most
+     common way this screen is ever seen. Sheet 444.5 own units, so at 380 it
+     classified NORMAL and got the roomy head: head 196.3, foot 72.1, parts list
+     93.7 — ONE AND A HALF cards out of a catalogue of five. At 480 the compact
+     head this file already builds engages: head 154.8, foot 58.7, list 165.7 —
+     3.1 cards, and the budget readout stops wrapping. Nothing new is drawn; the
+     tier was simply never reaching the case it was designed for.
+     Not a general raise: 380 is right for a sheet that is mostly list. This is
+     the number for a sheet that is mostly chrome, which is why it is declared
+     here beside --pair-at rather than moved into css/tokens.css. */
+  --compact-at: 480px;
   /* 28%, not 27%. At 27% a 529px desktop sheet gave the rail 142px, which left
      the category label 67px against the 70px "SUSPENSION" needs at the 10px
      desktop size — truncated by THREE pixels. Here the share binds, not the
@@ -912,6 +933,33 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
+/* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
+   UI SIZE 150% the head and the foot together came to 2px more than the panel,
+   so the grid's 1fr body row collapsed to zero and the 2px landed on .sheet-foot
+   — BACK and DONE clipped by exactly that much in four screens of the matrix.
+   The shared compact tier already trims this to ~2.9px a side (--pad 13 x 0.22);
+   the garage is the densest sheet in the app and needs the last two. */
+#cs-inner[data-density="compact"] > .sheet-foot { padding-top: 1px; padding-bottom: 1px; }
+/* ...AND IT MAY NOT WRAP. Two buttons in a `flex-wrap: wrap` bar is a coin flip
+   decided by a few pixels, and on a portrait phone at UI SIZE 150% it lands the
+   wrong way: BACK and DONE want 226 of the 220 units inside the foot, so DONE
+   drops to a second row and the bar goes 52 units tall to 114. The panel is 340
+   units. That six-unit overshoot cost the parts list a THIRD of the sheet.
+   The comment further up this file already recorded wrapping making this foot
+   132px tall once, in the pair layout, and fixed it by giving the bar more room.
+   That fix does not reach here, because in the stacked layout the bar is the
+   panel's full width and the panel is 246 units wide — there is no more room to
+   give. Two equal columns instead: the buttons share whatever there is and the
+   count of rows is a fact of the layout rather than an outcome of arithmetic.
+   `minmax(0, 1fr)` and `min-width: 0` because a grid item's automatic minimum is
+   its content, which is the same refusal-to-shrink that started this. */
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot > button {
+  min-width: 0; margin: 0;
+}
 
 /* ---------- portrait: categories as one scrolling strip ---------- */
 /* The stacked category grid is the biggest single item in a portrait garage —
@@ -950,7 +998,19 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    half that has to agree. */
 @media (orientation: portrait) {
   #carsetup { place-items: start stretch; }
-  #cs-inner { width: 100%; height: 70%; }
+  /* CONTENT FIRST, BAND SECOND — the floor is in OWN units and the 70% is not.
+     `height: 70%` reserves a fixed share of the SCREEN, but what the panel needs
+     is a number of its own pixels, and those two diverge as the zoom rises: at
+     UI SIZE 115% on a 393x852 phone 70% leaves the panel 345 own px and the head
+     + category strip + foot want ~345, so it just fits; at 150% the same 70% is
+     only 264 own px and the option list ran 79px out of the bottom of the sheet.
+     The 1900-cell matrix reported that as 561 clipped elements on garagelivery,
+     which is one overflow counted once per descendant.
+     min-height is therefore the priority statement: the panel keeps enough of
+     its own pixels to hold its content, and the car band is whatever is left —
+     which at 150% is very little, and that is the correct trade. A band nobody
+     can read a car in is not worth an option list nobody can reach. */
+  #cs-inner { width: 100%; height: 70%; min-height: 340px; }
 }
 @media (orientation: portrait) {
   #cs-inner[data-pair="off"] #cs-tabs {
