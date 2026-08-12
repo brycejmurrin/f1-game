@@ -53,6 +53,7 @@
     ],
     scenery: function (api) {
       const { out, MAT, n, ds, px, pz, pyMin, place, backdrop, every, onTrack, hash, pal,
+              indexSolid,
               grandstandEx, building, motorhome, hedge, billboard, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
@@ -1094,12 +1095,26 @@
           // (rows from 146) across the s0.48-0.52 hedge at 155 — tents grew
           // straight through both, which is what tripped CI's prop-clipping
           // ratchet (silverstone 19 -> 21 severe). Moved out past them.
+          // Gap 192-208, past ALL the authored planting — and indexSolid does
+          // NOT let these come closer. Reserving a footprint only steers what
+          // is placed AFTERWARDS and consults the index: the deferred generic
+          // foliage. Silverstone's clashing treeline is this circuit's own
+          // hedge()/forestEdge() calls, made EARLIER in this same scenery()
+          // callback, so those trees already exist by the time the campsites
+          // book their ground. Tried at 134-152 with the reservation in place:
+          // clip 19 -> 21 severe AND coplanar to 14. The reservation below is
+          // still worth keeping — it holds the generic scatter off — but the
+          // distance is what actually fixes the authored planting.
           [0.055, 0.135,  1, 196, 5],   // Copse / Maggotts side
           [0.300, 0.395, -1, 208, 6],   // Hangar Straight / Stowe — Woodlands
           [0.470, 0.560,  1, 202, 5],   // Vale / Club overflow
           [0.760, 0.860, -1, 192, 5],   // Brooklands / Luffield — Whittlebury
         ]) {
           const span = (s1 - s0 + 1) % 1;
+          // Book the whole field before pitching a tent in it: rows step out
+          // 11 m each plus the marquee beyond them, and the reservation is
+          // measured from the inner face, so the width covers the lot.
+          indexSolid(s0, s1, side, gap - 6, rows * 11 + 34);
           // Pitch spacing in METRES, not in nodes. Deriving cols from the node
           // count put one column every ~90 m and produced 30 tents a field —
           // a lay-by, not a campsite. span*n*ds is the field's arc length.

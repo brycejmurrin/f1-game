@@ -35,7 +35,7 @@ those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
    along-track length in the node SCALE, or measure the real anchor step.**
 2. **Props grown through existing foliage.** Silverstone's tents (prisms) vs
    the authored treeline (cones). Circuit files *cannot* reserve a footprint —
-   `indexSolid` is engine-internal and not on the 107-member api. **Fix: place
+   `indexSolid` is engine-internal and not on the 108-member api. **Fix: place
    beyond the authored planting** (the campsites now sit at gap 192–208, past
    everything). Stripping near-track foliage via `dressingExclusions` would
    have been a much worse trade.
@@ -60,12 +60,25 @@ those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
 build of a landmark that was already there (Montreal's dome, the Nürburg). Grep
 for the LOCAL word too, and check `modelGroup` ids.
 
-**The structural gap worth fixing.** A circuit file cannot reserve ground before
-building on it: `indexSolid` is engine-internal and not on the 107-member
-scenery api. So any large prop placed in vegetated outfield risks growing
-through a tree, and the only workarounds are to move it past all planting
-(worked for Silverstone's campsites) or not build it (Mugello's casali).
-Exposing a footprint-reservation call to circuit files would unblock both.
+**The structural gap — now fixed.** A circuit file could not reserve ground
+before building on it: `indexSolid` was engine-internal. It is now on the
+scenery api (contract 107 → 108), remapped for reverse/source circuits like
+`recordBarrier`, whose signature it shares. Safe to expose because the foliage
+pass is **already deferred until after `def.scenery()`** — the engine does that
+so the tree guard sees every barrier a circuit registers — so anything reserved
+is in the index before a single tree is placed.
+
+**Mugello's casali are back because of it**, at their original gap 98–116, with
+`clip 17 = cap 17` and `coplanar 0 = cap 0`. The vertex count actually *fell*:
+the scatter routes around the reserved yards.
+
+**What it does not fix, measured.** It steers what is placed *afterwards*.
+It does **not** remove planting the circuit's own `scenery()` already did
+earlier in the same callback. Silverstone's campsites stay at gap 192–208:
+tried at 134–152 *with* the reservation, they went clip 19 → 21 severe and
+coplanar to 14, because the trees they hit are this circuit's own
+`hedge()`/`forestEdge()` runs, made before the campsite code. **Against
+authored planting, distance is still the fix.**
 
 **Bisect rather than reason.** Every one of these was found by disabling one
 emitter and re-measuring, and in four cases (Zandvoort's stage, Montreal's

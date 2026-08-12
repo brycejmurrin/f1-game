@@ -58,7 +58,8 @@
       { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine
     ],
     scenery: function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+        indexSolid,
         pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
@@ -112,19 +113,67 @@
           }
         }
 
-        // NO CASALI, and this is a deliberate omission rather than an
-        // oversight. Tuscan stone farmhouses belong in this landscape and were
-        // built here — but wherever they went they landed on the existing
-        // olive and cypress planting, and clip-audit counted it: mugello 17 ->
-        // 18 severe, with the bisect naming the casali (the vineyards measured
-        // innocent) and the spot list naming the collision as addBox x addCone
-        // at frac 0.64. Pushing them out to gap 158-176 did not help, and a
-        // circuit file cannot reserve a footprint — `indexSolid` is internal to
-        // the engine and is not on the scenery api.
+        // Casali. A Tuscan farmhouse is a squat rectangular block of rough
+        // stone under a shallow terracotta pitch with deep eaves, a square
+        // tower end on the older ones, and — the giveaway — a pair of
+        // cypresses at the gate.
         //
-        // Fixing this properly means giving circuit files a way to clear
-        // ground before building on it. Until then the vineyards carry the
-        // worked-farmland read on their own, and they measure clean.
+        // These were built once before and ABANDONED: wherever they went they
+        // landed on the existing olive and cypress planting (clip-audit
+        // 17 -> 18 severe, the spot list naming it addBox x addCone at frac
+        // 0.64), and a circuit file had no way to say "this ground is taken".
+        // indexSolid() is now on the scenery api and this is its first use:
+        // reserve the footprint, and because foliage is deferred to after
+        // def.scenery(), the roadside scatter and treelines route around it.
+        const RENDER = [0.78, 0.71, 0.58], RENDER_D = [0.70, 0.63, 0.51];
+        const TILE   = [0.62, 0.34, 0.22], TILE_D = [0.54, 0.29, 0.19];
+        const CYP    = [0.14, 0.26, 0.15];
+        for (const [sf, side, gap] of [
+          [0.150, -1, 112], [0.385,  1, 108], [0.640, -1,  98], [0.800,  1, 116],
+        ]) {
+          const kk = K(sf), a = anchor(kk, side, gap);
+          if (onTrack(a.c[0], a.c[2], 26)) continue;
+          const b = [a.r, a.u, a.t];
+          const hv = hash(kk * 43 + gap);
+          const w = 12 + hv * 4, d = 15 + hv * 6, wallH = 7 + hv * 2;
+          // Reserve the whole yard — house, tower and both cypresses — BEFORE
+          // drawing any of it. The half-span along the arc is d plus the
+          // cypress reach, converted to a lap fraction.
+          const halfFrac = (d * 0.5 + w * 1.1) / track.total;
+          indexSolid(sf - halfFrac, sf + halfFrac, side, gap - 4, w * 2.0);
+          out._mat = MAT.STONE;
+          addBox(out, vadd(a.c, a.u, wallH * 0.5), [w, wallH, d],
+                 hv < 0.5 ? RENDER : RENDER_D, b);
+          out._mat = 0;
+          // Shallow terracotta pitch with deep eaves — the eaves are the read.
+          addPrism(out, vadd(a.c, a.u, wallH + w * 0.13), [w * 1.14, w * 0.27, d * 1.10],
+                   hv < 0.5 ? TILE : TILE_D, b);
+          // Square tower end on the older houses. ABUTS the gable, it does not
+          // sink into it — 3 m of overlap is severe interpenetration.
+          if (hv > 0.45) {
+            const tc = vadd(a.c, a.t, d * 0.5 + 3.8);
+            out._mat = MAT.STONE;
+            addBox(out, vadd(tc, a.u, wallH * 0.72), [7.5, wallH * 1.44, 7.5], RENDER_D, b);
+            out._mat = 0;
+            addPrism(out, vadd(tc, a.u, wallH * 1.44 + 1.0), [8.4, 2.0, 8.4], TILE_D, b);
+          }
+          // Shuttered windows, sparse and small — Tuscan walls are mostly wall.
+          for (let i = -1; i <= 1; i++) {
+            addBox(out, vadd(vadd(vadd(a.c, a.r, -w * 0.5), a.t, i * d * 0.28),
+                             a.u, wallH * 0.62),
+                   [0.16, 1.5, 1.0], [0.30, 0.34, 0.26], b);
+          }
+          // The cypress pair at the gate. Cones STACK rather than merge.
+          out._mat = MAT.FOLIAGE;
+          for (const t of [-w * 0.85, w * 0.85]) {
+            const cc = vadd(vadd(a.c, a.t, t), a.r, -w * 0.7);
+            if (onTrack(cc[0], cc[2], 8)) continue;
+            const ch = 12 + hash(kk + t) * 4;
+            addCone(out, vadd(cc, a.u, ch * 0.10), 1.5, ch * 0.55, CYP, 6, b);
+            addCone(out, vadd(cc, a.u, ch * 0.62), 1.15, ch * 0.38, CYP, 6, b);
+          }
+          out._mat = 0;
+        }
       }
 
       const PINE = [0.12, 0.29, 0.15], PINE_D = [0.09, 0.23, 0.13];

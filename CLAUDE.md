@@ -217,7 +217,7 @@ js/track/        — track ENGINE (shared code) —
   scenery-data.js  TrackSceneryData  static buildProps tables — data only
   scenery-nature.js / scenery-city.js / scenery-structures.js / scenery-identity.js
                  Scenery*.create(ctx)  the buildProps split; together they serve the
-                                  107-member scenery(api) contract frozen by
+                                  108-member scenery(api) contract frozen by
                                   tests/unit/scenery-api-contract.test.mjs (docs/SCENERY-API.md)
 
 js/circuits/     — circuit DATA — one file per circuit, registers on Tracks.LIST

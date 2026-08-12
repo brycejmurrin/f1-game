@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **107-member `api` surface is a frozen
+primitives, and composite models. The **108-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -131,7 +131,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 107-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 108-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -226,13 +226,48 @@ dressingExclusions: [
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 107-member contract but not detailed in this doc: `MAT` (material
+Also on the 108-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, the grounding helpers `seat` / `foundation` / `cantilever` and
 `recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
 `motorhome`, `forestEdge`, `signBoard`, `signDigit`, `waterBand`,
 `waterField`, and `modelDiagnostics` (also exposed as
 `__apex.modelDiagnostics()`).
+
+### Reserving ground (`indexSolid`)
+
+`indexSolid(s0, s1, side, gap, width)` books a footprint in the solid spatial
+index so later placement guards route around it. Engine emitters have always
+called it — it is why `spectatorHill`, `bleacher`, `terrace` and the rest do not
+get trees growing through them — and it is now on the circuit `api` too.
+
+Use it whenever a circuit builds a **large prop out of raw primitives**: a
+farmhouse, a campsite, a hand-rolled stand. Without it the roadside scatter and
+the treelines have no idea the ground is taken.
+
+```js
+// Book the yard — house, tower and both cypresses — BEFORE drawing any of it.
+const halfFrac = (d * 0.5 + w * 1.1) / track.total;
+indexSolid(sf - halfFrac, sf + halfFrac, side, gap - 4, w * 2.0);
+```
+
+- `gap` is the reservation's **inner face** (metres beyond the road edge) and
+  `width` its extent across; the recorded centreline sits half a width out, so
+  clearance is measured from the reserved **surface**.
+- Purely geometric. Like `indexBarrier` it never touches `barL`/`barR`, so it
+  cannot move the driving limits.
+- Remapped for `reverse` / `sceneryCoordinates: "source"` circuits exactly like
+  `recordBarrier`, whose signature it shares.
+
+**What it does and does not fix.** It steers what is placed *afterwards* and
+consults the index — chiefly the generic roadside scatter and the treelines,
+both of which are **deferred until after `def.scenery()`** precisely so they see
+the finished set. It does **not** remove planting your own `scenery()` already
+placed earlier in the same callback. Silverstone's campsites are the worked
+example: reserving their footprint does not let them move inside the circuit's
+own `hedge()`/`forestEdge()` runs, because those trees already exist by then
+(measured: clip 19 → 21 severe and coplanar to 14 when tried). Against
+authored planting, distance is still the fix.
 
 ### Placement helpers (box-based, terrain-anchored)
 | Helper | Use |
