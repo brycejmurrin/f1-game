@@ -1990,10 +1990,10 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const W = _ringWorld;
       W.set(_wheelWorld);
       W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
-      gfx.draw(getBrakeRing(), W, {
-        emissive: 0.30 + 0.70 * heat, roughness: 0.9, specular: 0,
-        alpha: Math.min(1, 0.25 + heat * 0.9), noAlphaWrite: true,
-      });
+      // Pooled, like the AI ring path: this allocated a literal per hot wheel.
+      const ro = _ringOpts;
+      ro.emissive = 0.30 + 0.70 * heat; ro.alpha = Math.min(1, 0.25 + heat * 0.9);
+      gfx.draw(getBrakeRing(), W, ro);
     }
   }
 }
