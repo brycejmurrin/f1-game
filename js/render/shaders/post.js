@@ -332,9 +332,9 @@ void main() {
     // the shafts or the lamp volumetrics are live, and at night game.js drives
     // uStr to 0 (the god-ray strength is gated on sun luminance) while the lamp
     // half below is exactly what we came here for. The lamp block already has
-    // its `uLampStr > 0.0` guard one scope down; the sun half had none, so every
+    // its uLampStr > 0.0 guard one scope down; the sun half had none, so every
     // night frame paid 16 shadow-map fetches, 16 mat4 transforms and 16
-    // three-octave cloud FBM evaluations per half-res pixel to build `accum` —
+    // three-octave cloud FBM evaluations per half-res pixel to build accum —
     // which the last line then multiplies by uStr, i.e. by zero.
     //
     // gCloud does not rescue it either: its own early-out is on uSunDir.y, and
