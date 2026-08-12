@@ -26,13 +26,13 @@
  * - THREE.ColorManagement.enabled = false and outputColorSpace =
  *   LinearSRGBColorSpace; NO sRGB encode in any pass — the whole game look,
  *   the LightPresets and every pixel baseline are calibrated without one
- *   (js/render/shaders/chunks.js:93-98).
+ *   (js/render/shaders/chunks.js).
  * - Defaults for every frame.tune / present(opts.tune) knob MUST mirror
  *   LightTune.TUNE_DEFS, same as GLX (js/render/gfx.js contract note).
  *
  * M1 STATUS: renderer lifecycle is real (dynamic import, WebGPURenderer with
  * WebGL2 fallback, resize/renderScale, clear-to-fogColor begin/present so the
- * no-track menu path at game.js:3105 works); every other contract member is
+ * no-track menu path at js/game.js works); every other contract member is
  * present as a SAFE no-op so game.js can issue the full frame protocol without
  * crashing. M2+ replace the no-ops subsystem by subsystem.
  *
@@ -124,7 +124,7 @@ const TLX = (function () {
     try {
       // Capture the mobile-tier decision from GLX BEFORE game.js's
       // descriptor-copy overwrites GLX's own values with ours.
-      // glx.js:23-34 stays the single source of truth (lighting.js reads it
+      // js/render/glx.js stays the single source of truth (lighting.js reads it
       // at script-eval time, long before any backend exists).
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
@@ -135,7 +135,7 @@ const TLX = (function () {
       const TSL = await import("three/tsl");
 
       // Calibration invariant: the game's look is authored with NO sRGB
-      // encode anywhere (shaders/chunks.js:93-98).
+      // encode anywhere (js/render/shaders/chunks.js).
       THREE.ColorManagement.enabled = false;
 
       const renderer = new THREE.WebGPURenderer({
@@ -507,7 +507,7 @@ const TLX = (function () {
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
       // ── M8: frame state the post chain consumes at present() (the GLX
-      // frameInvProj/frameInvVP/frameSunVS/… latch — glx.js:839-857). All
+      // frameInvProj/frameInvVP/frameSunVS/… latch — js/render/glx.js). All
       // POINTERS into the game's stable per-frame arrays; nulled every
       // begin() so a probe-less path (setup preview, menus) self-disables
       // SSAO/SSR/godray rather than reconstructing with stale matrices. ─────
@@ -530,7 +530,7 @@ const TLX = (function () {
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
 
-      // ── M9 env-probe frame state (glx.js:72-88 port) ─────────────────────
+      // ── M9 env-probe frame state (js/render/glx.js port) ─────────────────────
       // A CubeCamera owns the 6 face sub-cameras with the correct cube-face
       // orientations (fov 90, aspect 1, near 0.4, far 900 — GLX's
       // perspectiveTo(π/2, 1, 0.4, 900)). envFaceBegin positions it at the
@@ -589,7 +589,7 @@ const TLX = (function () {
         g.setAttribute("mat", new THREE.BufferAttribute(
           new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
         // Road track-space coords (arc-length s, signed lateral x, half-width),
-        // GLX attribute location 4 (glx.js:469-478, :505). tsl-lit's roadMarkings()
+        // GLX attribute location 4 (js/render/glx.js trk). tsl-lit's roadMarkings()
         // paints the edge lines and the dashed centre line analytically from
         // these, so a road mesh WITHOUT them renders as bare tarmac — which is
         // exactly what this backend did until now. ALWAYS present, zero-filled
@@ -785,7 +785,7 @@ const TLX = (function () {
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
         // M7: cull chunked casters against the ACTIVE depth pass's light
         // frustum — castCullVP (the lamp's perspective cone between
-        // lampShadowBegin/End) or the static sun box (glx/chunked.js:170-191).
+        // lampShadowBegin/End) or the static sun box (js/render/glx/chunked.js).
         // NO radial cull: an off-camera building can still cast INTO view.
         castShadowChunked(mesh, model) {
           if (!shadowSys) return;
@@ -930,7 +930,7 @@ const TLX = (function () {
             lit.updateFrame(frame);
             // M9: env-probe strength. 0 until a full cube has captured; forced
             // 0 on a probe-less preview (frame.noEnv) even if a stale cube
-            // lingers — glx.js:1037-1044 1:1 (fallback mirrors TUNE_DEFS
+            // lingers — js/render/glx.js 1:1 (fallback mirrors TUNE_DEFS
             // carEnvCube def 0). Held off while rendering INTO the cube.
             if (lit.setEnvStr) {
               const _T = frame.tune;
@@ -945,7 +945,7 @@ const TLX = (function () {
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
-          // M8: latch the post chain's frame inputs (glx.js:839-857). The
+          // M8: latch the post chain's frame inputs (js/render/glx.js). The
           // viewProj is the _frameVP COPY — immune to a swapped frame array.
           _postF.proj = (frame && frame.proj) || null;
           _postF.invProj = (frame && frame.invProj) || null;
@@ -975,7 +975,7 @@ const TLX = (function () {
         // M5: update the sky uniforms from whatever frameSky carries and arm
         // the background node for this frame's render. game.js may call this
         // twice per frame (env-probe pass with a swapped invViewProj, then
-        // the main pass with the restored one — game.js:3744/3759); the env
+        // the main pass with the restored one — js/game.js/3759); the env
         // face is skipped on TLX until M9 (envFaceBegin -> null), and even
         // when it lands, the LAST update before render owns the uniforms.
         drawSky(frameSky) {
@@ -1143,7 +1143,7 @@ const TLX = (function () {
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // M7 staged release, final stage: the render above created the GPU
           // buffers for any first-drawn chunked mesh — drop its shared vertex
-          // mirrors (glx/chunked.js:118 "uploaded to the VBO — drop the CPU
+          // mirrors (js/render/glx/chunked.js "uploaded to the VBO — drop the CPU
           // copy"; see tlx-chunked.js releaseMirrors for why this is safe).
           for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
           _mirrorRelease.length = 0;

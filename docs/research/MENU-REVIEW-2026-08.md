@@ -61,10 +61,21 @@ three-pixel case already documented in css/carsetup.css. Left alone.)
 
 Measured clean AND shallow (worst scroll ≤ 3 screens at every size):
 
-`title`, `career`, `datahub`, `vsfriend`, `pause`, `hud` (+ `hudtouch`,
-`hudbuttons`, `hudmanual`), `trackdetail`, `standings`, `careerhistory`,
-`careeroffers`, and all six data-hub tabs (`datatelemetry`, `dataschedule`,
-`datastandings`, `datalastrace`, `datalive`, `dataexport`).
+`title`, `career`, `careerhub`, `datahub`, `vsfriend`, `pause`, `hud`
+(+ `hudtouch`, `hudbuttons`, `hudmanual`), `trackdetail`, `standings`,
+`careerhistory`, `careeroffers`, `teampicker`, `racesettings`, `spotify`, and
+all six data-hub tabs (`datatelemetry`, `dataschedule`, `datastandings`,
+`datalastrace`, `datalive`, `dataexport`).
+
+Four of those earn a word each, because they were fixed DURING this pass rather
+than being clean all along:
+
+| screen | what it took |
+|---|---|
+| `teampicker` | 12 clipped tiles at 150% — the `auto-fill` floor could not shrink below itself |
+| `racesettings` | rides on `#rs-body`'s compact tier; clean at every cell once `data-density` reached the tokens |
+| `careerhub` | shares `.pane-pair` with `select`; the `--pair-at` unit fix corrected it for free |
+| `spotify` | 11 controls, one section, never deep — nothing was ever wrong here |
 
 **Verdict: leave.** Half the app is done. Recording that explicitly matters as
 much as the list of problems — it is the difference between a review and a
@@ -84,7 +95,8 @@ three ways, and conflating them is what made this list look alarming:
 | `select` | 23.8 | forty circuits |
 | `howtoplay` | 24.6 | a prose document |
 | `careerguide` | 31.9 | a prose document |
-| `resultsseason` | 13.8 | a results table |
+| `results` | 6.9 | a results table |
+| `resultsseason` | 13.8 | the same table, a season round |
 | `quali` | 9.5 | a classification table |
 
 A list of forty things is forty things. `deepScroll` cannot tell "a form that
@@ -108,6 +120,13 @@ a tuner is. **Three redesign attempts here were measured and all lost:**
   it truncates.
 - the livery list as a grid — 34.3 screens became **78.1**, because at 124 units
   each row wraps to several lines.
+
+`garagelivery` deserves naming on its own: at **86.2 screens** on a landscape
+phone at 150% it is the deepest cell in the entire 1600, more than twice the
+next. It is 70 livery rows one per line in a 274-unit column. It belongs in this
+category and not in (c) for one measured reason — the obvious fix makes it 2.3x
+worse. A swatch GRID without full-width text rows would be the real answer, and
+that is a visual-design decision about dropping labels, not a layout one.
 - the stat block as one line — clipped CORNERING and BRAKING.
 
 The one lever that moves all of them is the garage HEADER, and its cheap wins are
@@ -161,21 +180,62 @@ the collapse works everywhere without it.
 
 ---
 
-## 6. Known open defect
+## 6. Closed: what looked like a stuck sheet was a slow measurement
 
-**The garage sheet does not re-lay-out when the viewport shrinks while it is
-open.** Measured at phone-landscape: fresh gives 420x377 (ratio 0.898, `wide`);
-resizing desktop -> phone-landscape leaves it **420x876** (ratio 2.086, `tall`) —
-876px tall inside a 393px viewport.
+**The garage sheet's SIZE is always correct, instantly.** Every reproduction —
+manual, scripted, Playwright — agreed on this without exception:
+`getBoundingClientRect()` read the resized box within ~250ms of every resize,
+every time. The claim recorded here earlier ("876px tall inside a 393px
+viewport, pre-existing on build 1085") was wrong. It compared two builds using
+the same one-shot, non-headless measurement, which is exactly the methodology
+that turned out to be unreliable — so the "identical on both builds" reading
+was two unreliable measurements agreeing with each other, not two builds
+sharing a bug.
 
-**Pre-existing, and confirmed so.** Identical to the pixel on build 1085, before
-any of this pass. `tests/specs/ui-resize.spec.js` catches it and should stay red
-until the sheet is fixed; both Playwright and the MCP reproduce it independently,
-so it is not a harness artifact.
+**What is real: `data-shape` can lag the box by anywhere from ~250ms to several
+seconds**, specifically after opening the garage — which runs a live 3D car
+preview (`renderSetupPreview`) regardless of race state — and then resizing.
+It always converged to the CORRECT value in every run; the question was only
+*when*, and *when* varied by an order of magnitude between otherwise-identical
+runs. Three confounds stacked before the real cause was isolated:
 
-Two hypotheses were wrong on the way here and are recorded so nobody re-derives
-them: it is NOT the hysteresis dead-band (2.086 is nowhere near 0.95-1.05), and
-it was NOT introduced by this pass.
+1. **A leftover MCP browser tab.** The garage's live preview was left rendering
+   in a chrome-devtools-mcp session for 37+ minutes while Playwright tests ran
+   concurrently on the same 4-core box — one Chrome process measured at 363%
+   CPU. This is the exact mistake `.claude/skills/mcp-probe/SKILL.md` names and
+   warns against: park the MCP page to `about:blank` the moment you are done
+   with it.
+2. **The render loop's own cost.** Even with that tab parked, `data-shape`
+   still lagged on a genuinely idle box, because the PAGE UNDER TEST keeps its
+   own 3D preview rendering unless told not to — and SwiftShader software
+   rendering is expensive enough, per frame, to starve the same page's JS
+   timers and DOM event delivery. This is the identical class of bug CLAUDE.md
+   already documents for `waitForFunction` on a rendering page; it turns out to
+   also reach plain `setTimeout` and `ResizeObserver` under enough load, not
+   only rAF-based polling.
+3. **The test not calling `headless(true)`.** Every other layout tool in this
+   repo (`tools/layout-audit.mjs`, the menu-survey specs) stops the render loop
+   before doing timing-sensitive DOM waits, for reason (2). `ui-resize.spec.js`
+   was the one file that did not.
+
+**The fix, in `tests/specs/ui-resize.spec.js` and `js/game/sheetshape.js`:**
+`waitReady()` now calls `headless(true)`, matching the rest of the suite; the
+convergence wait's budget went from 5s to 15s, with the measured 7.1s outlier
+that motivated it recorded in the comment; and SheetShape's `resize` listener
+now calls `reclassify()` (which updates every observed sheet) instead of
+`classifyBody()` alone (which only ever updated the body's own density). That
+last change is real and kept, but — said plainly, because the first version of
+this document overstated it — it is belt-and-braces, not the fix for the
+measured symptom: the actual delay traced to general main-thread starvation
+under the render loop, which affects `resize` events and `ResizeObserver`
+callbacks alike, so switching which one drives `reclassify()` does not bound
+the delay on its own. It stays because a second, independent delivery path for
+the same question is cheap and costs nothing on an event that fires rarely —
+the same argument `watchScale()` two functions up already makes for the same
+class of gap.
+
+Verified: `tests/specs/ui-resize.spec.js`, 4 tests, 3 consecutive full runs, 12
+executions, 0 failures.
 
 ---
 
@@ -192,8 +252,18 @@ predictions read from the CSS were reversed by measurement:
    deliberate, and the clamp's px bounds do scale.
 5. The settings door row was an obvious win — it REGRESSED landscape until the
    threshold was moved to the 2/3-column boundary.
-6. The resize bug looked like the hysteresis dead-band, and like mine.
+6. The "stuck sheet" looked like the hysteresis dead-band, then like a real
+   product bug identical across two builds, then like an under-scheduled
+   ResizeObserver. It was main-thread starvation from a live 3D render loop —
+   partly my own leftover MCP tab, partly the page's own per-frame cost — none
+   of which a single measurement could distinguish from the others. It took
+   parking the tab, disabling rendering, and three separate scripted repros
+   with increasingly controlled variables to find.
 
 The rule that follows: **any layout claim gets a number before it gets a
-commit.** `tools/mcp-cli.mjs` exists for that, and its A/B form — two trees on
-two ports, same page, one variable — is what caught (2) and (5).
+commit** — and when a number is surprising, ask whether the MEASUREMENT itself
+could be the thing that's wrong, not only the code it's measuring. `tools/
+mcp-cli.mjs` exists for the first half, and its A/B form — two trees on two
+ports, same page, one variable — is what caught (2) and (5). The second half
+had no tool; it took noticing a 363%-CPU process in `top` while three
+consecutive "confirmations" of the same wrong conclusion sat in the transcript.

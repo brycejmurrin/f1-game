@@ -453,7 +453,7 @@ body { --compact-at: 600px; }
      height on this column, which the flex chain does not currently provide
      (`max-height: 100%` here resolves against an indefinite height and is
      inert — measured, not assumed). Revisit with the height mechanism in
-     docs/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
+     docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
   padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);

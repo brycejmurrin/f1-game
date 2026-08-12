@@ -50,7 +50,7 @@ async function installPickerApi(page, options = {}) {
     ];
     window.__life = {
       meetingCalls: [], sessionCalls: [], driverCalls: [],
-      weatherCalls: [], positionCalls: [], telemetryCalls: [], interval: null
+      weatherCalls: [], positionCalls: [], intervalCalls: [], telemetryCalls: [], interval: null
     };
     F1API.schedule = () => Promise.resolve([]);
     F1API.driverStandings = () => Promise.resolve([]);
@@ -87,6 +87,12 @@ async function installPickerApi(page, options = {}) {
       if (!config.deferLive) return Promise.resolve(null);
       const d = deferred();
       window.__life.positionCalls.push({ sessionKey, resolve: d.resolve });
+      return d.promise;
+    };
+    F1API.intervals = (sessionKey) => {
+      if (!config.deferLive) return Promise.resolve(null);
+      const d = deferred();
+      window.__life.intervalCalls.push({ sessionKey, resolve: d.resolve });
       return d.promise;
     };
     F1API.fastestLap = (sessionKey, num) => {
@@ -269,6 +275,7 @@ test("newest LIVE refresh owns data and timestamp", async ({ page }) => {
     const life = window.__life;
     life.weatherCalls[2].resolve(null);
     life.positionCalls[2].resolve([{ num: 44, pos: 1 }]);
+    life.intervalCalls[2].resolve(null);
     life.driverCalls[2].resolve([{ num: 44, code: "NEW", name: "Newest Driver" }]);
   });
   const liveData = page.locator(".dh-split-R").first();
@@ -281,6 +288,7 @@ test("newest LIVE refresh owns data and timestamp", async ({ page }) => {
     [1, 0].forEach((i) => {
       life.weatherCalls[i].resolve(null);
       life.positionCalls[i].resolve([{ num: i + 1, pos: 1 }]);
+      life.intervalCalls[i].resolve(null);
       life.driverCalls[i].resolve([{ num: i + 1, code: "OLD", name: "Stale Driver " + i }]);
     });
   });

@@ -231,7 +231,7 @@
      has, and this is how big they are. The in-race HUD is deliberately NOT on
      this scale (see css/hud.css) — its labels are glanced at, not read, and
      they are sized to boxes that have to clear the driving controls. */
-  --fs-micro: 10px;
+  --fs-micro: 11px;
   /* ---- TYPE SCALE — seven steps, menus/HUD-adjacent body text only ----
      No type system existed: 294 raw `font-size: Npx` declarations across the
      eight menu stylesheets, measured by counting every one of them, sorted:
@@ -246,13 +246,18 @@
      Above ~22px every remaining size (23-68px) is a ONE-OFF: a HUD digit
      readout or a hero title, not a repeated body size. Those stay off this
      scale entirely, the same exclusion css/hud.css already documents above.
-       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (10px)
-       --fs-2  body base — the single most common size      (12px, was 11-12)
-       --fs-3  body emphasis / secondary label               (13px)
-       --fs-4  control label / subhead                       (14px, was 14-15)
-       --fs-5  larger subhead / button text                  (16px, was 15-16)
-       --fs-6  section heading                                (20px, was 17-20)
+       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (11px)
+       --fs-2  body base — the single most common size      (13px; was 12)
+       --fs-3  body emphasis / secondary label               (14px; was 13)
+       --fs-4  control label / subhead                       (15px; was 14)
+       --fs-5  larger subhead / button text                  (16px)
+       --fs-6  section heading                                (20px)
        --fs-7  large heading — the ceiling of this scale       (22px)
+     2026-08-12 readability pass (MCP survey × TinyFish research): the phone-
+     first rule in docs/research/UI-DESIGN-PRINCIPLES.md says the smallest rung
+     must stay legible at arm's length under UI SIZE zoom. Raising micro/body
+     one step and the UI SIZE floor to 90% keeps control labels ≥~12px visual
+     at the low end of the slider without redesigning every screen.
      Migrate ONE FILE PER COMMIT with a before/after font-size dump, per
      docs/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
      is only acceptable when that dump says so on purpose.
@@ -264,9 +269,9 @@
      first real consumer, not pre-declared here.
      --fs-1/--fs-3/--fs-4 joined this list with css/data.css's migration. */
   --fs-1: var(--fs-micro);
-  --fs-2: 12px;
-  --fs-3: 13px;
-  --fs-4: 14px;
+  --fs-2: 13px;
+  --fs-3: 14px;
+  --fs-4: 15px;
   --fs-5: 16px;
   --fs-6: 20px;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
@@ -604,7 +609,7 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
    query reads 600, declines to tighten, and hands roomy 22px padding to a sheet
    whose own height is 400px. That is the same coordinate-space fault that put
    the lighting tuner's action bar off the bottom of a phone
-   (docs/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md has the full inventory).
+   (docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md has the full inventory).
 
    `data-density` is the answer that can see both: js/game/sheetshape.js divides
    the measured height by the element's own zoom, against a per-sheet

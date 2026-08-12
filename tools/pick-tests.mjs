@@ -144,7 +144,7 @@ function changedFiles(argv) {
   // `--since HEAD~3` reported the literal string "HEAD~3" as the only changed
   // file, matched no rule, and printed "nothing to run" — the one answer a test
   // selector must never give wrongly. It had never worked, and the change-aware
-  // CI design in docs/research/TEST-AUDIT-2026-08.md §3 is built entirely on it.
+  // CI design in docs/archive/research/TEST-AUDIT-2026-08.md §3 is built entirely on it.
   const explicit = argv.filter((a, n) => !a.startsWith("--") && n !== since + 1);
   if (explicit.length) return explicit;
   const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();

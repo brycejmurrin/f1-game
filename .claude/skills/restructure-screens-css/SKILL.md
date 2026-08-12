@@ -189,8 +189,8 @@ entries there — that test is how you prove the count went down.
 
 ## Deep references
 
-- `docs/research/UI-LAYOUT-CRITIQUE-2026-08.md` — every screen measured at 852x393
-- `docs/research/UI-REDESIGN-2026-08.md` — the scale/type/container proposal (read §9 first)
+- `docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md` — every screen measured at 852x393
+- `docs/archive/research/UI-REDESIGN-2026-08.md` — the scale/type/container proposal (read §9 first)
 - `docs/LAYOUT-AUDIT.md` — the seven axes and which mechanism owns each
 - `docs/COMPONENTS.md` — the class-family inventory
 - `ui-menu-a11y` skill — per-bug menu/dialog/Escape/focus workflow

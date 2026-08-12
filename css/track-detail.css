@@ -114,8 +114,8 @@
    Dropping the ceiling closes it by construction rather than by picking a
    fourth number: landscape now always matches here, and the >=900x600 block
    below — later in source, equal specificity — still wins where it applies and
-   upgrades the panel from 220px to 260px. css/menus.css:159-161 records fixing
-   this same 560/599/600 seam for #overlay; it was never carried to this file. */
+   upgrades the panel from 220px to 260px. See the `#overlay` / `--compact-at`
+   block in css/menus.css; it was never carried to this file. */
 @media (orientation: landscape) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 10px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }

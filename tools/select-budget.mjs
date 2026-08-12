@@ -1,29 +1,5 @@
-// select-budget — CAN A CHANGE-AWARE CI JOB ACTUALLY RUN WHAT IT SELECTS?
-//
-// docs/research/TEST-AUDIT-2026-08.md's change-aware CI design is blocked on
-// gaps 7/8/13, and its own recommendation is explicit: "re-derive the budget
-// against measured per-spec counts" before any YAML lands. This is that
-// derivation, and it is arithmetic over MEASURED numbers rather than a guess.
-//
-// THE TWO MEASUREMENTS IT RESTS ON, both from CI run 31197770813:
-//
-//   smoke          9 declared tests in 11m57s  ->  79.7 s per test
-//   driving-model  1 declared test  in    42s  ->  42.0 s per test
-//
-// Both at APEX_WORKERS=1 on a shared GitHub runner, which is what ci.yml pins
-// and why. 80 s/test is the honest planning figure — smoke's nine are the
-// rendering-heavy kind a selector would most often pull in.
-//
-// THE PART THE DESIGN MISSED. ci.yml sets `retries: 1` and the smoke step passes
-// `--timeout=240000`, so a test that TIMES OUT costs 240 s and then 240 s again
-// on the retry: 480 s, over half a fifteen-minute budget, for one test. The
-// all-pass case fits comfortably and the failing case does not — which means the
-// step dies exactly when the selection has found something. A budget that only
-// holds while nothing is wrong is not a budget.
-//
-//   node tools/select-budget.mjs                 # the table
-//   node tools/select-budget.mjs --json
-//   node tools/select-budget.mjs --budget 20     # minutes
+// Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md §3.
+// Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -176,7 +176,7 @@
     /* ── car decals (DECAL_VS/FS) ───────────────────────────────────────────
      * Sun + hemisphere lit so marks sit INTO the paint's shading; uGlow lifts
      * them at night. Frame uniforms are fx-local (the decal pass reads the
-     * keyMul-scaled sun + ambientMul-scaled ambient — glx.js:885-911 — and
+     * keyMul-scaled sun + ambientMul-scaled ambient — js/render/glx.js — and
      * must keep working when the lit factory is absent). One material per
      * (texture, glow) pair, cached: ~2 textures/car x 2 glow states. */
     const U = {
@@ -213,7 +213,7 @@
       return m;
     }
 
-    /** begin(frame) -> decal-pass uniforms (glx.js:885-911 semantics: the
+    /** begin(frame) -> decal-pass uniforms (js/render/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
     function updateFrame(frame) {
       const T = (frame && frame.tune) || null;

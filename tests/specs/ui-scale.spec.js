@@ -1,7 +1,7 @@
 // @ts-check
 // UI SCALE — every main screen still fits at every size the player can pick.
 //
-// SETTINGS ▸ DISPLAY runs UI SIZE and HUD SIZE from 80 % to 150 %, which means
+// SETTINGS ▸ DISPLAY runs UI SIZE and HUD SIZE from 90 % to 150 %, which means
 // "does this screen fit?" stopped being one question. A sheet that sits
 // comfortably at the default can push its primary button off the edge two
 // notches up, and nothing in the suite would have noticed: the six pixel
@@ -32,7 +32,7 @@ const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary pl
 // at 100% and present at 115%, including the garage panel overlapping the
 // camera bar by 61px (measured -8 / +61 / +130 / +222 at 100/115/130/150). A
 // guard that skips the default cannot see the default's bugs.
-const SCALES = [80, 100, 115, 130, 150];
+const SCALES = [90, 100, 115, 130, 150];
 
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].
@@ -204,8 +204,8 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.uiScale(150));
     expect(await read(), "moving UI must not move the HUD").toEqual({ ui: "1.5", hud: "1" });
 
-    await page.evaluate(() => window.__apex.hudScale(80));
-    expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.8" });
+    await page.evaluate(() => window.__apex.hudScale(90));
+    expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.
@@ -222,7 +222,7 @@ test.describe("UI scale", () => {
   // applyScale() (js/game.js) runs on every boot, reading straight from
   // localStorage — the slider's own oninput can't produce an out-of-range value
   // (the native <input type=range> clamps .value on assignment), but a value
-  // outside [80,150] can still reach apex26.uiScale/hudScale from a direct edit
+  // outside [90,150] can still reach apex26.uiScale/hudScale from a direct edit
   // or an older build with a different range. The CSS custom property that
   // actually sets the on-screen size used to be read from that RAW number
   // instead of the already-clamped percentage the slider itself displays — the
@@ -239,7 +239,7 @@ test.describe("UI scale", () => {
       return { ui: s.getPropertyValue("--ui-scale").trim(), hud: s.getPropertyValue("--hud-scale").trim() };
     });
     expect(cs.ui, "500 must clamp to SCALE_MAX (150%)").toBe("1.5");
-    expect(cs.hud, "-40 must clamp to SCALE_MIN (80%)").toBe("0.8");
+    expect(cs.hud, "-40 must clamp to SCALE_MIN (90%)").toBe("0.9");
 
     // The slider's own displayed value/label must read the SAME clamped number,
     // not merely a different-but-also-safe one — this is the invariant that
@@ -250,7 +250,7 @@ test.describe("UI scale", () => {
       hudInput: document.getElementById("pm-hudscale").value,
       hudLabel: document.getElementById("pm-hudscale-v").textContent,
     }));
-    expect(shown).toEqual({ uiInput: "150", uiLabel: "150%", hudInput: "80", hudLabel: "80%" });
+    expect(shown).toEqual({ uiInput: "150", uiLabel: "150%", hudInput: "90", hudLabel: "90%" });
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one
