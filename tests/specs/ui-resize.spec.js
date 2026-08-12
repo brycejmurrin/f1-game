@@ -213,7 +213,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // The case this test exists for is unchanged and still exercised: two scales
     // that classify differently, with no resize between them, proving the
     // classifier answers to `zoom` alone. Only the low end moved.
-    await page.evaluate(() => window.__apex.uiScale(80));
+    await page.evaluate(() => window.__apex.uiScale(90));
     await page.waitForTimeout(400);
     const at100 = await readState(page);
 
@@ -230,7 +230,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     expect(at150.doneOnScreen, "DONE reachable at 150%").toBe(true);
 
     // And back down again, because a one-way classifier would pass the above.
-    await page.evaluate(() => window.__apex.uiScale(80));
+    await page.evaluate(() => window.__apex.uiScale(90));
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "normal";

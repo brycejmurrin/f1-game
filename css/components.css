@@ -757,7 +757,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    margins on the children — keeps DRIVING / DISPLAY / MORE on the same ladder. */
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.11em;
+  color: var(--red); font-size: var(--fs-3); font-weight: 700; letter-spacing: 0.11em;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
@@ -779,9 +779,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   align-items: center;
   justify-content: center;
   width: 100%;
+  /* Control labels are glanced mid-corner — --fs-4 (15px) stays ≥~13.5px visual
+     at the UI SIZE floor (90%). MEASURED before: compact phone buttons read
+     ~10.4 own/--fs-2 and failed the arm's-length floor in the readability survey. */
+  font-size: var(--fs-4);
 }
-/* A SLIDER IN A BUTTON COLUMN. Row height matches --tap so columns stay
-   aligned; the label overlays the track (pointer-events: none). */
 .pm-group .tune-row {
   position: relative;
   margin: 0;
