@@ -232,18 +232,45 @@ const TrackModels = (function () {
       spec = spec || {};
       if (!Array.isArray(spec.points) || spec.points.length < 2 || !ctx.groundHeight) return false;
       const posBefore = out.pos.length;
-      let emitted = 0;
+      const height = spec.height || 1;
+      const width = spec.width || 0.25;
+      const ground = (k, side, dist) => {
+        const y = ctx.groundHeight(k, dist || 0);
+        if (!Number.isFinite(y)) return null;
+        return ctx.groundPoint ? ctx.groundPoint(k, side || 1, dist || 0, y) : [(dist || 0), y, k];
+      };
+      // Densify the caller's polyline before extruding. The caller's points can
+      // be 50-100 m apart in s; a single straight box between two of them chords
+      // ACROSS the track's curvature, so on a bend the terrain-tilted slab bows
+      // OVER the racing line (monza banking, catalunya La Caixa, istanbul T8
+      // revetment all read 1.9-4.4 m over the tarmac from exactly this). k is a
+      // node index and groundPoint(k,...) rounds it, so interpolating k between
+      // two caller points and re-grounding at each intermediate node walks the
+      // real track arc. A ~10 m sub-chord keeps the arc-vs-chord bow under the
+      // 0.2 m props-over-road tolerance on a typical corner radius.
+      const TARGET = 10, MAXSUB = 16;
+      const pts = [];
       for (let i = 0; i < spec.points.length - 1; i++) {
         const a = spec.points[i], b = spec.points[i + 1];
-        const ay = ctx.groundHeight(a.k, a.dist || 0);
-        const by = ctx.groundHeight(b.k, b.dist || 0);
-        if (!Number.isFinite(ay) || !Number.isFinite(by)) continue;
-        const pa = ctx.groundPoint
-          ? ctx.groundPoint(a.k, a.side || 1, a.dist || 0, ay)
-          : [(a.dist || 0), ay, a.k];
-        const pb = ctx.groundPoint
-          ? ctx.groundPoint(b.k, b.side || 1, b.dist || 0, by)
-          : [(b.dist || 0), by, b.k];
+        const pa = ground(a.k, a.side, a.dist), pb = ground(b.k, b.side, b.dist);
+        if (!pa || !pb) continue;
+        const chord = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]) || 0.1;
+        const sub = Math.max(1, Math.min(MAXSUB, Math.ceil(chord / TARGET)));
+        if (!pts.length) pts.push(pa);
+        for (let j = 1; j <= sub; j++) {
+          const t = j / sub;
+          const p = ground(
+            a.k + (b.k - a.k) * t,
+            t < 0.5 ? (a.side || 1) : (b.side || 1),
+            (a.dist || 0) + ((b.dist || 0) - (a.dist || 0)) * t,
+          );
+          pts.push(p || pb);
+        }
+      }
+      if (pts.length < 2) return false;
+      let emitted = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const pa = pts[i], pb = pts[i + 1];
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
         const forward = [dx / length, dy / length, dz / length];
@@ -261,13 +288,12 @@ const TrackModels = (function () {
           forward[2] * right[0] - forward[0] * right[2],
           forward[0] * right[1] - forward[1] * right[0],
         ];
-        const height = spec.height || 1;
         const center = [
           (pa[0] + pb[0]) / 2 + up[0] * height / 2,
           (pa[1] + pb[1]) / 2 + up[1] * height / 2,
           (pa[2] + pb[2]) / 2 + up[2] * height / 2,
         ];
-        if (box(out, center, [spec.width || 0.25, height, length], spec.color,
+        if (box(out, center, [width, height, length], spec.color,
           spec.basis || [right, up, forward])) emitted++;
       }
       if (!emitted) return false;
