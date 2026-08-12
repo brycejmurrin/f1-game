@@ -761,6 +761,8 @@
       // ===================================================================
       // FLOODLIGHT MASTS — one intentional warm-white ring. Shared generic
       // floodlights are excluded above, avoiding duplicate poles and pools.
+      // floodMastRing registers lens posts (default light:true) so night pools
+      // anchor to these fixtures instead of the empty-list synthetic fallback.
       // ===================================================================
       // ~1600 projectors on masts down both kerbs is the defining look of the
       // Singapore night race; a 75 m spacing left long unlit-looking gaps.

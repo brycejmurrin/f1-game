@@ -61,13 +61,20 @@ const SceneryIdentity = (function () {
     };
 
     // Tall dual-arm cool-white flood mast + optional ground pool.
-    // dist = metres beyond road edge (mast centre). opts: { h, cool, pool, arms }
+    // dist = metres beyond road edge (mast centre).
+    // opts: { h, cool, pool, arms, light }
+    // `light` (default true): register a point light at the lens bank so the
+    // fixture actually lights the road. Pass light:false for accent-only masts
+    // that sit ON TOP of the generic floodlights dressing pass — otherwise the
+    // same stretch gets two light sources. Circuits that exclude "floodlights"
+    // and use floodMastRing as the race-lighting rig leave the default on.
     const floodMast = (k, side, dist, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 36;
       const cool = opts.cool !== false;
       const pool = opts.pool !== false;
       const arms = opts.arms != null ? opts.arms : 2;
+      const light = opts.light !== false;
       const poleCol = [0.14, 0.14, 0.17];
       const lens = cool
         ? (NIGHT ? [1.22, 1.28, 1.40] : [0.96, 1.00, 1.06])
@@ -81,11 +88,15 @@ const SceneryIdentity = (function () {
       addCyl(out, a.c, 0.45, h, poleCol, 6, b);
       const top = vadd(a.c, a.u, h);
       // Dual (or multi) arms reaching toward the track (−side along r).
+      let lensPos = null;
       for (let i = 0; i < arms; i++) {
         const armOff = (i - (arms - 1) / 2) * 1.8;
         const arm = vadd(vadd(top, a.t, armOff), a.r, -side * 1.6);
         addBox(out, arm, [3.4, 0.35, 0.55], poleCol, b);
-        addBox(out, vadd(arm, a.r, -side * 1.3), [1.6, 0.55, 1.1], lens, b);
+        const head = vadd(arm, a.r, -side * 1.3);
+        addBox(out, head, [1.6, 0.55, 1.1], lens, b);
+        // One emitter per mast at the bank centre (middle arm, or sole arm).
+        if (i === (arms >> 1)) lensPos = head;
       }
       // Crossbar / bank housing
       addBox(out, top, [1.2, 0.9, arms * 1.9 + 0.6], [0.22, 0.22, 0.26], b);
@@ -94,6 +105,16 @@ const SceneryIdentity = (function () {
         addBox(out, vadd(a.c, a.u, 0.10), [7.5, 0.18, 7.5], poolCol, b);
       }
       blockAt(k, side, dist - 0.6, 2);
+      // Look up at CALL time — registerMastLamp is wired onto ctx just before
+      // def.scenery runs, after SceneryIdentity.create has already closed.
+      const register = ctx.registerMastLamp;
+      if (light && typeof register === "function" && lensPos) {
+        register({
+          pos: [lensPos[0], lensPos[1], lensPos[2]],
+          k, side,
+          kind: cool ? "flood_bank" : "halogen",
+        });
+      }
     };
 
     // Ring of flood masts both sides every ~stepM metres. opts forwarded to floodMast;

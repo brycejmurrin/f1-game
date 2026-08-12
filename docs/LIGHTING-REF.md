@@ -119,13 +119,15 @@ genuinely unlit stretch at night** — worst of all baku (1.2 km, a fifth of the
 lap) and redbull (784 m spanning its own start/finish straight), plus madrid,
 mexico, silverstone, suzuka, monaco, abudhabi, montreal.
 
-Placing bespoke masts circuit-side does not fix it: `floodMast()` and
-`floodMastRing()` draw a fixture but never register a lamp post, so they emit
-nothing either. Instead `buildTrackLights` walks the sorted mast list and
-inserts fill lights wherever the gap exceeds `LT.lampGapFill`, keeping the mast
-suppressed (the circuit's visual intent) while restoring the pool. Fill lights
-carry `glareW = 0` and damped volumetrics — there is no fixture to anchor a lens
-halo to, so they read as spill from off-camera architectural lighting.
+Placing bespoke masts circuit-side used to leave the same hole:
+`floodMast()` / `floodMastRing()` drew a fixture but never registered a lamp
+post. They now register a lens into `track.lampPosts` by default
+(`opts.light: false` opts out for accent-only towers sitting on top of the
+generic pass). Gap-fill still covers stretches where both the generic pass
+and bespoke masts are absent — keeping the mast suppressed (the circuit's
+visual intent) while restoring the pool. Fill lights carry `glareW = 0` and
+damped volumetrics — there is no fixture to anchor a lens halo to, so they
+read as spill from off-camera architectural lighting.
 
 Set the knob to 0 for the old behaviour. With it at the default every node on
 all 40 circuits is within 28 m of a lamp.

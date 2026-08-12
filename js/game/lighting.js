@@ -325,11 +325,12 @@ function buildTrackLights(track, onlyAlways) {
   // deleted the light — and an audit of all 40 circuits found nine with a
   // genuinely unlit stretch at night, worst of all Baku (1.2 km, a fifth of the
   // lap) and Red Bull Ring (784 m spanning its own start/finish straight).
-  // Nine circuits each placing bespoke masts is the wrong fix twice over: the
-  // scenery-side floodMast()/floodMastRing() helpers draw a fixture but never
-  // register a lamp post, so they emit nothing either.
-  // So: keep the mast suppressed (that is the circuit's visual intent) and put
-  // the LIGHT back. Fill lights get no lens halo (glareW 0) and damped
+  // Shared floodMast()/floodMastRing() now register lens positions into
+  // track.lampPosts (unless opts.light:false), so a circuit that excludes the
+  // generic pass and draws its own Musco ring keeps fixture-anchored pools.
+  // Gap-fill still covers stretches where BOTH the generic pass and bespoke
+  // masts are absent — keep the mast suppressed (circuit visual intent) and
+  // put the LIGHT back. Fill lights get no lens halo (glareW 0) and damped
   // volumetrics, because there is no fixture to anchor them to — they read as
   // spill from off-camera architectural lighting rather than a floating lens.
   // Never runs for the always-on subset: those are specific modelled fixtures
