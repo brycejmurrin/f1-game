@@ -1,5 +1,23 @@
 # Handoff — fix `startFrac` on all 40 circuits
 
+> **Partly answered — read `START-LINES.md` first.** The values are now derived
+> and verified (start lines in a corner: **22/40 → 1/40**; Turn-1 hand **6/6**),
+> and the derivation this file calls "gone" is reproducible from
+> `tools/startline-snap.cjs` + `tools/startline-probe.cjs`.
+>
+> Three claims below are wrong and cost time before they were measured:
+> Monaco's trace is **stored reversed**, so the geojson↔`pts` index is NOT 1:1
+> there; snapping must be to the nearest **segment**, not vertex; and the
+> `bacinger` traces **begin at the start/finish line**, which is a second
+> independent estimator this file does not mention.
+>
+> The values are **not applied**, for a reason this file does not cover:
+> `startFrac` rotates racing space, so moving the line drags the authored
+> scenery, `dressingExclusions` and corner boards round the lap with it — seven
+> circuits fail `verify-track --all` on required landmarks pushed into the road.
+> `START-LINES.md` has the measurements, the mechanism that fixes it, and the
+> pre-existing `transformSceneryApi` coverage gap that blocks it.
+
 You are picking up work on **Apex 26**, an unofficial WebGL2 F1 fan game at
 `brycejmurrin/f1-game`. Read `CLAUDE.md` first — it is the engineering
 reference and its rules are binding (no ES modules, `?v=N` cache bumps,
