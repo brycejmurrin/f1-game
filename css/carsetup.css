@@ -525,6 +525,25 @@
    the right answer there — it has the height to spend and no width. */
 #cs-inner {
   --pair-at: 400px;
+  /* 480, NOT THE 380 EVERY OTHER SHEET USES. `--compact-at` asks "is this sheet
+     short in its own units", and the honest threshold is different per screen
+     because what a screen must fit before its content starts is different. The
+     garage carries the most fixed furniture in the app — title, budget bar and
+     readout, a four-number stat block, a twelve-category strip, and a two-button
+     action bar — which comes to ~320 own units in the normal tier. A sheet under
+     480 therefore has under 160 left for the parts list, and a part row is 62:
+     under three of them, on the screen whose entire purpose is comparing parts.
+     MEASURED, portrait iPhone at UI SIZE 100% — the shipped default, the most
+     common way this screen is ever seen. Sheet 444.5 own units, so at 380 it
+     classified NORMAL and got the roomy head: head 196.3, foot 72.1, parts list
+     93.7 — ONE AND A HALF cards out of a catalogue of five. At 480 the compact
+     head this file already builds engages: head 154.8, foot 58.7, list 165.7 —
+     3.1 cards, and the budget readout stops wrapping. Nothing new is drawn; the
+     tier was simply never reaching the case it was designed for.
+     Not a general raise: 380 is right for a sheet that is mostly list. This is
+     the number for a sheet that is mostly chrome, which is why it is declared
+     here beside --pair-at rather than moved into css/tokens.css. */
+  --compact-at: 480px;
   /* 28%, not 27%. At 27% a 529px desktop sheet gave the rail 142px, which left
      the category label 67px against the 70px "SUSPENSION" needs at the 10px
      desktop size — truncated by THREE pixels. Here the share binds, not the
