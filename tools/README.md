@@ -13,6 +13,7 @@ to use them) — this index is the quick map. Run from the repo root. Disposable
 | **apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON. Takes `<trackId> "<expr>"`: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **apex-capture.mjs** | Parallel headless screenshot capture across cameras/tracks/modes for visual validation. Default output lives under `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **capture/baked-scenery.mjs** | Curated free-cam gallery for Monza/Spa `bakedModel` sites. Prefetches pack models before `race()`, writes PNGs + `manifest.json`. `node tools/capture/baked-scenery.mjs [--out DIR]`. | playwright-probe / scenery-dress |
+| **capture/synthetic-gallery.mjs** | Wide multi-circuit free-cam gallery for procedural/synthetic scenery models (200+ shots, page.screenshot). Prefetches pack models; writes PNGs + `manifest.json` under `/opt/cursor/artifacts/synthetic-models/gallery/`. `node tools/capture/synthetic-gallery.mjs`. | playwright-probe / scenery-dress |
 | **motion-capture.mjs** | Capture RENDERED MOTION (screenshots can't — headless rAF is frozen at 0 fps). Records a driven clip via `recordVideo` (which ticks the loop), extracts frames, scores per-frame flicker. For temporal artifacts (z-fight/clipping flicker, shadow crawl, pop-in) and A/B-verifying a renderer fix. Default output: `scratch/captures/motion-capture/<track>/`. `motion-capture.mjs <track> [sec] [speed]`. | motion-capture |
 | **survey-track.mjs** | One-command circuit survey — self-boots the game and emits screenshots (aerial + orbit + driver's-eye per spot → `scratch/captures/survey-track/<id>/`) **and** a lateral ground-profile probe table with auto-flagged holes/steps. `survey-track.mjs <id> [label] [fracs]`. | survey-track |
 | **carshot.mjs** | Cropped studio-orbit car JPEG. Self-boots. `carshot.mjs [az] [tod] [teamIdx] [outPath]` → `artifacts/tmp/carshot.jpg`. | playwright-probe / car-viewer |
@@ -104,7 +105,7 @@ deliberately NOT moved — their consumers hardcode the flat paths):
 
 - `net/` — WebRTC/Nostr end-to-end harnesses: rtc-e2e.mjs, rtc-e2e-3p.mjs, rtc-e2e-room.mjs, nostr-local.cjs, nostr-probe.mjs, turn-local.cjs
 - `car/` — car renders: render-car.mjs, carshot.mjs
-- `capture/` — frame capture: apex-capture.mjs, baked-scenery.mjs, motion-capture.mjs
+- `capture/` — frame capture: apex-capture.mjs, baked-scenery.mjs, synthetic-gallery.mjs, motion-capture.mjs
 - `lighting/` — ab-lighting.mjs (lighting-campaign/ was already its own package)
 
 ## Conventions
