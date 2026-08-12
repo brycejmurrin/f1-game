@@ -682,7 +682,7 @@
   flex: 0 0 auto; width: auto; margin: 0;
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
-  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
   background: rgba(12,12,16,0.74); color: rgba(255,255,255,0.62);
   border: 1px solid rgba(255,255,255,0.14);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
@@ -691,7 +691,9 @@
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  min-height: 30px;
+  /* --chip-h: same rung as the touch override below. MEASURED readability
+     survey: desktop #cs-cam/#cs-aero sat at 31px under a 40px chip floor. */
+  min-height: var(--chip-h);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) {
@@ -763,13 +765,13 @@
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  min-height: 30px;
+  min-height: var(--chip-h);
 }
 @media (hover: hover) {
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 }
 .cs-aero-lbl {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.42);
 }
 .cs-aero-val {
@@ -782,20 +784,18 @@
 #cs-aero.active .cs-aero-lbl { color: rgba(125,249,255,0.75); }
 #cs-aero.active .cs-aero-val { color: #7df9ff; }
 @media (max-width: 1000px) {
-  /* 8px was the smallest type in the whole app, on the GARAGE — the screen you
-     sit on longest outside a race — and 26px targets against a 52px touch
-     ladder. Raised to the --label floor; min-height follows so the boxes are
-     aimable as well as readable. */
-  #cs-aero { padding: 6px 10px; gap: 5px; min-height: 34px; }
+  /* Touch-ish widths: keep padding/type bumps; height floor is --tap-min /
+     --chip-h from the base + body:not(.desktop) rules, not a narrower 34. */
+  #cs-aero { padding: 6px 10px; gap: 5px; }
   .cs-aero-lbl { font-size: 11px; letter-spacing: 0.08em; }
   .cs-aero-val { font-size: 13px; }
-  #cs-cam { padding: 6px 10px; font-size: 11px; min-height: 34px; }
+  #cs-cam { padding: 6px 10px; font-size: 11px; }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
   padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.74); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
@@ -933,7 +933,12 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    press once a session, sitting next to the list you came to the screen to read.
    Only where the sheet is short. At any comfortable height it keeps the full
    ladder, because there the 52 costs nothing. */
-#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--tap-min); }
+/* Chip floor, not --tap-min. Measured 852×393 @115%: --tap-min landed at 28px
+   painted — under the house chip ladder (46 on touch) and a hard miss for a
+   labeled toggle. --chip-h is the secondary-control rung already used by cam/
+   aero chips on touch; full --tap stays off here so the header does not reclaim
+   the third of the panel the comment above documented. */
+#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--chip-h); }
 /* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
    nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
    same fact, exactly, in text — the bar is a glanceable for a number that is

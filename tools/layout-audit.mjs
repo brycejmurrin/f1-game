@@ -33,6 +33,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { pickChromium } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const require = createRequire(ROOT + "/");
@@ -831,7 +832,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
+const browser = await chromium.launch({ executablePath: pickChromium(),
   args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
 
 // ONE BOOT PER VIEWPORT, not one per cell. Booting this game means compiling
