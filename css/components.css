@@ -938,6 +938,18 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px calc(var(--gap) * 0.6); }
+/* Compact MORE doors: wrap labels (beats @container #pmsettings-inner button
+   nowrap — that ID rule re-enabled ellipsis on wide+short sheets). Height must
+   grow with wrap; a fixed --tap box clips the second line. */
+.sheet[data-density="compact"] #pmsettings-inner .pm-doors button {
+  white-space: normal;
+  text-overflow: clip;
+  overflow: visible;
+  height: auto;
+  min-height: var(--tap);
+  line-height: 1.15;
+  font-size: var(--fs-3);
+}
 .sheet[data-density="compact"] .pm-doors button {
   white-space: normal;
   text-overflow: clip;
