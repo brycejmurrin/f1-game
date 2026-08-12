@@ -27,6 +27,22 @@ const TrackMesh = (function () {
       + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   };
 
+  // Add one triangle's un-normalised face normal into each of its three
+  // vertices' normal slots. Un-normalised on purpose: |cross| is twice the
+  // triangle area, so a big face pulls the shared vertex normal harder than a
+  // sliver does — area weighting for free. Caller normalises once at the end.
+  function accumFaceN(nrm, pos, ia, ib, ic) {
+    const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
+    const ex1 = pos[ib * 3] - ax, ey1 = pos[ib * 3 + 1] - ay, ez1 = pos[ib * 3 + 2] - az;
+    const ex2 = pos[ic * 3] - ax, ey2 = pos[ic * 3 + 1] - ay, ez2 = pos[ic * 3 + 2] - az;
+    const nx = ey1 * ez2 - ez1 * ey2;
+    const ny = ez1 * ex2 - ex1 * ez2;
+    const nz = ex1 * ey2 - ey1 * ex2;
+    nrm[ia * 3] += nx; nrm[ia * 3 + 1] += ny; nrm[ia * 3 + 2] += nz;
+    nrm[ib * 3] += nx; nrm[ib * 3 + 1] += ny; nrm[ib * 3 + 2] += nz;
+    nrm[ic * 3] += nx; nrm[ic * 3 + 1] += ny; nrm[ic * 3 + 2] += nz;
+  }
+
   function upOf(track, k) {
     const t = [track.tx[k], track.ty[k], track.tz[k]];
     const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -726,7 +742,10 @@ const TrackMesh = (function () {
             if (wy > target) wy = target;
           }
           pos.push(wx, wy, wz);
-          nrm.push(0, 1, 0);
+          // Seeded at zero: the real normal is accumulated from the faces once
+          // the strip exists (see REAL NORMALS below). A (0,1,0) seed here would
+          // bias every vertex back toward flat.
+          nrm.push(0, 0, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
           // gravel/runoff verge at the road edge, grading out to grass (no apron)
           const gt = v / (NTV - 1);                          // 0 inner edge → 1 far
@@ -762,6 +781,49 @@ const TrackMesh = (function () {
             tri(a + v, b + v, a + v + 1);
             tri(a + v + 1, b + v, b + v + 1);
           }
+        }
+      }
+
+      // REAL NORMALS for the ribbon just emitted. Every terrain vertex used to
+      // be pushed with a hardcoded (0,1,0) — but this ribbon is not flat: it
+      // tracks the road's elevation along the lap, grades down to the lap's low
+      // point at its outer edge, and is carved DOWN under the road wherever
+      // another part of the circuit passes nearby. With one up-normal
+      // everywhere, all of that geometry shaded as though it were a level
+      // plane, so a bank, an embankment and a flat verge took exactly the same
+      // amount of sun. Measured on the built mesh: monaco's ribbon averages
+      // 24.9° of real tilt, silverstone's 5.2°, none of which reached the
+      // shading. tests/unit/terrain-normals.test.mjs guards the collapse back.
+      //
+      // Accumulate area-weighted face normals over the strip (area weighting
+      // falls out of using the un-normalised cross product) and normalise once.
+      // Done on the FULL grid rather than per-triangle so shared vertices blend
+      // and the ribbon stays smooth instead of faceting. Cost is one pass over
+      // the strip at build time; nothing per frame.
+      for (let k = 0; k < n; k++) {
+        const a = base + k * NTV, b = base + ((k + 1) % n) * NTV;
+        for (let v = 0; v < NTV - 1; v++) {
+          accumFaceN(nrm, pos, a + v, b + v, a + v + 1);
+          accumFaceN(nrm, pos, a + v + 1, b + v, b + v + 1);
+        }
+      }
+      for (let k = 0; k < n; k++) {
+        for (let v = 0; v < NTV; v++) {
+          const i3 = (base + k * NTV + v) * 3;
+          // The accumulation above walks a FIXED winding while the emitted
+          // triangles flip per side, so one ribbon comes out sign-inverted.
+          // Terrain is heightfield-like — its true normal always points up —
+          // so resolve the ambiguity by orienting to +Y rather than by
+          // threading `flip` through the accumulation.
+          const sgn = nrm[i3 + 1] < 0 ? -1 : 1;
+          const nx = nrm[i3] * sgn, ny = nrm[i3 + 1] * sgn, nz2 = nrm[i3 + 2] * sgn;
+          const l = Math.hypot(nx, ny, nz2);
+          // A degenerate corner (every adjoining face zero-area) would divide
+          // by zero, so fall back to straight up rather than emit NaN — one
+          // NaN vertex is enough for validateGeometry to reject the whole mesh
+          // and ship the circuit with no terrain at all.
+          if (l > 1e-6) { nrm[i3] = nx / l; nrm[i3 + 1] = ny / l; nrm[i3 + 2] = nz2 / l; }
+          else { nrm[i3] = 0; nrm[i3 + 1] = 1; nrm[i3 + 2] = 0; }
         }
       }
     }
