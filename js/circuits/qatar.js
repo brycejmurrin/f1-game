@@ -38,7 +38,8 @@
       // recognisable. Geometry only: streetLamp() registers no point light —
       // track.lampPosts is filled by the separate generic MAST pass, which is
       // the "floodlights" kind and is deliberately NOT excluded here, so the
-      // night lighting is byte-identical without them.
+      // night lighting is byte-identical without them. The Musco helpers pass
+      // light:false so they stay visual identity and do not double the pools.
       { kind: "lamps", s0: 0, s1: 1 },
     ],
     lengthKm: 5.4,
@@ -256,7 +257,9 @@
       // grandstand roof and every dune on the horizon.
       const MAST_H = 46, MAST_H_SF = 50;
       if (typeof floodMastRing === "function") {
-        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true });
+        // light:false — generic floodlights dressing still owns night pools;
+        // these Musco towers are visual identity only.
+        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true, light: false });
         // Extra densification on the televised start/finish kilometre.
         // 88 m, not 45. THREE mast lines overlap on this stretch: the 90 m ring
         // above, the engine's own light-bearing mast pass (~44 m stride, the
@@ -267,8 +270,8 @@
         // than the rest of the lap, which is the point of the densification.
         along(0.86, 0.14, 88, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
-            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
+            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true, light: false });
+            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true, light: false });
           }
         });
       } else {
@@ -650,8 +653,8 @@
       // make the T10 and fast final-sector complexes visibly floodlit heroes.
       if (typeof floodMast === "function") {
         for (const s of [0.63, 0.72, 0.80]) {
-          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
-          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
+          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3, light: false });
+          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3, light: false });
         }
       }
 

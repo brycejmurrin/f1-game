@@ -392,8 +392,9 @@
       // things for miles and a fixture of every wide shot. floodMast draws the
       // real article (pole, dual arms, lens bank, ground pool) and guards its own
       // footprint, which a hand-rolled cylinder-and-box pair does neither of.
+      // light:false — oval still uses the generic floodlights pass for pools.
       for (let i = 0; i < 9; i++) {
-        floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3 });
+        floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3, light: false });
       }
       // Broadcast platforms at the show corners.
       cameraTower(K(0.115), 1, 30, { h: 18 });

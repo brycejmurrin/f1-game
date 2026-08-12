@@ -2042,6 +2042,11 @@ const Tracks = (function () {
     // reversed lap's bespoke scenery computes them off the same arrays.
     const customLamps = [];
     const CUSTOM_LAMP_CAP = 96;
+    // floodMast / floodMastRing registrations — separate from lampPost's 96-cap
+    // tunnel/soffit budget. A full-lap Musco ring is hundreds of fixtures; the
+    // custom cap is for rare hand-placed luminaires.
+    const mastLamps = [];
+    const MAST_LAMP_CAP = 512;
     const lampPost = (spec) => {
       spec = spec || {};
       const p = spec.pos;
@@ -2065,6 +2070,24 @@ const Tracks = (function () {
       customLamps.push(rec);
       return true;
     };
+    // Called by SceneryIdentity.floodMast at draw time (looked up off ctx).
+    // Marks custom so buildTrackLights does not invent neon-spill washers on
+    // top of a modelled stadium bank.
+    const registerMastLamp = (spec) => {
+      spec = spec || {};
+      const p = spec.pos;
+      if (!finiteVec(p, 3, false)) return false;
+      if (mastLamps.length >= MAST_LAMP_CAP) return false;
+      const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
+      const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
+                    kind: typeof spec.kind === "string" ? spec.kind : "flood_bank",
+                    custom: true, mast: true };
+      if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
+      if (Number.isFinite(spec.radius)) rec.radius = Math.max(1, spec.radius);
+      mastLamps.push(rec);
+      return true;
+    };
+    ctx.registerMastLamp = registerMastLamp;
 
     // Per-circuit bespoke scenery lives in js/circuits/<id>.js (def.scenery).
     if (def.scenery) {
@@ -2262,8 +2285,10 @@ const Tracks = (function () {
     // Circuit-registered fixtures ride the same export, so buildTrackLights needs
     // no second code path — they are lamp posts that happened to be modelled by a
     // scenery() callback instead of by the generic mast pass. Appended AFTER it
-    // because that pass assigns track.lampPosts fresh.
+    // because that pass assigns track.lampPosts fresh. Mast lamps from
+    // floodMast()/floodMastRing() follow the same rule (fixtures that emit).
     for (const lamp of customLamps) track.lampPosts.push(lamp);
+    for (const lamp of mastLamps) track.lampPosts.push(lamp);
     track.hasAlwaysLamps = customLamps.some((lamp) => lamp.always);
 
     // bridge supports: pillars from the ground up to the raised deck, set a

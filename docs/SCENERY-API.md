@@ -121,6 +121,14 @@ rule as every other lamp — no light without something visible emitting it.
   that a bright session still uploads, for the places the sun cannot reach.
 - Capped at 96 fixtures per circuit.
 
+**`floodMast` light registration.** Shared `floodMast` / `floodMastRing` register
+a `flood_bank` (cool) or `halogen` (warm) lens into `track.lampPosts` by default,
+on a separate 512-cap mast-lamp budget (not the 96 `lampPost` cap). Pass
+`opts.light: false` when the mast is accent geometry on top of the generic
+`"floodlights"` dressing pass — otherwise the same stretch gets two light
+sources. Circuits that exclude `"floodlights"` and use `floodMastRing` as the
+race-lighting rig leave the default on so pools anchor to the tall fixtures.
+
 ### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
 
 Engine emitters are being migrated off "push primitives into the soup" and onto
@@ -365,7 +373,7 @@ setting it there is a declaration of the local species, not a visible change.
 | `gantry(s, h, col)` | overhead structure spanning the track (start/scoring) |
 | `marshalPost(k, side, gap)` | orange-roofed post + flag pole |
 | `underpassPortal(s, opts)` | dark overhead slab + off-edge piers (cars pass under). `opts:{h,thick,col,pierGap,pierW,depth}` |
-| `floodMast(k, side, dist, opts)` | tall dual-arm cool-white flood + optional ground pool. `opts:{h,cool,pool,arms}` |
+| `floodMast(k, side, dist, opts)` | tall dual-arm cool-white flood + optional ground pool. `opts:{h,cool,pool,arms,light}`. Registers a point light at the lens bank unless `light:false` |
 | `floodMastRing(stepM, opts)` | both sides every ~`stepM` m; forwards `opts` to `floodMast` (`opts.dist` default 14) |
 | `ledFacadeBands(c, h, opts)` | stacked emissive frustum bands (Flame Towers / Sphere). `opts:{r,bands,cols,seg,basis}` |
 | `sailCanopy(c, basis, opts)` | disc/ellipse sail on a hub mast. `opts:{rad,rx,rz,h,col,ribs,thick}` |
