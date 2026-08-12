@@ -101,9 +101,27 @@ variadic `push()` shim measured SLOWER than native (the win needs fixed arity);
 `idx` must be `Uint32Array`; and `TrackModels.validateGeometry` gates on
 `Array.isArray(geo.pos)`, so the props mesh ships EMPTY if that is missed.
 
-**Non-passive capture-phase `wheel` listener on `window`** (`js/game/menunav.js`)
-— prevents compositor-thread scrolling application-wide, including mid-race.
-Not audited in scope; flagged as adjacent.
+**Non-passive capture-phase `wheel` listener on `window`**
+(`js/game/menunav.js`) — flagged by the audit as "the single highest-leverage
+item adjacent to scope", on the standard reasoning that a non-passive wheel
+listener at window/capture stops the browser starting a scroll on the
+compositor thread. **Audited, and it does not apply here.** Two independent
+reasons:
+
+- `css/tokens.css` sets `html, body { overflow: hidden }`, so the DOCUMENT
+  never scrolls. The only scrollable things are `.pane` regions inside menus.
+  Mid-race there is no scroll for the listener to delay, because there is no
+  scroll.
+- Inside a menu the handler is load-bearing, not overhead: it calls
+  `e.preventDefault()` (menunav.js) to redirect a wheel that landed on no
+  scroll region — a sheet head, a stats block, a circuit map — onto the nearest
+  pane. It cannot be made passive without deleting the feature.
+
+The only residue is that `onWheel` calls `activeLayer()` → `UiLayers.top()`,
+which is the 24-selector `querySelectorAll` plus a `getComputedStyle` per
+match. That is the same query `anyOpen()` was moved off, but wheel events are
+user-driven and occasional rather than per-frame, so it is not worth the same
+treatment. Left alone.
 
 **Frame-invariant uniforms** — ~95 tuner uniforms re-uploaded per frame across
 `begin()`, `drawSky()` and the composite. The file already has the pattern to
