@@ -80,11 +80,27 @@
 }
 .dh-close:active { background: rgba(255,255,255,0.18); color: #fff; }
 
+/* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
+   declarations decide whether a thumb-drag actually pans it, and this strip had
+   neither — while the three other strips in the app (the garage's category rail,
+   the tuner's chips in both its tiers) had one or both. Four hand-rolled copies
+   of one pattern, disagreeing.
+   `touch-action: pan-x` claims the horizontal gesture. Without it the browser is
+   free to give a diagonal drag to an ancestor, so the strip feels dead or the
+   panel behind it moves instead.
+   `overscroll-behavior-x: contain` stops a flick past the last chip from
+   CHAINING outward — and on iOS the thing it chains into is the back-navigation
+   gesture, so overscrolling the tab strip can leave the page. That is the worst
+   failure mode any of these four can have and it was on the widest screen in the
+   app.
+   Neither is visible to the layout audit: this is behaviour, not geometry, and
+   nothing about the boxes is wrong. tests/unit/scroll-strips.test.mjs is what
+   keeps the four in step from here. */
 .dh-tabs {
   display: flex; gap: 6px; padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
-  overflow-x: auto;
+  overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none;
   flex-wrap: nowrap;
 }
@@ -513,7 +529,11 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   background: #0d0d13; border: 1px solid rgba(255, 255, 255, 0.12);
   color: #cfcfd6; font-size: var(--fs-2); line-height: 1.45;
   white-space: pre-wrap; word-break: break-word;
-  max-height: 320px; overflow: auto;
+  /* One axis. The text already `pre-wrap`s and `break-word`s, so there is
+     nothing to scroll sideways to — `overflow: auto` turned the other axis on
+     by shorthand, not by intent. Same trap as #overlay in css/menus.css. */
+  max-height: 320px; overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain; touch-action: pan-y;
 }
 .dh-pick-field { display: flex; flex-direction: column; gap: 3px; }
 .dh-pick-label { font-size: var(--fs-micro); letter-spacing: 0.12em; color: #8a8a95; }
