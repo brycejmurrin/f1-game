@@ -93,6 +93,15 @@ on:
         type: string
         required: false
         default: ""
+      # Explicit flag — do NOT rely on github.event_name != 'workflow_call' alone.
+      # Measured: the advisory job still queued/ran on Pages calls and ate a
+      # runner while deploy CI sat pending. Caller sets false; branch/PR pushes
+      # never pass the input so the default (true) keeps advisory on.
+      advisory:
+        description: "run the change-aware advisory selected-specs job"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -412,12 +421,10 @@ jobs:
     # files changed, which is a flake by another name; the gates stay guards /
     # sweeps / smoke / driving-model.
     #
-    # SKIP ON workflow_call (Pages deploy). It never gates deploy, but it still
-    # occupies a GitHub-hosted runner for up to 26 minutes. Under a burst of
-    # feature-branch CI the deploy's own gates sat `pending` for tens of
-    # minutes behind advisory jobs that could not unblock Pages anyway. PR and
-    # branch pushes keep the advisory; the deploy path does not buy it.
-    if: github.event_name != 'workflow_call'
+    # SKIP ON Pages deploy. pages.yml passes advisory:false. Do not key this off
+    # github.event_name alone — under workflow_call the advisory job still ran
+    # and occupied a runner while deploy gates waited.
+    if: ${{ inputs.advisory != false }}
     #
     # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).

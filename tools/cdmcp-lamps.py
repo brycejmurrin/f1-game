@@ -103,11 +103,14 @@ def boot_js(track: str, frac: float, dens: float) -> str:
   a.go();
   a.setTimeOfDay('night');
   a.freeze(false);
-  a.lightTune({{ lampDensity: {dens} }});
+  // Density must be set BEFORE reading baked lights; lightTune(rebuild) nulls
+  // track._lights and the next presented frames rebuild via buildTrackLights.
+  a.lightTune({{ lampDensity: {dens}, lampGapFill: 0 }});
   a.park({frac});
   a.orbit({frac}, 40, 16, 55);
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  await wait(1000);
+  // Present frames so the flood path rebuilds _lights after the dens change.
+  a.step(1/60, 12);
+  await wait(400);
   const ls = a.lightState();
   const at = a.atmosphere();
   const vs = a.viewState && a.viewState();
@@ -116,6 +119,8 @@ def boot_js(track: str, frac: float, dens: float) -> str:
     track: a.info().track,
     dens: a.lightTune().lampDensity,
     numLights: ls.numLights,
+    bakedLights: ls.bakedLights,
+    lampPosts: ls.lampPosts,
     floodEmit: ls.floodEmit,
     builtNight: ls.builtNight,
     brief: at.brief,
@@ -182,9 +187,25 @@ def run(log: Logger, *, url: str, shots: list[dict]) -> int:
                     "blank": blank,
                     "elapsed_s": round(time.time() - t0, 1),
                 }
+                # Parse dens vs bakedLights from the evaluate_script JSON blob.
+                try:
+                    import re
+                    m = re.search(r"\{[^{}]*\"bakedLights\"[^{}]*\}", meta_txt)
+                    if m:
+                        blob = json.loads(m.group(0))
+                        row["bakedLights"] = blob.get("bakedLights")
+                        row["numLights"] = blob.get("numLights")
+                        row["lampPosts"] = blob.get("lampPosts")
+                except Exception:
+                    pass
                 report.append(row)
                 flag = "BLANK" if blank else "ok"
-                log.progress(i, len(shots), f"{tag} {kb:.1f}KB {flag} ({row['elapsed_s']}s)")
+                baked = row.get("bakedLights")
+                extra = f" baked={baked}" if baked is not None else ""
+                log.progress(
+                    i, len(shots),
+                    f"{tag} {kb:.1f}KB {flag}{extra} ({row['elapsed_s']}s)",
+                )
             except Exception as e:
                 log.log(f"  ERROR {tag}: {e}")
                 report.append({**s, "error": str(e), "blank": True, "kb": 0})
@@ -211,8 +232,24 @@ def run(log: Logger, *, url: str, shots: list[dict]) -> int:
         (OUT / "report.json").write_text(json.dumps({"url": url, "shots": report}, indent=2))
         ok = sum(1 for r in report if not r.get("blank") and not r.get("error"))
         total = len(shots)
+        # Gate: dens=2 shots must bake MORE lights than dens=1 on the same track.
+        # Reading lightState().numLights alone is a false no-op (nearest-N cull).
+        dens_fail = False
+        by_track: dict[str, dict[float, int]] = {}
+        for r in report:
+            b = r.get("bakedLights")
+            if b is None or r.get("error"):
+                continue
+            by_track.setdefault(r["id"], {})[float(r["dens"])] = int(b)
+        for tid, dens_map in by_track.items():
+            if 1.0 in dens_map and 2.0 in dens_map and dens_map[2.0] <= dens_map[1.0]:
+                log.log(
+                    f"! gate: {tid} dens=2 bakedLights={dens_map[2.0]} "
+                    f"not > dens=1 bakedLights={dens_map[1.0]}"
+                )
+                dens_fail = True
         if status not in ("interrupted",):
-            status = "passed" if ok == total and total > 0 else "failed"
+            status = "passed" if ok == total and total > 0 and not dens_fail else "failed"
         STATUS_PATH.write_text(f"{status}\n{ok}/{total}\n")
         log.log(f"summary {ok}/{total} non-blank → {OUT}")
         log.terminal(status)

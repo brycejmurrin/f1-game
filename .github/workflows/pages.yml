@@ -39,6 +39,7 @@ jobs:
       # deploy touch cannot move circuit geometry. Without it, workflow_call
       # always fail-safed into a full 15-minute sweep on every Pages push.
       before_sha: ${{ github.event.before }}
+      advisory: false
 
   deploy:
     needs: ci

@@ -66,6 +66,42 @@ test("LAMP DENSITY densifies and thins the light set vs density 1", () => {
   assert.ok(sparse < base, `density 0.5 should thin lights (${sparse} vs ${base})`);
 });
 
+test("densify inserts into gaps shorter than 2× stride (the MCP monza no-op)", () => {
+  // applyLampDensity used `for (j = 1; j < floor(span/target))` which never
+  // fired when target < span < 2*target. Real circuits land many gaps there
+  // once dens doubles — chrome-devtools lamps saw dens=1 and dens=2 both bake
+  // 292 lights on Monza. floor((span-1)/target) is the insert count that
+  // actually subdivides those gaps.
+  const api = loadLightTune();
+  api.LT.lampDensity = 2;
+  api.LT.lampGapFill = 0;
+  const n = 40, total = 880; // ds=22 → dens1 stride nodes=1, dens2 stride=1
+  // Force a dens1-like spacing of 2 nodes with dens2 targetGap=1 so span=2
+  // sits in the old dead band (1 < 2 < 2).
+  const ds = total / n;
+  const track = {
+    n, total,
+    px: new Float64Array(n), py: new Float64Array(n), pz: new Float64Array(n),
+    rx: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n),
+    def: { theme: "green", id: "probe" },
+    lampPosts: [],
+  };
+  for (let i = 0; i < n; i++) {
+    track.px[i] = i; track.pz[i] = 0; track.py[i] = 0;
+    track.rx[i] = 1; track.rz[i] = 0; track.hw[i] = 7;
+  }
+  for (let k = 0; k < n; k += 2) {
+    track.lampPosts.push({ k, side: 1, kind: "halide", x: k, y: 13, z: 0 });
+  }
+  // Sanity: dens2 targetGap should be 1 with ds=22.
+  assert.equal(api.lampStrideNodes(ds), 1, `expected dens2 stride 1 at ds=${ds}`);
+  const lights = api.buildTrackLights(track);
+  const count = lights.length / 15;
+  // 20 posts at dens1 spacing + at least one synth per gap → >20.
+  assert.ok(count > track.lampPosts.length,
+    `dens=2 must insert into span=2/target=1 gaps (got ${count} lights from ${track.lampPosts.length} posts)`);
+});
+
 test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
   // Source-level: the mast pass queries "lamps", and LIGHTING_KINDS treats the
   // three names as one family (any rule ↔ any query).

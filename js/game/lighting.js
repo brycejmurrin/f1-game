@@ -325,8 +325,12 @@ function applyLampDensity(posts, track, height, onlyAlways) {
     const a = sorted[i], bN = sorted[(i + 1) % sorted.length];
     const span = (i === sorted.length - 1) ? (bN.k + n - a.k) : (bN.k - a.k);
     if (span <= targetGap) continue;
-    const steps = Math.floor(span / targetGap);
-    for (let j = 1; j < steps; j++) {
+    // Insert count: floor((span-1)/targetGap), NOT floor(span/targetGap)-0 via
+    // `j < steps` with steps=floor(span/targetGap). That old form needs
+    // span >= 2*targetGap before the first insert — so a gap of 3 nodes with
+    // dens=2 target 2 was a silent no-op (MCP: monza dens 1→2 both baked 292).
+    const nFill = Math.floor((span - 1) / targetGap);
+    for (let j = 1; j <= nFill; j++) {
       const k = (a.k + j * targetGap) % n;
       const side = (j % 2 === 0) ? a.side : -a.side;
       const hwk = track.hw[k] || 7;
@@ -796,5 +800,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
 }
 
   return { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights,
+           applyLampDensity, lampDensityFactor, lampStrideNodes, lampStrideM,
            setFrameLights, appendCarTailLights };
 })();

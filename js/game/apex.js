@@ -1475,15 +1475,19 @@ const api = {
   clearMeshes() { G.hideMeshes = {}; return G.hideMeshes; },
 
   // Combined debug snapshot: camera mode, frozen, dbgCam active, weather.
-  // Lighting snapshot — ambient (sky/ground), the scene sun colour, exposure, and
-  // how many point lights (floodlights) are active this frame. Handy for checking
-  // whether a night scene is correctly dark + lit by floodlights vs washed out.
+  // Lighting snapshot — ambient (sky/ground), the scene sun colour, exposure,
+  // how many point lights are ACTIVE this frame (after nearest-N cull), and how
+  // many are BAKED on the track (pre-cull). LAMP DENSITY changes bakedLights;
+  // LAMP COUNT / traffic changes numLights. MCP dens=1 vs dens=2 looked like a
+  // no-op when it only read numLights (always lampCull≈28 with AI on track).
   lightState: () => ({
     ambientSky: G.frame.ambientSky && G.frame.ambientSky.slice(),
     ambientGround: G.frame.ambientGround && G.frame.ambientGround.slice(),
     sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
     exposure: G.frame.exposure != null ? G.frame.exposure : 1,
     numLights: G.frame.lights ? G.frame.lights.length / 15 : 0,
+    bakedLights: G.track && G.track._lights ? G.track._lights.length / 15 : 0,
+    lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
     sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
     builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,
     floodEmit: G._lastFloodEmit,   // actual prop-emissive ramp value this frame

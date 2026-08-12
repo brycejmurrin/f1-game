@@ -360,15 +360,20 @@ azimuth twist). Returns `orbit()`'s framing plus the chosen `az` and curvature
 __apex.cinematic(0.22, { dist: 80 }); // outside-of-corner framing at 22%
 ```
 
-### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights}`
+### `lightState() → {ambientSky, ambientGround, sunColor, exposure, numLights, bakedLights, lampPosts}`
 Lighting snapshot for the current frame: hemisphere ambient (sky/ground), the
 **scene** sun colour (`frameSky.sunColor` may differ — the sky keeps a warm sun
-for dusk glow while the scene sun is dimmed at night), tone-map `exposure`, and
-how many point lights (floodlights) are active. Use it to confirm a night scene
-is actually dark + lit by floodlights rather than washed by a bright sun/ambient.
+for dusk glow while the scene sun is dimmed at night), tone-map `exposure`, how
+many point lights are **active this frame** after the nearest-N cull
+(`numLights`), how many are **baked** on the track before cull (`bakedLights`),
+and how many mast fixtures the scenery pass registered (`lampPosts`).
+**LAMP DENSITY** moves `bakedLights` (and poles on the next track load);
+**LAMP COUNT** / AI traffic moves `numLights`. Reading only `numLights` to
+check density is a false no-op — with a full grid it sticks near `lampCull`
+(def 28) even when density doubles the baked set.
 ```js
 __apex.race("singapore"); __apex.lightState();
-// → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:32, … }
+// → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:28, bakedLights:64, … }
 ```
 
 ### `lightTune(o?) → {id: value, …}`
