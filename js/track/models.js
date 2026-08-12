@@ -232,7 +232,13 @@ const TrackModels = (function () {
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
         const forward = [dx / length, dy / length, dz / length];
-        let right = [-forward[2], 0, forward[0]];
+        // right = [fz,0,-fx] (not [-fz,0,fx]) so the derived up = forward×right
+        // points +Y. With the old sign up.y = -(fx²+fz²) < 0 pointed DOWN, so the
+        // center offset (mid + up*height/2) sank the box below grade: the box
+        // spanned [mid.y-height, mid.y] — top flush with the ground, whole wall /
+        // cut-bank / banking buried and invisible. addBox's flip detection already
+        // tolerates the resulting basis handedness.
+        let right = [forward[2], 0, -forward[0]];
         const rl = Math.hypot(right[0], right[2]) || 1;
         right = [right[0] / rl, 0, right[2] / rl];
         const up = [

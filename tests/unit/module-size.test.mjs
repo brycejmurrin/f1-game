@@ -60,7 +60,13 @@ const CEILINGS = {
   // measurement — splitting them would put two halves of one framing rule in two
   // files. Bug-explaining growth at the site of the bug, not a feature.
   // game.js: concurrent camera/preview work + wheel-to-wheel racecraft.
-  "js/game.js": 7896,
+  // 7896 -> 7928 for the bug-hunt fix train: the sector-PB incident-invalid gate,
+  // the offT grace-sentinel two-sided decay, the ghost-recorder reset on a backward
+  // line crossing, the G.seasonRound accessor (quali round resolved as reliability
+  // does), the reliability `networked` build-relief opt, and the aero-flap livery
+  // finish thread — each landed with the comment recording the bug it fixes at its
+  // site, the one growth this ratchet tolerates.
+  "js/game.js": 7928,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,

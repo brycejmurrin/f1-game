@@ -653,7 +653,12 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
     gl.uniform1i(litU.uMatAlbedoTex, 10);
     gl.activeTexture(gl.TEXTURE11);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matAlbedoTex || matDummyArrTex);
+    // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
+    // array. A pack with albedo but no normal is documented-valid ("albedo alone
+    // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
+    // applyMaterialTexNormal as a tangent-space normal, warping shading on every
+    // grass/rock/wall layer instead of degrading cleanly.
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
     gl.uniform1i(litU.uMatNormalTex, 11);
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
     gl.uniform1f(litU.uMatTexMix, matAlbedoTex ? mix : 0);
@@ -928,7 +933,10 @@ const GLX = (function () {
     bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 1.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
-    gl.uniform1f(litU.uFogDensity, frame.fogDensity * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
+    // Default a missing fogDensity to 0 (fog off), like every sibling scalar here
+    // and both other backends — an omitted field is documented-valid and must not
+    // upload `undefined * mul = NaN`, which blacks out the whole scene.
+    gl.uniform1f(litU.uFogDensity, (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
     if (SHD.enabled) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, SHD.mapTex);

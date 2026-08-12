@@ -213,7 +213,11 @@ function create(G) {
     // career the round and the career's own seed are the identity of the session;
     // anywhere else the sim seed is, exactly as armReliability() resolves it.
     const inCareer = Career.inCareer();
-    const round = inCareer ? Career.round() : 0;
+    // Outside a career, resolve the round as armReliability() does (G.seasonRound:
+    // the season round in a championship, else the race counter) rather than a
+    // hardcoded 0 — otherwise a non-career season's execution draw is frozen
+    // identical for every round instead of varying circuit to circuit.
+    const round = inCareer ? Career.round() : G.seasonRound;
     const seed = inCareer ? Career.data().seed : G.simSeed();
     const real = drivenMap(driven);
 
