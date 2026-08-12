@@ -795,7 +795,7 @@ body.hud-hidden #hud-restore { display: block; }
   flex-direction: column;
   gap: 4px;
   max-height: 28svh;
-  overflow-y: auto;
+  overflow-y: auto; overscroll-behavior-y: contain;
 }
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
 #vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

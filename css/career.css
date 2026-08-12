@@ -81,12 +81,12 @@
    layout. The garage lost five category buttons off the bottom of its sheet
    exactly that way. Only what is true WHEN THE PANES SPLIT lives here. */
 #cr-inner[data-pair="on"] #cr-left {
-  overflow-y: auto;
+  overflow-y: auto; overscroll-behavior-y: contain;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
   padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
 }
 #cr-inner[data-pair="on"] #cr-right {
-  overflow-y: auto;
+  overflow-y: auto; overscroll-behavior-y: contain;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
 }
 /* The action bar sits under the left column; border-right continues the column
