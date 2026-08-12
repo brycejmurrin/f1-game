@@ -188,6 +188,53 @@ rounding-error finding that happened to be forty circuits. The lesson is the sam
 one as the survey's: the number is a pointer, and the diagnosis is always a
 measurement of the live box.
 
+## A third family: a threshold compared in the wrong space, and the numbers behind it
+
+`--pair-at` was declared in the sheet's own units — the space every `@container
+sheet` breakpoint two rules away evaluates in — and compared by JS against
+`getBoundingClientRect`, which is VISUAL px. The two answers drift apart by
+exactly one zoom factor, in opposite directions as UI SIZE moves, and neither
+branch is wrong on its own. MEASURED on `#select`, landscape iPhone at 80 %: the
+sheet is 600 visual px and 750 of its own, so the container query dropped the
+circuit list's height cap (750 > 619) while `data-pair` kept the STACKED layout
+(600 < 620) — a list with no cap inside a layout that assumes one, 1717px of rows
+in a 226px body. Fixed by dividing by `currentCSSZoom`, which `classifyDensity`
+already did.
+
+**And then every threshold downstream of it had to be re-derived, because they
+were all set while the comparison was wrong.** Three, each with the measurement:
+
+| threshold | was | now | why |
+|---|---|---|---|
+| garage `--compact-at` | 380 (the shared default) | **480** | the garage carries ~320 own units of chrome before a part appears; under 480 the list gets under three rows. At 380 a portrait phone at the SHIPPED DEFAULT classified normal and showed 1.5 cards; at 480 it shows 3.1 |
+| pause 2-column | 420 | **340** | a `.pm-col` needs ~150 own units. At the default size a portrait phone sat 57 units short of a split it could afford — one column, 2.1 screens of scroll |
+| pause 3-column | 620 | **490** | same 150-unit column. Landscape at 130 % went 4.2 → 3.2 screens |
+
+The pause numbers came from forcing extra columns and counting every button:
+
+    column width   wrapped    clipped    scroll
+       318 (1 col)    0/13         0     2.1 screens
+       167 (3 col)    4/13         0     3.2
+       153 (2 col)    8/13         0     1.6
+       111 (2 col)   11/13         0     2.2
+        93 (2 col)   12/13         4     2.9
+
+Two lessons in that table. **Doubling the columns never halves the scroll** — a
+wrapped button is twice as tall, so the arrangement gives back most of what it
+wins; the honest gain is about a quarter. And **below ~110 units the labels stop
+wrapping and start being CUT**, which is strictly worse than scrolling: a
+settings button reads "RESOLUTION: AUTO" and the half that gets cut is the value.
+That is why the `nowrap` + ellipsis rule had to be separated from the column
+count when the count came down — they had ridden in the same block, safe only
+while three columns implied ~190 units each.
+
+**The general point.** A threshold is a claim about how much room a THING needs,
+and it is only checkable in the units that thing is laid out in. Every number in
+the table above was wrong in the same direction — too high — because each was
+chosen against a viewport measurement while the content lived in a zoomed space.
+None of them produced a clipped element, so none of them ever appeared in a
+survey.
+
 ## The honest counter-argument
 
 Nine queries is a small number, and eight of them are not currently causing a
