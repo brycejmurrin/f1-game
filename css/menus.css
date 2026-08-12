@@ -114,7 +114,7 @@
    label competing with CAREER. Empty (and therefore zero-height) until a save
    exists, so a first-time title screen is exactly as it was. */
 .mb-sub {
-  font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.08em;
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
@@ -227,7 +227,7 @@ body { --compact-at: 600px; }
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
   :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-  :where(body[data-density="compact"]) .mb-sub { font-size: 12px; }
+  :where(body[data-density="compact"]) .mb-sub { font-size: var(--fs-micro); }
   /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
      back out of the gutter rather than out of the type.
      IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
@@ -923,12 +923,12 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   :where(.sheet[data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
   /* Five chips in a third of the sheet want three across, not five. */
   :where(.sheet[data-density="compact"]) #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  /* RACE SETTINGS is seen before every single race, and its labels were the
-     smallest type in the app at 9px — under the 13px --label floor by a third.
-     The chips are also the thing you AIM at here, so 11px with 5px of padding
-     was a small target as well as small text. */
+  /* RACE SETTINGS is seen before every single race, and its labels used to be
+     the smallest type in the app at 9px — under the --label floor by a third.
+     The chips are also the thing you AIM at here, so undersized type with thin
+     padding was a small target as well as small text. */
   :where(.sheet[data-density="compact"]) #race-settings .sel-chip { font-size: 13px; padding: 7px 9px; letter-spacing: 0; }
-  :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: 12px; margin-bottom: 3px; }
+  :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
   :where(.sheet[data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
 }
 #race-settings .sel-chip {
@@ -1062,5 +1062,5 @@ body:not(.desktop) .sur-rnd,
 body:not(.desktop) .sur-country { font-size: 12px; }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: 12px; }
-body:not(.desktop) .mb-sub { font-size: 12px; }
+body:not(.desktop) .mb-sub { font-size: var(--fs-micro); }
 } /* @layer components */

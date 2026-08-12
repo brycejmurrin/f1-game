@@ -221,7 +221,7 @@
      max(), so a control never SHRINKS at a large scale either: at 1.5 the 24px
      branch wins and it paints 36. */
   --tap-min: max(24px, calc(24px / var(--ui-scale)));
-  --label: 12px;    /* section label type size */
+  --label: 14px;    /* section label type size — clears 12px visual at 90% zoom */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —
      8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
@@ -230,8 +230,12 @@
      One token instead: uppercase micro-labels are the smallest type this UI
      has, and this is how big they are. The in-race HUD is deliberately NOT on
      this scale (see css/hud.css) — its labels are glanced at, not read, and
-     they are sized to boxes that have to clear the driving controls. */
-  --fs-micro: 12px;
+     they are sized to boxes that have to clear the driving controls.
+     2026-08-12 90% UI-scale floor: .sheet zoom ≈0.9, so painted type is
+     fs*0.9. Visual floor is 12px → CSS inside zoomed sheets must be ≥14
+     (ceil(12/0.9)). Micro/body rungs sit at that floor; higher rungs step up
+     so hierarchy survives. */
+  --fs-micro: 14px;
   /* ---- TYPE SCALE — seven steps, menus/HUD-adjacent body text only ----
      No type system existed: 294 raw `font-size: Npx` declarations across the
      eight menu stylesheets, measured by counting every one of them, sorted:
@@ -240,24 +244,24 @@
      Below ~22px the values are a near-continuous ramp, not the clean gaps the
      radius tokens had — so each step below is anchored on whichever value is
      ALREADY most common in its band, same rule the radius tokens used, and a
-     few adjacent sizes (11px into --fs-2, 15px into --fs-5) move by a single
-     pixel onto the nearest step. That is a deliberate, logged consolidation
-     each time a file migrates onto these — never a silent one.
+     few adjacent sizes move by a single pixel onto the nearest step. That is a
+     deliberate, logged consolidation each time a file migrates onto these —
+     never a silent one.
      Above ~22px every remaining size (23-68px) is a ONE-OFF: a HUD digit
      readout or a hero title, not a repeated body size. Those stay off this
      scale entirely, the same exclusion css/hud.css already documents above.
-       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (12px)
-       --fs-2  body base — the single most common size      (13px; was 12)
-       --fs-3  body emphasis / secondary label               (14px; was 13)
-       --fs-4  control label / subhead                       (15px; was 14)
-       --fs-5  larger subhead / button text                  (16px)
+       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (14px)
+       --fs-2  body base — the single most common size      (15px; was 13)
+       --fs-3  body emphasis / secondary label               (16px; was 14)
+       --fs-4  control label / subhead                       (17px; was 15)
+       --fs-5  larger subhead / button text                  (18px; was 16)
        --fs-6  section heading                                (20px)
        --fs-7  large heading — the ceiling of this scale       (22px)
      2026-08-12 readability pass (MCP survey × TinyFish research): the phone-
      first rule in docs/research/UI-DESIGN-PRINCIPLES.md says the smallest rung
      must stay legible at arm's length under UI SIZE zoom. Raising micro/body
-     one step and the UI SIZE floor to 90% keeps control labels ≥~12px visual
-     at the low end of the slider without redesigning every screen.
+     to ≥14px CSS keeps painted type ≥12px visual at the 90% UI SIZE floor
+     without redesigning every screen.
      Migrate ONE FILE PER COMMIT with a before/after font-size dump, per
      docs/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
      is only acceptable when that dump says so on purpose.
@@ -269,10 +273,10 @@
      first real consumer, not pre-declared here.
      --fs-1/--fs-3/--fs-4 joined this list with css/data.css's migration. */
   --fs-1: var(--fs-micro);
-  --fs-2: 13px;
-  --fs-3: 14px;
-  --fs-4: 15px;
-  --fs-5: 16px;
+  --fs-2: 15px;
+  --fs-3: 16px;
+  --fs-4: 17px;
+  --fs-5: 18px;
   --fs-6: 20px;
   /* ---- CORNER RADIUS — four steps, plus a pill ----
      These tokens existed and had three users. Everything else hard-coded its
@@ -401,7 +405,8 @@ body:not(.desktop) {
   --tap: 52px;
   --chip-h: 46px;
   --tap-sm: 36px;
-  --label: 13px;
+  /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */
+  --label: 14px;
 }
 
 /* --ui-scale — HOW BIG THE UI IS, as one number, consumed as a `zoom` by the
