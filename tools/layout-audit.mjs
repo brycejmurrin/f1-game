@@ -334,6 +334,55 @@ const SCREENS = [
       await p.waitForFunction(() => !document.querySelector("#camtune").hidden, null, { timeout: 15000 });
       await p.waitForTimeout(400); } },
 
+  // ---- THE LIGHTING TUNER WHILE FLYING, a DIFFERENT LAYOUT, not a mood ----
+  //
+  // The panel changes shape in FREE CAMERA and nothing here ever opened it. In
+  // that state `--dock-w` drops from 560 to 300 so two thumbsticks and a
+  // climb/dive column have somewhere to live, TIME and WEATHER stand down, and
+  // the panel abandons its two-column rail for a single column. That is three
+  // layout branches the docked cells cannot reach.
+  //
+  // THE LIGHTING TUNER ONLY, and that is a fact about the app rather than a gap
+  // here. `#pc-toggle` is the sole way into photo mode and it lives in this
+  // panel; `closeLightTuner` (js/game/tuner.js) calls `exitPhotoMode()` on the
+  // way out; and the camera tuner is opened from pause SETTINGS, which the
+  // lighting tuner hides while it is open. So `#camtune-inner` under
+  // `body.photo-mode` is unreachable, and a cell for it measures nothing — which
+  // is precisely what it did when this was written for both: it skipped, every
+  // time, because the class never arrived.
+  //
+  // What it cost: SEVEN rules implementing exactly that were written with `body`
+  // as a DESCENDANT of the panel (`#lighting-inner … body.photo-mode …`), which
+  // can never match. All seven were inert for months. The panel kept its
+  // 210-unit furniture column inside a 300-unit dock, leaving the sliders 76,
+  // and "KEY LIGHT (SUN)" set one word per line with its explanation sliced by
+  // the panel edge. 140 tuner cells scored 0 findings the whole time, because
+  // every one of them measured the panel docked.
+  //
+  // Toggled in-page rather than with p.click: the game loop is running here (the
+  // free camera is the point), and Playwright's actionability checks against a
+  // rendering SwiftShader page routinely outlast the 12s cell budget — the same
+  // trap the skip counting documents.
+  { id: "lightingtunerfly", name: "Lighting tuner — free camera", root: "#lighting",
+    open: async (p) => {
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
+      await p.waitForTimeout(200);
+      await p.evaluate(() => document.getElementById("pm-settings")?.click());
+      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 15000 });
+      await p.waitForTimeout(250);
+      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await p.waitForFunction(() => !document.querySelector("#lighting").hidden, null, { polling: 100, timeout: 15000 });
+      await p.waitForTimeout(400);
+      // The panel's own FREE CAMERA button, which is what a player presses.
+      await p.evaluate(() => document.getElementById("pc-toggle")?.click());
+      await p.waitForFunction(() => document.body.classList.contains("photo-mode"),
+        null, { polling: 100, timeout: 15000 });
+      await p.waitForTimeout(500);
+    } },
+
   // ---- the sub-views the first pass documented as gaps and did not measure ----
 
   // The data hub's other four tabs. SCHEDULE and TELEMETRY were already covered;
