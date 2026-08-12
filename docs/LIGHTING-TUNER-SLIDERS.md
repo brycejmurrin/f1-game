@@ -35,6 +35,38 @@ reload, and why RESET is per-condition rather than global.
   WGX backends are excluded for the same reason they are deferred.
 - **preset** — ✓ when shipped presets override this knob for some condition.
 
+## Every shipped value is reachable on its own slider
+
+A knob renders as `<input type="range" min step>`, so the thumb can only land
+on `min + k*step`. A shipped preset value off that grid cannot be represented:
+the readout prints the true value while the thumb snaps to a neighbouring
+notch. `fmtTune` derives its decimals from the step, so both were already
+printing two decimals — the mismatch was invisible in the text.
+
+It bites harder than a cosmetic mismatch, because `set()` in
+`js/game/light-store.js` stores a player override whenever the incoming value
+differs from `fallback(id)`, and `fallback` includes the shipped preset for the
+current condition. With `keyMul` shipped at 0.85 against a 0.02 grid the slider
+can only emit 0.84 or 0.86, so the first nudge persisted a value the player
+never chose and flipped the profile to "(1 tuned)" — and 0.85 became
+unreachable through the UI, recoverable only by RESET.
+
+MEASURED before the fix: **481 of the 1,921 shipped values (25%), across 30
+knobs**, plus two `TUNE_DEFS` defaults that were off their own slider's grid
+(`godrayLowBoost` 0.55, `shadowStr` 1.15). The 27 worst knobs were all step
+0.02 carrying values on odd hundredths — every one exactly half a step off.
+
+The fix refined `step` to 0.01 on the 31 affected knobs rather than rounding
+the presets. 0.01 divides the old 0.02 and 0.05 steps, so every previously
+reachable value stays reachable, and **no shipped value changed** — the baked
+look was tuned by eye and rounding 481 of its values to fit the widget would
+have edited the thing the widget is meant to display. Guarded by
+`tests/unit/light-grid.test.mjs`.
+
+Note the grid test must be done in integer space: `(0.06 - 0) / 0.02` is
+`2.9999999999999996`, so a float `% 1` check calls 223 perfectly on-grid values
+off-grid.
+
 ---
 
 ## SUN & MOON  (12)

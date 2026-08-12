@@ -37,10 +37,24 @@ const W = 320, H = 180, SW = 160, SH = 90;
 
 // Conditions chosen to exercise different consumers. Monza has night:false, so
 // a night probe needs a track whose def allows it.
+//
+// THE CONDITION LIST IS PART OF THE MEASUREMENT, NOT A SAMPLING CHOICE. A knob
+// whose consumer sits behind a weather branch this list never enters is scored
+// "inert" however long the sweep runs — a false negative that reads exactly
+// like a dead slider. The first three conditions here missed two real knobs
+// that way: js/game/atmosphere.js gates `overcastFogMul` behind
+// `raceWeather === "overcast"` and `fogWxMul` behind `raceWeather === "fog"`,
+// and neither weather was reachable from dry/wet alone. Both are knobs that
+// were separately found broken (missing from APPLY_RACE_IDS) — so the sweep
+// would have cleared them twice over.
+// Before adding a knob to a "dead" list, check that some condition here opens
+// its gate; `G.raceWeather` accepts dry | wet | rain | overcast | fog.
 const CONDS = {
-  "day-dry":   { track: "monaco",    tod: "day",   wx: "dry",  s: 0.16 },
-  "night-dry": { track: "vegas",     tod: "night", wx: "dry",  s: 0.25 },
-  "dusk-wet":  { track: "singapore", tod: "dusk",  wx: "wet",  s: 0.30 },
+  "day-dry":      { track: "monaco",    tod: "day",   wx: "dry",      s: 0.16 },
+  "night-dry":    { track: "vegas",     tod: "night", wx: "dry",      s: 0.25 },
+  "dusk-wet":     { track: "singapore", tod: "dusk",  wx: "wet",      s: 0.30 },
+  "day-overcast": { track: "monaco",    tod: "day",   wx: "overcast", s: 0.16 },
+  "day-fog":      { track: "monaco",    tod: "day",   wx: "fog",      s: 0.16 },
 };
 
 const arg = (k, d) => {
