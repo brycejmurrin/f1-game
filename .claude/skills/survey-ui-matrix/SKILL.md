@@ -37,7 +37,7 @@ await new Promise(r => setTimeout(r, 500));         // 3. let layout settle
 
 1. **`headless(true)` first.** The 3D scene starves the compositor; every wait and
    every capture is an order of magnitude slower without it.
-2. **Hide `#game` before any screenshot.** `docs/research/UI-SCALE-AND-ZOOM.md`
+2. **Hide `#game` before any screenshot.** `docs/archive/research/UI-SCALE-AND-ZOOM.md`
    records MCP captures of this page coming back with the left 400px solid black
    and concludes "measure with the MCP, capture with Playwright". **That conclusion
    is too broad** — re-measured 2026-08-08, MCP captures are correct once the WebGL

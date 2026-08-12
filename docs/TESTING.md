@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 69 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 71 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -131,7 +131,7 @@ budget ran out, never why.**
 M6 cost four wrong mechanisms — a hanging `act()`, a slow prediction,
 arithmetic in an un-timeouted `evaluate`, rAF starvation — and every one was a
 theory about the WAIT. The answer was in the code being waited on:
-`skids.stamp()` is called from `render()` (`js/game.js:6064`), the stint was
+`skids.stamp()` is called from `render()` in js/game.js, the stint was
 driven through `act()` which never presents a frame, and 120 steps of full lock
 crashed the car below both stamp gates before the wait even began.
 
@@ -414,7 +414,7 @@ Three edges that bite when converting a spec:
   it wanted >0.7. The reset now calls `freeze(false)` and `camera("chase")`,
   which clears `dbgCam` and restores the default mode in one call.
 - **Physics keeps running between round-trips.** `headless(true)` only skips
-  RENDERING (`js/game/apex.js:1513`), so a test that sets a value in one
+  RENDERING (`js/game/apex.js` `headless()`), so a test that sets a value in one
   `evaluate` and reads it in the next is racing the game loop. `setSpeed(55)`
   then `probe()` measured 54.498 against a `toBeCloseTo(…, 1)` tolerance of
   0.05 — latent until the box was loaded enough to stretch the gap. Sample both
@@ -690,6 +690,7 @@ what it covers.
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 109-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
 | `quick-validate.test.mjs` | the quick-probe validator tool itself |
 | `map-hooks.spec.js` | minimap polyline (`mapPts()`) + orientation + `trackBounds()` |

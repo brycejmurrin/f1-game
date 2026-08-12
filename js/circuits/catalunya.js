@@ -11,9 +11,17 @@
     // Upstream es-1991 already runs clockwise, matching the racing direction
     // (Elf at T1 is a right-hander).
     reverse: false,
-    // The trace opens on the 700 m main straight; nudge the line along it so the
-    // grid sits short of the Turn 1 braking zone. Not GPS-calibrated.
-    startFrac: 0.03,
+    // The trace opens on the 700 m main straight, and its first vertex IS the
+    // start line — measured, not nudged.
+    // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
+    // Was 0.03. That already measured straight (mean |k| 0.00036 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.03,
     name: "CATALUNYA",
     gp: "Spanish GP",
     country: "Spain",
@@ -315,10 +323,12 @@
       // testing, and the masts are unusually TALL and slim — the vertical
       // punctuation on an otherwise horizontal, low-slung site. Real masts via
       // floodMast rather than a hand-rolled pole so they carry lamp heads.
+      // light:false — generic floodlights still own the night pools; these are
+      // accent towers, not a replacement lighting rig.
       for (const [s, side, gap] of [
         [0.030, -1, 24], [0.075, 1, 34], [0.245, -1, 30],
         [0.505, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
-      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
 
       // The paddock-club terraces: three low white pavilions stepping along the
       // hillside above Turn 1, each with a shaded roof deck. One 62 m block was

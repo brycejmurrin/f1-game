@@ -120,8 +120,14 @@ window.SheetShape = (function () {
        answering the same question in two different units.
        The ratio above needs no such division: it is h/w, and the zoom cancels. */
     const zoom = el.currentCSSZoom || 1;
-    classifyPair(el, w / zoom);
+    /* DENSITY BEFORE PAIR. Compact rules may raise `--pair-at` (career forces a
+       stack at 2000px) so the pair answer must be read AFTER `data-density` is
+       written — otherwise the first paint of a short sheet keeps the wide
+       threshold, stays `pair=on`, and clips the stacked content the compact
+       rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
+       sat ~39px past the sheet until this order flipped. */
     classifyDensity(el, h / zoom);
+    classifyPair(el, w / zoom);
   }
 
   let ro = null;
@@ -235,11 +241,27 @@ window.SheetShape = (function () {
     }
     scan();
     classifyBody();
-    // body's own box does not change when the viewport does (it is the
-    // viewport), so the ResizeObserver above never fires for it — a plain
-    // resize listener is the honest way to hear about it.
-    addEventListener("resize", classifyBody, { passive: true });
-    addEventListener("orientationchange", classifyBody, { passive: true });
+    /* `reclassify()`, NOT `classifyBody()` alone. body's own box does not
+       change when the viewport does (it is the viewport), so the
+       ResizeObserver above never fires for it; that half of this listener was
+       always right. But it left every INDIVIDUAL SHEET's
+       data-shape/data-pair/data-density resting on the ResizeObserver alone,
+       with no second path if that observer's delivery is ever delayed.
+
+       Belt-and-braces, not a proven fix for a specific incident — said plainly
+       so nobody cites this as more than it is. Chasing a slow reclassification
+       in tests/specs/ui-resize.spec.js (data-shape lagging the resized box by
+       seconds) traced to the render loop's own per-frame cost under SwiftShader
+       starving the main thread generally — timers and DOM events alike, not
+       ResizeObserver specifically — so switching this ONE listener to
+       `reclassify` did not close that gap; the real fix was stopping the render
+       loop during the test (see that file). What stays true regardless: a plain
+       `resize` event is a second, independent delivery path for the same
+       question, costs nothing on an event that fires rarely, and is the same
+       argument watchScale() already makes two functions up for the same class
+       of gap. Kept for that reason, not for the incident that prompted it. */
+    addEventListener("resize", reclassify, { passive: true });
+    addEventListener("orientationchange", reclassify, { passive: true });
     watchVisibility();
     watchScale();
     // A screen that builds its sheet later (the data hub) still gets measured.

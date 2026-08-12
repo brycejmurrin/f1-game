@@ -892,7 +892,7 @@ test.describe("Parts module — visual recipes", () => {
           const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
           const body = Car3D.build([0.7,0.05,0.05], [0.95,0.8,0.1],
             { noWheels: true, parts });
-          // PASS wheelStyle — buildWheel takes EIGHT arguments (car3d.js:586)
+          // PASS wheelStyle — buildWheel in js/car/car3d.js (eight arguments)
           // and this passed seven. Without it every option in the `wheels`
           // category rendered the default rim, so all 17 non-default rims —
           // spoked, dished, taped, mag_forged, aero_disc, works_rim and the 11
@@ -1237,7 +1237,7 @@ test.describe("Parts module — visual recipes", () => {
       const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
       // THE WHOLE CAR, WHEELS INCLUDED. This built with `noWheels: true`, and
       // five of the twenty-seven knobs below are wheel-side — tyres.shoulder
-      // and brakes.discFace reach only addWheel (js/car/car3d.js:474-477), and
+      // and brakes.discFace reach only addWheel in js/car/car3d.js, and
       // the three wheels.* knobs are rim geometry. A wheel knob cannot deform a
       // wheel-less mesh, so those five asserted something the helper made
       // impossible and the test could never pass. (Measured: noWheels 17964

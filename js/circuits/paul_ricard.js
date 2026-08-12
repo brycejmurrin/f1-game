@@ -12,9 +12,16 @@
     // RACE_DIRECTION_OVERRIDES (tests/specs/f1-track-accuracy.spec.js) orients the
     // reference the same way so the direction assertion still means something.
     reverse: true,
-    // The trace's first vertex opens the pit straight; the 1044 m run at
-    // source 0.52-0.70 is the Mistral, not the start. Not GPS-calibrated.
-    startFrac: 0.03,
+    // The trace's first vertex opens the pit straight and IS the start line; the
+    // 1044 m run at source 0.52-0.70 is the Mistral, not the start.
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured LEFT, matches the Verrerie left-right.
+    // Was 0.03, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.03,
     name: "PAUL RICARD",
     gp: "French GP",
     country: "France",

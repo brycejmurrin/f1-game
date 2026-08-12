@@ -14,7 +14,7 @@
 // THE LOAD-BEARING IDEA: only SAME-FACING coplanarity can fight.
 //
 // gl.enable(CULL_FACE) + cullFace(BACK) is on (js/render/glx.js, GL state setup) and
-// addBox reverses winding so the OUTWARD face survives (js/track/geom.js:70-82).
+// addBox reverses winding so the OUTWARD face survives (js/track/geom.js addBox).
 // So for an ANTI-parallel coplanar pair — a window pane's inner face against the
 // wall it sits on, a stacked mass section, an abutting terrace facade, a kerb on
 // terrain — exactly one face is ever rasterised, and it cannot fight. Gating on

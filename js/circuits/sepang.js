@@ -12,7 +12,14 @@
     // Sepang's two long straights are separated by the tight T15 hairpin; the
     // shorter of the pair is the pit straight, so the line goes there. Not
     // GPS-calibrated (no OpenF1 coverage for a circuit that left in 2017).
-    startFrac: 0.95,
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
+    // Was 0.95, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.95,
     name: "SEPANG",
     gp: "Malaysian GP",
     country: "Malaysia",

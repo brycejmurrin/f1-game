@@ -9,9 +9,16 @@
     classic: true,
     // Upstream pt-1972 already runs clockwise, matching the racing direction.
     reverse: false,
-    // The 602 m run at source 0.856-1.0 is the pit straight — Estoril's long
-    // one, famous for the slipstreaming drag to the line. Not GPS-calibrated.
-    startFrac: 0.96,
+    // The pit straight is Estoril's long one, famous for the slipstreaming drag
+    // to the line, and the trace's first vertex opens it.
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
+    // Was 0.96, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.96,
     name: "ESTORIL",
     gp: "Portuguese GP",
     country: "Portugal",

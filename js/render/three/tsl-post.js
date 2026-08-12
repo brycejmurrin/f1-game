@@ -10,7 +10,7 @@
  * HDR grade, PARAMETERISED Narkowicz ACES, colourGrade, lens flare, vignette,
  * dither + grain) and FXAA — constants lifted verbatim, line refs in comments.
  *
- * CALIBRATION INVARIANTS (tlx.js header + shaders/chunks.js:93-98):
+ * CALIBRATION INVARIANTS (tlx.js header + js/render/shaders/chunks.js):
  *   - NO sRGB encode anywhere: the composite writes ACES output straight to
  *     the 8-bit target, exactly like GLX. The tone-map is the PARAMETERISED
  *     Narkowicz fit (uAcesA..E) — NOT three's built-in Hill ACES, NOT any
@@ -21,7 +21,7 @@
  * UV CONVENTION: three's node system is top-left-origin on BOTH backends
  * (screenUV/screenCoordinate normalise WebGL's bottom-left fragcoord, and
  * texture nodes auto-flip render-target/depth reads on the GL backend — see
- * tsl-sky.js:26 + tsl-lit.js flipUV). The GLX post math is written in GL
+ * js/render/three/tsl-sky.js + tsl-lit.js flipUV). The GLX post math is written in GL
  * bottom-left vUV space (vUV.y<0.62 road gate, sunUV, haze plume, SSR streak
  * direction), so every pass anchors `vUV = (screenUV.x, 1-screenUV.y)` and
  * every texture fetch converts back through TL() — the GLSL math then ports
@@ -82,7 +82,7 @@
       return m;
     }
 
-    /* ── BRIGHT (BRIGHT_FS — post.js:27-46): quadratic soft knee ──────────── */
+    /* ── BRIGHT (BRIGHT_FS in js/render/shaders/post.js): quadratic soft knee ──────────── */
     const brightU = { threshold: uniform(0.75) };
     const bright = {
       U: brightU,
@@ -99,7 +99,7 @@
       })()),
     };
 
-    /* ── BLUR (BLUR_FS — post.js:49-64): 5-tap separable gaussian ─────────── */
+    /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
     function makeBlur() {
@@ -122,7 +122,7 @@
     const blurAO = makeBlur();
     const blurGR = makeBlur();
 
-    /* ── DOWN (DOWN_FS — post.js:70-118): 13-tap Jimenez + Karis ──────────── */
+    /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);
     const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
     const down = {
@@ -159,9 +159,9 @@
       })()),
     };
 
-    /* ── UP (UP_FS — post.js:123-142): 9-tap tent. Two materials: additive
+    /* ── UP (UP_FS in js/render/shaders/post.js): 9-tap tent. Two materials: additive
      *    (ONE,ONE) for the intermediate octaves, overwrite for the final into
-     *    level 0 (glx/post.js:565-578 — adding onto the sharp bright-pass
+     *    level 0 (glx/js/render/shaders/post.js — adding onto the sharp bright-pass
      *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. ── */
     const spread = uniform(1.0);
     function makeUp(additive) {
@@ -194,7 +194,7 @@
     const upAdd = makeUp(true);
     const upFinal = makeUp(false);
 
-    /* ── SSAO (SSAO_FS — post.js:149-237): view-space horizon AO + contact
+    /* ── SSAO (SSAO_FS in js/render/shaders/post.js): view-space horizon AO + contact
      *    shadows, half-res. Depth reconstruction through the game's
      *    GL-convention invProj (window depth d -> NDC z = d*2-1, exactly the
      *    GLSL — the shadow family already treats every manual matrix as GL
@@ -214,7 +214,7 @@
       const v = ssaoU.invProj.mul(c);
       return v.xyz.div(v.w);
     };
-    // 12-vector kernel, first 8 used (post.js:168-172, 190).
+    // 12-vector kernel, first 8 used (js/render/shaders/post.js, 190).
     const SSAO_K = [
       [0.0, 1.0], [0.5, 0.866], [0.866, 0.5], [1.0, 0.0],
       [0.866, -0.5], [0.5, -0.866], [0.0, -1.0], [-0.5, -0.866],
@@ -228,7 +228,7 @@
         const d = depthAt(vUV).toVar();
         If(d.lessThan(0.99999), () => {          // sky -> 1.0
           const P = vec3(ssaoViewPos(vUV)).toVar();
-          // NaN-guarded derivative normal (post.js:178-181) + an eye-facing
+          // NaN-guarded derivative normal js/render/shaders/post.js + an eye-facing
           // flip: dFdy's sign differs between the GL and WebGPU backends.
           const crN = cross(dFdx(P), dFdy(P)).toVar();
           const crL = length(crN).toVar();
@@ -250,7 +250,7 @@
             occ.addAssign(ndv.mul(range));
           }
           const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
-          // Contact shadows: short view-space march toward the sun (:206-235).
+          // Contact shadows: short view-space march toward the sun (SSAO_FS).
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
             const sh = float(1.0).toVar();
             Loop({ start: int(1), end: int(6), type: "int", condition: "<" }, ({ i }) => {
@@ -261,7 +261,7 @@
                 .or(quv.y.lessThan(0.0)).or(quv.y.greaterThan(1.0)), () => { Break(); });
               const B = ssaoViewPos(quv).toVar();
               const dz = B.z.sub(q.z).toVar();
-              // Coplanar-road false-occluder reject (post.js:213-227).
+              // Coplanar-road false-occluder reject js/render/shaders/post.js.
               const above = dot(N, B.sub(P));
               const aboveBias = float(0.05).add(max(P.z.negate().sub(6.0), 0.0).mul(0.01));
               If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(above.greaterThan(aboveBias)), () => {
@@ -278,7 +278,7 @@
       })()),
     };
 
-    /* ── GODRAY (GODRAY_FS — post.js:245-389): world-space 16-step march of
+    /* ── GODRAY (GODRAY_FS in js/render/shaders/post.js): world-space 16-step march of
      *    the SUN SHADOW MAP + nearest-12 lamp beam in-scatter with the mapped
      *    lamp's spot-shadow carve. Built only when the shadow subsystem is
      *    live — its depth textures are the samplers. ───────────────────────── */
@@ -319,14 +319,14 @@
         const w = grU.invVP.mul(c);
         return w.xyz.div(w.w);
       };
-      // 3-octave surface-family FBM (post.js:287) over the shared vnoise leaf.
+      // 3-octave surface-family FBM js/render/shaders/post.js over the shared vnoise leaf.
       const gCloudFBM = (pIn) => {
         const s1 = vnoise(pIn).mul(0.5);
         const s2 = vnoise(pIn.mul(2.03).add(1.7)).mul(0.25);
         const s3 = vnoise(pIn.mul(2.03 * 2.03).add(1.7 * 2.03 + 1.7)).mul(0.125);
         return s1.add(s2).add(s3);
       };
-      // Cloud cover at a world point (post.js:290-301) — same clouds that
+      // Cloud cover at a world point js/render/shaders/post.js — same clouds that
       // dapple the ground (lit's cloudShadow), same 0.15 grazing floor.
       const gCloud = Fn(([wpIn]) => {
         const wp = vec3(wpIn).toVar();
@@ -380,7 +380,7 @@
             });
             lit.mulAssign(gCloud(p).mul(0.62).oneMinus());   // SOFT crepuscular bands
             accum.addAssign(lit.mul(hSun).mul(trans));
-            // Lamp in-scatter: nearest-6 aimed beams (post.js:343-374).
+            // Lamp in-scatter: nearest-6 aimed beams js/render/shaders/post.js.
             If(grU.lampStr.greaterThan(0.0).and(td.lessThan(200.0)), () => {
               Loop({ start: int(0), end: int(6), type: "int", condition: "<" }, ({ i: li }) => {
                 If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
@@ -398,7 +398,7 @@
                   const cosL = max(dot(rd, Ld), 0.0);
                   const hgLd = float(1.36).sub(cosL.mul(1.2)).toVar();   // HG g=0.6; d >= 0.16
                   const hgL = float(1.0 - 0.36).div(hgLd.mul(sqrt(hgLd)));
-                  // Mapped-lamp spot shadow carve (post.js:359-371).
+                  // Mapped-lamp spot shadow carve js/render/shaders/post.js.
                   const lampLit = float(1.0).toVar();
                   if (SHD.lampTex) {
                     If(float(li).equal(grU.lampShadowIdx), () => {
@@ -422,7 +422,7 @@
           });
           accum.divAssign(16.0);
           lampAccum.mulAssign(grU.mist.mul(grU.lampStr).mul(2.0 / 16.0));
-          // Henyey-Greenstein forward lobe + isotropic floor (post.js:379-388).
+          // Henyey-Greenstein forward lobe + isotropic floor js/render/shaders/post.js.
           const cosT = max(dot(rd, grU.sunDir), 0.0);
           const g = clamp(grU.hgAniso, 0.0, 0.95).toVar();
           const hgD = g.mul(g).add(1.0).sub(g.mul(cosT).mul(2.0)).toVar();
@@ -433,7 +433,7 @@
       };
     }
 
-    /* ── COMPOSITE (COMPOSITE_FS — post.js:393-1010): the whole resolve ───── */
+    /* ── COMPOSITE (COMPOSITE_FS in js/render/shaders/post.js): the whole resolve ───── */
     const C = {
       aoTexel: uniform(new THREE.Vector2(0, 0)),
       bloomAmt: uniform(0.55), bloomKnee: uniform(0.5),
@@ -492,7 +492,7 @@
       const cp = C.invProj.mul(vec4(uvGl.mul(2.0).sub(1.0), d, 1.0));
       return cp.xyz.div(cp.w);
     };
-    // Scene sample carrying the CA radial split (caScene — post.js:469-474;
+    // Scene sample carrying the CA radial split (caScene in js/render/shaders/post.js;
     // the GLSL early-out is a pure optimisation: at uChromAb=0 the offset is
     // exactly zero, so the 3-fetch form is bit-identical).
     const caScene = (uvGl) => {
@@ -512,7 +512,7 @@
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const fragXY = vec2(screenCoordinate.xy).toVar();
 
-        // EXHAUST HEAT HAZE (post.js:572-591): UV-warp anchored above the
+        // EXHAUST HEAT HAZE js/render/shaders/post.js: UV-warp anchored above the
         // tailpipe; SKIPS car pixels (SSR alpha tag) so the body doesn't waver.
         const hazeUV = vec2(vUV).toVar();
         If(C.hazeStr.greaterThan(0.002), () => {
@@ -531,14 +531,14 @@
         const c = vec3(scn.rgb).toVar();
         const caDir = vec2(vUV.sub(0.5)).toVar();
 
-        // CHROMATIC ABERRATION (post.js:598-602) — stays in the hazeUV domain.
+        // CHROMATIC ABERRATION js/render/shaders/post.js — stays in the hazeUV domain.
         If(C.chromAb.greaterThan(0.001), () => {
           const caAmt = C.chromAb.mul(0.004).mul(dot(caDir, caDir));
           c.r.assign(sceneT.sample(TL(hazeUV.add(caDir.mul(caAmt)))).r);
           c.b.assign(sceneT.sample(TL(hazeUV.sub(caDir.mul(caAmt)))).b);
         });
 
-        // SPEED BLUR (post.js:606-614): radial smear; caScene carries CA so
+        // SPEED BLUR js/render/shaders/post.js: radial smear; caScene carries CA so
         // the two effects don't cancel — one UV domain.
         If(C.speedBlur.greaterThan(0.001), () => {
           const acc = vec3(c).toVar();
@@ -549,7 +549,7 @@
           c.assign(acc.div(5.0));
         });
 
-        // SHARPEN (post.js:618-624): unsharp mask, caScene domain.
+        // SHARPEN js/render/shaders/post.js: unsharp mask, caScene domain.
         If(C.sharpen.greaterThan(0.001), () => {
           const bl = caScene(vUV.add(vec2(C.reflTexel.x, 0.0)))
             .add(caScene(vUV.sub(vec2(C.reflTexel.x, 0.0))))
@@ -559,7 +559,7 @@
         });
 
         // AO: depth-aware 4-tap BILATERAL upsample of the half-res buffer
-        // (post.js:639-663) — taps across a silhouette lose their vote.
+        // js/render/shaders/post.js — taps across a silhouette lose their vote.
         const aoV = float(1.0).toVar();
         If(C.aoTexel.x.greaterThan(0.0), () => {
           const aoDc = depthAt(vUV).toVar();
@@ -589,7 +589,7 @@
         // Volumetric sun shafts: additive (black texture when disabled).
         c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
 
-        // ── Wet-road + car-paint screen-space reflection (post.js:668-852) ──
+        // ── Wet-road + car-paint screen-space reflection js/render/shaders/post.js ──
         const carPx = smoothstep(0.42, 0.55, scn.a).oneMinus().toVar();
         If(C.ssrOk.greaterThan(0.5)
           .and(C.reflect.greaterThan(0.001).or(carPx.greaterThan(0.3)))
@@ -636,7 +636,7 @@
             // into hit/miss patches. Car paint keeps its true normal.
             const Nr = select(carDomEarly, Nv, normalize(mix(Nv, upVSn, 0.85))).toVar();
             const R = reflect(V.negate(), Nr).toVar();
-            // Jittered fine march (post.js:722-759).
+            // Jittered fine march js/render/shaders/post.js.
             const ign = ignoise(fragXY).toVar();
             const pos = vec3(P).toVar();
             const prevPos = vec3(P).toVar();
@@ -694,7 +694,7 @@
                 Break();
               });
             });
-            // Vertical light-smear streak taps + contact hardening (:764-786).
+            // Vertical light-smear streak taps + contact hardening (COMPOSITE_FS).
             const hitCol = vec3(0.0).toVar();
             const carDom = carTerm.greaterThan(roadTerm);
             If(found.greaterThan(0.5), () => {
@@ -733,7 +733,7 @@
               fres.mul(0.45).add(0.50), fres.mul(0.42).add(0.55))).toVar();
             const gateSrc = select(carDom, C.carReflect, C.reflect);
             strength.mulAssign(min(gateSrc.div(0.20), 1.0));
-            // Soft fade below the hard 0.62 gate — no seam (post.js:836-843).
+            // Soft fade below the hard 0.62 gate — no seam js/render/shaders/post.js.
             strength.mulAssign(smoothstep(C.ssrTopUV.sub(0.06), C.ssrTopUV, vUV.y).oneMinus());
             // Road cap 0.94 -> 0.80, matching GLX: keep more of the reflective lit
             // base under a hit so hit and miss regions share the same wet look.
@@ -745,23 +745,23 @@
           });
         });
 
-        // Exposure before tone-mapping (post.js:855).
+        // Exposure before tone-mapping js/render/shaders/post.js.
         c.mulAssign(C.exposure);
 
-        // Bloom with the highlight-suppression knee, exposure-matched (:857-867).
+        // Bloom with the highlight-suppression knee, exposure-matched (COMPOSITE_FS).
         const bloomSample = vec3(bloomTexN.sample(TL(vUV)).rgb).toVar();
         const bloomMask = clamp(max(c.r, max(c.g, c.b)).sub(0.7), 0.0, 0.3)
           .div(0.3).mul(C.bloomKnee).oneMinus();
         c.addAssign(bloomSample.mul(C.bloomAmt).mul(bloomMask).mul(C.exposure));
 
-        // LENS DIRT veil (post.js:869-877): grime scatters the bright-pass.
+        // LENS DIRT veil js/render/shaders/post.js: grime scatters the bright-pass.
         const dirt = float(0.0).toVar();
         If(C.lensDirt.greaterThan(0.001), () => {
           dirt.assign(dirtT.sample(TL(vUV)).r);
           c.addAssign(bloomSample.mul(C.exposure).mul(dirt).mul(C.lensDirt).mul(2.2));
         });
 
-        // Screen-space sun shafts: 8 radial bright-pass taps (post.js:882-910).
+        // Screen-space sun shafts: 8 radial bright-pass taps js/render/shaders/post.js.
         If(C.sunShaft.greaterThan(0.0), () => {
           const toSun = C.sunUV.sub(vUV).toVar();
           const dist = length(toSun).toVar();
@@ -785,7 +785,7 @@
           });
         });
 
-        // Professional HDR grade (applyHdrGrade — post.js:477-530, 916),
+        // Professional HDR grade (applyHdrGrade in js/render/shaders/post.js, 916),
         // gated so all-neutral knobs skip the transcendentals entirely.
         If(C.hdrGradeOn.greaterThan(0.5), () => {
           const lift = vec3(C.lift).toVar();
@@ -800,15 +800,15 @@
           const w0z = smoothstep(-2.5, -0.5, z).mul(smoothstep(0.5, 2.5, z).oneMinus()).toVar();
           const w0w = smoothstep(0.0, 1.5, z).mul(smoothstep(3.0, 5.0, z).oneMinus()).toVar();
           const wWhite = smoothstep(2.5, 5.0, z).toVar();
-          // per-zone exposure gain (blacks x3, shadows x2 — post.js:511-517)
+          // per-zone exposure gain (blacks x3, shadows x2 in js/render/shaders/post.js)
           const stops = w0x.mul(C.tone0.x.mul(3.0)).add(w0y.mul(C.tone0.y.mul(2.0)))
             .add(w0z.mul(C.tone0.z)).add(w0w.mul(C.tone0.w))
             .add(wWhite.mul(C.tone1.x));
           c.mulAssign(exp2(clamp(stops, -4.0, 4.0)));
-          // additive low-end lift for BLACKS/SHADOWS (post.js:518-526)
+          // additive low-end lift for BLACKS/SHADOWS js/render/shaders/post.js
           c.addAssign(w0x.mul(C.tone0.x).mul(0.05).add(w0y.mul(C.tone0.y).mul(0.025)));
           c.assign(max(c, vec3(0.0)));
-          // toe/shoulder: monotonic power pivoted at middle grey (:492-500)
+          // toe/shoulder: monotonic power pivoted at middle grey (applyToeShoulder)
           const oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
           const exponent = select(oldY.lessThan(0.18),
             exp2(clamp(C.tone1.y, -1.0, 1.0)),
@@ -820,7 +820,7 @@
         // Filmic tone-map (parameterised Narkowicz ACES) + WHITE POINT knee.
         c.assign(acesTonemap(c.div(C.whitePoint)));
 
-        // colourGrade (post.js:536-569): broadcast gain, S-curve, contrast
+        // colourGrade js/render/shaders/post.js: broadcast gain, S-curve, contrast
         // gamma, vibrance, saturation, tint, split-tone, black lift.
         c.mulAssign(vec3(1.015, 1.008, 0.992));
         c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
@@ -837,7 +837,7 @@
         c.assign(mix(c, c.mul(toneTint), C.gradeStr));
         c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
 
-        // Lens flare (post.js:923-969): DEPTH-OCCLUDED procedural streaks +
+        // Lens flare js/render/shaders/post.js: DEPTH-OCCLUDED procedural streaks +
         // ghosts — fades when geometry covers the sun's screen point.
         const sunVis = smoothstep(0.9990, 0.9999, depthAt(C.sunUV)).toVar();
         const flare = vec3(0.0).toVar();
@@ -866,7 +866,7 @@
         });
         c.addAssign(flare);
 
-        // Vignette — aspect-corrected circular falloff (post.js:977-985).
+        // Vignette — aspect-corrected circular falloff js/render/shaders/post.js.
         const q = vec2(vUV.sub(0.5)).toVar();
         const vAspect = select(C.reflTexel.x.greaterThan(0.0),
           C.reflTexel.y.div(C.reflTexel.x), float(1.0)).toVar();
@@ -876,12 +876,12 @@
         const vig = smoothstep(0.95, min(C.vigSoft, 0.94), vr);
         c.mulAssign(mix(C.vignette, float(1.0), vig));
 
-        // Triangular-PDF LDR dither, golden-ratio time-stepped (post.js:989-997).
+        // Triangular-PDF LDR dither, golden-ratio time-stepped js/render/shaders/post.js.
         const dc = fragXY.add(mod(floor(C.grainTime.mul(60.0)), 64.0).mul(5.588238)).toVar();
         const d0n = ignoise(dc);
         const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
         c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
-        // FILM GRAIN: luminance-weighted animated noise (post.js:1000-1008).
+        // FILM GRAIN: luminance-weighted animated noise js/render/shaders/post.js.
         If(C.grain.greaterThan(0.001), () => {
           const gUV = vUV.add(vec2(fract(C.grainTime.mul(1.37)), fract(C.grainTime.mul(0.61))).mul(3.17));
           const gn = fract(sin(dot(gUV, vec2(93.9898, 47.233))).mul(61237.312)).sub(0.5);
@@ -892,7 +892,7 @@
       })()),
     };
 
-    /* ── FXAA (FXAA_FS — post.js:1016-1045): Lottes compact, LDR resolve.
+    /* ── FXAA (FXAA_FS in js/render/shaders/post.js): Lottes compact, LDR resolve.
      *    The flat-area early-out (lMax-lMin < max(0.04, lMax*0.125)) keeps
      *    flat regions pixel-exact — constants verbatim. ─────────────────────── */
     const fxaaTex = texture(ctx.blackTex);

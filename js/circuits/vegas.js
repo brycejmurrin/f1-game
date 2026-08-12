@@ -7,7 +7,14 @@
   {
     id: "vegas",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.8575, // GPS-derived (OpenF1 2025, conf=0.297)
+    // Start/finish line. Snapped to the real one: coord 0.3 m off centreline, 1 node before vertex 0 (timing line).
+    // Was 0.8575, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.9899,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.8575,
     name: "LAS VEGAS",
     gp: "Las Vegas GP",
     country: "USA",
@@ -36,7 +43,7 @@
       { t: 20, l: 200 }, { t: -90, l: 90 }, { t: 60, l: 60 }, { t: -70, l: 70 }, { t: -65, l: 120 },
     ],
     // Elevations are authored in SOURCE space. Source 0.2075 maps to racing
-    // s=0.35 with startFrac 0.8575: a shallow Sphere-sector underpass dip,
+    // s≈0.218 with startFrac 0.9899: a shallow Sphere-sector underpass dip,
     // while the Strip remains essentially level as in the circuit brief.
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
     // The Strip and Koval are enormous multi-lane boulevards; the Sphere-sector

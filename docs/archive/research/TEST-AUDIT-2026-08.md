@@ -6,7 +6,7 @@ feasibility skeptic). This is an EXECUTION PLAN feeding the W2 restructure
 (tests/ split + change-aware CI); items are worked off against it and it
 archives when spent. The per-file verdict appendix is the evidence base; the
 uncompressed result (verdicts with weakSpots and overlap fields the table
-drops) is archived at [`archive/research/raw/2026-08-test-audit.json`](../archive/research/raw/2026-08-test-audit.json).
+drops) is archived at [`archive/research/raw/2026-08-test-audit.json`](raw/2026-08-test-audit.json).
 
 ---
 

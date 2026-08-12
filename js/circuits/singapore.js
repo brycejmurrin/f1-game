@@ -7,7 +7,14 @@
   {
     id: "singapore",
     name: "SINGAPORE",
-    startFrac: 0.5075, // GPS-derived (OpenF1 2025, conf=0.566)
+    // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
+    // Was 0.5075, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.5075,
     // Marina Bay races ANTI-CLOCKWISE — Pirelli ("cars are driving
     // anti-clockwise"), f1-fansite ("Driving direction: Counterclockwise"),
     // and Turn 1 is a sharp left. The imported centreline runs the other way:
@@ -384,16 +391,34 @@
           // Lateral stagger: each tree is 17 m apart along the row
           const latOff = (idx - (rowB ? 2 : 2.5)) * 17;
           const depOff = rowB ? (idx % 2) * 10 : 0;
-          const a    = anchor(k, 1, rowDist + depOff);
-          const c    = vadd(a.c, a.r, latOff);
+          // The stagger goes through the anchor's own `dist`, NOT along a.r
+          // afterwards. `dist` is the lateral axis, so the physical spot is
+          // unchanged — but a.r is a RAW BASIS VECTOR, which transformSceneryApi
+          // does not remap, and a reversed lap negates it. Sliding along it by
+          // hand therefore spread these eleven trees the wrong way round the
+          // moment singapore gained `reverse: true`, putting them on ground
+          // their shared anchor never sampled — up to 60 m in the air, and the
+          // bulk of the circuit's float-audit count. Routing through `dist` also
+          // gives each tree its own ground sample instead of all eleven
+          // inheriting one anchor's Y across an 85 m spread.
+          const a    = anchor(k, 1, rowDist + depOff + latOff);
+          const c    = a.c;
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
-          // Trunk (dark green)
-          addCyl(out, vadd(c, a.u, h * 0.5), 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
-          // Main canopy cap — vivid NEON colour
-          addCone(out, vadd(c, a.u, h + 3), capR, 8, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]);
-          // Upper secondary glow
-          addCone(out, vadd(c, a.u, h + 9), capR * 0.55, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]);
+          // Trunk (dark green). addCyl/addCone are BASE-anchored (geom.js:196 —
+          // it builds from `c` up to `c + u*h`), so the old `c + u*h*0.5` put
+          // the trunk's FOOT half its own height in the air and carried the
+          // canopies up with it. Forward, that was invisible: the trees spread
+          // over the CBD façade mass, which the float audit accepted as support.
+          // Reversed they spread the other way, over open ground, and eleven
+          // trees stood 14-27 m up. Anchor the foot at `c`.
+          addCyl(out, c, 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
+          // Main canopy cap — vivid NEON colour. Base sits 2 m BELOW the trunk
+          // top so it overlaps rather than hovers; a cone base exactly at `h`
+          // would leave a hairline the grounding walk can miss.
+          addCone(out, vadd(c, a.u, h - 2), capR, 8, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]);
+          // Upper secondary glow, overlapping the cap it sits in.
+          addCone(out, vadd(c, a.u, h + 4), capR * 0.55, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]);
         }
       }
 
@@ -761,6 +786,8 @@
       // ===================================================================
       // FLOODLIGHT MASTS — one intentional warm-white ring. Shared generic
       // floodlights are excluded above, avoiding duplicate poles and pools.
+      // floodMastRing registers lens posts (default light:true) so night pools
+      // anchor to these fixtures instead of the empty-list synthetic fallback.
       // ===================================================================
       // ~1600 projectors on masts down both kerbs is the defining look of the
       // Singapore night race; a 75 m spacing left long unlit-looking gaps.

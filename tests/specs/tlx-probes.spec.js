@@ -16,56 +16,18 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/* STOP THE RENDER LOOP BEFORE SCREENSHOTTING THE CANVAS.
-   `park()` freezes PHYSICS, not rendering — the game keeps redrawing every rAF
-   tick, so a `.screenshot()` issued while that is running has to queue behind an
-   endless SwiftShader redraw instead of reading a quiet compositor.
-   tests/specs/smoke.spec.js:35-56 measured the cost of exactly this mistake: 88-96 s
-   solo, 154-214 s under a two-worker suite, and 29-32 s once the loop is
-   stopped first. `headless(true)` (js/game/apex.js) halts render() while the
-   compositor keeps the LAST drawn frame, which is what tests/helpers/track-helpers.js
-   already relies on for its stable captures.
-   This file had three canvas screenshots and none of them did it. The
-   corroboration is in its own numbers: M2, the only test here whose cost is
-   dominated by a screenshot, measured 92.6 s solo — inside smoke's recorded
-   88-96 s band — against 125.8 s in a mixed batch, while the non-screenshot
-   tests around it barely moved between the two runs.
-   Present a real frame BEFORE stopping the loop (smoke found 100 ms is not
-   reliably enough on a heavy circuit; every caller below has already waited
-   longer than that or waited on a readiness flag). */
+/* Call headless(true) before canvas screenshots — park() freezes physics, not
+   rendering. smoke.spec.js measured 88–96 s vs 29–32 s once the loop stops.
+   Present a frame first (wait on readiness), then headless(true). */
 async function stopRendering(page) {
   await page.evaluate(() => window.__apex.headless(true));
   await page.waitForTimeout(50);
 }
 
 test.describe("TLX — boot", () => {
-  /* THE WHOLE FILE HAS NO MARGIN, so the budget is raised for all of it.
-     MEASURED on this box, solo, one process: the thirteen tests that pass run
-     10.6 s … 92.6 s against a 120 s budget — the slowest is at 77 % and the
-     median around 65 s. Nothing here is idle; a TLX boot loads three.js, builds
-     a circuit and renders under SwiftShader, and that cost is the test.
-
-     Two of the fifteen had NEVER passed — M6 skid (130.3 s, then 140.9 s) and
-     M9 env (130.5 s, then 152.8 s), both `Test timeout of 120000ms exceeded`
-     with no assertion ever reached. Raising the budget first and alone was what
-     separated them, because they turned out to have DIFFERENT faults that
-     presented identically:
-
-       M9 env  — a real wait on a real condition, starved by Playwright's
-                 default `polling: 'raf'` under SwiftShader. Passing
-                 { polling: 100 } fixed it: 72 s.
-       M6 skid — waiting on something that could never happen. `skids.stamp()`
-                 lives in render(), and the stint was driven through act(),
-                 which never presents a frame; the same stint also crashed the
-                 car into the barrier long before the wait began. Rewritten to
-                 stop inside the measured slide window (see its own comment):
-                 49 s.
-
-     Both now pass with room. The lesson worth keeping is the one that cost four
-     wrong theories: a timeout tells you the budget ran out, never why — and on
-     a rendering page a declared inner timeout does not even bound its own wait
-     (docs/TESTING.md). Reach for an instrument, not a fifth mechanism;
-     tests/manual/skid-probe.spec.js is the one that settled M6. */
+  /* Budget raised: TLX boot + SwiftShader render is slow. M6/M9 failures were
+     test defects (rAF polling starvation; skid marks need render(), not act()).
+     See docs/TESTING.md and tests/manual/skid-probe.spec.js. */
   test.slow();
 
   test("boots with the TLX backend installed on the GLX object", async ({ page }) => {
@@ -246,31 +208,9 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     // A SLIDING CAR, HELD SLIDING — not a crashed one.
-    //
-    // This test asserted something unreachable for its whole life, and the
-    // reason is two mistakes stacked. Measured with tests/manual/skid-probe:
-    //
-    //   1. Marks are NOT "recorded in the physics step". `skids.stamp()` is
-    //      called from js/game.js:6064, inside `render(dt)` — so a stint driven
-    //      entirely through `act()`, which steps physics without ever
-    //      presenting a frame, cannot lay a single mark however hard it slides.
-    //   2. 120 steps of full lock is not a slide, it is a crash. Stepping the
-    //      old stint one frame at a time: the stamp condition
-    //      (|slip| > 8.59 deg and speed > 10) holds over steps 24..37 — slip
-    //      peaking at 12.3 deg with the car still at 56 m/s — and then the car
-    //      reaches the barrier at x 13.9, slip snaps to exactly 0, and it
-    //      decelerates into rescue. By step 120 it sits at 2.5 m/s with zero
-    //      slip: below BOTH gates, permanently.
-    //
-    // So the wait could never come true, and every investigation that treated
-    // the timeout as a symptom of a slow wait was looking at the wrong end of
-    // the pipeline. (`GLX.drawSkidBatch` returns early on vertCount 0, which is
-    // why "no marks laid" and "never called" read identically from outside.)
-    //
-    // Stop inside the window instead, then freeze — freeze() pauses physics but
-    // NOT rendering, so skidIntensity and speed are held at their sliding
-    // values and every presented frame stamps. One frame lays the mark, the
-    // next draws the batch.
+    // skids.stamp() runs in render(), not act(). Stop inside the slide window,
+    // then freeze() — freeze pauses physics but not rendering, so presented
+    // frames stamp. See tests/manual/skid-probe.spec.js and docs/TESTING.md.
     await page.evaluate(() => {
       window.__apex.jump(0.1, 70);
       window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 30);

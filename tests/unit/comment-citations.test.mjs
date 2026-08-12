@@ -38,9 +38,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // The citation population. LOWER it when you convert citations to symbol names.
-// 197 when this guard was written; 148 after the 49 wrong ones in the WebGPU and
-// three.js ports were rewritten to name their symbol instead of a line.
-const CITATION_CEILING = 148;
+// 148 after the 2026-08 WebGPU/TLX port rewrite; 0 after replacing the rest
+// with file-path or symbol references (2026-08-12 full sweep).
+const CITATION_CEILING = 0;
 // A ceiling left far above the real count has stopped ratcheting — the same
 // second assertion tests/unit/module-size.test.mjs carries, for the same reason.
 const CITATION_SLACK = 15;

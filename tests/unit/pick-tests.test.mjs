@@ -1,16 +1,5 @@
-// pick-tests — the SELECTOR's own contract.
-//
-// tests/unit/test-groups.test.mjs already asserts every group pick-tests names
-// exists in package.json. That is the output vocabulary. What was unguarded is
-// everything upstream of it: how the tool decides WHICH FILES changed, and the
-// shape of the machine-readable answer CI is meant to consume.
-//
-// Both had already failed silently. `--since <ref>` swallowed the ref as an
-// explicit path, so it reported the literal string "HEAD~3" as the only changed
-// file and printed "nothing to run" — for any diff, forever — while the
-// change-aware CI design in docs/research/TEST-AUDIT-2026-08.md §3 was written
-// on top of it. A selector that wrongly says "run nothing" is the one failure
-// mode that ships regressions, so it gets a test.
+// pick-tests — the selector's contract (--json shape, --since ref handling).
+// test-groups.test.mjs covers the output vocabulary; this file guards upstream.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

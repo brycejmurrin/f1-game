@@ -377,10 +377,11 @@
       // =====================================================================
       // Warm-lensed masts: Rio ran evening support races, and the tall poles
       // silhouetted against the granite are part of the place.
+      // light:false — accents over the generic floodlights dressing pass.
       for (const [s, side, gap] of [
         [0.030, -1, 26], [0.075, -1, 34], [0.470, 1, 40], [0.622, -1, 30], [0.882, -1, 26],
       ]) {
-        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2 });
+        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
       }
       cameraTower(K(0.205), -1, 24, { h: 15 });
       for (let i = 0; i < 8; i++) {

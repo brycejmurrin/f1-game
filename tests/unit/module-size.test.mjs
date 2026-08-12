@@ -86,18 +86,29 @@ const CEILINGS = {
   // actually sets the on-screen UI/HUD size was reading the RAW stored percentage
   // instead of the already-clamped one computed two lines above it for the
   // slider's own label, so an out-of-range apex26.uiScale/hudScale applied
-  // unclamped on every boot while the slider quietly showed something else. Fix
-  // is one line; the rest is the comment recording why the raw read was wrong,
-  // which is exactly the bug-explaining growth this ratchet tolerates.
-  "js/game.js": 7955,
-  // The next three largest. Each is cohesive today (a dev API, an agent view, a
+  // unclamped on every boot while the slider quietly showed something else.
+  // 7955 -> 7970 for UI/HUD SIZE step 0.5: scaleSnap / scaleLabel / SCALE_STEP
+  // beside applyScale so the slider lattice and the stored value stay one
+  // function (and the clamp comment above still applies — snap is the clamp).
+  "js/game.js": 7970,  // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
   // — a dev-API hook growing the dev API is the file doing its job.
   "js/game/apex.js": 3055,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
-  "js/track/tracks.js": 2600,
+  // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
+  // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
+  // for the six emitters transformSceneryApi never covered (groundPatch,
+  // overheadSpan, circuitKit, groundedSegments, waterField, frameAt). Mostly
+  // the comments explaining why the shift is an ARC-LENGTH fraction and not
+  // `startFrac - sceneryStartFrac` — the trap that cost a full debugging pass.
+  // Raised again 2670 -> 2725: elevation/bridge anchors were remapped against
+  // `startFrac` instead of the authoring origin, sliding the road surface
+  // vertically under its own dressing (measured up to 43 m at Spa) — fixed by
+  // freezing that remap at `sceneryStartFrac` and rotating the bumps and the
+  // undulation ripple by the same arc-length shift in buildCenterline.
+  "js/track/tracks.js": 2725,
 };
 
 test("the big modules are not growing unnoticed", () => {

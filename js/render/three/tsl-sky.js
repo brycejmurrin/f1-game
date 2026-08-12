@@ -87,7 +87,7 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
-    /* ── the 28 uniforms (glx.js drawSky upload, defaults :1292-1326) ──────── */
+    /* ── the 28 uniforms (drawSky upload in js/render/glx.js) ─────────────── */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
       zenith:        uniform(new THREE.Vector3(0.18, 0.40, 0.78)),
@@ -120,7 +120,7 @@
     };
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
-     * glx.js:1292-1326 upload exactly (each frameSky field maps to the same-
+     * js/render/glx.js upload exactly (each frameSky field maps to the same-
      * named uniform; stars is the bool->float night flag). Takes whatever
      * invViewProj the frame carries — the env-probe pass (M9) swaps it. */
     function update(sky) {
@@ -157,7 +157,7 @@
       s1(U.lightning, sky.lightning, 0);
     }
 
-    /* ── the fragment (SKY_VS ray math + SKY_FS, :58-368) ──────────────────── */
+    /* ── the fragment (SKY_VS ray math + SKY_FS in js/render/shaders/sky.js) ─ */
     const node = Fn(() => {
       // ── ANCHORS: screenUV + the whole ray chain, unconditional ────────────
       const suv = vec2(screenUV).toVar();

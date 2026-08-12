@@ -12,8 +12,15 @@
     // Upstream us-1909 already runs clockwise, matching the F1 lap.
     reverse: false,
     // The 647 m run opening the trace is the oval front straight — the pit
-    // straight for the Grand Prix. Not GPS-calibrated.
-    startFrac: 0.05,
+    // straight for the Grand Prix — and its first vertex is the line.
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
+    // Was 0.05, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.05,
     name: "INDIANAPOLIS",
     gp: "United States GP",
     country: "USA",
@@ -385,8 +392,9 @@
       // things for miles and a fixture of every wide shot. floodMast draws the
       // real article (pole, dual arms, lens bank, ground pool) and guards its own
       // footprint, which a hand-rolled cylinder-and-box pair does neither of.
+      // light:false — oval still uses the generic floodlights pass for pools.
       for (let i = 0; i < 9; i++) {
-        floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3 });
+        floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3, light: false });
       }
       // Broadcast platforms at the show corners.
       cameraTower(K(0.115), 1, 30, { h: 18 });

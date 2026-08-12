@@ -114,7 +114,7 @@
    label competing with CAREER. Empty (and therefore zero-height) until a save
    exists, so a first-time title screen is exactly as it was. */
 .mb-sub {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
@@ -227,7 +227,7 @@ body { --compact-at: 600px; }
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
   :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-  :where(body[data-density="compact"]) .mb-sub { font-size: 11px; }
+  :where(body[data-density="compact"]) .mb-sub { font-size: 12px; }
   /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
      back out of the gutter rather than out of the type.
      IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
@@ -453,7 +453,7 @@ body { --compact-at: 600px; }
      height on this column, which the flex chain does not currently provide
      (`max-height: 100%` here resolves against an indefinite height and is
      inert — measured, not assumed). Revisit with the height mechanism in
-     docs/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
+     docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
   padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
@@ -858,8 +858,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   color: #fff; letter-spacing: 0.02em;
 }
 .track-row.active .track-row-name { color: var(--red); }
-.track-row-meta { font-size: 11px; color: var(--dim); }
-.track-row-rec { font-size: 11px; color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
+.track-row-meta { font-size: 12px; color: var(--dim); }
+.track-row-rec { font-size: 12px; color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
 .trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: 0.08em; padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
@@ -868,7 +868,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {
   position: sticky; top: 0; z-index: 1;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
   color: var(--dim); padding: 7px 12px 5px;
   background: var(--surf-1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1055,7 +1055,7 @@ body:not(.desktop) #sel-preview-rec { font-size: 13px; }
 body:not(.desktop) .spf-fact { font-size: 12px; padding: 3px 8px; }
 body:not(.desktop) .track-row-meta,
 body:not(.desktop) .track-row-rec { font-size: 13px; }
-body:not(.desktop) .trb { font-size: 11px; }
+body:not(.desktop) .trb { font-size: 12px; }
 body:not(.desktop) .track-group-head { font-size: 12px; }
 body:not(.desktop) .season-upcoming-head,
 body:not(.desktop) .sur-rnd,

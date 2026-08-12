@@ -7,7 +7,15 @@
   {
     id: "mexico",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.6350, // GPS-derived (OpenF1 2025, conf=0.212)
+    // Start/finish line. Snapped to the real one: coord 1.6 m off centreline; = trace vertex 0.
+    // Was 0.6350. That already measured straight (mean |k| 0.00211 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.6350,
     name: "MEXICO CITY",
     gp: "Mexican GP",
     country: "Mexico",

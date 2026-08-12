@@ -7,7 +7,14 @@
   {
     id: "qatar",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.8000, // GPS-derived (OpenF1 2025, conf=0.212)
+    // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
+    // Was 0.8000, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.8000,
     name: "QATAR",
     gp: "Qatar GP",
     country: "Qatar",
@@ -31,7 +38,8 @@
       // recognisable. Geometry only: streetLamp() registers no point light —
       // track.lampPosts is filled by the separate generic MAST pass, which is
       // the "floodlights" kind and is deliberately NOT excluded here, so the
-      // night lighting is byte-identical without them.
+      // night lighting is byte-identical without them. The Musco helpers pass
+      // light:false so they stay visual identity and do not double the pools.
       { kind: "lamps", s0: 0, s1: 1 },
     ],
     lengthKm: 5.4,
@@ -52,7 +60,8 @@
     ],
     // Desert plain — genuinely gentle, but not the dead 0.0 m the trace shipped
     // with. ~6.5 m of long-wavelength undulation, nothing over ~1.5 %.
-    // (s = SOURCE fraction; startFrac 0.8 shifts these into racing space.)
+    // (s = SOURCE fraction. With the line corrected to 0.0 that shift is the
+    // identity, so these are racing fractions too.)
     elevations: [
       { s: 0.05, halfM: 550, rise: 3.5 },
       { s: 0.42, halfM: 700, rise: 5.5 },
@@ -248,7 +257,9 @@
       // grandstand roof and every dune on the horizon.
       const MAST_H = 46, MAST_H_SF = 50;
       if (typeof floodMastRing === "function") {
-        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true });
+        // light:false — generic floodlights dressing still owns night pools;
+        // these Musco towers are visual identity only.
+        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true, light: false });
         // Extra densification on the televised start/finish kilometre.
         // 88 m, not 45. THREE mast lines overlap on this stretch: the 90 m ring
         // above, the engine's own light-bearing mast pass (~44 m stride, the
@@ -259,8 +270,8 @@
         // than the rest of the lap, which is the point of the densification.
         along(0.86, 0.14, 88, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
-            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
+            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true, light: false });
+            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true, light: false });
           }
         });
       } else {
@@ -642,8 +653,8 @@
       // make the T10 and fast final-sector complexes visibly floodlit heroes.
       if (typeof floodMast === "function") {
         for (const s of [0.63, 0.72, 0.80]) {
-          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
-          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
+          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3, light: false });
+          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3, light: false });
         }
       }
 
