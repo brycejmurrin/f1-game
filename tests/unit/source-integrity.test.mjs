@@ -157,6 +157,54 @@ test("no CSS selector can never match", () => {
     "it describes simply never happens");
 });
 
+/* THE SHELL'S TAGS NEST. The two checks above ask "does this file still parse"
+ * for JS and for CSS, and index.html — the only HTML in the project, holding
+ * every screen in the app — had no equivalent.
+ *
+ * It was needed within the hour it was written. A scripted edit inserted a
+ * closing `</details>` into the shell while the matching opening tag had never
+ * been written: the script that was supposed to add it asserted, failed on a
+ * LATER assertion, and died before its write, so only the second half landed.
+ * An unbalanced tag does not throw. The browser's parser silently re-nests
+ * around it, which moves whole screens into the wrong parent — and every guard
+ * in this repo stayed green, because none of them read the markup.
+ *
+ * Deliberately a NESTING check and nothing more. It is not a validator and must
+ * not grow into one: void elements, self-closing SVG and boolean attributes all
+ * live in this file and are all fine. The one question is whether every
+ * container that opens gets closed, in order.
+ */
+test("index.html's tags are balanced and correctly nested", () => {
+  const src = fs.readFileSync(path.join(ROOT, "index.html"), "utf8")
+    .replace(/<!--[\s\S]*?-->/g, "")              // comments
+    .replace(/<script[\s\S]*?<\/script>/gi, "")    // JS may contain "<" and "</div>" in strings
+    .replace(/<style[\s\S]*?<\/style>/gi, "");
+  // Elements that never have a closing tag, so they never enter the stack.
+  const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr"]);
+  const stack = [];
+  const bad = [];
+  for (const m of src.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g)) {
+    const [, slash, rawName, attrs] = m;
+    const name = rawName.toLowerCase();
+    if (VOID.has(name) || attrs.trimEnd().endsWith("/")) continue;
+    const line = src.slice(0, m.index).split("\n").length;
+    if (!slash) { stack.push({ name, line }); continue; }
+    const top = stack.pop();
+    if (!top) { bad.push(`line ${line}: </${name}> closes nothing`); break; }
+    if (top.name !== name) {
+      bad.push(`line ${line}: </${name}> closes <${top.name}> opened at line ${top.line}`);
+      break;
+    }
+  }
+  for (const left of stack.slice(0, 3)) bad.push(`<${left.name}> at line ${left.line} is never closed`);
+
+  assert.deepEqual(bad, [],
+    "index.html's tags do not nest. This is the one HTML file in the project and it " +
+    "holds every screen in the app; an unbalanced tag does not throw, the parser " +
+    "silently re-nests around it, and a whole screen ends up inside the wrong parent");
+});
+
 test("tools/layout-audit.mjs knows about every screen in the shell", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const audit = fs.readFileSync(path.join(ROOT, "tools/layout-audit.mjs"), "utf8");
