@@ -290,11 +290,11 @@
   flex: 0 0 auto; line-height: 1.35;
 }
 /* Labels stay one line; current-part line keeps ellipsis.
-   Tracking cut from 0.12em → 0.02em (measured: 0.12→97px, 0.02→83px,
-   0→81px for "SUSPENSION" at 14px). Pair rail floor bumped to 120px so the
-   word fits without mid-word wrap. */
+   Tracking cut from 0.12em → 0 (measured @14px: 0.12→97px, 0.02→83px,
+   0→81px for "SUSPENSION"). Pair rail floor 120px + zero tracking clears
+   the 1px ellipsis left at 0.02em inside tab padding. */
 .cs-tab-lbl {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.02em; color: var(--dim);
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--dim);
 }
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }

@@ -100,11 +100,28 @@ Monza → Spa → Monza with `__apex.race` / `go` / `snapCam`. Monza→Spa grew
 multi‑MB buffer growth — treat as a lead for mesh-cache eviction work, not a
 shipped verdict (SwiftShader + one session).
 
-### Lighthouse snapshot (settings @115%)
+### Lighthouse snapshot (title shell, build 1136+)
 
-Accessibility **91**, Best Practices **100**, SEO **67**, Agentic **100**.
-Fails: `user-scalable=no` (intentional for tilt/drive). Meta description
-shipped in the shell (build 1132+); remaining SEO gap is zoom policy, not copy.
+Accessibility **92**, Best Practices **100**, SEO **100**, Agentic **100**.
+Only remaining LH fail: `user-scalable=no` (intentional for tilt/drive).
+Meta description ships in the shell. Console issue
+`Interactive element inside of a <summary>` (MUSIC/SOUND ON·OFF) is a
+documented accordion tradeoff — do not relocate those toggles without
+re-reading the audio-panel HTML comment.
+
+### Boot performance (chrome-devtools `performance_*`)
+
+- Local HTTP/1 `python3 -m http.server`: ~145 sync scripts, ~6 MB transfer,
+  DCL ~3.8 s. LCP on `#title` is almost all **element render delay** behind
+  that serial IIFE wall (Slow 4G lab: LCP ~4.8 s, TTFB ~5 ms).
+- `rel=preload` for `tokens.css` + `components.css` clears render-blocking
+  CSS on Fast 4G traces; non-title sheets use `media="print"
+  onload="this.media='all'"` so tuner/garage/hud/data CSS leave the critical
+  path.
+- Heap @ title (~44 MB): duplicate `"Poly Haven contributors"` ×50 is asset
+  credit strings — not a boot regression. Never run Lighthouse before a
+  heap (axe URL pollution).
+
 Do not chase SEO on the fan game shell unless product asks.
 
 ---

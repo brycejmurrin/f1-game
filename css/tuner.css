@@ -328,9 +328,11 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    are on separate lines. */
 .tune-label {
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
-  font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
+  /* --fs-micro (14px): at UI SIZE 90% painted type stays ≥12px. Was 12px/13px
+     on the label/value; chrome-devtools measured 10.8 / 11.7 visual. */
+  font-size: var(--fs-micro); letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
 }
-.tune-label b { color: var(--red); font-size: 13px; flex: none; margin-left: auto; }
+.tune-label b { color: var(--red); font-size: var(--fs-micro); flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
   /* --tap-min, not 24px: this sat exactly on the WCAG floor, so any UI SIZE below
      100% put it under (19px at 80). See css/tokens.css. */
