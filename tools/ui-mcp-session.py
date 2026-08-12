@@ -243,8 +243,15 @@ def main() -> None:
         print("→ emulate phone landscape")
         print(c.text(c.call("emulate", {"viewport": "852x393x3,mobile,touch,landscape"})))
 
-        print("→ navigate")
-        print(c.text(c.call("navigate_page", {"url": "http://127.0.0.1:3456/?v=1117"})))
+        build = json.loads((ROOT / "version.json").read_text())["build"]
+        url = f"http://127.0.0.1:3456/?v={build}"
+        print("→ navigate", url)
+        try:
+            print(c.text(c.call("navigate_page", {"url": url})))
+        except Exception as e:
+            print("navigate retry after", e)
+            time.sleep(1)
+            print(c.text(c.call("navigate_page", {"url": url})))
 
         print("→ boot harness")
         harness = c.eval_json(BOOT)
