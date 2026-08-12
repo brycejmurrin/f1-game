@@ -764,13 +764,24 @@ const PROBE = (rootSel) => {
   // could tell those apart, so "the settings menu is a mile long on a phone" was
   // only ever findable by opening it and scrolling.
   //
-  // AMBER, NOT RED, and deliberately: unlike everything else here this is a
-  // judgement about how much winding is too much, not a fact about a box being
-  // in the wrong place. It is counted and reported on its own line so it can
-  // never be mistaken for a clipped element — the same treatment `smallTaps`
-  // gets for the same reason. 3.0 is the trigger because the measurements above
-  // straddle it: an iPad sits at 1.0, a phone at 3.4-5.2, and a sheet you can
-  // cross in two pulls is a list, not a maze.
+  // INFORMATION, NOT A FINDING — and that is a correction, made by running it.
+  // It shipped as amber on the reasoning below, and the first 84 cells of the
+  // full matrix flagged 21 of them: #select (a list of FORTY circuits), HOW TO
+  // PLAY and the career guide (prose documents), the garage's livery list. Those
+  // are not defects. They are long lists, and a long list is allowed to be long.
+  //
+  // The measurement cannot tell "a form that should have been arranged better"
+  // from "a list with forty things in it" — that distinction is about what the
+  // content MEANS, and nothing here has access to that. A check that is wrong a
+  // quarter of the time trains the eye to skip it, which is exactly how the
+  // skipped-cell count came to be ignored for three runs. So it is reported as a
+  // ranked table for a human to read, the same standing `belowFold` already has
+  // in this file, and it colours nothing.
+  //
+  // It still earns its place: pause SETTINGS at 5.2 screens is the number that
+  // started this, and no other check in the tool could produce it. 3.0 stays as
+  // the reporting threshold because the interesting cases sit above it — but it
+  // is a threshold for ATTENTION, not for failure.
   out.deepScroll = [];
   for (const el of root.querySelectorAll(SCROLLERS)) {
     if (!visible(el)) continue;
@@ -1031,7 +1042,8 @@ if (deep.length) {
   // Amber, and tallied apart from the red count on purpose — see the probe.
   const worst = deep.flatMap((r) => (r.deepScroll || []).map((d) => ({ ...d, cell: `${r.screen} ${r.viewport}` })))
     .sort((a, b) => b.screens - a.screens).slice(0, 8);
-  console.log(`  ${deep.length} cells scroll more than 3 screens (amber, not a clipping bug):`);
+  console.log(`  ${deep.length} cells scroll more than 3 screens — INFORMATION, not findings.`);
+  console.log("  A long list is allowed to be long; read the worst and judge:");
   for (const w of worst) console.log(`    ${String(w.screens).padStart(5)} screens  ${w.el} — ${w.cell}`);
 }
 if (skipped.length) {
@@ -1057,7 +1069,7 @@ function writeIndex(rows) {
     const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
       + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length
       + (r.starved || []).length;
-    const cls = issues ? "bad" : ((r.smallTaps || []).length || (r.deepScroll || []).length) ? "warn" : "ok";
+    const cls = issues ? "bad" : (r.smallTaps || []).length ? "warn" : "ok";
     const detail = [
       ...(r.clipped || []).map((c) => `clipped ${c.el} past ${c.by}`),
       ...(r.offscreen || []).map((c) => `offscreen ${c.el}`),
