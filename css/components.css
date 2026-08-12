@@ -798,11 +798,39 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    INSIDE the scroll region, spanning its columns. Outside it they would be
    fixed chrome, and a landscape phone at UI SIZE 150% has a 196px body that
    cannot afford five rows of anything it did not ask for. */
+/* A FULL-WIDTH ROW ONLY WHERE THERE IS ONE COLUMN — measured, after shipping
+   the opposite and watching it regress.
+   In a multi-column grid the body's height is the TALLEST COLUMN. Doors written
+   as ordinary entries add to ONE column each; a row spanning `1 / -1` adds to
+   ALL of them, because it sits below every column and every column has to clear
+   it. MEASURED on a landscape phone at UI SIZE 150%, three columns, 116-unit
+   body: content went 333 -> 361 own units and the scroll 2.87 -> 3.11 screens.
+   The change that helps a stacked sheet hurts a split one, for the same reason
+   in both directions.
+   So: one column, span it — that is the case where the doors were stacking five
+   deep and the row is the whole point (portrait phone at 100%: 780 -> 655 own
+   units, 1.55 -> 1.30 screens). More than one, let it be an ordinary cell that
+   packs beside the groups and adds to only its own column. */
 .pm-doors {
-  grid-column: 1 / -1;
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.6);
   margin-top: var(--gap); padding-top: var(--gap);
   border-top: 1px solid rgba(255, 255, 255, 0.10);
+  align-content: start;
+}
+/* 489, the 2/3-column boundary — NOT the 1/2 boundary, which is where this was
+   first written and where it was wrong in the other direction. MEASURED, all
+   four combinations, own units of content and screens of scroll:
+
+                       shipped      spanning     ordinary cell
+     portrait @100     780 / 1.55   655 / 1.30   809 / 1.61
+     landscape @150    333 / 2.87   361 / 3.11   265 / 2.28
+
+   Two columns want the row (the doors were stacking and the row unstacks them);
+   three want a cell (a fourth short column packs beside the groups and adds to
+   nothing). Both readings beat shipped only when the threshold sits between
+   them. Neither is a matter of taste — each cell above is a measurement. */
+@container sheet (max-width: 489px) {
+  .pm-doors { grid-column: 1 / -1; }
 }
 .pm-doors button {
   /* `1 1 150px`: the basis is what one of these labels actually needs, so the
