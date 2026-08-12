@@ -108,7 +108,12 @@ const CEILINGS = {
   // vertically under its own dressing (measured up to 43 m at Spa) — fixed by
   // freezing that remap at `sceneryStartFrac` and rotating the bumps and the
   // undulation ripple by the same arc-length shift in buildCenterline.
-  "js/track/tracks.js": 2725,
+  // Raised again 2725 -> 2750: floodMast/floodMastRing registered fixtures as
+  // customLamps only, so circuits that skip the generic floodlights pass
+  // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
+  // registerMastLamp() gives those masts their own 512-cap budget, separate
+  // from the 96-cap tunnel/soffit customLamps list.
+  "js/track/tracks.js": 2750,
 };
 
 test("the big modules are not growing unnoticed", () => {

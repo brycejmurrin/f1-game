@@ -405,8 +405,8 @@
           const c    = a.c;
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
-          // Trunk (dark green). addCyl/addCone are BASE-anchored (geom.js:196 —
-          // it builds from `c` up to `c + u*h`), so the old `c + u*h*0.5` put
+          // Trunk (dark green). addCyl/addCone in js/track/geom.js are BASE-anchored
+          // (they build from `c` up to `c + u*h`), so the old `c + u*h*0.5` put
           // the trunk's FOOT half its own height in the air and carried the
           // canopies up with it. Forward, that was invisible: the trees spread
           // over the CBD façade mass, which the float audit accepted as support.
