@@ -218,6 +218,18 @@ test.describe("UI scale", () => {
   // slider would show a sane value while the real render used whatever was
   // stored, unbounded.
   test("an out-of-range stored scale clamps the applied CSS property, not just the slider label", async ({ page }) => {
+    // This test referenced `read` from "the two scales are independent" above,
+    // a `const` local to THAT test's own callback — plain JS lexical scoping
+    // never made it visible here, in any run order, on any worker. Not a
+    // flake: a ReferenceError on the one assertion that reaches it, every time
+    // this test actually runs. Each `test()` gets its own `page`, so the fix is
+    // to redeclare it here rather than hoist it to describe scope, which would
+    // capture whichever page happened to be in scope when the describe body
+    // itself ran (none — describe bodies run before any page exists).
+    const read = () => page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return { ui: cs.getPropertyValue("--ui-scale").trim(), hud: cs.getPropertyValue("--hud-scale").trim() };
+    });
     await page.addInitScript(() => {
       localStorage.setItem("apex26.uiScale", "500");
       localStorage.setItem("apex26.hudScale", "-40");
