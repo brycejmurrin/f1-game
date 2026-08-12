@@ -101,6 +101,18 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    `@media (min-width: 720px)` rail block below: a portrait phone never reaches
    it, which is exactly why the free-camera layout restored there does not help
    here. */
+/* The head wraps HERE and only here. Title (66.3 own units) plus the FREE CAMERA
+   button (77.6) want 144, and `space-between` has no answer when they do not both
+   fit — it pushes the second one out of a panel that is `overflow: hidden`, so it
+   is cut rather than scrollable to. MEASURED flying on a portrait iPhone: the
+   head's content box is 109.5 units at 130% and 91.2 at 150%, and the button hung
+   29.6 and 47.9 units past the edge.
+   Scoped, because unscoped it is a REGRESSION and the audit caught it as one.
+   Docked, `--dock-w` is min(88 * --vwz, 380) — 230.6 own units on that same
+   phone at 150% — so the two already fit and wrapping only makes the head taller,
+   which pushed #lt-rows 17px into the home-indicator inset. A rule that fixes the
+   narrow case and costs the wide one has to ask which case it is in. */
+body.photo-mode:not(.pc-nopanel) :is(#lt-head, #ct-head) { flex-wrap: wrap; }
 body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot > button {
   /* DONE is a .bigbtn and measured 113.2 own units against a 91.2-unit content
      box, so it hung out of the panel. A grid item's automatic minimum is its
@@ -248,15 +260,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .lt-group .lt-section:first-of-type { margin-top: 6px; }
 /* panel header: title + FREE CAMERA button on one line */
-/* `flex-wrap: wrap`, because the title and the FREE CAMERA button do not always
-   both fit and `space-between` has no answer when they do not — it just pushes
-   the second one out of the panel. MEASURED on a portrait iPhone in FREE CAMERA
-   at UI SIZE 130%: the panel is 137.5 own units wide, the head's content box
-   109.5, and "LIGHTING TUNER" (66.3) plus the button (77.6) want 144. The button
-   hung 29.6 units past the panel edge; at 150% it was 47.9. `#lighting` is
-   `overflow: hidden`, so it was cut, not scrollable to.
-   Wrapping costs nothing at any width where they already fit. */
-#lt-head, #ct-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+#lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 #lt-head h2, #ct-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }

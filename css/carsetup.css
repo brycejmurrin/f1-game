@@ -918,6 +918,18 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    Only where the sheet is short. At any comfortable height it keeps the full
    ladder, because there the 52 costs nothing. */
 #cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--tap-min); }
+/* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
+   nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
+   same fact, exactly, in text — the bar is a glanceable for a number that is
+   already legible. It costs 10 own units plus its row gap.
+   MEASURED with the notch injected, garage on a landscape iPhone at UI SIZE
+   150%: the panel is 306 device px tall, the action bar takes 82, the header
+   takes ~180, and #cs-tabs and #cs-options were left THIRTY-NINE PX EACH — under
+   the 44px floor `starved` uses, and under one row of either list. Every pixel
+   the header gives back here is a pixel of the two lists the screen exists for.
+   Only in the compact tier. On any panel with the height for it the bar is worth
+   having, and it comes straight back. */
+#cs-inner[data-density="compact"] #cs-budget-bar { display: none; }
 
 /* ---------- the SHORT garage head ---------- */
 /* `data-density="compact"` (js/game/sheetshape.js) means the sheet is short in
