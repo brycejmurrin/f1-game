@@ -36,13 +36,19 @@ const TrackMaps = (function () {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
         const m = tr.map.length;
         // Prefer curated FIA turn apexes when present on the def.
+        // `v` is |curvature| at the apex — same units detectCorners stores —
+        // so the track-detail TURNS list (and the select-screen "slowest"
+        // fact) can classify HAIRPIN/SLOW/MEDIUM/FAST. Hard-coding v:0 made
+        // every curated turn read as FAST and every "slowest" callout as T1.
         let crns;
         if (def.turns && def.turns.length) {
+          const total = tr.total;
           crns = def.turns.map(function (frac, i) {
             const f = (((frac % 1) + 1) % 1);
             const idx = Math.floor(f * m) % m;
             const mp = tr.map[idx];
-            return { n: i + 1, x: mp[0], y: mp[1], v: 0 };
+            const v = Math.abs(Tracks.curvature(tr, f * total));
+            return { n: i + 1, x: mp[0], y: mp[1], v: v };
           });
         } else {
           crns = detectCorners(tr);
