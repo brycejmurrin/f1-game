@@ -88,7 +88,7 @@
       // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
       // rules above, just a smaller range.
       { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
-      { kind: "floodlights", s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even
     // a raised budget — because cityFront()'s own along() step (44/62/44/48 m)

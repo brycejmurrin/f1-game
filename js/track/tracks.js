@@ -1420,7 +1420,7 @@ const Tracks = (function () {
       // this, roadside foliage happily grows straight through every placed prop.
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
-    // "lamps"/"floodlights" distinct; "lighting" matches either (streetLamp pass retired).
+    // One lighting family: "lamps" canonical; "floodlights"/"lighting" aliases.
     const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
     // Origin-invariant alias for RANDOM DRAWS only (placement still uses k).
     // Keeps scatter stable when startFrac moves — without it coplanar baselines jumped.
@@ -1443,10 +1443,8 @@ const Tracks = (function () {
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
         let hit = kinds.includes("all") || kinds.includes(kind);
-        if (!hit && LIGHTING_KINDS[kind]) {
-          if (kind === "lighting") hit = kinds.some((knd) => LIGHTING_KINDS[knd]);
-          else hit = kinds.includes("lighting");
-        }
+        // Any lighting-family rule matches any lighting-family query.
+        if (!hit && LIGHTING_KINDS[kind]) hit = kinds.some((knd) => LIGHTING_KINDS[knd]);
         if (!hit) continue;
         if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
         const s0 = TrackSpace.wrap01((rule.s0 == null ? 0 : rule.s0) + shift);
@@ -2172,7 +2170,10 @@ const Tracks = (function () {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
       const poleCol = [0.16, 0.16, 0.19];
-      const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in lighting.js
+      const dens = (typeof LightTune !== "undefined" && LightTune.LT &&
+        typeof LightTune.LT.lampDensity === "number" && LightTune.LT.lampDensity > 0)
+        ? LightTune.LT.lampDensity : 1;
+      const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
       // ── LAMP KIND — decided HERE, once, per post (single source of truth) ──
       // The visible lens albedo and the point light buildTrackLights emits (colour, cone,
@@ -2217,7 +2218,7 @@ const Tracks = (function () {
       track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
-        if (dressingExcluded("floodlights", k, side)) continue;
+        if (dressingExcluded("lamps", k, side)) continue;
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));

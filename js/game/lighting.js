@@ -94,6 +94,7 @@ const TUNE_DEFS = [
   // pipeline, so the two names read as two systems. Sections keep the old
   // visual grouping without a second tab.
   { id: "lampLevel",    label: "LAMP LEVEL",      group: "LAMPS", section: "POOLS", min: 0.02, max: 1.5,   step: 0.01, def: 0.26, help: "Overall lamp brightness ceiling (on top of the twilight ramp). Applies to every track lamp — street posts and flood banks alike." },
+  { id: "lampDensity",  label: "LAMP DENSITY",    group: "LAMPS", section: "POOLS", min: 0.5, max: 2.5, step: 0.05, def: 1.0, rebuild: true, help: "How densely lamps are placed along the track (1 = shipped ~22 m stride). Higher = more poles/pools per kilometre; lower = sparser. Light pools update live; pole geometry refreshes on the next track load. Distinct from LAMP COUNT (how many nearest lamps the shader keeps)." },
   { id: "floodDay",     label: "DAYTIME LAMPS",   group: "LAMPS", section: "POOLS", min: 0, max: 1.5, step: 0.01, def: 0.0, help: "Light track lamps during DAY sessions (normally off — the sun dominates). 0 = off (as-shipped), higher = brighter daytime pools. Lets you run a lit stadium look under a blue sky. Brightness still rides LAMP LEVEL and the per-lamp POOL ENERGY on top of this." },
   { id: "poolEnergy",   label: "POOL ENERGY",     group: "LAMPS", section: "POOLS", min: 0.04,  max: 2, step: 0.01, def: 0.55, rebuild: true, help: "Per-lamp pool luminance scale (physical energy per fixture). min/step chosen so the grid lands on every hundredth: at the old min 0.05 / step 0.02 the notches fell on ODD hundredths, so the max was unreachable (topped out at 1.99) and 22 shipped presets sat between notches." },
   { id: "lampRadiusMul",label: "POOL RADIUS",     group: "LAMPS", section: "POOLS", min: 0.3,  max: 3,   step: 0.02, def: 1.0,  rebuild: true, help: "Reach of each lamp pool. Too small and the far pool corner dies." },
@@ -112,7 +113,7 @@ const TUNE_DEFS = [
   { id: "lampWarmupWarm",label: "WARM-UP WARMTH",  group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 3, step: 0.05, def: 1.0, help: "How orange a freshly-struck lamp glows before settling to its true colour (strike-warmth amount). 0 = strikes at final colour, 1 = as-shipped sodium-warm start, higher = a strong amber ignition." },
   { id: "lampCull",      label: "LAMP COUNT",      group: "LAMPS", section: "BEHAVIOUR", min: 16, max: 32, step: 1, def: 28, help: "How many of the nearest lamps light the scene at once when there's traffic (the shader has 32 slots; the rest are reserved for car tail-lights). Higher = more of the field lit but fewer tail-light slots on dense night grids. Solo running always uses all 32." },
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMPS", section: "BEHAVIOUR", min: 0.1, max: 0.9, step: 0.05, def: 0.35, help: "How far inside the nearest-lamp boundary a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
-  { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 400, step: 10, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Several circuits suppress the generic masts over a stretch (dressingExclusions kind \"floodlights\") so a bespoke structure can own that ground — but suppressing the MAST also removed the LIGHT, leaving that stretch genuinely unlit at night. Fill lights restore the pool without adding mast geometry, so they carry no lens halo. 0 = off (the old behaviour: dark where the masts were suppressed)." },
+  { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 400, step: 10, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 10, step: 0.25, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. 0/low = lamps ranked purely by distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 12, step: 0.25, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. Both renderers." },
   // ── NIGHT GLOW & BLOOM ──
@@ -289,6 +290,59 @@ const LAMP_KINDS = {
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
   fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
 };
+function lampDensityFactor() {
+  const d = LT.lampDensity;
+  return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
+}
+// Shared mast/light spacing in metres. Density 1 = shipped ~22 m; higher denser.
+function lampStrideM() { return 22 / lampDensityFactor(); }
+function lampStrideNodes(ds) {
+  return Math.max(1, Math.round(lampStrideM() / ds));
+}
+// Thin or densify the fixture list so live LAMP DENSITY matches without a full
+// track rebuild. dens<1 drops posts below the target spacing; dens>1 inserts
+// synthetic roadside lights (no lens halo) between fixtures — poles catch up
+// on the next Tracks.build (which reads the same LT.lampDensity).
+function applyLampDensity(posts, track, height, onlyAlways) {
+  if (!posts || !posts.length || onlyAlways) return posts;
+  const dens = lampDensityFactor();
+  if (Math.abs(dens - 1) < 0.01) return posts;
+  const n = track.n, ds = track.total / n;
+  const targetGap = lampStrideNodes(ds);
+  const sorted = posts.slice().sort((a, b) => a.k - b.k);
+  if (dens < 1) {
+    const out = [];
+    let lastK = null;
+    for (const p of sorted) {
+      if (lastK == null) { out.push(p); lastK = p.k; continue; }
+      const span = (p.k - lastK + n) % n;
+      if (span >= targetGap) { out.push(p); lastK = p.k; }
+    }
+    return out.length ? out : posts;
+  }
+  const fill = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i], bN = sorted[(i + 1) % sorted.length];
+    const span = (i === sorted.length - 1) ? (bN.k + n - a.k) : (bN.k - a.k);
+    if (span <= targetGap) continue;
+    const steps = Math.floor(span / targetGap);
+    for (let j = 1; j < steps; j++) {
+      const k = (a.k + j * targetGap) % n;
+      const side = (j % 2 === 0) ? a.side : -a.side;
+      const hwk = track.hw[k] || 7;
+      fill.push({
+        k, side, synth: true, densified: true, kind: a.kind || null,
+        x: track.px[k] + track.rx[k] * (hwk + 6) * side,
+        y: track.py[k] + height,
+        z: track.pz[k] + track.rz[k] * (hwk + 6) * side,
+      });
+    }
+  }
+  if (!fill.length) return posts;
+  // Cap growth so a maxed density slider cannot explode the baked set.
+  const cap = 800;
+  return sorted.concat(fill.slice(0, Math.max(0, cap - sorted.length)));
+}
 // `onlyAlways` builds ONLY the fixtures a circuit marked always-on (see
 // lampPost() in js/track/tracks.js) — the set game.js uploads in a BRIGHT
 // session, where the ordinary lamps stay off.
@@ -300,7 +354,7 @@ function buildTrackLights(track, onlyAlways) {
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   const ds = total / n;
-  const stride = Math.max(1, Math.round(22 / ds));   // denser than before; matches the masts in buildProps
+  const stride = lampStrideNodes(ds);   // matches buildProps mast stride (+ LAMP DENSITY)
   const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
@@ -311,34 +365,23 @@ function buildTrackLights(track, onlyAlways) {
   // a saturated paint-bucket pool.
   const NEON_SPILL = [[1.35, 0.75, 1.1], [0.75, 1.15, 1.3], [0.9, 1.25, 0.85], [1.3, 0.85, 0.65]];
   // Every point light is emitted FROM a visible fixture: buildProps exports the
-  // exact world position of each mast lens (track.lampPosts — same 22 m stride,
-  // side parity and onTrack suppression as the drawn masts), so glare halos,
-  // specular streaks, volumetric beams and reflections all anchor to geometry.
-  // Fallback: synthetic stride walk when lampPosts is absent (older track build).
+  // exact world position of each mast lens (track.lampPosts — same density-aware
+  // stride, side parity and onTrack suppression as the drawn masts), so glare
+  // halos, specular streaks, volumetric beams and reflections all anchor to
+  // geometry. Fallback: synthetic stride walk when lampPosts is absent.
   let posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
   if (onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
+  posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
-  // A circuit can suppress the generic flood masts over a stretch with a
-  // dressingExclusions rule of kind "floodlights", usually because a bespoke
-  // structure owns that ground and a row of stock poles through it looks wrong.
-  // But the light is emitted FROM the mast list, so suppressing the mast also
-  // deleted the light — and an audit of all 40 circuits found nine with a
-  // genuinely unlit stretch at night, worst of all Baku (1.2 km, a fifth of the
-  // lap) and Red Bull Ring (784 m spanning its own start/finish straight).
-  // Shared floodMast()/floodMastRing() now register lens positions into
-  // track.lampPosts (unless opts.light:false), so a circuit that excludes the
-  // generic pass and draws its own Musco ring keeps fixture-anchored pools.
-  // Gap-fill still covers stretches where BOTH the generic pass and bespoke
-  // masts are absent — keep the mast suppressed (circuit visual intent) and
-  // put the LIGHT back. Fill lights get no lens halo (glareW 0) and damped
-  // volumetrics, because there is no fixture to anchor them to — they read as
-  // spill from off-camera architectural lighting rather than a floating lens.
-  // Never runs for the always-on subset: those are specific modelled fixtures
-  // (a tunnel soffit), and back-filling the "gap" between them with synthetic
-  // roadside masts would invent street lighting inside a bore.
+  // Circuits suppress the generic mast pass over a stretch (dressingExclusions
+  // kind "lamps" / "lighting") so bespoke fixtures own that ground. Suppressing
+  // the mast also deleted the light — gap-fill restores pools without geometry.
+  // Shared floodMast()/floodMastRing() register into track.lampPosts (unless
+  // opts.light:false). Fill lights get no lens halo (glareW 0). Never runs for
+  // the always-on subset (tunnel soffits etc.).
   if (posts && LT.lampGapFill > 0 && !onlyAlways) {
     const sorted = posts.slice().sort((a, b) => a.k - b.k);
     const maxGap = Math.max(stride * 2, Math.round(LT.lampGapFill / ds));
