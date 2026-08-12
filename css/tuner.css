@@ -91,6 +91,51 @@ body.photo-mode:not(.pc-nopanel) #lt-preview,
 body.photo-mode:not(.pc-nopanel) #lt-profile,
 body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 
+/* THE FLYING PANEL ON A PHONE, which is much narrower than the 300px cap makes
+   it sound. `--dock-w: min(46 * --vwz, 300px)` was chosen against a LANDSCAPE
+   phone, where 46vw of 852 is 392 and the cap governs. In PORTRAIT 46vw of 393
+   is 181, and at UI SIZE 150% the panel's own width comes out at 120 units — a
+   third of what the cap suggests, and narrower than several of the controls
+   inside it. Measured: 137.5 units at 130%, 120.5 at 150%.
+   These are the rules that survive that. They are deliberately OUTSIDE the
+   `@media (min-width: 720px)` rail block below: a portrait phone never reaches
+   it, which is exactly why the free-camera layout restored there does not help
+   here. */
+body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot > button {
+  /* DONE is a .bigbtn and measured 113.2 own units against a 91.2-unit content
+     box, so it hung out of the panel. A grid item's automatic minimum is its
+     content — the same refusal-to-shrink that has cost this pass four separate
+     findings — so the floor has to be named. `flex: 1 1 auto` then lets the
+     three of them share what there is instead of each demanding its natural
+     width and wrapping to three rows: the foot measured 154 units tall of a
+     330-unit panel at 150%, which is half the height the sliders needed. */
+  min-width: 0; flex: 1 1 auto;
+}
+/* AND ON A SHORT ONE, THE FURNITURE GOES TOO. Same argument the TIME/WEATHER
+   rows above are already removed by, one step further along, because the panel
+   gets shorter than that argument anticipated. MEASURED on a landscape iPhone
+   at 150%: the panel is 191.7 own units tall and its chrome — head 64, help
+   toggle 24, category strip 24, action bar 34.7 — takes 188 of them, leaving
+   the sliders THREE POINT SEVEN. A lighting tuner showing no sliders.
+   The title is decoration on a panel you just opened by name, and the
+   explanations toggle is a preference you set once; the sliders are the reason
+   the panel is still on screen at all. Both come back the moment there is room,
+   because `data-density` is measured, not guessed.
+
+   #lighting-inner ALONE, not the `:is(#lighting-inner, #camtune-inner)` pair the
+   rest of this file uses. `#pc-toggle` is the only way into photo mode and it
+   lives in the lighting tuner; `closeLightTuner` (js/game/tuner.js) calls
+   `exitPhotoMode()` on the way out; and the camera tuner is opened from pause
+   SETTINGS, which the lighting tuner hides while it is open. The camera tuner
+   can therefore never be in this state, and naming it here would be two dead
+   selectors — plus a prelude long enough that tests/unit/css-comments.test.mjs
+   flags it as prose, which is how this scope got questioned in the first
+   place. */
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] h2,
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-help-toggle {
+  display: none;
+}
+
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
 #lighting, #camtune { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
@@ -203,7 +248,15 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 }
 .lt-group .lt-section:first-of-type { margin-top: 6px; }
 /* panel header: title + FREE CAMERA button on one line */
-#lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+/* `flex-wrap: wrap`, because the title and the FREE CAMERA button do not always
+   both fit and `space-between` has no answer when they do not — it just pushes
+   the second one out of the panel. MEASURED on a portrait iPhone in FREE CAMERA
+   at UI SIZE 130%: the panel is 137.5 own units wide, the head's content box
+   109.5, and "LIGHTING TUNER" (66.3) plus the button (77.6) want 144. The button
+   hung 29.6 units past the panel edge; at 150% it was 47.9. `#lighting` is
+   `overflow: hidden`, so it was cut, not scrollable to.
+   Wrapping costs nothing at any width where they already fit. */
+#lt-head, #ct-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 #lt-head h2, #ct-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
