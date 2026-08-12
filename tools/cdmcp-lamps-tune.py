@@ -131,14 +131,17 @@ BOOT_JS = f"""async () => {{
 
 
 def dens_js(dens: float) -> str:
-    # Pin dens on the NIGHT profile, rebuild geometry, re-assert LT.
+    # Pin dens, then flip day→night so loadTrack rebuilds mast stride (night→night
+    # is a no-op for geometry — see __apex.setTimeOfDay). Re-assert LT after each
+    # applyRaceSettings so the profile cannot wipe the slider.
     return f"""async () => {{
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const a = window.__apex;
-  a.setTimeOfDay('night');
+  a.lightTune({{ lampDensity: {dens}, lampGapFill: 0 }});
+  a.setTimeOfDay('day');
   a.lightTune({{ lampDensity: {dens}, lampGapFill: 0 }});
   a.setTimeOfDay('night');
-  for (let i = 0; i < 60 && !(a.info() && a.info().track); i++) await wait(100);
+  for (let i = 0; i < 80 && !(a.info() && a.info().track); i++) await wait(100);
   a.lightTune({{ lampDensity: {dens}, lampGapFill: 0 }});
   a.park({FRAC});
   a.orbit({FRAC}, 35, 18, 70);
