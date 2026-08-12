@@ -64,10 +64,18 @@ function report() {
   for (const c of conds) for (const [id, r] of Object.entries(loadShard(c))) (all[id] ||= {})[c] = r;
   const ids = Object.keys(all);
   if (!ids.length) { console.log("no shards yet — run a --cond= sweep first"); return; }
+  // NOISE FLOOR, MEASURED (tools/tuner-sweep.mjs noise probe, monaco/day, frozen
+  // scene, five consecutive captures with nothing changed):
+  //   no re-park   0.19  0.29  1.74  0.41   <- the policy this tool uses
+  //   re-park      0.45 21.30 21.31 21.28   <- park() teleports the AI field
+  //   park+settle  1.72  1.78  1.37  0.65
+  // So a quiet frame still moves up to ~1.7 on its own. FLOOR is set above that
+  // rather than at a guessed 0.35, which would have scored a noise spike "live".
+  const FLOOR = 2.0;
   const verdict = (r) => {
     if (!r) return "-";
-    if (r.noise > 2 && r.signal < r.noise * 3) return "noisy";
-    return r.signal > Math.max(0.35, r.noise * 3) ? "live" : "inert";
+    if (r.noise > FLOOR && r.signal < r.noise * 3) return "noisy";
+    return r.signal > Math.max(FLOOR, r.noise * 3) ? "live" : "inert";
   };
   const dead = [], noisy = [];
   for (const id of ids) {
