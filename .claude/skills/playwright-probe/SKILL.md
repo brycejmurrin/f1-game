@@ -30,11 +30,20 @@ For ONE deterministic shot, use the helper in this skill folder — it boots a
 server, waits for `__apex`, freezes the scene, frames the camera, writes a PNG:
 
 ```sh
-node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
+node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png] \
+  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud]
 # cam = orbit | eye | cinematic | trackside | park
 node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/captures/playwright-probe/monaco-chicane.png
 node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/captures/playwright-probe/eau-rouge.png
+# Paddock / baked-model framing (az/el/dist; never snapCam after free-cam):
+node .claude/skills/playwright-probe/shot.mjs monza 0.97 orbit out.png --az -105 --el 26 --dist 110
+# Full Monza/Spa bakedModel gallery:
+node tools/capture/baked-scenery.mjs --out /opt/cursor/artifacts/baked-models
 ```
+
+`shot.mjs` prefetches `Assets.loadModels()` before `race()` so `bakedModel()`
+placements are in the mesh, and only calls `snapCam()` for `cam=park` (free-cam
+modes set `G.dbgCam` instantly — `snapCam` would clear them back to chase).
 
 **Viewport gotcha:** `shot.mjs` uses **1280×720** (wide survey frame). In-race
 Playwright **specs** use landscape **844×390** to avoid the `#rotate-device`

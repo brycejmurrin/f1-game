@@ -119,11 +119,13 @@ script uses (`docs/DEBUG-HOOKS.md`):
 async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   for (let i=0;i<60 && !window.__apex;i++) await wait(250);
+  // Prefetch baked models BEFORE race() so scenery bakedModel() emits
+  if (typeof Assets !== "undefined" && Assets.loadModels) await Assets.loadModels();
   __apex.race('portimao');
   for (let i=0;i<80 && !(__apex.info()&&__apex.info().track);i++) await wait(200);
   __apex.go();
   __apex.jump(0.315, 40, 0);   // arc s, speed, lateral — put the car at the feature
-  __apex.snapCam();            // REQUIRED after jump()/park() before a shot
+  __apex.snapCam();            // REQUIRED after jump()/park() — NOT after orbit/view
   await wait(400);
   return __apex.info();
 }
@@ -132,9 +134,16 @@ async () => {
 mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 ```
 
-`snapCam()` after every `jump()`/`park()` or the frame is stale (same rule as the
-scratch scripts). Screenshots and human-reviewed captures go under `scratch/`,
-never the repo root (CLAUDE.md).
+Shell one-liner (auto-starts `:3456` if needed, parks to `about:blank` after):
+
+```sh
+python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
+  --out /opt/cursor/artifacts/baked-models/cdmcp-monza-paddock.png
+```
+
+`snapCam()` after every `jump()`/`park()` or the frame is stale — but **never**
+after `orbit()`/`view()`/`eyeAt()` (clears dbgCam; see trap above). Screenshots
+go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (CLAUDE.md).
 
 ### When this beats a scratch script
 
