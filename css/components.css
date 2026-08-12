@@ -759,10 +759,35 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    so everything else about the slider already works here. */
 .pm-group .tune-row { margin: 3px 0; }
 .pm-group .tune-row input[type="range"] { min-height: var(--tap); }
-@container sheet (min-width: 420px) {
+/* THE THRESHOLDS ARE DERIVED FROM THE COLUMN, NOT PICKED FOR THE SHEET.
+   A .pm-col needs about 150 own units before its labels start costing more than
+   the column saves. MEASURED by forcing extra columns on a phone and counting
+   what happened to every one of the thirteen buttons:
+
+     column width   wrapped    clipped    scroll
+        318 (1 col)    0/13         0     2.1 screens
+        255 (2 col)    0/13         0     4.2
+        167 (3 col)    4/13         0     3.2
+        153 (2 col)    8/13         0     1.6
+        143 (3 col)    8/13         0     4.3
+        111 (2 col)   11/13         0     2.2
+         93 (2 col)   12/13         4     2.9
+
+   Two things fall out. Doubling the columns NEVER halves the scroll — a wrapped
+   button is twice as tall, so the arrangement gives back most of what it wins;
+   the honest gain is about a quarter, not a half. And below ~110 the labels stop
+   wrapping and start being CUT, which is worse than scrolling: "RESOLUTION:
+   AUTO" truncated loses the value, which is the half you needed.
+   So: 340 seats two columns of ~150, 490 seats three. Both numbers are
+   2*150+gap+padding and 3*150+2*gap+padding, and both were checked against the
+   table above rather than rounded to something tidy.
+   The old 420/620 pair left a portrait phone at the SHIPPED DEFAULT size in one
+   column with 2.1 screens of scroll, 57 units short of a split it could easily
+   afford. */
+@container sheet (min-width: 340px) {
   .pm-groups { grid-template-columns: 1fr 1fr; }
 }
-@container sheet (min-width: 620px) {
+@container sheet (min-width: 490px) {
   /* Three .pm-col columns, each owning its own groups. This replaced a 3x2
      grid that assigned cells by nth-child with DRIVING and DISPLAY spanning
      both rows: a spanning item distributes its height across the rows it
@@ -771,6 +796,16 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      stack their own content are self-sizing, and adding or moving a group no
      longer means rewriting grid coordinates. */
   .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* THE ELLIPSIS STAYS AT 620 AND DOES NOT FOLLOW THE COLUMN COUNT DOWN.
+   It used to ride along in the same block, which was safe while three columns
+   meant 620/3 ≈ 190 units each — wide enough that `nowrap` costs nothing.
+   Bringing the count down to 490 makes the columns ~163, where the measurement
+   above records 4 of 13 labels WRAPPING. Under `nowrap` those four do not wrap,
+   they get cut — and a settings button reads "RESOLUTION: AUTO", so the half
+   that gets cut is the VALUE. Wrapping to two lines is a cost; losing the answer
+   is a defect. They are separate questions and now they are separate blocks. */
+@container sheet (min-width: 620px) {
   #pmsettings-inner button { font-size: var(--fs-2); padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is
