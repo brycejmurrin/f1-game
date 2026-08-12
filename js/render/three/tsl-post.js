@@ -250,7 +250,7 @@
             occ.addAssign(ndv.mul(range));
           }
           const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
-          // Contact shadows: short view-space march toward the sun (:206-235).
+          // Contact shadows: short view-space march toward the sun (SSAO_FS).
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
             const sh = float(1.0).toVar();
             Loop({ start: int(1), end: int(6), type: "int", condition: "<" }, ({ i }) => {
@@ -694,7 +694,7 @@
                 Break();
               });
             });
-            // Vertical light-smear streak taps + contact hardening (:764-786).
+            // Vertical light-smear streak taps + contact hardening (COMPOSITE_FS).
             const hitCol = vec3(0.0).toVar();
             const carDom = carTerm.greaterThan(roadTerm);
             If(found.greaterThan(0.5), () => {
@@ -748,7 +748,7 @@
         // Exposure before tone-mapping js/render/shaders/post.js.
         c.mulAssign(C.exposure);
 
-        // Bloom with the highlight-suppression knee, exposure-matched (:857-867).
+        // Bloom with the highlight-suppression knee, exposure-matched (COMPOSITE_FS).
         const bloomSample = vec3(bloomTexN.sample(TL(vUV)).rgb).toVar();
         const bloomMask = clamp(max(c.r, max(c.g, c.b)).sub(0.7), 0.0, 0.3)
           .div(0.3).mul(C.bloomKnee).oneMinus();
@@ -808,7 +808,7 @@
           // additive low-end lift for BLACKS/SHADOWS js/render/shaders/post.js
           c.addAssign(w0x.mul(C.tone0.x).mul(0.05).add(w0y.mul(C.tone0.y).mul(0.025)));
           c.assign(max(c, vec3(0.0)));
-          // toe/shoulder: monotonic power pivoted at middle grey (:492-500)
+          // toe/shoulder: monotonic power pivoted at middle grey (applyToeShoulder)
           const oldY = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-6).toVar();
           const exponent = select(oldY.lessThan(0.18),
             exp2(clamp(C.tone1.y, -1.0, 1.0)),

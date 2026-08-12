@@ -15,12 +15,11 @@
 //   1. the car slips           js/game.js skids.stamp() when |slip| > 0.25 ||
 //                              c.offroad, and c.speed > 10) — no slip, no mark
 //   2. marks accumulate        js/game/skidmarks.js  `active` counts them
-//   3. the batch is drawn      skidmarks.js:87  draw() -> gfx.drawSkidBatch(...)
+//   3. the batch is drawn      skidmarks.js draw() -> gfx.drawSkidBatch(...)
 //                              BUT drawSkidBatch returns early when
 //                              `!(vertCount > 0)` — with zero marks it is a
 //                              no-op that still returns true
-//   4. the probe latches it    tlx.js:1032 sets _fxFrame.skidVerts, and
-//                              tlx.js:1151 copies _fxFrame -> _fxLast at the
+//   4. the probe latches it    tlx.js sets _fxFrame.skidVerts, copies _fxFrame -> _fxLast at
 //                              END of a presented frame. fxState() reads
 //                              _fxLast, so a frame that never presents never
 //                              publishes.
@@ -142,11 +141,11 @@ test("is there a step window where the stamp condition actually holds?", async (
 
   // js/game.js skids.stamp() lays a mark when `(skidIntensity > 0.25 || offroad) &&
   // speed > 10`. skidIntensity is clamp((slipAng - 0.10) / 0.20, 0, 1) with
-  // slipAng in radians (js/game.js:4082), so > 0.25 means slipAng > 0.15 rad =
+  // slipAng in radians (js/game.js slipAng calc), so > 0.25 means slipAng > 0.15 rad =
   // 8.59 deg — a number physState() already reports as `slipDeg`. Walk the
   // stint ONE step at a time and print the window, if there is one.
   //
-  // ABS, NOT >. slipAng at js/game.js:4081 is Math.abs(atan2(vLat, ...)) and
+  // ABS, NOT >. slipAng uses Math.abs(atan2(vLat, ...)) in js/game.js and
   // `slipDeg` is SIGNED — steering right makes it negative. The first version
   // of this probe compared `slipDeg > 8.59` and reported "0 of 120 steps",
   // i.e. that no window exists, while the printed rows underneath it showed

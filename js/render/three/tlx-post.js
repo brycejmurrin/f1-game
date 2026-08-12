@@ -425,7 +425,7 @@
       C.contrast.value = gk("contrast", 1.12);
       C.vibrance.value = gk("vibrance", 0.20);
       C.saturation.value = gk("saturation", 1.0);
-      // Skip the whole HDR block when every knob is neutral (glx:685-693).
+      // Skip the whole HDR block when every knob is neutral (js/render/glx/post.js).
       const _hg = GT && (
         (GT.blacks || 0) !== 0 || (GT.shadows || 0) !== 0 || (GT.midtones || 0) !== 0 ||
         (GT.highlights || 0) !== 0 || (GT.whites || 0) !== 0 || (GT.toe || 0) !== 0 ||

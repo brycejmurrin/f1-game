@@ -297,7 +297,7 @@
       return res;
     });
 
-    /* ── M4 sun-shadow sampling (lit.js sampleShadow, :584-700) ──────────────
+    /* ── M4 sun-shadow sampling (sampleShadow in js/render/shaders/lit.js) ───
      * Distance fade anchored to the GLIDING uShadowCtr (never the box, which
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
@@ -585,7 +585,7 @@
      * vertex colour: js/track/mesh.js stopped emitting them as colour and
      * the fragment shader now draws them analytically from the road's
      * track-space coords (arc-length s, signed lateral x, half-width), carried
-     * by the `trk` attribute (js/render/glx.js + :505, tlx.js buildGeometry). This port
+     * by the `trk` attribute (js/render/glx.js, tlx.js buildGeometry). This port
      * did not exist, so every road on this backend rendered as bare tarmac.
      *
      * DERIVATIVES ARE UNCONDITIONAL. GLX opens with `if (hw <= 0.5) return;`
@@ -757,7 +757,7 @@
       return vec4(albedo, rough);
     });
 
-    /* ── the fragment (lit.js main(), :702-1372) built per material variant ──
+    /* ── the fragment (main() in js/render/shaders/lit.js) per material variant ──
      * matU = the per-draw material scalars as uniform nodes (one set per
      * cached variant — every variant compiles to the SAME program text, so
      * three's program cache dedupes the actual GL compiles). */
@@ -768,7 +768,7 @@
     // a multi-million-vertex street circuit is ~27 MB of zeros, on the one
     // buffer the whole chunked subsystem exists to keep small (see its header
     // — the staged-release mobile-OOM guard). GLX pays nothing there either:
-    // its aTrk is per-mesh optional (js/render/glx.js, :505) and a disabled attrib
+    // its aTrk is per-mesh optional (js/render/glx.js trk attrib) and a disabled attrib
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).

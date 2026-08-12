@@ -589,7 +589,7 @@ const TLX = (function () {
         g.setAttribute("mat", new THREE.BufferAttribute(
           new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
         // Road track-space coords (arc-length s, signed lateral x, half-width),
-        // GLX attribute location 4 (js/render/glx.js, :505). tsl-lit's roadMarkings()
+        // GLX attribute location 4 (js/render/glx.js trk). tsl-lit's roadMarkings()
         // paints the edge lines and the dashed centre line analytically from
         // these, so a road mesh WITHOUT them renders as bare tarmac — which is
         // exactly what this backend did until now. ALWAYS present, zero-filled
