@@ -824,7 +824,15 @@
     <div class="cz-row"><label for="cz-short">SHORT CODE</label><input id="cz-short" type="text" maxlength="4" placeholder="YOU"></div>
     <div class="cz-row"><label for="cz-color">PRIMARY</label><input id="cz-color" type="color"></div>
     <div class="cz-row"><label for="cz-color2">ACCENT</label><input id="cz-color2" type="color"></div>
-    <div class="cz-sep">EXTRA PAINT — OPTIONAL</div>
+    <!-- Collapsed by default: this is the 12-row, 34-of-52-control bulk of the
+         densest screen in the app, and every one of these rows is already
+         labelled optional. A native <details> means the required fields above
+         (identity) and below (driver) stay on screen without it; the label
+         doubles as the disclosure. Not exclusive with anything — nothing else
+         on this screen collapses, so there is nothing to be exclusive with. -->
+    <details id="cz-paint">
+    <summary class="cz-sep">EXTRA PAINT — OPTIONAL</summary>
+    <div id="cz-paint-rows">
     <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none">NONE</button></div>
     <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none">NONE</button></div>
     <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none">NONE</button></div>
@@ -847,6 +855,8 @@
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
     <div class="cz-row cz-liv-row"><label>FINISH</label><span class="cz-finish" id="cz-finish"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
+    </div><!-- /#cz-paint-rows -->
+    </details>
     <!-- The driver is not paint. These three used to sit inside EXTRA PAINT —
          OPTIONAL, so the form said a name and a car number were livery layers. -->
     <div class="cz-sep">DRIVER</div>
@@ -1125,8 +1135,13 @@
       <p class="adv-help">How fast the whole field actually covers the track &mdash; you and the AI together. Shown as a share of reference pace: 100% is full speed, and every notch is 6% either way. Your dash and gearbox keep their full range at every setting; higher just means everyone laps quicker.</p>
     </div>
 
-    <button id="adv-more" class="adv-more-btn" aria-expanded="false">ADVANCED &#9662;</button>
-    <div id="adv-extra" hidden>
+    <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
+         Space on the summary) and screen-reader "expanded" announcement all
+         come from the element for free, and the JS handler in
+         steer-tuning.js only has to play the click sound. -->
+    <details id="adv-details">
+    <summary id="adv-more" class="adv-more-btn">ADVANCED</summary>
+    <div id="adv-extra">
     <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
@@ -1172,7 +1187,8 @@
         <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
       <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
     </div>
-    </div>
+    </div><!-- /#adv-extra -->
+    </details>
     </div><!-- /.sheet-body -->
     <div class="sheet-foot"><button id="adv-close" autofocus class="bigbtn">DONE</button></div>
   </div>
@@ -1187,15 +1203,27 @@
     <div class="sheet-body pane">
       <!-- Each section is a header row with its switch on the right, then its
            slider. The two are independent: music with no effects is a normal way
-           to play, so neither switch touches the other. -->
-      <section class="as-sec">
-        <div class="as-head">
+           to play, so neither switch touches the other.
+
+           Each section is now a <details> — MUSIC and SOUND EFFECTS open by
+           default (every player's two most-used controls; the ON/OFF switch is
+           in the summary itself so it's reachable either way), YOUR TRACKS and
+           SPOTIFY closed (opt-in workflows most players never touch — SPOTIFY
+           is "dormant until a Client ID is entered" even when it IS open).
+           The switch buttons inside MUSIC/SOUND EFFECTS' summaries stop click
+           propagation (js/game/audio-panel.js) so pressing ON/OFF changes the
+           setting without also toggling the section — the alternative the
+           2026-08 menu review considered and rejected was relocating them out
+           of the header, which would have reversed the full-width-halves
+           decision two rules below records. -->
+      <details id="as-music-details" class="as-sec" open>
+        <summary class="as-head">
           <h3 class="adv-sec">MUSIC</h3>
           <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
             <button id="as-music-on" class="opt-btn" type="button">ON</button>
             <button id="as-music-off" class="opt-btn" type="button">OFF</button>
           </div>
-        </div>
+        </summary>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
@@ -1225,41 +1253,47 @@
             <button id="as-skip" class="as-tbtn" type="button" aria-label="Next track">&#9197;</button>
           </div>
         </div>
-      </section>
+      </details>
 
-      <section class="as-sec">
-        <div class="as-head">
+      <details id="as-sound-details" class="as-sec" open>
+        <summary class="as-head">
           <h3 class="adv-sec">SOUND EFFECTS</h3>
           <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
             <button id="as-sound-on" class="opt-btn" type="button">ON</button>
             <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
           </div>
-        </div>
+        </summary>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
         <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
-      </section>
+      </details>
 
       <!-- YOUR TRACKS: uploaded audio files, stored in IndexedDB by
            js/game/music-lib.js and appended to the same playlist as the shipped
-           songs, so SKIP walks through both. -->
-      <section class="as-sec">
-        <div class="as-head"><h3 class="adv-sec">YOUR TRACKS</h3></div>
+           songs, so SKIP walks through both. Closed by default — an upload
+           workflow most players never touch, and the biggest single chunk of
+           this screen's control count after Spotify. -->
+      <details id="as-tracks-details" class="as-sec">
+        <summary class="as-head"><h3 class="adv-sec">YOUR TRACKS</h3></summary>
         <button id="as-add" class="adv-more-btn" type="button">&#43; ADD MP3s</button>
         <!-- The extension list is not redundant: Android WebViews that report an
              empty MIME type filter those files out of a bare audio/* picker. -->
         <input id="as-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,.opus" multiple hidden aria-label="Add music files">
         <div id="as-tracks" class="music-list"></div>
         <p id="as-lib-msg" class="as-note">Files stay on this device &mdash; nothing is uploaded anywhere.</p>
-      </section>
+      </details>
 
       <!-- SPOTIFY: personal-use only, and dormant until a Client ID is entered.
            Spotify's developer policy does not permit shipping their audio as a
            game soundtrack, and a Development Mode app only works for the
            owner's own allowlisted Premium accounts — so no client ID is
-           committed and the whole block does nothing until one is pasted in. -->
-      <section class="as-sec" id="as-sp-wrap">
-        <div class="as-head"><h3 class="adv-sec">SPOTIFY</h3></div>
+           committed and the whole block does nothing until one is pasted in.
+           Closed by default: this is the single largest section on the screen
+           (15+ controls) and stays inert for every player who never pastes in
+           a client id — id kept on the <details> itself (js/game/spotify.js
+           reads dataset.spState off #as-sp-wrap; tag-agnostic, untouched). -->
+      <details id="as-sp-wrap" class="as-sec">
+        <summary class="as-head"><h3 class="adv-sec">SPOTIFY</h3></summary>
         <!-- autocapitalize/autocorrect off: a client id is 32 hex characters and
              a phone keyboard will happily capitalise and "fix" it. -->
         <label class="tune-row"><span class="tune-label">CLIENT ID</span>
@@ -1309,7 +1343,7 @@
         <p class="as-note"><b id="as-sp-uri" class="sp-uri">&mdash;</b></p>
         <p class="as-note">CONNECT sends you to Spotify to sign in and reloads the game on the way back &mdash; do it from the menu, not mid-race. This panel reopens when you return.</p>
         <p class="as-note">Running it locally? Serve from <b>http://127.0.0.1:&lt;port&gt;/</b> &mdash; Spotify rejects <b>localhost</b> as a redirect URI.</p>
-      </section>
+      </details>
 
     </div>
     <div class="sheet-foot"><button id="as-close" autofocus class="bigbtn">DONE</button></div>

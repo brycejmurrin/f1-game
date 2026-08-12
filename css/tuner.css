@@ -343,8 +343,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    made a four-control panel scroll on a landscape phone. */
 .as-sec { margin-bottom: calc(var(--gap) * 0.9); }
 .as-sec + .as-sec { border-top: 1px solid rgba(255,255,255,0.08); padding-top: calc(var(--gap) * 0.8); }
-.as-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+/* .as-head is now a <summary> (each section is a <details>) — list-style and
+   cursor are the only things a <summary> needs that a <div> didn't; the flex
+   row it already was carries over unchanged since the class, not the tag,
+   supplies it. The ON/OFF switch inside MUSIC/SOUND EFFECTS' summaries stops
+   its own click from reaching this element (js/game/audio-panel.js), so
+   pressing it changes the setting without also toggling the section. */
+.as-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); list-style: none; cursor: pointer; }
+.as-head::-webkit-details-marker { display: none; }
 .as-head .adv-sec { margin: 0; }
+/* The marker sits on the LABEL, not .as-head itself: .as-head is a two-child
+   flex row (label, switch) with space-between, and a marker as a third flex
+   child there would get its own evenly-spaced slot instead of sitting next to
+   the text it belongs to. */
+.as-head .adv-sec::before { content: "\25BE"; font-size: 9px; opacity: 0.6; margin-right: 6px; display: inline-block; }
+details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 /* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
    has the same specificity and comes later in the file, so an unqualified
    `.as-toggle .opt-btn` loses and the buttons collapse to their flex basis. */
@@ -675,8 +688,26 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     white-space: nowrap; flex: 0 0 auto;
   }
 }
-/* advanced disclosure */
-.adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }
+/* advanced disclosure — a native <details>/<summary>; the summary keeps the
+   look of the button it replaced (tokens.css's base `button` rule does not
+   apply to <summary>, so the button chrome is repeated here explicitly), and
+   the default triangle marker is replaced with one that flips on [open]
+   since the built-in marker cannot be positioned to match the old glyph. */
+#adv-details { margin: 14px 0 2px; }
+.adv-more-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; list-style: none; cursor: pointer;
+  font: inherit; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85;
+  color: var(--text); background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; padding: 10px 18px;
+}
+.adv-more-btn::-webkit-details-marker { display: none; }
+.adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
+@media (hover: hover) {
+  .adv-more-btn:hover { background: rgba(255, 255, 255, 0.12); }
+}
+.adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
+#adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
 #adv-extra { margin-top: 4px; }
 
 /* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------
