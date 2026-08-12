@@ -42,7 +42,12 @@ const TrackMaps = (function () {
             const f = (((frac % 1) + 1) % 1);
             const idx = Math.floor(f * m) % m;
             const mp = tr.map[idx];
-            return { n: i + 1, x: mp[0], y: mp[1], v: 0 };
+            // Same curvature sample detectCorners() below uses for its severity
+            // bucket. Left at 0 since the file's introduction, every curated-turn
+            // circuit's chip in the track-detail popup rendered green "FAST"
+            // regardless of the corner — Monaco's hairpins included.
+            const v = Math.abs(Tracks.curvature(tr, f * tr.total));
+            return { n: i + 1, x: mp[0], y: mp[1], v: v };
           });
         } else {
           crns = detectCorners(tr);
