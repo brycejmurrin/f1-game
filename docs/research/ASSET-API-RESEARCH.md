@@ -518,6 +518,29 @@ meshes, which needs the network-capable `bake-material`/`fetch` path. The
 SCENERY-UPGRADE-PLAN win is now one asset-sourcing session away rather than one
 engine change away.
 
+### Next graphics wins (2026-08 research pass)
+
+Measured after the 2k→256 full-pack rebake + Chromium A/B (`matTex` 0 vs 1):
+
+1. **Tune world scales, not resolution first.** Sand/shoulder tiling reads clearly
+   at `SCALES.SAND=6`; asphalt grit is already good at 4 m/tile. Prefer
+   per-MAT scale tweaks (+ `__apex.matTex` A/B) over jumping to 512² (that blows
+   the 8 MB commit budget without KTX2).
+2. **KTX2 / Basis Universal** when (if) we want 512² or more layers — VRAM stays
+   compressed; PNG/WebP always expand. Don McCurdy’s web texture formats note +
+   Khronos KTX artist guide; UASTC for normals, ETC1S for albedo.
+3. **HDRI → `Assets.env()` presets** — API + runtime consumer already exist;
+   bake a few Poly Haven skies per (track, tod) so hemisphere ambient is measured
+   rather than hand-picked (cheapest lighting win, no shader change).
+4. **Prop geometry, not prop textures.** Trees/grandstands still read flat because
+   they are low-poly solids; `bakedModel` + Quaternius/Kenney CC0 stands fix that
+   without UV-ing the chunked prop path.
+5. **Motion-capture before raising ASPHALT normals.** Shader already clamps
+   asphalt baked normals (`mid==16 ? 0.10`); shimmer at speed is the failure mode
+   — validate with `test:shimmer` / driven capture, not a parked screenshot.
+6. **Per-profile `matTexMix`.** Still open from §5 phase 3 — night/wet may want
+   <1.0 so procedural wet remap stays dominant.
+
 ### Also fixed on the way
 
 The TSL port bounded its material branches at `mid < 14.5`, so **`MAT.ASPHALT`
