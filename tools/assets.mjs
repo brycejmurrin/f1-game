@@ -21,8 +21,11 @@
  * `bake-synthetic` has NO dependencies and needs NO network: it generates every
  * material layer from multi-octave noise, encoded to PNG with node's own zlib.
  * That is what makes the whole runtime path testable in CI and in a sandbox
- * with no egress — and it ships as the default pack.  `fetch`/`bake-material`
- * are the real-CC0-scan path and need network plus an image decoder (sharp).
+ * with no egress.  The committed pack is a real Poly Haven CC0 bake (via
+ * webbake.js / import-pack).  `fetch`/`bake-material` are the offline
+ * re-bake path (network + sharp) that mirrors webbake's mean-normalised
+ * Diffuse/nor_gl/arm packing — use them to swap a single MAT layer without
+ * reopening a browser.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -689,22 +692,36 @@ async function search(args) {
   if (!type) fail("usage: search <textures|models|hdris> <query>");
   const query = q.join(" ");
   for (const [name, S] of Object.entries(SOURCES)) {
-    const url = S.list(type, query);
+    // ambientCG's catalogue is Materials only — skip model/hdri queries there.
+    if (name === "ambientcg" && type !== "textures" && type !== "materials") continue;
+    const url = S.list(type === "textures" && name === "ambientcg" ? "Material" : type, query);
     console.log(`\n── ${name} ── ${url}`);
     try {
       const res = await fetch(url);
       if (!res.ok) { console.log(`   HTTP ${res.status}`); continue; }
       const j = await res.json();
-      const keys = Object.keys(j).filter((k) => !query || k.toLowerCase().includes(query.toLowerCase()));
+      let keys;
+      if (name === "ambientcg") {
+        // Shape: { foundAssets: [{ assetId, … }, …] } — not a flat id→meta map.
+        keys = (j.foundAssets || []).map((a) => a.assetId).filter(Boolean);
+      } else {
+        keys = Object.keys(j).filter((k) => !query || k.toLowerCase().includes(query.toLowerCase()));
+      }
       for (const k of keys.slice(0, 15)) console.log(`   ${k}`);
       if (!keys.length) console.log("   (no matches)");
     } catch (e) {
-      // The sandbox this was written in has no egress to either host.  Say so
-      // plainly instead of pretending the library is empty.
       console.log(`   unreachable: ${e.message}`);
       console.log("   (needs network access — run this on a dev machine or in CI)");
     }
   }
+}
+
+async function downloadFile(url, dest) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  fs.writeFileSync(dest, buf);
+  return buf.length;
 }
 
 async function fetchSource(args) {
@@ -723,13 +740,66 @@ async function fetchSource(args) {
   if (!r.ok) fail(`HTTP ${r.status} from ${host}`);
   const j = await r.json();
   fs.writeFileSync(path.join(dir, "_files.json"), JSON.stringify(j, null, 2));
-  console.log(`wrote _files.json — pick the maps you want, then: bake-material ${mat} ${path.relative(ROOT, dir)}`);
+  fs.writeFileSync(path.join(dir, "_meta.json"), JSON.stringify({
+    host, id, res, licence: S.licence, source: `${host}:${id}`, fetchedAt: new Date().toISOString(),
+  }, null, 2) + "\n");
+
+  // Poly Haven: pull Diffuse + nor_gl + arm (the three maps bake-material needs).
+  // ambientCG: leave _files.json for a human to pick — its download shape differs
+  // and CORS-blocked browser path never uses it; node can grow later.
+  if (host === "polyhaven") {
+    const wanted = [
+      ["Diffuse", "diffuse"],
+      ["nor_gl", "normal"],
+      ["arm", "arm"],
+    ];
+    for (const [map, stem] of wanted) {
+      const f = pickFile(j, map, res, "jpg");
+      if (!f) { console.log(`  skip ${map}: not published`); continue; }
+      const ext = f.fmt || "jpg";
+      const dest = path.join(dir, `${stem}.${ext}`);
+      const n = await downloadFile(f.url, dest);
+      console.log(`  ${map} -> ${path.relative(ROOT, dest)} (${(n / 1024).toFixed(0)} KB @ ${f.res}/${f.fmt})`);
+    }
+  } else {
+    console.log("  wrote _files.json only — ambientCG downloads are not auto-pulled yet");
+  }
+  console.log(`next: bake-material ${mat} ${path.relative(ROOT, dir)}`);
   console.log(`licence: ${S.licence}${S.apiCredit ? ` (credit: ${S.apiCredit})` : ""}`);
 }
 
+// Mean-normalise albedo RGB so the shader's multiplicative blend
+// (`albedo * tex.rgb * 2.0`) is a no-op on average — see webbake.js layer().
+// Without this, a dark asphalt scan (~0.12) would multiply every surface by
+// ~0.24 and crush the scene to black.
+function meanNormaliseAlbedo(rgba, w, h) {
+  const n = w * h;
+  let mr = 0, mg = 0, mb = 0;
+  for (let i = 0; i < rgba.length; i += 4) { mr += rgba[i]; mg += rgba[i + 1]; mb += rgba[i + 2]; }
+  mr = Math.max(1, mr / n); mg = Math.max(1, mg / n); mb = Math.max(1, mb / n);
+  const out = Buffer.alloc(rgba.length);
+  for (let i = 0; i < rgba.length; i += 4) {
+    out[i]     = Math.min(255, Math.round(rgba[i]     / mr * 128));
+    out[i + 1] = Math.min(255, Math.round(rgba[i + 1] / mg * 128));
+    out[i + 2] = Math.min(255, Math.round(rgba[i + 2] / mb * 128));
+    out[i + 3] = rgba[i + 3];
+  }
+  return out;
+}
+
+function findSourceMap(dir, stems) {
+  for (const stem of stems) {
+    for (const ext of ["jpg", "jpeg", "png", "webp"]) {
+      const p = path.join(dir, `${stem}.${ext}`);
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return null;
+}
+
 async function bakeMaterial(args) {
-  const [mat, dir] = args.filter((a) => !a.startsWith("--"));
-  if (!mat || !dir) fail("usage: bake-material <MATNAME> <dir-of-source-maps> [--size N]");
+  const [matName, dirArg] = args.filter((a) => !a.startsWith("--"));
+  if (!matName || !dirArg) fail("usage: bake-material <MATNAME> <dir-of-source-maps> [--size N]");
   let sharp = null;
   try { sharp = (await import("sharp")).default; } catch (_) {}
   if (!sharp) {
@@ -738,11 +808,136 @@ async function bakeMaterial(args) {
     console.error("Meanwhile `bake-synthetic` produces a complete pack with no dependencies.");
     process.exit(2);
   }
-  // Composite <dir>/{color,normal,roughness}.* into the existing filmstrip at
-  // this material's layer.  Left as an explicit follow-up: the sandbox this was
-  // authored in has no egress, so this path is unexercised and must not be
-  // presented as verified.  See docs/research/ASSET-API-RESEARCH.md §3.1.
-  fail("bake-material is not implemented yet — see docs/research/ASSET-API-RESEARCH.md (needs a network-capable machine to develop against)");
+
+  const matKey = matName.toUpperCase();
+  const mid = MAT[matKey];
+  if (mid == null) fail(`unknown MAT "${matName}" — expected one of ${Object.keys(MAT).join(", ")}`);
+  if (mid === MAT.FLAT || mid === MAT.GLASS || mid === MAT.FLAG)
+    fail(`${matKey} is never baked (FLAT=no-material; GLASS needs mirror read; FLAG is vertex-displaced)`);
+  if (!(SCALES[mid] > 0)) fail(`${matKey} has no SCALES entry`);
+
+  const srcDir = path.resolve(dirArg);
+  if (!fs.existsSync(srcDir)) fail(`source dir not found: ${srcDir}`);
+
+  // Prefer an existing pack size so we patch in place; --size overrides.
+  const man = readManifest();
+  const size = intArg(args, "--size", (man.materials && man.materials.size) || 256);
+  const lowSize = (man.materials && man.materials.low && man.materials.low.size) || 128;
+
+  const diffPath = findSourceMap(srcDir, ["diffuse", "albedo", "color", "diff"]);
+  if (!diffPath) fail(`no diffuse/albedo map in ${srcDir} (expected diffuse.jpg etc — run fetch first)`);
+  const normPath = findSourceMap(srcDir, ["normal", "nor_gl", "nor"]);
+  const armPath = findSourceMap(srcDir, ["arm"]);
+  const roughPath = findSourceMap(srcDir, ["roughness", "rough"]);
+  const aoPath = findSourceMap(srcDir, ["ao", "ambient"]);
+
+  const resize = async (p) => {
+    if (!p) return null;
+    const { data, info } = await sharp(p).ensureAlpha().resize(size, size, { fit: "fill" })
+      .raw().toBuffer({ resolveWithObject: true });
+    if (info.width !== size || info.height !== size)
+      fail(`resize produced ${info.width}x${info.height}, expected ${size}x${size}`);
+    return data;
+  };
+
+  const dif = await resize(diffPath);
+  const nrm = await resize(normPath);
+  const arm = await resize(armPath);
+  const rough = arm ? null : await resize(roughPath);
+  const ao = arm ? null : await resize(aoPath);
+
+  // Pack: albedo RGB + A roughness; normal RG + B AO (+ A=255).
+  const alb = meanNormaliseAlbedo(dif, size, size);
+  const nor = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size * 4; i += 4) {
+    alb[i + 3] = arm ? arm[i + 1] : (rough ? rough[i] : 220);
+    nor[i]     = nrm ? nrm[i]     : 128;
+    nor[i + 1] = nrm ? nrm[i + 1] : 128;
+    nor[i + 2] = arm ? arm[i]     : (ao ? ao[i] : 255);
+    nor[i + 3] = 255;
+  }
+
+  fs.mkdirSync(PACK, { recursive: true });
+  const albName = `mat-albedo-${size}.png`;
+  const norName = `mat-normal-${size}.png`;
+  const albPath = path.join(PACK, albName);
+  const norPath = path.join(PACK, norName);
+
+  // Start from existing strips when present so we only replace this MAT layer.
+  const stripH = size * MAT_LAYERS;
+  let albStrip, norStrip;
+  if (fs.existsSync(albPath) && fs.existsSync(norPath)) {
+    albStrip = decodePNG(fs.readFileSync(albPath));
+    norStrip = decodePNG(fs.readFileSync(norPath));
+    if (albStrip.w !== size || albStrip.h !== stripH)
+      fail(`${albName} is ${albStrip.w}x${albStrip.h}; expected ${size}x${stripH} — pass --size or re-import`);
+  } else {
+    albStrip = { w: size, h: stripH, rgba: Buffer.alloc(size * stripH * 4, 128) };
+    norStrip = { w: size, h: stripH, rgba: Buffer.alloc(size * stripH * 4) };
+    for (let i = 0; i < norStrip.rgba.length; i += 4) {
+      norStrip.rgba[i] = 128; norStrip.rgba[i + 1] = 128;
+      norStrip.rgba[i + 2] = 255; norStrip.rgba[i + 3] = 255;
+    }
+    // Clear alpha on neutral albedo fill (encodePNG cares about full RGBA).
+    for (let i = 3; i < albStrip.rgba.length; i += 4) albStrip.rgba[i] = 255;
+  }
+
+  const y0 = mid * size;
+  for (let y = 0; y < size; y++) {
+    const srcOff = y * size * 4;
+    const dstOff = ((y0 + y) * size) * 4;
+    alb.copy(albStrip.rgba, dstOff, srcOff, srcOff + size * 4);
+    nor.copy(norStrip.rgba, dstOff, srcOff, srcOff + size * 4);
+  }
+
+  fs.writeFileSync(albPath, encodePNG(size, stripH, albStrip.rgba));
+  fs.writeFileSync(norPath, encodePNG(size, stripH, norStrip.rgba));
+
+  // Refresh the low-tier downsample of just this layer by re-downsampling the
+  // whole strip — cheap at 256→128 and keeps mobile in sync.
+  if (lowSize && size % lowSize === 0 && lowSize < size) {
+    const f = size / lowSize;
+    for (const [which, strip] of [["albedo", albStrip], ["normal", norStrip]]) {
+      const small = downsample(strip.rgba, strip.w, strip.h, f);
+      const name = `mat-${which}-${lowSize}.png`;
+      fs.writeFileSync(path.join(PACK, name), encodePNG(small.w, small.h, small.rgba));
+    }
+  }
+
+  let meta = {};
+  try { meta = JSON.parse(fs.readFileSync(path.join(srcDir, "_meta.json"), "utf8")); } catch (_) {}
+  const source = meta.source || `local:${path.relative(ROOT, srcDir)}`;
+  const licence = meta.licence || "CC0";
+  const author = meta.host === "polyhaven" ? "Poly Haven contributors"
+    : meta.host === "ambientcg" ? "ambientCG contributors" : "unknown";
+
+  const out = readManifest();
+  out.version = 1;
+  out.materials = out.materials || { size, layers: [] };
+  out.materials.size = size;
+  out.materials.albedo = albName;
+  out.materials.normal = norName;
+  if (lowSize && lowSize < size) {
+    out.materials.low = out.materials.low || { size: lowSize, layers: [] };
+    out.materials.low.size = lowSize;
+    out.materials.low.albedo = `mat-albedo-${lowSize}.png`;
+    out.materials.low.normal = `mat-normal-${lowSize}.png`;
+  }
+  const layers = (out.materials.layers || []).filter((L) => L.mat !== mid);
+  layers.push({
+    mat: mid, id: MAT_NAME[mid].toLowerCase(), scale: SCALES[mid],
+    source, licence, author,
+  });
+  layers.sort((a, b) => a.mat - b.mat);
+  out.materials.layers = layers;
+  if (out.materials.low) out.materials.low.layers = layers;
+  out.models = out.models || {};
+  out.env = out.env || {};
+  out.credits = buildCredits(out);
+  writeManifest(out);
+  credits();
+  report(out);
+  console.log(`baked ${matKey} (mat ${mid}) from ${path.relative(ROOT, srcDir)} @ ${size}px`);
 }
 
 // ────────────────────────────── verify / credits ─────────────────────────────
@@ -874,7 +1069,7 @@ const USAGE = `Apex 26 asset bake CLI
 
   bake-synthetic [--size N]        generate the full material pack (no network, no deps)
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
-  fetch <MAT> <host:id> [--res 1k] download a CC0 source material's file list
+  fetch <MAT> <host:id> [--res 1k] download CC0 source maps (Diffuse/nor_gl/arm)
   bake-material <MAT> <dir>        composite source maps into a layer (needs sharp)
   import-pack <dir> [--size N]     install a browser bake (assets/pack/webbake.js)
   bake-model <id> <file.glb>       bake glTF -> the game's own vertex format

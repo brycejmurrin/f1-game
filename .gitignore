@@ -7,11 +7,9 @@
 # Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/
 node_modules
-
 # Regenerable output
 scratch/
 artifacts/
-
 # Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
 tools/_*.cjs
@@ -22,6 +20,6 @@ tools/.*
 *.bak
 *.orig
 *~
-
 # git worktrees for isolated agent work
 .worktrees/
+assets/pack/src/

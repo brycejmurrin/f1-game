@@ -479,19 +479,21 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
   `applyMaterial*` bump/tint as still deferred — WGX has no procedural material
   system for a baked map to augment. `Assets.supported` is false there and the
   backend renders as it does today.
-- **`bake-material`** (real CC0 scans → a layer) **exits with a message.** It
-  needs network plus an image decoder for JPG/PNG source maps, and this was
-  authored in a sandbox whose proxy 403s `api.polyhaven.com` and
-  `ambientcg.com`. Shipping it untested would have been the wrong call, so it
-  fails loudly and points here instead.
-- **KTX2.** The pack is 561 KB against an 8 MB budget. The VRAM argument in §3.2
+- **`bake-material`** (real CC0 scans → a layer) **is implemented** (2026-08).
+  Needs `sharp` (`npm i -D sharp`) and network for `fetch`. It mean-normalises
+  Diffuse albedo, packs `nor_gl` + `arm` exactly like `assets/pack/webbake.js`,
+  and patches a single MAT layer into the committed filmstrips. `search` now
+  correctly lists ambientCG `foundAssets[].assetId` (previously always empty).
+  The browser `webbake.js` path remains the fastest full-pack bake; CLI is for
+  single-layer swaps without a DevTools session.
+- **KTX2.** The pack is ~5.4 MB against an 8 MB budget. The VRAM argument in §3.2
   still stands for a full-resolution scan bake — revisit at that point, not now.
 
 ### Known gaps
 
-- `search`/`fetch` are written against the published API shapes but **unverified
-  against a live endpoint** for the same egress reason. Treat the first real run
-  as debugging, not as regression.
+- `search`/`fetch`/`bake-material` are exercised against live Poly Haven (and
+  ambientCG search) endpoints. Treat the first ambientCG *download* bake as
+  still experimental — only the Poly Haven path auto-pulls maps today.
 - The TSL port of `applyMaterial` covers `mid < 14.5`, so `MAT.ASPHALT` (16)
   never reaches the *procedural* branch on TLX. Pre-existing, unrelated to this
   work, but it means TLX and GLX already differ on tarmac. The baked path added
