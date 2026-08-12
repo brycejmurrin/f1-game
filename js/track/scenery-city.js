@@ -949,8 +949,11 @@ const SceneryCity = (function () {
           } else if (st === "monopole" || st === "tower") {
             rec.box([0, h + 2.1, 0], [0.32, 4.2, 1], NC);
             rec.box([0, h - 0.2, 0], [0.5, 0.34, 1], postCol);                  // return wing
-          } else {
-            rec.box([0, h + 1.6, 0], [0.3, 3.2, 1], NC);                        // panel (default)
+          } else {                                                             // panel (default): framed hoarding
+            rec.box([0, h + 1.6, 0], [0.30, 3.2, 1], NC);                       // advert face
+            rec.box([0, h + 3.3, 0], [0.36, 0.22, 1], postCol);                 // top frame rail
+            rec.box([0, h - 0.1, 0], [0.36, 0.22, 1], postCol);                 // bottom frame rail
+            rec.box([side * 0.5, h + 1.6, 0], [0.6, 0.4, 0.5], postCol);        // rear support strut
           }
         },
         { kind: "billboard", k, side });

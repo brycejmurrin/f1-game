@@ -172,10 +172,20 @@ const LandmarkKit = (function () {
         stage, mastCenter, radius, mastHeight,
         spec.mastColor || spec.color, 8, spec.basis,
       ])) return false;
-      return emit(p.box, [
+      // Peaked marquee roof (a ridged prism, base-anchored on the eave line)
+      // plus a thin valance skirt under the eave — reads as a tent, not a flat
+      // slab lid. p.prism is already a kit dependency (sawtooth uses it).
+      const ridge = spec.size[1] * 0.30;
+      return emit(p.prism, [
         stage,
-        [spec.center[0], spec.center[1] + spec.size[1] * 0.4, spec.center[2]],
-        [spec.size[0], spec.size[1] * 0.2, spec.size[2]],
+        [spec.center[0], spec.center[1] + spec.size[1] * 0.30, spec.center[2]],
+        [spec.size[0], ridge, spec.size[2]],
+        spec.color,
+        spec.basis,
+      ]) && emit(p.box, [
+        stage,
+        [spec.center[0], spec.center[1] + spec.size[1] * 0.28, spec.center[2]],
+        [spec.size[0] * 1.02, spec.size[1] * 0.06, spec.size[2]],
         spec.color,
         spec.basis,
       ]);
