@@ -5,9 +5,10 @@ DOM/audio layer, plus the measurements that followed. It is written down because
 the audit's value is not the list — it is **which kinds of finding survived
 measurement and which did not**, and that pattern is reusable.
 
-Nothing here was profiled in a browser. Every "measured" number below is either
-a whole-build wall time in the Node VM harness or a before/after with the change
-stashed and restored; the GPU-side claims are all still **unverified**.
+Every "measured" number below is either a whole-build wall time in the Node VM
+harness or a before/after with the change stashed and restored. The GPU-side
+claims are still **unverified**, and §3 records the attempt that established
+they cannot be verified here — see the env-probe entry.
 
 ---
 
@@ -62,7 +63,25 @@ hundreds of chunk draw calls for 4096 pixels of blurred reflection. This is the
 only finding where the win is draw-call submission rather than a shaved
 constant, and game.js already calls this pass "the biggest per-frame load
 multiplier" — the mitigation that shipped halved its *rate*, not its *reach*.
-**Profile before touching**: the size depends entirely on chunk counts.
+**Profile before touching**, and note that this box cannot do it. Attempted:
+
+- Counting `drawChunked` CALLS separates the passes (1 env / 2 main per frame)
+  but not the chunks inside them, which is where the cost is. Useless.
+- Frame timing under SwiftShader is worse than useless — it is **misleading in
+  the optimistic direction**. Measured baseline on vegas parked, 640x360:
+  **2872 ms median frame** (p25 2751, p75 3216). At 0.35 fps the frame is
+  dominated by SOFTWARE RASTERISATION of ~1.8 M verts, so any change that
+  removes geometry posts a large win that a real GPU — where the bottleneck is
+  submission, not fill — would not repeat. A number from that harness would
+  have looked like strong evidence and been worth nothing.
+
+A patch was written and reverted unmeasured: save/restore `frame.cullDist`
+alongside `viewProj` and `eye`, with a 220 m probe cull. It is defensible on its
+face — the save/restore triple is plainly incomplete — but it is not purely a
+correctness fix, because narrowing the cull CHANGES what the reflection
+contains. Shipping a visible behaviour change whose benefit cannot be measured
+here is the trade this document exists to warn against, so it was reverted
+rather than shipped on plausibility. It needs a real GPU and a frame capture.
 
 **Two full-field O(n²) AI scans** at `js/game.js` — traffic awareness and
 lateral separation, ~370 lines apart. The second loop's window (`|Δp| ≤ 6.5`)
