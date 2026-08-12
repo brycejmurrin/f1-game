@@ -322,6 +322,19 @@ const TrackMesh = (function () {
   // footprint can reach the query point. The accept/reject maths in each caller
   // is unchanged — the grid only narrows the candidate SET to a superset of every
   // node that could pass, so the resulting geometry is identical.
+  //
+  // CELL=10 IS NOT WORTH SPLITTING. buildTerrain's over-track clip is the one
+  // wide query (R = maxHw + 27 ~ 33 m) and at this cell it sweeps ~64 buckets to
+  // find ~8 candidates, which looks like an obvious win for a second, coarser
+  // grid. It was tried: a CELL=24 grid used for that query alone, verified
+  // bit-identical on monza/spa/suzuka/zandvoort/vegas/silverstone (all five
+  // buffers, element by element). Measured with both grids pre-warmed so the
+  // timer covered query cost only, isolated buildTerrain moved 6 / 6 / 2 / 7 /
+  // 0 percent — and buildTerrain is 5-15% of a build, so under 1% of load, for
+  // a second grid and a per-cell cache. Reverted. A first pass that left grid
+  // CONSTRUCTION inside the timer for the coarse arm only reported 4 / -1 / -2
+  // / 5 / 3, i.e. the bias was worth more than the effect. If you revisit this,
+  // pre-warm both arms or you will measure the wrong thing.
   function nodeGrid(track) {
     if (track._nodeGrid) return track._nodeGrid;
     const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
@@ -794,6 +807,18 @@ const TrackMesh = (function () {
       // amount of sun. Measured on the built mesh: monaco's ribbon averages
       // 24.9° of real tilt, silverstone's 5.2°, none of which reached the
       // shading. tests/unit/terrain-normals.test.mjs guards the collapse back.
+      //
+      // SCOPE, measured — this is a correctness fix, NOT a cure for the scene
+      // reading flat, which is what it was first justified as. A controlled A/B
+      // on spa (identical camera eye to 3 dp, day, dry) moved the frame's mean
+      // neighbour delta by -1.8% / +0.8% / +4.8% across chase, heli and an Eau
+      // Rouge heli — small and mixed, not the visible change that claim
+      // predicted. Most ground a player actually sees on an open circuit is
+      // either the flat floor slab or terrain past the shading-detail range,
+      // and the ribbon's steep parts are largely the carve channels beside the
+      // road, which the road itself hides. Worth having because a constant
+      // up-normal on non-flat geometry is simply wrong; not worth citing as a
+      // flatness fix.
       //
       // Accumulate area-weighted face normals over the strip (area weighting
       // falls out of using the un-normalised cross product) and normalise once.
