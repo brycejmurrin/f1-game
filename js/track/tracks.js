@@ -1975,7 +1975,15 @@ const Tracks = (function () {
         MAT,
         // Named atmosphere / colour packs (js/track/scenery-data.js)
         ATM, COL,
-        place, prop, backdrop, groundPlane, groundYAt, addBox, every, onTrack,
+        place, prop, backdrop, groundPlane, groundYAt,
+        // World-XZ ground query, exposed to circuits because its ABSENCE is
+        // what makes Trap B (docs/SCENERY-GROUNDING.md §2) so easy to write:
+        // groundYAt is a NODE query, so a circuit walking a tangent away from
+        // the centreline had nothing to ask and reused one anchor's height
+        // across tens of metres of slope. Returns null off the rendered
+        // ribbon; callers fall back to whatever they were using before.
+        terrainYAt,
+        addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
         // Resolved data and opt-in architectural/facility helpers. Merely binding

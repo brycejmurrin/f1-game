@@ -40,12 +40,27 @@ const TrackModels = (function () {
   // that is tens of millions of non-inlinable calls per track load; inline, the
   // same work is a predictable read-and-compare the JIT keeps in registers.
   // Behaviour is identical, including which reason wins.
+  // Hoisted out of the loop below. `Infinity` is a GLOBAL, and under
+  // vm.createContext — which tools/verify-track.cjs, tools/graph-parity.cjs and
+  // the VM-based unit suites all use — every bare global read goes through the
+  // contextified global's C++ interceptor. At 27 M elements x 2 lookups that is
+  // ~54 M interceptor calls: validateGeometry measured 10.4 s of a 13.9 s Vegas
+  // build in the VM (75 %), against 13 ms for the identical scan from host
+  // scope. Hoisting took Vegas 14.7 s -> 5.7 s and Monza 5.2 s -> 2.7 s.
+  //
+  // In a browser this is a constant and costs nothing, so it is a dev-loop fix,
+  // not a player-facing one — and it is a caution about the comment above:
+  // this loop was hand-rolled FOR speed and then measured in the one
+  // environment that made the globals expensive, so the callback took the
+  // blame for what two property loads were doing. 1/0 === Infinity, so the
+  // comparison is unchanged.
+  const POSINF = 1 / 0, NEGINF = -1 / 0;
   function firstNonFinite(a) {
     for (let i = 0; i < a.length; i++) {
       const v = a[i];
       // Cheap fast path: only fall back to the real predicate for values that
       // fail a plain numeric comparison (NaN and both infinities do).
-      if (!(v > -Infinity && v < Infinity)) return true;
+      if (!(v > NEGINF && v < POSINF)) return true;
     }
     return false;
   }
@@ -232,7 +247,13 @@ const TrackModels = (function () {
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
         const forward = [dx / length, dy / length, dz / length];
-        let right = [-forward[2], 0, forward[0]];
+        // right = [fz,0,-fx] (not [-fz,0,fx]) so the derived up = forward×right
+        // points +Y. With the old sign up.y = -(fx²+fz²) < 0 pointed DOWN, so the
+        // center offset (mid + up*height/2) sank the box below grade: the box
+        // spanned [mid.y-height, mid.y] — top flush with the ground, whole wall /
+        // cut-bank / banking buried and invisible. addBox's flip detection already
+        // tolerates the resulting basis handedness.
+        let right = [forward[2], 0, -forward[0]];
         const rl = Math.hypot(right[0], right[2]) || 1;
         right = [right[0] / rl, 0, right[2] / rl];
         const up = [

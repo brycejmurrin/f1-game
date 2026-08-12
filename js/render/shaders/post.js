@@ -327,22 +327,16 @@ void main() {
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
     float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
-    // SUN SHAFTS — skipped wholesale when the sun term is off, which is the
-    // NORMAL configuration for a night race. This pass is entered when EITHER
-    // the shafts or the lamp volumetrics are live, and at night game.js drives
-    // uStr to 0 (the god-ray strength is gated on sun luminance) while the lamp
-    // half below is exactly what we came here for. The lamp block already has
-    // its uLampStr > 0.0 guard one scope down; the sun half had none, so every
-    // night frame paid 16 shadow-map fetches, 16 mat4 transforms and 16
-    // three-octave cloud FBM evaluations per half-res pixel to build accum —
-    // which the last line then multiplies by uStr, i.e. by zero.
-    //
-    // gCloud does not rescue it either: its own early-out is on uSunDir.y, and
-    // glx.js deliberately holds the night moon-key high (y~0.97) for the sky
-    // glow, so the noise runs at full cost in the dark.
-    //
-    // Uniform branch — same value for every fragment, so it is fully coherent
-    // and costs nothing in divergence. Output is bit-identical when uStr > 0.
+    // The SUN half of the march, gated the way the lamp half below already is.
+    // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
+    // end — so at uStr == 0 every shadow tap and gCloud() call here is
+    // multiplied away. The pass still RUNS at night, because haveGR is true
+    // whenever lampVol > 0, and gCloud cannot early-out either: the night
+    // moon-key is deliberately held at sunDir.y ~ 0.97 to drive the sky glow,
+    // so on a cloudy night this ran a 3-octave FBM 16x per half-res pixel for
+    // nothing. uStr is a uniform, so this is uniform control flow — no
+    // divergence — and trans is still stepped outside the branch, which is
+    // what keeps lampAccum bit-identical.
     if (uStr > 0.0) {
       float hSun = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
       vec4 lc = uLightVP * vec4(p, 1.0);

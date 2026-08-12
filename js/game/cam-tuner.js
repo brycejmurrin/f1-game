@@ -98,8 +98,13 @@ function updateCtProfileLabel() {
   host.textContent = curLabel() + (n ? "  (" + n + " tuned)" : "  (default framing)");
   const modes = $("ct-modes");
   if (modes) for (const b of modes.children) {
-    b.classList.toggle("on", b.dataset.mode === curMode());
+    const on = b.dataset.mode === curMode();
+    b.classList.toggle("on", on);
     b.classList.toggle("tuned", CamTune.count(b.dataset.mode) > 0);
+    // These chips carry role="tab" but never announced their selected state —
+    // the active camera was invisible to assistive tech (the lighting tuner
+    // already sets aria-selected; this matches it).
+    b.setAttribute("aria-selected", on ? "true" : "false");
   }
 }
 function refreshCamTunePanel() {

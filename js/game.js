@@ -1250,6 +1250,10 @@ const _flapWorld = new Float32Array(16);
 // it in mid-air behind a car that has no rear wing.
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
+  // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
+  // finish remap never reached them — a chrome/satin car kept glossy top flaps.
+  // Thread the livery finish through so getAeroFlap remaps the flap material too.
+  const finish = resolveLivery(team).finish || null;
   const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
   for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
     const fg = flaps[i];
@@ -1270,7 +1274,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
       W[8 + k] = -uu * sa + ff * ca;
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
-    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg);
+    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish);
     if (mesh) gfx.draw(mesh, W, mat);
   }
 }
@@ -1986,10 +1990,10 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const W = _ringWorld;
       W.set(_wheelWorld);
       W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
-      gfx.draw(getBrakeRing(), W, {
-        emissive: 0.30 + 0.70 * heat, roughness: 0.9, specular: 0,
-        alpha: Math.min(1, 0.25 + heat * 0.9), noAlphaWrite: true,
-      });
+      // Pooled, like the AI ring path: this allocated a literal per hot wheel.
+      const ro = _ringOpts;
+      ro.emissive = 0.30 + 0.70 * heat; ro.alpha = Math.min(1, 0.25 + heat * 0.9);
+      gfx.draw(getBrakeRing(), W, ro);
     }
   }
 }
@@ -2190,6 +2194,10 @@ function armReliability(field) {
     // The player's own build is the R&D economy's grip on this: an AI runs its
     // team's works car, which `tier` already says everything about.
     build: Reliability.buildQuality(getTeamParts(team.id), team),
+    // In a friend race each peer arms the whole field but knows only its OWN
+    // build, so build relief must be OFF or the two peers draw split thresholds
+    // off the same shared hash and disagree on who retires.
+    networked: !!(netPlay && netPlay.active && netPlay.active()),
   });
   return field;
 }
@@ -2581,6 +2589,11 @@ const G = {
   openCareer: (...a) => openCareer(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
+  // The stateless-draw round, resolved EXACTLY as armReliability() does: the
+  // championship round in a season/career, else the per-session race counter.
+  // quali.js reads this so a non-career season's qualifying execution draw varies
+  // round to round instead of being frozen at a hardcoded 0.
+  get seasonRound() { return isChampionship() && season ? season.round : raceIndex; },
   get ttNewRecord() { return ttNewRecord; },
   get ttSessionTs() { return ttSessionTs; },
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
@@ -3717,7 +3730,16 @@ function updateCar(c, dt, ranked) {
         if (soundOn) GameAudio.offtrack();
       }
     }
-  } else if (c.offT > 0) c.offT = Math.max(0, c.offT - dt);
+  } else if (c.offT !== 0) {
+    // Relax offT toward 0 during clean running — from BOTH sides. A counted cut
+    // parks it at the -2 grace sentinel; decaying only positive values (the old
+    // `else if (c.offT > 0)`) froze that -2 the whole rest of the stint, so the
+    // NEXT, separate excursion started from -2 and needed ~3.2 s off-track to
+    // count instead of 1.2 s — an unintended free pass. The continuous-excursion
+    // grace is unaffected: that path is the `if` branch above (offT += dt), not
+    // this one, which only runs while the car is back on track.
+    c.offT = c.offT > 0 ? Math.max(0, c.offT - dt) : Math.min(0, c.offT + dt);
+  }
 
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
@@ -4374,8 +4396,12 @@ function updateCar(c, dt, ranked) {
         // Grid sits just before the line (in S3). The first start/finish crossing
         // only starts the flying lap (lap 0→1) — do NOT stamp that formation
         // segment as an S3 split/best, or the HUD shows a bogus ~few-second S3
-        // the moment the race begins.
-        if (c.lap >= 1) {
+        // the moment the race begins. And skip an incident-invalidated lap: a
+        // takeover freezes c.lapTime while Rapier walks c.s forward, so `elapsed`
+        // over the skipped sector is impossibly short — it would set a permanent
+        // bogus sector best, exactly the corruption the lap-best (4420) and ghost
+        // (4456) already guard against with this same flag.
+        if (c.lap >= 1 && !c.incidentInvalidLap) {
           const elapsed = c.lapTime - sectorStartT;
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
@@ -4449,6 +4475,12 @@ function updateCar(c, dt, ranked) {
       // (A finished car cannot get here — updateCar early-outs it long before
       // the crossing logic — so no `c.finished` undo is needed.)
       if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
+      // Crossing back over the line wraps c.s from ~0 to ~track.total, breaking the
+      // monotonic-distance domain the ghost recorder assumes. Ghost.record only
+      // rejects DECREASING s, so the next forward-jump sample would be appended and
+      // at() would interpolate the replay ghost crawling across the whole lap.
+      // Restart the recording so the re-timed lap records cleanly from here.
+      if (c.isPlayer && isTimeTrial()) Ghost.startLap();
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
@@ -6091,9 +6123,25 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
+    // Distance-gated for RIVALS, exactly as the brake rings above are and for
+    // the same reason — a wing element is ~1 m x 0.15 m, and 4 flaps x 21 AI is
+    // ~84 draws a frame, every one a VAO bind + drawElements (each flap is its
+    // own mesh, so the bind never hits the cache). The cue this exists to sell
+    // is the car AHEAD of you opening its wings, not one two straights away.
+    // 150 m is deliberately generous next to the rings' 40 m: the rings are a
+    // glow that genuinely goes sub-pixel, whereas a rear wing swinging is still
+    // legible at distance. The player is never gated — it is the car you are
+    // looking at.
     if (!carModelBuf) {
-      const aSt = teamDecalState(c.team, c.isPlayer);
-      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
+      let drawFlaps = true;
+      if (!c.isPlayer) {
+        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
+      }
+      if (drawFlaps) {
+        const aSt = teamDecalState(c.team, c.isPlayer);
+        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
+      }
     }
     // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
     // at night — a car's rear/vertical faces receive none of the downward-aimed

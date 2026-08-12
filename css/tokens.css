@@ -68,6 +68,29 @@
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none !important; }
+  /* Backstop for the infinite loops the curated per-site handling doesn't reach
+     (redline/overtake pulses, the data spinner, the yellow-flag pulse, the
+     rotate-device hint). Don't remove animation — make it instant and non-
+     repeating, so one-shot transitions still complete but nothing throbs.
+     WCAG 2.3.3 / vestibular safety. */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows High Contrast / forced-colors: gradients and translucent panel edges
+   flatten to system colours, so the red-border "selected" cue and panel outlines
+   can vanish. Restate selection and panel edges with system colours + a non-
+   colour outline so the sighted high-contrast user keeps the affordance the
+   aria-pressed mirroring already gives assistive tech. */
+@media (forced-colors: active) {
+  [aria-pressed="true"], [aria-selected="true"], .active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .sheet, .hud-box, dialog { border: 1px solid CanvasText; }
 }
 
 /* Scroll-fade custom properties. The fade is driven by JS, not a scroll
@@ -183,6 +206,21 @@
   --tap: 44px;      /* minimum interactive box */
   --chip-h: 40px;   /* chips are secondary — one step below --tap */
   --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
+  /* THE WCAG FLOOR, AND THE ONE LENGTH HERE THAT DIVIDES BY THE SCALE.
+     The note below is right that a size token must NOT pre-multiply — a zoomed
+     subtree already scales what it inherits, and doing both double-counts. A
+     FLOOR is a different kind of thing: 24px is a requirement in the pixels a
+     thumb actually lands on, so it has to survive the subtree being scaled DOWN.
+     --tap at 44 has headroom and is fine at every setting (44 x 0.8 = 35.2);
+     a control sitting exactly on 24 has none.
+     MEASURED, 1900-cell matrix across five UI sizes: at UI SIZE 80% the two
+     tuner panels put 35 and 23 controls under the floor, plus the ADVANCED
+     STEERING and MUSIC & SOUND sliders — every one of them 19px, which is
+     24 x 0.8. Nothing failed at 115 or 130. A single-scale survey could not see
+     it, and the scale ladder ships all five.
+     max(), so a control never SHRINKS at a large scale either: at 1.5 the 24px
+     branch wins and it paints 36. */
+  --tap-min: max(24px, calc(24px / var(--ui-scale)));
   --label: 12px;    /* section label type size */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —

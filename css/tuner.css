@@ -70,7 +70,12 @@ body:has(#camtune:not([hidden])) {
    each side there are 549 usable pixels, and a 380px panel leaves 151 — not one
    thumbstick, never mind two and a climb/dive column. */
 body.photo-mode:not(.pc-nopanel):has(#lighting:not([hidden])),
-body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) { --dock-w: min(46vw, 300px); }
+body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) {
+  /* `46 * --vwz`, not `46vw` — same correction as the base --dock-w above and
+     for the same reason: this is consumed inside `zoom: var(--ui-scale)`, so a
+     bare viewport unit paints at 53vw on the coarse-pointer default. */
+  --dock-w: min(calc(46 * var(--vwz)), 300px);
+}
 /* …and the panel sheds the furniture it does not need while flying. A 300px
    panel on a 393px-tall phone has ~370px of height, and the fixed head — title,
    FREE CAMERA, the session line, two rows of TIME chips, two of WEATHER, the
@@ -85,6 +90,63 @@ body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) { --dock-w: min(46v
 body.photo-mode:not(.pc-nopanel) #lt-preview,
 body.photo-mode:not(.pc-nopanel) #lt-profile,
 body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
+
+/* THE FLYING PANEL ON A PHONE, which is much narrower than the 300px cap makes
+   it sound. `--dock-w: min(46 * --vwz, 300px)` was chosen against a LANDSCAPE
+   phone, where 46vw of 852 is 392 and the cap governs. In PORTRAIT 46vw of 393
+   is 181, and at UI SIZE 150% the panel's own width comes out at 120 units — a
+   third of what the cap suggests, and narrower than several of the controls
+   inside it. Measured: 137.5 units at 130%, 120.5 at 150%.
+   These are the rules that survive that. They are deliberately OUTSIDE the
+   `@media (min-width: 720px)` rail block below: a portrait phone never reaches
+   it, which is exactly why the free-camera layout restored there does not help
+   here. */
+/* The head wraps HERE and only here. Title (66.3 own units) plus the FREE CAMERA
+   button (77.6) want 144, and `space-between` has no answer when they do not both
+   fit — it pushes the second one out of a panel that is `overflow: hidden`, so it
+   is cut rather than scrollable to. MEASURED flying on a portrait iPhone: the
+   head's content box is 109.5 units at 130% and 91.2 at 150%, and the button hung
+   29.6 and 47.9 units past the edge.
+   Scoped, because unscoped it is a REGRESSION and the audit caught it as one.
+   Docked, `--dock-w` is min(88 * --vwz, 380) — 230.6 own units on that same
+   phone at 150% — so the two already fit and wrapping only makes the head taller,
+   which pushed #lt-rows 17px into the home-indicator inset. A rule that fixes the
+   narrow case and costs the wide one has to ask which case it is in. */
+body.photo-mode:not(.pc-nopanel) :is(#lt-head, #ct-head) { flex-wrap: wrap; }
+body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot > button {
+  /* DONE is a .bigbtn and measured 113.2 own units against a 91.2-unit content
+     box, so it hung out of the panel. A grid item's automatic minimum is its
+     content — the same refusal-to-shrink that has cost this pass four separate
+     findings — so the floor has to be named. `flex: 1 1 auto` then lets the
+     three of them share what there is instead of each demanding its natural
+     width and wrapping to three rows: the foot measured 154 units tall of a
+     330-unit panel at 150%, which is half the height the sliders needed. */
+  min-width: 0; flex: 1 1 auto;
+}
+/* AND ON A SHORT ONE, THE FURNITURE GOES TOO. Same argument the TIME/WEATHER
+   rows above are already removed by, one step further along, because the panel
+   gets shorter than that argument anticipated. MEASURED on a landscape iPhone
+   at 150%: the panel is 191.7 own units tall and its chrome — head 64, help
+   toggle 24, category strip 24, action bar 34.7 — takes 188 of them, leaving
+   the sliders THREE POINT SEVEN. A lighting tuner showing no sliders.
+   The title is decoration on a panel you just opened by name, and the
+   explanations toggle is a preference you set once; the sliders are the reason
+   the panel is still on screen at all. Both come back the moment there is room,
+   because `data-density` is measured, not guessed.
+
+   #lighting-inner ALONE, not the `:is(#lighting-inner, #camtune-inner)` pair the
+   rest of this file uses. `#pc-toggle` is the only way into photo mode and it
+   lives in the lighting tuner; `closeLightTuner` (js/game/tuner.js) calls
+   `exitPhotoMode()` on the way out; and the camera tuner is opened from pause
+   SETTINGS, which the lighting tuner hides while it is open. The camera tuner
+   can therefore never be in this state, and naming it here would be two dead
+   selectors — plus a prelude long enough that tests/unit/css-comments.test.mjs
+   flags it as prose, which is how this scope got questioned in the first
+   place. */
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] h2,
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-help-toggle {
+  display: none;
+}
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
@@ -115,7 +177,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    the end of this file). Everywhere else it must not exist as a box at all, or
    it would become the flex item and the panel would size its head/tabs/rows as
    one block instead of letting #lt-rows be the only thing that gives. */
-#lt-rail { display: contents; }
+#lt-rail, #ct-rail { display: contents; }
 
 /* min-height must be a real floor, not 0. Every other child is intrinsically
    sized (flex-shrink can't take a flex item below its content height), so
@@ -144,7 +206,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    already centres its contents and had ~12px of margin to spend. */
 .lt-help-toggle {
   display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
-  min-height: 24px;
+  min-height: var(--tap-min);
   font-size: 11px; opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
@@ -164,6 +226,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   flex-shrink: 0;
 }
 #lt-tabs .lt-tab, #ct-modes .lt-tab {
+  /* No explicit height before: padding + 10px text came to ~24, which is ON the
+     floor and therefore under it at any scale below 100%. 225 cells of the
+     1900-cell matrix failed on this one selector. */
+  min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
@@ -199,7 +265,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; margin: 0; padding: 4px 3px; font-size: 10px; }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: 10px; }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
@@ -244,13 +310,27 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 .adv-item { margin: 11px 0; }
 .adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
 .tune-row { display: block; margin: 0; }
+/* Name on the left, value on the right — and the VALUE IS THE PART THAT MUST
+   NOT BE LOST. `space-between` alone puts the name and the number on one line
+   and offers no answer when they do not both fit: the name is an anonymous flex
+   item floored at its min-content width, so it refuses to give way and the
+   number is pushed straight out of the panel. MEASURED, lighting tuner on a
+   landscape iPhone at UI SIZE 150%: MOON BRIGHTNESS's "1.00" sat 15px past
+   #lt-rows, whose overflow-x is hidden, so the slider showed a name, a track and
+   no reading. The camera tuner's DISTANCE lost "0.00m" the same way.
+   Wrapping is the whole fix: when they fit it is the row it always was, and
+   when they do not the number takes its own line — still right-aligned, by the
+   auto margin rather than by `space-between`, which does nothing once the items
+   are on separate lines. */
 .tune-label {
-  display: flex; justify-content: space-between; align-items: baseline;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
   font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
 }
-.tune-label b { color: var(--red); font-size: 13px; }
+.tune-label b { color: var(--red); font-size: 13px; flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
-  width: 100%; margin: 0; accent-color: var(--red); height: 24px; cursor: pointer;
+  /* --tap-min, not 24px: this sat exactly on the WCAG floor, so any UI SIZE below
+     100% put it under (19px at 80). See css/tokens.css. */
+  width: 100%; margin: 0; accent-color: var(--red); height: var(--tap-min); cursor: pointer;
 }
 /* ---------- MUSIC & SOUND panel ----------
    Two sections, each a header row with a small ON/OFF beside it and one slider
@@ -403,7 +483,7 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      precisely where they get tapped. 24 is the floor, and the row has the pixel
      to give — the panel does not get shorter for it. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
-    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: 24px;
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
@@ -419,7 +499,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs::-webkit-scrollbar { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot { margin-top: 6px; padding-top: 6px; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; }
+  /* The floor applies to the shrunken foot too: 12px text in 6px padding comes to
+     ~27 own px, which is 21-23 ACTUAL px at UI SIZE 80% — RESET, COPY VALUES and
+     DONE were the last three controls under the WCAG floor in the 1900-cell run. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; min-height: var(--tap-min); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
 
@@ -437,25 +520,40 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    chips become a vertical list here — the horizontal strip above is a
    short-panel compromise, and this layout has the room to show them all. */
 @media (min-width: 720px) {
-  /* the rail layout is wider — and --dock-w is how everything else finds out */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body:has(#lighting:not([hidden])) { --dock-w: min(70vw, 560px); }
-  /* ...EXCEPT while flying, where --dock-w is overridden above. The rail exists
-     to show twelve categories and their sliders side by side, which is worth
-     560px when the panel IS the screen; in FREE CAMERA the screen is the scene.
-     At the narrower flying width the two-column rail no longer fits, so put the
-     panel back into its tall single-column form. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner {
-    display: flex; flex-direction: column;
+  /* THE RAIL LAYOUT IS WIDER — AND --dock-w IS HOW EVERYTHING ELSE FINDS OUT.
+     `body:has(#lighting > #lighting-inner[data-density="compact"])`, because the
+     condition is about a DESCENDANT and the declaration has to land on body.
+     This rule and the six below it were, until 2026-08-12, written as
+     `#lighting-inner[data-density="compact"] body…` — `body` as a DESCENDANT of
+     the panel, which can never match anything. All seven were inert, and CSS
+     reports nothing for a selector that simply never matches.
+     They were valid when this block was gated by `@media (max-height: 620px)`;
+     rescoping the block onto `data-density` prefixed every rule in it with the
+     panel scope, including the ones that already started at `body`. Same class
+     of mistake as the two self-nesting selectors earlier in this pass, and the
+     same cause: a mechanical prefix applied to a block whose rules did not all
+     start in the same place.
+     WHAT WAS LOST: the rail declares a 210px furniture column and expects a
+     560px panel to pay for it. With this rule dead the panel stayed at its base
+     380 — or 300 in FREE CAMERA — so the sliders got 156px, and 76px while
+     flying. That is the screenshot: KEY LIGHT (SUN) set one word per line beside
+     a full-height rail.
+     NO FEEDBACK LOOP, checked: the panel's height is fixed by its top/bottom
+     insets, so `data-density` does not depend on the width this sets. */
+  /* `:not(.photo-mode)` rather than trusting the flying override to win. It used
+     to, when this condition was `body:has(#lighting:not([hidden]))` — (1,1,1)
+     against the flying rule's (1,3,1), decided on classes. Naming the panel's
+     density inside :has() puts a SECOND id in this selector, and (2,2,1) beats
+     three classes no matter what. Stating the exclusion is what keeps the two
+     rules from being ordered by an accident of how the condition is spelled. */
+  body:not(.photo-mode):has(#lighting:not([hidden]) > #lighting-inner[data-density="compact"]),
+  body:not(.photo-mode):has(#camtune:not([hidden]) > #camtune-inner[data-density="compact"]) {
+    /* `70 * --vwz`, not `70vw` — this file's own header explains why: the value
+       is consumed inside `zoom: var(--ui-scale)`, so a bare viewport unit is
+       multiplied by the scale and paints as 80vw at the 1.15 a coarse pointer
+       ships. The base --dock-w was corrected; these two overrides were missed. */
+    --dock-w: min(calc(70 * var(--vwz)), 560px);
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-rail { display: contents; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-rows { max-height: none; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot {
-    display: flex; flex-wrap: wrap; margin-top: 6px; padding-top: 6px;
-  }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lighting-inner .lt-tabs {
-    display: flex; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
-  }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] body.photo-mode:not(.pc-nopanel) #lt-tabs .lt-tab { white-space: nowrap; flex: 0 0 auto; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
     display: grid;
     grid-template-columns: 210px minmax(0, 1fr);
@@ -471,12 +569,12 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
      painted underneath RESET ALL / COPY VALUES / DONE. The rail scrolls, so it
      never needed the second row — the foot's height is exactly what row 2 is
      for. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rail {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rail, #ct-rail) {
     display: flex; flex-direction: column;
     grid-column: 1; grid-row: 1;
     min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-rows {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
     grid-column: 2; grid-row: 1;
     min-height: 0; max-height: none;
   }
@@ -494,7 +592,13 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot button {
     margin: 0; min-width: 0;
-    padding: 5px 6px; font-size: 11px; min-height: 0;
+    /* --tap-min, NOT 0. `min-height: 0` here was cancelling the floor the block
+       above sets, and this rule wins on both order and the child combinator — so
+       on a landscape phone (852 wide, so the rail applies) at UI SIZE 80% RESET,
+       COPY VALUES and DONE measured 21-23 ACTUAL px, under WCAG 2.5.8's 24. The
+       intent of the 0 was to let the buttons shrink in the rail, and they still
+       do: --tap-min only floors the axis a thumb needs. */
+    padding: 5px 6px; font-size: 11px; min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > #lt-close { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
@@ -520,6 +624,43 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { grid-column: 1 / -1; width: auto; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn { min-width: 0; }
+
+  /* ---------- ...EXCEPT WHILE FLYING: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
+     The rail exists to show twelve categories and their sliders side by side,
+     which is worth 560px when the panel IS the screen. In FREE CAMERA the
+     screen is the SCENE — --dock-w drops to 300 so two thumbsticks and a
+     climb/dive column have somewhere to live — and a 210px furniture column out
+     of 300 leaves the sliders 76. Measured: "KEY LIGHT (SUN)" set one word per
+     line, its explanation sliced by the panel edge, the toggle half off. A
+     column that narrow is not a column, so give the panel back its single-column
+     flow: furniture on top, sliders under it, action bar at the foot.
+     The height that pays for it is already found — `#lt-preview`, `#lt-profile`
+     and `#ct-profile` stand down while flying (see the top of this file), which
+     is ~155px of TIME/WEATHER setup nobody adjusts mid-shot.
+     AFTER the rail block, not before it. These beat the rail rules on
+     specificity either way, but a layout override that also comes later cannot
+     be undone by someone adding one more rail rule underneath. */
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
+    display: flex; flex-direction: column;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rail, #ct-rail) {
+    display: contents;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
+    max-height: none;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot {
+    display: flex; flex-wrap: wrap; margin-top: 6px; padding-top: 6px;
+  }
+  /* the categories go back to the horizontal scroll strip the short panel uses:
+     a two-column chip grid down a full-width panel would spend the height the
+     sliders just got back */
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
+    white-space: nowrap; flex: 0 0 auto;
+  }
 }
 /* advanced disclosure */
 .adv-more-btn { width: 100%; margin: 14px 0 2px; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85; }

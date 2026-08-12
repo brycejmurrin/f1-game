@@ -247,7 +247,9 @@
      grid. The cap is what stops a long catalogue from starving the list. */
   flex: 0 0 auto; min-height: 0;
   max-height: 48%;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  /* min(...) floor — see #sel-teams in css/menus.css: a bare px floor cannot
+     shrink below itself, so a narrow strip overflows instead of re-flowing. */
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr));
   gap: calc(var(--gap) * 0.5); align-content: start;
 }
 #cs-options {
@@ -523,6 +525,25 @@
    the right answer there — it has the height to spend and no width. */
 #cs-inner {
   --pair-at: 400px;
+  /* 480, NOT THE 380 EVERY OTHER SHEET USES. `--compact-at` asks "is this sheet
+     short in its own units", and the honest threshold is different per screen
+     because what a screen must fit before its content starts is different. The
+     garage carries the most fixed furniture in the app — title, budget bar and
+     readout, a four-number stat block, a twelve-category strip, and a two-button
+     action bar — which comes to ~320 own units in the normal tier. A sheet under
+     480 therefore has under 160 left for the parts list, and a part row is 62:
+     under three of them, on the screen whose entire purpose is comparing parts.
+     MEASURED, portrait iPhone at UI SIZE 100% — the shipped default, the most
+     common way this screen is ever seen. Sheet 444.5 own units, so at 380 it
+     classified NORMAL and got the roomy head: head 196.3, foot 72.1, parts list
+     93.7 — ONE AND A HALF cards out of a catalogue of five. At 480 the compact
+     head this file already builds engages: head 154.8, foot 58.7, list 165.7 —
+     3.1 cards, and the budget readout stops wrapping. Nothing new is drawn; the
+     tier was simply never reaching the case it was designed for.
+     Not a general raise: 380 is right for a sheet that is mostly list. This is
+     the number for a sheet that is mostly chrome, which is why it is declared
+     here beside --pair-at rather than moved into css/tokens.css. */
+  --compact-at: 480px;
   /* 28%, not 27%. At 27% a 529px desktop sheet gave the rail 142px, which left
      the category label 67px against the 70px "SUSPENSION" needs at the 10px
      desktop size — truncated by THREE pixels. Here the share binds, not the
@@ -662,10 +683,14 @@
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
   font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
-  background: rgba(12,12,16,0.62); color: rgba(255,255,255,0.62);
+  background: rgba(12,12,16,0.74); color: rgba(255,255,255,0.62);
   border: 1px solid rgba(255,255,255,0.14);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  /* no backdrop-filter: these chips sit over the garage's LIVE turntable
+     canvas (renderSetupPreview spins the car every frame), so a blur here
+     makes the compositor re-snapshot and re-blur the backdrop every frame
+     on the screen you sit on longest outside a race. Same call hud.css and
+     overlays.css already make over the race canvas; the tinted bg, raised
+     a little to compensate, carries the look. */
   min-height: 30px;
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
@@ -686,10 +711,14 @@
   pointer-events: auto;
   display: flex; flex-direction: column; gap: 5px;
   padding: 8px 10px; border-radius: var(--r-sm);
-  background: rgba(10,10,14,0.86);
+  background: rgba(10,10,14,0.94);
   border: 1px solid rgba(255,255,255,0.14);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  /* no backdrop-filter: these chips sit over the garage's LIVE turntable
+     canvas (renderSetupPreview spins the car every frame), so a blur here
+     makes the compositor re-snapshot and re-blur the backdrop every frame
+     on the screen you sit on longest outside a race. Same call hud.css and
+     overlays.css already make over the race canvas; the tinted bg, raised
+     a little to compensate, carries the look. */
   max-width: 100%;
 }
 #cs-cam-panel[hidden] { display: none; }
@@ -726,10 +755,14 @@
   display: flex; flex-direction: row; align-items: baseline; gap: 7px;
   width: auto; margin: 0;
   padding: 5px 10px; border-radius: var(--r-sm);
-  background: rgba(12,12,16,0.62);
+  background: rgba(12,12,16,0.74);
   border: 1px solid rgba(255,255,255,0.14);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  /* no backdrop-filter: these chips sit over the garage's LIVE turntable
+     canvas (renderSetupPreview spins the car every frame), so a blur here
+     makes the compositor re-snapshot and re-blur the backdrop every frame
+     on the screen you sit on longest outside a race. Same call hud.css and
+     overlays.css already make over the race canvas; the tinted bg, raised
+     a little to compensate, carries the look. */
   min-height: 30px;
 }
 @media (hover: hover) {
@@ -764,10 +797,14 @@
   flex: 0 0 auto; width: auto; margin: 0;
   font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
   padding: 5px 9px; border-radius: var(--r-sm);
-  background: rgba(12,12,16,0.62); color: var(--dim);
+  background: rgba(12,12,16,0.74); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  /* no backdrop-filter: these chips sit over the garage's LIVE turntable
+     canvas (renderSetupPreview spins the car every frame), so a blur here
+     makes the compositor re-snapshot and re-blur the backdrop every frame
+     on the screen you sit on longest outside a race. Same call hud.css and
+     overlays.css already make over the race canvas; the tinted bg, raised
+     a little to compensate, carries the look. */
   /* Touch targets: the visual chip stays small, the hit area does not. */
   min-height: 30px;
 }
@@ -876,6 +913,39 @@ body:not(.desktop) .cs-cam-lbl,
 body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
 body:not(.desktop) .cs-cam-caret { font-size: 11px; }
 body:not(.desktop) #cs-unlimited { font-size: 12px; }
+/* FREE BUILD COMES OFF THE FULL TAP LADDER ON A SHORT SHEET — and it is the
+   single biggest thing in this header, by a distance nobody would guess from
+   looking at it. It is a 10px chip with 4px of padding, so its own content is
+   ~18 own units; `min-height: var(--tap)` (css/components.css) makes it 52, and
+   because it shares a flex line with the budget READOUT, which is 20, the whole
+   line becomes 76.
+   MEASURED, garage on a landscape iPhone at UI SIZE 150% — the shape the game is
+   played in. Sheet 218 own units. Header 146.4 of them: title+budget line 76,
+   budget bar 10, stat block 46. Foot 54. Which leaves SEVENTEEN units for the
+   category rail and the parts list TOGETHER, both of which the audit's new
+   `starved` check correctly calls absent. One button's tap floor was a third of
+   the panel.
+   `--tap-min` is the WCAG 2.5.8 floor expressed in the sheet's own units
+   (css/tokens.css) — 24 ACTUAL px however the sheet is zoomed. So this stays a
+   legal target; it stops being a 52px one. That trade is already made twice in
+   this codebase for exactly this kind of control, both recorded: the tuner's
+   rail foot and the compact action bars. FREE BUILD is a two-state toggle you
+   press once a session, sitting next to the list you came to the screen to read.
+   Only where the sheet is short. At any comfortable height it keeps the full
+   ladder, because there the 52 costs nothing. */
+#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--tap-min); }
+/* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
+   nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
+   same fact, exactly, in text — the bar is a glanceable for a number that is
+   already legible. It costs 10 own units plus its row gap.
+   MEASURED with the notch injected, garage on a landscape iPhone at UI SIZE
+   150%: the panel is 306 device px tall, the action bar takes 82, the header
+   takes ~180, and #cs-tabs and #cs-options were left THIRTY-NINE PX EACH — under
+   the 44px floor `starved` uses, and under one row of either list. Every pixel
+   the header gives back here is a pixel of the two lists the screen exists for.
+   Only in the compact tier. On any panel with the height for it the bar is worth
+   having, and it comes straight back. */
+#cs-inner[data-density="compact"] #cs-budget-bar { display: none; }
 
 /* ---------- the SHORT garage head ---------- */
 /* `data-density="compact"` (js/game/sheetshape.js) means the sheet is short in
@@ -912,6 +982,33 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
+/* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
+   UI SIZE 150% the head and the foot together came to 2px more than the panel,
+   so the grid's 1fr body row collapsed to zero and the 2px landed on .sheet-foot
+   — BACK and DONE clipped by exactly that much in four screens of the matrix.
+   The shared compact tier already trims this to ~2.9px a side (--pad 13 x 0.22);
+   the garage is the densest sheet in the app and needs the last two. */
+#cs-inner[data-density="compact"] > .sheet-foot { padding-top: 1px; padding-bottom: 1px; }
+/* ...AND IT MAY NOT WRAP. Two buttons in a `flex-wrap: wrap` bar is a coin flip
+   decided by a few pixels, and on a portrait phone at UI SIZE 150% it lands the
+   wrong way: BACK and DONE want 226 of the 220 units inside the foot, so DONE
+   drops to a second row and the bar goes 52 units tall to 114. The panel is 340
+   units. That six-unit overshoot cost the parts list a THIRD of the sheet.
+   The comment further up this file already recorded wrapping making this foot
+   132px tall once, in the pair layout, and fixed it by giving the bar more room.
+   That fix does not reach here, because in the stacked layout the bar is the
+   panel's full width and the panel is 246 units wide — there is no more room to
+   give. Two equal columns instead: the buttons share whatever there is and the
+   count of rows is a fact of the layout rather than an outcome of arithmetic.
+   `minmax(0, 1fr)` and `min-width: 0` because a grid item's automatic minimum is
+   its content, which is the same refusal-to-shrink that started this. */
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot > button {
+  min-width: 0; margin: 0;
+}
 
 /* ---------- portrait: categories as one scrolling strip ---------- */
 /* The stacked category grid is the biggest single item in a portrait garage —
@@ -950,7 +1047,19 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    half that has to agree. */
 @media (orientation: portrait) {
   #carsetup { place-items: start stretch; }
-  #cs-inner { width: 100%; height: 70%; }
+  /* CONTENT FIRST, BAND SECOND — the floor is in OWN units and the 70% is not.
+     `height: 70%` reserves a fixed share of the SCREEN, but what the panel needs
+     is a number of its own pixels, and those two diverge as the zoom rises: at
+     UI SIZE 115% on a 393x852 phone 70% leaves the panel 345 own px and the head
+     + category strip + foot want ~345, so it just fits; at 150% the same 70% is
+     only 264 own px and the option list ran 79px out of the bottom of the sheet.
+     The 1900-cell matrix reported that as 561 clipped elements on garagelivery,
+     which is one overflow counted once per descendant.
+     min-height is therefore the priority statement: the panel keeps enough of
+     its own pixels to hold its content, and the car band is whatever is left —
+     which at 150% is very little, and that is the correct trade. A band nobody
+     can read a car in is not worth an option list nobody can reach. */
+  #cs-inner { width: 100%; height: 70%; min-height: 340px; }
 }
 @media (orientation: portrait) {
   #cs-inner[data-pair="off"] #cs-tabs {

@@ -287,7 +287,9 @@
 
 /* weather */
 .dh-weather { margin: 6px 0 12px; }
-.dh-wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+/* min(...) floors throughout — see #sel-teams in css/menus.css: `minmax(90px,
+   1fr)` still emits a 90px track in an 80px box, and overflows it. */
+.dh-wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr)); gap: 8px; }
 .dh-wx-cell { background: rgba(255, 255, 255, 0.05); border-radius: var(--r-md); padding: 8px 10px; }
 .dh-wx-label { font-size: var(--fs-1); letter-spacing: 0.1em; color: #8a8a95; }
 .dh-wx-value { font-size: var(--fs-5); font-weight: 700; color: #f2f2f5; margin-top: 2px; }
@@ -394,7 +396,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
 
 .dh-dash {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(68px, 100%), 1fr)); gap: 8px;
   margin: 6px 0 8px; padding: 10px 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);

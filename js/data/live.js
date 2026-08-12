@@ -170,7 +170,11 @@ const DataLive = (function () {
       // in, or a picker-change rebuild would re-arm the replaced body instead.
       armAuto = () => {
         stopLiveAuto();
-        liveTimer = setInterval(() => { if (dataEl.isConnected) refresh(); }, LIVE_REFRESH);
+        // Skip the fetch while the tab is hidden — OpenF1's free tier is rate-
+        // limited (export.js sleeps 3-5s between calls), and a backgrounded hub
+        // otherwise keeps spending requests forever. Keep the timer so it resumes
+        // on its own when the tab is visible again.
+        liveTimer = setInterval(() => { if (dataEl.isConnected && !document.hidden) refresh(); }, LIVE_REFRESH);
       };
       const sentinel = makeSentinel();
       if (sentinel) bar.appendChild(sentinel);

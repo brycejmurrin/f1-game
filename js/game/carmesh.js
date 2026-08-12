@@ -329,7 +329,7 @@ const FLAP_CACHE_MAX = 128;
 // `el` is the element record the caller ALREADY solved (drawAeroFlaps walks
 // Car3D.aeroFlaps() and holds it); passing it in skips a second identical lookup
 // per flap per car per frame. Omitted, it is resolved here as before.
-function getAeroFlap(aLvl, col, idx, style, el) {
+function getAeroFlap(aLvl, col, idx, style, el, finish) {
   const c = col || [0.9, 0.9, 0.1];
   // aLvl is passed through RAW — catalog options use fractional levels and the
   // wing geometry depends on the exact value, so it must not be truncated here
@@ -348,9 +348,11 @@ function getAeroFlap(aLvl, col, idx, style, el) {
     style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
   // Colour, spelled out rather than mapped+joined — same 0.01 resolution, no
   // array and no closure. The whole key build runs per flap per car per frame.
-  const key = sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2);
+  // Finish is part of the key: the same element/level/colour renders a different
+  // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
+  const key = sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + (finish || "");
   if (_flapMeshes[key]) return _flapMeshes[key];
-  const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c));
+  const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c, finish));
   _flapMeshes[key] = mesh;
   _flapOrder.push(key);
   if (_flapOrder.length > FLAP_CACHE_MAX) {

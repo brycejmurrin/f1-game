@@ -213,7 +213,13 @@ function create(G) {
     // career the round and the career's own seed are the identity of the session;
     // anywhere else the sim seed is, exactly as armReliability() resolves it.
     const inCareer = Career.inCareer();
-    const round = inCareer ? Career.round() : 0;
+    // Round selection, narrowest fix: a non-career SEASON championship advances
+    // season.round, so use it there (else the execution draw was frozen identical
+    // every round). A one-off Grand Prix has no round dimension and must stay at a
+    // constant 0 — routing it through raceIndex made the grid depend on how many
+    // races the session had already run, which the career-isolation grid test
+    // (correctly) forbids. Career keeps its own round.
+    const round = inCareer ? Career.round() : (G.seasonMode ? G.seasonRound : 0);
     const seed = inCareer ? Career.data().seed : G.simSeed();
     const real = drivenMap(driven);
 

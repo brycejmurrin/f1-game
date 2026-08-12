@@ -289,8 +289,54 @@ only one of them is fixed in `css/`.
 - **red** — the count of real findings, tap targets under 24px among them. Hover
   for the list; `audit.json` has the element, its clipper, and how many pixels it
   escaped by.
-- **skipped** — the screen could not be reached in that viewport. That is a
-  finding too, and the reason is in the tooltip.
+
+  **`starved` is the one finding here that is not about POSITION.** Every other
+  check asks whether something is in the wrong place — clipped, off screen, under
+  the notch. A scroll region crushed to a couple of pixels is in exactly the
+  right place: it clips nothing, it overflows nothing, it sits inside its parent,
+  and until 2026-08-12 every one of those cells scored **green**.
+
+  Three real ones, all found by eye, none by this tool:
+
+  - `#sel-tracks` got TWO PIXELS on a rotated monitor. `js/game/sheetshape.js`
+    exists because of it; the header of that file is the write-up.
+  - `#sel-tracks` again, on a landscape phone at UI SIZE 150% — the same two
+    pixels down a different path (flex shrink), while portrait scored green at
+    80, 100 and 130 the whole time it was broken.
+  - `#cs-options`, the garage's parts list, NINE PIXELS on a portrait phone at
+    150%. A screen whose entire purpose is choosing parts, showing none.
+
+  The shape never varies: `scrollHeight` says there is content, `clientHeight`
+  says there is nowhere to put it. Both numbers were already being recorded under
+  `scrollers` and nothing compared them. The floor is **44 DEVICE px**, not own
+  units — this asks what a player can see and touch, so it is asked in the pixels
+  their eyes are on, the same reasoning as `tinyTaps`. `hidden > 8` keeps an
+  empty list out of it (that is a data state, not a layout defect), and it tests
+  `overflow-y` only so a horizontal chip strip is not dragged in by its height.
+
+  A green cell means *nothing was found*, which is not the same as *nothing is
+  wrong* — it is only ever as strong as the list of questions above it. This
+  check turned four green cells red on its first run.
+- **skipped** — the screen could not be reached in that viewport, so **nothing
+  was measured**. A skip is not a pass and it is not a finding; the reason is in
+  the tooltip and the summary line counts skips on their own, with the command to
+  re-run exactly those cells.
+
+  **A click timeout is almost always the box, not the app.** The runner sets a
+  12 s default timeout so an unreachable cell costs seconds instead of thirty,
+  and on a loaded four-core SwiftShader machine that budget lapses on clicks that
+  are fine. Measured 2026-08-12: five cells across a full matrix came back
+  `page.click: Timeout 12000ms exceeded`, survived a `--jobs=1` re-run, and read
+  for an afternoon like a button that could not be clicked. Probed on a quiet
+  box, every one of those clicks landed in ~200 ms, and re-running the two
+  viewports gave 78 cells / 0 findings / 0 skips. **Re-run a skipped cell alone
+  before drawing any conclusion from it** — the same rule CLAUDE.md states for a
+  Playwright timeout, for the same reason.
+
+  This was folded into the "something to look at" total until 2026-08-12, which
+  made both readings wrong at once: a run with 40 skips looked like a run with 40
+  defects, and once the eye learned to discount that number, a run with 5 skips
+  read as clean. It cost time three times before the number was split.
 
 A cell going from green to red between builds is a regression with an address:
 screen, viewport, element, and the number of pixels involved.

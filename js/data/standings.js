@@ -88,22 +88,32 @@ const DataStandings = (function () {
               myDrivers.sort((a, b) => b.points - a.points);
               const h2h = el("div", "dh-h2h-bar");
               const d1 = myDrivers[0], d2 = myDrivers[1];
-              const p1 = (d1.points / s.points) * 100;
-              
+              // Denominator is the two SHOWN drivers' combined points, not the
+              // constructor total: `s.points` also carries points scored by drivers
+              // who have since left the team (mid-season swap), so `100 - p1` would
+              // hand that surplus to d2 and misstate the head-to-head. denom>0 holds
+              // because s.points>0 gated us in and d1 is the top scorer.
+              const denom = (d1.points + d2.points) || 1;
+              const p1 = (d1.points / denom) * 100;
+
               const p1Fill = el("div", "dh-h2h-fill");
               p1Fill.style.width = p1 + "%";
               p1Fill.title = (d1.code || d1.name) + ": " + d1.points + " pts";
-              
+
               const p2Fill = el("div", "dh-h2h-fill dh-h2h-alt");
-              p2Fill.style.width = (100 - p1) + "%";
+              p2Fill.style.width = ((d2.points / denom) * 100) + "%";
               p2Fill.title = (d2.code || d2.name) + ": " + d2.points + " pts";
               
               h2h.appendChild(p1Fill);
               h2h.appendChild(p2Fill);
               
               const labels = el("div", "dh-h2h-labels");
-              labels.appendChild(el("span", null, d1.code || d1.name.slice(0, 3).toUpperCase()));
-              labels.appendChild(el("span", null, d2.code || d2.name.slice(0, 3).toUpperCase()));
+              // `name` can be null independently of `code` (api.js maps both from
+              // possibly-absent fields), so guard the .slice fallback — a nameless,
+              // codeless entry must not throw and blank the whole STANDINGS tab.
+              const abbr = (d) => d.code || (d.name ? d.name.slice(0, 3).toUpperCase() : "—");
+              labels.appendChild(el("span", null, abbr(d1)));
+              labels.appendChild(el("span", null, abbr(d2)));
               
               const h2hWrap = el("div", "dh-h2h-wrap");
               h2hWrap.appendChild(h2h);
