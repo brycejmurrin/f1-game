@@ -326,15 +326,33 @@ void main() {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
-    float hSun  = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
     float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
-    vec4 lc = uLightVP * vec4(p, 1.0);
-    vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
-    float lit = 1.0;
-    if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
-      lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
-    lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
-    accum += lit * hSun * trans;
+    // SUN SHAFTS — skipped wholesale when the sun term is off, which is the
+    // NORMAL configuration for a night race. This pass is entered when EITHER
+    // the shafts or the lamp volumetrics are live, and at night game.js drives
+    // uStr to 0 (the god-ray strength is gated on sun luminance) while the lamp
+    // half below is exactly what we came here for. The lamp block already has
+    // its `uLampStr > 0.0` guard one scope down; the sun half had none, so every
+    // night frame paid 16 shadow-map fetches, 16 mat4 transforms and 16
+    // three-octave cloud FBM evaluations per half-res pixel to build `accum` —
+    // which the last line then multiplies by uStr, i.e. by zero.
+    //
+    // gCloud does not rescue it either: its own early-out is on uSunDir.y, and
+    // glx.js deliberately holds the night moon-key high (y~0.97) for the sky
+    // glow, so the noise runs at full cost in the dark.
+    //
+    // Uniform branch — same value for every fragment, so it is fully coherent
+    // and costs nothing in divergence. Output is bit-identical when uStr > 0.
+    if (uStr > 0.0) {
+      float hSun = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
+      vec4 lc = uLightVP * vec4(p, 1.0);
+      vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+      float lit = 1.0;
+      if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
+        lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
+      lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
+      accum += lit * hSun * trans;
+    }
     // Lamp in-scatter: each nearby lamp casts a beam through the ground haze,
     // shaped by its aimed cone + falloff (same math as the lit shader's pools),
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the
