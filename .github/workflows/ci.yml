@@ -83,6 +83,16 @@ on:
     branches-ignore: [claude/f1-game-project-26h3ng]
   pull_request:
   workflow_call:      # pages.yml gates its deploy on this
+    inputs:
+      # Caller's push `before` SHA. workflow_call replaces github.event with its
+      # own payload, so without this the sweeps filter always sees a non-push
+      # event and fail-safes into RUNNING the full 15-minute rebuild — every
+      # Pages deploy paid for four fleet rebuilds even when the diff was CSS.
+      before_sha:
+        description: "github.event.before from the calling push (empty = run sweeps)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -227,14 +237,21 @@ jobs:
       - name: Does this diff touch the geometry?
         id: filter
         env:
-          BEFORE: ${{ github.event.before }}
+          # Prefer the caller's before_sha on a Pages workflow_call; fall back to
+          # the push event's before on direct branch pushes.
+          BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
           EVENT: ${{ github.event_name }}
         run: |
           set -u
           run_all() { echo "geometry=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SWEEPS: $1"; exit 0; }
-          [ "$EVENT" = "push" ] || run_all "event is '$EVENT', not a push"
+          # workflow_call from pages.yml is a deploy push in disguise — treat it
+          # like a push when before_sha was forwarded, otherwise fail-safe RUN.
+          case "$EVENT" in
+            push|workflow_call) ;;
+            *) run_all "event is '$EVENT', not a push/workflow_call" ;;
+          esac
           case "${BEFORE:-}" in
-            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch or first push)" ;;
+            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push, or caller omitted input)" ;;
           esac
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
@@ -394,6 +411,13 @@ jobs:
     # deploy. Gating on a selection would mean a red that depends on which
     # files changed, which is a flake by another name; the gates stay guards /
     # sweeps / smoke / driving-model.
+    #
+    # SKIP ON workflow_call (Pages deploy). It never gates deploy, but it still
+    # occupies a GitHub-hosted runner for up to 26 minutes. Under a burst of
+    # feature-branch CI the deploy's own gates sat `pending` for tens of
+    # minutes behind advisory jobs that could not unblock Pages anyway. PR and
+    # branch pushes keep the advisory; the deploy path does not buy it.
+    if: github.event_name != 'workflow_call'
     #
     # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).

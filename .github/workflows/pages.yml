@@ -29,6 +29,11 @@ jobs:
   # instead of merely being available to a human who might run it.
   ci:
     uses: ./.github/workflows/ci.yml
+    with:
+      # Forward the push's before SHA so the sweeps filter can skip when this
+      # deploy touch cannot move circuit geometry. Without it, workflow_call
+      # always fail-safed into a full 15-minute sweep on every Pages push.
+      before_sha: ${{ github.event.before }}
 
   deploy:
     needs: ci
