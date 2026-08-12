@@ -6,10 +6,13 @@ Examples:
   python3 tools/cdmcp-cli.py call navigate_page '{"url":"http://127.0.0.1:3456/"}'
   python3 tools/cdmcp-cli.py call evaluate_script '{"function":"() => document.title"}'
   python3 tools/cdmcp-cli.py survey-title
+  python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110
 """
 from __future__ import annotations
 
+import argparse
 import json
+import socket
 import subprocess
 import sys
 import threading
@@ -18,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "tools" / "chrome-devtools-mcp.sh"
-TIMEOUT = 120
+TIMEOUT = 180
 
 
 class McpClient:
@@ -177,6 +180,128 @@ def cmd_survey_title(_: list[str]) -> None:
         c.close()
 
 
+def _port_open(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.4):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_static_server(port: int = 3456) -> subprocess.Popen | None:
+    """Reuse an existing :port server, else start `npx serve` for the repo root."""
+    if _port_open(port):
+        print(f"reusing http://127.0.0.1:{port}/")
+        return None
+    print(f"starting static server on :{port}")
+    proc = subprocess.Popen(
+        ["npx", "--yes", "serve", "-l", str(port), str(ROOT)],
+        cwd=str(ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(40):
+        if _port_open(port):
+            return proc
+        time.sleep(0.25)
+    proc.kill()
+    raise RuntimeError(f"static server failed to bind :{port}")
+
+
+def cmd_apex_shot(argv: list[str]) -> None:
+    """Frame a free-cam orbit shot of a live track via chrome-devtools MCP.
+
+    Waits for Assets.loadModels() before race(), and never calls snapCam() after
+    orbit() (snapCam clears dbgCam back to chase — see mcp-probe skill).
+    """
+    p = argparse.ArgumentParser(prog="apex-shot")
+    p.add_argument("track", nargs="?", default="monza")
+    p.add_argument("frac", nargs="?", type=float, default=0.1)
+    p.add_argument("--az", type=float, default=45.0)
+    p.add_argument("--el", type=float, default=18.0)
+    p.add_argument("--dist", type=float, default=45.0)
+    p.add_argument("--tod", default="day")
+    p.add_argument("--port", type=int, default=3456)
+    p.add_argument(
+        "--out",
+        default=str(ROOT / "artifacts" / "tmp" / "cdmcp-apex-shot.png"),
+        help="screenshot path (must be inside the MCP workspace root; "
+             "if denied, omit and rely on Playwright shot.mjs / baked-scenery.mjs)",
+    )
+    p.add_argument(
+        "--no-file",
+        action="store_true",
+        help="call take_screenshot without filePath (MCP returns image inline)",
+    )
+    args = p.parse_args(argv)
+
+    out = Path(args.out)
+    if not args.no_file:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    server = _ensure_static_server(args.port)
+    url = f"http://127.0.0.1:{args.port}/"
+    c = McpClient()
+    try:
+        c.start()
+        print(f"→ navigate_page {url}")
+        print(text_result(c.call("navigate_page", {"url": url})))
+        # Boot + model prefetch + race + free-cam orbit (no snapCam).
+        js = f"""async () => {{
+  for (let i = 0; i < 80 && !window.__apex; i++)
+    await new Promise(r => setTimeout(r, 250));
+  if (!window.__apex) return {{ ok: false, error: "no __apex" }};
+  const a = window.__apex;
+  let models = 0;
+  if (typeof Assets !== "undefined" && Assets.loadModels) {{
+    try {{ models = await Assets.loadModels(); }} catch (_) {{}}
+  }}
+  a.race({json.dumps(args.track)});
+  for (let i = 0; i < 80 && !(a.info && a.info().track); i++)
+    await new Promise(r => setTimeout(r, 250));
+  await new Promise(r => setTimeout(r, 1200));
+  a.go();
+  a.park({args.frac});
+  a.freeze(true);
+  if (a.setTimeOfDay) a.setTimeOfDay({json.dumps(args.tod)});
+  if (a.hud) a.hud(false);
+  a.orbit({args.frac}, {args.az}, {args.el}, {args.dist});
+  if (a.step) a.step(1/60, 4);
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => requestAnimationFrame(r));
+  const cs = a.camState ? a.camState() : null;
+  return {{
+    ok: true,
+    track: a.info().track,
+    models,
+    modelIds: (typeof Assets !== "undefined" && Assets.models) ? Assets.models() : [],
+    dbgCam: !!(cs && cs.debug),
+    eye: cs && cs.eye,
+  }};
+}}"""
+        print("→ evaluate_script (loadModels → race → orbit)")
+        print(text_result(c.call("evaluate_script", {"function": js})))
+        print("→ take_screenshot")
+        shot_args: dict = {}
+        if not args.no_file:
+            shot_args["filePath"] = str(out)
+        shot = c.call("take_screenshot", shot_args)
+        print(text_result(shot)[:500])
+        if not args.no_file:
+            print(f"screenshot: {out}")
+        try:
+            c.call("navigate_page", {"url": "about:blank"})
+        except Exception:
+            pass
+    finally:
+        c.close()
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                server.kill()
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -189,6 +314,8 @@ def main() -> None:
         cmd_call(rest)
     elif cmd == "survey-title":
         cmd_survey_title(rest)
+    elif cmd == "apex-shot":
+        cmd_apex_shot(rest)
     else:
         print(f"unknown: {cmd}", file=sys.stderr)
         sys.exit(1)
