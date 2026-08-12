@@ -20,6 +20,23 @@ Powered by Poly Haven.
 | material | stone | Poly Haven contributors | CC0 | polyhaven:castle_brick_02_red |
 | material | rust | Poly Haven contributors | CC0 | polyhaven:rusty_metal |
 | material | asphalt | Poly Haven contributors | CC0 | polyhaven:asphalt_track |
+| model | kenney_construction-barrier | Kenney | CC0 | kenney:city-kit-roads |
+| model | kenney_construction-cone | Kenney | CC0 | kenney:city-kit-roads |
+| model | kenney_construction-light | Kenney | CC0 | kenney:city-kit-roads |
+| model | kenney_ind_building-a | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-d | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-h | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-l | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-o | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_chimney-medium | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_detail-tank | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_com_building-a | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_building-e | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_low-detail-building-a | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_low-detail-building-wide-a | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_twr_building-sample-house-b | Kenney | CC0 | kenney:modular-buildings |
+| model | kenney_twr_building-sample-tower-a | Kenney | CC0 | kenney:modular-buildings |
+| model | kenney_twr_building-sample-tower-c | Kenney | CC0 | kenney:modular-buildings |
 | env | *|default | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
 | env | *|day | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
 | env | *|dusk | Poly Haven contributors | CC0 | polyhaven:industrial_sunset_puresky |
