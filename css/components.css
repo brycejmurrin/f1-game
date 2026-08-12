@@ -166,7 +166,18 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 /* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
    phone held sideways — a fixed 24px title costs the same as a row of the list
-   it is sitting above. */
+   it is sitting above.
+   AND SO IT DOES NOT FOLLOW UI SIZE, WHICH IS THE POINT AND NOT A BUG. `--vhz`
+   is `1vh / --ui-scale` consumed inside `zoom: var(--ui-scale)`, so the scale
+   cancels and the heading is a constant fraction of the SCREEN. MEASURED on a
+   portrait iPhone: 24 / 18 / 13.2 own units at UI SIZE 80 / 100 / 150 — which
+   reads like type that shrinks as you ask for bigger type, and is ~19 PAINTED px
+   at all three. (The 100 -> 150 step also crosses into the compact tier, which
+   drops the ceiling from 24 to 18; that compounds it.)
+   Checked once and nearly "fixed". Do not: every unit given back to this
+   heading comes straight out of the list under it, on exactly the short screens
+   the rule exists for. The clamp's px bounds ARE in own units and do scale, so
+   the heading is never smaller than the floor at any setting. */
 .sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
 .sheet-body {
   min-height: 0;
@@ -813,9 +824,22 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    packs beside the groups and adds to only its own column. */
 .pm-doors {
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.6);
-  margin-top: var(--gap); padding-top: var(--gap);
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
   align-content: start;
+}
+/* The heading takes its own full line and carries the column's top alignment.
+   `flex: 1 0 100%` rather than a block, because this is a wrap container and a
+   bare child would sit ON the first row of buttons. */
+.pm-doors > .pm-group-h { flex: 1 0 100%; margin: 0; }
+/* THE RULE BELONGS TO THE SPANNING FORM ONLY. When this nav spans the grid it
+   sits UNDER the groups and a rule reads as a separator; when it is a column of
+   its own it sits BESIDE them, and a top border plus the extra margin pushed its
+   first button a heading's height below DRIVING's and DISPLAY's. Same element,
+   two different jobs, and the divider only makes sense in one of them. */
+@container sheet (max-width: 489px) {
+  .pm-doors {
+    margin-top: var(--gap); padding-top: var(--gap);
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+  }
 }
 /* 489, the 2/3-column boundary — NOT the 1/2 boundary, which is where this was
    first written and where it was wrong in the other direction. MEASURED, all

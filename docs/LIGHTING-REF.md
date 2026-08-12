@@ -205,6 +205,12 @@ __apex.lightState()
 
 // Switch time of day (no asset reload; rebuilds meshes only on day↔dark flip)
 __apex.setTimeOfDay('night')    // 'dawn' | 'day' | 'dusk' | 'night' | 'default'
+
+// Spread the CURRENT (track, time, weather) profile to every other circuit at
+// the same time and weather — the tuner's COPY ALL chips, headless.
+__apex.lightCopy()              // this profile's own edits, merged over each target
+__apex.lightCopy('look')        // every live value: they all end up identical
+__apex.lightCopy({ undo })      // put back exactly what a copy replaced
 ```
 
 ---

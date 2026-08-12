@@ -177,7 +177,16 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await waitReady(page);
     await openGarage(page);
 
-    await page.evaluate(() => window.__apex.uiScale(100));
+    // 80, NOT 100 — and that is a real behaviour change, not a nudge to make a
+    // test pass. The garage's `--compact-at` was raised from the shared 380 to
+    // 480 (css/carsetup.css) because this screen carries ~320 own units of
+    // chrome before a part appears, so a sheet under 480 has under three option
+    // rows. On SHORT_WIDE at UI SIZE 100% it is now COMPACT by design —
+    // measured, that took the parts list from 1.5 cards to 3.1.
+    // The case this test exists for is unchanged and still exercised: two scales
+    // that classify differently, with no resize between them, proving the
+    // classifier answers to `zoom` alone. Only the low end moved.
+    await page.evaluate(() => window.__apex.uiScale(80));
     await page.waitForTimeout(400);
     const at100 = await readState(page);
 
@@ -188,13 +197,13 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     }, null, { polling: 50, timeout: 5_000 });
     const at150 = await readState(page);
 
-    expect(at100.density, "not compact at UI SIZE 100% on this viewport").toBe("normal");
+    expect(at100.density, "not compact at UI SIZE 80% on this viewport").toBe("normal");
     expect(at150.density, "compact once the sheet is short in its own units").toBe("compact");
     expect(at150.hOverflow, "no horizontal overflow at 150%").toBe(false);
     expect(at150.doneOnScreen, "DONE reachable at 150%").toBe(true);
 
     // And back down again, because a one-way classifier would pass the above.
-    await page.evaluate(() => window.__apex.uiScale(100));
+    await page.evaluate(() => window.__apex.uiScale(80));
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "normal";

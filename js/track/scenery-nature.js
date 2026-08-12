@@ -483,6 +483,13 @@ const SceneryNature = (function () {
       out._mat = MAT.ROCK;
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
+      // A smaller off-axis sub-peak breaks the perfect-pyramid read. Offset in
+      // XZ, its own base Y and a NON-square base (w*0.6 × w*0.72) so its faces
+      // align with neither the summit nor the foot — no same-facing coplanar
+      // pair. Kept inside the w*1.061 guard footprint. Deterministic per (x,z).
+      const pj = hash(x * 0.17 + z * 0.19), pa = pj * 6.2832, so = w * (0.25 + pj * 0.13);
+      addPyramid(out, [x + Math.cos(pa) * so, baseY - 0.6, z + Math.sin(pa) * so],
+        [w * 0.6, h * (0.5 + pj * 0.25), w * 0.72], [col[0] * 0.94, col[1] * 0.95, col[2] * 0.96], null);
       out._mat = 0;
     };
     // Organic mountain (world coords): irregular craggy summit with height colour
@@ -542,6 +549,20 @@ const SceneryNature = (function () {
       // never got it.
       const SINK = 2;
       addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
+      // One subordinate crest breaks the single clean wedge into a small range.
+      // It gets its OWN heading (rotated ang) and a DEEPER buried base, so it
+      // shares no plane with the main prism — no same-facing coplanar pair
+      // (coplanar-faces.test.mjs counts those, and this helper fires 28× across
+      // 24 circuits). Kept small and inside the footprint the onTrack guard
+      // already cleared. Deterministic per (x,z) so a given ridge is stable.
+      const jr = hash(x * 0.13 + z * 0.11 + ang);
+      const a2 = ang + (jr - 0.5) * 0.6;
+      const f2 = [Math.cos(a2), 0, Math.sin(a2)], r2 = [-f2[2], 0, f2[0]];
+      const off = (0.06 + jr * 0.06) * len, dY = 1.0;
+      addPrism(out,
+        [x + f[0] * off, baseY - SINK - dY, z + f[2] * off],
+        [w * 0.7, h * (0.42 + jr * 0.22) + SINK + dY, len * 0.4],
+        col, [r2, [0, 1, 0], f2]);
     };
     // Populate a raked seating bank with speckled spectators. Front row sits at
     // clearance `gap` beyond the road edge and the bank rises `rise` m over

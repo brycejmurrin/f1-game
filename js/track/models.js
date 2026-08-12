@@ -248,29 +248,8 @@ const TrackModels = (function () {
       // two caller points and re-grounding at each intermediate node walks the
       // real track arc. A ~10 m sub-chord keeps the arc-vs-chord bow under the
       // 0.2 m props-over-road tolerance on a typical corner radius.
-      const TARGET = 10, MAXSUB = 16;
-      const pts = [];
-      for (let i = 0; i < spec.points.length - 1; i++) {
-        const a = spec.points[i], b = spec.points[i + 1];
-        const pa = ground(a.k, a.side, a.dist), pb = ground(b.k, b.side, b.dist);
-        if (!pa || !pb) continue;
-        const chord = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]) || 0.1;
-        const sub = Math.max(1, Math.min(MAXSUB, Math.ceil(chord / TARGET)));
-        if (!pts.length) pts.push(pa);
-        for (let j = 1; j <= sub; j++) {
-          const t = j / sub;
-          const p = ground(
-            a.k + (b.k - a.k) * t,
-            t < 0.5 ? (a.side || 1) : (b.side || 1),
-            (a.dist || 0) + ((b.dist || 0) - (a.dist || 0)) * t,
-          );
-          pts.push(p || pb);
-        }
-      }
-      if (pts.length < 2) return false;
-      let emitted = 0;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const pa = pts[i], pb = pts[i + 1];
+      // One box between two grounded points, extruded up from grade.
+      const emitBox = (pa, pb) => {
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
         const forward = [dx / length, dy / length, dz / length];
@@ -293,8 +272,48 @@ const TrackModels = (function () {
           (pa[1] + pb[1]) / 2 + up[1] * height / 2,
           (pa[2] + pb[2]) / 2 + up[2] * height / 2,
         ];
-        if (box(out, center, [width, height, length], spec.color,
-          spec.basis || [right, up, forward])) emitted++;
+        return box(out, center, [width, height, length], spec.color,
+          spec.basis || [right, up, forward]);
+      };
+      // Extrude EACH caller pair independently — never a single global polyline.
+      // A widely-spaced pair (50-100 m in s) chords across the track's curvature,
+      // so the terrain-tilted slab bows OVER the racing line (monza banking,
+      // catalunya La Caixa, istanbul T8 revetment read 1.9-4.4 m over the tarmac
+      // from exactly this). k is a node index groundPoint() rounds, so
+      // interpolating k between the pair's endpoints and re-grounding at each
+      // intermediate node walks the real arc; ~10 m sub-chords keep the bow under
+      // the 0.2 m props-over-road tolerance. Per-PAIR is load-bearing: a global
+      // polyline bridged across any pair that grounded to null — e.g. a wall that
+      // wraps the start line — drawing one box the full width of the circuit
+      // (hungaroring's pit trim read 5 m over the racing line 1 km away).
+      const TARGET = 10, MAXSUB = 16;
+      let emitted = 0;
+      for (let i = 0; i < spec.points.length - 1; i++) {
+        const a = spec.points[i], b = spec.points[i + 1];
+        const pa = ground(a.k, a.side, a.dist), pb = ground(b.k, b.side, b.dist);
+        if (!pa || !pb) continue;
+        const chord = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]) || 0.1;
+        const sub = Math.max(1, Math.min(MAXSUB, Math.ceil(chord / TARGET)));
+        // Walk k the SHORT way around the loop. A wall that wraps the start line
+        // has consecutive points at k≈n-1 and k≈0 — adjacent in the world but a
+        // full lap apart in index. Interpolating k straight (n-1 → 0) sends the
+        // midpoint to node n/2, the FAR side of the circuit, and the sub-chord
+        // becomes a box spanning the whole track (hungaroring's pit trim read
+        // 5 m over the racing line 1 km away). ctx.n lets us take the ±1-node
+        // step across the seam instead; groundPoint() re-wraps the index.
+        let dk = b.k - a.k;
+        if (ctx.n && Math.abs(dk) > ctx.n / 2) dk -= Math.sign(dk) * ctx.n;
+        let prev = pa;
+        for (let j = 1; j <= sub; j++) {
+          const t = j / sub;
+          const p = j === sub ? pb : (ground(
+            a.k + dk * t,
+            t < 0.5 ? (a.side || 1) : (b.side || 1),
+            (a.dist || 0) + ((b.dist || 0) - (a.dist || 0)) * t,
+          ) || pb);
+          if (emitBox(prev, p)) emitted++;
+          prev = p;
+        }
       }
       if (!emitted) return false;
       // Real vertex count (buffer delta) — see groundPatch above.

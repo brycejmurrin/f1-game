@@ -227,3 +227,26 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/circuits/<id>.js` for palette/locale).
 2. Proposals are baked into `js/game/light-presets.js` and the row flipped to ✅.
 3. Bump `index.html` `?v=` + `version.json`, verify no page errors, then push.
+
+### Tuning one condition for the whole grid
+
+The per-track pass above is the fine work. When the thing being decided is what a
+CONDITION should feel like — "dusk in the wet" everywhere, not Bahrain in
+particular — the tuner's **COPY ALL** row does the fan-out: it writes the
+condition on screen to every other circuit at the same time-of-day and weather
+(`LightStore.copyToTracks`, `__apex.lightCopy()`).
+
+| chip | what lands on the other tracks | use it for |
+|---|---|---|
+| `MY EDITS` | only the knobs tuned on this condition, merged over each target's own | a change of INTENT for that condition — every circuit keeps its own character underneath |
+| `FULL LOOK` | every live value, overriding each target's shipped per-condition preset | levelling a condition you want identical everywhere, or re-basing it before per-track work |
+
+Then `COPY VALUES` and bake as usual — the export merges the shipped file with
+every local profile, so a spread condition arrives in `light-presets.js` as one
+`"track|tod|wx"` entry per circuit. Both chips arm on the first click and fire on
+the second, and `UNDO` reverts the whole fan-out while the panel is open.
+
+**`FULL LOOK` is the destructive one.** It writes a local profile that outranks
+the shipped preset for every knob on 39 circuits, which is exactly what makes the
+grid uniform — and exactly what erases the per-track character this doc's intent
+notes describe. Reach for `MY EDITS` unless the uniformity IS the goal.
