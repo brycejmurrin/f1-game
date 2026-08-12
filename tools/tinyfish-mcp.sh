@@ -90,7 +90,7 @@ mcp_post() {
   local hdr_file
   hdr_file="$(mktemp)"
   local out
-  out="$(curl -sS -D "$hdr_file" -X POST "$MCP" \
+  out="$(curl -sS --max-time 90 -D "$hdr_file" -X POST "$MCP" \
     -H 'Content-Type: application/json' \
     -H 'Accept: application/json, text/event-stream' \
     -H "MCP-Protocol-Version: ${PROTO}" \

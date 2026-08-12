@@ -41,7 +41,7 @@ const WebBake = (function () {
   const DEFAULTS = {
     1:  "concrete_floor_02",      2:  "red_brick",
     4:  "metal_plate",            5:  "wood_planks",
-    6:  "leafy_grass",            7:  "fabric_pattern_07",
+    6:  "leafy_grass",            7:  "denim_fabric",
     8:  "coast_sand_01",          9:  "sparse_grass",
     10: "rock_ground",            11: "snow_02",
     12: "clay_roof_tiles",        13: "castle_brick_02_red",

@@ -72,8 +72,11 @@ cmd_build() {
   cd "$REPO"
   echo "Installing npm deps (ignore prepare hook — run manually)…"
   npm ci --ignore-scripts
-  echo "Syncing devtools-frontend submodule…"
-  git submodule update --init --recursive
+  # Shallow, NON-recursive: prepare.ts only needs devtools-frontend/mcp/mcp.ts.
+  # --recursive pulls Chromium nested deps (llvm-project etc.) and can hang for
+  # hours on googlesource — never what we want for the MCP binary.
+  echo "Syncing devtools-frontend submodule (shallow, no nested deps)…"
+  git submodule update --init --depth 1
   echo "Running prepare…"
   npx tsx scripts/prepare.ts
   echo "Compiling…"
@@ -82,6 +85,7 @@ cmd_build() {
   chmod +x build/src/bin/chrome-devtools-mcp.js 2>/dev/null || true
   if local_ok; then
     echo "Built OK: $BIN"
+    node "$BIN" --help >/dev/null && echo "Bin help OK"
     node "$BIN" --version 2>/dev/null || true
   else
     echo "Build finished but bin not runnable" >&2; exit 1

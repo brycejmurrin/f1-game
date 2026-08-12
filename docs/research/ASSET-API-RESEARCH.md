@@ -479,19 +479,21 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
   `applyMaterial*` bump/tint as still deferred — WGX has no procedural material
   system for a baked map to augment. `Assets.supported` is false there and the
   backend renders as it does today.
-- **`bake-material`** (real CC0 scans → a layer) **exits with a message.** It
-  needs network plus an image decoder for JPG/PNG source maps, and this was
-  authored in a sandbox whose proxy 403s `api.polyhaven.com` and
-  `ambientcg.com`. Shipping it untested would have been the wrong call, so it
-  fails loudly and points here instead.
-- **KTX2.** The pack is 561 KB against an 8 MB budget. The VRAM argument in §3.2
+- **`bake-material`** (real CC0 scans → a layer) **is implemented** (2026-08).
+  Needs `sharp` (`npm i -D sharp`) and network for `fetch`. It mean-normalises
+  Diffuse albedo, packs `nor_gl` + `arm` exactly like `assets/pack/webbake.js`,
+  and patches a single MAT layer into the committed filmstrips. `search` now
+  correctly lists ambientCG `foundAssets[].assetId` (previously always empty).
+  The browser `webbake.js` path remains the fastest full-pack bake; CLI is for
+  single-layer swaps without a DevTools session.
+- **KTX2.** The pack is ~5.4 MB against an 8 MB budget. The VRAM argument in §3.2
   still stands for a full-resolution scan bake — revisit at that point, not now.
 
 ### Known gaps
 
-- `search`/`fetch` are written against the published API shapes but **unverified
-  against a live endpoint** for the same egress reason. Treat the first real run
-  as debugging, not as regression.
+- `search`/`fetch`/`bake-material` are exercised against live Poly Haven (and
+  ambientCG search) endpoints. Treat the first ambientCG *download* bake as
+  still experimental — only the Poly Haven path auto-pulls maps today.
 - The TSL port of `applyMaterial` covers `mid < 14.5`, so `MAT.ASPHALT` (16)
   never reaches the *procedural* branch on TLX. Pre-existing, unrelated to this
   work, but it means TLX and GLX already differ on tarmac. The baked path added
@@ -515,6 +517,29 @@ No circuit calls `bakedModel` yet: that needs actual CC0 grandstand/pit-building
 meshes, which needs the network-capable `bake-material`/`fetch` path. The
 SCENERY-UPGRADE-PLAN win is now one asset-sourcing session away rather than one
 engine change away.
+
+### Next graphics wins (2026-08 research pass)
+
+Measured after the 2k→256 full-pack rebake + Chromium A/B (`matTex` 0 vs 1):
+
+1. **Tune world scales, not resolution first.** Sand/shoulder tiling reads clearly
+   at `SCALES.SAND=6`; asphalt grit is already good at 4 m/tile. Prefer
+   per-MAT scale tweaks (+ `__apex.matTex` A/B) over jumping to 512² (that blows
+   the 8 MB commit budget without KTX2).
+2. **KTX2 / Basis Universal** when (if) we want 512² or more layers — VRAM stays
+   compressed; PNG/WebP always expand. Don McCurdy’s web texture formats note +
+   Khronos KTX artist guide; UASTC for normals, ETC1S for albedo.
+3. **HDRI → `Assets.env()` presets** — API + runtime consumer already exist;
+   bake a few Poly Haven skies per (track, tod) so hemisphere ambient is measured
+   rather than hand-picked (cheapest lighting win, no shader change).
+4. **Prop geometry, not prop textures.** Trees/grandstands still read flat because
+   they are low-poly solids; `bakedModel` + Quaternius/Kenney CC0 stands fix that
+   without UV-ing the chunked prop path.
+5. **Motion-capture before raising ASPHALT normals.** Shader already clamps
+   asphalt baked normals (`mid==16 ? 0.10`); shimmer at speed is the failure mode
+   — validate with `test:shimmer` / driven capture, not a parked screenshot.
+6. **Per-profile `matTexMix`.** Still open from §5 phase 3 — night/wet may want
+   <1.0 so procedural wet remap stays dominant.
 
 ### Also fixed on the way
 

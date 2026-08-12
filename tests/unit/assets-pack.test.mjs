@@ -183,6 +183,9 @@ test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack ins
   let bytes = 0;
   const walk = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      // `src/` is the author-time fetch cache (gitignored) — verify() already
+      // ignores it; counting it here would fail every local bake-material run.
+      if (e.name === "src") continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) walk(p); else bytes += fs.statSync(p).size;
     }
