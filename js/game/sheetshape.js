@@ -120,8 +120,14 @@ window.SheetShape = (function () {
        answering the same question in two different units.
        The ratio above needs no such division: it is h/w, and the zoom cancels. */
     const zoom = el.currentCSSZoom || 1;
-    classifyPair(el, w / zoom);
+    /* DENSITY BEFORE PAIR. Compact rules may raise `--pair-at` (career forces a
+       stack at 2000px) so the pair answer must be read AFTER `data-density` is
+       written — otherwise the first paint of a short sheet keeps the wide
+       threshold, stays `pair=on`, and clips the stacked content the compact
+       rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
+       sat ~39px past the sheet until this order flipped. */
     classifyDensity(el, h / zoom);
+    classifyPair(el, w / zoom);
   }
 
   let ro = null;
