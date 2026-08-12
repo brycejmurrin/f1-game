@@ -241,543 +241,543 @@
   "models": {
     "kenney_construction-barrier": {
       "file": "models/kenney_construction-barrier.bin",
-      "verts": 72,
-      "tris": 36,
+      "verts": 144,
+      "tris": 72,
       "mat": "CONCRETE",
       "sizeM": [
-        0.88,
-        1.1,
-        1.89
+        0.95,
+        1.18,
+        1.96
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "9d347b0b562a124dce464168a0222bb4"
+      "md5": "d4991a51bfbf9209aff80f81a221f563"
     },
     "kenney_construction-cone": {
       "file": "models/kenney_construction-cone.bin",
-      "verts": 73,
-      "tris": 36,
+      "verts": 170,
+      "tris": 84,
       "mat": "CONCRETE",
       "sizeM": [
-        0.8,
-        0.98,
-        0.8
+        0.85,
+        0.93,
+        0.85
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "c5ee8d3045a0f424694cef9b6856159d"
+      "md5": "b99452181fc04516c0791cc7012f6fe2"
     },
     "kenney_construction-light": {
       "file": "models/kenney_construction-light.bin",
-      "verts": 50,
-      "tris": 36,
+      "verts": 122,
+      "tris": 72,
       "mat": "METAL",
       "sizeM": [
-        0.22,
-        0.97,
-        0.28
+        0.28,
+        1.01,
+        0.72
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "50700f2c8fa1ebf305583b82e0e17719"
+      "md5": "0f248cc6d7b8aaa0cbdd33ad3c91bbce"
     },
     "kenney_ind_building-a": {
       "file": "models/kenney_ind_building-a.bin",
-      "verts": 770,
-      "tris": 396,
+      "verts": 3484,
+      "tris": 1764,
       "mat": "CONCRETE",
       "sizeM": [
-        20.67,
-        19.4,
-        12.19
+        21.06,
+        18.41,
+        13.34
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "e20053395a219785eaf23ebc34f5721f"
+      "md5": "dbbbb3898ba2ffe25f93ea9e57379102"
     },
     "kenney_ind_building-d": {
       "file": "models/kenney_ind_building-d.bin",
-      "verts": 384,
-      "tris": 192,
+      "verts": 1534,
+      "tris": 776,
       "mat": "CONCRETE",
       "sizeM": [
-        9.01,
-        14.55,
-        14.84
+        9.18,
+        18.11,
+        15.12
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "693faa253a1241c2c65c82e26d67b556"
+      "md5": "daaeb17314883e986bd01a491b7a8f31"
     },
     "kenney_ind_building-h": {
       "file": "models/kenney_ind_building-h.bin",
-      "verts": 624,
-      "tris": 312,
+      "verts": 3196,
+      "tris": 1620,
       "mat": "CONCRETE",
       "sizeM": [
-        25.44,
-        14.55,
-        25.44
+        25.92,
+        16.5,
+        25.98
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "1b09107f2b25ec204636a9e73da0dfdd"
+      "md5": "cf6cda4997e92c574f370118400572dc"
     },
     "kenney_ind_building-l": {
       "file": "models/kenney_ind_building-l.bin",
-      "verts": 600,
-      "tris": 300,
+      "verts": 2692,
+      "tris": 1368,
       "mat": "CONCRETE",
       "sizeM": [
-        15.9,
-        14.55,
-        14.31
+        16.2,
+        15.73,
+        15.42
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "f133a2f216ee5ea0b375a4dde2dfa32a"
+      "md5": "8f8043ea01001837d8033165a02aa762"
     },
     "kenney_ind_building-o": {
       "file": "models/kenney_ind_building-o.bin",
-      "verts": 456,
-      "tris": 228,
+      "verts": 1920,
+      "tris": 960,
       "mat": "CONCRETE",
       "sizeM": [
-        13.78,
-        14.55,
-        19.61
+        14.04,
+        16.5,
+        19.98
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "cdf4150748b991dd6712d5c9e2f3b7ef"
+      "md5": "126a373db8fd2ec07a66b67e6b0a6cf5"
     },
     "kenney_ind_chimney-medium": {
       "file": "models/kenney_ind_chimney-medium.bin",
-      "verts": 68,
-      "tris": 64,
+      "verts": 319,
+      "tris": 216,
       "mat": "CONCRETE",
       "sizeM": [
-        3.1,
-        14,
-        3.1
+        3.4,
+        14.7,
+        3.23
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "57d025497ea29a70529b0a9680bbaecb"
+      "md5": "699c22351cde59042d0e585029995a40"
     },
     "kenney_ind_detail-tank": {
       "file": "models/kenney_ind_detail-tank.bin",
-      "verts": 248,
-      "tris": 196,
+      "verts": 586,
+      "tris": 376,
       "mat": "METAL",
       "sizeM": [
-        7,
-        9,
-        19.6
+        8.15,
+        9.95,
+        20
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "aa4e7fd7f0ceccb3807ba4a8aa052dda"
+      "md5": "3a66bbaaaf419fa1af9526ddc150f19a"
     },
     "kenney_com_building-a": {
       "file": "models/kenney_com_building-a.bin",
-      "verts": 576,
-      "tris": 288,
+      "verts": 2976,
+      "tris": 1488,
       "mat": "BRICK",
       "sizeM": [
-        11.13,
-        16.55,
-        12.19
+        11.34,
+        18.51,
+        12.96
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "fcaa936d1ad6c3627e96e17a74fd57f2"
+      "md5": "98cc55902db04bbbb0a2e2ac88462e7b"
     },
     "kenney_com_building-e": {
       "file": "models/kenney_com_building-e.bin",
-      "verts": 1344,
-      "tris": 672,
+      "verts": 6816,
+      "tris": 3408,
       "mat": "BRICK",
       "sizeM": [
-        29.68,
-        16.55,
-        18.55
+        30.24,
+        18.51,
+        19.2
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "8c5b0900a4ec52e2d46e828e2d51212d"
+      "md5": "b4a46bbc4cbd5f9d64c03d3b2f76fb52"
     },
     "kenney_com_low-detail-building-a": {
       "file": "models/kenney_com_low-detail-building-a.bin",
-      "verts": 48,
-      "tris": 24,
+      "verts": 310,
+      "tris": 164,
       "mat": "BRICK",
       "sizeM": [
-        4.08,
-        16.4,
-        4.08
+        4.16,
+        20.02,
+        4.2
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "90144a664afe3114d2060d9d0f369216"
+      "md5": "3c5dd06491cf5586c15dcb6b2a3b7b12"
     },
     "kenney_com_low-detail-building-wide-a": {
       "file": "models/kenney_com_low-detail-building-wide-a.bin",
-      "verts": 48,
-      "tris": 24,
+      "verts": 360,
+      "tris": 180,
       "mat": "BRICK",
       "sizeM": [
-        14.79,
-        16.4,
-        7.34
+        15.08,
+        18.43,
+        8.44
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "c1a1e03cd95207ae58907ac34e7124aa"
+      "md5": "a2bbb9004c23e26697a9c1524b0216b5"
     },
     "kenney_twr_building-sample-house-b": {
       "file": "models/kenney_twr_building-sample-house-b.bin",
-      "verts": 386,
-      "tris": 204,
+      "verts": 1388,
+      "tris": 712,
       "mat": "CONCRETE",
       "sizeM": [
-        10.2,
-        14,
-        12.8
+        10.64,
+        12.3,
+        13.97
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "c06764ccae710697e40b8ca91f4b9db1"
+      "md5": "278f681b814c94e9158446031ca92599"
     },
     "kenney_twr_building-sample-tower-a": {
       "file": "models/kenney_twr_building-sample-tower-a.bin",
-      "verts": 432,
-      "tris": 216,
+      "verts": 2206,
+      "tris": 1112,
       "mat": "CONCRETE",
       "sizeM": [
-        7.95,
-        18.55,
-        9.01
+        8.1,
+        22.11,
+        9.18
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "cbbbbd037e11d410e16d5bc906d50850"
+      "md5": "afcd6c54774826ebfea981d873151c64"
     },
     "kenney_twr_building-sample-tower-c": {
       "file": "models/kenney_twr_building-sample-tower-c.bin",
-      "verts": 432,
-      "tris": 216,
+      "verts": 1990,
+      "tris": 1004,
       "mat": "CONCRETE",
       "sizeM": [
-        6.36,
-        18.55,
-        7.42
+        6.48,
+        22.11,
+        7.56
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "f3708bc9cb00872856d7f5e903294fef"
+      "md5": "5ed2c93758824efc8fb9f7ef57ec7a51"
     },
     "kenney_sub_building-type-a": {
       "file": "models/kenney_sub_building-type-a.bin",
-      "verts": 432,
-      "tris": 216,
+      "verts": 1728,
+      "tris": 864,
       "mat": "BRICK",
       "sizeM": [
-        15.9,
-        10.55,
-        12.72
+        16.8,
+        13.52,
+        13.72
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "4f0132c239bc00771b6973f4c9a1c9bf"
+      "md5": "063fc3f79fadf35b88b870ae856127e3"
     },
     "kenney_sub_building-type-c": {
       "file": "models/kenney_sub_building-type-c.bin",
-      "verts": 336,
-      "tris": 168,
+      "verts": 1588,
+      "tris": 816,
       "mat": "BRICK",
       "sizeM": [
-        12.72,
-        10.55,
-        10.07
+        12.96,
+        11.73,
+        10.88
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "de7c7c04b9c4917fa5fb060660f86fdb"
+      "md5": "a76493035ca81ff6bc052fcdceabd52f"
     },
     "kenney_sub_building-type-h": {
       "file": "models/kenney_sub_building-type-h.bin",
-      "verts": 528,
-      "tris": 264,
+      "verts": 2256,
+      "tris": 1128,
       "mat": "BRICK",
       "sizeM": [
-        18.02,
-        10.55,
-        12.72
+        18.36,
+        12.51,
+        13.48
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "875fda08e7bbf99b73e5d70c9049fe3d"
+      "md5": "00aee3d2bcbfcd62696f6cbe9b162d62"
     },
     "kenney_sub_building-type-k": {
       "file": "models/kenney_sub_building-type-k.bin",
-      "verts": 266,
-      "tris": 144,
+      "verts": 864,
+      "tris": 432,
       "mat": "BRICK",
       "sizeM": [
-        8.48,
-        14,
-        9.01
+        8.96,
+        13.52,
+        10.01
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "ec19e3ff197d005c9a7bfa647096a5b6"
+      "md5": "d18948b6fbff6b71ccc3bf7440fa316f"
     },
     "kenney_sub_building-type-r": {
       "file": "models/kenney_sub_building-type-r.bin",
-      "verts": 336,
-      "tris": 168,
+      "verts": 1588,
+      "tris": 816,
       "mat": "BRICK",
       "sizeM": [
-        9.54,
-        10.55,
-        9.01
+        9.72,
+        11.73,
+        9.84
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "643238cf564be8de1c43ee6e5b4c94fd"
+      "md5": "28a73cbf03c1791eb40e99f64dac9e3a"
     },
     "kenney_ind_building-b": {
       "file": "models/kenney_ind_building-b.bin",
-      "verts": 768,
-      "tris": 384,
+      "verts": 3648,
+      "tris": 1824,
       "mat": "CONCRETE",
       "sizeM": [
-        20.67,
-        14.55,
-        12.76
+        21.06,
+        16.5,
+        13.86
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "787b2cc7a40c06fab9dbd050a908ea6f"
+      "md5": "aab1cc25ce44814725ef8448cbdb2c05"
     },
     "kenney_ind_building-c": {
       "file": "models/kenney_ind_building-c.bin",
-      "verts": 744,
-      "tris": 372,
+      "verts": 2668,
+      "tris": 1356,
       "mat": "CONCRETE",
       "sizeM": [
-        21.73,
-        14.55,
-        24.38
+        22.14,
+        15.73,
+        24.95
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "596d441296d4e2b7fbbda98206e14133"
+      "md5": "e33cae2cfb628b992cc79edc9498598a"
     },
     "kenney_ind_building-e": {
       "file": "models/kenney_ind_building-e.bin",
-      "verts": 600,
-      "tris": 300,
+      "verts": 2650,
+      "tris": 1340,
       "mat": "CONCRETE",
       "sizeM": [
-        14.84,
-        14.55,
-        11.13
+        15.12,
+        17.03,
+        12.3
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "654fea2ca36f3c7a440afde20fa98d5c"
+      "md5": "22c95514be0092ad968da8421687bb40"
     },
     "kenney_ind_building-g": {
       "file": "models/kenney_ind_building-g.bin",
-      "verts": 602,
-      "tris": 312,
+      "verts": 2904,
+      "tris": 1452,
       "mat": "CONCRETE",
       "sizeM": [
-        19.08,
-        19.4,
-        14.84
+        20.02,
+        18.41,
+        15.94
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "21b108d509d5890b0120408b8c5440d6"
+      "md5": "820c43c81fa7332fd64f33382db13b9b"
     },
     "kenney_ind_building-q": {
       "file": "models/kenney_ind_building-q.bin",
-      "verts": 816,
-      "tris": 408,
+      "verts": 4180,
+      "tris": 2112,
       "mat": "CONCRETE",
       "sizeM": [
-        34.98,
-        14.55,
-        28.62
+        35.64,
+        16.5,
+        29.46
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "685e35a57e3d32311c6a82393027f62d"
+      "md5": "8b1406125b10fae3ad2a985d520f2648"
     },
     "kenney_ind_chimney-large": {
       "file": "models/kenney_ind_chimney-large.bin",
-      "verts": 84,
-      "tris": 80,
+      "verts": 331,
+      "tris": 234,
       "mat": "CONCRETE",
       "sizeM": [
-        7.6,
-        14,
-        7.23
+        7.8,
+        15.1,
+        7.8
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "40cd8dcb771dd10f26cafa44c75b2b9c"
+      "md5": "60cd7d23a519f08aea90eb912b67c6b4"
     },
     "kenney_com_building-b": {
       "file": "models/kenney_com_building-b.bin",
-      "verts": 696,
-      "tris": 348,
+      "verts": 3628,
+      "tris": 1836,
       "mat": "BRICK",
       "sizeM": [
-        13.78,
-        18.55,
-        13.78
+        14.04,
+        20.51,
+        14.52
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "93fe5fc403725e03c8496c5b4f0be23d"
+      "md5": "2fa05e575547905dc054540fa8380955"
     },
     "kenney_com_building-f": {
       "file": "models/kenney_com_building-f.bin",
-      "verts": 482,
-      "tris": 252,
+      "verts": 2014,
+      "tris": 1016,
       "mat": "BRICK",
       "sizeM": [
-        9.01,
-        24.8,
-        11.13
+        9.18,
+        23.29,
+        11.34
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "a1c6e8c590053043a1e8db8289256fdf"
+      "md5": "d6cc580ff131dffc37fdd84b831b4886"
     },
     "kenney_com_building-skyscraper-b": {
       "file": "models/kenney_com_building-skyscraper-b.bin",
-      "verts": 526,
-      "tris": 272,
+      "verts": 2300,
+      "tris": 1168,
       "mat": "BRICK",
       "sizeM": [
-        5.51,
-        22,
-        5.51
+        5.62,
+        25.2,
+        5.62
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "a02eb8698263cde72174d8df671af750"
+      "md5": "5e95c0440d20418e3448f69230681f92"
     },
     "kenney_com_low-detail-building-c": {
       "file": "models/kenney_com_low-detail-building-c.bin",
-      "verts": 48,
-      "tris": 24,
+      "verts": 364,
+      "tris": 204,
       "mat": "BRICK",
       "sizeM": [
-        4.08,
-        18.4,
-        4.08
+        4.16,
+        19.65,
+        4.2
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "724cd2f3b47198489d5122e750d6a3bc"
+      "md5": "3f9845b0fd836bce194b7d0851e8d073"
     },
     "kenney_com_low-detail-building-wide-b": {
       "file": "models/kenney_com_low-detail-building-wide-b.bin",
-      "verts": 48,
-      "tris": 24,
+      "verts": 436,
+      "tris": 240,
       "mat": "BRICK",
       "sizeM": [
-        15.81,
-        18.4,
-        7.96
+        16.12,
+        20.43,
+        8.13
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "2194a7bfb366660b396f3ceeb42bf9ee"
+      "md5": "20b57765f09f4fdd53b6510cad0741af"
     },
     "kenney_sub_fence-low": {
       "file": "models/kenney_sub_fence-low.bin",
-      "verts": 168,
-      "tris": 84,
+      "verts": 360,
+      "tris": 180,
       "mat": "WOOD",
       "sizeM": [
-        10.2,
-        1.1,
-        0.12
+        10.5,
+        1.3,
+        0.18
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "9fc36f9a3d7e05ed7ab50dfb38fef09f"
+      "md5": "c9b873da3d34e4e2f7cf7050fb56e052"
     },
     "kenney_sub_fence": {
       "file": "models/kenney_sub_fence.bin",
-      "verts": 96,
-      "tris": 48,
+      "verts": 192,
+      "tris": 96,
       "mat": "WOOD",
       "sizeM": [
-        2.4,
-        1.4,
-        0.12
+        2.5,
+        1.6,
+        0.2
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "6c5da10b3b8cf1b0e311f3f5518dc05a"
+      "md5": "a0591f1a8886a719518d16e03977cbe1"
     },
     "kenney_sub_planter": {
       "file": "models/kenney_sub_planter.bin",
-      "verts": 48,
-      "tris": 24,
+      "verts": 144,
+      "tris": 72,
       "mat": "WOOD",
       "sizeM": [
-        3,
-        1.02,
-        2.2
+        3.2,
+        1.5,
+        2.4
       ],
       "source": "procedural:tools/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
-      "md5": "e43704be4663918f784aed8bc2f41c67"
+      "md5": "901c40865ab327f6309d530646f66e64"
     }
   },
   "env": {
