@@ -68,7 +68,8 @@
       const { out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
-        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower } = api;
+        cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower,
+        bakedModel } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // High Roller: one atomic, fully-grounded vertical wheel. The old model
@@ -453,6 +454,23 @@
       }
       broadcastCompound(K(0.09), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
       cameraTower(K(0.002), -1, 15, { h: 20, boom: 1.4 });
+
+      // CC0 Kenney mid/hi-rise accents behind the paddock BOH strip — pack
+      // optional; procedural towers remain the Strip heroes above.
+      {
+        const pads = [
+          ["kenney_com_building-f", 0.08, 1, 58],
+          ["kenney_com_building-b", 0.11, -1, 48],
+          ["kenney_com_building-skyscraper-b", 0.16, 1, 55],
+          ["kenney_ind_building-q", 0.20, -1, 50],
+        ];
+        for (const [id, s, side, dist] of pads) {
+          const sc = id.includes("skyscraper") ? 4.2 : 1.2;
+          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
+            building(K(s), side, dist, 20, 40 * sc * 0.4, 18,
+              { kind: "tiered", wall: [0.16, 0.17, 0.20], window: [0.30, 0.38, 0.48], floor: 8, lit: true });
+        }
+      }
 
       // --- s 0.02–0.08 L: Fontainebleau + Resorts World (real, both absent) ---
       // These stand across Koval from the paddock — background landmarks, not

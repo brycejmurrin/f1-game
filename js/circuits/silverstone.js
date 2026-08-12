@@ -67,7 +67,7 @@
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat,
-              spectatorHill, cameraTower, sponsorHoarding } = api;
+              spectatorHill, cameraTower, sponsorHoarding, bakedModel, along } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -485,6 +485,28 @@
         [0.99, 44, 16, 6, 30, [0.72, 0.74, 0.76]],
         [0.92, 38, 12, 6, 26, [0.78, 0.77, 0.73]],
       ]) motorhome(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
+      // CC0 Kenney warehouses / service sheds behind the National paddock
+      // (pack-optional; procedural halls when Assets has not loaded models).
+      {
+        const yards = [
+          ["kenney_ind_building-e", 0.93, 1, 78],
+          ["kenney_ind_building-g", 0.96, 1, 82],
+          ["kenney_ind_building-c", 0.995, 1, 80],
+          ["kenney_com_low-detail-building-wide-b", 0.91, 1, 88],
+        ];
+        for (const [id, s, side, dist] of yards) {
+          if (!bakedModel(id, k(s), side, dist))
+            building(k(s), side, dist, 16, 12, 14,
+              { kind: "hall", wall: [0.74, 0.74, 0.72], window: [0.22, 0.26, 0.30], floor: 4 });
+        }
+        bakedModel("kenney_ind_chimney-large", k(0.945), 1, 90, { scale: 0.7 });
+      }
+      along(0.038, 0.05, 4.5, (kk) => {
+        bakedModel("kenney_construction-barrier", kk, 1, 5.8, { scale: 1.15 });
+      });
+      along(0.039, 0.049, 6.0, (kk) => {
+        bakedModel("kenney_construction-cone", kk, 1, 4.6, { tint: [1.0, 0.42, 0.10] });
+      });
       // marquee / hospitality tents (white prism roofs) in the paddock
       for (const [s, d, tCol] of [
         [0.94, 60, [0.92, 0.93, 0.94]],

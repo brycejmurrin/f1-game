@@ -7,7 +7,7 @@
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
-        "source": "polyhaven:concrete_floor_02",
+        "source": "polyhaven:concrete_panels",
         "licence": "CC0",
         "author": "Poly Haven contributors"
       },
@@ -23,14 +23,14 @@
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-        "source": "polyhaven:metal_plate",
+        "source": "polyhaven:corrugated_iron",
         "licence": "CC0",
         "author": "Poly Haven contributors"
       },
       {
         "mat": 5,
         "id": "wood",
-        "scale": 2.2,
+        "scale": 2.8,
         "source": "polyhaven:wood_planks",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -46,7 +46,7 @@
       {
         "mat": 7,
         "id": "fabric",
-        "scale": 1.5,
+        "scale": 1.8,
         "source": "polyhaven:denim_fabric",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -86,7 +86,7 @@
       {
         "mat": 12,
         "id": "roof",
-        "scale": 2,
+        "scale": 2.6,
         "source": "polyhaven:clay_roof_tiles",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -124,7 +124,7 @@
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
-          "source": "polyhaven:concrete_floor_02",
+          "source": "polyhaven:concrete_panels",
           "licence": "CC0",
           "author": "Poly Haven contributors"
         },
@@ -140,14 +140,14 @@
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-          "source": "polyhaven:metal_plate",
+          "source": "polyhaven:corrugated_iron",
           "licence": "CC0",
           "author": "Poly Haven contributors"
         },
         {
           "mat": 5,
           "id": "wood",
-          "scale": 2.2,
+          "scale": 2.8,
           "source": "polyhaven:wood_planks",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -163,7 +163,7 @@
         {
           "mat": 7,
           "id": "fabric",
-          "scale": 1.5,
+          "scale": 1.8,
           "source": "polyhaven:denim_fabric",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -203,7 +203,7 @@
         {
           "mat": 12,
           "id": "roof",
-          "scale": 2,
+          "scale": 2.6,
           "source": "polyhaven:clay_roof_tiles",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -493,6 +493,291 @@
       "licence": "CC0",
       "author": "Kenney",
       "md5": "7a0d9091b25074948159bcdc2898d94f"
+    },
+    "kenney_sub_building-type-a": {
+      "file": "models/kenney_sub_building-type-a.bin",
+      "verts": 1870,
+      "tris": 1174,
+      "mat": "BRICK",
+      "sizeM": [
+        15.6,
+        10,
+        12.33
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2655f1e37b5c1d7601c18550fa1183c8"
+    },
+    "kenney_sub_building-type-c": {
+      "file": "models/kenney_sub_building-type-c.bin",
+      "verts": 1886,
+      "tris": 1196,
+      "mat": "BRICK",
+      "sizeM": [
+        12.45,
+        10,
+        9.95
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "f3b185637859928c210318ad3df60716"
+    },
+    "kenney_sub_building-type-h": {
+      "file": "models/kenney_sub_building-type-h.bin",
+      "verts": 1228,
+      "tris": 770,
+      "mat": "BRICK",
+      "sizeM": [
+        17.63,
+        10,
+        12.42
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "9cc43bbe39a66855f36d8ab238a35d60"
+    },
+    "kenney_sub_building-type-k": {
+      "file": "models/kenney_sub_building-type-k.bin",
+      "verts": 1690,
+      "tris": 1024,
+      "mat": "BRICK",
+      "sizeM": [
+        8.01,
+        10,
+        8.87
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "362d3ae78f302947e0056087d2abc05a"
+    },
+    "kenney_sub_building-type-r": {
+      "file": "models/kenney_sub_building-type-r.bin",
+      "verts": 1676,
+      "tris": 1030,
+      "mat": "BRICK",
+      "sizeM": [
+        9.01,
+        10,
+        8.94
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "5676d0f8cbbf61567a9a4170252453f2"
+    },
+    "kenney_ind_building-b": {
+      "file": "models/kenney_ind_building-b.bin",
+      "verts": 4066,
+      "tris": 2422,
+      "mat": "CONCRETE",
+      "sizeM": [
+        19.84,
+        14,
+        12.02
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "043071f47c282ad5c04ea79a9053c195"
+    },
+    "kenney_ind_building-c": {
+      "file": "models/kenney_ind_building-c.bin",
+      "verts": 3062,
+      "tris": 1780,
+      "mat": "CONCRETE",
+      "sizeM": [
+        21.01,
+        14,
+        23.61
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "8d49d26f831c7eb8e9ffb04fe4658856"
+    },
+    "kenney_ind_building-e": {
+      "file": "models/kenney_ind_building-e.bin",
+      "verts": 2462,
+      "tris": 1484,
+      "mat": "CONCRETE",
+      "sizeM": [
+        14.28,
+        14,
+        10.95
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "bb9678716d066b92d453cc219cec2b85"
+    },
+    "kenney_ind_building-g": {
+      "file": "models/kenney_ind_building-g.bin",
+      "verts": 2024,
+      "tris": 1242,
+      "mat": "CONCRETE",
+      "sizeM": [
+        18.35,
+        14,
+        14.04
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "960619fd5f7cdd7db6716a3aa8cbb33f"
+    },
+    "kenney_ind_building-q": {
+      "file": "models/kenney_ind_building-q.bin",
+      "verts": 3470,
+      "tris": 2062,
+      "mat": "CONCRETE",
+      "sizeM": [
+        34.05,
+        14,
+        28.16
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "3a46f2c4d4e3a1be9c8b3aa9c84a0858"
+    },
+    "kenney_ind_chimney-large": {
+      "file": "models/kenney_ind_chimney-large.bin",
+      "verts": 384,
+      "tris": 212,
+      "mat": "CONCRETE",
+      "sizeM": [
+        8.24,
+        14,
+        8.24
+      ],
+      "source": "kenney:city-kit-industrial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "bb1283fe37f99326ec086acb738425a3"
+    },
+    "kenney_com_building-b": {
+      "file": "models/kenney_com_building-b.bin",
+      "verts": 2018,
+      "tris": 1276,
+      "mat": "BRICK",
+      "sizeM": [
+        13.5,
+        18,
+        13.09
+      ],
+      "source": "kenney:city-kit-commercial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2322c5d3f9df0cfc6d00d28fe30621b3"
+    },
+    "kenney_com_building-f": {
+      "file": "models/kenney_com_building-f.bin",
+      "verts": 2842,
+      "tris": 1794,
+      "mat": "BRICK",
+      "sizeM": [
+        8.93,
+        18,
+        10.95
+      ],
+      "source": "kenney:city-kit-commercial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "1c2569064b0a28ad89b952e4b2658387"
+    },
+    "kenney_com_building-skyscraper-b": {
+      "file": "models/kenney_com_building-skyscraper-b.bin",
+      "verts": 2646,
+      "tris": 1592,
+      "mat": "BRICK",
+      "sizeM": [
+        5.46,
+        18,
+        5.46
+      ],
+      "source": "kenney:city-kit-commercial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b9c0458fc82bf97e7c1460f42cc87e30"
+    },
+    "kenney_com_low-detail-building-c": {
+      "file": "models/kenney_com_low-detail-building-c.bin",
+      "verts": 210,
+      "tris": 142,
+      "mat": "BRICK",
+      "sizeM": [
+        4,
+        18,
+        4
+      ],
+      "source": "kenney:city-kit-commercial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "336dc9ce59b66676730e01955b89ab32"
+    },
+    "kenney_com_low-detail-building-wide-b": {
+      "file": "models/kenney_com_low-detail-building-wide-b.bin",
+      "verts": 324,
+      "tris": 246,
+      "mat": "BRICK",
+      "sizeM": [
+        15.65,
+        18,
+        7.83
+      ],
+      "source": "kenney:city-kit-commercial",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a2ceab2c9b122ab547c468bd2860d985"
+    },
+    "kenney_sub_fence-low": {
+      "file": "models/kenney_sub_fence-low.bin",
+      "verts": 328,
+      "tris": 180,
+      "mat": "WOOD",
+      "sizeM": [
+        10.5,
+        1.4,
+        6.9
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "fcb0611f61dc6555880c7dd58d12d52a"
+    },
+    "kenney_sub_fence": {
+      "file": "models/kenney_sub_fence.bin",
+      "verts": 160,
+      "tris": 88,
+      "mat": "WOOD",
+      "sizeM": [
+        2.46,
+        1.4,
+        0.39
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "5f78e52da209265f6ff0d5575515ee44"
+    },
+    "kenney_sub_planter": {
+      "file": "models/kenney_sub_planter.bin",
+      "verts": 360,
+      "tris": 204,
+      "mat": "WOOD",
+      "sizeM": [
+        3.16,
+        1.4,
+        2.37
+      ],
+      "source": "kenney:city-kit-suburban",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "9acf260afd38d599d511633b4a112394"
     }
   },
   "env": {
@@ -563,7 +848,7 @@
       "id": "concrete",
       "author": "Poly Haven contributors",
       "licence": "CC0",
-      "source": "polyhaven:concrete_floor_02"
+      "source": "polyhaven:concrete_panels"
     },
     {
       "kind": "material",
@@ -577,7 +862,7 @@
       "id": "metal",
       "author": "Poly Haven contributors",
       "licence": "CC0",
-      "source": "polyhaven:metal_plate"
+      "source": "polyhaven:corrugated_iron"
     },
     {
       "kind": "material",
@@ -774,6 +1059,139 @@
       "author": "Kenney",
       "licence": "CC0",
       "source": "kenney:modular-buildings"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_building-type-a",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_building-type-c",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_building-type-h",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_building-type-k",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_building-type-r",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_building-b",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_building-c",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_building-e",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_building-g",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_building-q",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_ind_chimney-large",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-industrial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_com_building-b",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-commercial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_com_building-f",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-commercial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_com_building-skyscraper-b",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-commercial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_com_low-detail-building-c",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-commercial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_com_low-detail-building-wide-b",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-commercial"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_fence-low",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_fence",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
+    },
+    {
+      "kind": "model",
+      "id": "kenney_sub_planter",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "kenney:city-kit-suburban"
     },
     {
       "kind": "env",

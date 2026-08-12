@@ -64,6 +64,24 @@ const SHOTS = [
     frac: 0.02,
     az: 95, el: 8, dist: 20, tod: "day",
   },
+  {
+    id: "silverstone-paddock",
+    track: "silverstone",
+    frac: 0.95,
+    az: -100, el: 22, dist: 100, tod: "day",
+  },
+  {
+    id: "monaco-rascasse",
+    track: "monaco",
+    frac: 0.91,
+    az: 80, el: 18, dist: 40, tod: "day",
+  },
+  {
+    id: "vegas-boh-towers",
+    track: "vegas",
+    frac: 0.12,
+    az: -70, el: 20, dist: 90, tod: "dusk",
+  },
 ];
 
 const srv = await startStaticServer(ROOT);
@@ -110,7 +128,9 @@ try {
 
     const file = `${shot.id}.png`;
     const path = resolve(outDir, file);
-    const buf = await page.locator("canvas#game").screenshot({ path });
+    const buf = await page.screenshot({ path, type: "png" });
+    // Prefer full-page screenshot: canvas#game locator.screenshot can hang on
+    // heavy circuits (Vegas) waiting for "element stable" under SwiftShader.
     const rec = {
       ...shot,
       file,
