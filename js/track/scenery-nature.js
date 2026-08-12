@@ -289,12 +289,20 @@ const SceneryNature = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) return;
       const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
+      // Per-instance variety, so a treeline is a forest and not one fir stamped N
+      // times: a deterministic ±15% size jitter, a windswept lean on ~40% of
+      // trees, and a 4th spire tier. All from hash(k,side,dist) — no unique
+      // geometry, so the roadside scatter stays cheap. `lean` shifts each tier
+      // laterally in proportion to its height.
+      const vr = hash(k * 6.7 + side * 2.3 + dist), j = 0.85 + hash(k * 3.1 + side * 1.7 + dist) * 0.3;
+      const lean = vr > 0.6 ? (vr - 0.6) * 1.3 * side : 0;
       out._mat = MAT.WOOD;
       addCyl(out, vadd(a.c, a.u, -0.5), 0.3, h * 0.20 + 0.5, [0.34, 0.24, 0.15], 5, b);   // trunk, sunk base
       out._mat = MAT.FOLIAGE;
-      addCone(out, vadd(a.c, a.u, h * 0.14), 2.1 + h * 0.06, h * 0.44, col, 7, b);
-      addCone(out, vadd(a.c, a.u, h * 0.42), 1.6 + h * 0.05, h * 0.38, col, 6, b);
-      addCone(out, vadd(a.c, a.u, h * 0.70), 1.0 + h * 0.04, h * 0.34, c2, 6, b);
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.14), a.r, lean * 0.14), (2.1 + h * 0.06) * j, h * 0.44, col, 7, b);
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.42), a.r, lean * 0.42), (1.6 + h * 0.05) * j, h * 0.38, col, 6, b);
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.70), a.r, lean * 0.70), (1.0 + h * 0.04) * j, h * 0.34, c2, 6, b);
+      addCone(out, vadd(vadd(a.c, a.u, h * 0.88), a.r, lean * 0.88), (0.6 + h * 0.03) * j, h * 0.28, c2, 5, b);
       out._mat = 0;
     };
     // ---------- species: the silhouettes pine/tree/palm/conifer cannot make ----------
@@ -869,7 +877,17 @@ const SceneryNature = (function () {
           Log.warn("scenery", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        addBox(out, vadd(p.c, p.u, (h - 0.4) / 2), [HEDGE_W, h + 0.4, spacing], col || [0.18, 0.36, 0.16], [p.r, p.u, p.t]);   // base sunk 0.4
+        // Scalloped clipped top instead of a dead-flat wall: a ±10% per-node
+        // crest wobble on the base body, plus a narrower jittered lump riding the
+        // crest. All jitter stays INSIDE HEDGE_W, so the indexSolid footprint
+        // registered above is unchanged (no new clipping).
+        const base = col || [0.18, 0.36, 0.16], hb = [p.r, p.u, p.t];
+        const hj = h * (0.9 + hash(k * 5.1 + side) * 0.2);
+        addBox(out, vadd(p.c, p.u, (hj - 0.4) / 2), [HEDGE_W, hj + 0.4, spacing], base, hb);   // base sunk 0.4
+        const lump = 0.25 + hash(k * 7.7 + side) * 0.5, lx = (hash(k * 3.3 + side) - 0.5) * HEDGE_W * 0.4;
+        addBox(out, vadd(vadd(vadd(p.c, p.u, hj + lump * 0.5 - 0.2), p.r, lx), p.t, (hash(k * 9.1) - 0.5) * spacing * 0.3),
+               [HEDGE_W * (0.5 + hash(k * 2.2) * 0.3), lump, spacing * 0.55],
+               [base[0] * 0.9, base[1] * 0.92, base[2] * 0.88], hb);
       });
     };
     // forestEdge(): a DENSE treeline (mix of pine/tree) from s0→s1 on `side`,
@@ -888,7 +906,7 @@ const SceneryNature = (function () {
     const canopyR = (kind, h) => {
       const jMax = 1.15;                                  // per-instance jitter ceiling
       if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
-      if (kind === "fir")  return 2.1 + h * 0.06 + 0.4;   // conifer(): no jitter applied
+      if (kind === "fir")  return (2.1 + h * 0.06) * 1.15 + 0.4;   // conifer(): +15% jitter on the base tier
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       // The five species emitters added for the identity pass. Each figure is
       // the emitter's OWN on-track guard radius at the default spread, so the
