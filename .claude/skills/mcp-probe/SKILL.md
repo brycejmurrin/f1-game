@@ -150,6 +150,21 @@ never the repo root (CLAUDE.md).
     GC-jitter profiling (overlaps `perf-profile`, but live).
   - `list_console_messages` (`types:["error","warn"]`) — did the page throw.
   - `take_snapshot` — the a11y tree as cheap text (see survey-ui-matrix).
+  - `lighthouse_audit` (`mode:"snapshot"`) — a11y/best-practices on the current
+    screen (excludes performance; use traces for that).
+  - `click` / `press_key` / `wait_for` on snapshot **uids** (`1_12`, not `1`).
+
+### File writes and roots (measured 2026-08-12)
+
+Heap / perf / lighthouse tools validate paths against MCP **roots**. A stdio
+client that never answers `roots/list` only gets `/tmp` by default — writes to
+`/workspace/scratch/...` fail with `Access denied: … not within any of the
+configured workspace roots`. Fix: advertise `capabilities.roots` on
+`initialize`, answer `roots/list` with `file:///workspace`, **or** write
+artifacts under `/tmp` and copy out.
+
+Full recipes + measured LCP/heap/a11y numbers:
+`docs/research/CHROME-DEVTOOLS-MCP.md`.
 
 ### When NOT to use it
 
