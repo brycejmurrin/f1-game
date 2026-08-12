@@ -379,15 +379,22 @@
       // ochre benches stepping up the slope behind the outer runoff read as that
       // terracing at speed, and they are what stops this track's backdrop being
       // interchangeable with a German one.
-      for (const [id, s, side, gap] of [
+      for (const [id, s, side, gap, offs] of [
         ["t1", 0.090, 1, 62], ["repsol", 0.215, -1, 58],
-        ["campsa", 0.470, 1, 62], ["lacaixa", 0.640, -1, 58],
+        ["campsa", 0.470, 1, 62],
+        // La Caixa's outfield curls back beside the T10 approach (s≈0.57); the
+        // bench's low-s end straddled that racing line and read ~4 m over it.
+        // Run this one UP the slope from La Caixa (s-offsets 0..+0.04) instead of
+        // centring it (±0.02), so the near end retreats from the loop-back. Only
+        // this bench needed it; the other three keep the symmetric span.
+        ["lacaixa", 0.645, -1, 58, [0, 1, 2, 3, 4]],
       ]) {
+        const js = offs || [-2, -1, 0, 1, 2];
         for (let t = 0; t < 3; t++) {
           groundedSegments({
             id: `catalunya-terrace-${id}-${t + 1}`,
-            points: [0, 1, 2, 3, 4].map((j) => ({
-              k: K(s + (j - 2) * 0.010), side, dist: gap + t * 16,
+            points: js.map((j) => ({
+              k: K(s + j * 0.010), side, dist: gap + t * 16,
             })),
             width: 11, height: 2.2 + t * 1.6,
             color: t & 1 ? OCHRE : [0.71, 0.66, 0.52],
