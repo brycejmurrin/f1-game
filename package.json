@@ -55,6 +55,7 @@
     "test:audit": "node tools/test-coverage-audit.mjs",
     "test:pick": "node tools/pick-tests.mjs",
     "test:bg": "node tools/test-bg.mjs",
+    "ui:survey": "node tools/ui-mcp-survey.mjs",
     "ab:light": "node tools/lighting/ab-lighting.mjs"
   },
   "devDependencies": {
