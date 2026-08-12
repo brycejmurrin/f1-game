@@ -7,7 +7,15 @@
   {
     id: "zandvoort",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.3275, // GPS-derived (OpenF1 2025, conf=0.265)
+    // Start/finish line. Snapped to the real one: coord 0.4 m off centreline; = trace vertex 0 (timing line).
+    // Was 0.3275. That already measured straight (mean |k| 0.00356 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.3275,
     name: "ZANDVOORT",
     gp: "Dutch GP",
     country: "Netherlands",

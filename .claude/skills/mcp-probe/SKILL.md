@@ -43,6 +43,63 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
 ---
 
+## A SECOND trap: `snapCam()` after a free-cam call cancels the free-cam
+
+`park()`/`jump()` need `snapCam()` right after them (see `docs/DEBUG-HOOKS.md`).
+`orbit()`/`view()`/`dolly()`/`eyeAt()`/`roadside()`/`cinematic()`/`sky()` do
+**not** — they position the free-cam (`G.dbgCam`) instantly, no easing to settle.
+Calling `snapCam()` after one of them does `G.dbgCam = null` first and snaps back
+to the ordinary player camera mode, silently discarding the framing you just set.
+It doesn't error — you get a real, in-focus render, just not the shot you asked
+for, so a "before"/"after" pair taken this way can show two DIFFERENT camera
+positions with nothing to flag it.
+
+MEASURED 2026-08-12 (proving out lighting-tuner sliders this way): `orbit(0.16,
+40, 20, 20); snapCam();` before one screenshot and the identical call before a
+second gave a wide cityscape in one and a close-up car in the other — the
+`snapCam()` was cancelling the orbit both times and each shot landed at a
+different point in the chase cam's own spring-back. Dropping `snapCam()` (just
+`orbit(...)` + a couple of `requestAnimationFrame` waits) made every subsequent
+pair land on the identical framing.
+
+```js
+// WRONG — snapCam() cancels the orbit that came before it
+__apex.orbit(0.16, 40, 20, 20);
+__apex.snapCam();              // <- G.dbgCam = null; back to chase
+// RIGHT — free-cam hooks need no snap; just let a couple of frames settle
+__apex.orbit(0.16, 40, 20, 20);
+await new Promise(r => requestAnimationFrame(r));
+await new Promise(r => requestAnimationFrame(r));
+```
+
+`viewState().dbgCamActive` tells you which camera is actually live — check it
+once when setting up a shot sequence rather than assuming.
+
+## A THIRD trap: verify TUNE_DEFS by grep, not by memory
+
+Proving a lighting-tuner slider "does nothing" (or "does something") means
+pushing it from its shipped default to an extreme — get either number wrong and
+the test is invalid regardless of how careful the rest of it is. MEASURED
+2026-08-12: two knobs (`mieScatter`, `flareStreak2`) were tested against
+guessed/half-remembered defaults (0.03 and 0.4) that turned out to be wrong (the
+real `TUNE_DEFS` defaults are 1.0 and 0.5) — the "no visible effect" result those
+produced was really "no visible effect near an arbitrary point that happened not
+to be the default," not evidence about the knob. Five more knobs in the same
+session had the same class of error. Always
+`grep -n 'id: "<knobId>"' js/game/lighting.js` immediately before testing a knob
+and read `min`/`max`/`def` off that line — never carry values between sessions
+or reconstruct them from a description.
+
+A knob that shows no effect at its documented extreme is also worth checking for
+a spatially-thin effect before concluding it's dead: a whole-frame pixel-mean
+diff is blind to anything confined to a narrow band (a lens-flare core streak
+occupying 2–3 pixel rows, star points in a 320×180 capture). Scan horizontal (or
+vertical) bands and diff each independently — the band containing the effect
+reads an order of magnitude above its neighbours even when the frame-wide mean
+shows nothing.
+
+---
+
 ## Chrome DevTools MCP — live 3D / __apex debugging
 
 ### Setup (canvas visible — you WANT the render here)

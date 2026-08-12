@@ -9,9 +9,16 @@
     classic: true,
     // Upstream it-1914 already runs clockwise (San Donato at T1 is a right).
     reverse: false,
-    // The trace opens on the 682 m main straight — Mugello's longest — so the
-    // line only needs nudging along it. Not GPS-calibrated.
-    startFrac: 0.05,
+    // The trace opens on the 682 m main straight — Mugello's longest — and its
+    // first vertex is the line itself.
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches San Donato.
+    // Was 0.05, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.05,
     name: "MUGELLO",
     gp: "Tuscan GP",
     country: "Italy",

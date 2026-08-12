@@ -122,10 +122,10 @@ Like `park()`, but tilts the camera toward the horizon so sky/clouds are clearly
 visible. Eye 3.5 m up, target 20 m ahead and 34 m higher (~58° up) so the horizon
 drops to the lower third and the frame fills with sky.
 
-### `snapCam() → void`  — **call this before every screenshot**
-Instantly snap the camera to the current mode's vantage (no damping) — every mode,
-not just chase. Call right after `jump()`/`park()` so the very next rendered frame
-is clean.
+### `snapCam() → void`  — **call this before every `jump()`/`park()` screenshot**
+Instantly snap the **player camera mode** (chase, cockpit, …) to its vantage (no
+damping) — every mode, not just chase. Call right after `jump()`/`park()` so the
+very next rendered frame is clean.
 
 **Skip it and your screenshot is of a camera in transit.** The rig eases toward
 its target exponentially, so a `jump()`/`park()` teleport leaves it flying to the
@@ -134,6 +134,22 @@ hundreds of metres back. `camState()` read in that window describes the camera's
 current position, not the mode's framing. Waiting longer is not a reliable fix —
 `freeze()` can hold the ease. Sanity numbers once snapped: chase eye ≈ 5.8 m from
 the car, cockpit ≈ 0.36 m, hood ≈ 0.58 m.
+
+**Do NOT call it after `orbit()`/`view()`/`dolly()`/`eyeAt()`/`roadside()`/
+`cinematic()`/`sky()`/`previewCam()`.** Every one of those sets `G.dbgCam`, a
+free-cam override; `snapCam()` unconditionally does `G.dbgCam = null` first, so
+calling it right after one of them **cancels the positioning you just set** and
+silently falls back to whatever the player camera mode was — read the frame back
+and it looks plausible (it's a real render, just the wrong one), so this doesn't
+error, it just quietly invalidates the shot. MEASURED 2026-08-12: two screenshots
+captured with `orbit(0.16,40,20,20); snapCam();` between a "before" and an
+"after" `lightTune()` call showed a wide cityscape in one and a close-up car in
+the other — not because anything in the scene changed, but because the two calls
+landed at different points in the chase-cam's own spring-back after each
+`snapCam()` silently discarded the orbit. The fix is to never call `snapCam()`
+after a free-cam hook — those hooks already position instantly, no easing to
+settle. Only call `snapCam()` when you want the ordinary player camera back
+(after `camera(mode)`, or to end a debug-cam session).
 
 Note `park()` places the car on the centreline with heading == the road tangent —
 the one pose where every camera rig coincides. It is the right hook for a clean
