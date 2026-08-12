@@ -102,6 +102,16 @@ on:
         type: boolean
         required: false
         default: true
+      # TEMP 2026-08-12: pages.yml passes false so a deploy can ship without the
+      # ~15 min SwiftShader smoke job. Rapid pushes were cancelling in-flight
+      # Pages runs mid-smoke and live version.json stayed stuck at 1126. Flip
+      # pages.yml smoke:true (or remove the override) once the site has caught
+      # the tip — do NOT leave this off as the permanent gate.
+      smoke:
+        description: "run the Playwright smoke gate (page boots, __apex responds)"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -282,6 +292,9 @@ jobs:
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
+    # TEMP: pages.yml can pass smoke:false to skip this job on deploy (see the
+    # workflow_call input). Branch/PR pushes keep the default (true).
+    if: ${{ inputs.smoke != false }}
     # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
     # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
     # whose per-test cost is the very thing that varies — and the last time a

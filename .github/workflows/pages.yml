@@ -40,6 +40,9 @@ jobs:
       # always fail-safed into a full 15-minute sweep on every Pages push.
       before_sha: ${{ github.event.before }}
       advisory: false
+      # TEMP: skip ~15 min smoke so this deploy can finish. Re-enable (true /
+      # omit) after live version.json catches the tip. See ci.yml smoke input.
+      smoke: false
 
   deploy:
     needs: ci
