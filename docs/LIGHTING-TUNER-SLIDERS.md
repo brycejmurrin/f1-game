@@ -13,13 +13,37 @@ goes nowhere. It is one of three things, and they need different fixes:
 | Failure mode | How to tell | Fix |
 |---|---|---|
 | **Not stored** | `__apex.lightTune({id: v})` then `__apex.lightTune()[id] !== v` | the store/clamp path, not the renderer |
-| **Inert everywhere** | stored, but pushed to its extreme it moves no pixels in any condition | its consumer is gated off, or the effect is below perceptible |
+| **Stored but not re-applied** | `lightTune()[id]` updates but the scene does not, until some *other* action re-runs `applyRaceSettings()` | the id is missing from `APPLY_RACE_IDS` in `light-store.js` (this is what broke five knobs — see below) |
+| **Inert everywhere** | stored, re-applied, but pushed to its extreme it moves no SCENE STATE in any condition | its consumer is gated off, or the effect is genuinely a no-op |
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
-The third is the common one and the reason a casual "half these do nothing" is
-usually wrong: 69 of the 178 knobs are also set by shipped presets per
+The third and fourth are the common ones, and the reason a casual "half these do
+nothing" is usually wrong: 69 of the 178 knobs are also set by shipped presets per
 (track, time-of-day, weather), so what a slider appears to do depends on where
 you are standing when you drag it.
+
+**Measure scene STATE, not the frame mean.** A frame-wide mean-absolute pixel
+diff is the wrong instrument for a knob whose effect is diluted across the
+image. MEASURED: `nightAmbLift` pushed 1→4 scales `frame.ambientSky` and
+`ambientGround` by exactly ×4 (verified via `__apex.lightState()`), yet the
+night frame — dominated by lamp-lit surfaces where ambient is a small term —
+moved a mean of only 0.37/255, which a pixel-threshold sweep scored "inert" at
+1.8× over noise. The value reaches the scene; the *mean* hides it. `lightState()`
+exposes `ambientSky/ambientGround/sunColor/exposure/fogDensity/fogColor/...`,
+so an A→B→A′ read of the actual derived value is exact, noise-free, and needs no
+threshold. The five repaired knobs were all confirmed this way:
+
+| knob | condition it needs | state it moves (verified) |
+|---|---|---|
+| `nightAmbLift` | night | `ambientSky`/`ambientGround` band ×4 |
+| `cityGlowWarm` | night, `street_night`/`modern` theme | `ambientSky` white-balance |
+| `weatherSunMute` | wet / overcast / fog | `sunColor` ×0.53 |
+| `overcastFogMul` | **overcast only** | `fogDensity` ×3.5 |
+| `fogWxMul` | **fog only** | `fogDensity` ×2.7 |
+
+The last two are why `tools/tuner-sweep.mjs` gained `day-overcast`/`day-fog`
+conditions: their gates never open under dry/wet, so any pixel sweep would have
+scored them dead regardless of runtime.
 
 ## Reading the table
 
