@@ -22,7 +22,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 110,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.34, s1: 0.46 },
     ],
     // Atlantic coast light — bright but with sea haze softening the horizon,

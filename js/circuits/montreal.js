@@ -19,15 +19,9 @@
     dressingExclusions: [
       // Bespoke parkland below owns Montreal's foliage; avoid a duplicate shared row.
       { kind: "foliage", s0: 0, s1: 1 },
-      // Preserve the open-water read along the Olympic Basin and island canals.
-      { kind: "lamps", s0: 0.065, s1: 0.21, side: -1 },
-      { kind: "lamps", s0: 0.565, s1: 0.75, side: 1 },
-      { kind: "lamps", s0: 0.78, s1: 0.86, side: 1 },
       // Foldbacks need a furniture-free envelope on both sides.
-      { kinds: ["lamps", "floodlights"], s0: 0.19, s1: 0.23 },
-      { kinds: ["lamps", "floodlights"], s0: 0.69, s1: 0.73 },
-      // Keep the Wall of Champions sightline free of generic furniture.
-      { kind: "lamps", s0: 0.94, s1: 0.995, side: 1 },
+      { kinds: ["lighting"], s0: 0.19, s1: 0.23 },
+      { kinds: ["lighting"], s0: 0.69, s1: 0.73 },
     ],
     pal: { zenith: [0.30, 0.50, 0.82], horizon: [0.74, 0.80, 0.86], grass: [0.24, 0.50, 0.20], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
     segs: [

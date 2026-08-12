@@ -140,7 +140,7 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
 
   expect(audit.sceneryCoordinates).toBe("racing");
   expect(audit.exclusions).toContainEqual({
-    kinds: ["foliage", "floodlights"], s0: 0, s1: 1,
+    kinds: ["foliage", "lighting"], s0: 0, s1: 1,
   });
   expect(audit.relief).toBeGreaterThanOrEqual(4.5);
   expect(audit.relief).toBeLessThanOrEqual(5.5);

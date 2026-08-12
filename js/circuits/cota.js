@@ -22,7 +22,7 @@
     terrainOuter: 48,
     dressingExclusions: [
       { kind: "foliage", s0: 0.94, s1: 0.16 },          // pits + Big Red sightline
-      { kinds: ["foliage", "lamps"], s0: 0.72, s1: 0.86, side: 1 }, // tower/amphitheater
+      { kinds: ["foliage"], s0: 0.72, s1: 0.86, side: 1 }, // tower/amphitheater
     ],
     pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     segs: [

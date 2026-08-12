@@ -24,7 +24,7 @@
     // enough to carry the banks the circuit rides over.
     terrainOuter: 125,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.93, s1: 0.08 },
+      { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.30, s1: 0.42 },
     ],
     // Algarve light: dry, bright, faintly dusty, with red-earth soil.

@@ -20,7 +20,9 @@
     flatTerrain: true,
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      // Bespoke parkland owns the planting; generic floodlights stay so night
+      // pools remain fixture-anchored (no bespoke mast ring on this circuit).
+      { kind: "foliage", s0: 0, s1: 1 },
     ],
     pal: { zenith: [0.22, 0.44, 0.82], horizon: [0.76, 0.79, 0.82], grass: [0.28, 0.50, 0.24], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012, sunDir: [0.6666666666666667, 0.6666666666666667, 0.33333333333333337], sun: [1, 0.95, 0.8], sunColor: [1, 0.93, 0.78] },
     segs: [

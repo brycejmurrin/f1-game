@@ -23,7 +23,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.93, s1: 0.08 },  // pits
+      { kinds: ["foliage"], s0: 0.93, s1: 0.08 },  // pits
       { kind: "foliage", s0: 0.34, s1: 0.46 },              // the Turn 8 amphitheatre
     ],
     // Dry Thracian hillside: hazy warm sun, parched grass, pale limestone dust.

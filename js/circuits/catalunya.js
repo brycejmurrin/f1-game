@@ -24,7 +24,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 115,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.12 },  // pits + main straight
+      { kinds: ["foliage"], s0: 0.92, s1: 0.12 },  // pits + main straight
       { kind: "foliage", s0: 0.42, s1: 0.52 },              // the open infield bowl
     ],
     // Dry Catalan light: hard sun, bleached scrub, dusty ochre runoff.

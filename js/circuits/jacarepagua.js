@@ -24,7 +24,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.36, s1: 0.50 },   // the lagoon frontage
     ],
     // Rio: brilliant tropical light with heavy coastal humidity flattening the

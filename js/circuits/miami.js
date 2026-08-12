@@ -28,9 +28,6 @@
       { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
-      { kind: "lamps", s0: 0.94, s1: 0.08, side: 1 },
-      { kind: "lamps", s0: 0.26, s1: 0.38, side: 1 },
-      { kind: "lamps", s0: 0.60, s1: 0.72 },
     ],
     // Aqua runoff = Dolphins identity (COL.aquaRunoff); soft tropical haze so
     // the Hard Rock bowl owns the near horizon over a distant downtown.

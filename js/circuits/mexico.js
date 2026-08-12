@@ -24,7 +24,7 @@
       // stadium sector, whose bright apertures shared furniture would close.
       { kind: "city", s0: 0.02, s1: 0.14 },
       { kind: "city", s0: 0.60, s1: 0.94 },
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 },
+      { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
     // Cool thin-air haze: pale blue-grey horizon + slightly denser fog so far
     // Sierra Nevada peaks read as altitude, not flat desert glare.

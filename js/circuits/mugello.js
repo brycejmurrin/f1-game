@@ -22,7 +22,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.36, s1: 0.46 },
     ],
     // Tuscan hill light: warm, golden, slightly hazy; cypress-dark greens.

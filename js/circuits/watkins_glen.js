@@ -22,7 +22,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.93, s1: 0.08 },
+      { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.24, s1: 0.34 },
     ],
     // Upstate New York in autumn: cool clear light, deep hardwood greens

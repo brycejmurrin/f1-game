@@ -19,8 +19,8 @@
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "floodlights"], s0: 0.19, s1: 0.26 },
-      { kinds: ["foliage", "floodlights"], s0: 0.79, s1: 0.85 },
+      { kinds: ["foliage", "lighting"], s0: 0.19, s1: 0.26 },
+      { kinds: ["foliage", "lighting"], s0: 0.79, s1: 0.85 },
     ],
     pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
     segs: [
