@@ -39,8 +39,8 @@ const WebBake = (function () {
   // live catalogue; every one is CC0. GLASS(3), FLAG(15) and FLAT(0) are
   // deliberately absent — see tools/assets.mjs SCALES for why.
   const DEFAULTS = {
-    1:  "concrete_floor_02",      2:  "red_brick",
-    4:  "metal_plate",            5:  "wood_planks",
+    1:  "concrete_panels",        2:  "red_brick",
+    4:  "corrugated_iron",        5:  "wood_planks",
     6:  "leafy_grass",            7:  "denim_fabric",
     8:  "coast_sand_01",          9:  "sparse_grass",
     10: "rock_ground",            11: "snow_02",
@@ -51,8 +51,8 @@ const WebBake = (function () {
   // World metres per tile — MUST match tools/assets.mjs SCALES, or a browser
   // bake and an offline bake of the same material would tile differently.
   const SCALES = {
-    1: 5.5, 2: 2.8, 4: 2.8, 5: 2.2, 6: 4.0, 7: 1.5, 8: 11.0,
-    9: 4.5, 10: 8.0, 11: 7.0, 12: 2.0, 13: 3.5, 14: 2.5, 16: 3.5,
+    1: 5.5, 2: 2.8, 4: 2.8, 5: 2.8, 6: 4.0, 7: 1.8, 8: 11.0,
+    9: 4.5, 10: 8.0, 11: 7.0, 12: 2.6, 13: 3.5, 14: 2.5, 16: 3.5,
   };
 
   const NAMES = { 0:"FLAT",1:"CONCRETE",2:"BRICK",3:"GLASS",4:"METAL",5:"WOOD",6:"FOLIAGE",
@@ -68,7 +68,7 @@ const WebBake = (function () {
   // catalogue for the keyword and tries the first few hits. That is what turns
   // a hand-written table into something self-healing.
   const FALLBACK = {
-    1: "concrete_floor", 2: "red_brick", 4: "metal_plate", 5: "wood_planks",
+    1: "concrete_panels", 2: "red_brick", 4: "corrugated_iron", 5: "wood_planks",
     6: "leafy", 7: "fabric", 8: "sand", 9: "grass", 10: "rock_ground",
     11: "snow", 12: "roof_tiles", 13: "castle_brick", 14: "rusty_metal",
     16: "asphalt",
