@@ -751,14 +751,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    forced row 1 to half the tallest column's height and left AUDIO floating
    above a block of dead space. */
 .pm-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-.pm-group { display: flex; flex-direction: column; }
+/* ONE VERTICAL RHYTHM for every settings column. Buttons used `margin: 3px 0`
+   while MORE used grid `gap`, so the first MORE button sat 2px above GEARS /
+   HIDE HUD (MEASURED 1280×800). Flex/grid `gap: 6px` on both stacks — and zero
+   margins on the children — keeps DRIVING / DISPLAY / MORE on the same ladder. */
+.pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.11em;  /* was 11px, one step from --fs-2's 12px */
-  margin: 0 0 6px; padding-bottom: 4px;
-  /* a rule that fades out rather than stopping dead — see --grad-rule */
+  color: var(--red); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.11em;
+  margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-.pm-group button { margin: 3px 0; width: 100%; }
+.pm-group button { margin: 0; width: 100%; }
 /* SETTINGS CONTROLS SHARE ONE HEIGHT. DRIVING and DISPLAY sit in sibling
    columns; when DISPLAY's .tune-row was ~80px (label + tap-min track) while
    every DRIVING button was --tap, row N of one column never met row N of the
@@ -777,18 +780,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   justify-content: center;
   width: 100%;
 }
-/* A SLIDER IN A BUTTON COLUMN. .pm-group was 100% <button> until UI/HUD SIZE
-   arrived, so both of its house rules — the 3px rhythm above and the
-   `min-height: var(--tap)` at the top of this file — are keyed to `button` and
-   miss a `.tune-row` entirely. Without these two lines the slider sits flush
-   against the button above it and presents a 24px target in a column of 52px
-   ones, which is under the WCAG 2.5.8 floor for a control you drag.
-   The row gets the rhythm; the input itself gets the height, because it is the
-   thing you actually grab. .tune-row/.tune-label are unscoped in css/tuner.css,
-   so everything else about the slider already works here. */
+/* A SLIDER IN A BUTTON COLUMN. Row height matches --tap so columns stay
+   aligned; the label overlays the track (pointer-events: none). */
 .pm-group .tune-row {
   position: relative;
-  margin: 3px 0;
+  margin: 0;
   height: var(--tap);
   min-height: var(--tap);
   display: flex;
@@ -810,6 +806,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   height: var(--tap);
   min-height: var(--tap);
   margin: 0;
+  box-sizing: border-box;
 }
 /* THE THRESHOLDS ARE DERIVED FROM THE COLUMN, NOT PICKED FOR THE SHEET.
    A .pm-col needs about 150 own units before its labels start costing more than
@@ -867,10 +864,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   /* GRID, NOT FLEX-WRAP. Flex `1 1 150px` lets a lone last-row door grow to the
      full row width — MEASURED compact landscape: ADVANCED/LIGHTING/CAMERA/MUSIC
      were 179px while HOW TO PLAY alone was 732px. `auto-fill` keeps empty tracks
-     so an orphan occupies ONE cell at the shared size instead of stretching. */
+     so an orphan occupies ONE cell at the shared size instead of stretching.
+     Row gap is 6px to match `.pm-group` — column gap stays the tighter wrap pitch. */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: calc(var(--gap) * 0.6);
+  gap: 6px calc(var(--gap) * 0.6);
   align-content: start;
 }
 /* The heading takes its own full line and carries the column's top alignment. */
@@ -936,9 +934,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 /* Compact DISPLAY: drop the disabled/hidden controls' visual weight and tighten
    the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
-.sheet[data-density="compact"] .pm-group button { margin: 2px 0; }
-.sheet[data-density="compact"] .pm-group .tune-row { margin: 2px 0; }
-.sheet[data-density="compact"] .pm-group-h { margin-bottom: 4px; padding-bottom: 2px; }
+.sheet[data-density="compact"] .pm-group { gap: 4px; }
+.sheet[data-density="compact"] .pm-doors { gap: 4px calc(var(--gap) * 0.6); }
+.sheet[data-density="compact"] .pm-group-h { padding-bottom: 2px; }
 /* THE ELLIPSIS STAYS AT 620 AND DOES NOT FOLLOW THE COLUMN COUNT DOWN.
    It used to ride along in the same block, which was safe while three columns
    meant 620/3 ≈ 190 units each — wide enough that `nowrap` costs nothing.

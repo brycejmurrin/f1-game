@@ -82,7 +82,11 @@ const CEILINGS = {
   // already here, plus the comment saying what the two modes mean. The operation
   // itself is 40 lines and landed in the store, which is the shape this ratchet
   // is asking for — what stayed is the façade line the other five files reach.
-  "js/game.js": 7949,
+  // 7949 -> 7960 for UI/HUD SIZE step 0.5: scaleSnap / scaleLabel / SCALE_STEP
+  // beside applyScale so the slider lattice and the stored value stay one
+  // function. Too small to extract; too easy to leave unclamped if it lived only
+  // in the <input> attributes.
+  "js/game.js": 7960,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
