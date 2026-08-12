@@ -948,7 +948,9 @@ const DataTelemetry = (function () {
   // drag the trace chart to scrub (pauses playback)
   function attachScrub(canvas, view) {
     function at(ev) {
-      const r = canvas.getBoundingClientRect();
+      // clientX is viewport; after .dh-card carries UI SIZE zoom, use the visual
+      // rect so the scrub tracks the pointer (CssZoom / A13).
+      const r = (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
       // map into bitmap px, then invert the plot-area (axis gutter) transform
       const bx = (ev.clientX - r.left) / (r.width || 1) * canvas.width;
       view.cursorT = clamp((bx - PADL) / ((canvas.width - PADL - PADR) || 1), 0, 1) * view.tMax;

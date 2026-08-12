@@ -93,7 +93,8 @@ window.MenuNav = (function () {
     if (list.length < 2) return list[0] || null;
     let best = null, bestCost = Infinity;
     for (const el of list) {
-      const r = el.getBoundingClientRect();
+      // Viewport space: clientX/Y vs a zoomed .pane's visual box (A13).
+      const r = (window.CssZoom && CssZoom.viewportRect(el)) || el.getBoundingClientRect();
       const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
       const dv = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
       const cost = dx * 3 + dv;
@@ -110,8 +111,10 @@ window.MenuNav = (function () {
   }
 
   function scrollPane(pane, px) {
+    // Wheel deltaY is viewport px; scrollTop is local — divide by the pane's zoom.
+    const local = (window.CssZoom && CssZoom.toLocalDelta(pane, px)) || px;
     const before = pane.scrollTop;
-    pane.scrollTop = before + px;
+    pane.scrollTop = before + local;
     if (pane.scrollTop === before) return false;
     if (window.ScrollFade) window.ScrollFade.paint(pane);
     return true;

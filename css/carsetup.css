@@ -410,6 +410,82 @@
 .cs-liv-create { border-style: dashed; border-color: rgba(255,255,255,0.2); }
 .cs-liv-row { display: flex; align-items: stretch; gap: calc(var(--gap) * 0.5); width: 100%; }
 .cs-liv-row > .cs-liv { flex: 1 1 auto; min-width: 0; width: auto; }
+
+/* SWATCH GRID — ~70 full-width text rows was the deepest cell in the 2026-08
+   menu survey (~86 screens at 150% landscape). A denser text list made it
+   worse; a swatch grid with the name in aria-label/title is the measured win.
+   CREATE stays full-width; edit/del float over the swatch. */
+#cs-options.cs-liv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+#cs-options.cs-liv-grid > .cs-liv-create {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+#cs-options.cs-liv-grid > .cs-liv-row {
+  position: relative;
+  width: auto;
+  flex-direction: column;
+  gap: 0;
+}
+#cs-options.cs-liv-grid > .cs-liv-row > .cs-liv {
+  flex: none;
+  width: 100%;
+  min-height: var(--chip-h);
+  min-width: 0;
+  padding: 6px 4px 4px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+}
+#cs-options.cs-liv-grid .cs-opt-dot,
+#cs-options.cs-liv-grid .cs-opt-cost { display: none; }
+#cs-options.cs-liv-grid .cs-liv-swatch {
+  width: 56px; height: 40px; align-self: center;
+}
+#cs-options.cs-liv-grid .cs-opt-main {
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
+}
+#cs-options.cs-liv-grid .cs-opt-name {
+  display: block;
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+#cs-options.cs-liv-grid .cs-opt-tag { display: none; }
+#cs-options.cs-liv-grid .cs-liv-edit,
+#cs-options.cs-liv-grid .cs-liv-del {
+  position: absolute;
+  top: 2px;
+  width: 22px; height: 22px;
+  min-width: 22px; min-height: 22px;
+  padding: 0;
+  font-size: 11px;
+  z-index: 1;
+  opacity: 0.92;
+}
+#cs-options.cs-liv-grid .cs-liv-edit { right: 2px; }
+#cs-options.cs-liv-grid .cs-liv-del { left: 2px; }
+@media (hover: hover) {
+  #cs-options.cs-liv-grid .cs-liv-edit,
+  #cs-options.cs-liv-grid .cs-liv-del { opacity: 0; }
+  #cs-options.cs-liv-grid > .cs-liv-row:is(:hover, :focus-within) .cs-liv-edit,
+  #cs-options.cs-liv-grid > .cs-liv-row:is(:hover, :focus-within) .cs-liv-del { opacity: 1; }
+}
+/* Touch keeps the icons visible — no hover to reveal them. */
+body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-edit,
+body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
+
 /* Edit / duplicate / delete affordances. These were 24x24 — half a thumb, and
    sitting right next to the row that repaints the car, so a miss was expensive.
    Sized off --chip-h like every other secondary control. */

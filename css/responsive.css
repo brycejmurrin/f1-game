@@ -150,6 +150,12 @@ body.desktop #pm-calib { display: none !important; }
 /* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
 @media (orientation: landscape) and (max-height: 560px) {
   #hud-sectors { top: calc(52px + var(--sat) / var(--hud-scale)); font-size: 10px; padding: 3px 6px; }
+  /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
+     without shrinking thumb targets — tap floors stay on the >700px ladder. */
+  #minimap { width: 96px; height: 96px; }
+  .hud-gaps { top: calc(56px + var(--sat) / var(--hud-scale)); font-size: 11px; gap: 4px; }
+  .hud-top { gap: 6px; }
+  .hud-box { padding: 4px 7px; }
 }
 
 /* The keyboard focus ring lives in css/tokens.css (@layer base). It was here,

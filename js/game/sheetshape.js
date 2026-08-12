@@ -101,33 +101,22 @@ window.SheetShape = (function () {
     const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
       : (ratio >= TALL_ON ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
-    /* BOTH THRESHOLDS ARE IN THE SHEET'S OWN UNITS, because that is the space
-       they are declared in and the space every `@container sheet` breakpoint
-       beside them evaluates in. `getBoundingClientRect` is in VISUAL px, so
-       dividing by the element's own zoom is what makes `--pair-at: 620px` mean
-       the same 620 as `@container sheet (max-width: 619px)` two rules below it.
-       Comparing the raw rect against `--pair-at` — which is what this did until
-       2026-08-12 — puts the two answers a whole zoom factor apart, and they
-       drift in OPPOSITE directions as UI SIZE moves: css/components.css already
-       states the intent ("at 130% you need 30% more REAL width to afford two
-       columns, which is the honest answer") and the container queries have
-       always delivered it, while this comparison did not.
-       MEASURED, #select on a landscape iPhone at UI SIZE 80%: the sheet is 600
-       visual px and 750 of its own, so the container query dropped the circuit
-       list's height cap (750 > 619) while `data-pair` kept the STACKED layout
-       (600 < 620) — a list with no cap in a layout that assumes one, 1717px of
-       rows in a 226px body. Neither branch is wrong on its own; they were
-       answering the same question in two different units.
-       The ratio above needs no such division: it is h/w, and the zoom cancels. */
-    const zoom = el.currentCSSZoom || 1;
+    /* BOTH THRESHOLDS ARE IN THE SHEET'S OWN UNITS. Prefer clientWidth/Height
+       (always local) over gBCR÷zoom — on pre-26.4 WebKit gBCR was already local,
+       so dividing by currentCSSZoom understated the box and delayed data-pair.
+       CssZoom.localBox is the shared answer; fall back to the passed rect when
+       the element is display:none (client box is 0). */
+    const box = (window.CssZoom && CssZoom.localBox(el)) || { w: 0, h: 0 };
+    const wOwn = box.w || w;
+    const hOwn = box.h || h;
     /* DENSITY BEFORE PAIR. Compact rules may raise `--pair-at` (career forces a
        stack at 2000px) so the pair answer must be read AFTER `data-density` is
        written — otherwise the first paint of a short sheet keeps the wide
        threshold, stays `pair=on`, and clips the stacked content the compact
        rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
        sat ~39px past the sheet until this order flipped. */
-    classifyDensity(el, h / zoom);
-    classifyPair(el, w / zoom);
+    classifyDensity(el, hOwn);
+    classifyPair(el, wOwn);
   }
 
   let ro = null;
