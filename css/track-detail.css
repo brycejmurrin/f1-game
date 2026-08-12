@@ -10,7 +10,7 @@
    `@layer overlays`, which beats `@layer components`, so the clamp pinned the
    whole dialog to 540px in the top-left corner instead of the centred sheet.
    Only the inner scroll region wants a cap of its own. */
-#standings-body { max-height: 55svh; overflow-y: auto; font-size: 13px; }
+#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: 13px; }
 
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {
@@ -95,7 +95,7 @@
 
 /* Portrait: canvas fills top portion, info panel scrolls below */
 @media (orientation: portrait) {
-  #track-detail { overflow-y: auto; }
+  #track-detail { overflow-y: auto; overscroll-behavior-y: contain; }
   #track-detail-body { overflow: visible; flex: none; }
   #track-detail-canvas-wrap { flex: none; height: min(56vw, 320px); }
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
@@ -119,13 +119,13 @@
 @media (orientation: landscape) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 10px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
-  #track-detail-panel { display: flex; flex: 0 0 220px; max-width: 220px; overflow-y: auto; }
+  #track-detail-panel { display: flex; flex: 0 0 220px; max-width: 220px; overflow-y: auto; overscroll-behavior-y: contain; }
 }
 
 @media (min-width: 900px) and (min-height: 600px) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
-  #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
 }
 
 /* ---------- Portrait-specific HUD fixes ---------- */

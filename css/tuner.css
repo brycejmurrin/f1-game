@@ -171,7 +171,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      and this never engages, but if the head + footer alone outgrow the panel
      (see the short-screen block below) the whole panel scrolls rather than
      clipping its own footer off the bottom with no way to reach it. */
-  overflow-x: hidden; overflow-y: auto;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
 }
 /* The rail is a grouping element for ONE layout (the wide-and-short block at
    the end of this file). Everywhere else it must not exist as a box at all, or
@@ -189,7 +189,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    is drawn on the content-box edge, which is where each row's VALUE sits — the
    0.55 beside KEY LIGHT had a red bar through it. */
 #lt-rows, #ct-rows {
-  flex: 1 1 auto; overflow-y: auto; min-height: 84px; touch-action: pan-y;
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior-y: contain; min-height: 84px; touch-action: pan-y;
   padding-right: 10px;
 }
 #lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before { margin-right: -8px; }
@@ -656,7 +656,16 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      a two-column chip grid down a full-width panel would spend the height the
      sliders just got back */
   body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
-    display: flex; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
+    /* The FULL strip, not most of it. This rule exists to undo the rail block's
+       two-column chip grid, so it has to restate the pattern — and when it was
+       written it restated it incompletely, dropping `overscroll-behavior-x` and
+       the scrollbar suppression that the identical strip 160 lines up has. A
+       flick past the last chip then chains outward, which on iOS is the
+       back-navigation gesture. Four copies of one pattern is how that happens;
+       tests/unit/scroll-strips.test.mjs now fails if a fifth diverges. */
+    display: flex; flex-wrap: nowrap;
+    overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+    scrollbar-width: none;
   }
   body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
     white-space: nowrap; flex: 0 0 auto;
