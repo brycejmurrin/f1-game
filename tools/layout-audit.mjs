@@ -886,10 +886,39 @@ fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   rows: merged,
 }, null, 2));
 writeIndex(merged);
-const bad = rows.filter((r) => r.skipped || (r.clipped || []).length || (r.offscreen || []).length
+// COUNT SKIPS SEPARATELY, AND SAY SO. A skipped cell is neither a pass nor a
+// finding: nothing was measured. Folding it into one "something to look at"
+// number made both readings wrong at once — a run with 40 skips looked like a
+// run with 40 defects, and once the eye learned to discount that number a run
+// with 5 skips read as clean. Measured 2026-08-12: five cells skipped on
+// `page.click: Timeout 12000ms exceeded` across a full matrix, survived a
+// `--jobs=1` re-run, and looked for an afternoon like a button that could not be
+// clicked. Re-probed on a quiet box, every one of those clicks landed in ~200 ms
+// and the same two viewports came back 78 cells / 0 findings / 0 skips. The 12 s
+// budget was measuring the machine, exactly as CLAUDE.md warns a timeout does.
+// So: name the skips, and name the retry, because the answer to a skip is never
+// "read the grid harder", it is "run that cell alone".
+const skipped = rows.filter((r) => r.skipped);
+const bad = rows.filter((r) => !r.skipped && ((r.clipped || []).length || (r.offscreen || []).length
   || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length
-  || (r.underHardware || []).length);
-console.log(`\n${rows.length} cells, ${bad.length} with something to look at -> ${path.relative(ROOT, OUT)}/index.html`);
+  || (r.underHardware || []).length));
+console.log(`\n${rows.length} cells, ${bad.length} with something to look at, ` +
+  `${skipped.length} skipped (nothing measured) -> ${path.relative(ROOT, OUT)}/index.html`);
+if (skipped.length) {
+  const byReason = new Map();
+  for (const r of skipped) {
+    const k = r.skipped.replace(/\d+/g, "N").slice(0, 60);
+    byReason.set(k, (byReason.get(k) || 0) + 1);
+  }
+  for (const [k, c] of [...byReason].sort((a, b) => b[1] - a[1])) console.log(`  ${String(c).padStart(3)}x ${k}`);
+  // --viewports= matches the BASE name; the scale lives on --scale=, so strip
+  // the tag before deduping or the same viewport is named once per scale.
+  const vps = [...new Set(skipped.map((r) => r.viewport.replace(/@\d+$/, "")))].join(",");
+  const scr = [...new Set(skipped.map((r) => r.screen))].join(",");
+  console.log(`  a skip is NOT a pass. Re-run those cells alone before believing them:\n` +
+    `    node tools/layout-audit.mjs --viewports=${vps} --screens=${scr} --jobs=1` +
+    (SCALES[0] == null ? "" : ` --scale=${SCALES.join(",")}`));
+}
 
 function writeIndex(rows) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -933,5 +962,9 @@ no horizontal overflow and no page errors. Amber means every finding is a contro
 below the house <code>--tap</code> floor but at or above WCAG 2.2 SC 2.5.8's
 24&times;24 &mdash; a preference, not a defect. Red is the count of real findings,
 tap targets under 24px among them &mdash; hover a cell for the list.</p>
+<p>Grey means SKIPPED: the cell was never measured, so it is not a pass and not a
+finding. Hover it for the reason. A click timeout there is usually the box, not
+the app &mdash; re-run that cell alone at <code>--jobs=1</code> before drawing any
+conclusion from it.</p>
 <table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`);
 }

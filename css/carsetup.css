@@ -247,7 +247,9 @@
      grid. The cap is what stops a long catalogue from starving the list. */
   flex: 0 0 auto; min-height: 0;
   max-height: 48%;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  /* min(...) floor — see #sel-teams in css/menus.css: a bare px floor cannot
+     shrink below itself, so a narrow strip overflows instead of re-flowing. */
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr));
   gap: calc(var(--gap) * 0.5); align-content: start;
 }
 #cs-options {

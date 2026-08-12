@@ -253,6 +253,57 @@ body { --compact-at: 600px; }
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
 }
+/* AND THE LIST MUST NOT BE THE THING THAT YIELDS. `overflow-y: auto` on the body
+ * says "let the column be taller than me and scroll", but flex SHRINKS before it
+ * overflows, and the two items shrink very differently: #sel-track-section is a
+ * plain block, so `min-height: auto` floors it at its min-content height and it
+ * refuses; #sel-tracks is a scroll container, whose `min-height: auto` is ZERO,
+ * so it absorbs the entire deficit alone.
+ *
+ * MEASURED, iPhone 15 Pro landscape at UI SIZE 150%: sheet 400x204 in its own
+ * units, body 118.7 of them, preview card 175.6 — a 57-unit deficit, and
+ * #sel-tracks came out 1.3 units tall (2 device px), rendered BELOW the sheet's
+ * own bottom edge and 4px into the home-indicator inset. The layout audit
+ * reported that as one element under the hardware; the element was the circuit
+ * list, and the whole list was gone. That is the same two-pixel list
+ * js/game/sheetshape.js was written for, arriving down a different path — there
+ * a wrong proxy chose the layout, here the right layout was chosen and the flex
+ * algorithm quietly took the list's height away inside it.
+ *
+ * `flex: none` makes the cap below a HEIGHT rather than a ceiling on something
+ * being crushed: the list takes min(40svhz, 300px), the body overflows by
+ * exactly what does not fit, and the body scrolls — which is what the comment
+ * above already promised ("the body is the scroller and the track list keeps its
+ * own cap below, so the two never fight"). It only ever fought because nothing
+ * said which one wins. */
+#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { flex: none; }
+/* AND WHEN THE BODY MUST SCROLL, THE LIST IS WHAT SHOULD BE ABOVE THE FOLD.
+ * `flex: none` above gives the list its height back, but on this sheet — 306
+ * device px tall, holding a 263px preview card and a 137px list inside a 178px
+ * body — something is below the fold no matter how the pixels are dealt. The
+ * question is only WHICH, and the shipped order answers it backwards: the
+ * preview is confirmation of a choice, the list is where the choice is MADE, and
+ * a player who opens SELECT CIRCUIT and sees no circuits has no way to know
+ * scrolling is what is missing.
+ *
+ * Only in the compact stack. On any sheet with the height for both, the reading
+ * order preview-then-list is the right one and is left alone; `order` is scoped
+ * to the one case where the body genuinely cannot show both. Turning the pair on
+ * instead was measured and is worse here: at 400 units wide the two columns give
+ * the list the same 137px (its `max-height` cap binds either way), shrink the
+ * map from 269 to 210, and stack BACK above START into a 177px foot.
+ *
+ * And once the list is FIRST, its cap stops earning its keep. `max-height:
+ * min(40 * svhz, 300px)` exists so "the list cannot push the sheet's own body
+ * into a long scroll" — but in this tier the body is already scrolling, so the
+ * cap buys nothing and costs three quarters of the list: 40 % of a 343px screen
+ * is 91 units, and one row at UI SIZE 150 % is 52, so it showed ONE AND THREE
+ * QUARTER CIRCUITS out of forty. `100%` resolves against the body's definite
+ * height (the sheet's `minmax(0, 1fr)` row) and hands the list exactly the fold
+ * it is sitting at the top of. */
+#sel-inner[data-density="compact"]:not([data-pair="on"]) > #sel-body > #sel-tracks {
+  order: -1; max-height: 100%;
+}
 .sel-section { min-width: 0; }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
@@ -483,10 +534,31 @@ body { --compact-at: 600px; }
 }
 .tm-chev { flex: none; color: var(--red); font-size: 12px; }
 .team-tile.active .tm-name { color: #fff; }
-/* Tiles fill the picker in as many columns as fit; each stays a big target. */
+/* Tiles fill the picker in as many columns as fit; each stays a big target.
+ *
+ * `min(240px, 100%)` IS THE FLOOR, NOT A BARE 240px. `repeat(auto-fill,
+ * minmax(240px, 1fr))` reads as "at least 240 wide, as many as fit", and the
+ * first half of that is unconditional: when the container is NARROWER than
+ * 240px auto-fill still emits one column and minmax still floors it at 240, so
+ * the track is wider than the box that holds it and every tile hangs out of the
+ * right edge. `overflow-x: hidden` on the pane then slices them rather than
+ * letting them scroll, which is the worst of the three possible outcomes — no
+ * scrollbar to hint at it, just missing content.
+ *
+ * MEASURED, iPhone 15 Pro portrait at UI SIZE 150%: #sel-teams' content box is
+ * 215px in its own units, the column stayed 240px, and all twelve team tiles
+ * overflowed by 25px — the chevron and the right of every team name gone. It is
+ * a zoom bug in the same family as everything else in this pass: the 240 is a
+ * literal in the sheet's own units, and raising UI SIZE shrinks the box those
+ * units are measured against without touching the literal.
+ *
+ * `min(240px, 100%)` resolves against the grid container's content box, so it
+ * is exactly 240 whenever 240 fits — identical behaviour at every size that was
+ * already correct — and collapses to the container when it does not. Use this
+ * form for EVERY auto-fill/auto-fit floor; a bare px floor is the bug. */
 #sel-teams {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: calc(var(--gap) * 0.7);
   align-content: start;
 }
@@ -925,7 +997,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 460px) {
   #cz-body {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+    /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
+    grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
     column-gap: var(--pad); align-content: start;
   }
   #cz-body .cz-sep, #cz-body #cz-preview { grid-column: 1 / -1; }
