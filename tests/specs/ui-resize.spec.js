@@ -50,7 +50,20 @@ import { test, expect } from "../helpers/fixtures.js";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE_LANDSCAPE = { width: 852, height: 393 };
 const PHONE_PORTRAIT = { width: 393, height: 852 };
-const SHORT_WIDE = { width: 1000, height: 462 };
+// 490, NOT 462. `--compact-at: 480` (css/carsetup.css) plus SHORT_HYST: 40 means
+// the garage's density classifier RELEASES from compact back to normal only
+// above 520 of its own units — and at UI SIZE 90% (SCALE_MIN, js/game.js) that
+// needs ~468 visual px of sheet height, while staying compact at 100% needs
+// under 480. 462 leaves no viewport where both hold: at 90% its 446-tall sheet
+// tops out at 495.6 own units, short of the 520 release line, so once the
+// garage's first-ever classification (at the 100% default) latches "compact"
+// it can never come back — not a test bug, a real dead zone this exact height
+// sat in after `SCALE_MIN` moved 80 -> 90 (commit 415aae6): 80% used to clear
+// 520 with room to spare (557.5). 490 clears both: 474 visual px is compact at
+// 100% (474 < 480) and normal at 90% (526.7 >= 520), so the round-trip this
+// spec's last assertion makes is reachable again inside the current [90,150]
+// range. MEASURED live via the two numbers above.
+const SHORT_WIDE = { width: 1000, height: 490 };
 
 const SIZES = [
   ["desktop", DESKTOP],
@@ -204,7 +217,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await waitReady(page);
     await openGarage(page);
 
-    // 80, NOT 100 — and that is a real behaviour change, not a nudge to make a
+    // 90, NOT 100 — and that is a real behaviour change, not a nudge to make a
     // test pass. The garage's `--compact-at` was raised from the shared 380 to
     // 480 (css/carsetup.css) because this screen carries ~320 own units of
     // chrome before a part appears, so a sheet under 480 has under three option
@@ -212,7 +225,8 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // measured, that took the parts list from 1.5 cards to 3.1.
     // The case this test exists for is unchanged and still exercised: two scales
     // that classify differently, with no resize between them, proving the
-    // classifier answers to `zoom` alone. Only the low end moved.
+    // classifier answers to `zoom` alone. 90 is SCALE_MIN (js/game.js) — the
+    // lowest a player can actually reach, which is the honest floor to test.
     await page.evaluate(() => window.__apex.uiScale(90));
     await page.waitForTimeout(400);
     const at100 = await readState(page);
@@ -224,7 +238,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     }, null, { polling: 50, timeout: 5_000 });
     const at150 = await readState(page);
 
-    expect(at100.density, "not compact at UI SIZE 80% on this viewport").toBe("normal");
+    expect(at100.density, "not compact at UI SIZE 90% on this viewport").toBe("normal");
     expect(at150.density, "compact once the sheet is short in its own units").toBe("compact");
     expect(at150.hOverflow, "no horizontal overflow at 150%").toBe(false);
     expect(at150.doneOnScreen, "DONE reachable at 150%").toBe(true);
