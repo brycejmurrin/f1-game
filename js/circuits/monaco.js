@@ -227,13 +227,30 @@
       {
         const k = K(0.21);
         const HOTEL = [0.92, 0.88, 0.82];
-        building(k, 1, 3.5, 22, 40, 18,
-          { kind: "tiered", wall: HOTEL, window: WIN, floor: 5, lit: true, windowCol: WINLIT, setback: true });
-        // Ochre mansard / cornice strip + secondary wing toward the square
-        const a = anchor(k, 1, 3.5 + 11);
+        // Built from RAW PRIMITIVES, not building() — deliberately, and the
+        // Casino above does the same for the same reason. `dressingExclusions`
+        // carries `{ kind: "city", s0: 0.17, s1: 0.24 }` to keep generic city
+        // furniture out of the Casino sightline, and building() honours it, so
+        // this landmark was silently dropped: removing the building() call
+        // changed the vertex count by exactly ZERO.
+        //
+        // The decorations below did NOT get dropped with it. The primitive
+        // guard only rejects geometry near road level (bridges and gantries
+        // have to be allowed through), so the ochre cornice at 41 m sailed past
+        // it and hung in the sky over Casino Square with nothing underneath —
+        // a 24 x 3 x 21 m slab, 39 m up, which float-audit ranks as the single
+        // worst float on the circuit.
+        const a = anchor(k, 1, 14.5);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
+          // The mass itself, with its floor bands.
+          addBox(out, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
+          for (let f = 0; f < 7; f++) {
+            addBox(out, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
+          }
+          // Ochre mansard / cornice strip, now sitting ON something.
           addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+          // Secondary wing toward the square.
           addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
           for (let f = 0; f < 5; f++) {
             addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
@@ -253,12 +270,22 @@
         const k = K(0.228);
         const CAFE  = [0.94, 0.90, 0.83];
         const AWN_R = [0.68, 0.16, 0.16], AWN_W = [0.93, 0.92, 0.88];
-        building(k, 1, 3.5, 16, 19, 34,
-          { kind: "hall", wall: CAFE, window: WIN, floor: 5, lit: true,
-            windowCol: WINLIT, setback: true });
-        const a = anchor(k, 1, 3.5 + 8);
+        // Raw primitives, not building() — same reason as the Hotel de Paris
+        // opposite: the `city` exclusion over s 0.17-0.24 drops building() here
+        // silently, and this landmark had the identical floating-decoration bug
+        // (awnings, parasols and barrel roof hanging at ~20 m over nothing).
+        // dist 14, not 11.5. At 11.5 the onTrack(...,12) guard below
+        // rejected the WHOLE block and this landmark drew nothing at all —
+        // verified by vertex count, which is the only thing that catches a
+        // silently-skipped guard: verify-track prints OK either way.
+        const a = anchor(k, 1, 14);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
+          // The pavilion mass, lower and longer than either hotel.
+          addBox(out, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
+          for (let f = 0; f < 4; f++) {
+            addBox(out, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
+          }
           // Glazed barrel roof + ochre cornice, the café's own silhouette.
           addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
           addCyl(out, vadd(a.c, a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
