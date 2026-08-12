@@ -253,11 +253,23 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 .adv-item { margin: 11px 0; }
 .adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
 .tune-row { display: block; margin: 0; }
+/* Name on the left, value on the right — and the VALUE IS THE PART THAT MUST
+   NOT BE LOST. `space-between` alone puts the name and the number on one line
+   and offers no answer when they do not both fit: the name is an anonymous flex
+   item floored at its min-content width, so it refuses to give way and the
+   number is pushed straight out of the panel. MEASURED, lighting tuner on a
+   landscape iPhone at UI SIZE 150%: MOON BRIGHTNESS's "1.00" sat 15px past
+   #lt-rows, whose overflow-x is hidden, so the slider showed a name, a track and
+   no reading. The camera tuner's DISTANCE lost "0.00m" the same way.
+   Wrapping is the whole fix: when they fit it is the row it always was, and
+   when they do not the number takes its own line — still right-aligned, by the
+   auto margin rather than by `space-between`, which does nothing once the items
+   are on separate lines. */
 .tune-label {
-  display: flex; justify-content: space-between; align-items: baseline;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
   font-size: 12px; letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
 }
-.tune-label b { color: var(--red); font-size: 13px; }
+.tune-label b { color: var(--red); font-size: 13px; flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
   /* --tap-min, not 24px: this sat exactly on the WCAG floor, so any UI SIZE below
      100% put it under (19px at 80). See css/tokens.css. */
