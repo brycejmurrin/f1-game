@@ -313,6 +313,9 @@ function buildSetup() {
     const restricted = opt.supplier || opt.suppliers || opt.team || opt.teams;
     row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "")
                   + (locked ? " locked" : "") + (restricted ? " exclusive" : "");
+    // Announce the fitted part like the driver chips already announce selection —
+    // otherwise a screen-reader user can't tell which of 12 categories' parts is on.
+    row.setAttribute("aria-pressed", active ? "true" : "false");
     row.dataset.csOpt = opt.id;
     row.dataset.csCat = activeCat.id;
 
@@ -459,6 +462,7 @@ function buildLiveryOptions(container, team) {
     row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
     row.setAttribute("aria-label", "Select " + liv.name + " livery");
+    row.setAttribute("aria-pressed", active ? "true" : "false");
     // Every row gets the wrap now: custom rows carry edit+delete, stock rows a
     // duplicate ("start from this") button that prefills the creator.
     const rowWrap = document.createElement("div");
