@@ -48,3 +48,12 @@ Mostly flat (sea-level boulevards). One distinct climb: the Old City "Castle Sec
 - Neftchilar L: sell the Caspian **void** — reflective sea + far silhouettes only; cull mid-ground palms, cafes, near piers, and dense boulevard buildings.
 - Line the whole lap with low repeating barrier/wall boxes; punctuate with floodlight poles (thin box + bright top) for the night mood.
 - Concentrate lit boxes on the right of the long straight; keep the left visually empty.
+
+
+## Research pass — verified, already covered
+
+The Old City (İçərişəhər) section is modelled in depth: the **Maiden Tower**,
+the **Palace of the Shirvanshahs** cluster, the castle walls, the sandstone
+street façades, the Flame Towers, Government House, the carpet museum and the
+Caspian seafront. **Nothing added** — there is no obvious gap left in the
+landmark set.

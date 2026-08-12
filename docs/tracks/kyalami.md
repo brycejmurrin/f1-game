@@ -54,3 +54,8 @@ Built across a ridge, and severe — around 45 m of range used hard.
 - Build in face brick, red oxide and corrugated sheeting. Model the iron roofs rib by rib; a smooth slab loses the whole vernacular.
 - Spectator cover is a corrugated lean-to on a raked frame — no cantilever, no fascia, nothing modern.
 - The mine dumps are the single most recognisable shape on the Gauteng horizon: dead-level tops, straight sides, a pale cyanided-sand colour that belongs to no natural hill. Give them the best arc of sky.
+
+
+## Research pass — verified, already covered
+
+Already excellent, and for the right reasons. It hand-builds **Acacia karroo** — bare trunk forking low into one wide, shallow, near-horizontal crown — with the note that *"a rounded tree() canopy here would read as European parkland."* Plus blue-gum windbreak rows and the red laterite scars where the veld wears through. Nothing to add. **Nothing added.**

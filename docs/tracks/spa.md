@@ -52,3 +52,35 @@ Huge ~102 m total elevation change — the defining feature.
 - Cluster grandstand seat-boxes at La Source, Les Combes, Bus Stop, pit straight, and the oversized Raidillon Gold-3 amphitheatre; leave mid-forest sections bare.
 - Contrast the modern white pit/paddock box against the lone weathered old pit building for history.
 - Pouhon: orange marshal-post cluster on the left; Stavelot: grey runoff apron + tyre/armco against the treeline.
+
+## 7. Research pass — the old circuit, and the village
+
+Spa was already well dressed for the Ardennes (forest walls, the Raidillon
+amphitheatre, the old pit building, cabin hamlets, damp overcast palette). Two
+things research says belong here that the circuit had no trace of:
+
+**The old course, carrying straight on at Les Combes.** Until 1970 this was a
+14 km triangle of public road: the course did *not* turn right at Les Combes,
+it went straight on and plunged down through Burnenville and Malmedy to the
+Masta kink and Stavelot before climbing back. That road is still there — it is
+the N62 — and from the modern right-hander you can see it carrying on into the
+trees, narrower and older than the track you are on, with its own armco still
+standing. Modelled as a diverging ribbon leaving on the Kemmel tangent while
+the racing line turns away, so the two separate naturally over ~230 m: narrow
+1960s two-lane asphalt, pale edge lines, period armco on posts (left side only
+— the right drops into the trees, exactly as it does now), a stone marker where
+the courses part, and forest closing in behind.
+
+**Francorchamps village.** The circuit is named after a village and ran through
+it, and the outfield above La Source was cabins and forest. Ardennes building
+is unmistakable and cheap to read: rough grey limestone walls under **steep**
+dark-slate roofs with deep eaves, small windows, ridge chimneys — and a slate
+church spire, the only thing that breaks the treeline from the track.
+
+> **Trap worth recording.** The church is built inside a `modelGroup`, and
+> `modelGroup` **fails closed silently** — a rejected or throwing group commits
+> nothing and `verify-track` still prints `OK`. The first version called
+> `addPyramid` without destructuring it from `api`, so the church simply did
+> not exist while every check passed. The tell was the vertex count: adding the
+> destructure moved props from 490,538 to 490,664. **Check the vert delta after
+> adding scenery** — an `OK` alone does not prove your geometry landed.

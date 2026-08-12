@@ -40,3 +40,43 @@ Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00�
 - Keep the first third flat, then ramp ground-box tops up for Piratella/Acque Minerali and drop them into Rivazza.
 - Thin far mountain rings before stacking hero riverside / hollow / crest geometry.
 - A small bronze statue box on a green lawn near Tamburello reads as the Senna memorial — a quiet landmark.
+
+## Research pass — findings (not yet built)
+
+- **The Santerno river borders the circuit on the paddock side** — it is what
+  the place was originally named after (Autodromo di Imola → Dino Ferrari,
+  1970 → Enzo e Dino Ferrari, 1988). Running water along the paddock boundary
+  is a real, checkable feature, not decoration.
+- The setting is **rolling hills, plains and hillside vineyards**, dropping
+  into the Santerno valley. Vineyard rows on the higher ground behind Acque
+  Minerali / Piratella are very Emilia-Romagna and cheap to read (parallel
+  low rows following the contour).
+- **Imola is Ferrari's home circuit** and 60 km from Maranello: the crowd is a
+  *tifosi* crowd, so red should dominate the stands, banners and flags far more
+  than at a neutral venue.
+- Named features worth checking: **Tosa** (slow uphill bend), **Piratella**
+  (blind crest), **Acque Minerali** (the rollercoaster dip — named for the
+  mineral-water park it runs through), **Rivazza**.
+
+
+## Outcome
+
+The Santerno river was already modelled along the paddock boundary, and the
+crowd already skews tifosi red.
+
+Added the **hillside vineyards**. Imola's high ground was dressed as
+undifferentiated woodland, which could be anywhere in Europe — vine rows are
+what make it Emilia-Romagna, and they are almost free to draw. Six blocks on
+the high ground behind Piratella and Acque Minerali, out past the treeline
+(gap 92–150) so the woodland still fringes the track and the vineyards sit
+above and beyond it.
+
+What carries the read:
+- **The rows must be parallel and evenly spaced.** A row is one long low box;
+  all the character is in the repetition.
+- Each row steps out and **shears slightly**, so the block follows a contour
+  instead of looking like a printed grid.
+- **Bare tilled soil under each row.** The ground between vine rows is worked
+  earth, not grass, and that stripe is half the read.
+- **End posts** anchoring the wire — the detail that says *trained vine* rather
+  than *hedge*.

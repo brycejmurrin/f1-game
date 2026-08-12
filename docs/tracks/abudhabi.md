@@ -38,3 +38,10 @@ Two long straights (a 1km+ run) punctuated by tight hairpins and chicane-tight c
 - Contrast geometry: long clean straight box-chains vs. abrupt tight-hairpin clusters reads as Yas's stop-go layout.
 - Drop **Ferrari World** as one big red roof box + logo disc on the desert side mid-lap; keep the rest of the horizon flat sand under a glowing sky.
 - Ring the lap with tall **light-tower boxes** (dark pole, bright cap) to justify the night lighting.
+
+
+## Research pass — verified, already covered
+
+Yas Marina, the marina itself, Ferrari World, the dunes, and the hero **W Yas
+Hotel** — twin towers under a continuous colour-cycling **LED gridshell veil**
+spanning the track — are all modelled. **Nothing added.**

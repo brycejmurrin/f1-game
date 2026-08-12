@@ -72,6 +72,94 @@
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ── MONTADO: CORK OAK AND OLIVE ──────────────────────────────────────
+      // The circuit is 22 km INLAND, on the rolling hills of the Algarve
+      // interior — not on the coast, which is why there is deliberately no
+      // Atlantic anywhere in this file. That interior is montado: open,
+      // grazed, sparsely treed country of cork oak and olive, and the lap had
+      // neither. Generic scatter gave it trees, but not THESE trees.
+      //
+      // The cork oak is the giveaway and it is nearly free to draw. Short
+      // thick trunk, a broad LOW spreading crown much wider than it is tall —
+      // and, where the bark has been stripped for cork, a bare rust-red lower
+      // trunk under the corky grey upper. That two-tone trunk exists nowhere
+      // else and reads at distance.
+      {
+        const CORK_LEAF  = [0.24, 0.34, 0.19];
+        const CORK_LEAF2 = [0.29, 0.39, 0.22];
+        const STRIPPED   = [0.55, 0.24, 0.14];   // freshly harvested trunk
+        const BARK       = [0.44, 0.40, 0.33];   // corky grey above the strip
+        const OLIVE_LEAF = [0.44, 0.48, 0.36];
+        const OLIVE_BARK = [0.48, 0.45, 0.39];
+        const SOIL       = [0.56, 0.44, 0.30];
+
+        // Cork oaks: scattered, never in rows. Montado is grazed woodland, so
+        // the spacing is wide and irregular and the ground between stays open.
+        for (const [sf, side, gap] of [
+          [0.055,  1,  72], [0.105, -1,  88], [0.165,  1, 104],
+          [0.235, -1,  76], [0.300,  1,  92], [0.375, -1, 110],
+          [0.440,  1,  80], [0.510, -1,  96], [0.585,  1, 116],
+          [0.660, -1,  84], [0.735,  1, 100], [0.815, -1,  90],
+          [0.885,  1,  74], [0.945, -1, 106],
+        ]) {
+          const kk = K(sf);
+          const count = 2 + Math.floor(hash(kk * 17 + gap) * 3);
+          for (let j = 0; j < count; j++) {
+            const hv = hash(kk * 29 + j * 41 + gap);
+            const a = anchor(kk + Math.round((j - 1) * 5 + (hv - 0.5) * 4),
+                             side, gap + (j % 2) * 13 + (hv - 0.5) * 8);
+            if (onTrack(a.c[0], a.c[2], 14)) continue;
+            const b = [a.r, a.u, a.t];
+            const h = 7.5 + hv * 3;
+            const strip = h * 0.26;              // how far up the cork was cut
+            out._mat = MAT.WOOD;
+            addCyl(out, a.c, 0.52 + hv * 0.14, strip, STRIPPED, 6, b);
+            addCyl(out, vadd(a.c, a.u, strip), 0.46 + hv * 0.12, h * 0.22, BARK, 6, b);
+            out._mat = MAT.FOLIAGE;
+            // Broad and LOW — the crown is wider than the tree is tall. Two
+            // flattened lobes rather than one cone, so it spreads.
+            const spread = h * 0.72;
+            addFrustum(out, vadd(a.c, a.u, h * 0.46), spread * 0.55, spread, h * 0.20,
+                       hv < 0.5 ? CORK_LEAF : CORK_LEAF2, 8, b);
+            addFrustum(out, vadd(a.c, a.u, h * 0.66), spread, spread * 0.42, h * 0.26,
+                       hv < 0.5 ? CORK_LEAF2 : CORK_LEAF, 8, b);
+            out._mat = 0;
+          }
+        }
+
+        // Olive terraces. Unlike the cork oaks these ARE ordered — olives are
+        // planted on the grid, and the contrast between the scattered montado
+        // and the regimented olive is what makes the hillside read as farmed
+        // rather than wild.
+        for (const [sf, side, gap, rows] of [
+          [0.140, -1, 118, 4], [0.410,  1, 126, 4],
+          [0.630,  1, 108, 5], [0.860, -1, 122, 4],
+        ]) {
+          const kk = K(sf), a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 26)) continue;
+          for (let r = 0; r < rows; r++) {
+            for (let c = -2; c <= 2; c++) {
+              const hv = hash(kk * 23 + r * 13 + c * 7);
+              const a = anchor(kk + c * 3, side, gap + r * 9);
+              if (onTrack(a.c[0], a.c[2], 12)) continue;
+              const b = [a.r, a.u, a.t];
+              const h = 4.2 + hv * 1.4;
+              // Tilled soil ring under each tree — olive groves are ploughed.
+              addBox(out, vadd(a.c, a.u, 0.05), [5.2, 0.10, 5.2], SOIL, b);
+              out._mat = MAT.WOOD;
+              addCyl(out, a.c, 0.30, h * 0.34, OLIVE_BARK, 5, b);
+              out._mat = MAT.FOLIAGE;
+              // Silver-green, small, rounded — an olive is a shrub on a leg.
+              addFrustum(out, vadd(a.c, a.u, h * 0.30), h * 0.26, h * 0.40, h * 0.30,
+                         OLIVE_LEAF, 7, b);
+              addFrustum(out, vadd(a.c, a.u, h * 0.58), h * 0.40, h * 0.14, h * 0.34,
+                         OLIVE_LEAF, 7, b);
+              out._mat = 0;
+            }
+          }
+        }
+      }
+
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.34, 0.38, 0.21], SCRUB_D = [0.28, 0.32, 0.18];
       const EARTH = [0.66, 0.44, 0.30], EARTH_D = [0.54, 0.34, 0.23];

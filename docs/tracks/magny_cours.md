@@ -52,3 +52,8 @@ Gently rolling farmland — real but modest relief, most of it through the Estor
 - Concentrate the crowd at Adelaide, Estoril and Lycée; leave the rest of the lap with grass banks and hedges only.
 - Keep the light cool and slightly flat. Warm golden sun belongs to Mugello, not the Nivernais.
 - One stone farm in the middle distance is the right amount of architecture — a second would make the place look populated, which it is not.
+
+
+## Research pass — verified, already covered
+
+The Nivernais farmland read is complete — fields, hedgerows, poplar lines, and the corners named for the circuits they imitate (Adelaide, Estoril, Lycée). Charolais cattle would be the only addition and are not worth the vertex cost. **Nothing added.**

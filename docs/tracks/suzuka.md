@@ -38,3 +38,33 @@ Figure-8 **crossover** (underpass at s≈0.37, bridge at s≈0.82); the high-spe
 - Use the **undulation**: Esses climb rise is punched so grandstands sit on a visible hill, not a flat plane.
 - Sprinkle small pink cherry-box clusters sparsely on the Esses climb only (s≈0.18–0.22 L).
 - Keep kerb boxes thin, bright red/white, and tightly hugging the S-Curves and chicane to read the rhythm.
+
+## 7. Research pass — the Mie landscape
+
+Suzuka's built environment was already well covered: the Ferris wheel hero on
+the main straight, the Motopia park behind it, the hotel block, the
+figure-of-eight crossover, all the named corners.
+
+**Note a deliberate decision already in the code:** the park's coaster loops
+and chair-swing were *removed* on purpose because they competed with the Ferris
+rim on the main-straight skyline. Do not add them back — a fuller Suzuka has to
+come from somewhere other than more fairground clutter.
+
+So this pass went to the landscape instead. The circuit sits in the foothills of
+the Suzuka mountains in Mie, and it already plants the **sugi** (cedar) that
+covers those hills. Two things were missing:
+
+- **Bamboo groves.** At the edge of every Japanese hill plantation, where the
+  cedar thins toward cleared ground, there is bamboo — and it looks nothing
+  like a tree: tall, bare, pale, absurdly slender culms in a dense stand with
+  all the foliage in the top third. Ten groves of 14–22 culms (a grove is a
+  clump, not a scatter). **Cedar and bamboo side by side is the read; cedar
+  alone could be Oregon.**
+- **A hillside shrine and torii.** Mie is Shinto country — Ise Jingu is an hour
+  down the road — and a small wooded shrine with a vermilion torii at the foot
+  of its steps is as ordinary here as a church spire in the Ardennes. One only,
+  set back on the wooded rise at the Spoon side (s≈0.648, L, gap 96) so it
+  reads against the cedar instead of competing with the wheel. Torii
+  proportions are the whole read: splayed pillars, curved-up *kasagi* over a
+  straight *nuki*. Stone steps, a pair of stone lanterns, and the *honden*
+  under a heavy dark hip roof whose deep overhanging eaves are its silhouette.

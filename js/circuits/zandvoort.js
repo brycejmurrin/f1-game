@@ -55,7 +55,7 @@
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, waterBand, groundPatch,
-              mountain, peak, bush, hedge, grandstand, grandstandEx, tower,
+              mountain, peak, bush, hedge, grandstand, grandstandEx, tower, ferrisWheel,
               pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier,
               circuitKit } = api;
@@ -543,6 +543,75 @@
       }
 
       // -----------------------------------------------------------------------
+      // ── THE RACE FESTIVAL: BIG WHEEL + FANZONE STAGE ─────────────────────
+      // The Dutch GP is not a race weekend with entertainment attached, it is
+      // a festival that happens to contain a race — dutchgp.com, F1.com and
+      // visitzandvoort.com all lead with it. Two things carry that on sight
+      // and the circuit had neither: the Ferris wheel, and the Fanzone Main
+      // Stage where the DJ sets run between sessions. Both sit behind the
+      // paddock side, so they read on the main-straight skyline above the
+      // (deliberately modest) pit building without crowding it.
+      // NO FERRIS WHEEL, deliberately. The Dutch GP does have one and it was
+      // modelled here, but the shared ferrisWheel() emitter carries coplanar
+      // geometry of its own: adding it took zandvoort from 3 same-facing
+      // coplanar spots to 4 (and from 3 pairs to 15), and moving or resizing it
+      // does not help because the fight is internal to the emitter. Fixing that
+      // means changing a shared emitter used by Suzuka, Vegas and Montreal,
+      // which is not a change to make from a circuit file. The Fanzone stage
+      // below carries the festival read on its own.
+      {
+        const a = anchor(K(0.062), -1, 104), b = [a.r, a.u, a.t];
+        const ORANJE = [0.96, 0.46, 0.06];
+        const DARK   = [0.13, 0.13, 0.16];
+        const TRUSS  = [0.72, 0.73, 0.76];
+        modelGroup("zandvoort-fanzone-stage", {
+          center: vadd(a.c, a.u, 9), size: [34, 22, 40], basis: b,
+        }, (stage) => {
+          // Deck, back wall and the LED screen that is the stage's real face.
+          addBox(stage, vadd(a.c, a.u, 1.1), [16, 2.2, 30], DARK, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -7.4), a.u, 8.0), [1.6, 14, 30], DARK, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -6.4), a.u, 8.6), [0.5, 8.6, 22],
+                 [0.30, 0.52, 0.86], b);
+          // Truss roof on four legs — a festival stage is a box of scaffolding
+          // with a roof, and the exposed truss is the whole silhouette.
+          stage._mat = MAT.METAL;
+          for (const [dr, dt] of [[-7.0, -14], [7.0, -14], [-7.0, 14], [7.0, 14]]) {
+            addCyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.34, 15.5, TRUSS, 5, b);
+          }
+          for (let i = 0; i < 7; i++) {
+            addBox(stage, vadd(vadd(a.c, a.t, (i - 3) * 4.7), a.u, 15.2),
+                   [15.5, 0.42, 0.42], TRUSS, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 16.0), [17, 0.5, 31], DARK, b);
+          // PA stacks flanking the deck, and a lighting bar of orange cans.
+          for (const dt of [-12.5, 12.5]) {
+            for (let j = 0; j < 4; j++) {
+              addBox(stage, vadd(vadd(a.c, a.t, dt), a.u, 4.0 + j * 1.7),
+                     [2.0, 1.5, 2.8], [0.07, 0.07, 0.09], b);
+            }
+          }
+          for (let i = 0; i < 9; i++) {
+            addBox(stage, vadd(vadd(a.c, a.t, (i - 4) * 3.3), a.u, 13.4),
+                   [0.7, 0.9, 0.7], i % 2 ? ORANJE : [0.95, 0.92, 0.86], b);
+          }
+          stage._mat = 0;
+          // The crowd in front of it. Zandvoort's crowd is the most monochrome
+          // in F1 — this is deliberately ONE colour, not a speckle.
+          stage._mat = MAT.FABRIC;
+          for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 20; c++) {
+              const hv = hash(r * 37 + c * 13);
+              if (hv > 0.88) continue;
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, 6 + r * 2.6),
+                                       a.t, (c - 9.5) * 1.7 + (hv - 0.5)), a.u, 0.9),
+                     [0.7, 1.8, 0.6],
+                     hv > 0.80 ? [0.95, 0.93, 0.88] : ORANJE, b);
+            }
+          }
+          stage._mat = 0;
+        });
+      }
+
       // WIND TURBINES — seaward horizon landmark (North Sea wind farm silhouette).
       // Fixed: blades are built in track-right (a.r) and track-up (a.u) space
       // so they orbit the shaft axis correctly and don't lean into the ground.

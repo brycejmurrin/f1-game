@@ -264,6 +264,65 @@
         }, { required: true });
       }
 
+      // ── AL-BALAD — historic Jeddah on the inland skyline ─────────────────
+      // The circuit's inland side was generic modern city mass, and Jeddah has
+      // the one piece of architecture on the calendar that cannot be mistaken
+      // for anywhere else: Al-Balad, the UNESCO-listed old town. Tall narrow
+      // coral-stone tower houses, four to six storeys, packed shoulder to
+      // shoulder — and hung off their faces, tier upon tier of ROSHAN: deep
+      // projecting bay windows of carved wooden lattice, traditionally painted
+      // a soft teal-green against the pale coral stone. The roshan ARE the
+      // building; a plain coral box is just a beige box.
+      //
+      // Sited inland (left) and set well back, because Al-Balad is a few km
+      // from the Corniche — this is the old town on the skyline behind the
+      // modern city, not a trackside façade.
+      {
+        const CORAL   = [0.84, 0.79, 0.68];
+        const CORAL_D = [0.76, 0.71, 0.60];
+        const TEAL    = [0.24, 0.46, 0.44];
+        const TEAL_L  = [0.32, 0.55, 0.51];
+        const WOOD_D  = [0.34, 0.26, 0.18];
+        for (let i = 0; i < 16; i++) {
+          const sf = 0.545 + i * 0.0125;
+          const kk = K(sf), hv = hash(kk * 37 + i * 11);
+          const gap = 150 + (i % 4) * 30 + hv * 22;
+          const a = anchor(kk, -1, gap);
+          if (onTrack(a.c[0], a.c[2], 30)) continue;
+          const b = [a.r, a.u, a.t];
+          const floors = 4 + Math.floor(hv * 3);          // 4-6 storeys
+          const fh = 3.9;
+          const h = floors * fh;
+          const w = 11 + hv * 5, d = 10 + hash(kk * 13) * 5;
+          // The coral-stone mass, with a plain parapet above the top floor.
+          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, d],
+                 hv < 0.45 ? CORAL_D : CORAL, b);
+          addBox(out, vadd(a.c, a.u, h + 0.55), [w + 0.7, 1.1, d + 0.7], CORAL_D, b);
+          // Roshan tiers on the two visible faces. Ground floor stays blank —
+          // the lattice starts at first floor, as it does in Al-Balad.
+          for (let f = 1; f < floors; f++) {
+            const y = f * fh + fh * 0.45;
+            const col  = ((f + i) % 2) ? TEAL : TEAL_L;
+            // Track-facing face: two bays.
+            for (const t of [-d * 0.24, d * 0.24]) {
+              const p = vadd(vadd(a.c, a.t, t), a.u, y);
+              addBox(out, vadd(p, a.r, w * 0.5 + 0.55), [1.1, fh * 0.72, d * 0.34], col, b);
+              // Carved-lattice read: thin vertical mullions across the bay.
+              for (let m = -1; m <= 1; m++) {
+                addBox(out, vadd(vadd(p, a.r, w * 0.5 + 1.12), a.t, m * d * 0.10),
+                       [0.12, fh * 0.66, 0.13], WOOD_D, b);
+              }
+              // Shallow pitched hood over each bay — roshan are roofed.
+              addPrism(out, vadd(vadd(p, a.r, w * 0.5 + 0.55), a.u, fh * 0.42),
+                       [1.35, 0.42, d * 0.36], WOOD_D, b);
+            }
+            // Return face, one bay, so corners do not read as flat.
+            const q = vadd(vadd(a.c, a.t, d * 0.5 + 0.5), a.u, y);
+            addBox(out, q, [w * 0.34, fh * 0.72, 1.05], col, b);
+          }
+        }
+      }
+
       // ── START/FINISH gantries ─────────────────────────────────────────────
       gantry(0.0,   13, [0.12, 0.13, 0.17]);
       gantry(0.012, 11, [0.12, 0.13, 0.17]);

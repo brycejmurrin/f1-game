@@ -61,6 +61,102 @@
               recordBarrier, circuitKit, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ── THE HUNGARIAN PLAIN: POPLAR WINDBREAKS AND ACÁC ──────────────────
+      // The Hungaroring sits in the Valley of the Three Springs at Mogyoród,
+      // and the bowl and the dust were already modelled. The PLANTING was not:
+      // the outfield used the generic broadleaf scatter, which could be any
+      // European circuit. Two species make the Pannonian plain unmistakable
+      // and the circuit had neither.
+      //
+      // 1. LOMBARDY POPLAR, planted in dead-straight WINDBREAK ROWS along
+      //    field edges and farm tracks. This is the defining line of the
+      //    Hungarian landscape and the silhouette is extreme: 20 m tall, 2 m
+      //    wide, a green exclamation mark. The row is the read — one poplar is
+      //    nothing, twelve in a line is Hungary.
+      // 2. AKÁC (Robinia pseudoacacia), the black locust, which is roughly a
+      //    fifth of all Hungarian forest. Open, irregular, airy crown carried
+      //    high on a bare forked trunk — nothing like the solid cone the
+      //    generic scatter plants.
+      {
+        const POP    = [0.34, 0.50, 0.24];
+        const POP_L  = [0.42, 0.57, 0.28];
+        const POP_BK = [0.46, 0.44, 0.38];
+        const AKAC   = [0.44, 0.54, 0.30];
+        const AKAC_D = [0.36, 0.47, 0.26];
+        const BARK   = [0.34, 0.29, 0.23];
+
+        // Windbreak rows. Each runs along the arc so it reads as a planted
+        // line, not a clump; kept beyond the crowd banks at gap 56-78.
+        for (const [s0, s1, side, gap] of [
+          [0.075, 0.150, -1, 62],
+          [0.245, 0.320,  1, 70],
+          [0.470, 0.545, -1, 58],
+          [0.665, 0.745,  1, 66],
+          [0.840, 0.905, -1, 74],
+        ]) {
+          const span = (s1 - s0 + 1) % 1;
+          const count = Math.max(8, Math.round(span * n * ds / 11));
+          for (let i = 0; i < count; i++) {
+            const sf = (s0 + span * (i / count)) % 1;
+            const kk = K(sf), hv = hash(kk * 19 + i * 7);
+            const a = anchor(kk, side, gap);
+            if (onTrack(a.c[0], a.c[2], 18)) continue;
+            const b = [a.r, a.u, a.t];
+            const h = 17 + hv * 6;
+            out._mat = MAT.WOOD;
+            addCyl(out, a.c, 0.30, h * 0.30, POP_BK, 5, b);
+            out._mat = MAT.FOLIAGE;
+            // Columnar crown: three tall narrow stacked cones, barely wider
+            // than the trunk. Width is what makes or breaks a poplar.
+            addCone(out, vadd(a.c, a.u, h * 0.16), 1.75 + hv * 0.35, h * 0.42,
+                    hv < 0.5 ? POP : POP_L, 6, b);
+            addCone(out, vadd(a.c, a.u, h * 0.50), 1.45 + hv * 0.30, h * 0.36,
+                    hv < 0.5 ? POP_L : POP, 6, b);
+            addCone(out, vadd(a.c, a.u, h * 0.78), 1.00 + hv * 0.22, h * 0.28,
+                    POP_L, 6, b);
+            out._mat = 0;
+          }
+        }
+
+        // Akác groves — scattered, not rowed, and deliberately airy: a bare
+        // forked trunk carrying two or three offset crown lobes with sky
+        // between them.
+        for (const [sf, side, gap] of [
+          [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
+          [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
+          [0.600, -1, 64], [0.700, -1, 52], [0.775,  1, 58],
+          [0.880,  1, 62], [0.940, -1, 56],
+        ]) {
+          const kk = K(sf);
+          const trees = 3 + Math.floor(hash(kk * 23 + gap) * 4);
+          for (let j = 0; j < trees; j++) {
+            const hv = hash(kk * 31 + j * 13 + gap);
+            const a = anchor(kk + Math.round((hv - 0.5) * 8),
+                             side, gap + (hash(kk + j * 5) - 0.5) * 14);
+            if (onTrack(a.c[0], a.c[2], 16)) continue;
+            const b = [a.r, a.u, a.t];
+            const h = 11 + hv * 5;
+            out._mat = MAT.WOOD;
+            // Bare trunk forking low — akác holds its crown high.
+            addCyl(out, a.c, 0.34, h * 0.52, BARK, 5, b);
+            addCyl(out, vadd(vadd(a.c, a.u, h * 0.42), a.r, 0.7),
+                   0.20, h * 0.26, BARK, 4, b);
+            out._mat = MAT.FOLIAGE;
+            // Two or three offset lobes with gaps between — an open crown.
+            const lobes = hv > 0.55 ? 3 : 2;
+            for (let l = 0; l < lobes; l++) {
+              const ang = (l / lobes) * 6.2832 + hv * 2;
+              const rr = 1.5 + hv * 1.1;
+              addCone(out,
+                vadd(vadd(vadd(a.c, a.r, Math.cos(ang) * rr),
+                          a.t, Math.sin(ang) * rr), a.u, h * 0.52 + l * 0.7),
+                2.5 + hv * 1.3, h * 0.40, l % 2 ? AKAC : AKAC_D, 6, b);
+            }
+            out._mat = 0;
+          }
+        }
+      }
+
       // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
       if (ATM && ATM.dustyBowl) Object.assign(pal, ATM.dustyBowl);
 

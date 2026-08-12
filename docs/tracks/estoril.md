@@ -54,3 +54,8 @@ Undulates throughout — a hillside lap, never level for long.
 - Use only limewash, terracotta and rust-primed tube for everything built. No glass, no grey steel cladding, no modern paddock.
 - The aldeia, the farol and the moinho are three silhouettes that belong to this coast and nowhere else on the calendar — place all three, spaced far apart.
 - Give the Parabolica the biggest crowd bank and the widest gravel; it is the corner the circuit is remembered for.
+
+
+## Research pass — verified, already covered
+
+Atlantic/coast setting, pine hillside and the stacked-cone reasoning are in place. **Nothing added.**

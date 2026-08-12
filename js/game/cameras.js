@@ -451,7 +451,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const beyond = Math.max(0, Math.abs(lat) - cvA.hw);
     // Pooled out-param — this runs once per frame for every camera mode, and
     // banking() allocates a fresh { dy, roll } for any caller that omits it.
-    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr) : null;
+    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr, true) : null;
     // Catmull-Rom across four nodes, matching centreY: lerping the two
     // neighbours removes the STEPS but leaves a slope kink at every node, and a
     // camera resting on this floor feels those the same way it felt the steps.

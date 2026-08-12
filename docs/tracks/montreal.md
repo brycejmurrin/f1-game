@@ -50,3 +50,49 @@ Clockwise; s=0.0 at start/finish on the main straight.
 - Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with Bienvenue/Bonjour Québec signage.
 - Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper.
 - Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.
+
+## Research pass — findings (not yet built)
+
+The circuit is on **Île Notre-Dame**, an artificial island in the St Lawrence
+built for **Expo 67**, inside Parc Jean-Drapeau. That origin is the key to the
+setting — everything around it is either Expo-era architecture or a rowing
+venue, not a normal paddock landscape:
+
+- **The Olympic Rowing Basin** (1976) runs alongside the circuit — the largest
+  artificial rowing basin in North America. Long, dead-straight, still water.
+- **The Biosphère** — Buckminster Fuller's geodesic dome from Expo 67, on the
+  neighbouring Île Sainte-Hélène. A steel sphere lattice with nothing else like
+  it on the calendar.
+- **Casino de Montréal** — the former French and Quebec Expo 67 pavilions,
+  right on Île Notre-Dame.
+- **Downtown Montreal's skyline** across the St Lawrence.
+- Parc Jean-Drapeau is **lush gardens and public artworks**, so the infield
+  should read as landscaped parkland rather than service compound.
+
+
+## Outcome
+
+Most of the banked list was **already built**: the Biosphère geodesic dome, the
+Olympic Rowing Basin, the Casino pavilions, the downtown skyline and Habitat 67.
+
+Two Expo-67 things were missing.
+
+**Calder's *Trois disques* (1967)** — commissioned for Expo 67, formally
+*Trois disques*, universally called *L'Homme*. Parc Jean-Drapeau is full of
+public art and the circuit had none of it; this is the piece that is a landmark
+in its own right. It stands on the Île Sainte-Hélène side, so it reads across
+the water. Two things make it recognisable and both are easy to get wrong:
+- It is built from **flat plates splaying outward from a narrow waist**. With
+  no arbitrary-axis rotation available, each leg is stepped outward as it
+  descends; at this distance the stagger reads as a lean.
+- It is **unpainted stainless steel** — *not* the vermilion or black most
+  Calder stabiles wear. A red one here would be the wrong sculpture.
+- The three discs are flat cylinders standing on edge, with the basis permuted
+  so they read as plates rather than drums.
+
+**The Jardins des Floralies** — the infield of Île Notre-Dame is not service
+compound, it is a formal ornamental garden laid out for the 1980 Floralies
+Internationales, with canals, footbridges and massed bedding. The thing that
+must read is that the planting is **geometric**: rectangular parterres in
+blocks of single strong colour, edged in clipped green, on gravel walks.
+Scattered bushes would say *park*; blocks say *Floralies*.

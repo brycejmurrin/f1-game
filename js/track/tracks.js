@@ -288,7 +288,8 @@ const Tracks = (function () {
     }
     // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
     for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
-                        "forestEdge", "cityFront", "recordBarrier", "concreteCanyon",
+                        "forestEdge", "cityFront", "recordBarrier", "indexSolid",
+                        "concreteCanyon",
                         "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow",
                         "spectatorHill", "sponsorHoarding",
                         "bleacher", "scaffoldStand", "terrace", "tieredBowl"]) {
@@ -1992,6 +1993,20 @@ const Tracks = (function () {
         signBoard, sponsorHoarding,
         // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
+        // Footprint reservation. A circuit that builds a large prop from raw
+        // primitives — a farmhouse, a campsite, a stand — has no way to tell
+        // the foliage pass that the ground is taken, so the roadside scatter
+        // and the treelines grow straight through it. Every ENGINE emitter
+        // already calls indexSolid for exactly this reason; circuit files
+        // could not, which is why Mugello's casali had to be abandoned and
+        // Silverstone's campsites pushed out to 200 m.
+        //
+        // Safe to expose because foliage is already DEFERRED to after
+        // def.scenery() (see the call site below): anything a circuit reserves
+        // is in the index before a single tree is placed. Purely geometric —
+        // like indexBarrier it never touches barL/barR, so it cannot move the
+        // driving limits.
+        indexSolid,
         // baked asset pack — returns false (and emits nothing) with no pack
         bakedModel, bakedModels: () => (typeof Assets !== "undefined" ? Assets.models() : []),
       };

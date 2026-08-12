@@ -47,3 +47,15 @@ Fast, flowing layout inherited from its MotoGP origins: long medium- and high-sp
 - Frame asphalt with a continuous green artificial-grass verge, then warm `COL.desertSand` runoff aprons, then open desert.
 - Sparse palms only; faint low Lusail/Doha skyline on the far horizon.
 - Keep corners long and gently curved with continuous red-white kerb boxes to evoke the flowing, motorcycle-style layout.
+
+
+## Research pass — verified; one deliberate decision to respect
+
+The crescent main grandstand, the desert dunes, the floodlighting and the
+hospitality villas are all modelled.
+
+**Do not add a mosque here.** The villa block explicitly *replaced* an earlier
+"mosque / marquees / Aspire" group, recorded in the code as **fantasy
+landmarks** — invented Gulf set-dressing that does not correspond to anything
+at Lusail. A later research pass reading "Qatar → mosque, minaret" would
+re-introduce exactly what was deliberately removed. **Nothing added.**

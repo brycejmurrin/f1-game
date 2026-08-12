@@ -40,3 +40,39 @@ The world's fastest street circuit: long flat-out sweeps and the lengthy flowing
 - Hero silhouettes by shape alone: Fountain = single thin tall glowing column far offshore; Floating Mosque; yachts = low hulls + mast spikes; skyline = inland lit-window slabs.
 - Keep the Red Sea open on the outside (R) of the early/mid lap (~s 0.05–0.40): no seaward cityFront/backdrop there — sea, mosque, and fountain must read.
 - City mass stays inland (L); only thin seaward frontage near the start/finish pocket.
+
+## Research pass — findings (not yet built)
+
+- **King Fahd's Fountain** is Jeddah's defining landmark and it is *out at sea*
+  — roughly 1 km offshore, throwing seawater **312 m** into the air, floodlit,
+  and it runs **in the evening only**. Jeddah is a night race, so it should be
+  visible: a lit vertical plume far out on the Red Sea horizon, taller than
+  anything built on the corniche. It is the tallest fountain in the world and
+  nothing else on this circuit reads as unmistakably Jeddah.
+- **The corniche itself** — the Red Sea waterfront the whole lap runs along.
+  Water should be on the seaward side for most of the circuit.
+- **Jeddah Yacht Club** and marina, at the harbour end.
+- 6.174 km, 27 corners — the fastest street circuit on the calendar; the
+  long walled canyons between corners are the defining *shape*.
+
+
+## Outcome
+
+The banked findings were **already built**: King Fahd's Fountain is modelled at
+its real 312 m as a lit offshore plume, the corniche and Red Sea run down the
+seaward side, and there is a marina with a yacht-club building.
+
+The gap was Jeddah's **architecture**. The inland side was generic modern city
+mass, and Jeddah has the one building type on the calendar that cannot be
+mistaken for anywhere else: **Al-Balad**, the UNESCO-listed old town. Tall
+narrow coral-stone tower houses, four to six storeys, packed shoulder to
+shoulder — and hung off their faces, tier upon tier of **roshan**: deep
+projecting bay windows of carved wooden lattice, traditionally painted a soft
+teal-green against the pale coral stone.
+
+**The roshan are the building.** A plain coral box is just a beige box, so the
+lattice is modelled explicitly — bay, vertical mullions, and the shallow
+pitched hood over each one (roshan are roofed). Ground floors stay blank; the
+lattice starts at first floor, as it does in Al-Balad. Sited inland and set
+well back at gap 150–200, because Al-Balad is a few km from the Corniche: this
+is the old town *on the skyline behind* the modern city, not a trackside façade.

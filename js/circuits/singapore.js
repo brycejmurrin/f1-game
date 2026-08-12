@@ -128,7 +128,7 @@
     scenery: function (api) {
       const { out, MAT, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
-              addPrism, addFrustum, grandstand, grandstandEx, sponsorHoarding,
+              addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
@@ -552,6 +552,99 @@
         // matching the amber treatment already used at Fullerton.
         addBox(out, vadd(vadd(a.c, a.r, W * 0.44), a.u, 1.2), [1.4, 2.4, D * 0.9],
           [1.00, 0.90, 0.66], [a.r, a.u, a.t]);
+      }
+
+      // ===================================================================
+      // s 0.722 L — THE NEW SUPREME COURT (Foster, 2005), behind the old one
+      // F1.com's own landmark list for Marina Bay names the Supreme Court, and
+      // the circuit only had the neoclassical building it REPLACED (the block
+      // above, now the National Gallery). The working court stands directly
+      // behind it and is one of the most recognisable silhouettes in the city:
+      // a broad horizontal slab faced in close-spaced vertical stone fins,
+      // with the Court of Appeal carried on top as a CANTILEVERED DISC. The
+      // disc is the whole landmark — a flying saucer parked on a law court.
+      // Set at gap 168 so it rises behind the Gallery's dome rather than
+      // competing with it at the same depth.
+      // ===================================================================
+      {
+        const a = anchor(K(0.722), -1, 168), b = [a.r, a.u, a.t];
+        const STONE  = [0.80, 0.78, 0.73];
+        const FIN    = [0.86, 0.84, 0.79];
+        const GLASS  = [0.34, 0.40, 0.48];
+        const LITWIN = [0.92, 0.86, 0.62];
+        modelGroup("singapore-supreme-court", {
+          center: vadd(a.c, a.u, 26), size: [52, 58, 86], basis: b,
+        }, (stage) => {
+          const W = 40, H = 34, D = 78;
+          // The slab, glazed between its fins.
+          addBox(stage, vadd(a.c, a.u, H * 0.5), [W, H, D], GLASS, b);
+          // Vertical fin order — the building's texture, and cheap: one thin
+          // box per fin across the road-facing front.
+          const FINS = 26;
+          for (let i = 0; i < FINS; i++) {
+            const off = (i - (FINS - 1) / 2) * (D * 0.94 / (FINS - 1));
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, W * 0.5), a.t, off), a.u, H * 0.5),
+                   [0.9, H, 1.5], FIN, b);
+          }
+          // Lit floor bands behind the fins — it is a night race.
+          for (let f = 1; f < 6; f++) {
+            addBox(stage, vadd(vadd(a.c, a.r, W * 0.46), a.u, f * (H / 6)),
+                   [0.5, 1.5, D * 0.9], LITWIN, b);
+          }
+          // Roof deck the disc sits on.
+          addBox(stage, vadd(a.c, a.u, H + 0.9), [W + 2, 1.8, D + 2], STONE, b);
+          // THE DISC. Cantilevered clear of the slab toward the Padang, held
+          // on a short drum, with a bright glazed rim band under its lip.
+          const dc = vadd(vadd(a.c, a.r, W * 0.30), a.u, H + 2.4);
+          addCyl(stage, dc, 5.0, 4.5, STONE, 10, b);
+          addFrustum(stage, vadd(dc, a.u, 4.0), 12.5, 17.5, 3.2, STONE, 20, b);
+          addCyl(stage, vadd(dc, a.u, 7.0), 17.8, 1.5, LITWIN, 20, b);
+          addFrustum(stage, vadd(dc, a.u, 8.4), 17.5, 13.0, 3.0, FIN, 20, b);
+          addCyl(stage, vadd(dc, a.u, 11.3), 12.6, 0.8, STONE, 20, b);
+        });
+      }
+
+      // ===================================================================
+      // s 0.690 L — ST ANDREW'S CATHEDRAL, across the Padang lawn
+      // White Gothic-revival, and the only spire on this skyline. It stands
+      // on the far side of the Padang from the circuit, so it reads across
+      // the open lawn with nothing in front of it — which is exactly why it
+      // is worth having on a lap otherwise built from glass and stone slabs.
+      // ===================================================================
+      {
+        const a = anchor(K(0.690), -1, 126), b = [a.r, a.u, a.t];
+        const WHITE = [0.93, 0.92, 0.89];
+        const SHADE = [0.84, 0.83, 0.80];
+        const ROOF  = [0.42, 0.44, 0.46];
+        modelGroup("singapore-st-andrews", {
+          center: vadd(a.c, a.u, 18), size: [26, 46, 58], basis: b,
+        }, (stage) => {
+          // Nave under a shallow pitched roof, with buttresses down the flank.
+          addBox(stage, vadd(a.c, a.u, 7.0), [18, 14, 46], WHITE, b);
+          addPrism(stage, vadd(a.c, a.u, 15.6), [19, 3.6, 47], ROOF, b);
+          for (let i = -3; i <= 3; i++) {
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 9.4), a.t, i * 6.4), a.u, 5.6),
+                   [1.6, 11.2, 1.5], SHADE, b);
+          }
+          // Lancet window band — tall thin openings, the Gothic tell.
+          for (let i = -3; i < 4; i++) {
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 9.0), a.t, i * 6.4 + 3.2), a.u, 8.2),
+                   [0.3, 6.0, 1.6], [0.88, 0.80, 0.55], b);
+          }
+          // Tower and spire at the west end — the thing you actually see.
+          const tc = vadd(a.c, a.t, -25);
+          addBox(stage, vadd(tc, a.u, 13), [11, 26, 11], WHITE, b);
+          addBox(stage, vadd(tc, a.u, 26.6), [12.2, 1.2, 12.2], SHADE, b);
+          // Corner pinnacles, then the spire itself.
+          for (const [dx, dz] of [[-5.2, -5.2], [5.2, -5.2], [-5.2, 5.2], [5.2, 5.2]]) {
+            addPyramid(stage, vadd(vadd(vadd(tc, a.r, dx), a.t, dz), a.u, 28.4),
+                       [1.8, 4.4, 1.8], WHITE, b);
+          }
+          addPyramid(stage, vadd(tc, a.u, 27.2), [10.4, 15.5, 10.4], WHITE, b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(tc, a.u, 42.6), 0.10, 2.4, [0.72, 0.70, 0.64], 4, b);
+          stage._mat = 0;
+        });
       }
 
       // ===================================================================

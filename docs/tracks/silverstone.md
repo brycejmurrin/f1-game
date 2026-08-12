@@ -48,3 +48,40 @@ Fast, flowing, high-speed flat-out sweeps (Copse, Maggotts/Becketts, Abbey) defi
 - Repeat red/white kerb boxes (`[0.85,0.15,0.15]` / `[0.92,0.92,0.92]`) at every apex.
 - Scatter dark-green copse clusters and thin hedgerow strips to grid the distant fields.
 - Pale grey overcast sky and soft fog in hollows; mute distant greens toward grey for depth.
+
+## 7. Research pass — the campsites
+
+Silverstone was already dressed with the airfield inheritance (The Wing, the
+hangar-line on Hangar Straight, the old runways, the museum, farm buildings,
+silos and hedgerows). The gap research turned up was **the weekend itself**.
+
+The British Grand Prix is a camping festival with a race attached. Woodlands,
+Whittlebury and the rest put tens of thousands of people in the fields around
+the circuit, and from the track the outfield horizon is tents, caravans and
+flags. Dressing the outfield only in farmland is correct for a Tuesday in
+February and wrong for race weekend — it left every wide shot looking like an
+empty airfield.
+
+Four fields are modelled, sited where the real ones sit relative to the lap:
+
+| s | Side | Gap | Field |
+|---|---|---|---|
+| 0.055–0.135 | R | 138 m | Copse / Maggotts side |
+| 0.300–0.395 | L | 152 m | Hangar Straight / Stowe — **Woodlands** |
+| 0.470–0.560 | R | 146 m | Vale / Club overflow |
+| 0.760–0.860 | L | 134 m | Brooklands / Luffield — **Whittlebury** |
+
+Modelling rules that matter:
+- **Beyond the farmland band** (gap 130–210), so the hedgerow/field structure
+  still reads first and the campsites sit on the horizon where they belong.
+- **A ridge tent is one prism.** That is the whole budget argument — ~780 tents
+  across four fields costs ~17 k verts. Caravans (with pull-out awnings) are
+  ~14 % of pitches, and each field gets one white catering marquee, which is
+  what distinguishes an organised site from a lay-by.
+- **Pitch spacing is in metres, not nodes.** A first cut derived the column
+  count from the node count and put one column every ~90 m — 30 tents per
+  field, which reads as a lay-by. `span * n * ds` is the field's arc length.
+- Note `terrainOuter` is 110 m here, so these sit outside the rendered ribbon
+  (as the existing far hedgerows at 150–165 m already do). The ⚠ terrain step
+  the survey flags at 110 m on frac 0.35 is **pre-existing** — the ribbon's
+  outer edge — not caused by the campsites.

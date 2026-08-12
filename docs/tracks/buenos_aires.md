@@ -53,3 +53,8 @@ The pampa. Genuinely, honestly flat.
 - Keep the pit block and tower deliberately plain — flat parapets, square columns, bare concrete. Understatement is accurate.
 - Keep the ground dead flat and the inside of the Curvón clear, so the sweep's length is legible from the cockpit.
 - Put apartment blocks on ONE horizon only; the asymmetry is what places the autodrome at the city's edge rather than in open pampa.
+
+
+## Research pass — verified, already covered
+
+Dressed in depth already — plane-tree avenues, 1950s mass-concrete terraces, the Peronist-era pórtico, the park lake, and porteño apartment blocks on one horizon. **Nothing added.**

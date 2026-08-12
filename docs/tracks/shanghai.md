@@ -52,3 +52,23 @@ Model this as three long, gentle cosine bumps, not a flat plane with two dents.
 - Backdrop = **marsh mounds + one hazed Pudong** — never wraparound glass rings.
 - **Yu Garden paddock**: small white pavilion boxes with red roofs in the lakes beside the pit.
 - Stack grandstands as **stepped box tiers**; vary height to imply the 200,000-seat scale.
+
+## Research pass — the marshland it was built on
+
+The circuit's origin story is its landscape: this was **swampland used as rice
+paddy**, and the ground was so soft that a raft of concrete piles had to be
+sunk before anything could be built on it (racingcircuits.info; F1.com dates
+the groundworks to April 2003). The lap was dressed with the city and the pit
+complex, but the outfield was plain ground — which loses the one thing that
+makes Jiading look like Jiading rather than like any Tilke infield.
+
+Eight paddy blocks added (2×3 paddies each), gap 108–158. What carries it:
+
+- **Rectangular, flooded, bunded.** Those three facts are the whole read. Each
+  paddy sits *inside* a raised earth bund and is slightly sunk.
+- **Real water, not green paint.** The flooded paddies use `waterSurface`, so
+  they mirror the sky. That mirror is what sells them from a moving car; a
+  green slab would just read as a lawn.
+- ~22 % are **fallow** — drained, bare worked earth — so the block isn't uniform.
+- **Reed fringes** on the outer edge, where the paddies stop being farmed and
+  go back to marsh.

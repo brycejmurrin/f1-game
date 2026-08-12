@@ -55,10 +55,10 @@
     ],
     scenery: function (api) {
       const { out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
-              addBox, addCyl, addCone, addPrism, addFrustum, vadd, anchor,
+              addBox, addCyl, addCone, addPrism, addFrustum, addPyramid, vadd, anchor,
               mountain, pine, tree, forestEdge, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
-              modelGroup, overheadSpan, groundPatch, circuitKit, ATM,
+              modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
               waterSurface } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -551,6 +551,126 @@
       tyreWall(0.155, 0.175, 1, 4.6, [0.20, 0.36, 0.62]);     // Les Combes
       tyreWall(0.46, 0.49,  -1, 4.6, [0.55, 0.55, 0.52]);     // Pouhon
       tyreWall(0.905, 0.925, 1, 4.4, [0.78, 0.12, 0.12]);     // Bus Stop
+
+      // --- THE OLD CIRCUIT, CARRYING STRAIGHT ON AT LES COMBES -------------
+      // The single most Spa thing there is, and the circuit had no trace of it.
+      // Until 1970 this was a 14 km triangle of public road: the course did not
+      // turn right at Les Combes, it went STRAIGHT ON, plunging down through
+      // Burnenville and Malmedy to the Masta kink and Stavelot before climbing
+      // back. That road is still there — it is the N62 — and from the modern
+      // right-hander you can see it carrying on into the trees, narrower and
+      // older than the track you are on, with its own armco still standing.
+      //
+      // Modelled as a diverging ribbon: it leaves on the Kemmel tangent while
+      // the racing line turns away, so the two separate naturally over ~230 m.
+      {
+        const a0 = anchor(K(0.170), 1, 16);
+        const dir = a0.t, rgt = a0.r, up = a0.u;
+        const b = [rgt, up, dir];
+        const OLD_TAR  = [0.29, 0.29, 0.30];
+        const OLD_EDGE = [0.62, 0.61, 0.57];
+        const ARMCO    = [0.74, 0.75, 0.76];
+        let laid = 0;
+        for (let i = 0; i < 16; i++) {
+          // Drift gently right of the tangent — the old road fell away downhill
+          // toward Burnenville rather than running dead straight.
+          const c = vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16);
+          if (onTrack(c[0], c[2], 18)) continue;
+          // Old road is NARROW: two lanes of a 1960s Ardennes highway.
+          addBox(out, vadd(c, up, 0.09), [8.2, 0.16, 15.4], OLD_TAR, b);
+          addBox(out, vadd(vadd(c, rgt, -4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
+          addBox(out, vadd(vadd(c, rgt,  4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
+          // Period armco on posts, one run per panel, left side only — the
+          // right drops into the trees exactly as it does now.
+          if (i % 2 === 0) {
+            addBox(out, vadd(vadd(c, rgt, -5.6), up, 0.62), [0.14, 0.34, 15.0], ARMCO, b);
+            addCyl(out, vadd(c, rgt, -5.6), 0.09, 0.62, [0.55, 0.55, 0.56], 4, b);
+          }
+          laid++;
+        }
+        // A commemorative marker where the two courses part, and the forest
+        // closing in behind it — this is a road nobody races on any more.
+        if (laid > 4) {
+          const m = vadd(vadd(a0.c, dir, 26), rgt, -9);
+          if (!onTrack(m[0], m[2], 12)) {
+            out._mat = MAT.STONE;
+            addBox(out, vadd(m, up, 0.9), [1.1, 1.8, 2.4], [0.68, 0.66, 0.62], b);
+            addBox(out, vadd(m, up, 1.95), [1.3, 0.24, 2.6], [0.58, 0.56, 0.52], b);
+            out._mat = 0;
+          }
+          for (let i = 0; i < 9; i++) {
+            const t = vadd(vadd(a0.c, dir, 40 + i * 26),
+                           rgt, -16 - (i % 3) * 7 + i * i * 0.14);
+            if (onTrack(t[0], t[2], 14)) continue;
+            const hv = hash(i * 37 + 11), ht = 15 + hv * 9;
+            out._mat = MAT.WOOD;
+            addCyl(out, t, 0.4, ht * 0.4, [0.26, 0.21, 0.16], 5, b);
+            out._mat = MAT.FOLIAGE;
+            addCone(out, vadd(t, up, ht * 0.3), 3.0 + hv, ht * 0.75,
+                    hv < 0.5 ? [0.10, 0.30, 0.14] : [0.14, 0.34, 0.17], 6, b);
+            out._mat = 0;
+          }
+        }
+      }
+
+      // --- FRANCORCHAMPS VILLAGE -------------------------------------------
+      // The circuit is named after a village and ran through it, and the
+      // village was not on the map: the outfield above La Source was cabins
+      // and forest. Ardennes building is unmistakable and cheap to read —
+      // rough grey limestone walls under STEEP dark-slate roofs, small
+      // windows, and a slate church spire above the roofline.
+      {
+        const STONE  = [0.68, 0.66, 0.62], STONE_W = [0.78, 0.76, 0.71];
+        const SLATE  = [0.26, 0.27, 0.31], SLATE_D = [0.20, 0.21, 0.25];
+        const TRIM   = [0.86, 0.85, 0.80];
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.018 + i * 0.0075;
+          const kk = K(sf), hv = hash(kk * 29 + i * 5);
+          const gap = 88 + (i % 3) * 26 + hv * 14;
+          const a = anchor(kk, -1, gap);
+          if (onTrack(a.c[0], a.c[2], 22)) continue;
+          const b = [a.r, a.u, a.t];
+          const w = 8 + hv * 4, d = 9 + hv * 5, wallH = 5.5 + hv * 2.4;
+          out._mat = MAT.STONE;
+          addBox(out, vadd(a.c, a.u, wallH * 0.5), [w, wallH, d],
+                 hv < 0.4 ? STONE_W : STONE, b);
+          out._mat = 0;
+          // The roof IS the Ardennes silhouette: steep, dark, deep-eaved.
+          addPrism(out, vadd(a.c, a.u, wallH + w * 0.30), [w * 1.12, w * 0.62, d * 1.06],
+                   hv < 0.5 ? SLATE : SLATE_D, b);
+          // Window band + a chimney on the ridge.
+          addBox(out, vadd(vadd(a.c, a.r, -w * 0.5), a.u, wallH * 0.58),
+                 [0.16, 1.1, d * 0.66], TRIM, b);
+          addBox(out, vadd(vadd(a.c, a.t, d * 0.28), a.u, wallH + w * 0.55),
+                 [0.9, 1.8, 0.9], STONE, b);
+        }
+        // The church — every Ardennes village has one, and its slate spire is
+        // the only thing that breaks the treeline from the track.
+        {
+          const a = anchor(K(0.062), -1, 104);
+          if (!onTrack(a.c[0], a.c[2], 26)) {
+            const b = [a.r, a.u, a.t];
+            modelGroup("spa-francorchamps-church", {
+              center: vadd(a.c, a.u, 11), size: [14, 30, 24], basis: b,
+            }, (stage) => {
+              stage._mat = MAT.STONE;
+              addBox(stage, vadd(a.c, a.u, 4.6), [10, 9.2, 20], STONE_W, b);
+              addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.0), [7, 16, 7], STONE_W, b);
+              stage._mat = 0;
+              addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 20.4], SLATE_D, b);
+              addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 21.5), [7.4, 9.5, 7.4],
+                         SLATE, b);
+              // Clock face and the cross above the spire.
+              addBox(stage, vadd(vadd(vadd(a.c, a.t, -11), a.r, -3.6), a.u, 13.5),
+                     [0.3, 1.9, 1.9], TRIM, b);
+              stage._mat = MAT.METAL;
+              addCyl(stage, vadd(vadd(a.c, a.t, -11), a.u, 26.2), 0.09, 2.2,
+                     [0.60, 0.58, 0.52], 4, b);
+              stage._mat = 0;
+            });
+          }
+        }
+      }
     },
   }
   );

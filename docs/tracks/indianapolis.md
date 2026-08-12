@@ -54,3 +54,8 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 - Pit boxes are open stalls under one flat roof, not enclosed garage bays. Every road course has the latter; this one never did.
 - Keep the ground plane dead level. Nothing grows inside the oval and there are no hills anywhere on the horizon — resist adding either.
 - The yard of bricks is a tiny detail and the one every broadcast opens with. Lay it across the full width at the line.
+
+
+## Research pass — verified, already covered
+
+The **Pagoda** is modelled as the hero (correctly called out in the code as the Speedway's single most recognisable structure), along with the oval, the yard of bricks, the infield and the golf course. **Nothing added.**

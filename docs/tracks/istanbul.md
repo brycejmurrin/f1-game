@@ -53,3 +53,8 @@ The circuit drops and climbs constantly — this is a valley lap, and the Turn 1
 - Plant thinly and unevenly: this is a dry hillside with scattered pine, not a plantation. Any continuous treeline is wrong.
 - The paddock block's stepped roofline is the only architectural cue worth building — keep everything else here low, pale and plain.
 - One horizon gets apartment blocks; the other three stay bare ridge. The asymmetry is what places the circuit next to a city.
+
+
+## Research pass — verified, already covered
+
+Turn 8, the hillside terrain and the pine/scrub planting are modelled. No further landmark confirmed by research — Istanbul Park is inland at Tuzla, so the Bosphorus and the city skyline do **not** belong here. **Nothing added.**

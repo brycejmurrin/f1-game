@@ -206,6 +206,21 @@
   --tap: 44px;      /* minimum interactive box */
   --chip-h: 40px;   /* chips are secondary — one step below --tap */
   --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
+  /* THE WCAG FLOOR, AND THE ONE LENGTH HERE THAT DIVIDES BY THE SCALE.
+     The note below is right that a size token must NOT pre-multiply — a zoomed
+     subtree already scales what it inherits, and doing both double-counts. A
+     FLOOR is a different kind of thing: 24px is a requirement in the pixels a
+     thumb actually lands on, so it has to survive the subtree being scaled DOWN.
+     --tap at 44 has headroom and is fine at every setting (44 x 0.8 = 35.2);
+     a control sitting exactly on 24 has none.
+     MEASURED, 1900-cell matrix across five UI sizes: at UI SIZE 80% the two
+     tuner panels put 35 and 23 controls under the floor, plus the ADVANCED
+     STEERING and MUSIC & SOUND sliders — every one of them 19px, which is
+     24 x 0.8. Nothing failed at 115 or 130. A single-scale survey could not see
+     it, and the scale ladder ships all five.
+     max(), so a control never SHRINKS at a large scale either: at 1.5 the 24px
+     branch wins and it paints 36. */
+  --tap-min: max(24px, calc(24px / var(--ui-scale)));
   --label: 12px;    /* section label type size */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —

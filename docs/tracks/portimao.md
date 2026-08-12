@@ -57,3 +57,29 @@ The defining feature, and the biggest authored deltas of any circuit in this bat
 - Spectator terracing is cut INTO the hill, with the escarpment as its back shell — no roofs, no back walls, no freestanding stands except at the line.
 - Carry the pit roof's wave phase across all bays so it reads as one continuous undulation, not four identical humps.
 - The moinho and the whitewashed hamlet belong on the skyline above the crests, not in the trackside dressing — they place the circuit in the Algarve at a glance.
+
+## Research pass — montado
+
+**The circuit is 22 km inland**, on the rolling hills of the Algarve interior
+(racingcircuits.info, lapmeta) — not on the coast. So the absence of any
+Atlantic in this file is *correct* and should stay that way; the "Algarve →
+beach" instinct is wrong here.
+
+What that interior actually is: **montado** — open, grazed, sparsely treed
+country of cork oak and olive. The lap had generic scatter, which gave it trees
+but not *these* trees.
+
+- **Cork oak** is the giveaway and nearly free to draw. Short thick trunk, a
+  broad **low** spreading crown wider than the tree is tall, and — where the
+  bark has been stripped — a bare **rust-red lower trunk** under corky grey
+  above. That two-tone trunk exists nowhere else on the calendar and reads at
+  distance. Scattered, never in rows: montado is grazed woodland, so spacing is
+  wide and irregular and the ground between stays open.
+- **Olive terraces**, which unlike the oaks *are* ordered — planted on the grid,
+  over tilled soil. **The contrast between scattered montado and regimented
+  olive is what makes the hillside read as farmed rather than wild.**
+
+Measured clean first time: coplanar 0 (cap 0), clip 31 (cap 31). Crowns are
+built as **abutting** stacked frusta rather than merged cones — the lesson from
+Mugello, where two cypress cones overlapping by ~2 m tripped the severe
+interpenetration threshold.

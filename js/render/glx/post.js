@@ -96,7 +96,7 @@ const GLXPost = (function () {
         msaaSamples = IS_MOBILE ? 0 : Math.min(2, cMax, dMax);
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uFlareStreak", "uFlareStreak2"]);
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
       if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -716,6 +716,12 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
       // SUN-SHAFT REACH / FLARE STREAK knobs (defaults reproduce the shipped look).
       gl.uniform1f(compU.uShaftDecay,  CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
+      // Reach scales with the SCREEN SUN-SHAFT knob, sub-linearly so the shipped
+      // value (1) keeps the shipped radius and turning it up genuinely extends the
+      // rays instead of only brightening a fixed disc. sqrt keeps 4x strength at a
+      // 2x radius rather than blowing the pass across the whole frame.
+      const _shaftMul = (opts && opts.tune && opts.tune.sunShaftMul != null) ? opts.tune.sunShaftMul : 1;
+      gl.uniform1f(compU.uShaftSpread, Math.sqrt(Math.max(0.05, _shaftMul)));
       gl.uniform1f(compU.uFlareStreak, CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
       gl.uniform1f(compU.uFlareStreak2, CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
       // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}

@@ -90,6 +90,83 @@
         px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
+      // ── THE PARK WALL (Muro del Serraglio) ────────────────────────────────
+      // Monza is not a circuit in a wood, it is a circuit inside a WALLED
+      // ESTATE — the Royal Park is the largest walled park in Europe, ~688 ha
+      // ringed by a continuous brick boundary wall with regular piers. The
+      // circuit had the trees and the Villa but not the thing that makes them
+      // a park rather than a forest, so the outfield read as open countryside.
+      //
+      // Built on the engine's `wall()` emitter, NOT on a hand-rolled box loop.
+      // The first version walked the arc itself and emitted a fixed-length
+      // panel per node, which overlapped its neighbour wherever the anchors
+      // compress on the inside of a bend — two same-colour side faces on one
+      // plane, facing the same way, which is a guaranteed z-fight. It took
+      // monza from 8 coplanar spots to 22 and CI caught it. Shortening the
+      // panel got it to 10; measuring the true anchor step made it 15. The
+      // hand-rolled approach was simply the wrong tool. `wall()` walks with
+      // `along()` and carries the along-track length in the node SCALE, so
+      // consecutive segments abut exactly instead of guessing at a spacing.
+      //
+      // Three arcs behind the treeline rather than lap-wide: the wall should be
+      // something caught THROUGH the pines, not a fence around the racing.
+      // Brick-warm, so it separates from the grey concrete of the Sopraelevata
+      // ruin, which is the other long low mass out there.
+      {
+        const BRICK = [0.56, 0.40, 0.32];
+        const CAP   = [0.70, 0.68, 0.62];
+        for (const [s0, s1, side, gap] of [
+          [0.100, 0.235, -1, 68],
+          [0.415, 0.545,  1, 74],
+          [0.640, 0.780, -1, 62],
+        ]) {
+          wall(s0, s1, side, gap, 2.6, BRICK, 0.55);
+          // Piers: isolated masonry posts every ~34 m, proud of the wall in
+          // both width and height so none of their faces share a plane with
+          // it. Sparse and free-standing, so they cannot seam against each
+          // other the way the old per-node panels did.
+          const span = (s1 - s0 + 1) % 1;
+          const count = Math.max(3, Math.round(span * n * ds / 34));
+          for (let i = 0; i <= count; i++) {
+            const a = anchor(K((s0 + span * (i / count)) % 1), side, gap);
+            if (onTrack(a.c[0], a.c[2], 20)) continue;
+            const b = [a.r, a.u, a.t];
+            out._mat = MAT.STONE;
+            addBox(out, vadd(a.c, a.u, 1.55), [0.95, 3.1, 1.1], BRICK, b);
+            addBox(out, vadd(a.c, a.u, 3.25), [1.15, 0.3, 1.3], CAP, b);
+            out._mat = 0;
+          }
+        }
+        // Porta / gateway: one monumental opening in the wall, the way into
+        // the estate. Piers, a stone lintel and a pair of ironwork leaves.
+        {
+          const a = anchor(K(0.172), -1, 68);
+          if (!onTrack(a.c[0], a.c[2], 22)) {
+            const b = [a.r, a.u, a.t];
+            const STONE = [0.80, 0.77, 0.70];
+            modelGroup("monza-park-gate", {
+              center: vadd(a.c, a.u, 3.2), size: [3, 9, 16], basis: b,
+            }, (stage) => {
+              stage._mat = MAT.STONE;
+              for (const t of [-5.2, 5.2]) {
+                addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 2.6), [1.3, 5.2, 1.5], STONE, b);
+                addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 5.45), [1.6, 0.5, 1.8], CAP, b);
+                addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 6.1), [0.7, 0.9, 0.8], STONE, b);
+              }
+              stage._mat = MAT.METAL;
+              for (const [t, sgn] of [[-3.6, -1], [3.6, 1]]) {
+                for (let r = 0; r < 7; r++) {
+                  addCyl(stage, vadd(vadd(vadd(a.c, a.t, t + sgn * r * 0.42),
+                                            a.r, -r * 0.16), a.u, 0),
+                         0.045, 3.4, [0.18, 0.19, 0.20], 4, b);
+                }
+              }
+              stage._mat = 0;
+            });
+          }
+        }
+      }
+
       // Royal-park greens — warm Italian afternoon palette.
       const PINE_D = [0.08, 0.26, 0.12], PINE = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.17];
       const LEAF = [0.18, 0.45, 0.20], LEAF_L = [0.24, 0.50, 0.24], LEAF_D = [0.15, 0.38, 0.18];

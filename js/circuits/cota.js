@@ -303,9 +303,15 @@
           addCyl(stage, deckCen, 7.8, 2.2, pale2, 10, tb);
           addBox(stage, vadd(tBase, at.u, deckH + 1.1), [13, 1.4, 13], white, tb);
           addCyl(stage, vadd(tBase, at.u, deckH + 2.6), 6.4, 1.6, [0.74, 0.76, 0.82], 8, tb);
-          addCone(stage, vadd(tBase, at.u, deckH + 4.2), 3.8, 3.4, [0.68, 0.69, 0.74], 8, tb);
-          addCyl(stage, vadd(tBase, at.u, deckH + 7.8), 0.28, 8.0, pale2, 5, tb);
-          addBox(stage, vadd(tBase, at.u, deckH + 16.0), [0.6, 0.6, 0.6], [1.0, 0.82, 0.25], tb);
+          // Crown sized to the REAL tower: COTA publishes 251 ft (76.5 m) at
+          // its highest point, with the observation deck 22 storeys up. The
+          // deck sits at 70 m, which is right — but the crown then carried an
+          // 8 m mast and a beacon at deckH+16, topping out around 86 m, i.e.
+          // ~12% over the one dimension the venue actually states. Cone and
+          // finial now land the tip at deckH + 6.5 = 76.5 m exactly.
+          addCone(stage, vadd(tBase, at.u, deckH + 4.2), 3.8, 2.0, [0.68, 0.69, 0.74], 8, tb);
+          addCyl(stage, vadd(tBase, at.u, deckH + 6.0), 0.24, 0.5, pale2, 5, tb);
+          addBox(stage, vadd(tBase, at.u, deckH + 6.4), [0.5, 0.5, 0.5], [1.0, 0.82, 0.25], tb);
           stage._mat = 0;
           // red tube veil — ~14 thin tubes on the amphitheater face, full height
           stage._mat = MAT.METAL;

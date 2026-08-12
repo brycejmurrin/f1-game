@@ -41,3 +41,24 @@ Fairly **flat** throughout. Only minor undulations: a gentle dip and rise approa
 - One reflective blue lake slab + cream Villa box are enough to evoke the royal grounds.
 - Tilted grey ramp boxes for the Sopraelevata ruin read instantly as the historic banking.
 - Tribuna Centrale + slim podium tower frame the start/finish; thin drifting fog boxes add mood near shaded corners.
+
+## 7. Research pass — the walled estate
+
+Monza already had the pines, the Villa Reale, the Sopraelevata ruin, the park
+lake and the Milan skyline. The thing it was missing is what makes those a
+**park** rather than a forest: Monza sits inside the largest **walled** estate
+in Europe (~688 ha), ringed by a continuous 19th-century brick boundary wall
+with regular piers — the *Muro del Serraglio*. Without it the outfield read as
+open countryside.
+
+Modelling notes:
+- Run it in **three arcs** behind the treeline (gap 62–78 m), not lap-wide. The
+  wall should be something you catch *through* the pines, not a fence around
+  the racing.
+- **Brick-warm**, deliberately, so it separates from the grey concrete of the
+  Sopraelevata ruin — the other long low mass out there.
+- Panel heights vary slightly (2.5–2.85 m) with a stone cap and a pier every
+  fourth panel: this is 19th-century brickwork on undulating ground, not a
+  precast barrier.
+- One monumental **gateway** (s≈0.172, L): stone piers, capped lintel blocks,
+  and a pair of ironwork leaves standing open.

@@ -41,3 +41,23 @@ Famously twisty and slow with very few overtaking spots — pole and clean air d
 - Keep palette warm and slightly hazy; fade far hills toward the fog tint for depth.
 
 Sources: [Wikipedia](https://en.wikipedia.org/wiki/Hungaroring), [TrackTitan](https://www.tracktitan.io/post/hungaroring-track-guide), [Motorsport.com](https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/), [F1 Technical](https://www.f1technical.net/news/25005), [Driver61](https://driver61.com/circuit-guide/hungaroring/)
+
+## Research pass — the Pannonian plain
+
+The Hungaroring sits in the **Valley of the Three Springs** at Mogyoród, and
+the bowl (and the dust it causes) were already modelled. The **planting** was
+not: the outfield used the generic broadleaf scatter, which could be any
+European circuit. Two species make this landscape unmistakable and neither was
+present.
+
+- **Lombardy poplar, in dead-straight windbreak rows** along field edges and
+  farm tracks. This is the defining line of the Hungarian landscape and the
+  silhouette is extreme — ~20 m tall, ~2 m wide, a green exclamation mark.
+  **The row is the read**: one poplar is nothing, twelve in a line is Hungary.
+  Five rows, gap 58–74, spaced in metres along the arc. Crown width is what
+  makes or breaks a poplar, so the stacked cones stay barely wider than the
+  trunk.
+- **Akác** (*Robinia pseudoacacia*, black locust) — roughly a fifth of all
+  Hungarian forest. Scattered, not rowed, and deliberately **airy**: a bare
+  trunk forking low, carrying two or three *offset* crown lobes with sky
+  between them. Nothing like the solid cone the generic scatter plants.
