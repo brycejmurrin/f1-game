@@ -326,15 +326,27 @@ void main() {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
-    float hSun  = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
     float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
-    vec4 lc = uLightVP * vec4(p, 1.0);
-    vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
-    float lit = 1.0;
-    if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
-      lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
-    lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
-    accum += lit * hSun * trans;
+    // The SUN half of the march, gated the way the lamp half below already is.
+    // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
+    // end — so at uStr == 0 every shadow tap and gCloud() call here is
+    // multiplied away. The pass still RUNS at night, because haveGR is true
+    // whenever lampVol > 0, and gCloud cannot early-out either: the night
+    // moon-key is deliberately held at sunDir.y ~ 0.97 to drive the sky glow,
+    // so on a cloudy night this ran a 3-octave FBM 16x per half-res pixel for
+    // nothing. uStr is a uniform, so this is uniform control flow — no
+    // divergence — and trans is still stepped outside the branch, which is
+    // what keeps lampAccum bit-identical.
+    if (uStr > 0.0) {
+      float hSun = exp(-max(p.y - groundY, 0.0) * 0.03);   // sun shafts reach higher
+      vec4 lc = uLightVP * vec4(p, 1.0);
+      vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+      float lit = 1.0;
+      if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
+        lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
+      lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
+      accum += lit * hSun * trans;
+    }
     // Lamp in-scatter: each nearby lamp casts a beam through the ground haze,
     // shaped by its aimed cone + falloff (same math as the lit shader's pools),
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the

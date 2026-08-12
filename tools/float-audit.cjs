@@ -599,6 +599,23 @@ if (args.includes("--foliage")) {
   process.exit(0);
 }
 
+// Emit JSON with a SYNCHRONOUS write, not console.log.
+//
+// console.log to a PIPE is asynchronous in Node, and every exit path below
+// calls process.exit() immediately afterwards — which kills the process before
+// the buffer drains. The --all payload is ~1 MB (it carries `all` and
+// `flagKeys` per circuit), so a consumer reading this over a pipe got the JSON
+// TRUNCATED mid-object: `SyntaxError: Expected ',' or '}' after property value
+// in JSON at position 219264`, from tests/unit/scenery-grounding.test.mjs in
+// CI. It never reproduced locally because a shell redirect to a FILE is a
+// synchronous write and completes before exit.
+//
+// fs.writeSync(1, ...) is synchronous for pipes too, so the control flow below
+// (each branch emits then exits) stays exactly as it was.
+function emitJson(obj) {
+  fs.writeSync(1, JSON.stringify(obj, null, 1) + "\n");
+}
+
 if (args.includes("--clip")) {
   const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
   let total = 0;
@@ -636,7 +653,7 @@ if (args[0] === "--all") {
       bad++;
     }
   }
-  if (asJson) console.log(JSON.stringify(out, null, 1));
+  if (asJson) emitJson(out);
   else {
     console.log(`\n${"=".repeat(72)}`);
     const dirty = out.filter((o) => o.floating.length);
@@ -667,7 +684,7 @@ if (args[0] === "--all") {
   const id = args[0];
   if (!id) { console.error("usage: float-audit.cjs <trackId> | --all"); process.exit(2); }
   const res = audit(id);
-  if (asJson) console.log(JSON.stringify(res, null, 1));
+  if (asJson) emitJson(res);
   else printOne(res, allClusters ? 200 : 40);
   process.exit(res.floating.length ? 1 : 0);
 }
