@@ -72,6 +72,99 @@ function buildLtPreview() {
   mkGroup("WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
     (w) => __apex.weather(w), "lt-wx-");
 }
+// COPY TO ALL TRACKS. Every other control in this panel edits the ONE
+// (track, time-of-day, weather) profile named above it; these two write the same
+// values into every OTHER track at that same time and weather
+// (LightStore.copyToTracks — js/game/light-store.js owns the semantics):
+//   MY EDITS  — only this profile's own overrides, merged over each target's, so
+//               a circuit keeps its shipped character for untouched knobs.
+//   FULL LOOK — every live value, so they all render identically. This overrides
+//               the per-track presets, which is the point of asking for it.
+// 39 profiles at once is worth a second thought, so each button ARMS on the first
+// click and fires on the second, and the previous state stays revertible via UNDO
+// for as long as the panel is open.
+let _ltUndo = null;            // snapshot from the last copy, or null
+let _ltArmed = null;           // id of the armed button, or null
+let _ltArmT = 0, _ltFlashT = 0;
+const LT_SPREAD = [
+  ["edits", "MY EDITS"],
+  ["look", "FULL LOOK"],
+];
+const ltSpreadBtn = {};
+function ltTargetCount() {
+  const n = (typeof Tracks !== "undefined" && Tracks.LIST && Tracks.LIST.length) || 0;
+  return Math.max(0, n - 1);
+}
+function ltDisarm() {
+  _ltArmed = null;
+  clearTimeout(_ltArmT); clearTimeout(_ltFlashT);
+  for (const [id, label] of LT_SPREAD) if (ltSpreadBtn[id]) {
+    ltSpreadBtn[id].textContent = label;
+    ltSpreadBtn[id].classList.remove("on");
+  }
+  if (ltSpreadBtn.undo) ltSpreadBtn.undo.hidden = !_ltUndo;
+}
+function ltFlash(btn, text) {
+  btn.textContent = text;
+  clearTimeout(_ltFlashT);
+  _ltFlashT = setTimeout(ltDisarm, 2200);
+}
+function ltSpread(id, btn) {
+  if (_ltArmed !== id) {   // first click arms; arming one disarms the other
+    ltDisarm();
+    _ltArmed = id; btn.classList.add("on");
+    btn.textContent = "COPY TO " + ltTargetCount() + "?";
+    _ltArmT = setTimeout(ltDisarm, 6000);
+    return;
+  }
+  clearTimeout(_ltArmT);
+  _ltArmed = null; btn.classList.remove("on");
+  const r = G.copyLightTune(id);
+  if (!r.ok) { ltFlash(btn, r.error === "no-edits" ? "NOTHING TUNED" : "NO TRACK"); return; }
+  persistLightTune();
+  _ltUndo = r.undo;
+  ltFlash(btn, "COPIED " + r.tracks + " ✓");
+  if (ltSpreadBtn.undo) ltSpreadBtn.undo.hidden = false;
+}
+function ltUndoSpread() {
+  if (!_ltUndo) return;
+  G.restoreLightTune(_ltUndo);
+  _ltUndo = null;
+  persistLightTune();
+  ltDisarm();
+  refreshLightTunePanel();
+}
+function buildLtSpread() {
+  const host = $("lt-spread");
+  if (!host || host.dataset.built) return;
+  host.dataset.built = "1";
+  const row = document.createElement("div");
+  row.className = "lt-preview-row";
+  const lb = document.createElement("span");
+  lb.className = "lt-preview-lbl"; lb.textContent = "COPY ALL";
+  row.appendChild(lb);
+  for (const [id, label] of LT_SPREAD) {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "opt-btn lt-preview-btn"; btn.id = "lt-spread-" + id;
+    btn.textContent = label;
+    btn.onclick = () => ltSpread(id, btn);
+    ltSpreadBtn[id] = btn;
+    row.appendChild(btn);
+  }
+  const undo = document.createElement("button");
+  undo.type = "button"; undo.className = "opt-btn lt-preview-btn"; undo.id = "lt-spread-undo";
+  undo.textContent = "UNDO"; undo.hidden = true;
+  undo.onclick = ltUndoSpread;
+  ltSpreadBtn.undo = undo;
+  row.appendChild(undo);
+  host.appendChild(row);
+  const help = document.createElement("p");
+  help.className = "adv-help";
+  help.textContent = "Copy this condition to every other track at the same time and weather. " +
+    "MY EDITS sends only the knobs tuned here; FULL LOOK sends every value and overrides each " +
+    "track's shipped look. Click twice to confirm.";
+  host.appendChild(help);
+}
 let _ltActiveGroup = null;   // currently-shown tuner category (tab)
 // Show one tuner category at a time (tab click). Toggles the .active class on the
 // matching group wrapper + its tab chip so only that group's sliders render —
@@ -89,6 +182,7 @@ function setLtTab(group) {
 }
 function buildLightTunePanel() {
   buildLtPreview();
+  buildLtSpread();
   const host = $("lt-rows"), tabs = $("lt-tabs");
   if (!host.dataset.built) {
     host.dataset.built = "1";
@@ -158,6 +252,10 @@ function refreshLightTunePanel() {
     if (b) b.textContent = fmtTune(d, LT[d.id]);
   }
   updateLtProfileLabel();
+  // An armed COPY ALL is armed for the condition that was on screen when it was
+  // clicked. This runs on every time-of-day / weather switch, so cancelling here
+  // is what stops the second click landing on a different one.
+  ltDisarm();
 }
 $("pm-lighting").onclick = () => {
   buildLightTunePanel();
@@ -171,6 +269,7 @@ $("pm-lighting").onclick = () => {
 };
 function closeLightTuner(showPauseMenu) {
   if (G.photoMode) exitPhotoMode();
+  _ltUndo = null; ltDisarm();   // the copy's one-step revert does not outlive the panel
   // Restore the race's real time & weather (preview was transient).
   if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);

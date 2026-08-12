@@ -77,10 +77,17 @@ const CEILINGS = {
   // Merged with the ACTIVE AERO flap distance gate from the other branch;
   // the file carries both sets of lines, so neither side's number fits it.
   // Set from the merged file: 7944.
-  "js/game.js": 7944,
+  // 7944 -> 7949 for the lighting tuner's COPY ALL: two more thin passes through
+  // to js/game/light-store.js (copyToTracks/restore) beside the four that were
+  // already here, plus the comment saying what the two modes mean. The operation
+  // itself is 40 lines and landed in the store, which is the shape this ratchet
+  // is asking for — what stayed is the façade line the other five files reach.
+  "js/game.js": 7949,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
-  "js/game/apex.js": 3050,
+  // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
+  // — a dev-API hook growing the dev API is the file doing its job.
+  "js/game/apex.js": 3055,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   "js/track/tracks.js": 2600,

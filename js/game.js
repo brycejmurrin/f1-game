@@ -2795,7 +2795,7 @@ const G = {
   get countT() { return countT; }, set countT(v) { countT = v; },
   get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
-  loadCarModel, loadTrack, persistLightTune,
+  loadCarModel, loadTrack, persistLightTune, copyLightTune, restoreLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
@@ -4680,12 +4680,17 @@ function coast(c, dt) {
 const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
 // The PROFILE STORE — which layer of (default / shipped preset / player edit)
 // wins for the conditions on screen — lives in js/game/light-store.js
-// (LightStore.create(G), assigned with the other modules below). These four are
+// (LightStore.create(G), assigned with the other modules below). These six are
 // thin passes through to it, kept so every call site here reads unchanged.
 function ltKey() { return ltStore.key(); }
 function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
 function setLightTune(id, v) { return ltStore.set(id, v); }
 function persistLightTune() { ltStore.persist(); }
+// Spread the on-screen condition to every other track at the same time+weather
+// ("edits" = this profile's overrides only, "look" = every live value), and the
+// one-step revert for it. The tuner panel and __apex.lightCopy are the callers.
+function copyLightTune(mode) { return ltStore.copyToTracks(mode); }
+function restoreLightTune(undo) { return ltStore.restore(undo); }
 // LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in

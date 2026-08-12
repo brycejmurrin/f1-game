@@ -367,6 +367,28 @@ __apex.lightTune({ wetness: 0.8 });    // pin road wetness instantly
 __apex.lightTune({ wetness: -0.05 });  // back to the weather-driven ramp
 ```
 
+### `lightCopy(arg?) → {ok, mode, tracks, changed, undo, …}`
+The tuner's **COPY ALL**, headless. Takes the profile for the conditions on
+screen and writes it into **every other track at the same time-of-day and
+weather** — the 39-circuit version of what the panel's two chips do.
+
+| call | what lands on the other tracks |
+|---|---|
+| `lightCopy()` | this profile's **own overrides only**, merged over each target's — every circuit keeps its shipped character for knobs you never touched |
+| `lightCopy("look")` | **every live value**, so they all render identically at that time and weather (this overrides the per-track presets in `js/game/light-presets.js` — that is the point) |
+| `lightCopy({undo})` | puts back exactly what a previous call replaced |
+
+Persists in every case. Storage stays sparse either way: a value is written only
+where the target would not have resolved there anyway. `{ok:false,
+error:"no-edits"}` means nothing is tuned on this condition — move a slider, or
+ask for `"look"`; `error:"no-track"` means no circuit is loaded.
+```js
+__apex.race("bahrain"); __apex.setTimeOfDay("dusk"); __apex.weather("wet");
+__apex.lightTune({ ssrWetMul: 1.4 });
+const r = __apex.lightCopy();     // → { ok:true, mode:"edits", tracks:39, changed:39, undo:{…} }
+__apex.lightCopy({ undo: r.undo });        // …never mind
+```
+
 ## Baked asset pack
 
 The pack (`assets/pack/`, built by `node tools/assets.mjs`) supplies PBR
