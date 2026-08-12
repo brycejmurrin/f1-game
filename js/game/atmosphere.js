@@ -16,6 +16,13 @@ const { clamp, satAdjust, isRaining, isWetRoad, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
 const { LT, buildTrackLights } = LightTune;
 
+// Clear-weather haze scale — see the CLEAR-CONDITION HAZE PULL-BACK note at
+// its use site. 0.65 was picked by A/B on Spa day/dry: enough to give the
+// mid-distance its colour back without losing the sense of depth that some
+// haze provides. The FOG DENSITY tuner still multiplies on top, so a player
+// who wants the old wash can dial it straight back.
+const CLEAR_FOG_SCALE = 0.45;
+
 function applyRaceSettings() {
   // Load the lighting-tuner profile for the current (track, time, weather) so
   // the right per-condition values are live. Cheap (a few dozen assignments);
@@ -315,6 +322,7 @@ function applyRaceSettings() {
         G.frame.fogDensity = Math.min(0.005, _pal.fogDensity * (1 + _bias * 0.30));
       }
 
+
       // Exposure: night tracks already bright with floodlights; desert night
       // tracks get a gentle lift; daytime green tracks sit near neutral.
       if (isNightSession) {
@@ -358,6 +366,27 @@ function applyRaceSettings() {
   // Each branch below mutes the sun by a fixed factor f (<1); _mute reshapes that
   // as 1−(1−f)·knob so 0 = weather never mutes the sun, 1 = as-shipped, >1 = deeper
   // murk (floored at 0). No-op in clear/dry weather (branches skipped).
+  // CLEAR-CONDITION HAZE PULL-BACK. Applied HERE, after every time-of-day branch
+  // has set its base and before the weather branches add their own haze — an
+  // earlier attempt sat inside the "default mode only" per-track block and so
+  // never ran for an explicit time of day at all, which is the kind of dead edit
+  // that measures as "no change" and looks like the idea was wrong.
+  //
+  // Why: the exp² falloff at the shipped densities erases the mid-distance.
+  // MEASURED on Spa day/dry (no fogDensityMul preset, so this is the base), a
+  // terrain band 300 m out renders (103,110,104) and the ground slab
+  // (177,170,164) — both effectively neutral — against an unlit source colour of
+  // (98,136,105). Everything past ~200 m converges on one tone, which is most of
+  // what reads as a flat daytime scene. A straight A/B at 0.35x moved the frame
+  // 16.9/255 and gave the distance its colour back.
+  //
+  // CLEAR WEATHER ONLY. Rain, wet, overcast and fog each set their own haze
+  // below and are authored to be murky; they keep exactly what they were given.
+  // The FOG DENSITY tuner still multiplies on top, so the old wash is one slider
+  // away.
+  if (!isWetRoad() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
+    G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * CLEAR_FOG_SCALE;
+  }
   const _wsm = LT.weatherSunMute != null ? LT.weatherSunMute : 1;
   const _mute = (f) => Math.max(0, 1 - (1 - f) * _wsm);
   if (isWetRoad()) {

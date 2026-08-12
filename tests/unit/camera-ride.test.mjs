@@ -39,11 +39,22 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // cameras.js declares `const GameCams`, which lands in the context's lexical
 // scope rather than on the global object — read it back by evaluating its name.
 // Same shape as tests/unit/race-control.test.mjs.
-function loadGameCams(Tracks) {
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, console, Tracks });
+function loadGameCams(Tracks, CamTune) {
+  const globals = { Math, JSON, Object, Array, Number, console, Tracks };
+  // Left UNDEFINED unless a test supplies one — cameras.js guards every use with
+  // `typeof CamTune !== "undefined"`, so an absent tuner is the shipped default.
+  if (CamTune) globals.CamTune = CamTune;
+  const ctx = vm.createContext(globals);
   vm.runInContext(readFileSync(join(ROOT, "js/game/cameras.js"), "utf8"), ctx,
     { filename: "js/game/cameras.js" });
   return vm.runInContext("GameCams", ctx);
+}
+
+/* The CAMERA TUNER's HEIGHT knob, reduced to what this file needs: translate the
+   EYE only, leaving the aim point alone. That is exactly what js/game/cam-tune.js
+   apply() does for `height` (the aim stays put so the car cannot leave frame). */
+function camTuneHeight(dh) {
+  return { get: () => 0, apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; } };
 }
 
 /* A straight track running along +Z with the elevation profile `heightAt(s)`.
@@ -185,6 +196,105 @@ test("far chase gets the same treatment", () => {
   const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
   assert.ok(rawBob > 0.05, `reference rig should bob, got ${rawBob.toFixed(4)}°`);
   assert.ok(bob < rawBob / 4, `far pitch bob ${bob.toFixed(4)}° vs raw ${rawBob.toFixed(4)}°`);
+});
+
+test("a camera LOWERED into the ground clamp does not ride a node staircase", () => {
+  // THE REPORTED BUG. surface.heightAt() rounds its node index, so asking it once
+  // per frame makes the clamp floor a staircase with one step per ~4 m node. At
+  // the shipped framing the eye rides ~0.5 m clear of that floor and never sees
+  // it — which is why this hid behind every default-valued test. Lower the eye
+  // with the CAMERA TUNER and it lands ON the floor, inheriting the steps: on a
+  // gradient each one is nodeSpacing x grade (0.45 m measured on Monaco),
+  // snapping ~11 times a second at racing speed. Flat road is immune (adjacent
+  // nodes are level), and a parked car is immune (nothing crosses a node), which
+  // is exactly the "fast judder only while climbing" signature.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5));
+
+  // Sample far finer than the 4 m node spacing, or the staircase aliases away.
+  const ys = [];
+  for (let s = 1000; s < 1120; s += 0.25) ys.push(chaseAt(cams, track, s).eye[1]);
+  const d = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+
+  const held = d.filter((v) => Math.abs(v) < 1e-9).length;
+  const snaps = d.filter((v) => Math.abs(v) > 0.2).length;
+  // A staircase is mostly-flat with occasional big jumps; a slide is neither.
+  assert.equal(snaps, 0, `eye snapped ${snaps} time(s), max jump ${Math.max(...d.map(Math.abs)).toFixed(3)} m`);
+  assert.ok(held < d.length * 0.25, `eye held flat for ${held}/${d.length} samples — that is a staircase`);
+
+  // ...and it must genuinely be sitting on the clamp, or the test proves nothing.
+  const free = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5e-9));
+  assert.ok(chaseAt(cams, track, 1050).eye[1] > chaseAt(free, track, 1050).eye[1] - 1.5 + 0.05,
+    "the lowered eye was never actually caught by the clamp — nothing was exercised");
+});
+
+test("the camera path is C1 — no node-rate or clamp-handover acceleration spikes", () => {
+  // The two defects a position-driven judder is made of, and neither shows up in
+  // a position or even a velocity check:
+  //   1. elevation lerped between ~4 m nodes is only C0, so vertical VELOCITY
+  //      steps at every node boundary (~11 Hz at racing speed);
+  //   2. a hard max() ground clamp is C0 too, so its slope jumps every time the
+  //      eye engages or disengages the floor.
+  // Both are invisible at the shipped framing — the eye rides clear of the floor
+  // and the rig sits several degrees nose-down, so these differences are noise.
+  // Lower and shorten the rig with the CAMERA TUNER and they become the signal.
+  //
+  // The instrument is the ratio of the WORST vertical acceleration to its own
+  // rms: a smooth curve keeps that small, while a discontinuity is a spike by
+  // definition. Ratio, not an absolute bound, so the test says "no kinks" rather
+  // than pinning a particular hill's steepness.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  for (const dh of [0, -1.5]) {
+    const cams = loadGameCams(makeTracksStub(track), dh ? camTuneHeight(dh) : null);
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    assert.ok(spike < 6,
+      `HEIGHT ${dh}: worst vertical acceleration is ${spike.toFixed(1)}x its own rms — that is a discontinuity, not a curve`);
+  }
+});
+
+test("EVERY world-facing camera mode is C1 on a gradient", () => {
+  // chase/far were fixed first, and the rest were left on the raw sample. That
+  // was worse, not better: MEASURED at stock framing on Monaco's climb, drift
+  // read 8.6, heli 9.4 and tcam/rear/cinematic/reverse 10.2 — i.e. a player who
+  // never touched the CAMERA TUNER still got the judder, just in a different
+  // mode. This sweeps the lot so a new mode cannot quietly join them.
+  //
+  // cockpit and hood are excluded ON PURPOSE: they are bolted to the car and
+  // must match the raw profile the chassis is drawn from. Riding the car's own
+  // bumps is what an onboard camera is for.
+  const MODES = ["chase", "far", "drift", "overhead", "heli", "reverse", "side",
+                 "cinematic", "low", "tcam", "rear"];
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const bad = [];
+  for (const mode of MODES) {
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s, mode).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    if (!(spike < 6)) bad.push(`${mode} ${spike.toFixed(1)}x`);
+  }
+  assert.deepEqual(bad, [], `these modes step their vertical velocity at node rate: ${bad.join(", ")}`);
+});
+
+test("the soft floor never lets the eye end up below the hard floor", () => {
+  // Softening the clamp handover must not weaken what the clamp is FOR. The
+  // blend may only ever push the eye up.
+  const track = makeTrack((s) => (s > 2000 ? -6 : 0));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-4));
+  for (let s = 1900; s < 2200; s += 2) {
+    const v = chaseAt(cams, track, s);
+    const groundHere = (s > 2000 ? -6 : 0) - 0.12;
+    assert.ok(v.eye[1] >= groundHere + 0.8 - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} below the floor ${(groundHere + 0.8).toFixed(3)} at s=${s}`);
+  }
 });
 
 test("the ground clamp still catches an eye below the surface", () => {

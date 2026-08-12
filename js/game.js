@@ -1438,7 +1438,10 @@ function recomputePlayerMods() {
 function driverSkill(team, d, di) {
   const roll = simRnd();
   const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
-  return DriverRatings.skill(r, roll);
+  // The pace-skill scalar PLUS the racecraft axes (0..1) the driving loop reads
+  // for attack/defence (see updateCar). Still exactly ONE simRnd() draw — the
+  // stream-position contract reliability.js and career.spec.js depend on.
+  return { skill: DriverRatings.skill(r, roll), craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100 };
 }
 
 function makeCars() {
@@ -1504,7 +1507,7 @@ function makeCars() {
         retired: false, dnf: null, dnfAt: null, dnfWhy: null,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        skill: driverSkill(team, d, di),
+        ...driverSkill(team, d, di),   // skill + craft + awareness
         aiBrakeT: 0, lane,
       });
     });
@@ -2151,7 +2154,7 @@ function isFloodActiveSession() {
 // throttle past the start"). Shared by startRace() and __apex.snapCam().
 function snapGameCam() {
   if (!player || !track) return;
-  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch);
+  const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
@@ -3392,12 +3395,22 @@ function updateCar(c, dt, ranked) {
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     vmax *= 1 + bandFactor;
   }
+  // Caution: under VSC / safety car the whole field runs to a delta pace, not
+  // racing speed — the AI used to blast through a caution at full tilt. Cautions
+  // are a race setting (off by default), so a normal race is unchanged. A
+  // fraction of the pace-scaled top speed, so it rides OVERALL SPEED like the rest.
+  if (!c.human && raceCtl) {
+    const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
+    if (lvl >= 2) vmax = Math.min(vmax, VMAX * PACE * (lvl === 3 ? 0.45 : 0.6));
+  }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
   // in our lane, and a "stuck" timer. Shared by the braking and steering logic
   // so the AI can pick the open side, commit to a pass, and dig itself out when
   // wedged — instead of grinding to a halt against a car or wall.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
+  let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
+  let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -3420,13 +3433,15 @@ function updateCar(c, dt, ranked) {
       let dprog = o.prog - c.prog;
       if (!Number.isFinite(dprog)) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-      if (dprog < -6 || dprog > 18) continue;
+      if (dprog < -13 || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
       const dx = o.x - c.x;
       if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
+      if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < 4) { towCar = o; towGap = dprog; }   // wake giver
+      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
@@ -3526,6 +3541,15 @@ function updateCar(c, dt, ranked) {
     // grip — otherwise it carries dry entry speed and runs wide in the rain.
     const vCorner = Math.sqrt(LAT_MAX * bankMu * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
     braking = c.speed > vCorner + 2;
+    // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
+    // what lets a following car CLOSE and pull out to pass instead of queueing.
+    // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
+    // cap bounds it) but surges the instant we draw out of that car's box. Fades
+    // with gap + lateral offset; straight only (the wake is behind the car).
+    if (towCar && !braking && kMax < 0.006 && !track.street) {
+      const tow = clamp((34 - towGap) / 28, 0, 1) * clamp(1 - Math.abs(towCar.x - c.x) / 4, 0, 1);
+      vmax *= 1 + 0.045 * tow;  // up to +4.5% top speed deep in the wake (~F1 tow)
+    }
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram. On
     // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
@@ -3731,10 +3755,27 @@ function updateCar(c, dt, ranked) {
     // side is also tight (a car alongside or a wall), so we don't dive into a
     // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
     let overtake = 0;
-    if (blocker && blocker.speed < c.speed + 4 && blockerGap < 14) {
+    // PERMANENT circuits: a decisive, CRAFT-scaled pull-out that clears the box and
+    // uses the tow. STREET circuits keep the gentler baseline move — tight barriers
+    // punish an over-committed line (it clipped the wall on Monaco). Defend and tow
+    // are permanent-only for the same reason.
+    const otEnh = !track.street;
+    if (blocker && blocker.speed < c.speed + (otEnh ? 5 : 4) && blockerGap < (otEnh ? 16 : 14)) {
       const side = roomR >= roomL ? 1 : -1;
       const need = side > 0 ? roomR : roomL;
-      overtake = side * lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1);
+      overtake = side * (otEnh
+        ? lerp(0.8, 2.6, clamp(1 - blockerGap / 16, 0, 1)) * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, c.craft || 0.75)
+        : lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1));
+    }
+    // Defending: a car of similar-or-better pace close behind, a corner ahead, and
+    // clean air in front → take the inside line to cover the obvious passing spot,
+    // scaled by CRAFT. Corner-only (shading on a straight just made the defender
+    // weave and bleed pace); a steady cover that fades as the threat drops back.
+    let defend = 0;
+    if (chaser && !blocker && chaserGap < 12 && chaser.speed > c.speed - 3 && Math.abs(kA) > 0.004 && !track.street) {
+      const coverSide = -Math.sign(kA);
+      const coverRoom = coverSide > 0 ? roomR : roomL;   // don't cover INTO a close barrier
+      defend = coverSide * lerp(0.2, 1.1, c.craft || 0.75) * clamp(1 - chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
@@ -3771,7 +3812,7 @@ function updateCar(c, dt, ranked) {
     sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
-    const desiredX = clamp(targetX + overtake + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    const desiredX = clamp(targetX + overtake + defend + sep + unstuck, -(hw - 0.5), hw - 0.5);
     let err = desiredX - c.x;
     // Soft deadzone near the target: fade the correction out as the error gets
     // small so the AI stops making tiny frame-to-frame steering corrections
@@ -5123,7 +5164,7 @@ function render(dt) {
     // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
     // alone deliberately rather than reworked blind.
     // ride the bank with the car so the camera doesn't sink into the banked road
-    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam);
+    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam, true);  // true = SMOOTH lift, camera only (mesh.js banking)
     const bankDy = bankCam ? bankCam.dy : 0;
     const mode = CAM_MODES[camMode].id;
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
@@ -7604,6 +7645,22 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
+
+// BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
+// own, so a stale shell (or a service worker serving a cached generation) can run
+// old JS with nothing on screen to say so — during one camera-bug hunt a fix was
+// deployed three times while the reporter kept testing the previous build, and
+// neither side could tell. Read from the stylesheet's ?v=, which is the build
+// whose assets ACTUALLY loaded, rather than a constant compiled into the markup:
+// a string in the HTML would go stale with the HTML and confirm the wrong thing.
+{
+  const tag = $("pm-build");
+  if (tag) {
+    const link = document.querySelector('link[rel="stylesheet"][href*="?v="]');
+    const m = link && link.href.match(/[?&]v=(\d+)/);
+    tag.textContent = m ? `build ${m[1]}` : "build unknown";
+  }
+}
 
 // One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
 const STEER_MODES = ["tilt", "buttons", "touch"];

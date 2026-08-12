@@ -87,12 +87,48 @@ const RIDE_GRADE = 40;                    // half-baseline the road slope is rea
 // Centreline height alone at arc `s` — the height component of Tracks.sample
 // without the tangent/right/half-width lerps this never looks at. Called 21x a
 // frame in chase (three times through rideY), which is why it skips sample().
+//
+// CATMULL-ROM, not the lerp Tracks.sample uses. A linear blend between the ~4 m
+// nodes is only C0: the height is continuous but its SLOPE jumps at every node
+// boundary, so the eye's vertical VELOCITY steps ~11 times a second at racing
+// speed. On flat road that is invisible (adjacent nodes are level, so there is
+// no slope to jump) and at the shipped framing it is about a pixel — which is
+// why it survived every earlier measurement. Pull the camera DOWN and IN with
+// the CAMERA TUNER and both of those excuses evaporate: the eye-to-target
+// baseline shortens, and the rig goes near-level so pitch is driven by exactly
+// these small vertical differences instead of a healthy few degrees. MEASURED
+// at HEIGHT -1.5 / DIST -3 on Beau Rivage: 11 pitch reversals in 2.6 s with a
+// worst-to-rms acceleration ratio of 10.2, i.e. plainly discontinuous.
+//
+// Catmull-Rom is C1, so the velocity is continuous and no node rate survives at
+// all. It still passes exactly through every node, and on collinear nodes (flat
+// road, constant slope) it reproduces the straight line to floating-point — so
+// this changes nothing anywhere the old curve was already smooth.
+function crY(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * ((2 * p1) + (-p0 + p2) * t
+    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+    + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+}
+// max(v, floor) with a C1 handover across a band of `k` metres. Outside the band
+// it IS the plain max; inside, a quadratic joins the two branches with matching
+// slope at both ends (v = floor+k and v = floor-k), which is what a hard max
+// cannot do. Only ever returns >= floor, so it never weakens the guarantee it
+// implements.
+function softFloor(v, floor, k) {
+  const d = v - floor;
+  if (d > k) return v;
+  if (d < -k) return floor;
+  const t = (d + k) / (2 * k);
+  return floor + k * t * t;
+}
 function centreY(track, s) {
-  const n = track.n, L = track.total;
+  const n = track.n, L = track.total, py = track.py;
   let v = s % L; if (v < 0) v += L;
   const fi = v / L * n;
-  const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
-  return track.py[i] + (track.py[j] - track.py[i]) * f;
+  const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
+  const a = (i - 1 + n) % n, b = (i + 1) % n, c = (i + 2) % n;
+  return crY(py[a], py[i], py[b], py[c], f);
 }
 function rideY(track, s) {
   // A window wider than the lap would fold the profile onto itself; no shipped
@@ -120,7 +156,25 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const dep = extra.deploy ? 1 : 0;
   const spN = clamp(spd / VMAX, 0, 1);
   Tracks.sample(track, wrapS(s), cvA);
-  const p = [cvA.p[0] + cvA.r[0] * x, cvA.p[1] + bankDy, cvA.p[2] + cvA.r[2] * x];
+  // WHICH ELEVATION A CAMERA READS. Tracks.sample lerps py between the ~4 m
+  // nodes, which is only C0 — the height is continuous but its slope jumps at
+  // every node, so any eye built on it steps its vertical velocity ~11 times a
+  // second on a gradient (see centreY). chase/far were moved onto the C1 curve
+  // when that was diagnosed; every other world-facing mode was left on the raw
+  // sample and MEASURED spiky at stock framing on Monaco's climb — drift 8.6,
+  // heli 9.4, tcam/rear/cinematic/reverse 10.2 (worst vertical acceleration as a
+  // multiple of its own rms; a smooth curve stays near 3).
+  //
+  // cockpit and hood deliberately keep the RAW sample. They are bolted to the
+  // car, the car body is drawn from the raw profile, and an eye that disagreed
+  // with the chassis by even a centimetre would float in the cockpit — matching
+  // the car matters more there than smoothness, and riding the car's own bumps
+  // is what an onboard camera is FOR.
+  const onboard = mode === "cockpit" || mode === "hood";
+  const elevY = (at) => (onboard ? null : centreY(track, at));
+  const p = [cvA.p[0] + cvA.r[0] * x,
+             (onboard ? cvA.p[1] : centreY(track, s)) + bankDy,
+             cvA.p[2] + cvA.r[2] * x];
   const t = cvA.t, r = cvA.r;
   // Curved look-ahead: aim at the actual centreline `d` m up the road — it bends
   // with the corner — instead of a straight tangent extrapolation, so the chase
@@ -129,7 +183,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const aheadPt = (d, h, lat) => {
     Tracks.sample(track, wrapS(s + d), cvB);
     const lx = lat || 0;
-    return [cvB.p[0] + cvB.r[0] * lx, cvB.p[1] + (h || 0), cvB.p[2] + cvB.r[2] * lx];
+    const ey = elevY(s + d);
+    return [cvB.p[0] + cvB.r[0] * lx, (ey === null ? cvB.p[1] : ey) + (h || 0), cvB.p[2] + cvB.r[2] * lx];
   };
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
@@ -212,7 +267,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     Tracks.sample(track, wrapS(s - 26), cvB);
     const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
-    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, cvB.p[1] + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
+    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, centreY(track, s - 26) + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
     tgt = [p[0], p[1] + 0.8, p[2]];
     fov = 36 + dep * 2;
   } else if (mode === "reverse") {
@@ -246,7 +301,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
     const cx = x * 0.3;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 10) + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
     tgt = [p[0], p[1] + 0.6, p[2]];
     fov = lerp(55, 68, spN);
   } else if (mode === "tcam") {
@@ -268,7 +323,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const slipN = clamp((extra.slipLat || 0) / 8, -1, 1);
     Tracks.sample(track, wrapS(s - 6.2), cvB);
     const cx = x * 0.5 - slipN * 5.5;
-    eye = [cvB.p[0] + cvB.r[0] * cx, cvB.p[1] + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
+    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 6.2) + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
     tgt = [p[0], p[1] + 0.75, p[2]];
     fov = lerp(55, 70, spN) + dep * 3;
   } else {
@@ -368,17 +423,53 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // surface by construction.
   if (mode !== "cockpit" && mode !== "hood" && track.surface) {
     const n = track.n;
-    const k = ((Math.round(s / track.total * n) % n) + n) % n;
-    // lateral distance of the eye from this node's centreline
-    const ex = eye[0] - track.px[k], ez = eye[2] - track.pz[k];
-    const lat = ex * track.rx[k] + ez * track.rz[k];
-    const beyond = Math.max(0, Math.abs(lat) - track.hw[k]);
+    // INTERPOLATE THE FLOOR BETWEEN NODES. surface.heightAt() rounds its node
+    // index and reads py at that node, so asking it once at Math.round(s) makes
+    // the floor a STAIRCASE with one step per ~4 m node. That is invisible while
+    // the eye rides clear of it — which it does at the shipped framing, by about
+    // half a metre on Monaco — and it is why this went unnoticed. Drop the eye
+    // into the clamp (the CAMERA TUNER's HEIGHT/DISTANCE do exactly that, which
+    // is the whole point of applying them above this) and the eye inherits the
+    // staircase: on a gradient each step is nodeSpacing x grade, MEASURED at
+    // 0.45 m on Beau Rivage, snapping ~11 times a second at racing speed. It
+    // vanishes when parked and on the flat (adjacent nodes are level there), so
+    // it reads as a fast vertical judder that only happens while climbing.
+    //
+    // Sampling both neighbours and lerping makes the floor continuous, so a
+    // lowered camera SLIDES along the terrain instead of stepping down it.
+    // js/track/mesh.js banking() lerps for exactly this reason ("so cars and
+    // cameras do not jump between the road mesh's ~4 m longitudinal nodes") —
+    // this clamp simply never got the same treatment.
+    const pos = (((s % track.total) + track.total) % track.total) / track.total * n;
+    const k0 = Math.floor(pos) % n, kf = pos - Math.floor(pos);
+    const kA = (k0 - 1 + n) % n, k1 = (k0 + 1) % n, kB = (k0 + 2) % n;
+    // Lateral offset of the eye, measured against the INTERPOLATED frame at s
+    // (cvA still holds that sample) rather than one node's — same reason: a
+    // per-node frame steps the lateral reading too.
+    const ex = eye[0] - cvA.p[0], ez = eye[2] - cvA.p[2];
+    const lat = ex * cvA.r[0] + ez * cvA.r[2];
+    const beyond = Math.max(0, Math.abs(lat) - cvA.hw);
     // Pooled out-param — this runs once per frame for every camera mode, and
     // banking() allocates a fresh { dy, roll } for any caller that omits it.
-    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr) : null;
-    const ground = track.surface.heightAt(k, beyond) + (bank ? bank.dy : 0);
-    const MIN_CLEAR = 0.8;
-    if (eye[1] < ground + MIN_CLEAR) eye[1] = ground + MIN_CLEAR;
+    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr, true) : null;
+    // Catmull-Rom across four nodes, matching centreY: lerping the two
+    // neighbours removes the STEPS but leaves a slope kink at every node, and a
+    // camera resting on this floor feels those the same way it felt the steps.
+    const ground = crY(track.surface.heightAt(kA, beyond), track.surface.heightAt(k0, beyond),
+                       track.surface.heightAt(k1, beyond), track.surface.heightAt(kB, beyond), kf)
+                 + (bank ? bank.dy : 0);
+    // SOFT floor, not a hard max(). `eye = max(eye, floor)` is continuous but its
+    // SLOPE jumps the instant the clamp takes over, so every engage/disengage is
+    // a kink — and a camera the player has parked NEAR the floor crosses it over
+    // and over, turning one threshold into a repeating judder. MEASURED on Spa
+    // with HEIGHT -1.5 / DIST -3: a single crossing produced a vertical
+    // acceleration 18.8x the local rms, while the same rig on the same road read
+    // 2.3x untuned (it never reaches the floor). Easing over CLAMP_BLEND makes
+    // the handover C1, so the eye settles onto the terrain instead of catching
+    // on it. The eye still never ends up below the floor — the blend only ever
+    // pushes it UP, so the "never render from inside a hill" guarantee holds.
+    const MIN_CLEAR = 0.8, CLAMP_BLEND = 0.35;
+    eye[1] = softFloor(eye[1], ground + MIN_CLEAR, CLAMP_BLEND);
   }
   return { eye, tgt, fov };
 }

@@ -460,6 +460,7 @@ uniform vec2 uHazeUV;        // player tailpipe screen UV (heat-haze plume ancho
 uniform float uHazeStr;      // exhaust heat-haze strength (0 = off; boost pushes ~1)
 uniform float uHazeTime;     // seconds — scrolls the shimmer upward
 uniform float uShaftDecay;   // screen-space sun-shaft per-tap falloff (def 0.82)
+uniform float uShaftSpread;  // how far the shafts reach (1 = shipped radius)
 uniform float uFlareStreak;  // anamorphic flare horizontal tightness (def 7.0)
 uniform float uFlareStreak2; // second thin hot-core flare streak strength (def 0.5)
 out vec4 outColor;
@@ -1039,13 +1040,24 @@ void main() {
         // Crepuscular rays emanate from the SUN'S OWN glare. Weight each sample
         // by its proximity to the sun so an isolated bright lamp head or cloud
         // hotspot elsewhere on screen can never smear into a comet streak.
-        float sw = 1.0 - clamp(length(suv - uSunUV) / 0.32, 0.0, 1.0);
+        // The proximity weight exists to stop an isolated bright lamp head
+        // smearing into a comet; it is NOT meant to cap how far the sun's own
+        // rays reach. It used to be a fixed 0.32 radius, and the radial term
+        // below a fixed 2.6, so SCREEN SUN-SHAFT could only brighten a small
+        // fixed disc around the disc — MEASURED, pushing the knob 1 -> 4 with the
+        // sun centred moved the image by 2.30/255 while the volumetric god-ray
+        // knob moved it 12.77. The knob had intensity authority and no reach
+        // authority, which is what "this slider does nothing" feels like.
+        // Let a turned-up knob EXTEND the rays as well as brighten them, while
+        // the shipped value keeps the shipped radius.
+        float reach = 0.32 * uShaftSpread;
+        float sw = 1.0 - clamp(length(suv - uSunUV) / reach, 0.0, 1.0);
         shaft += texture(uBloom, suv).rgb * (decay * sw * sw);
         decay *= uShaftDecay;   // SUN-SHAFT REACH knob (def 0.82 = as-shipped)
       }
       shaft /= 8.0;
       // Radial falloff: strongest near the sun, zero at the edge of the screen.
-      float radial = 1.0 - clamp(dist * 2.6, 0.0, 1.0);
+      float radial = 1.0 - clamp(dist * (2.6 / uShaftSpread), 0.0, 1.0);
       c += shaft * uSunShaft * radial * radial * 0.60;
     }
   }

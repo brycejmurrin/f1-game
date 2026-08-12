@@ -150,6 +150,9 @@
    own — it is padding-sized, and this measured 40 CSS px without it. */
 #soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
 #disclaimer { color: var(--dim); font-size: 11px; margin: 0; }
+/* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
+   "which version am I running", not a label anyone should read while racing. */
+.build-tag { color: var(--dim); font-size: 11px; margin: 4px 0 0; text-align: center; }
 
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and
@@ -168,8 +171,28 @@
    starts at min-height 600, and the 40px between the two used to fall through to
    the PORTRAIT stack — so a short, wide desktop window (say 1000x580) got a
    phone's vertical menu laid out sideways. The two branches now meet exactly. */
-@media (orientation: landscape) and (max-height: 599px) {
-  #overlay {
+/* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
+   the same arrangement `--pair-at` has with #cs-inner. js/game/sheetshape.js resolves
+   `innerHeight / --ui-scale` against this and writes data-density onto body, which is
+   how the screens OUTSIDE `.sheet` get an answer (#overlay's zoom sits on its children,
+   so it has none of its own to divide by). 600 is what the two #overlay blocks already
+   used — 599 here, 600 in css/responsive.css, one pixel apart, the same question.
+   It is registered `inherits: false` in css/tokens.css: declared plainly it cascaded
+   into every .sheet and moved their thresholds from 380 to 600. */
+body { --compact-at: 600px; }
+
+/* The height half of this condition now comes from data-density, measured in the
+   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   and width stay media queries: zoom does not distort either.
+
+   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
+   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
+   a class and an attribute to every selector in the block, which is enough to beat
+   a LATER rule that used to win — measured: #sel-inner's height cap started
+   overriding a rule it had always lost to, and the desktop select golden moved.
+   Wrapped in :where(), these rules keep exactly the specificity they had. */
+@media (orientation: landscape) {
+  :where(body[data-density="compact"]) #overlay {
     grid-template-columns: auto auto;
     justify-content: center; align-content: center; justify-items: start;
     /* Re-stating `safe center` because this block re-declares align-content and
@@ -177,21 +200,23 @@
     align-content: safe center;
     column-gap: 32px;
   }
-  #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
-  #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
-  #subtitle { margin: 8px 0 0; font-size: 13px; }
-  #menu-meta { margin-top: 12px; gap: 4px; }
-  #audiostate { font-size: 11px; }
-  #disclaimer { font-size: 11px; }
+  :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  :where(body[data-density="compact"]) #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
+  :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
+  :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: 13px; }
+  :where(body[data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
+  :where(body[data-density="compact"]) #audiostate { font-size: 11px; }
+  :where(body[data-density="compact"]) #disclaimer { font-size: 11px; }
   /* the group is what gets the width now; the buttons fill their cell */
-  #menu-hero, #menu-primary, #menu-secondary { width: min(calc(46 * var(--vwz)), 300px); }
+  :where(body[data-density="compact"]) #menu-hero,
+  :where(body[data-density="compact"]) #menu-primary,
+  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(46 * var(--vwz)), 300px); }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
-  #menu-hero .bigbtn { padding-block: 12px; }
-  .mb-sub { font-size: 11px; }
+  :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
+  :where(body[data-density="compact"]) .mb-sub { font-size: 11px; }
   /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
      back out of the gutter rather than out of the type.
      IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
@@ -204,8 +229,8 @@
      phone or that one button carrying smaller type than the five around it.
      The row is sized by its tallest cell, so SEASON grows to match — which is
      why the pair still reads as a pair. */
-  #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
-  #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
+  :where(body[data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
+  :where(body[data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
 }
 
 /* ---------- select screen ---------- */
@@ -667,8 +692,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   #sel-preview-name { font-size: 18px; }
 }
 /* Short landscape: the map and the facts are the useful part; prose is not. */
-@media (orientation: landscape) and (max-height: 560px) {
-  #sel-preview-meta, #sel-preview-elev { display: none; }
+/* The height half of this condition now comes from data-density, measured in the
+   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   and width stay media queries: zoom does not distort either.
+
+   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
+   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
+   a class and an attribute to every selector in the block, which is enough to beat
+   a LATER rule that used to win — measured: #sel-inner's height cap started
+   overriding a rule it had always lost to, and the desktop select golden moved.
+   Wrapped in :where(), these rules keep exactly the specificity they had. */
+@media (orientation: landscape) {
+  :where(.sheet[data-density="compact"]) #sel-preview-meta,
+  :where(.sheet[data-density="compact"]) #sel-preview-elev { display: none; }
 }
 
 /* Season upcoming rounds list */
@@ -771,20 +807,31 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    two, nothing spanning, and the chips dialled down: seven sections become
    three rows of about 200px total. Taller screens keep the roomy two-column
    layout, where there was never a problem. */
-@media (orientation: landscape) and (max-height: 500px) {
-  #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
+/* The height half of this condition now comes from data-density, measured in the
+   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   and width stay media queries: zoom does not distort either.
+
+   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
+   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
+   a class and an attribute to every selector in the block, which is enough to beat
+   a LATER rule that used to win — measured: #sel-inner's height cap started
+   overriding a rule it had always lost to, and the desktop select golden moved.
+   Wrapped in :where(), these rules keep exactly the specificity they had. */
+@media (orientation: landscape) {
+  :where(.sheet[data-density="compact"]) #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
   /* TIME OF DAY and DIFFICULTY stop spanning — in three columns a full-width
      row is the thing that pushes everything else down. */
-  #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: auto; }
+  :where(.sheet[data-density="compact"]) #rs-body #rs-time-section,
+  :where(.sheet[data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
   /* Five chips in a third of the sheet want three across, not five. */
-  #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  :where(.sheet[data-density="compact"]) #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* RACE SETTINGS is seen before every single race, and its labels were the
      smallest type in the app at 9px — under the 13px --label floor by a third.
      The chips are also the thing you AIM at here, so 11px with 5px of padding
      was a small target as well as small text. */
-  #race-settings .sel-chip { font-size: 13px; padding: 7px 9px; letter-spacing: 0; }
-  #race-settings .sel-label { font-size: 12px; margin-bottom: 3px; }
-  .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
+  :where(.sheet[data-density="compact"]) #race-settings .sel-chip { font-size: 13px; padding: 7px 9px; letter-spacing: 0; }
+  :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: 12px; margin-bottom: 3px; }
+  :where(.sheet[data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
 }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;
