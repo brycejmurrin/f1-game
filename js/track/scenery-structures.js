@@ -396,9 +396,11 @@ const SceneryStructures = (function () {
           rec.box([0, 3.3, 0], [2.6, 0.2, 2.6], [0.62, 0.63, 0.66]);
           rec.box([0, 3.9, 0], [2.6, 0.9, 0.10], roof);
           rec.box([side * 1.3, 1.6, 0], [0.10, 3.4, 0.6], [0.46, 0.47, 0.50]);
-        } else {                                       // hut (default)
-          rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // base sunk 0.4
-          rec.box([0, 2.7, 0], [2.5, 0.4, 2.5], roof);
+        } else {                                       // hut (default): pitched roof + door + window
+          rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // wall block, base sunk 0.4, top at 2.6
+          rec.prism([0, 2.55, 0], [2.6, 0.85, 2.6], roof);             // pitched roof seated on the wall top (prism is base-anchored)
+          rec.box([-side * 1.12, 0.55, 0], [0.12, 1.3, 0.9], [0.20, 0.21, 0.24]); // trackward doorway, proud of the face
+          rec.box([-side * 1.12, 1.8, 0.6], [0.08, 0.6, 0.6], [0.34, 0.46, 0.55]); // window pane
         }
         rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
       }, { kind: "marshalPost", k, side });
