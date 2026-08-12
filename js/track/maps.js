@@ -34,14 +34,45 @@ const TrackMaps = (function () {
   // Classify from approximate apex radius (m) + heading sweep (deg).
   // Peak |curvature| alone called every chicane a HAIRPIN (Rettifilo, Bus Stop);
   // real hairpins (La Source, Loews) are very tight AND reverse heading.
-  // Pouhon-class sweepers can show large angle at R~30 — those stay SLOW/MEDIUM,
-  // not HAIRPIN (threshold R < 28). Fast sweeps sit at R ≳ 85 m.
-  // Calibrated 2026-08 against Monza/Spa/Monaco guides + measured centreline.
+  // Absolute bands (R≥70 FAST, R<40 SLOW) match Monza/Spa guides on our
+  // centreline; tracks whose corners all sit in one band (Indy, Jacarepagua,
+  // GP-Stil short-radius packs) get a relative tertile spread so the popup
+  // never paints every chip the same colour.
   function classifyCorner(rM, angDeg) {
     if (rM < 28 && angDeg >= 110) return "HAIRPIN";
-    if (rM >= 85) return "FAST";
-    if (rM < 50) return "SLOW";
+    if (rM >= 70) return "FAST";
+    if (rM < 40) return "SLOW";
     return "MEDIUM";
+  }
+
+  // Re-label SLOW/MEDIUM/FAST across a full corner list when absolute bands
+  // collapse to one class (≥70% same, or <2 classes among non-hairpins).
+  function assignCornerClasses(crns) {
+    if (!crns || !crns.length) return crns;
+    for (let i = 0; i < crns.length; i++) {
+      crns[i].cls = classifyCorner(crns[i].r, crns[i].ang);
+    }
+    const rest = [];
+    for (let i = 0; i < crns.length; i++) {
+      if (crns[i].cls !== "HAIRPIN") rest.push(crns[i]);
+    }
+    if (rest.length < 4) return crns;
+    let nSlow = 0, nMed = 0, nFast = 0;
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i].cls === "SLOW") nSlow++;
+      else if (rest[i].cls === "MEDIUM") nMed++;
+      else nFast++;
+    }
+    const kinds = (nSlow > 0 ? 1 : 0) + (nMed > 0 ? 1 : 0) + (nFast > 0 ? 1 : 0);
+    const dominant = Math.max(nSlow, nMed, nFast);
+    if (kinds >= 2 && dominant / rest.length < 0.7) return crns;
+    rest.sort(function (a, b) { return a.r - b.r; });
+    const n = rest.length;
+    for (let i = 0; i < n; i++) {
+      const q = n === 1 ? 0.5 : i / (n - 1);
+      rest[i].cls = q <= 1 / 3 ? "SLOW" : q >= 2 / 3 ? "FAST" : "MEDIUM";
+    }
+    return crns;
   }
 
   // Peak |k|, radius, and heading change around a lap fraction. Window ±50 m
@@ -114,14 +145,15 @@ const TrackMaps = (function () {
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
         // Prefer curated FIA turn apexes when present on the def. Each corner
-        // carries radius + heading-sweep class (see classifyCorner) — not bare
-        // peak |k|, which painted every chicane as HAIRPIN.
+        // carries radius + heading-sweep class (see classifyCorner /
+        // assignCornerClasses) — not bare peak |k|.
         let crns;
         if (def.turns && def.turns.length) {
           crns = def.turns.map(function (frac, i) { return cornerAt(tr, frac, i + 1); });
         } else {
           crns = detectCorners(tr);
         }
+        assignCornerClasses(crns);
         const dir = circuitDirection(tr);
         const elevRange = elevationRange(tr);
         const drsZones = detectDRS(tr);
@@ -432,6 +464,6 @@ const TrackMaps = (function () {
 
   return {
     outline, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
-    SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex
+    SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
