@@ -252,7 +252,7 @@
       "source": "kenney:city-kit-roads",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "a43f0b6e876584c7710e855e4487d6e9"
+      "md5": "954d3b3640767ee9a15f14737693b695"
     },
     "kenney_construction-cone": {
       "file": "models/kenney_construction-cone.bin",
@@ -267,7 +267,7 @@
       "source": "kenney:city-kit-roads",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "d3d2b8c753cd936736efedabf20adf7f"
+      "md5": "595f15df712b0755e18c26beef42bf9b"
     },
     "kenney_construction-light": {
       "file": "models/kenney_construction-light.bin",
@@ -282,7 +282,7 @@
       "source": "kenney:city-kit-roads",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "4732f8e1a7a87dafc0bb426c3b15ba3b"
+      "md5": "3cfdc27b65343b0522ea8342c3fdd952"
     },
     "kenney_ind_building-a": {
       "file": "models/kenney_ind_building-a.bin",
@@ -462,7 +462,7 @@
       "source": "kenney:modular-buildings",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "c954eb0fd4e09677745ccaaaad4f3df1"
+      "md5": "de74784f893e8ba3fb6e396a513887d9"
     },
     "kenney_twr_building-sample-tower-a": {
       "file": "models/kenney_twr_building-sample-tower-a.bin",
@@ -477,7 +477,7 @@
       "source": "kenney:modular-buildings",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "31ed82d543571aacda90161bd75e1293"
+      "md5": "b23fe82186824a2c57b9040162924aed"
     },
     "kenney_twr_building-sample-tower-c": {
       "file": "models/kenney_twr_building-sample-tower-c.bin",
@@ -492,7 +492,7 @@
       "source": "kenney:modular-buildings",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "ed0fa1270c3ddbbce6c32cbb0ee3df61"
+      "md5": "7a0d9091b25074948159bcdc2898d94f"
     }
   },
   "env": {
