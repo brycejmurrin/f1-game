@@ -6723,12 +6723,11 @@ document.addEventListener("pointerdown", () => {
 // in the stylesheet stands and a phone is correct on its FIRST paint rather
 // than from whenever this module runs.
 //
-// SCALE_MIN was 90 (readability floor, 2026-08) but phones still read as
-// "zoomed in" at that stop — measured SETTINGS on landscape phones with the
-// thumb pegged left. 80 restores the previous floor so players can shrink;
-// the ≥14px type tokens keep body text readable at 80% zoom. Default is 100%
-// on every pointer (was 115% on touch) — first paint matches the slider.
-const SCALE_MIN = 80, SCALE_MAX = 150, SCALE_STEP = 0.5;
+// SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
+// headroom to "zoom way out" on SETTINGS/garage. 50% is the new floor so the
+// slider can shrink menus substantially; default stays 100%. Tap floors still
+// divide by --ui-scale (--tap-min), so WCAG 24px holds in CSS before zoom.
+const SCALE_MIN = 50, SCALE_MAX = 150, SCALE_STEP = 0.5;
 const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
