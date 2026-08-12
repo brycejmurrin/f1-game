@@ -3172,6 +3172,7 @@ function shiftLong(c, d) {
 // Returns a shared scratch object; every call site destructures it immediately,
 // so nothing aliases across a pair and the relaxation loop stays allocation-free.
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
+const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
 function sepShares(a, b) {
   const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1;
   const netA = netPlay.owns(a), netB = netPlay.owns(b);
@@ -3232,8 +3233,7 @@ function resolveCollisions(ranked, dt) {
     const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
     const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
     const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
-    return { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB,
-             sideContact: penLat < penLong && !forceRear };
+    _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat; _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB; _ct.sideContact = penLat < penLong && !forceRear; return _ct;
   }
   // Snapshot the player's road coords so the writeback at the end can tell
   // whether this pass actually shoved it (see there for why that matters).
