@@ -120,7 +120,7 @@
     };
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
-     * glx.js:1292-1326 upload exactly (each frameSky field maps to the same-
+     * js/render/glx.js upload exactly (each frameSky field maps to the same-
      * named uniform; stars is the bool->float night flag). Takes whatever
      * invViewProj the frame carries — the env-probe pass (M9) swaps it. */
     function update(sky) {

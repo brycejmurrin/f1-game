@@ -1,24 +1,9 @@
-// ci-coverage — WHAT DOES THE DEPLOY GATE ACTUALLY EXECUTE?
+// Reports which Playwright specs CI executes before deploy. Advisory only —
+// not a gate (`artifacts/` is gitignored, so a never-observed gate would
+// fail on every CI run). See docs/archive/research/CAMPAIGN-2026-08.md.
 //
-// The campaign's largest measured defect class is tests that never run, and its
-// second-largest is checks that cannot report. Both come back to one question
-// nothing in this repo asks out loud: of the Playwright specs on disk, how many
-// does CI actually execute before shipping?
-//
-// This does NOT gate, and that is deliberate. The obvious design — run
-// tools/test-observed.mjs in CI and fail on the never-observed count — is
-// broken by construction: `artifacts/` is gitignored, so in CI every title is
-// legitimately unobserved and the check would be red on an environment fact.
-// That exact trap turned the guards job red once already (see the "a guard that
-// only runs on ONE MACHINE" section in docs/archive/research/CAMPAIGN-2026-08.md).
-// A number in the job log is enough to make a silent gap visible; a gate here
-// would be the third instance of the same mistake.
-//
-// Reads ci.yml rather than a hand-written list, so it cannot drift from the
-// workflow the way a comment does.
-//
-//   node tools/ci-coverage.mjs           # human report
-//   node tools/ci-coverage.mjs --json    # machine
+//   node tools/ci-coverage.mjs
+//   node tools/ci-coverage.mjs --json
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

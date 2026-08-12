@@ -191,7 +191,7 @@ function wirePhotoStick(id, vec) {
      can fire with a thumb down. A touch pointer holds IMPLICIT capture, so
      removing the element loses the capture instead of delivering an up, the
      vector stays at its last value, and updatePhotoCam flies the camera away
-     for good. js/game/input.js:498 added this same listener to the pedals for
+     for good. js/game/input.js added this same listener to the pedals for
      the same reason. */
   el.addEventListener("lostpointercapture", endIf);
 }

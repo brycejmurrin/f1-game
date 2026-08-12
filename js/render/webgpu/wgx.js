@@ -2416,20 +2416,20 @@ const WGX = (function () {
       // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
       // GLX.init() was never called. A caller's feature test
       // (`if (gfx.lampShadowBegin)`) then PASSES and the call dies inside GLX.
-      // game.js:5385 is the live example: its comment says "WGX has no
+      // js/game.js is the live example: its comment says "WGX has no
       // lampShadowBegin", but before this list it inherited one, and every night
       // frame threw inside SHD (null) — aborting tickBody before present().
       // A descriptor whose value is undefined overwrites the inherited one, so
       // the feature test tells the truth again. Restoring any of these means
       // implementing it here and deleting the line.
-      drawParticles: undefined,          // js/game/particles.js:208 (guarded)
-      lampShadowBegin: undefined,        // js/game.js:5386 (guarded) / 5423
-      lampShadowEnd: undefined,          // js/game.js:5429
-      createTextureArray: undefined,     // js/render/assets.js:56 — baked pack stays off
-      setMaterialMaps: undefined,        // js/render/assets.js:56/194
+      drawParticles: undefined,          // js/game/particles.js (guarded)
+      lampShadowBegin: undefined,        // js/game.js (guarded)
+      lampShadowEnd: undefined,          // js/game.js
+      createTextureArray: undefined,     // js/render/assets.js — baked pack stays off
+      setMaterialMaps: undefined,        // js/render/assets.js
       materialMapState: undefined,       // js/game/apex.js assets() (guarded)
-      gpuTimer: undefined,               // js/game/apex.js:1391 (guarded) -> {supported:false}
-      gpuMs: undefined,                  // js/game/apex.js:1393 (guarded)
+      gpuTimer: undefined,               // js/game/apex.js (guarded) -> {supported:false}
+      gpuMs: undefined,                  // js/game/apex.js (guarded)
       createInstancedBatch: undefined,   // TrackGraph.batches() consumer — GLX only
       cullInstances: undefined,
       drawInstanced: undefined,

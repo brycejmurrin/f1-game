@@ -1061,7 +1061,7 @@ function renderPosOf(c, cS, renderX) {
 // project that world point ONCE via trackFrom. World interpolation is smooth,
 // so this s is smooth AND identical across all three consumers. Deriving each
 // consumer independently from the arc read-back lerpS(rPrevS, s) diverged —
-// that read-back is non-monotonic (game.js:2573), which showed as a backwards
+// that read-back is non-monotonic (js/game.js), which showed as a backwards
 // jolt (camera), a speed-dependent fore/aft slide (car vs camera), and
 // residual height/orientation jitter at speed. AI cars (no world position)
 // fall back to the arc interpolation unchanged.

@@ -657,7 +657,7 @@ const NetLobby = (function () {
       }
       for (const t of Teams.LIST) {
         // Never move somebody INTO a custom team. makeCars() only puts one on
-        // the grid for the player who selected it (js/game.js:1424), so the
+        // the grid for the player who selected it (js/game.js), so the
         // other screens have no such car to pose them in.
         if (t.custom || !t.drivers) continue;
         for (let i = 0; i < t.drivers.length; i++) {
@@ -924,7 +924,7 @@ const NetLobby = (function () {
       if (G.setNetRoom) G.setNetRoom(false);
       try {
         // A friend race is a one-off Grand Prix, never a championship round
-        // or a time trial. flow/session are the authority (game.js:587).
+        // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
         G.startRace();

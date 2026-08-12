@@ -7,7 +7,7 @@ from the stylesheet.
 
 This is a design proposal, not a description of current behaviour. The current
 behaviour is in `docs/LAYOUT-AUDIT.md` (mechanism), `docs/COMPONENTS.md`
-(inventory) and `docs/research/UI-SCALE-AND-ZOOM.md` (the scale mechanism and
+(inventory) and `UI-SCALE-AND-ZOOM.md` (the scale mechanism and
 its measured costs). This document argues that those three describe **three
 systems doing one job**, and proposes collapsing them to one.
 
@@ -144,7 +144,7 @@ carried by *weight* instead — which is why `800` is the most common weight in 
 app. That is the tell of a type system with no range: everything is bold because
 nothing can be bigger.
 
-`docs/research/UI-DESIGN-PRINCIPLES.md` already fixes the rule — the smallest
+`../research/UI-DESIGN-PRINCIPLES.md` already fixes the rule — the smallest
 rung must be legible **on a landscape phone at arm's length**, and the desktop is
 then allowed to be generous. The current floor is 9px. Seven rungs, ~1.2 ratio:
 

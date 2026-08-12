@@ -42,7 +42,7 @@ body:has(#camtune:not([hidden])) {
      correctly, and on desktop (--ui-scale 1) the cap governs anyway, so nothing
      there moves.
      This is the second of the two viewport-unit-inside-zoom defects
-     docs/research/UI-SCALE-AND-ZOOM.md §5b deferred; --cs-sheet-w was the
+     docs/archive/research/UI-SCALE-AND-ZOOM.md §5b deferred; --cs-sheet-w was the
      other, fixed earlier this session. */
   --dock-w: min(calc(88 * var(--vwz)), 380px);
   /* WHAT THE PANEL PAINTS, WHICH IS NOT WHAT IT DECLARES — use this, not
@@ -460,7 +460,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    `data-density` is measured in the panel's own units against the `--compact-at`
    declared above (620, matching the number this block used to hard-code), so the
    same intent now holds at every scale. Step 2 of the migration order in
-   docs/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md.
+   docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md.
 
    The selectors are scoped rather than the block being wrapped, because CSS
    nesting is used nowhere in this codebase (`:is()` and `:has()` are). Both this
