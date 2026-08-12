@@ -522,10 +522,10 @@ building(K(0.55), -1, 40, 46, 26, 46, { kind: "drum" });
 
 `bakedModel(id, k, side, dist, opts?) → boolean`
 
-Places a real modelled asset from `assets/pack/` — baked offline by
-`node tools/assets.mjs bake-model <id> <file.glb>` down to the game's own vertex
-format, `MAT` id included. It is the one scenery helper whose geometry is not
-generated procedurally here.
+Places a modelled asset from `assets/pack/` — either generated offline by
+`node tools/assets.mjs bake-synthetic-models` (no network) or imported via
+`bake-model` / `import-models.mjs` from a glTF. Geometry is the game's own
+vertex format with a `MAT` id per vertex.
 
 `opts`: `{ scale, rotY, lift, tint:[r,g,b], mat }`. Without `rotY` the model is
 yawed to face the track (a model authored facing **+Z** looks at the road from

@@ -9,7 +9,8 @@
  * and the game is an offline-first PWA on static hosting.  So every byte is
  * pulled here, at author time, verified, credited and committed.
  *
- *   node tools/assets.mjs bake-synthetic [--size N]   generate a pack, no network
+ *   node tools/assets.mjs bake-synthetic [--size N] [--models]  materials (+ optional models)
+ *   node tools/assets.mjs bake-synthetic-models   generate AX26 models, no network / no glTF
  *   node tools/assets.mjs search <textures|models|hdris> <query>
  *   node tools/assets.mjs fetch <mat> <source> [--res 1k]   download CC0 source maps
  *   node tools/assets.mjs bake-material <mat> <dir> [--size N]   sources -> layer
@@ -30,6 +31,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { buildAll as buildSynthModels, CATALOG_IDS as SYNTH_MODEL_IDS } from "./synth-models.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // APEX_PACK_DIR redirects every write, so tests can exercise a full bake in a
@@ -571,6 +573,90 @@ function bakeSynthetic(args) {
   writeManifest(m);
   credits();
   report(m);
+  // Optional: also regenerate models in the same offline pass.
+  if (args.includes("--models")) bakeSyntheticModels([]);
+}
+
+// ───────────────────────── synthetic model bake ──────────────────────────────
+// Replace downloaded Kenney/glTF AX26 bins with geometry generated in
+// tools/synth-models.mjs. Same IDs the circuits already call via bakedModel(),
+// so no js/circuits edit is required. No network, no sharp, no glTF.
+
+function writeAX26(mesh, matName) {
+  const mid = MAT[matName] || MAT.CONCRETE;
+  const nv = mesh.pos.length / 3;
+  const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3);
+  const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
+  const matArr = mesh.mat && mesh.mat.length === nv ? mesh.mat : new Float32Array(nv).fill(mid);
+  const head = Buffer.alloc(20);
+  head.write("AX26", 0, "ascii");
+  head.writeUInt32LE(1, 4);
+  head.writeUInt32LE(nv, 8);
+  head.writeUInt32LE(mesh.idx.length, 12);
+  head.writeUInt32LE(0, 16);
+  return Buffer.concat([
+    head,
+    Buffer.from(Float32Array.from(mesh.pos).buffer),
+    Buffer.from(Float32Array.from(nrm).buffer),
+    Buffer.from(Float32Array.from(col).buffer),
+    Buffer.from(Float32Array.from(matArr).buffer),
+    Buffer.from(Uint32Array.from(mesh.idx).buffer),
+  ]);
+}
+
+function bakeSyntheticModels(_args) {
+  console.log(`baking ${SYNTH_MODEL_IDS.length} procedural models (no network) …`);
+  fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
+  const built = buildSynthModels();
+  const m = readManifest();
+  m.models = m.models || {};
+
+  // Drop previous model bins that we are replacing (and orphans no longer in catalog).
+  const keepFiles = new Set();
+  let verts = 0;
+  for (const id of SYNTH_MODEL_IDS) {
+    const mesh = built[id];
+    if (!mesh || mesh.verts < 3) fail(`synth model "${id}" produced no geometry`);
+    const buf = writeAX26(mesh, mesh.matName);
+    const rel = path.join("models", `${id}.bin`).split(path.sep).join("/");
+    fs.writeFileSync(path.join(PACK, rel), buf);
+    keepFiles.add(path.basename(rel));
+    verts += mesh.verts;
+    m.models[id] = {
+      file: rel,
+      verts: mesh.verts,
+      tris: mesh.tris,
+      mat: mesh.matName,
+      sizeM: mesh.sizeM,
+      source: "procedural:tools/synth-models.mjs",
+      licence: "Apex26-Procedural",
+      author: "Apex 26",
+      md5: crypto.createHash("md5").update(buf).digest("hex"),
+    };
+  }
+  // Remove Kenney (or other) bins that are no longer in the synthetic catalog,
+  // and drop their manifest entries so verify cannot see a stale CC0 download.
+  for (const id of Object.keys(m.models)) {
+    if (!SYNTH_MODEL_IDS.includes(id)) {
+      const f = m.models[id].file;
+      const abs = path.join(PACK, f);
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      delete m.models[id];
+      console.log(`removed non-catalog model ${id}`);
+    }
+  }
+  for (const f of fs.readdirSync(path.join(PACK, "models"))) {
+    if (f.endsWith(".bin") && !keepFiles.has(f)) {
+      fs.unlinkSync(path.join(PACK, "models", f));
+      console.log(`removed orphan ${f}`);
+    }
+  }
+
+  m.credits = buildCredits(m);
+  writeManifest(m);
+  credits();
+  console.log(`synthetic models: ${SYNTH_MODEL_IDS.length} ids, ${verts} verts total`);
+  report(m);
 }
 
 // ───────────────────────────── model bake ────────────────────────────────────
@@ -611,26 +697,12 @@ async function bakeModel(args) {
   const matName = (strArg(args, "--mat", "CONCRETE") || "CONCRETE").toUpperCase();
   if (!(matName in MAT)) fail(`--mat must be one of ${Object.keys(MAT).join(", ")}`);
   const mid = MAT[matName];
-
   const nv = mesh.pos.length / 3;
   const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3).fill(0);
   const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
-  const matArr = new Float32Array(nv).fill(mid);
-
-  const head = Buffer.alloc(20);
-  head.write("AX26", 0, "ascii");
-  head.writeUInt32LE(1, 4);
-  head.writeUInt32LE(nv, 8);
-  head.writeUInt32LE(mesh.idx.length, 12);
-  head.writeUInt32LE(0, 16);
-  const out = Buffer.concat([
-    head,
-    Buffer.from(Float32Array.from(mesh.pos).buffer),
-    Buffer.from(Float32Array.from(nrm).buffer),
-    Buffer.from(Float32Array.from(col).buffer),
-    Buffer.from(matArr.buffer),
-    Buffer.from(Uint32Array.from(mesh.idx).buffer),
-  ]);
+  const out = writeAX26({
+    pos: mesh.pos, nrm, col, mat: new Float32Array(nv).fill(mid), idx: mesh.idx,
+  }, matName);
 
   const rel = path.join("models", `${id}.bin`);
   fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
@@ -1288,9 +1360,10 @@ function fail(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 const USAGE = `Apex 26 asset bake CLI
 
-  bake-synthetic [--size N]        generate the full material pack (no network, no deps)
+  bake-synthetic [--size N] [--models]  generate material pack (no network)
                                    default: both 256 (high) + 128 (low) tiers
-                                   --size N: bake only that power-of-two size
+                                   --models: also run bake-synthetic-models
+  bake-synthetic-models            generate AX26 scenery models (no network / glTF)
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
   fetch <MAT> <host:id> [--res 1k] download CC0 source maps (Diffuse/nor_gl/arm)
   bake-material <MAT> <dir>        composite source maps into a layer (needs sharp)
@@ -1306,6 +1379,7 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   switch (cmd) {
     case "bake-synthetic": bakeSynthetic(args); break;
+    case "bake-synthetic-models": bakeSyntheticModels(args); break;
     case "search": await search(args); break;
     case "fetch": await fetchSource(args); break;
     case "bake-material": await bakeMaterial(args); break;
