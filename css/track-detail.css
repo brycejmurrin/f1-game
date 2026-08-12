@@ -62,8 +62,16 @@
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 /* Hard cap so the canvas can never overflow its wrap even if the JS aspect-fit
-   (openTrackDetail's rAF) measures a stale width — belt to the JS's braces. */
-#track-detail-canvas { display: block; cursor: default; max-width: 100%; max-height: 100%; }
+   (openTrackDetail's rAF) measures a stale width — belt to the JS's braces.
+   object-fit: contain stops max-width/max-height from independently clamping
+   width vs height into a squashed bitmap (common under UI zoom when the wrap
+   shrinks in local px). */
+#track-detail-canvas {
+  display: block; cursor: default;
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+}
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
 #track-detail-meta { font-size: 10px; color: #888; letter-spacing: 0.04em; line-height: 1.5; }
 .tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }

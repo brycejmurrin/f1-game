@@ -90,7 +90,7 @@ const CEILINGS = {
   // 7955 -> 7970 for UI/HUD SIZE step 0.5: scaleSnap / scaleLabel / SCALE_STEP
   // beside applyScale so the slider lattice and the stored value stay one
   // function (and the clamp comment above still applies — snap is the clamp).
-  "js/game.js": 7973,  // 7971 -> 7973: CssZoom.viewportRect at garage lens (A13).
+  "js/game.js": 7980,  // 7973 -> 7980: refresh track-preview map after UI SIZE zoom.
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

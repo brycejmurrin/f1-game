@@ -108,3 +108,34 @@ test("Indianapolis and Jacarepagua are no longer all-SLOW", () => {
     assert.ok(!kinds.has("SLOW") || kinds.size >= 2);
   }
 });
+
+test("fitCanvas preserves circuit aspect inside a box (no stretch)", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const monza = Tracks.LIST.find((t) => t.id === "monza");
+  const a = TrackMaps.aspect(monza);
+  assert.ok(a >= 0.5 && a <= 2.5, "aspect clamped, got " + a);
+
+  // Minimal canvas stand-in (node has no HTMLCanvasElement).
+  const fake = { width: 0, height: 0, style: {} };
+  const wide = TrackMaps.fitCanvas(fake, 400, 100, monza, true);
+  assert.equal(wide.w, fake.width);
+  assert.equal(wide.h, fake.height);
+  assert.ok(Math.abs(wide.w / wide.h - a) < 0.05,
+    "wide-box fit drifted: " + wide.w + "x" + wide.h + " aspect=" + (wide.w / wide.h));
+  assert.ok(wide.h <= 100 && wide.w <= 400);
+  assert.equal(fake.style.width, wide.w + "px");
+  assert.equal(fake.style.height, wide.h + "px");
+  assert.equal(fake.style.maxWidth, wide.w + "px");
+  assert.equal(fake.style.maxHeight, wide.h + "px");
+  assert.equal(fake.style.aspectRatio, String(a));
+
+  const tall = TrackMaps.fitCanvas(fake, 100, 400, monza, true);
+  assert.ok(Math.abs(tall.w / tall.h - a) < 0.05,
+    "tall-box fit drifted: " + tall.w + "x" + tall.h);
+  assert.ok(tall.w <= 100 && tall.h <= 400);
+
+  // A square box must still honour the circuit ratio (letterbox in one axis).
+  const sq = TrackMaps.fitCanvas(fake, 300, 300, monza);
+  assert.ok(Math.abs(sq.w / sq.h - a) < 0.05);
+  assert.ok(sq.w === 300 || sq.h === 300, "should bind one edge of the box");
+});

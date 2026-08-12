@@ -466,7 +466,8 @@ body { --compact-at: 600px; }
    Capping the map at half the card leaves the facts their room; object-fit
    keeps the outline undistorted when the cap is what binds. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
-  max-height: 50%; object-fit: contain;
+  max-height: 50%;
+  object-fit: contain;
 }
 /* SCROLLS RATHER THAN CLIPS. `overflow: hidden` here made the card's last chip
    row UNREACHABLE: measured at 852x393, #sel-preview-info ran 12px past this
@@ -561,6 +562,7 @@ body { --compact-at: 600px; }
     #sel-inner[data-shape="tall"] #sel-track-preview { flex: 1 1 auto; min-height: 0; }
     #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-map {
       max-height: calc(100% - 9.5rem);
+      object-fit: contain;
     }
     /* The card keeps the wide-sheet shape it already has — map across the top,
        facts under it — and in a full-width band that makes the map ~765px on an
@@ -719,8 +721,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      attempts at overriding it that way were silently discarded. A custom
      property cascades by INHERITANCE from the card instead, which no ordering
      can undo. */
+  /* object-fit: contain — belt when a max-height cap and a definite width would
+     otherwise squash the bitmap. JS (updateTrackPreview) also re-fits and pins
+     style width/height to the circuit aspect so the common case needs no
+     letterboxing. UI zoom (--ui-scale) still scales the whole sheet uniformly. */
   flex: none; width: var(--sel-map-w, clamp(140px, 50%, 260px)); height: auto;
+  max-width: 100%;
   aspect-ratio: 520 / 300;
+  object-fit: contain;
   border-radius: var(--r-md);
   background: rgba(0, 0, 0, 0.25);
 }

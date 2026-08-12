@@ -250,7 +250,41 @@ function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
-  TrackMaps.draw(els.selPreviewMap, t, {
+  // Size the bitmap to the circuit's own aspect inside the CSS slot. A fixed
+  // 520×300 canvas displayed under max-height caps (or UI zoom reshaping the
+  // card) was getting CSS-squashed; fitCanvas + object-fit:contain keep the
+  // outline true while --ui-scale zoom still enlarges the whole sheet.
+  const map = els.selPreviewMap;
+  const a = TrackMaps.aspect(t);
+  // Clear prior pins so the stylesheet width / max-height slot can be measured.
+  map.style.width = "";
+  map.style.height = "";
+  map.style.maxWidth = "";
+  map.style.maxHeight = "";
+  map.style.aspectRatio = String(a);
+  void map.offsetWidth;
+  const slotW = Math.max(120, map.clientWidth || 260);
+  let slotH = Math.max(72, map.clientHeight || Math.round(slotW / a));
+  // Mirror the CSS max-height caps in JS. Percentage max-height often fails to
+  // bind while height is `auto` (indefinite containing-block height), then
+  // clamps AFTER we pin a definite height — which is the stretch. Fitting
+  // against the same cap the stylesheet intends keeps aspect and the facts.
+  const card = map.closest("#sel-track-preview");
+  const inner = document.getElementById("sel-inner");
+  if (card && inner) {
+    const cardH = card.clientHeight;
+    if (cardH > 0) {
+      if (inner.getAttribute("data-pair") === "on" && inner.getAttribute("data-shape") !== "tall") {
+        slotH = Math.min(slotH, Math.max(72, Math.floor(cardH * 0.5)));
+      } else if (inner.getAttribute("data-shape") === "tall") {
+        // css: max-height: calc(100% - 9.5rem) — 9.5rem ≈ caption block.
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        slotH = Math.min(slotH, Math.max(72, Math.floor(cardH - 9.5 * rem)));
+      }
+    }
+  }
+  TrackMaps.fitCanvas(map, slotW, slotH, t, true);
+  TrackMaps.draw(map, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
     width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11,
     sectors: true, drs: true
@@ -431,35 +465,15 @@ function openTrackDetail() {
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
   requestAnimationFrame(function () {
-    // Compute the track's natural aspect ratio from its outline points so the
-    // canvas matches the circuit shape instead of being CSS-stretched.
-    let trackAspect = 1.2;
-    const pts = TrackMaps.outline(t);
-    if (pts && pts.length > 2) {
-      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
-      for (let i = 0; i < pts.length; i++) {
-        if (pts[i][0] < minx) minx = pts[i][0]; if (pts[i][0] > maxx) maxx = pts[i][0];
-        if (pts[i][1] < miny) miny = pts[i][1]; if (pts[i][1] > maxy) maxy = pts[i][1];
-      }
-      trackAspect = Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
-    }
+    // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
+    // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
+    // pixels and re-introduce stretch at UI SIZE ≠ 100%.
     const wrap = document.getElementById("track-detail-canvas-wrap");
     const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
     const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
-    let canvW, canvH;
-    if (wrapH > 0 && wrapW > 0) {
-      // Fit canvas within wrapper preserving track aspect ratio
-      canvH = wrapH;
-      canvW = Math.round(canvH * trackAspect);
-      if (canvW > wrapW) { canvW = wrapW; canvH = Math.round(canvW / trackAspect); }
-    } else {
-      canvW = Math.min(window.innerWidth - 24, 600);
-      canvH = Math.round(canvW / trackAspect);
-    }
-    cv.width = Math.max(200, Math.round(canvW));
-    cv.height = Math.max(150, Math.round(canvH));
-    cv.style.width = cv.width + "px";
-    cv.style.height = cv.height + "px";
+    const maxW = Math.max(200, wrapW > 0 ? wrapW : Math.min(window.innerWidth - 24, 600));
+    const maxH = Math.max(150, wrapH > 0 ? wrapH : Math.round(maxW / 1.2));
+    TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
       width: 5, pad: 42, corners: true, cornerR: 6, cornerFont: 12,

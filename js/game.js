@@ -2831,7 +2831,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -6760,7 +6760,14 @@ function applyScale(key, prop, inputId) {
   const input = $(inputId); if (input) input.value = String(pct);
   const out = $(inputId + "-v"); if (out) out.textContent = scaleLabel(pct);
 }
-function applyUiScale()  { applyScale("uiScale",  "--ui-scale",  "pm-uiscale"); }
+function applyUiScale()  {
+  applyScale("uiScale",  "--ui-scale",  "pm-uiscale");
+  // Picker/detail maps size from local CSS boxes inside zoomed sheets — refresh
+  // so a drag of UI SIZE never leaves a stale bitmap stretched into a new slot.
+  requestAnimationFrame(function () {
+    try { updateTrackPreview(); } catch (e) { /* menus not ready */ }
+  });
+}
 function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
 // `input`, not `change`: the size should follow the thumb while it is dragged,
 // which is the only way to find the right one — the same convention the volume
