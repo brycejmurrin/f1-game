@@ -289,7 +289,13 @@
      keeps the box the size the glyphs actually need. */
   flex: 0 0 auto; line-height: 1.35;
 }
-.cs-tab-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--dim); }
+/* Labels wrap (SUSPENSION etc.); current-part line stays single-line ellipsis.
+   letter-spacing cut from 0.12em — at UI 115% + desktop rail width the tracking
+   was the difference between full word and "SUSPEN…". */
+.cs-tab-lbl {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.05em; color: var(--dim);
+  white-space: normal; overflow: visible; text-overflow: unset; line-height: 1.2;
+}
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }

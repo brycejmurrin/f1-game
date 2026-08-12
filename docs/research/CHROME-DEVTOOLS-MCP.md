@@ -103,8 +103,9 @@ shipped verdict (SwiftShader + one session).
 ### Lighthouse snapshot (settings @115%)
 
 Accessibility **91**, Best Practices **100**, SEO **67**, Agentic **100**.
-Fails: `user-scalable=no` (intentional for tilt/drive), missing meta
-description. Do not chase SEO on the fan game shell unless product asks.
+Fails: `user-scalable=no` (intentional for tilt/drive). Meta description
+shipped in the shell (build 1132+); remaining SEO gap is zoom policy, not copy.
+Do not chase SEO on the fan game shell unless product asks.
 
 ---
 
