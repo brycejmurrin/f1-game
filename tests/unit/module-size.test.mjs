@@ -82,7 +82,14 @@ const CEILINGS = {
   // already here, plus the comment saying what the two modes mean. The operation
   // itself is 40 lines and landed in the store, which is the shape this ratchet
   // is asking for — what stayed is the façade line the other five files reach.
-  "js/game.js": 7949,
+  // 7949 -> 7955 for the applyScale() clamp fix: the CSS custom property that
+  // actually sets the on-screen UI/HUD size was reading the RAW stored percentage
+  // instead of the already-clamped one computed two lines above it for the
+  // slider's own label, so an out-of-range apex26.uiScale/hudScale applied
+  // unclamped on every boot while the slider quietly showed something else. Fix
+  // is one line; the rest is the comment recording why the raw read was wrong,
+  // which is exactly the bug-explaining growth this ratchet tolerates.
+  "js/game.js": 7955,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
