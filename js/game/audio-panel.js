@@ -50,11 +50,15 @@ const AudioPanel = (() => {
       syncAudioPanel();
     }
 
-    let musicVol = store.get("volMusic", 0.5);
-    let sfxVol = store.get("volSfx", 1);
+    // setMusicVolume/setSfxVolume clamp to 0..1 internally and RETURN the
+    // clamped value — take that, not the raw store read, so a value outside
+    // 0..1 (corrupted storage, an older build's scale) can't leave musicVol/
+    // sfxVol reading something the slider's own [0,10] input has to silently
+    // clamp on assignment, while its TEXT label (driven by these variables,
+    // not the input) kept showing the unclamped number.
+    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.5));
+    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 1));
     let sfxOn = store.get("sfx", true);
-    GameAudio.setMusicVolume(musicVol);
-    GameAudio.setSfxVolume(sfxVol);
     GameAudio.setSfxEnabled(sfxOn);
 
     // SOUND EFFECTS on/off. Only the sfx bus is muted, so the soundtrack keeps

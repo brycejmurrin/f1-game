@@ -8,7 +8,12 @@ const SteerTuning = (function () {
 
 function create(G) {
 // Stable helpers from the game.js closure.
-const { $, store } = G;
+const { $, store, clamp } = G;
+
+// Every 1..10 knob's DOM range (index.html: min="1" max="10") — named so the
+// clamp below and the slider markup cannot silently drift apart.
+const SLIDER_MIN = 1, SLIDER_MAX = 10;
+const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
 // ---- steering tuning sliders (pause menu) ----
 // Every slider is an integer 1..10 (racing line is -5..5) that maps to a
@@ -165,18 +170,21 @@ function matchSteerLevel() {
 // Mirror the granular store values back onto the simplified controls so the two
 // views never disagree (presets, Advanced edits and macros all stay in sync).
 function refreshMacros() {
-  const ts = store.get("tiltDeg", 6);
+  // Clamped for the same reason as applySteerTuning(): each of these drives a
+  // .textContent directly, which — unlike the .value assignment beside it — the
+  // DOM does not clamp on its own.
+  const ts = clamp(store.get("tiltDeg", 6), SLIDER_MIN, SLIDER_MAX);
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
   for (const n of STEER_LEVEL_ORDER) {
     const b = $("pm-steer-" + n); if (b) b.classList.toggle("active", n === lvl);
   }
-  const dh = store.get("drivingHelp", 1);
+  const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
   const hb = dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
   for (const n of ["low", "med", "high"]) {
     const b = $("pm-help-" + n); if (b) b.classList.toggle("active", n === hb);
   }
-  const rl = store.get("raceLine", 0);
+  const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
   const lb = rl <= 0 ? "off" : rl >= 5 ? "full" : "corner";
   for (const n of ["off", "corner", "full"]) {
     const b = $("pm-line-" + n); if (b) b.classList.toggle("active", n === lb);
@@ -325,15 +333,24 @@ function migrateSteerStore() {
 
 function applySteerTuning() {
   migrateSteerStore();
-  const rate    = store.get("steerRate",  5);
-  const expo    = store.get("steerExpo",  5);
-  const smooth  = store.get("steerSmooth", 6);
-  const tiltdeg = store.get("tiltDeg",    6);   // 6→32° for full lock (tuner optimum)
-  const lock    = store.get("steerLock",  5);
-  const spdsteer = store.get("steerSpeed", 5);
-  const help    = store.get("drivingHelp", 1);   // default: assist OFF
-  const pace    = store.get("pace", PACE_DEF);   // 11 -> 0.840 (14 is the 1.0 reference)
-  const line    = store.get("raceLine",   0);
+  // Clamped on the way OUT of storage, not just on the way in from a slider —
+  // wheelbaseFromSlider/lockFromSlider/speedRefFromSlider/etc. are plain linear
+  // interpolations with no floor or ceiling of their own, and this function
+  // feeds them straight into G.WHEELBASE/G.STEER_MAX_SLIP/G.PACE. A store value
+  // outside a knob's range (an edited apex26.steerRate, a downgrade from a build
+  // with a wider range) would EXTRAPOLATE rather than clamp — a steerRate of 50
+  // computes a negative wheelbase, not an error. The nine oninput handlers below
+  // are DOM-clamped by the range input's own min/max and never take this path;
+  // this is the one that runs on every boot, reading whatever localStorage holds.
+  const rate    = clamp(store.get("steerRate",  5), SLIDER_MIN, SLIDER_MAX);
+  const expo    = clamp(store.get("steerExpo",  5), SLIDER_MIN, SLIDER_MAX);
+  const smooth  = clamp(store.get("steerSmooth", 6), SLIDER_MIN, SLIDER_MAX);
+  const tiltdeg = clamp(store.get("tiltDeg",    6), SLIDER_MIN, SLIDER_MAX);   // 6→32° for full lock (tuner optimum)
+  const lock    = clamp(store.get("steerLock",  5), SLIDER_MIN, SLIDER_MAX);
+  const spdsteer = clamp(store.get("steerSpeed", 5), SLIDER_MIN, SLIDER_MAX);
+  const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
+  const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
+  const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
@@ -355,40 +372,46 @@ function applySteerTuning() {
   refreshPresetButtons();
   refreshMacros();
 }
+// Clamped here too, not just in applySteerTuning() — the DOM range input clamps
+// its OWN .value on a real drag, but that guarantee is specific to a genuine
+// user drag; it does not cover a value pushed onto the element some other way.
+// Explicit clamps make every write path agree with the one applySteerTuning()
+// reads back on the next boot, rather than trusting two different mechanisms
+// to reach the same answer.
 $("pm-rate").oninput = (e) => {
-  const v = +e.target.value; store.set("steerRate", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerRate", v);
   G.WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v; clearPreset();
 };
 $("pm-expo").oninput = (e) => {
-  const v = +e.target.value; store.set("steerExpo", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerExpo", v);
   G.STEER_EXPO = expoFromSlider(v); $("pm-expo-v").textContent = v; clearPreset();
 };
 $("pm-smooth").oninput = (e) => {
-  const v = +e.target.value; store.set("steerSmooth", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSmooth", v);
   Input.setTiltSmoothing(cutoffFromSmooth(v)); $("pm-smooth-v").textContent = v; clearPreset();
 };
 $("pm-tiltdeg").oninput = (e) => {
-  const v = +e.target.value; store.set("tiltDeg", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("tiltDeg", v);
   Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v; clearPreset();
 };
 $("pm-lock").oninput = (e) => {
-  const v = +e.target.value; store.set("steerLock", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerLock", v);
   G.STEER_MAX_SLIP = lockFromSlider(v); $("pm-lock-v").textContent = v; clearPreset();
 };
 $("pm-speedsteer").oninput = (e) => {
-  const v = +e.target.value; store.set("steerSpeed", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSpeed", v);
   G.STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v; clearPreset();
 };
 $("pm-help").oninput = (e) => {
-  const v = +e.target.value; store.set("drivingHelp", v);
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);
   G.ROAD_FOLLOW = helpFromSlider(v); $("pm-help-v").textContent = v; clearPreset();
 };
 $("pm-pace").oninput = (e) => {
-  const v = +e.target.value; store.set("pace", v);
+  const v = clamp(+e.target.value, PACE_MIN, PACE_MAX); store.set("pace", v);
   G.PACE = paceFromSlider(v); $("pm-pace-v").textContent = paceLabel(v);
 };
 $("pm-line").oninput = (e) => {
-  const v = +e.target.value; store.set("raceLine", v);
+  const v = clamp(+e.target.value, LINE_MIN, LINE_MAX); store.set("raceLine", v);
   G.raceLineAssist = v / 5; $("pm-line-v").textContent = lineLabel(v); clearPreset();
 };
 $("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (G.soundOn) GameAudio.uiSelect(); };
@@ -397,7 +420,7 @@ $("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn
 
 // ---- simplified controls: each fans out to the granular store keys ----
 $("pm-tiltsimple").oninput = (e) => {
-  store.set("tiltDeg", +e.target.value); clearPreset(); applySteerTuning();
+  store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };
 function applySteerLevel(name) {
   const L = STEER_LEVELS[name]; if (!L) return;

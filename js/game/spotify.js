@@ -638,7 +638,12 @@ window.SpotifyMusic = (function () {
         paused = !(j && j.is_playing);
         if (j && j.device) {
           devName = j.device.name || "";
-          devVol = typeof j.device.volume_percent === "number" ? j.device.volume_percent : null;
+          // Clamped at the one place this enters the module: it feeds both the
+          // slider's native input (browser-clamped on assignment) and its text
+          // label (not — a bare write here left the two able to disagree if
+          // Spotify's API ever reported outside 0..100).
+          devVol = typeof j.device.volume_percent === "number"
+            ? Math.max(0, Math.min(100, j.device.volume_percent)) : null;
           devSupportsVol = j.device.supports_volume !== false;
           if (j.device.id && !deviceId2()) lsSet(K_DEV, j.device.id);
         }

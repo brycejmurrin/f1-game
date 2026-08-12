@@ -64,6 +64,54 @@ test.describe("Apex 26 — steering sliders", () => {
     });
   }
 
+  // Every one of these store keys feeds a plain linear (or, for pace, geometric)
+  // interpolation with no floor or ceiling of its own — wheelbaseFromSlider,
+  // lockFromSlider, speedRefFromSlider, paceFromSlider, etc. (js/game/steer-
+  // tuning.js). applySteerTuning() runs on every boot, reading straight from
+  // localStorage, and until this test existed nothing clamped that read: a
+  // steerRate of 999 (a direct localStorage edit, or a downgrade from a build
+  // with a wider range) computed a NEGATIVE wheelbase and fed it straight into
+  // G.WHEELBASE, not an error and not a defensive floor.
+  //
+  // One combined test rather than one per slider: the interesting cost here is
+  // page loads, not assertions, and a single addInitScript can seed all nine
+  // keys for one reload.
+  test("a store value outside a slider's own range clamps to its boundary notch, not an extrapolation", async ({ page }) => {
+    // The LEGITIMATE result at each slider's own min/max, measured by driving
+    // the real DOM control — this is what a corrupted store SHOULD resolve to
+    // once clamped, not whatever the interpolation reaches if followed past
+    // where the slider itself can ever go.
+    await load(page);
+    const atMax = {}, atMin = {};
+    for (const s of SLIDERS) {
+      await setSlider(page, s.id, s.max);
+      atMax[s.store] = (await tuning(page))[s.key];
+    }
+    for (const s of SLIDERS) {
+      await setSlider(page, s.id, s.min);
+      atMin[s.store] = (await tuning(page))[s.key];
+    }
+
+    await page.addInitScript((seeds) => {
+      for (const [k, v] of seeds) localStorage.setItem("apex26." + k, String(v));
+    }, SLIDERS.map((s) => [s.store, s.max + 500]));
+    await load(page);
+    const overHigh = await tuning(page);
+    for (const s of SLIDERS)
+      expect(overHigh[s.key], `${s.store} over max`).toBeCloseTo(atMax[s.store], 6);
+
+    // addInitScript calls accumulate (Playwright runs every registered script,
+    // in order, before each navigation) — registering this second one and
+    // reloading again means BOTH run, and this one (same keys, later) wins.
+    await page.addInitScript((seeds) => {
+      for (const [k, v] of seeds) localStorage.setItem("apex26." + k, String(v));
+    }, SLIDERS.map((s) => [s.store, s.min - 500]));
+    await load(page);
+    const underLow = await tuning(page);
+    for (const s of SLIDERS)
+      expect(underLow[s.key], `${s.store} under min`).toBeCloseTo(atMin[s.store], 6);
+  });
+
   // ---- behaviour: physics sliders genuinely change how the car drives ----
 
   // Hold a fixed steer from a straight and measure how far the heading swings.
