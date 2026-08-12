@@ -290,7 +290,16 @@ function audit(id) {
   const GRID = 10;             // spatial hash cell for primitives (m)
   const MAXSPREAD = 60;        // prims wider than this go in the linear list
 
-  const sorted = prims.slice().sort((a, b) => a.minY - b.minY);
+  // TOTAL order, not just by minY. Array.prototype.sort is stable, so equal
+  // keys keep INSERTION order — i.e. the order the circuit happened to emit its
+  // primitives in. That made the audit's answer depend on emission order, which
+  // is not a property of the world: reversing singapore's lap left every prop at
+  // an identical world position (verified to 0.02 m) yet moved the count 17 -> 37,
+  // purely because the mirrored anchors emit in a different sequence. Break ties
+  // on geometry so the same scene always scores the same.
+  const byGeom = (a, b) => a.minX - b.minX || a.minZ - b.minZ || a.minY - b.minY
+                        || a.maxX - b.maxX || a.maxZ - b.maxZ || a.maxY - b.maxY;
+  const sorted = prims.slice().sort((a, b) => (a.minY - b.minY) || byGeom(a, b));
   const TOL = 0.6;             // XZ slack: panes/cladding hug a wall's outer face
   const cellsOf = (p) => {
     const out = [];
@@ -351,7 +360,10 @@ function audit(id) {
   const floatingPrims = pending.map((p) => ({ p, gap: p.minY - (p._g === null ? 0 : p._g) }));
 
   // group neighbouring floating primitives so one object reports once
-  floatingPrims.sort((a, b) => b.gap - a.gap);
+  // Same total-order requirement, and it matters MORE here: the grouping below
+  // is greedy seed-and-absorb, so which primitive gets to be a seed decides how
+  // many clusters come out. Ties on gap alone left that to emission order.
+  floatingPrims.sort((a, b) => (b.gap - a.gap) || byGeom(a.p, b.p));
   const used = new Set(), report = [];
   for (let i = 0; i < floatingPrims.length; i++) {
     if (used.has(i)) continue;
