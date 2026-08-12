@@ -1006,12 +1006,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     align-content: start;
   }
   #advanced-inner .adv-item { margin: 0; min-width: 0; }
-  /* full-width rows: the intro, the preset picker, the disclosure button, the
-     disclosure itself, and every section heading inside it */
+  /* full-width rows: the intro, the preset picker, the whole <details>
+     disclosure (summary + content flow normally inside it — display:contents
+     was tried here first to keep the summary and #adv-extra as separate grid
+     items the way the old button+div pair were, but Chromium does not
+     promote a <details>'s children out of the box tree for grid placement
+     even with display:contents, so #adv-extra rendered at one column's width
+     instead of spanning the sheet), and every section heading inside
+     #adv-extra's OWN nested grid */
   #advanced-inner .adv-intro,
   #advanced-inner .preset-row,
-  #advanced-inner .adv-more-btn,
-  #advanced-inner #adv-extra,
+  #advanced-inner #adv-details,
   #advanced-inner .adv-sec { grid-column: 1 / -1; }
   #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 }

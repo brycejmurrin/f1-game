@@ -63,10 +63,18 @@ async function boot(page) {
 }
 
 /** Open the MUSIC & SOUND panel. #pm-audio lives in the hidden pause menu, so
- *  the click is dispatched directly (the same pattern audio-smoke.spec.js uses). */
+ *  the click is dispatched directly (the same pattern audio-smoke.spec.js uses).
+ *  YOUR TRACKS and SPOTIFY — the two sections this file exercises — collapse
+ *  by default (2026-08 menu review), so force them open: this file's
+ *  Playwright locators need the controls actually rendered, not just present
+ *  in the DOM. */
 async function openAudioPanel(page) {
   await page.locator("#pm-audio").evaluate((el) => el.click());
   await expect(page.locator("#audioset")).toBeVisible();
+  await page.evaluate(() => {
+    document.getElementById("as-tracks-details").open = true;
+    document.getElementById("as-sp-wrap").open = true;
+  });
 }
 
 /** Empty the library through MusicLib's own open DB handle (deleteDatabase would
