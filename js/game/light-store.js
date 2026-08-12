@@ -34,7 +34,24 @@ const LightStore = (() => {
     // so the change is live — safe because it re-derives from the branch values.
     const APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover",
       "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance",
-      "skyColorSat", "fogColorSat"]);
+      "skyColorSat", "fogColorSat",
+      // These five belong here for the same reason as the eleven above — their
+      // ONLY consumer is inside applyRaceSettings() (or _nightAmbientBand(),
+      // which only applyRaceSettings calls) — and they were missing, so
+      // dragging them did nothing at all. The value stored, the panel updated,
+      // the scene never changed, until something else happened to re-run
+      // applyRaceSettings: a TIME or WEATHER chip, a track load, or moving one
+      // of the eleven. A slider that is dead until you touch a different
+      // slider is indistinguishable from a broken one, and this is what the
+      // "some lighting sliders don't work" reports were.
+      //   nightAmbLift    game.js:_nightAmbientBand
+      //   cityGlowWarm    atmosphere.js
+      //   weatherSunMute  atmosphere.js
+      //   overcastFogMul  atmosphere.js
+      //   fogWxMul        atmosphere.js
+      // If you add a knob whose consumer lives in applyRaceSettings, add it
+      // here too — there is no mechanism that notices for you.
+      "nightAmbLift", "cityGlowWarm", "weatherSunMute", "overcastFogMul", "fogWxMul"]);
 
     let profiles = {};
     {

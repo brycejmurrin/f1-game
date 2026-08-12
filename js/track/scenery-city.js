@@ -861,6 +861,14 @@ const SceneryCity = (function () {
       }
       ctx.note("tower", [p.c[0], p.c[1] + h / 2, p.c[2]], [baseW, h, baseW], { k, side });
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
+      // Two glazing bands up the shaft + a proud observation deck near the top —
+      // turns the blank tapered cone into an occupied control tower. Band radius
+      // tracks the frustum taper (base 0.5w → top 0.335w) so they hug the wall.
+      const glass = opts.glassCol || [0.40, 0.52, 0.64];
+      const rAt = (f) => baseW * (0.5 - 0.165 * f) * 1.03;
+      addCyl(out, vadd(p.c, p.u, h * 0.40), rAt(0.40), h * 0.05, glass, opts.seg || 8, b);
+      addCyl(out, vadd(p.c, p.u, h * 0.66), rAt(0.66), h * 0.05, glass, opts.seg || 8, b);
+      addBox(out, vadd(p.c, p.u, h * 0.84), [baseW * 0.62, baseW * 0.05, baseW * 0.62], opts.deckCol || [0.26, 0.28, 0.32], b);   // observation deck
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       // Mast stands on the CAP's top face. The cap box is centred at h with
       // height baseW*0.18, so its top is h + baseW*0.09 — using the full 0.18

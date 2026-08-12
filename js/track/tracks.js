@@ -782,7 +782,7 @@ const Tracks = (function () {
       };
     };
     const models = TrackModels.create({
-      out, water: waterBuf, diagnostics,
+      out, water: waterBuf, diagnostics, n,
       preflight: (bounds) => !rejBox(bounds.center, bounds.size, bounds.basis),
       emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
       frameAt,
