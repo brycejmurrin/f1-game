@@ -100,7 +100,7 @@ deliberately NOT moved — their consumers hardcode the flat paths):
 
 - `net/` — WebRTC/Nostr end-to-end harnesses: rtc-e2e.mjs, rtc-e2e-3p.mjs, rtc-e2e-room.mjs, nostr-local.cjs, nostr-probe.mjs, turn-local.cjs
 - `car/` — car renders: render-car.mjs, carshot.mjs
-- `capture/` — frame capture: apex-capture.mjs, motion-capture.mjs
+- `capture/` — frame capture: apex-capture.mjs, baked-scenery.mjs, motion-capture.mjs
 - `lighting/` — ab-lighting.mjs (lighting-campaign/ was already its own package)
 
 ## Conventions
