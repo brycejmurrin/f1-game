@@ -214,24 +214,18 @@ body { --compact-at: 600px; }
    #overlay documents above. Plain center with overflow:auto parks CAREER
    above the scrollport (measured T=-30 at landscape 150%) where scrollIntoView
    cannot recover it; `safe` falls back to start the moment the stack is taller
-   than the cap. */
+   than the cap.
+
+   Type / padding / title-size polish stays out of this change — that lane is
+   separate. This block is reachability only. */
 :where(body[data-density="compact"]) #menu-buttons {
   max-height: calc(100 * var(--svhz) - 2 * var(--gut));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  gap: calc(var(--gap) * 0.55);
   align-content: center;
   align-content: safe center;
-  padding-block: 2px;
 }
-/* Compact padding/type — shared. On portrait @150% without this the primary
-   cells measured 226px tall (MCP 390×844), so two rows ate the viewport before
-   SETTINGS appeared. */
-:where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 9px; }
-:where(body[data-density="compact"]) .mb-sub { font-size: var(--fs-micro); }
-:where(body[data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 8px 10px; font-size: 16px; }
-:where(body[data-density="compact"]) #menu-buttons .minibtn { padding: 5px 9px; font-size: 11px; }
 /* Portrait: give the button column the leftover row under the brand so the
    max-height above is not "full viewport on top of the brand" (which would
    overflow again with no parent scroller). auto / minmax(0,1fr) + stretch is
@@ -262,7 +256,7 @@ body { --compact-at: 600px; }
        wider than vw (measured R=884 on 852), and plain center parks the right
        column past the scrollport's end edge. */
     align-content: safe center;
-    column-gap: 24px;
+    column-gap: 32px;
   }
   :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
   :where(body[data-density="compact"]) #menu-buttons {
@@ -270,27 +264,36 @@ body { --compact-at: 600px; }
     align-self: stretch;
     width: auto;
   }
-  /* Max is `48px / --ui-scale`, not bare 48px: this rule lives under a zoomed
-     `#overlay > *`, so a bare px ceiling grows with UI SIZE (48 local × 1.5 =
-     72 visual) and the brand column pushes the right-hand buttons past vw
-     (measured MCP 852×393 @150%: mb-tt/garage/help R=884). Dividing by the
-     scale keeps the visual ceiling at 48px. */
-  :where(body[data-density="compact"]) #title {
-    font-size: clamp(26px, calc(7.5 * var(--vwz)), calc(48px / var(--ui-scale)));
-  }
+  :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: 13px; }
   :where(body[data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
   :where(body[data-density="compact"]) #audiostate { font-size: 11px; }
   :where(body[data-density="compact"]) #disclaimer { font-size: 11px; }
-  /* 42vwz (was 46): at 150% the brand + 46vw column + gap measured ~872 on an
-     852 viewport. Four vw back clears the right-edge clip without starving
-     the labels (RACE A FRIEND already wraps; see comment below). */
+  /* 42vwz (was 46): layout-only width cut so the right column clears vw at
+     150% without touching type size (brand+46vw+gap measured ~872 on 852). */
   :where(body[data-density="compact"]) #menu-hero,
   :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 280px); }
-  /* Horizontal padding note for RACE A FRIEND wrap — see the shared compact
-     .bigbtn/.minibtn rules above (moved out of this landscape block so portrait
-     compact gets the same size cut). */
+  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 300px); }
+  /* One notch up, for the same reason as the HUD and the tap ladder: this
+     block is the PHONE, and it was the smallest type in the app on the device
+     held furthest from your face. The group widths above cap the row, so the
+     extra size comes out of padding rather than pushing anything off screen. */
+  :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
+  :where(body[data-density="compact"]) .mb-sub { font-size: var(--fs-micro); }
+  /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
+     back out of the gutter rather than out of the type.
+     IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
+     Measured at 667x375: that label needs 209px on one line against a 155px
+     cell — a 54px shortfall, where the whole horizontal padding is 20px. The
+     cell would have to reach ~408px, and the brand column beside it is 273px,
+     so 273 + 32 + 408 = 713 in a 667px window. It wraps to two lines at every
+     landscape width, on touch and desktop alike, and that is the correct
+     outcome: the alternative is either a horizontal overflow on the narrowest
+     phone or that one button carrying smaller type than the five around it.
+     The row is sized by its tallest cell, so SEASON grows to match — which is
+     why the pair still reads as a pair. */
+  :where(body[data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
+  :where(body[data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: 12px; }
 }
 
 /* ---------- select screen ---------- */

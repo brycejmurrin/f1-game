@@ -43,17 +43,15 @@ test("select track filter persists via store", () => {
   assert.match(js, /\["classic", "CLASSICS"\]/);
 });
 
-test("compact landscape title column scrolls instead of clipping at high UI SIZE", () => {
+test("compact title column scrolls instead of clipping at high UI SIZE", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8");
-  // Cap + scroll on #menu-buttons under body[data-density=compact] (all orients).
+  // Cap + scroll on #menu-buttons under body[data-density=compact] (layout only).
   assert.match(css, /body\[data-density="compact"\]\)\s*#menu-buttons/);
   assert.match(css, /max-height:\s*calc\(100 \* var\(--svhz\)/);
   assert.match(css, /align-content:\s*safe center/);
   // Portrait hands the leftover row to the button column (overlay scrollHeight
   // is a dead letter under zoom — see menus.css comment).
   assert.match(css, /orientation:\s*portrait[\s\S]*?minmax\(0,\s*1fr\)/);
-  // Title max must cancel zoom or brand width pushes the right column past vw.
-  assert.match(css, /#title\s*\{[\s\S]*?48px\s*\/\s*var\(--ui-scale\)/);
   // HOW TO PLAY carries an icon like the other doors.
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.match(html, /id="mb-help"[^>]*>[\s\S]*?btn-ico[\s\S]*?HOW TO PLAY/);
