@@ -151,6 +151,43 @@ governs a `--hud-scale`-zoomed element (`.hud-top`, `.hud-gaps`, `.hud-bottom`,
 `#minimap`, `#hud-flag`, `#hud-sectors`, `#lights`, `#announce`, `.dock`). At
 two the classifier pays for itself; at one it does not.
 
+## Two families the height work did not cover, found afterwards
+
+The `data-density` pass fixed rules that ask the WRONG QUESTION. These two ask no
+question at all — they are sizes that cannot yield, and a zoomed box eventually
+gets smaller than them. Both showed up only at UI SIZE 150 %, and neither is a
+media query, so neither was in the inventory above.
+
+**1. An `auto-fill` floor is a floor AND a ceiling.**
+`repeat(auto-fill, minmax(240px, 1fr))` reads as "at least 240 wide, as many as
+fit", and the first half is unconditional: in a 215px box auto-fill still emits
+one column and minmax still floors it at 240, so the track is wider than its
+container. With `overflow-x: hidden` on the pane — which every one of these panes
+has — the content is sliced with no scrollbar to hint at it. MEASURED: all twelve
+team tiles on a portrait iPhone at 150 %, the chevron and the right of every team
+name gone. Six sites in the app, all now
+`minmax(min(<n>px, 100%), 1fr)`, which is byte-identical behaviour at every size
+that already fit. **Any bare px floor under `auto-fill`/`auto-fit` is this bug.**
+
+**2. Flex shrink takes from whoever yields, and a scroll container yields
+everything.** `overflow-y: auto` on a flex column reads as "let my content be
+taller than me and scroll", but shrinking happens BEFORE overflowing, and the
+items shrink very differently: a plain block is floored at its min-content
+height by `min-height: auto` and refuses, while a scroll container's
+`min-height: auto` is ZERO and it absorbs the entire deficit alone. MEASURED on
+`#select`, iPhone landscape at 150 %: the preview card kept all 175.6 of its
+units, and the circuit list — the point of the screen — came out 1.3 units tall,
+below the sheet's own bottom edge. `flex: none` on the item that must not yield
+is the fix; the general rule is that **a flex column with a scroller in it has to
+say which item wins, or the scroller loses by default.**
+
+Note what found each one. Neither is visible in a green audit cell: the tile
+overflow was reported as 12 clipped elements (accurate but unattributed), and the
+list collapse was reported as ONE element 4px under the home indicator — a
+rounding-error finding that happened to be forty circuits. The lesson is the same
+one as the survey's: the number is a pointer, and the diagnosis is always a
+measurement of the live box.
+
 ## The honest counter-argument
 
 Nine queries is a small number, and eight of them are not currently causing a

@@ -275,7 +275,15 @@ body { --compact-at: 600px; }
  * exactly what does not fit, and the body scrolls — which is what the comment
  * above already promised ("the body is the scroller and the track list keeps its
  * own cap below, so the two never fight"). It only ever fought because nothing
- * said which one wins. */
+ * said which one wins.
+ *
+ * A `min-height` floor was tried first, on the theory that most of this
+ * shrinking is healthy and only the collapse to zero is the bug. It is not: the
+ * shrink is never healthy here, because the section it is yielding to cannot
+ * shrink at all. MEASURED on a portrait iPhone at UI SIZE 130%, with a two-row
+ * floor: the section kept all 304 of its units and the list was clamped to the
+ * floor — so the floor was not a safety net, it was the list's height, at every
+ * portrait scale from 80 up. Two rows of forty is not a list either. */
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { flex: none; }
 /* AND WHEN THE BODY MUST SCROLL, THE LIST IS WHAT SHOULD BE ABOVE THE FOLD.
  * `flex: none` above gives the list its height back, but on this sheet — 306
@@ -286,24 +294,31 @@ body { --compact-at: 600px; }
  * a player who opens SELECT CIRCUIT and sees no circuits has no way to know
  * scrolling is what is missing.
  *
- * Only in the compact stack. On any sheet with the height for both, the reading
- * order preview-then-list is the right one and is left alone; `order` is scoped
- * to the one case where the body genuinely cannot show both. Turning the pair on
- * instead was measured and is worse here: at 400 units wide the two columns give
- * the list the same 137px (its `max-height` cap binds either way), shrink the
- * map from 269 to 210, and stack BACK above START into a 177px foot.
+ * The whole stack, not just the compact tier. Gating this on `data-density`
+ * looked tighter and was wrong: MEASURED, the body overflows on a portrait
+ * iPhone at every scale from 80 to 150, while the sheet only classifies compact
+ * at 150 — so the three sizes most people actually use kept the list below the
+ * fold, now with a real height instead of a collapsed one. "Is the sheet short"
+ * is not the question; "does the body have room for both" is, and the answer on
+ * a stacked select is no, at every phone size there is. The stack only happens
+ * on a sheet under 620 units wide — phones and small windows — so this does not
+ * touch the desktop, where the pair is on and `order` means nothing.
  *
- * And once the list is FIRST, its cap stops earning its keep. `max-height:
- * min(40 * svhz, 300px)` exists so "the list cannot push the sheet's own body
- * into a long scroll" — but in this tier the body is already scrolling, so the
- * cap buys nothing and costs three quarters of the list: 40 % of a 343px screen
- * is 91 units, and one row at UI SIZE 150 % is 52, so it showed ONE AND THREE
- * QUARTER CIRCUITS out of forty. `100%` resolves against the body's definite
- * height (the sheet's `minmax(0, 1fr)` row) and hands the list exactly the fold
- * it is sitting at the top of. */
-#sel-inner[data-density="compact"]:not([data-pair="on"]) > #sel-body > #sel-tracks {
-  order: -1; max-height: 100%;
-}
+ * Turning the pair on instead was measured and is worse: at 400 units wide the
+ * two columns give the list the same 137px (its `max-height` cap binds either
+ * way), shrink the map from 269 to 210, and stack BACK above START into a 177px
+ * foot.
+ *
+ * `max-height: 100%` was also tried here, to let the list fill the body rather
+ * than sit at its cap, and it is a trap. It does exactly that on a landscape
+ * phone, where the sheet is height-capped by the screen and the body's
+ * `minmax(0, 1fr)` row is therefore DEFINITE. On a portrait phone the sheet is
+ * content-sized, that row is indefinite, a percentage max-height against an
+ * indefinite containing block computes to `none`, and the cap silently
+ * disappears — the one direction a height bound must never fail in. The existing
+ * `min(40 * svhz, 300px)` cap is viewport-derived and resolves the same way
+ * everywhere, so it stays. */
+#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { order: -1; }
 .sel-section { min-width: 0; }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
