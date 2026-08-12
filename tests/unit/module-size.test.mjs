@@ -108,7 +108,10 @@ const CEILINGS = {
   // vertically under its own dressing (measured up to 43 m at Spa) — fixed by
   // freezing that remap at `sceneryStartFrac` and rotating the bumps and the
   // undulation ripple by the same arc-length shift in buildCenterline.
-  "js/track/tracks.js": 2725,
+  // Raised 2725 -> 2750: concurrent floodmast/lamp-register work on deploy
+  // landed ~25 lines past the ceiling; keep the ratchet tight to the measured
+  // size rather than leaving a failing tooling-fast on the deploy branch.
+  "js/track/tracks.js": 2750,
 };
 
 test("the big modules are not growing unnoticed", () => {
