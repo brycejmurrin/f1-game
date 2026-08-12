@@ -748,13 +748,19 @@ async function fetchSource(args) {
   // ambientCG: leave _files.json for a human to pick — its download shape differs
   // and CORS-blocked browser path never uses it; node can grow later.
   if (host === "polyhaven") {
-    const wanted = [
-      ["Diffuse", "diffuse"],
-      ["nor_gl", "normal"],
-      ["arm", "arm"],
-    ];
-    for (const [map, stem] of wanted) {
+    // Prefer Diffuse; some fabrics only publish col_1/col_2 variants.
+    const albedoMaps = ["Diffuse", "col_1", "col_01", "col_2"];
+    let albedo = null, albedoName = null;
+    for (const map of albedoMaps) {
       const f = pickFile(j, map, res, "jpg");
+      if (f) { albedo = f; albedoName = map; break; }
+    }
+    const wanted = [
+      [albedoName || "Diffuse", "diffuse", albedo],
+      ["nor_gl", "normal", pickFile(j, "nor_gl", res, "jpg")],
+      ["arm", "arm", pickFile(j, "arm", res, "jpg")],
+    ];
+    for (const [map, stem, f] of wanted) {
       if (!f) { console.log(`  skip ${map}: not published`); continue; }
       const ext = f.fmt || "jpg";
       const dest = path.join(dir, `${stem}.${ext}`);
