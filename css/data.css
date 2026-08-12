@@ -340,7 +340,13 @@
      that — only touch-action does. */
   touch-action: none;
 }
-.dh-canvas.dh-map { cursor: default; max-width: 320px; max-width: min(320px, 42dvh); margin: 0 auto; aspect-ratio: 1 / 1; }
+.dh-canvas.dh-map {
+  cursor: default;
+  max-width: 320px; max-width: min(320px, 42dvh);
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
 /* colour key for the car dots under the track map */
 .dh-maplegend {
   display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px;

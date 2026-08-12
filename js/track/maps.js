@@ -171,6 +171,38 @@ const TrackMaps = (function () {
     const c = def && compute(def);
     return c ? c.pts : null;
   }
+
+  // World-space outline aspect (x/z span), clamped so a pathological centreline
+  // cannot blow the canvas. Used by the picker preview + track-detail modal so
+  // CSS never has to stretch a fixed 520×300 bitmap into a different box.
+  function aspect(def) {
+    const pts = outline(def);
+    if (!pts || pts.length < 2) return 520 / 300;
+    let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      if (pts[i][0] < minx) minx = pts[i][0]; if (pts[i][0] > maxx) maxx = pts[i][0];
+      if (pts[i][1] < miny) miny = pts[i][1]; if (pts[i][1] > maxy) maxy = pts[i][1];
+    }
+    return Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
+  }
+
+  // Size a canvas bitmap (+ matching CSS box) to fit maxW×maxH while keeping
+  // the circuit's aspect. Callers still draw via draw(); this only sizes.
+  // Clearing a prior inline size before measuring is the caller's job.
+  function fitCanvas(canvas, maxW, maxH, def) {
+    const a = aspect(def);
+    let boxW = Math.max(1, Math.floor(maxW || 1));
+    let boxH = Math.max(1, Math.floor(maxH || 1));
+    let w = boxW, h = Math.round(w / a);
+    if (h > boxH) { h = boxH; w = Math.round(h * a); }
+    w = Math.max(1, w); h = Math.max(1, h);
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.style.aspectRatio = String(a);
+    return { w: w, h: h, aspect: a };
+  }
   function corners(def) {
     const c = def && compute(def);
     return c ? c.corners : [];
@@ -463,7 +495,7 @@ const TrackMaps = (function () {
   }
 
   return {
-    outline, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
+    outline, aspect, fitCanvas, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
     SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
