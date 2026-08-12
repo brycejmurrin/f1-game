@@ -195,6 +195,33 @@ Don't trust a "currently clean" list in prose — run the tool. At the time of
 writing it is 3 circuits (miami, portimao, sepang), and an earlier draft of
 this very section claimed 2, then 5.
 
+## 5b. The inherited 12, and where the mechanical fixes ran out
+
+Merging the deploy branch brought 12 new floaters from scenery written before
+the guard existed. Two were **Trap B and fixed mechanically**, both in one line
+once `terrainYAt(x, z)` reached the circuit API:
+
+| | cause | result |
+|---|---|---|
+| spa | one `anchor()` reused along 248 m of the old-circuit ribbon | 7 → 6 |
+| mugello | `anchor()` at the road edge, rows marching 37 m back up a hillside | 16 → 13 |
+
+The rest are **not mechanical, and three were checked and deliberately left**:
+
+- **mugello `terrazza`** — a TERRACED stand. Each row rises by design and steps
+  into the hill; re-seating its rows on the terrain flattens the terrace and
+  deletes the thing it is.
+- **montreal Expo hall** — vertical aluminium fins projecting off each tier's
+  façade. Cantilevered off a building, which is what a fin is.
+- **montreal splayed-leg structure** — frustum segments at mid-height along legs
+  that splay ~9 m out as they descend. The segments are elevated by
+  construction; only the feet should touch.
+
+The lesson for whoever picks this up: **elevated is not unsupported**, and the
+count is not the target. Applying the Trap B pattern to any of the three above
+would have improved the number and damaged the circuit. Judge each one against
+§4's known-legitimate list before touching it.
+
 ## 6. Clipping — the other half
 
 Grounding and clipping are the same question on different axes, and the
