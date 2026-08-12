@@ -23,6 +23,17 @@
  *
  *   node tools/rotate-markings.cjs --check    # report, write nothing
  *   node tools/rotate-markings.cjs --write
+ *
+ * NOT IDEMPOTENT — do not re-run --write against an already-rotated
+ * markings.js. `_sceneryShift` is a fixed function of startFrac vs
+ * sceneryStartFrac, so it stays nonzero forever once a circuit opts in; this
+ * tool has no way to tell "already rotated" from "never rotated" and will add
+ * the shift AGAIN on a second run, silently corrupting every turn on that
+ * circuit. Measured: a second --check against the correctly-rotated file
+ * proposed changing all 27 circuits again, each one a double rotation.
+ * `--check` is safe any time; only run `--write` once per circuit, when it
+ * first opts into `sceneryStartFrac`. Verify with `t1check.cjs`-style probes
+ * (turns[0] against the measured first apex), not by trusting a green --check.
  */
 "use strict";
 

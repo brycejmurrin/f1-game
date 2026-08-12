@@ -246,11 +246,42 @@ remap — origin shift, no side flip, no reverse/mirror handling — deliberatel
 because the same emitters are unremapped on the four reversed circuits (monaco,
 kyalami, paul_ricard, singapore) *today*, and giving them the full treatment
 would silently move already-shipped geometry on circuits this change has no
-business touching. **That latent gap is still open and is worth its own pass.**
+business touching.
 
 `frameAt` is wrapped at the API boundary rather than at its definition: `models/`
 and the kits hold the raw one and resolve fractions the caller already handed
 them, so shifting it at source would apply the shift twice.
+
+**That latent gap is confirmed live, not just theoretical — three of the four
+reversed circuits (monaco, paul_ricard, singapore) now carry a nonzero shift,
+and the shift-only wrap is measurably wrong for them.** Evidence, from
+Monaco: `tools/float-audit.cjs monaco --why` names `waterField`/`grandstandEx`/
+`cameraTower`/yacht call sites, and floating clusters went **29 → 48** after
+the shift landed; `tools/coplanar-audit.cjs monaco --why --raw` found pairs
+with byte-identical bounding boxes at two different harbour locations — not
+near-misses, the exact same box twice.
+
+The mechanism: `waterField`'s raw `k` (like every non-reverse-aware emitter,
+historically) was always passed straight through with no space conversion at
+all — not even the reverse flip the STANDARD group (`place`, `anchor`, …) has
+always applied via `TrackSpace.sceneryNode`. A reversed circuit's own `K()`
+helper (monaco's is `(s) => Math.round(s * n) % n`, tracks.js:91) was tuned by
+its author to compensate for exactly that absence — which means the fractions
+authored for `waterField` and the fractions authored for `place`/`anchor` are
+**not necessarily in the same space**, even within one circuit file, and there
+is no way to tell which is which without checking each call site. Adding
+`sceneryStartFrac`'s shift on top of an authored-space mismatch that was
+previously invisible (because the shift was always zero) is what surfaced it.
+
+Not fixed here: closing it correctly requires reading every `groundPatch`/
+`overheadSpan`/`groundedSegments`/`waterField`/`circuitKit` call in the three
+affected circuit files and determining, per call, which space its fraction was
+actually authored in — guessing wrong moves already-shipped geometry rather
+than fixing it. `tools/coplanar-baseline.json`, `tools/clip-baseline.json` and
+`tools/float-baseline.json` were only LOWERED where this round's measurement
+showed genuine improvement; monaco/paul_ricard/singapore's grown counts were
+left as failing baselines rather than raised, so `npm run test:sweeps` stays
+red on exactly this until the six-emitter gap gets its own pass.
 
 ### 3. The generic scatter — `HK` and the phased `every()`
 
