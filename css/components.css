@@ -922,21 +922,24 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      longer means rewriting grid coordinates. */
   .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-/* SHORT SHEET: DROP TO TWO COLUMNS. Measured at 852×393 / UI SIZE 115% (the
-   shipped touch default): three columns put DISPLAY ~94px past the sheet floor
-   and left RESOLUTION / ACTIVE AERO only reachable after a non-obvious scroll,
-   while MORE doors sat at 36px because they were missing the tap floor (fixed
-   above). Two columns + a spanning doors row matches the portrait compact case
-   that already works, and fits DRIVING + DISPLAY above the fold on the play
-   shape. Only when data-density is compact — roomy sheets keep the 3-col pack. */
-.sheet[data-density="compact"] .pm-groups {
-  grid-template-columns: 1fr 1fr;
-}
-.sheet[data-density="compact"] .pm-doors {
-  grid-column: 1 / -1;
-  margin-top: var(--gap); padding-top: var(--gap);
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-}
+/* SHORT SHEET USED TO FORCE TWO COLUMNS whenever `data-density="compact"`,
+   beating the 490px three-column container query by specificity. That was
+   written for an older layout; with MORE as a third `.pm-doors` column it is
+   wrong in both directions:
+
+     MEASURED 852×393 (play shape), body scroll screens:
+                         compact→2col (old)   width→3col (now)
+       UI SIZE 100%           1.44                 1.00
+       UI SIZE 115%           1.76                 1.12
+       UI SIZE 150%           2.55                 1.69
+
+   Own width on that phone is ~750 at every scale that still goes compact —
+   well past 490 — so the container query already wants three columns. The
+   unconditional compact override left every zoom ≥~100% stuck at two columns
+   despite clearing the threshold, which is exactly "at certain zoom levels
+   settings should be three columns". Narrow sheets still get 1→2 cols from
+   the @container rules above; doors still span via `(max-width: 489px)`.
+   Compact only tightens gaps / wraps door labels below. */
 /* Compact DISPLAY: drop the disabled/hidden controls' visual weight and tighten
    the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
