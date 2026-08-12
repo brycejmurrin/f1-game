@@ -71,9 +71,16 @@ is strictly inside the first's (`−13…+34`), and both carry a comment defendi
 Deliberately NOT merged: ~55k simple float ops/s is ~0.05 % of a core, and the
 second loop nests a brace deeper, so merging risks changing racing behaviour for
 no measurable return.
-*But there is a latent correctness bug in there worth its own look*: loop 1
-skips self by identity, loop 2 by `ranked[(c.rank||1)-1]`. A stale `rank` makes
-a car repel itself sideways.
+The two loops DO skip self differently — loop 1 by identity, loop 2 by
+`ranked[(c.rank||1)-1]` — and this file first claimed that as a latent bug on
+the theory that a stale `rank` makes a car repel itself sideways. **Traced, and
+it is not reachable.** `rank` is assigned from `ranked` every physics step
+immediately before the `updateCar` loop; nothing reorders or mutates `ranked`
+inside it; and `updateCar` early-returns for `retired` (the only cars excluded
+from `ranked`) and for `finished`. So every car that reaches the separation loop
+satisfies `ranked[ci2] === c`. Left as written. Recorded because the claim was
+made without tracing it, which is the same error this document is otherwise
+about.
 
 **`massBlocked` is O(buildings²)** (`js/track/tracks.js`) — `masses` is a flat
 array with no spatial index, unlike `barSegs` which got one. It is the one place
