@@ -44,12 +44,14 @@ import { test, expect } from "@playwright/test";
 import { createRequire } from "module";
 export const TRACKS = createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS;
 
-/* The same roster for the all-circuit AUDIT specs, honouring TRACK=<id> so one
-   circuit can be measured on its own. Three specs had each pasted their own
-   copy of the 40 ids; a new circuit added to js/circuits/ silently escaped all
-   three. */
+/* The same roster for the all-circuit AUDIT specs, honouring TRACK=<id> (or a
+   comma-separated TRACK=<id>,<id> subset) so one circuit — or a handful under
+   investigation — can be measured on its own. Three specs had each pasted their
+   own copy of the 40 ids; a new circuit added to js/circuits/ silently escaped
+   all three. */
 export function auditTracks() {
-  return process.env.TRACK ? [process.env.TRACK] : TRACKS;
+  if (!process.env.TRACK) return TRACKS;
+  return process.env.TRACK.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
 // 6 evenly spaced lap positions (~every 16.7%): 0, 17, 33, 50, 67, 83%. Enough
