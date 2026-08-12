@@ -897,6 +897,27 @@ body:not(.desktop) .cs-cam-lbl,
 body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
 body:not(.desktop) .cs-cam-caret { font-size: 11px; }
 body:not(.desktop) #cs-unlimited { font-size: 12px; }
+/* FREE BUILD COMES OFF THE FULL TAP LADDER ON A SHORT SHEET — and it is the
+   single biggest thing in this header, by a distance nobody would guess from
+   looking at it. It is a 10px chip with 4px of padding, so its own content is
+   ~18 own units; `min-height: var(--tap)` (css/components.css) makes it 52, and
+   because it shares a flex line with the budget READOUT, which is 20, the whole
+   line becomes 76.
+   MEASURED, garage on a landscape iPhone at UI SIZE 150% — the shape the game is
+   played in. Sheet 218 own units. Header 146.4 of them: title+budget line 76,
+   budget bar 10, stat block 46. Foot 54. Which leaves SEVENTEEN units for the
+   category rail and the parts list TOGETHER, both of which the audit's new
+   `starved` check correctly calls absent. One button's tap floor was a third of
+   the panel.
+   `--tap-min` is the WCAG 2.5.8 floor expressed in the sheet's own units
+   (css/tokens.css) — 24 ACTUAL px however the sheet is zoomed. So this stays a
+   legal target; it stops being a 52px one. That trade is already made twice in
+   this codebase for exactly this kind of control, both recorded: the tuner's
+   rail foot and the compact action bars. FREE BUILD is a two-state toggle you
+   press once a session, sitting next to the list you came to the screen to read.
+   Only where the sheet is short. At any comfortable height it keeps the full
+   ladder, because there the 52 costs nothing. */
+#cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--tap-min); }
 
 /* ---------- the SHORT garage head ---------- */
 /* `data-density="compact"` (js/game/sheetshape.js) means the sheet is short in
