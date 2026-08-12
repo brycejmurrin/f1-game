@@ -231,7 +231,7 @@
      has, and this is how big they are. The in-race HUD is deliberately NOT on
      this scale (see css/hud.css) — its labels are glanced at, not read, and
      they are sized to boxes that have to clear the driving controls. */
-  --fs-micro: 11px;
+  --fs-micro: 12px;
   /* ---- TYPE SCALE — seven steps, menus/HUD-adjacent body text only ----
      No type system existed: 294 raw `font-size: Npx` declarations across the
      eight menu stylesheets, measured by counting every one of them, sorted:
@@ -246,7 +246,7 @@
      Above ~22px every remaining size (23-68px) is a ONE-OFF: a HUD digit
      readout or a hero title, not a repeated body size. Those stay off this
      scale entirely, the same exclusion css/hud.css already documents above.
-       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (11px)
+       --fs-1  micro labels, badges, uppercase tags        = --fs-micro (12px)
        --fs-2  body base — the single most common size      (13px; was 12)
        --fs-3  body emphasis / secondary label               (14px; was 13)
        --fs-4  control label / subhead                       (15px; was 14)
