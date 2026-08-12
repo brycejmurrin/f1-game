@@ -257,7 +257,6 @@
                inside a zone X-mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
           <button id="pm-aero">ACTIVE AERO: MANUAL</button>
-          <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
         </section>
       </div>
       <div class="pm-col">
@@ -281,31 +280,37 @@
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">115%</b></span>
             <input id="pm-hudscale" type="range" min="80" max="150" step="1" value="115" aria-label="HUD size"></label>
           <button id="pm-res">RESOLUTION: AUTO</button>
-          <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
-          <button id="pm-camtune">CAMERA TUNER&hellip;</button>
           <button id="pm-renderer" hidden>RENDERER: WEBGL2</button>
           <button id="pm-gfx" hidden>GRAPHICS: STANDARD</button>
         </section>
       </div>
-      <div class="pm-col">
-        <section class="pm-group">
-          <h3 class="pm-group-h">AUDIO</h3>
-          <!-- One entry. The SOUND: ON/OFF button duplicated the SOUND EFFECTS
-               switch inside, and SPOTIFY was a second top-level door into the
-               same subject that sat greyed out unless you had a Premium account
-               and had already pasted a client id — so most players only ever
-               saw it disabled. The Spotify player is now reached from inside
-               MUSIC & SOUND, next to the settings that turn it on. -->
-          <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
-        </section>
-        <section class="pm-group">
-          <h3 class="pm-group-h">HELP</h3>
-          <!-- Same #howtoplay sheet the title screen's HOW TO PLAY opens; it sits
-               at z-index 40, above #pmsettings (35), so it lays over the settings
-               menu and DONE drops you straight back to it. -->
-          <button id="pm-howto">HOW TO PLAY&hellip;</button>
-        </section>
-      </div>
+    <!-- THE DOORS, SEPARATED FROM THE SETTINGS.
+         Five of the sixteen controls on this screen were never settings: they
+         open other screens, and their `…` already said so. Mixed into the
+         groups they cost ~260 own units — about 38% of the body — and made two
+         of the four groups (AUDIO, HELP) a heading wrapped around a single
+         button, so the heading cost as much as the control under it.
+         MEASURED before this: 13 buttons and 2 sliders came to ~680 own units,
+         which is 5.2 screens of scroll on a landscape phone at UI SIZE 150% and
+         2.1 in portrait at the shipped default. Doors are a place you GO; the
+         list above is what you CHANGE, and the two do not belong in one column.
+         They keep their full tap height — these are still primary targets — but
+         they flow as a row, so the count of rows follows the room rather than
+         the number of doors. -->
+    <nav class="pm-doors" aria-label="More screens">
+      <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
+      <!-- Same #howtoplay sheet the title screen's HOW TO PLAY opens; it sits at
+           z-index 40, above #pmsettings (35), so it lays over the settings menu
+           and DONE drops you straight back to it. -->
+      <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
+      <button id="pm-camtune">CAMERA TUNER&hellip;</button>
+      <!-- The SOUND: ON/OFF button duplicated the SOUND EFFECTS switch inside,
+           and SPOTIFY was a second top-level door into the same subject that sat
+           greyed out unless you had Premium and had pasted a client id. The
+           Spotify player is reached from inside MUSIC & SOUND now. -->
+      <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
+      <button id="pm-howto">HOW TO PLAY&hellip;</button>
+    </nav>
     </div>
     <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
