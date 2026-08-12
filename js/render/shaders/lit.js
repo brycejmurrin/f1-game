@@ -584,6 +584,16 @@ float cloudShadow(vec3 wp) {
 }
 
 float sampleShadow(vec3 wpos) {
+  // The whole function collapses to 1.0 when the pass is off: its only
+  // non-trivial exit is max(0.0, mix(1.0, sh, uShadowStr * edgeFade)), and
+  // mix(1.0, sh, 0.0) is exactly 1.0. Without this line every opaque fragment
+  // still paid up to 16 dependent texture fetches — 4 PCSS blocker taps, 8
+  // Poisson shadow taps, 4 car-map taps — and then threw the result away.
+  // glx.js drives uShadowStr to 0 whenever the key luminance falls below ~0.28
+  // without a moon floor (cloudy, wet or foggy nights — frame.moonK is forced
+  // to 0 in fog) and whenever the shadow pass is disabled outright, which is
+  // exactly the overcast-night case that is already the heaviest to render.
+  if (uShadowStr <= 0.0) return 1.0;
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;

@@ -526,7 +526,22 @@ const SceneryNature = (function () {
       }
       ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
-      addPrism(out, [x, baseY, z], [w, h, len], col, [r, [0, 1, 0], f]);
+      // BURY the base. addPrism anchors at the BASE (Trap A in
+      // docs/SCENERY-GROUNDING.md), so a prism placed at baseY has its underside
+      // exactly there — and every one of the 28 ridge() calls across 24 circuits
+      // passes `pyMin`, the lap's LOWEST NODE. The ground these backdrop ridges
+      // actually stand on out there is the floor slab, and that sits at
+      // `floorY = pyMin - 1` (js/track/surface.js) — so the ridge line perched
+      // above its own ground by construction, fleet-wide. 206 of monza's 214
+      // flagged clusters were this one helper.
+      //
+      // Sink the origin and add the SAME amount back to the height, so the
+      // silhouette above ground is unchanged — dropping the origin alone would
+      // shave SINK metres off every hill on 24 circuits. mountain() already does
+      // the equivalent for its skirt (`baseY - 2`); ridge() was the sibling that
+      // never got it.
+      const SINK = 2;
+      addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
     };
     // Populate a raked seating bank with speckled spectators. Front row sits at
     // clearance `gap` beyond the road edge and the bank rises `rise` m over
