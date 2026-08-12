@@ -315,10 +315,12 @@
       // testing, and the masts are unusually TALL and slim — the vertical
       // punctuation on an otherwise horizontal, low-slung site. Real masts via
       // floodMast rather than a hand-rolled pole so they carry lamp heads.
+      // light:false — generic floodlights still own the night pools; these are
+      // accent towers, not a replacement lighting rig.
       for (const [s, side, gap] of [
         [0.030, -1, 24], [0.075, 1, 34], [0.245, -1, 30],
         [0.505, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
-      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
 
       // The paddock-club terraces: three low white pavilions stepping along the
       // hillside above Turn 1, each with a shaded roof deck. One 62 m block was
