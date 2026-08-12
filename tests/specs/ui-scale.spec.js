@@ -206,6 +206,40 @@ test.describe("UI scale", () => {
 
     await page.evaluate(() => window.__apex.hudScale(80));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.8" });
+  });
+
+  // applyScale() (js/game.js) runs on every boot, reading straight from
+  // localStorage — the slider's own oninput can't produce an out-of-range value
+  // (the native <input type=range> clamps .value on assignment), but a value
+  // outside [80,150] can still reach apex26.uiScale/hudScale from a direct edit
+  // or an older build with a different range. The CSS custom property that
+  // actually sets the on-screen size used to be read from that RAW number
+  // instead of the already-clamped percentage the slider itself displays — the
+  // slider would show a sane value while the real render used whatever was
+  // stored, unbounded.
+  test("an out-of-range stored scale clamps the applied CSS property, not just the slider label", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.uiScale", "500");
+      localStorage.setItem("apex26.hudScale", "-40");
+    });
+    await boot(page);
+    const cs = await page.evaluate(() => {
+      const s = getComputedStyle(document.documentElement);
+      return { ui: s.getPropertyValue("--ui-scale").trim(), hud: s.getPropertyValue("--hud-scale").trim() };
+    });
+    expect(cs.ui, "500 must clamp to SCALE_MAX (150%)").toBe("1.5");
+    expect(cs.hud, "-40 must clamp to SCALE_MIN (80%)").toBe("0.8");
+
+    // The slider's own displayed value/label must read the SAME clamped number,
+    // not merely a different-but-also-safe one — this is the invariant that
+    // broke: the readout was always correct even while the applied CSS was not.
+    const shown = await page.evaluate(() => ({
+      uiInput: document.getElementById("pm-uiscale").value,
+      uiLabel: document.getElementById("pm-uiscale-v").textContent,
+      hudInput: document.getElementById("pm-hudscale").value,
+      hudLabel: document.getElementById("pm-hudscale-v").textContent,
+    }));
+    expect(shown).toEqual({ uiInput: "150", uiLabel: "150%", hudInput: "80", hudLabel: "80%" });
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.

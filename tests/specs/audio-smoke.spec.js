@@ -69,3 +69,31 @@ test("real GameAudio unlock and engine synthesis run after a user gesture", asyn
   expect(state.contextState).toBe("running");
   expect(state.engineOn).toBe(true);
 });
+
+// GameAudio.setMusicVolume/setSfxVolume clamp to 0..1 and RETURN the clamped
+// value; js/game/audio-panel.js used to call them at boot and discard that
+// return, keeping its OWN musicVol/sfxVol (the pair the MUSIC & SOUND panel's
+// slider label reads) at whatever raw number came out of localStorage. The
+// gain itself was always safe — only the number shown on the slider could
+// disagree with it.
+test("an out-of-range stored volume clamps both the audio gain and the panel's own label", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("apex26.volMusic", "40");    // way over the 0..1 gain range
+    localStorage.setItem("apex26.volSfx", "-3");       // way under it
+  });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
+  expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
+
+  await page.locator("#mb-settings").click();
+  await page.locator("#pm-audio").click();
+  await expect(page.locator("#audioset")).toBeVisible();
+  const shown = await page.evaluate(() => ({
+    mvolInput: document.getElementById("as-mvol").value,
+    mvolLabel: document.getElementById("as-mvol-v").textContent,
+    svolInput: document.getElementById("as-svol").value,
+    svolLabel: document.getElementById("as-svol-v").textContent,
+  }));
+  // 0..1 gain maps to the panel's 0..10 slider by x10 — 1 -> "10", 0 -> "0".
+  expect(shown).toEqual({ mvolInput: "10", mvolLabel: "10", svolInput: "0", svolLabel: "0" });
+});

@@ -6730,9 +6730,15 @@ const scalePct = (k) => {
 };
 function applyScale(key, prop, inputId) {
   const stored = store.get(key, null);
-  if (typeof stored === "number") document.documentElement.style.setProperty(prop, stored / 100);
-  else document.documentElement.style.removeProperty(prop);
+  // The CSS custom property drives the ACTUAL on-screen size — it must read the
+  // CLAMPED pct, not the raw stored number. A value outside [SCALE_MIN,
+  // SCALE_MAX] can reach storage from outside this slider (an older build's
+  // range, a direct localStorage edit) and this function runs on every boot, so
+  // an unclamped read here silently applied an out-of-range scale while the
+  // slider's own displayed number — always clamped — showed something else.
   const pct = scalePct(key);
+  if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
+  else document.documentElement.style.removeProperty(prop);
   const input = $(inputId); if (input) input.value = String(pct);
   const out = $(inputId + "-v"); if (out) out.textContent = pct + "%";
 }
