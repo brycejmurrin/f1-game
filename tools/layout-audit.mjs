@@ -752,6 +752,37 @@ const PROBE = (rootSel) => {
         text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) });
     }
   }
+
+  // DEEP SCROLL: the other end of the same axis, and the other thing this tool
+  // cannot see. `starved` catches a region with NO room. This catches one with
+  // far too little — a body the player has to wind through five screens of.
+  //
+  // It is not a clipping bug and it never will be: everything is reachable,
+  // nothing overflows, no control is under the notch, and the cell is GREEN.
+  // MEASURED by hand, pause SETTINGS: 5.2 screens of scroll on a landscape phone
+  // at UI SIZE 150%, 3.4 in portrait, and 1.0 on an iPad. Nothing in this probe
+  // could tell those apart, so "the settings menu is a mile long on a phone" was
+  // only ever findable by opening it and scrolling.
+  //
+  // AMBER, NOT RED, and deliberately: unlike everything else here this is a
+  // judgement about how much winding is too much, not a fact about a box being
+  // in the wrong place. It is counted and reported on its own line so it can
+  // never be mistaken for a clipped element — the same treatment `smallTaps`
+  // gets for the same reason. 3.0 is the trigger because the measurements above
+  // straddle it: an iPad sits at 1.0, a phone at 3.4-5.2, and a sheet you can
+  // cross in two pulls is a list, not a maze.
+  out.deepScroll = [];
+  for (const el of root.querySelectorAll(SCROLLERS)) {
+    if (!visible(el)) continue;
+    if (!/(auto|scroll)/.test(getComputedStyle(el).overflowY)) continue;
+    const ch = el.clientHeight;
+    if (ch < 44) continue;             // that is `starved`, already reported above
+    const screens = el.scrollHeight / ch;
+    if (screens > 3) {
+      out.deepScroll.push({ el: desc(el), screens: Math.round(screens * 10) / 10,
+        h: px(ch), content: px(el.scrollHeight) });
+    }
+  }
   out.sheet = sheet === root ? null : { el: desc(sheet), w: px(sr.width), h: px(sr.height) };
   return out;
 };
@@ -947,6 +978,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
           `  tapUnder24 ${String(n(cell.tinyTaps)).padStart(2)}  tapSoft ${String(n(cell.smallTaps)).padStart(2)}` +
           `  trunc ${String(n(cell.truncated)).padStart(2)}  underHW ${String(n(cell.underHardware)).padStart(2)}` +
           `  starved ${String(n(cell.starved)).padStart(2)}` +
+          `  deepScroll ${String(n(cell.deepScroll)).padStart(2)}` +
           `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}`));
   }
   await page.close();
@@ -992,8 +1024,16 @@ const skipped = rows.filter((r) => r.skipped);
 const bad = rows.filter((r) => !r.skipped && ((r.clipped || []).length || (r.offscreen || []).length
   || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length
   || (r.underHardware || []).length || (r.starved || []).length));
+const deep = rows.filter((r) => !r.skipped && (r.deepScroll || []).length);
 console.log(`\n${rows.length} cells, ${bad.length} with something to look at, ` +
   `${skipped.length} skipped (nothing measured) -> ${path.relative(ROOT, OUT)}/index.html`);
+if (deep.length) {
+  // Amber, and tallied apart from the red count on purpose — see the probe.
+  const worst = deep.flatMap((r) => (r.deepScroll || []).map((d) => ({ ...d, cell: `${r.screen} ${r.viewport}` })))
+    .sort((a, b) => b.screens - a.screens).slice(0, 8);
+  console.log(`  ${deep.length} cells scroll more than 3 screens (amber, not a clipping bug):`);
+  for (const w of worst) console.log(`    ${String(w.screens).padStart(5)} screens  ${w.el} — ${w.cell}`);
+}
 if (skipped.length) {
   const byReason = new Map();
   for (const r of skipped) {
@@ -1017,11 +1057,12 @@ function writeIndex(rows) {
     const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
       + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length
       + (r.starved || []).length;
-    const cls = issues ? "bad" : (r.smallTaps || []).length ? "warn" : "ok";
+    const cls = issues ? "bad" : ((r.smallTaps || []).length || (r.deepScroll || []).length) ? "warn" : "ok";
     const detail = [
       ...(r.clipped || []).map((c) => `clipped ${c.el} past ${c.by}`),
       ...(r.offscreen || []).map((c) => `offscreen ${c.el}`),
       ...(r.starved || []).map((c) => `starved ${c.el}: ${c.h}px tall, ${c.hidden}px of content it cannot show`),
+      ...(r.deepScroll || []).map((c) => `deep scroll ${c.el}: ${c.screens} screens (${c.h}px showing ${c.content}px)`),
       ...(r.docOverflowX ? ["horizontal overflow"] : []),
       ...(r.errors || []).map((e) => "error " + e),
       ...(r.underHardware || []).slice(0, 4).map((u) => `under hardware: ${u.el} by ${u.worst}px`),
