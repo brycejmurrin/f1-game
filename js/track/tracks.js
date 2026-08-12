@@ -1420,30 +1420,13 @@ const Tracks = (function () {
       // this, roadside foliage happily grows straight through every placed prop.
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
-    // The origin-invariant alias of node k, for RANDOM DRAWS only.
-    //
-    // The generic dressing scatters on hash(nodeIndex) — which tree, which lamp
-    // style, which side of the road, which building kind. Node indices are
-    // counted from the start line, so correcting the line reshuffles the entire
-    // scatter: a different draw at every physical point on the circuit. That is
-    // not cosmetic. Rerolling took same-facing coplanar faces past their
-    // baseline on THIRTEEN circuits (miami 11 -> 19 spots, monaco 5 -> 9), i.e.
-    // it manufactured z-fighting out of nothing but a renumbering.
-    //
-    // Hashing the physical node instead keeps every draw exactly where it was.
-    // Combined with the sceneryStartFrac shift on the authored side, the whole
-    // dressed world holds still and only the line moves. Zero for any circuit
-    // that has not moved its line, so their scatter is bit-for-bit unchanged.
-    //
-    // Placement still uses the real `k`. This is the seed, never the position.
+    // One lighting family: "lamps" canonical; "floodlights"/"lighting" aliases.
+    const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
+    // Origin-invariant alias for RANDOM DRAWS only (placement still uses k).
+    // Keeps scatter stable when startFrac moves — without it coplanar baselines jumped.
     const HKSHIFT = Math.round(TrackSpace.sceneryOriginDelta(def) * n);
     const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
-    // every() walks the lap in fixed steps FROM THE START LINE, so the set of
-    // nodes it visits is itself origin-dependent: move the line and the whole
-    // scatter steps onto different physical points, even with the draw pinned.
-    // Phasing the walk by the same shift makes it revisit the same places, so
-    // HK(k) below recovers exactly the index that node had before. Zero shift
-    // leaves the walk starting at node 0 as it always did.
+    // Phase every() by the same shift so the walk revisits the same places.
     const every = (m, fn) => {
       const stp = Math.max(1, Math.round(m / ds));
       for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
@@ -1459,7 +1442,10 @@ const Tracks = (function () {
       const shift = TrackSpace.sceneryOriginDelta(def);
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
-        if (!kinds.includes("all") && !kinds.includes(kind)) continue;
+        let hit = kinds.includes("all") || kinds.includes(kind);
+        // Any lighting-family rule matches any lighting-family query.
+        if (!hit && LIGHTING_KINDS[kind]) hit = kinds.some((knd) => LIGHTING_KINDS[knd]);
+        if (!hit) continue;
         if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
         const s0 = TrackSpace.wrap01((rule.s0 == null ? 0 : rule.s0) + shift);
         const s1 = TrackSpace.wrap01((rule.s1 == null ? 1 : rule.s1) + shift);
@@ -1835,22 +1821,8 @@ const Tracks = (function () {
       else if (kind === "plane") plane(k, side, d, h, col);
       else tree(k, side, d, h, col, crownForm !== "round" ? { crown: crownForm } : undefined);
     };
-    // Lamp posts — streets / modern / desert. Alternate sides, set behind the
-    // barrier line; the head glows HDR at night via streetLamp(). ~12% of posts
-    // roll a DIFFERENT head style than the track's base lamp — real circuits mix
-    // eras/replacements rather than one uniform style down the whole lap (was
-    // every single post on a track using the exact same style).
-    const LAMP_STYLES = ["arm", "globe", "post"];
-    if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
-      for (const side of [-1, 1]) {
-        if (dressingExcluded("lamps", k, side)) continue;
-        const roll = hash(HK(k) * 19 + side * 5.5);
-        const style = roll > 0.88
-          ? LAMP_STYLES[Math.floor(hash(HK(k) * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
-          : fz.lamp;
-        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(HK(k) * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, style);
-      }
-    });
+    // Furniture streetLamp pass retired — mast pass draws fz.lamp posts + lampPosts.
+
     // Roadside trees — every circuit, per-track species/tint, set back behind the
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
     // staggered depths, each with its own varied colour) so the treeline reads as
@@ -2198,7 +2170,10 @@ const Tracks = (function () {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
       const poleCol = [0.16, 0.16, 0.19];
-      const mstride = Math.max(1, Math.round(22 / ds));   // matches buildTrackLights stride in lighting.js
+      const dens = (typeof LightTune !== "undefined" && LightTune.LT &&
+        typeof LightTune.LT.lampDensity === "number" && LightTune.LT.lampDensity > 0)
+        ? LightTune.LT.lampDensity : 1;
+      const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
       // ── LAMP KIND — decided HERE, once, per post (single source of truth) ──
       // The visible lens albedo and the point light buildTrackLights emits (colour, cone,
@@ -2243,7 +2218,7 @@ const Tracks = (function () {
       track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
-        if (dressingExcluded("floodlights", k, side)) continue;
+        if (dressingExcluded("lamps", k, side)) continue;
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));

@@ -31,7 +31,7 @@ test.describe("Hungaroring track foundation", () => {
 
     expect(result.coordinates).toBe("racing");
     expect(result.exclusions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kinds: expect.arrayContaining(["lamps"]) }),
+      expect.objectContaining({ kinds: expect.arrayContaining(["lighting"]) }),
     ]));
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
     expect(result.models.invalid).toEqual([]);

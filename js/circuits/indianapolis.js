@@ -35,7 +35,7 @@
     // Nothing grows inside a motor speedway. Suppress the generic foliage pass
     // across the whole oval section — grass, tarmac and grandstand only.
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.86, s1: 0.22 },
+      { kinds: ["foliage"], s0: 0.86, s1: 0.22 },
       { kind: "foliage", s0: 0.30, s1: 0.70 },
     ],
     // Flat Midwestern summer: high hazy sun, humid white horizon.

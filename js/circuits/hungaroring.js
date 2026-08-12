@@ -26,7 +26,7 @@
     // Bespoke treelines and circuit lamps own the bowl; suppress generic copies
     // that crowd the pit sightline and duplicate the day-only lighting furniture.
     dressingExclusions: [
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
     ],
     // Keep the terrain ribbon inside the compact foldbacks. The default 120 m
     // outer span chords from the raised T3 approach across the lower T2 basin.
@@ -63,7 +63,7 @@
               broadcastCompound, cameraTower, building, motorhome, tower,
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
-              seat, foundation, cantilever,
+              seat, foundation, cantilever, lampPost,
               forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
               recordBarrier, circuitKit, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
@@ -349,16 +349,13 @@
       });
 
       // ====================================================================
-      // LAMP POSTS — double-arm, every ~80 m, full circuit
-      // ====================================================================
+      // LAMP POSTS — double-arm, every ~80 m, full circuit.
+      // Generic lighting dressing is excluded; these posts register lampPosts
+      // so night pools anchor to the fixtures you see.
       every(80, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
           if (hh < 0.15) continue;
-          // frac~0.432 used to be skipped here for a reported terrain intrusion.
-          // Diagnosed (see the crowd-blanket note below): with terrainOuter:90
-          // already dialed in, neither the terrain raycast nor the on-track
-          // Minkowski test trips anywhere in this window — the skip was stale.
           const a = anchor(kk, side, 8);
           if (onTrack(a.c[0], a.c[2], 1.5)) continue;
           const b = [a.r, a.u, a.t];
@@ -367,6 +364,8 @@
           addBox(out, armC, [2.4, 0.18, 0.18], LAMP_ARM, b);
           const headC = vadd(vadd(a.c, a.u, 9.2), a.r, side * 2.2);
           addBox(out, headC, [1.0, 0.3, 0.7], LAMP_HEAD, b);
+          if (typeof lampPost === "function")
+            lampPost({ pos: headC, k: kk, side, kind: "halogen" });
         }
       });
       // Extra lamp clusters at key braking zones
@@ -389,7 +388,11 @@
           addCyl(out, vadd(a.c, a.u, -0.4), 0.12, 10.4, LAMP_POST, 5, b);
           // cantilever() emits the arm with the head, so the head can never be
           // left hovering beside a bare pole (it was, 168 times).
-          cantilever(out, vadd(a.c, a.u, 9.2), 1.8, side, [1.0, 0.3, 0.7], LAMP_HEAD, LAMP_POST, b);
+          const headBase = vadd(a.c, a.u, 9.2);
+          cantilever(out, headBase, 1.8, side, [1.0, 0.3, 0.7], LAMP_HEAD, LAMP_POST, b);
+          const headC = vadd(headBase, a.r, -side * 1.8);
+          if (typeof lampPost === "function")
+            lampPost({ pos: headC, k: kk, side, kind: "halogen" });
         }
       }
 

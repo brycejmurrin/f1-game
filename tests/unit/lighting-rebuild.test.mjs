@@ -53,7 +53,7 @@ function extractFn(src, name) {
 const LIGHTING = read("js/game/lighting.js");
 // The build path: buildTrackLights and its helper floodColor (called only from
 // the build). The per-frame path: functions render() calls each frame.
-const BUILD_FNS = ["buildTrackLights", "floodColor"];
+const BUILD_FNS = ["buildTrackLights", "floodColor", "applyLampDensity", "lampDensityFactor", "lampStrideNodes", "lampStrideM"];
 const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap"];
 
 test("the light functions this test models still exist", () => {
@@ -92,4 +92,16 @@ test("every build-only knob carries rebuild:true", () => {
     "these knobs are baked into the lamp geometry by buildTrackLights but never invalidate it, so\n" +
     "dragging their slider does NOTHING until the track reloads. Add `rebuild: true` to their\n" +
     "TUNE_DEFS entry in js/game/lighting.js:\n  " + offenders.join("\n  "));
+});
+
+test("LAMPS tuner group merges the old FLOODLIGHTS + LAMP BEHAVIOUR tabs", () => {
+  const defs = tuneDefs();
+  const lamp = defs.filter((d) => d.group === "LAMPS");
+  assert.ok(lamp.length >= 20, `expected unified LAMPS tab, got ${lamp.length}`);
+  assert.equal(defs.filter((d) => d.group === "FLOODLIGHTS").length, 0);
+  assert.equal(defs.filter((d) => d.group === "LAMP BEHAVIOUR").length, 0);
+  assert.ok(lamp.some((d) => d.id === "lampLevel" && d.section === "POOLS"));
+  assert.ok(lamp.some((d) => d.id === "lampCull" && d.section === "BEHAVIOUR"));
+  assert.ok(lamp.some((d) => d.id === "lampDensity" && d.rebuild), "LAMP DENSITY must rebuild lights");
+  assert.equal(defs.find((d) => d.id === "floodDay").label, "DAYTIME LAMPS");
 });

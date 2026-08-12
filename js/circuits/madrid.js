@@ -49,7 +49,7 @@
     // the required bespoke landmarks alone).
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
-      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.68, s1: 0.83 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
       { kinds: ["city"], s0: 0.15, s1: 0.55 },
       { kinds: ["city"], s0: 0.83, s1: 0.95 },
     ],

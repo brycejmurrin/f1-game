@@ -43,10 +43,12 @@ test("bahrain floodMastRing registers mast lamps (floodlights excluded)", () => 
   assert.ok(mast.some((p) => p.kind === "flood_bank"), "cool ring should register flood_bank");
 });
 
-test("qatar Musco masts opt out (light:false) — no mast-tagged posts", () => {
+test("qatar Musco masts register as the night lighting rig", () => {
   const track = build("qatar");
   const mast = (track.lampPosts || []).filter((p) => p && p.mast);
-  assert.equal(mast.length, 0, "Qatar keeps generic floodlights; Musco must not double-register");
-  // Generic mast pass still filled lampPosts.
-  assert.ok((track.lampPosts || []).length > 50, "generic floodlights dressing still owns night pools");
+  assert.ok(mast.length > 40, `expected Musco mast lamps, got ${mast.length}`);
+  assert.ok(mast.every((p) => p.kind === "flood_bank"), "cool Musco banks register flood_bank");
+  // Generic floodlights dressing is excluded — only mast-tagged posts remain.
+  const generic = (track.lampPosts || []).filter((p) => p && !p.mast && !p.custom);
+  assert.equal(generic.length, 0, "generic mast pass must stay suppressed on Lusail");
 });

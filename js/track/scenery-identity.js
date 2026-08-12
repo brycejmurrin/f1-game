@@ -65,9 +65,10 @@ const SceneryIdentity = (function () {
     // opts: { h, cool, pool, arms, light }
     // `light` (default true): register a point light at the lens bank so the
     // fixture actually lights the road. Pass light:false for accent-only masts
-    // that sit ON TOP of the generic floodlights dressing pass — otherwise the
-    // same stretch gets two light sources. Circuits that exclude "floodlights"
-    // and use floodMastRing as the race-lighting rig leave the default on.
+    // that sit ON TOP of the generic lamps dressing pass — otherwise the
+    // same stretch gets two light sources. Circuits that exclude "lamps" /
+    // "lighting" and use floodMastRing as the race-lighting rig leave the
+    // default on.
     const floodMast = (k, side, dist, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 36;

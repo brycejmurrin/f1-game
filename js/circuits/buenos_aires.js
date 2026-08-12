@@ -22,7 +22,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 115,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.38, s1: 0.48 },
     ],
     // Buenos Aires summer (the GP ran in April): warm, slightly hazy River
