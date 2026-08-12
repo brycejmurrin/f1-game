@@ -4,16 +4,38 @@ Generated from `TUNE_DEFS` in `js/game/lighting.js`; that registry is the
 source of truth and this table is a view of it. Regenerate rather than hand-edit
 (the generator is in the commit that added this file).
 
-## Every slider is wired
+## Every slider is wired — the full audit
 
-A scan of each id across `js/` finds **zero knobs without a consumer on the
-shipping (GLX) path**. So "this slider does nothing" is never because the value
-goes nowhere. It is one of three things, and they need different fixes:
+An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
+sampled file list) gives all 178 knobs a consumer on the shipping (GLX) path —
+**zero unwired**. The classification, and the invalidation each class needs to
+be live from a slider drag (not just at track load):
+
+| class | count | consumed in | live via | guarded by |
+|---|---|---|---|---|
+| per-frame | 74 | render/frame code | read every frame off live `LT` | — |
+| shader-uniform | 73 | GLX upload → GLSL (all 73 uniforms upload) | uniform re-uploaded each frame | — |
+| build-only | 5 | `buildTrackLights` only (poolEnergy, lampRadiusMul, bleedMul, beamCone, lampGapFill) | `rebuild:true` nulls `track._lights` | `lighting-rebuild.test.mjs` |
+| apply-only | 15 | `applyRaceSettings`/`atmosphere.js` only | `APPLY_RACE_IDS` re-runs it | `lighting-reapply.test.mjs` |
+
+The 16 lamp/tail-light knobs in FLOODLIGHTS / LAMP BEHAVIOUR / CAR are the trap:
+11 of them (`lampFlicker`, `lampWarmup*`, `lampCull*`, `lampBehindBias`,
+`tailLightMul`, `brakeGlowMul`, `tailRange`, `tailFade`) are read in
+`lighting.js` too — but inside `setFrameLights`/`appendCarTailLights`/`lampCap`,
+which run **every frame**, so they are live directly and correctly carry no
+`rebuild` flag. Only the 5 read inside `buildTrackLights` bake into cached
+geometry and need `rebuild:true`; all 5 have it. Counting "read in lighting.js"
+as one bucket wrongly flags all 16 as needing rebuild — the split is by
+function, not by file.
+
+So "this slider does nothing" is never the value going nowhere. It is one of
+these, and they need different fixes:
 
 | Failure mode | How to tell | Fix |
 |---|---|---|
 | **Not stored** | `__apex.lightTune({id: v})` then `__apex.lightTune()[id] !== v` | the store/clamp path, not the renderer |
 | **Stored but not re-applied** | `lightTune()[id]` updates but the scene does not, until some *other* action re-runs `applyRaceSettings()` | the id is missing from `APPLY_RACE_IDS` in `light-store.js` (this is what broke five knobs — see below) |
+| **Stored but not rebuilt** | a lamp/floodlight knob updates but the lamp geometry does not, until the track reloads | the id is read in `buildTrackLights` but its TUNE_DEFS entry lacks `rebuild:true` |
 | **Inert everywhere** | stored, re-applied, but pushed to its extreme it moves no SCENE STATE in any condition | its consumer is gated off, or the effect is genuinely a no-op |
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
