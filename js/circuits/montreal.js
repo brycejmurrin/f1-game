@@ -7,7 +7,15 @@
   {
     id: "montreal",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.9150, // GPS-derived (OpenF1 2025, conf=0.661)
+    // Start/finish line. Snapped to the real one: coord 0.1 m off centreline, 2 nodes past vertex 0.
+    // Was 0.9150. That already measured straight (mean |k| 0.00003 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.0198,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.9150,
     name: "MONTREAL",
     gp: "Canadian GP",
     country: "Canada",

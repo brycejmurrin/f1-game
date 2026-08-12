@@ -7,7 +7,14 @@
   {
     id: "redbull",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.1875, // GPS-derived (OpenF1 2025, conf=0.310)
+    // Start/finish line. Snapped to the real one: coord 2.3 m off centreline; = trace vertex 0 (timing line).
+    // Was 0.1875, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.1875,
     sceneryCoordinates: "racing",
     name: "RED BULL RING",
     gp: "Austrian GP",
@@ -34,8 +41,9 @@
       { t: -70, l: 80, h: -10 }, { t: 80, l: 90, h: -8 }, { t: 0, l: 480, h: -14 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
     ],
     // ~60 m top-to-bottom: Remus crest high, long post-Remus / T4 descent.
-    // Elevations use SOURCE coordinates. startFrac=0.1875 maps these centres to
-    // racing s≈0.12/0.22/0.42; broad shoulders cap the steepest grade near 12%.
+    // Elevations use SOURCE coordinates. With the line corrected to 0.0 the map
+    // is the identity — racing s 0.308/0.408/0.608; broad shoulders cap the
+    // steepest grade near 12%.
     elevations: [
       { s: 0.3075, halfM: 360, rise: 22 },  // racing 0.12: T1 / Niki Lauda climb
       { s: 0.4075, halfM: 430, rise: 32 },  // racing 0.22: Remus crest / high point

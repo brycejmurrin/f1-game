@@ -7,7 +7,14 @@
   {
     id: "singapore",
     name: "SINGAPORE",
-    startFrac: 0.5075, // GPS-derived (OpenF1 2025, conf=0.566)
+    // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
+    // Was 0.5075, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.5075,
     // Marina Bay races ANTI-CLOCKWISE — Pirelli ("cars are driving
     // anti-clockwise"), f1-fansite ("Driving direction: Counterclockwise"),
     // and Turn 1 is a sharp left. The imported centreline runs the other way:

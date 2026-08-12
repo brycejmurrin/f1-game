@@ -7,7 +7,15 @@
   {
     id: "suzuka",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.6125, // GPS-derived (OpenF1 2025, conf=0.281)
+    // Start/finish line. Snapped to the real one: coord 1.3 m off centreline, 1 node before vertex 0.
+    // Was 0.6125. That already measured straight (mean |k| 0.00330 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.9942,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.6125,
     sceneryCoordinates: "racing",
     name: "SUZUKA",
     gp: "Japanese GP",
@@ -29,7 +37,8 @@
       { t: 40, l: 140 },
     ],
     // Elevations and bridges are authored in source-trace space. These source
-    // fractions map through startFrac=0.6125 to racing s≈0.20, 0.45, and 0.817.
+    // fractions map through startFrac=0.9942 to racing s≈0.818, 0.068 and 0.436
+    // (the crossover bridge).
     // Keeping that contract explicit prevents the crossover lift from landing on
     // the Esses while its scenery remains at the real figure-8 crossing.
     // The bridge peak sits exactly on the measured self-crossing (lower road

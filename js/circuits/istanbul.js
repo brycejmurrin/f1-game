@@ -10,9 +10,16 @@
     // Istanbul Park is one of the few anti-clockwise circuits, and upstream
     // tr-2005 is already drawn that way, so no flip.
     reverse: false,
-    // The trace's first vertex closes the pit straight; back the line up along
-    // it so the grid sits before the Turn 1 plunge. Not GPS-calibrated.
-    startFrac: 0.98,
+    // The trace's first vertex is the start line, on the pit straight ahead of
+    // the Turn 1 plunge.
+    // Start/finish line. Snapped to the real one: v0 convention; T1 measured LEFT, matches the real T1.
+    // Was 0.98, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.98,
     name: "ISTANBUL",
     gp: "Turkish GP",
     country: "Turkey",

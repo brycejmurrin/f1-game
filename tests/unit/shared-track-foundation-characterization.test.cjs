@@ -102,6 +102,12 @@ function circleDefinition(id, scenery) {
     flatTerrain: false,
     reverse: false,
     startFrac: 0,
+    // Neutralised for the same reason as startFrac/reverse/hwZones above: the
+    // template is a real circuit, and a synthetic ring has no authored-scenery
+    // legacy to preserve. Left inherited, monza's value gives this ring a
+    // start-line-vs-scenery origin gap it never had, rotating every range the
+    // fixture records.
+    sceneryStartFrac: null,
     scenery,
   });
 }
@@ -127,7 +133,14 @@ test("startFrac and reverse transform source control points and authored fractio
   for (const raw of ctx.TrackDefs) {
     const built = Tracks.LIST.find((def) => def.id === raw.id);
     const phi = wrap(raw.startFrac || 0);
-    if (!raw.reverse && !phi) continue;
+    // Elevation and bridge anchors are remapped against the AUTHORING origin,
+    // not the start line — a def that carries `sceneryStartFrac` is declaring
+    // that its dressing predates a start-line correction, and buildCenterline
+    // rotates the result the rest of the way by arc length. Keying them off
+    // `startFrac` instead moved the road surface vertically by up to 43 m at
+    // Spa while X/Z stayed put; see the comment at the remap in tracks.js.
+    const phiAuthor = raw.sceneryStartFrac != null ? wrap(raw.sceneryStartFrac) : phi;
+    if (!raw.reverse && !phi && !phiAuthor) continue;
     transformed++;
     const source = smoothXZ(ctx.CircuitPaths[raw.id]);
     const count = source.length;
@@ -147,10 +160,13 @@ test("startFrac and reverse transform source control points and authored fractio
     const mapFraction = raw.reverse
       ? (fraction) => wrap(phi - fraction)
       : (fraction) => wrap(fraction - phi);
+    const mapDressing = raw.reverse
+      ? (fraction) => wrap(phiAuthor - fraction)
+      : (fraction) => wrap(fraction - phiAuthor);
     for (const key of ["bridges", "elevations"]) {
       if (!raw[key] || !built[key]) continue;
       raw[key].forEach((entry, i) => {
-        assert.ok(Math.abs(built[key][i].s - mapFraction(entry.s)) <= 1e-12, `${raw.id} ${key}[${i}]`);
+        assert.ok(Math.abs(built[key][i].s - mapDressing(entry.s)) <= 1e-12, `${raw.id} ${key}[${i}]`);
       });
     }
     if (raw.hwZones && built.hwZones) raw.hwZones.forEach((zone, i) => {

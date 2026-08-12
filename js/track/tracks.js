@@ -58,6 +58,20 @@ const Tracks = (function () {
     const closeGap = Math.hypot(dx[0] - dx[M - 1], dy[0] - dy[M - 1], dz[0] - dz[M - 1]);
     const total = dlen[M - 1] + closeGap;
 
+    // Where the SCENERY's old start line now sits, as an arc-length fraction of
+    // this lap. See TrackSpace.sceneryOriginDelta for why this cannot be
+    // `startFrac - sceneryStartFrac`: those are control-point index fractions
+    // and the control points are not arc-uniform. Here the arc-length table is
+    // in hand, so it is a direct lookup — control point j opens at dense
+    // sample j*SUB.
+    if (def.sceneryStartFrac != null) {
+      const offNew = Math.round(TrackSpace.wrap01(def.startFrac) * N) % N;
+      const iOld = Math.round(TrackSpace.wrap01(def.sceneryStartFrac) * N) % N;
+      // The old origin's control point, renumbered into THIS lap's ordering.
+      const j = (((def.reverse ? offNew - iOld : iOld - offNew) % N) + N) % N;
+      def._sceneryShift = total ? dlen[j * SUB] / total : 0;
+    }
+
     const n = Math.max(200, Math.round(total / 4));
     const ds = total / n;
     const px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n);
@@ -81,9 +95,13 @@ const Tracks = (function () {
     // deck so it passes OVER the lower section instead of clipping through it.
     // The cosine bump returns to 0 at the window edges, so the rest of the lap
     // stays flat — no global tilt.
+    // The dressing rotation, in the units this function works in. resolve()
+    // froze the elevation/bridge anchors at the authoring origin; here they are
+    // carried forward into the new lap, exactly as the scenery is.
+    const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
-      const cs = b.s * total;
+      const cs = ((b.s + dress) % 1) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);                 // wrap-around distance
@@ -93,7 +111,7 @@ const Tracks = (function () {
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
     const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
-      const cs = e.s * total;
+      const cs = ((e.s + dress) % 1) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);
@@ -141,7 +159,11 @@ const Tracks = (function () {
       }
       const norm = waves.reduce((a, b) => a + b.w, 0) || 1;
       for (let k = 0; k < n; k++) {
-        const u = k / n;
+        // Phased by the dressing shift for the same reason the bumps are: the
+        // ripple is a function of lap fraction, so moving the line would slide
+        // 0.4 m of road up and down under scenery that did not move. Whole
+        // cycles per lap, so a constant phase offset keeps the seam continuous.
+        const u = ((k / n - dress) % 1 + 1) % 1;
         let v = 0;
         for (const wv of waves) v += Math.sin(u * wv.cycles * Math.PI * 2 + wv.phase) * wv.w;
         py[k] += (v / norm) * amp;
@@ -310,6 +332,58 @@ const Tracks = (function () {
     // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
     // scenery stay mutually consistent on the reversed centreline (cosmetic only).
+
+    // ── SHIFT-ONLY remaps ────────────────────────────────────────────────────
+    // Six more entry points take a node index or a lap fraction and are absent
+    // from the lists above, so they never moved with the rest: `groundPatch`
+    // (35 circuits), `overheadSpan` (16), `circuitKit` (16), `groundedSegments`
+    // (10), `waterField`, and the `frameAt` lookup itself. That gap is why
+    // Miami's Turnpike overpass and Singapore's kit-built pit building were the
+    // last two required models left in the road after the origin move.
+    //
+    // These apply the ORIGIN SHIFT ONLY — no side flip, no reverse/mirror
+    // remap. That is deliberate and conservative: the same emitters are
+    // unremapped on the four reversed circuits (monaco, kyalami, paul_ricard,
+    // singapore) TODAY, so giving them the full treatment here would silently
+    // move already-shipped geometry on circuits this change has no business
+    // touching. Whether that latent gap is a bug worth closing is a separate
+    // question with its own before/after pass; this keeps every circuit without
+    // a shift bit-for-bit identical.
+    //
+    // `frameAt` is wrapped at the API BOUNDARY rather than at its definition on
+    // purpose. models/ and the kits hold the RAW frameAt and resolve fractions
+    // the caller already handed them, so shifting it at source would apply the
+    // shift twice to everything routed through the wrapped calls below.
+    const shiftS = TrackSpace.sceneryOriginDelta(def);
+    if (shiftS) {
+      const shiftK = Math.round(shiftS * n);
+      const SK = (k) => (((Math.round(k) + shiftK) % n) + n) % n;
+      const SS = (s) => TrackSpace.wrap01(s + shiftS);
+      for (const name of ["groundPatch", "waterField"]) {
+        const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
+      }
+      if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(SS(frac), ...r);
+      if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
+        spec && Number.isFinite(spec.frac) ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
+      if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
+        spec && Array.isArray(spec.points)
+          ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
+          : spec);
+      // Every CircuitKit method takes a spec keyed on `frac` (circuit-kit.js
+      // routes it through deps.frameAt). LandmarkKit needs nothing — its
+      // helpers take world coordinates and never see a fraction.
+      if (api.circuitKit) {
+        const kit = api.circuitKit, wk = {};
+        for (const name of Object.keys(kit)) {
+          const f = kit[name];
+          wk[name] = typeof f === "function"
+            ? (spec, ...r) => f(spec && Number.isFinite(spec.frac)
+                ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec, ...r)
+            : f;
+        }
+        w.circuitKit = wk;
+      }
+    }
     return w;
   }
 
@@ -1346,17 +1420,49 @@ const Tracks = (function () {
       // this, roadside foliage happily grows straight through every placed prop.
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
-    const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
+    // The origin-invariant alias of node k, for RANDOM DRAWS only.
+    //
+    // The generic dressing scatters on hash(nodeIndex) — which tree, which lamp
+    // style, which side of the road, which building kind. Node indices are
+    // counted from the start line, so correcting the line reshuffles the entire
+    // scatter: a different draw at every physical point on the circuit. That is
+    // not cosmetic. Rerolling took same-facing coplanar faces past their
+    // baseline on THIRTEEN circuits (miami 11 -> 19 spots, monaco 5 -> 9), i.e.
+    // it manufactured z-fighting out of nothing but a renumbering.
+    //
+    // Hashing the physical node instead keeps every draw exactly where it was.
+    // Combined with the sceneryStartFrac shift on the authored side, the whole
+    // dressed world holds still and only the line moves. Zero for any circuit
+    // that has not moved its line, so their scatter is bit-for-bit unchanged.
+    //
+    // Placement still uses the real `k`. This is the seed, never the position.
+    const HKSHIFT = Math.round(TrackSpace.sceneryOriginDelta(def) * n);
+    const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
+    // every() walks the lap in fixed steps FROM THE START LINE, so the set of
+    // nodes it visits is itself origin-dependent: move the line and the whole
+    // scatter steps onto different physical points, even with the draw pinned.
+    // Phasing the walk by the same shift makes it revisit the same places, so
+    // HK(k) below recovers exactly the index that node had before. Zero shift
+    // leaves the walk starting at node 0 as it always did.
+    const every = (m, fn) => {
+      const stp = Math.max(1, Math.round(m / ds));
+      for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
+    };
     const dressingExcluded = (kind, k, side) => {
       const rules = def.dressingExclusions;
       if (!rules || !rules.length) return false;
       const frac = (((k % n) + n) % n) / n;
+      // These spans are RACING-space fractions authored beside the scenery they
+      // protect ("no foliage across the pits"), so they travel with it when a
+      // corrected start line moves the origin — otherwise the exclusion stays
+      // put and the pit buildings it shielded grow trees again.
+      const shift = TrackSpace.sceneryOriginDelta(def);
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
         if (!kinds.includes("all") && !kinds.includes(kind)) continue;
         if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
-        const s0 = TrackSpace.wrap01(rule.s0 == null ? 0 : rule.s0);
-        const s1 = TrackSpace.wrap01(rule.s1 == null ? 1 : rule.s1);
+        const s0 = TrackSpace.wrap01((rule.s0 == null ? 0 : rule.s0) + shift);
+        const s1 = TrackSpace.wrap01((rule.s1 == null ? 1 : rule.s1) + shift);
         const full = rule.s0 == null || rule.s1 == null || Math.abs(Number(rule.s1) - Number(rule.s0)) >= 1 - 1e-9;
         const inside = full || (s1 < s0 ? frac >= s0 || frac <= s1 : frac >= s0 && frac <= s1);
         if (inside) return true;
@@ -1738,11 +1844,11 @@ const Tracks = (function () {
     if (fz.lamp && fz.lamp !== "none") every(26, (k) => {
       for (const side of [-1, 1]) {
         if (dressingExcluded("lamps", k, side)) continue;
-        const roll = hash(k * 19 + side * 5.5);
+        const roll = hash(HK(k) * 19 + side * 5.5);
         const style = roll > 0.88
-          ? LAMP_STYLES[Math.floor(hash(k * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
+          ? LAMP_STYLES[Math.floor(hash(HK(k) * 23 + side) * LAMP_STYLES.length) % LAMP_STYLES.length]
           : fz.lamp;
-        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(k * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, style);
+        streetLamp(k, side, (def.street ? 3.2 : 6) + hash(HK(k) * 7 + side) * 0.8, fz.lc || [1, 0.9, 0.7], def.street ? 7 : 8, style);
       }
     });
     // Roadside trees — every circuit, per-track species/tint, set back behind the
@@ -1759,20 +1865,20 @@ const Tracks = (function () {
     if (fz.tree && fz.tree !== "none") {
       const step = fz.sparse ? 30 : (def.street ? 24 : 18);   // street denser than before; sparse = coastal scrub
       every(step, (k) => {
-        const side = hash(k * 41) < 0.5 ? -1 : 1;
+        const side = hash(HK(k) * 41) < 0.5 ? -1 : 1;
         if (dressingExcluded("foliage", k, side)) return;
         const baseH = fz.tree === "palm" ? 8 : 6;
         const cluster = fz.sparse ? 1
-          : def.street ? (hash(k * 13) < 0.5 ? 1 : 2)              // streets: 1–2 per stand
-          : 2 + Math.floor(hash(k * 13) * 2);                      // green: 2–3 per stand
+          : def.street ? (hash(HK(k) * 13) < 0.5 ? 1 : 2)              // streets: 1–2 per stand
+          : 2 + Math.floor(hash(HK(k) * 13) * 2);                      // green: 2–3 per stand
         for (let i = 0; i < cluster; i++) {
-          const dist = (def.street ? 6 : 8) + hash(k * 3 + side + i * 4.4) * (def.street ? 4 : 14);
+          const dist = (def.street ? 6 : 8) + hash(HK(k) * 3 + side + i * 4.4) * (def.street ? 4 : 14);
           // Spread a stand over neighbouring nodes (k, k+1, k-1). WRAP it — the
           // third tree of the stand at k=0 resolved to node -1, and an
           // out-of-range index reads undefined off the typed arrays and NaNs
           // the entire props buffer (see anchor()).
           const kt = ((k + (i % 2) - (i > 1 ? 1 : 0)) % n + n) % n;
-          plantTree(kt, side, dist, baseH + hash(k * 5 + i * 2.7) * 6);
+          plantTree(kt, side, dist, baseH + hash(HK(k) * 5 + i * 2.7) * 6);
         }
       });
     }
@@ -1781,7 +1887,7 @@ const Tracks = (function () {
     // marshal post + signal board every 270 m on alternating sides (skip street circuits with continuous barriers)
     if (!def.street) {
       every(270, (k) => {
-        const side = hash(k * 7) < 0.5 ? -1 : 1;
+        const side = hash(HK(k) * 7) < 0.5 ? -1 : 1;
         place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
         place(k, side, 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
       });
@@ -1790,9 +1896,9 @@ const Tracks = (function () {
     if (theme === "green") {
       // FURN already plants real trees; legacy box trunk/canopy forest removed.
       // occasional grandstand
-      every(140, (k) => place(k, hash(k) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
+      every(140, (k) => place(k, hash(HK(k)) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
-      every(34, (k) => { for (const side of [-1, 1]) if (hash(k + side) > 0.6) place(k, side, 8 + hash(k) * 10, [2 + hash(k) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
+      every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
       const style = STYLES[def.id] || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
@@ -1827,34 +1933,34 @@ const Tracks = (function () {
       // Front row — dense.
       every(18, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 17 + side * 4) < 0.12 || dressingExcluded("city", k, side)) continue;
-          const s = hash(k * 5 + side), na = naFor(k, side);
-          const h = style.fh[0] + s * style.fh[1], w = 8 + s * 10, d = 8 + hash(k * 9 + side) * 9;
-          neonTower(k, side, 13 + s * 12, w, h, d, cn(k, side), pickKind(k, side, na), toneFor(k, side), na);
+          if (hash(HK(k) * 17 + side * 4) < 0.12 || dressingExcluded("city", k, side)) continue;
+          const s = hash(HK(k) * 5 + side), na = naFor(HK(k), side);
+          const h = style.fh[0] + s * style.fh[1], w = 8 + s * 10, d = 8 + hash(HK(k) * 9 + side) * 9;
+          neonTower(k, side, 13 + s * 12, w, h, d, cn(HK(k), side), pickKind(HK(k), side, na), toneFor(HK(k), side), na);
         }
       });
       // Back row — taller, set further back, staggered, for skyline depth.
       every(26, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 23 + side * 7) < 0.34 || dressingExcluded("city", k, side)) continue;
-          const s = hash(k * 11 + side * 2), na = naFor(k * 1.3, side);
+          if (hash(HK(k) * 23 + side * 7) < 0.34 || dressingExcluded("city", k, side)) continue;
+          const s = hash(HK(k) * 11 + side * 2), na = naFor(HK(k) * 1.3, side);
           const h = style.bh[0] + s * style.bh[1], w = 11 + s * 12, d = 11 + s * 10;
-          neonTower(k, side, 40 + s * 30, w, h, d, cn(k * 1.7, side), pickKind(k * 1.9, side, na), toneFor(k * 1.7, side), na);
+          neonTower(k, side, 40 + s * 30, w, h, d, cn(HK(k) * 1.7, side), pickKind(HK(k) * 1.9, side, na), toneFor(HK(k) * 1.7, side), na);
         }
       });
       // Sign blades + low retail boxes dressing the gaps.
       every(34, (k) => {
-        const side = hash(k * 13) < 0.5 ? -1 : 1;
+        const side = hash(HK(k) * 13) < 0.5 ? -1 : 1;
         if (dressingExcluded("city", k, side)) return;
-        const lc = cn(k * 3.3, side);
-        if (NIGHT && style.bias > 0.3 && hash(k * 19) < 0.5) neonSign(k, side, 8 + hash(k) * 4, 10 + hash(k * 2) * 10, lc);
-        else { const rc = toneFor(k * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(k) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
+        const lc = cn(HK(k) * 3.3, side);
+        if (NIGHT && style.bias > 0.3 && hash(HK(k) * 19) < 0.5) neonSign(k, side, 8 + hash(HK(k)) * 4, 10 + hash(HK(k) * 2) * 10, lc);
+        else { const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {
-        const side = hash(k * 31) < 0.5 ? -1 : 1;
+        const side = hash(HK(k) * 31) < 0.5 ? -1 : 1;
         if (dressingExcluded("city", k, side)) return;
-        const neon = cn(k * 5.5, side);
+        const neon = cn(HK(k) * 5.5, side);
         prop(k, side, 6, [1.0, 6, 1.0], [0.10, 0.10, 0.12]);
         prop(k, side, 6, [1.2, 3.4, 5], NIGHT ? neon : [neon[0] * 0.5 + 0.25, neon[1] * 0.5 + 0.25, neon[2] * 0.5 + 0.25]);
       });
@@ -2039,7 +2145,14 @@ const Tracks = (function () {
       // keeps barriers (recordBarrier fills barR/barL) aligned with the road.
       // Direct px[k]/upOf(k) reads inside scenery (a handful, cosmetic only) are
       // not remapped — they stay internally consistent on the reversed centreline.
-      if (def.reverse || def.sceneryCoordinates === "source")
+      // The third case is `sceneryStartFrac`: a FORWARD, racing-space def whose
+      // start line has been corrected still needs its scenery rotated back onto
+      // the origin it was authored against. Those defs took neither branch
+      // above — racing space is the identity remap — so without this they slid
+      // round the lap with the line, silently and by thousands of vertices.
+      // The wrap stays a no-op when the shift is zero, so untouched circuits
+      // are bit-for-bit unchanged.
+      if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
       def.scenery(sceneryApi);
     }
@@ -2432,6 +2545,14 @@ const Tracks = (function () {
       hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
+      // The startFrac this circuit's RACING-space scenery, dressingExclusions
+      // and corner boards were authored against — set only where the start line
+      // has since been corrected onto its real position, so the line moves and
+      // the dressed world stays where it was tuned. Read off the COPIED def by
+      // TrackSpace.sceneryOriginDelta, so it has to be copied here: the seventh
+      // member of the family the comment above describes, and it would fail the
+      // same silent way, since "no shift" is a legitimate value.
+      sceneryStartFrac: d.sceneryStartFrac != null ? d.sceneryStartFrac : null,
       // Curated FIA-aligned sector splits + turn apexes (js/track/markings.js).
       // Authored in RACING-LAP space (post startFrac/reverse) — do not fmap.
       sectors: (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].sectors) || null,
@@ -2446,15 +2567,44 @@ const Tracks = (function () {
     // remapped here; the matching scenery/barrier s-remap happens when the
     // bespoke scenery() runs (buildProps), driven by def._startFrac/_reverse.
     const phi = TrackSpace.wrap01(def.startFrac || 0);
-    if (def.reverse || phi) {
-      const P = def.points, N = P.length, out = new Array(N);
-      for (let i = 0; i < N; i++) out[i] = P[TrackSpace.racingNodeToSource(def, i, N)];
-      def.points = out;
+    // The AUTHORING origin for anything that was tuned by eye against the
+    // rendered road — see below. Equals `phi` unless the def declares that its
+    // dressing predates a start-line correction.
+    const phiAuthor = def.sceneryStartFrac != null
+      ? TrackSpace.wrap01(def.sceneryStartFrac) : phi;
+    if (def.reverse || phi || phiAuthor) {
+      if (def.reverse || phi) {
+        const P = def.points, N = P.length, out = new Array(N);
+        for (let i = 0; i < N; i++) out[i] = P[TrackSpace.racingNodeToSource(def, i, N)];
+        def.points = out;
+      }
       def._startFrac = phi;
-      const fmap = (s) => TrackSpace.toRacingFrac(def, s);
+      // ELEVATION AND BRIDGE ANCHORS ARE DRESSING, NOT GEOMETRY, and they are
+      // remapped against the AUTHORING origin, not the start line.
+      //
+      // `e.s` is remapped here as an index fraction (toRacingFrac is index
+      // algebra) and then consumed by buildCenterline as an ARC fraction
+      // (`e.s * total`). Control points are not arc-uniform, so that conflation
+      // makes a bump's PHYSICAL position a function of startFrac — which is
+      // invisible while startFrac never moves, and ruinous the moment it does.
+      // Measured across the 27 corrected circuits, keying the bumps off the new
+      // line slid the road surface vertically by a mean of 10.7 m at Red Bull
+      // and 7.6 m at Spa (max 43 m) while X/Z stayed put to within 0.9 m — the
+      // road climbing out from under its own dressing, and the reason floating
+      // clusters went 29 → 44 at Monaco and 3 → 15 at Vegas.
+      //
+      // So freeze the mapping at the origin the bumps were tuned against and
+      // let buildCenterline rotate the result by the same arc-length
+      // `_sceneryShift` the scenery uses. Bit-identical output for every
+      // circuit, whether or not its line moved.
+      const fmap = (s) => TrackSpace.toRacingFrac({ startFrac: phiAuthor, reverse: def.reverse }, s);
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
-      if (def.hwZones) {
+      // hwZones stay on the NARROWER guard: they are a source-space index range
+      // applied to the control points by index, so they are already origin-
+      // independent, and running the remap on a def whose phi is 0 would still
+      // wrap an authored s1 of exactly 1 down to 0 and blank the zone.
+      if (def.hwZones && (def.reverse || phi)) {
         // Reverse flips endpoint order — swap so [s0,s1] stays a short forward arc
         // (otherwise s1 < s0 wraps and the zone covers most of the lap).
         def.hwZones = def.hwZones.map((z) => {

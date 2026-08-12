@@ -7,7 +7,14 @@
   {
     id: "cota",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.5150, // GPS-derived (OpenF1 2025, conf=0.367)
+    // Start/finish line. Snapped to the real one: coord 0.8 m off centreline; = trace vertex 0.
+    // Was 0.5150, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.5150,
     name: "COTA",
     gp: "United States GP",
     country: "USA",
@@ -30,8 +37,9 @@
       { t: -55, l: 70 }, { t: 50, l: 70 }, { t: -40, l: 80 }, { t: -60, l: 90 }, { t: -120, l: 110 }, { t: 0, l: 460 },
       { t: -150, l: 130 }, { t: 70, l: 70 }, { t: -60, l: 70 }, { t: 80, l: 90 }, { t: 90, l: 160 }, { t: -130, l: 110 },
     ],
-    // Elevations are SOURCE-trace fractions. With startFrac=0.515 these map to
-    // racing s≈0.108 (Big Red), 0.52 (back-straight crest), and 0.84 (sweepers).
+    // Elevations are SOURCE-trace fractions, fmap'd through startFrac. With the
+    // line corrected to 0.0 the map is the identity, so these read directly as
+    // racing s: 0.623 (back-straight crest), 0.035 (Big Red), 0.355 (sweepers).
     elevations: [
       { s: 0.6233, halfM: 420, rise: 18 },
       { s: 0.0350, halfM: 280, rise: 3 },
