@@ -67,12 +67,12 @@ const MAT_LAYERS = 17;
 // reflection read, and FLAG's geometry is displaced in the vertex shader.
 // FLAT (0) is absent by definition — it is the "no material" id.
 const SCALES = {
-  [MAT.CONCRETE]: 4.0, [MAT.BRICK]: 2.4, [MAT.METAL]: 2.0, [MAT.WOOD]: 2.2,
+  [MAT.CONCRETE]: 5.5, [MAT.BRICK]: 2.8, [MAT.METAL]: 2.8, [MAT.WOOD]: 2.2,
   // Sand/rock tiling was the clearest remaining tell after the 2k rebake —
   // larger world-metres/tile = fewer repetitions in the shoulder/runoff.
   [MAT.FOLIAGE]: 4.0, [MAT.FABRIC]: 1.5, [MAT.SAND]: 11.0, [MAT.GRASS]: 4.5,
-  [MAT.ROCK]: 8.0, [MAT.SNOW]: 7.0, [MAT.ROOF]: 2.0, [MAT.STONE]: 3.0,
-  [MAT.RUST]: 2.0, [MAT.ASPHALT]: 3.5,
+  [MAT.ROCK]: 8.0, [MAT.SNOW]: 7.0, [MAT.ROOF]: 2.0, [MAT.STONE]: 3.5,
+  [MAT.RUST]: 2.5, [MAT.ASPHALT]: 3.5,
 };
 
 const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));

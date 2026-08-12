@@ -98,6 +98,33 @@ vertical) bands and diff each independently — the band containing the effect
 reads an order of magnitude above its neighbours even when the frame-wide mean
 shows nothing.
 
+## A FOURTH trap: two same-value screenshots must diff near-zero before you trust any pair
+
+Before comparing knob-A-vs-knob-B, take two screenshots at the SAME value and
+diff them. If that "noise floor" isn't near zero, something else in the frame
+is moving — most commonly a car left with nonzero speed under a free-cam
+(`orbit()`/`view()`) after `jump()`, which keeps driving while you tune the
+knob, changing the framing between shots. MEASURED 2026-08-12 (`cloudDef`): a
+same-value repeat under a moving car diffed at MAD 5.96 — statistically
+IDENTICAL to the "signal" a 0-vs-2 comparison had just shown (MAD 6.03) at the
+same pixel locations. The whole "effect" was scenery scrolling past, not the
+knob. Use `park()` (freezes the car, `G.frozen = true`) instead of `jump()`
+before any free-cam comparison shot; it dropped the noise floor to 0.42 on the
+same scene. A knob whose signal doesn't clear a same-value noise-floor check by
+several times over is not proven, whichever direction it points.
+
+For sky/cloud knobs specifically, don't reach for `sky()` — its ~58° pitch
+looks close to straight up, and the cloud plane in `js/render/shaders/sky.js`
+is sampled as `dir.xz / up * 0.42`: dividing by a near-1 `up` collapses the
+sampled coordinate toward one point, so every pixel reads nearly the same
+noise value and the sky renders as a smooth gradient with no puffy structure
+to carry a cloud-*shape* knob's effect. Use `park()` + a custom
+`view({eye, yaw, pitch: ~25-35, fov})` aimed lower toward the horizon instead,
+and nudge `cloudCover` — the bare weather default can be near-cloudless in the
+one direction `sky()` looks. A real signal here shows up as a cloud-*shaped*
+blob in a saved diff-map image (`np.abs(a-b).sum(axis=2)`, contrast-boosted and
+written to PNG) sitting where the visible cloud is, not a diffuse scatter.
+
 ---
 
 ## Chrome DevTools MCP — live 3D / __apex debugging

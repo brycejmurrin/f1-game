@@ -95,7 +95,7 @@ scene event it drives even happening in this shot (traffic, dark sky, weather),
 and would this effect show up in a MEAN across the whole frame or only in a
 handful of pixels?
 
-## The full day-dry sweep's 18 "no clear signal" knobs: 17 confirmed, 1 open
+## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
 A later full 178-knob day-dry sweep (`tools/tuner-sweep.mjs --cond=day-dry`)
 carried 18 knobs through to a genuinely clean, isolated re-check (own noise
@@ -104,8 +104,8 @@ floor ≈0.12, not the FLOOR=2.0 the sweep uses) that still showed no signal:
 `carShadow`, `aoStr`, `ssaoRadius`, `ambContactDark`, `carEnvCube`, `carGloss`,
 `carGlow`, `bounceK`, `fogSunCore`, `hazeCloudShare`, `fogHeight`, `cloudDef`,
 `surfDetail`. Driving the live page through the Chrome DevTools MCP (screenshots
-+ in-page pixel diffs, `.claude/skills/mcp-probe`) resolved 17 of them — LIVE,
-every time, once the right condition was found — and left one genuinely open.
++ in-page pixel diffs, `.claude/skills/mcp-probe`) resolved all 18 — LIVE,
+every time, once the right condition was found.
 
 **Two of this session's own earlier mistakes accounted for most of the false
 "no signal" results**, both now written up in `mcp-probe`'s trap list:
@@ -135,18 +135,23 @@ difference), one (`flareStreak2`) only by scanning horizontal bands and finding
 a single 3-pixel-tall row at 60× the surrounding noise — the same
 sub-pixel-band blind spot as `starBright` above, just narrower.
 
-**`cloudDef` remains genuinely unresolved.** Its shader gate is
-`cloudRich = max(daytime, twilight)` guarding a "billow octave" that sharpens
-cumulus edges (`js/render/shaders/sky.js`) — it needs PARTIAL cloud coverage
-with visible puffy edges in frame, not the full "overcast" weather (renders as a
-flat grey wash with no coverage gradient to sharpen) or the near-clear "dry"
-weather (too few clouds) tried here. Three different conditions (fog+dusk,
-overcast+day, dry+`cloudCover:0.5`) all read at the noise floor. It is very
-likely correctly wired — same registry, same uniform-upload pattern as its 177
-siblings, all independently confirmed clean by the static audit above — but
-finding the exact visual condition needs a dedicated cloud-focused camera setup
-this session didn't land on. Left as an open item rather than a claimed result
-either way.
+**`cloudDef` (the 18th) needed a THIRD trap fixed: `sky()`'s hardcoded ~58°
+pitch is the wrong angle to test it.** The cloud noise plane is sampled as
+`dir.xz / up * 0.42` (`js/render/shaders/sky.js`) — dividing by `up` means a
+steep look-up angle compresses the sampled coordinate toward a single point,
+so every pixel in frame reads nearly the same noise value and the sky renders
+as a smooth gradient with no puffy structure regardless of `cloudDef`. All
+three earlier attempts (fog+dusk, overcast+day, dry+`cloudCover:0.5`) inherited
+this same bias toward looking too high. Fixed by using `park()` (freezes the
+car — required, since a moving `jump()`'d car under a free-cam changes the
+framing between shots and reads as a false signal roughly the SAME magnitude
+as the real one, which is what happened on the first retry here) plus a custom
+`view({eye, yaw, pitch: ~30, fov})` aimed at a shallower angle toward the
+horizon, `cloudCover` nudged to put total cover around 0.5–0.7 (bare default
+gave an almost cloudless frame). The resulting diff between `cloudDef:0` and
+`cloudDef:2` is a clean cloud-shaped blob in the diff map (not scattered
+noise), reading ≈2.6× the frozen-scene noise floor exactly where the visible
+cloud sits, confirming it LIVE — the last of 178.
 
 ## Reading the table
 

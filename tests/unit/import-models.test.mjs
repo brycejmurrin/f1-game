@@ -115,3 +115,79 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", () => 
     process.on("exit", () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} });
   }
 });
+
+// Kenney City Kit Roads / Modular Buildings ship indexed (colour-type 3)
+// colormaps. Without PLTE support the importer threw, materialColour caught it,
+// and every vertex landed at the 0.75 grey factor — barriers looked blank.
+function pngIndexed(w, h, indices, palette /* RGB triples */) {
+  const T = (() => { const t = new Int32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c; } return t; })();
+  const crc = (b) => { let c = -1; for (let i = 0; i < b.length; i++) c = T[(c ^ b[i]) & 0xff] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+  const chunk = (ty, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const body = Buffer.concat([Buffer.from(ty), d]);
+    const cc = Buffer.alloc(4); cc.writeUInt32BE(crc(body)); return Buffer.concat([l, body, cc]); };
+  const stride = w, raw = Buffer.alloc((stride + 1) * h);
+  for (let y = 0; y < h; y++) {
+    raw[y * (stride + 1)] = 0; // filter None
+    indices.subarray(y * w, (y + 1) * w).copy(raw, y * (stride + 1) + 1);
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 3;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr), chunk("PLTE", Buffer.from(palette)),
+    chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+test("import-models samples indexed (colour-type 3) Kenney-style colormaps", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-idx-"));
+  const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
+  fs.mkdirSync(path.join(src, "textures"), { recursive: true });
+  fs.mkdirSync(out, { recursive: true });
+  try {
+    // 2x1 indexed palette: idx0=orange, idx1=blue — mirrors Kenney roads atlases.
+    fs.writeFileSync(path.join(src, "textures", "palette.png"),
+      pngIndexed(2, 1, Buffer.from([0, 1]), [220, 90, 20, 40, 90, 200]));
+    const pos = new Float32Array([0, 0, 0, 2, 0, 0, 0, 4, 0, 3, 0, 0, 5, 0, 0, 3, 4, 0]);
+    const nrm = new Float32Array(18).fill(0); for (let i = 2; i < 18; i += 3) nrm[i] = 1;
+    const uv = new Float32Array([0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.75, 0.5, 0.75, 0.5, 0.75, 0.5]);
+    const idxA = new Uint16Array([0, 1, 2]), idxB = new Uint16Array([3, 4, 5]);
+    const bin = Buffer.concat([Buffer.from(pos.buffer), Buffer.from(nrm.buffer), Buffer.from(uv.buffer),
+      Buffer.from(idxA.buffer), Buffer.from(idxB.buffer)]);
+    fs.writeFileSync(path.join(src, "model.bin"), bin);
+    const P = pos.byteLength, N = nrm.byteLength, U = uv.byteLength;
+    const gltf = {
+      asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [
+        { attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 3, material: 0 },
+        { attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 4, material: 0 }] }],
+      materials: [{ pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], baseColorTexture: { index: 0 } } }],
+      textures: [{ source: 0 }], images: [{ uri: "textures/palette.png" }],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 6, type: "VEC3", min: [0, 0, 0], max: [5, 4, 0] },
+        { bufferView: 1, componentType: 5126, count: 6, type: "VEC3" },
+        { bufferView: 2, componentType: 5126, count: 6, type: "VEC2" },
+        { bufferView: 3, componentType: 5123, count: 3, type: "SCALAR" },
+        { bufferView: 4, componentType: 5123, count: 3, type: "SCALAR" }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: P },
+        { buffer: 0, byteOffset: P, byteLength: N },
+        { buffer: 0, byteOffset: P + N, byteLength: U },
+        { buffer: 0, byteOffset: P + N + U, byteLength: 6 },
+        { buffer: 0, byteOffset: P + N + U + 6, byteLength: 6 }],
+      buffers: [{ uri: "model.bin", byteLength: bin.length }],
+    };
+    fs.writeFileSync(path.join(src, "barrier.gltf"), JSON.stringify(gltf));
+
+    const r = cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "1", "--prefix", "k_"],
+      { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
+    assert.equal(r.status, 0, `importer failed:\n${r.stdout}${r.stderr}`);
+    const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
+    const b = fs.readFileSync(path.join(out, man.models.k_barrier.file));
+    const nv = b.readUInt32LE(8);
+    const col = new Float32Array(b.buffer, b.byteOffset + 20 + nv * 24, nv * 3);
+    // UV 0.25 -> orange cell, UV 0.75 -> blue cell.
+    assert.ok(col[0] > 0.7 && col[1] < 0.5, `orange cell, got ${[col[0], col[1], col[2]]}`);
+    assert.ok(col[9] < 0.3 && col[11] > 0.6, `blue cell, got ${[col[9], col[10], col[11]]}`);
+  } finally {
+    process.on("exit", () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} });
+  }
+});

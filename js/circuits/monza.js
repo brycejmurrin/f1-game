@@ -95,7 +95,7 @@
         wall, fence, guardrail, tyreWall,
         addBox, addCyl, addPrism, anchor, along, vadd,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, groundedSegments,
-        px, pz } = api;
+        bakedModel, px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── THE PARK WALL (Muro del Serraglio) ────────────────────────────────
@@ -565,6 +565,34 @@
       // Every real F1 venue has satellite trucks and uplink dishes back here;
       // Monza had none.
       broadcastCompound(K(0.98), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
+
+      // CC0 Kenney warehouses / service yard behind hospitality. Pack-optional:
+      // bakedModel returns false without assets/pack/models, so each site keeps
+      // a procedural hall fallback (verify-track builds without the pack).
+      {
+        const yards = [
+          ["kenney_ind_building-a", 0.935, -1, 62],
+          ["kenney_ind_building-l", 0.958, -1, 64],
+          ["kenney_ind_building-d", 0.012, -1, 60],
+          ["kenney_com_building-a", 0.988, -1, 68],
+        ];
+        for (const [id, s, side, dist] of yards) {
+          if (!bakedModel(id, K(s), side, dist))
+            building(K(s), side, dist, 18, 12, 14,
+              { kind: "hall", wall: [0.72, 0.72, 0.74], window: [0.28, 0.32, 0.38], floor: 4 });
+        }
+        bakedModel("kenney_ind_detail-tank", K(0.972), -1, 72, { scale: 0.5 });
+        bakedModel("kenney_ind_chimney-medium", K(0.942), -1, 70, { scale: 0.65 });
+      }
+
+      // Jersey barriers + cones on the Rettifilo runoff (pack-optional polish;
+      // tyreWall above remains the always-on safety marker).
+      along(0.028, 0.052, 5.0, (k) => {
+        bakedModel("kenney_construction-barrier", k, 1, 6.4, { scale: 1.2 });
+      });
+      along(0.030, 0.050, 7.0, (k) => {
+        bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
+      });
 
       // Ornamental park lakes use the reflective water buffer and explicit model
       // intent; required diagnostics catch accidental suppression or bad sizing.
