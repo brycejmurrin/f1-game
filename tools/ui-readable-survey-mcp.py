@@ -23,6 +23,8 @@ SCREENS = [
   ("career", "career", "mb-career"),
   ("select", "select", "mb-race"),
   ("howto", "howtoplay", "mb-help"),
+  ("datahub", "datahub", "mb-data"),
+  ("vsfriend", "vsfriend", "mb-vs"),
 ]
 
 MEASURE = r"""async (args) => {
@@ -47,7 +49,9 @@ MEASURE = r"""async (args) => {
   const root = rootId === 'overlay' ? document.getElementById('overlay') : document.getElementById(rootId);
   if (!root || root.hidden) return { error: 'missing ' + rootId };
 
-  const fsFloor = 11; // own units — below this body copy is hard to read at arm's length
+  // VISUAL floor — CSS zoom shrinks painted type. getComputedStyle font-size is
+  // the local (pre-zoom) size; multiply by currentCSSZoom for what the eye gets.
+  const fsFloorVisual = 12;
   const tap = parseFloat(getComputedStyle(document.body).getPropertyValue('--tap')) || 44;
   const chip = parseFloat(getComputedStyle(document.body).getPropertyValue('--chip-h')) || tap;
   const smallText = [];
@@ -60,20 +64,38 @@ MEASURE = r"""async (args) => {
     return c.display !== 'none' && c.visibility !== 'hidden' && +c.opacity > 0.05;
   };
   const zOf = (el) => el.currentCSSZoom || 1;
+  const canScrollReach = (el) => {
+    let n = el.parentElement;
+    while (n) {
+      const cs = getComputedStyle(n);
+      const y = /(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 2;
+      const x = /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 2;
+      if (y || x) return true;
+      if (n === root || n === document.body) break;
+      n = n.parentElement;
+    }
+    return false;
+  };
 
-  for (const el of root.querySelectorAll('button, a, label, p, h1, h2, h3, h4, span, .sel-label, .cr-note, .pm-group-h, .tune-label, .menu-btn, .title-btn')) {
+  const skipSmall = '.cr-meter-lbl, .hud, #hud, .build-tag, #disclaimer, .cs-cam-caret, .spf-fact, .sur-rnd, .season-upcoming-head';
+
+  for (const el of root.querySelectorAll('button, a, label, p, h1, h2, h3, h4, span, .sel-label, .cr-note, .pm-group-h, .tune-label, .menu-btn, .title-btn, .cs-opt-desc, .cs-tab-lbl, .mb-sub')) {
     if (!vis(el)) continue;
+    if (el.closest(skipSmall)) continue;
     const t = (el.innerText || el.textContent || '').trim();
     if (!t || t.length < 2) continue;
+    // Prefer leaf text nodes — skip wrappers that only aggregate children
+    if (el.children.length && ['DIV','SECTION','NAV','LABEL'].includes(el.tagName) && !el.matches('button, a, .tune-label, label.tune-row')) continue;
     const cs = getComputedStyle(el);
     const fs = parseFloat(cs.fontSize);
-    const z = zOf(el);
-    const ownFs = fs / z;
-    if (ownFs > 0 && ownFs < fsFloor && !el.closest('.cr-meter-lbl, .hud, #hud')) {
-      smallText.push({ el: el.id ? '#'+el.id : el.tagName, fs: Math.round(ownFs*10)/10, text: t.slice(0,36) });
+    if (!(fs > 0)) continue;
+    const visual = fs * zOf(el);
+    if (visual < fsFloorVisual) {
+      smallText.push({ el: el.id ? '#'+el.id : (el.className && typeof el.className==='string' ? el.className.split(/\s+/)[0] : el.tagName),
+        fs: Math.round(fs*10)/10, visual: Math.round(visual*10)/10, text: t.slice(0,36) });
     }
-    if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 8 && cs.whiteSpace !== 'normal') {
-      truncated.push({ el: el.id ? '#'+el.id : el.className?.toString?.().slice(0,24), text: t.slice(0,28), need: el.scrollWidth, got: el.clientWidth });
+    if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 8 && (cs.whiteSpace === 'nowrap' || cs.textOverflow === 'ellipsis')) {
+      truncated.push({ el: el.id ? '#'+el.id : (el.className||'').toString().slice(0,24), text: t.slice(0,28), need: el.scrollWidth, got: el.clientWidth });
     }
   }
 
@@ -83,52 +105,55 @@ MEASURE = r"""async (args) => {
     if (r.width < 2 || r.height < 2) continue;
     const z = zOf(el);
     const h = r.height / z, w = r.width / z;
-    if (h < chip - 1.5 || Math.min(w,h) < 24)
-      underTap.push({ el: el.id ? '#'+el.id : (el.className||'').toString().slice(0,30), h: Math.round(h), w: Math.round(w) });
+    // Mouse: WCAG 24px. Touch/coarse: chip floor. body.desktop => mouse.
+    const floor = document.body.classList.contains('desktop') ? 24 : (chip - 1.5);
+    if (h < floor || Math.min(w, h) < 24)
+      underTap.push({ el: el.id ? '#'+el.id : (el.className||'').toString().slice(0,30), h: Math.round(h), w: Math.round(w), floor: Math.round(floor) });
   }
 
-  for (const box of root.querySelectorAll('.sheet, .pane, .sheet-body')) {
-    if (!vis(box)) continue;
-    const br = box.getBoundingClientRect();
-    const cs = getComputedStyle(box);
-    const canY = /(auto|scroll)/.test(cs.overflowY) && box.scrollHeight > box.clientHeight + 2;
-    if (canY) continue;
-    for (const el of box.querySelectorAll('button, .cr-slot, .cs-opt, .sel-card, h2, h3')) {
-      if (!vis(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.height < 8) continue;
-      const oB = r.bottom - br.bottom;
-      if (oB > 8) clippedNoScroll.push({ el: el.id ? '#'+el.id : (el.className||'').toString().slice(0,24), px: Math.round(oB), box: box.id || box.className });
+  // Clip only when the element sticks past its sheet AND no ancestor scrolls.
+  const sheet = root.querySelector('.sheet') || root;
+  const sr = sheet.getBoundingClientRect();
+  for (const el of root.querySelectorAll('button, .cr-slot, .cs-opt, .track-row, .sel-card, .bigbtn, .sheet-foot')) {
+    if (!vis(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.height < 8 || r.width < 8) continue;
+    const oB = r.bottom - sr.bottom;
+    const oT = sr.top - r.top;
+    if (oB <= 8 && oT <= 8) continue;
+    if (canScrollReach(el)) continue;
+    clippedNoScroll.push({
+      el: el.id ? '#'+el.id : (el.className||'').toString().slice(0,24),
+      px: Math.round(Math.max(oB, oT)),
+    });
+  }
+
+  const dedupe = (arr, keyFn, lim=12) => {
+    const seen = new Set(), out = [];
+    for (const s of arr) {
+      const k = keyFn(s);
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(s);
+      if (out.length >= lim) break;
     }
-  }
-
-  // dedupe smallText by text
-  const seen = new Set();
-  const small = [];
-  for (const s of smallText) {
-    const k = s.text;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    small.push(s);
-    if (small.length >= 12) break;
-  }
+    return out;
+  };
+  const small = dedupe(smallText, s => s.text + '|' + s.visual);
+  const trunc = dedupe(truncated, s => s.text);
+  const taps = dedupe(underTap, s => s.el);
+  const clips = dedupe(clippedNoScroll, s => s.el);
 
   return {
     top: window.UiLayers?.top?.()?.id || null,
     density: document.querySelector('.sheet:not([hidden])')?.dataset?.density || null,
-    tap, chip,
+    tap, chip, fsFloorVisual,
     counts: {
       smallText: small.length,
-      truncated: truncated.length,
-      underTap: underTap.length,
-      clippedNoScroll: clippedNoScroll.length,
+      truncated: trunc.length,
+      underTap: taps.length,
+      clippedNoScroll: clips.length,
     },
-    samples: {
-      smallText: small.slice(0, 6),
-      truncated: truncated.slice(0, 6),
-      underTap: underTap.slice(0, 8),
-      clippedNoScroll: clippedNoScroll.slice(0, 6),
-    }
+    samples: { smallText: small.slice(0, 8), truncated: trunc.slice(0, 6), underTap: taps.slice(0, 8), clippedNoScroll: clips.slice(0, 6) }
   };
 }"""
 

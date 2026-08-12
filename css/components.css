@@ -798,7 +798,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   position: absolute;
   left: 0; right: 0; top: 0;
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.2;
   pointer-events: none;
   z-index: 1;
@@ -938,7 +938,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px calc(var(--gap) * 0.6); }
-.sheet[data-density="compact"] .pm-group-h { padding-bottom: 2px; }
+.sheet[data-density="compact"] .pm-doors button {
+  white-space: normal;
+  text-overflow: clip;
+  overflow: visible;
+  line-height: 1.15;
+  font-size: var(--fs-3);
+}
 /* THE ELLIPSIS STAYS AT 620 AND DOES NOT FOLLOW THE COLUMN COUNT DOWN.
    It used to ride along in the same block, which was safe while three columns
    meant 620/3 ≈ 190 units each — wide enough that `nowrap` costs nothing.
