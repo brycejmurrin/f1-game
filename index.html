@@ -1378,7 +1378,12 @@
     <div id="lt-rows" class="pane"></div>
     <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
     <div class="sheet-foot">
-      <button id="lt-reset">RESET ALL</button>
+      <!-- "RESET", not "RESET ALL": the handler drops the LOCAL edits for the
+           current track|time-of-day|weather only, and deliberately leaves the
+           other conditions and the shipped file untouched. The old label
+           promised a global reset, so a user who had tuned several
+           conditions read the per-condition behaviour as reset being broken. -->
+      <button id="lt-reset" title="Drop local edits for THIS track / time of day / weather. Other conditions and the shipped presets are untouched.">RESET</button>
       <button id="lt-copy">COPY VALUES</button>
       <button id="lt-close" class="bigbtn">DONE</button>
     </div>
