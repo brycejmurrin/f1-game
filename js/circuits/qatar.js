@@ -30,7 +30,7 @@
       // One lighting system: the ~200 Musco masts below (floodMastRing + S/F +
       // TV corners) own BOTH the look and the night pools. Suppress the generic
       // mast pass so short duplicate poles do not sit under the tall banks.
-      { kind: "floodlights", s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0, s1: 1 },
     ],
     lengthKm: 5.4,
     sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight

@@ -88,7 +88,7 @@
       // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
       // rules above, just a smaller range.
       { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
-      { kind: "floodlights", s0: 0, s1: 1 },
+      { kind: "lamps", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even
     // a raised budget — because cityFront()'s own along() step (44/62/44/48 m)
@@ -406,12 +406,12 @@
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
           // Trunk (dark green). addCyl/addCone are BASE-anchored in TrackGeom
-          // (build from `c` up to `c + u*h`), so the old `c + u*h*0.5` put
-          // the trunk's FOOT half its own height in the air and carried the
-          // canopies up with it. Forward, that was invisible: the trees spread
-          // over the CBD façade mass, which the float audit accepted as support.
-          // Reversed they spread the other way, over open ground, and eleven
-          // trees stood 14-27 m up. Anchor the foot at `c`.
+          // (js/track/geom.js) — they build from `c` up to `c + u*h` — so the
+          // old `c + u*h*0.5` put the trunk's FOOT half its own height in the
+          // air and carried the canopies up with it. Forward, that was invisible:
+          // the trees spread over the CBD façade mass, which the float audit
+          // accepted as support. Reversed they spread the other way, over open
+          // ground, and eleven trees stood 14-27 m up. Anchor the foot at `c`.
           addCyl(out, c, 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
           // Main canopy cap — vivid NEON colour. Base sits 2 m BELOW the trunk
           // top so it overlaps rather than hovers; a cone base exactly at `h`

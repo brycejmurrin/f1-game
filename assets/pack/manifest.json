@@ -38,7 +38,7 @@
       {
         "mat": 6,
         "id": "foliage",
-        "scale": 3,
+        "scale": 4,
         "source": "polyhaven:leafy_grass",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -54,7 +54,7 @@
       {
         "mat": 8,
         "id": "sand",
-        "scale": 6,
+        "scale": 11,
         "source": "polyhaven:coast_sand_01",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -62,7 +62,7 @@
       {
         "mat": 9,
         "id": "grass",
-        "scale": 3,
+        "scale": 4.5,
         "source": "polyhaven:sparse_grass",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -70,7 +70,7 @@
       {
         "mat": 10,
         "id": "rock",
-        "scale": 5,
+        "scale": 8,
         "source": "polyhaven:rock_ground",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -78,7 +78,7 @@
       {
         "mat": 11,
         "id": "snow",
-        "scale": 6,
+        "scale": 7,
         "source": "polyhaven:snow_02",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -110,7 +110,7 @@
       {
         "mat": 16,
         "id": "asphalt",
-        "scale": 4,
+        "scale": 3.5,
         "source": "polyhaven:asphalt_track",
         "licence": "CC0",
         "author": "Poly Haven contributors"
@@ -155,7 +155,7 @@
         {
           "mat": 6,
           "id": "foliage",
-          "scale": 3,
+          "scale": 4,
           "source": "polyhaven:leafy_grass",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -171,7 +171,7 @@
         {
           "mat": 8,
           "id": "sand",
-          "scale": 6,
+          "scale": 11,
           "source": "polyhaven:coast_sand_01",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -179,7 +179,7 @@
         {
           "mat": 9,
           "id": "grass",
-          "scale": 3,
+          "scale": 4.5,
           "source": "polyhaven:sparse_grass",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -187,7 +187,7 @@
         {
           "mat": 10,
           "id": "rock",
-          "scale": 5,
+          "scale": 8,
           "source": "polyhaven:rock_ground",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -195,7 +195,7 @@
         {
           "mat": 11,
           "id": "snow",
-          "scale": 6,
+          "scale": 7,
           "source": "polyhaven:snow_02",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -227,7 +227,7 @@
         {
           "mat": 16,
           "id": "asphalt",
-          "scale": 4,
+          "scale": 3.5,
           "source": "polyhaven:asphalt_track",
           "licence": "CC0",
           "author": "Poly Haven contributors"
@@ -239,7 +239,68 @@
     "normal": "mat-normal-256.png"
   },
   "models": {},
-  "env": {},
+  "env": {
+    "*|default": {
+      "ambientSky": [
+        0.369,
+        0.3743,
+        0.386
+      ],
+      "ambientGround": [
+        0.0712,
+        0.0919,
+        0.1251
+      ],
+      "source": "polyhaven:kloofendal_43d_clear_puresky",
+      "licence": "CC0",
+      "author": "Poly Haven contributors"
+    },
+    "*|day": {
+      "ambientSky": [
+        0.369,
+        0.3743,
+        0.386
+      ],
+      "ambientGround": [
+        0.0712,
+        0.0919,
+        0.1251
+      ],
+      "source": "polyhaven:kloofendal_43d_clear_puresky",
+      "licence": "CC0",
+      "author": "Poly Haven contributors"
+    },
+    "*|dusk": {
+      "ambientSky": [
+        0.2092,
+        0.246,
+        0.2999
+      ],
+      "ambientGround": [
+        0.1379,
+        0.1634,
+        0.2016
+      ],
+      "source": "polyhaven:industrial_sunset_puresky",
+      "licence": "CC0",
+      "author": "Poly Haven contributors"
+    },
+    "*|dawn": {
+      "ambientSky": [
+        0.2011,
+        0.22,
+        0.2827
+      ],
+      "ambientGround": [
+        0.068,
+        0.0632,
+        0.0675
+      ],
+      "source": "polyhaven:venice_sunset",
+      "licence": "CC0",
+      "author": "Poly Haven contributors"
+    }
+  },
   "credits": [
     {
       "kind": "material",
@@ -338,6 +399,34 @@
       "author": "Poly Haven contributors",
       "licence": "CC0",
       "source": "polyhaven:asphalt_track"
+    },
+    {
+      "kind": "env",
+      "id": "*|default",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:kloofendal_43d_clear_puresky"
+    },
+    {
+      "kind": "env",
+      "id": "*|day",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:kloofendal_43d_clear_puresky"
+    },
+    {
+      "kind": "env",
+      "id": "*|dusk",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:industrial_sunset_puresky"
+    },
+    {
+      "kind": "env",
+      "id": "*|dawn",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:venice_sunset"
     }
   ]
 }

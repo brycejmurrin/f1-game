@@ -53,7 +53,7 @@ function extractFn(src, name) {
 const LIGHTING = read("js/game/lighting.js");
 // The build path: buildTrackLights and its helper floodColor (called only from
 // the build). The per-frame path: functions render() calls each frame.
-const BUILD_FNS = ["buildTrackLights", "floodColor"];
+const BUILD_FNS = ["buildTrackLights", "floodColor", "applyLampDensity", "lampDensityFactor", "lampStrideNodes", "lampStrideM"];
 const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap"];
 
 test("the light functions this test models still exist", () => {
@@ -102,5 +102,6 @@ test("LAMPS tuner group merges the old FLOODLIGHTS + LAMP BEHAVIOUR tabs", () =>
   assert.equal(defs.filter((d) => d.group === "LAMP BEHAVIOUR").length, 0);
   assert.ok(lamp.some((d) => d.id === "lampLevel" && d.section === "POOLS"));
   assert.ok(lamp.some((d) => d.id === "lampCull" && d.section === "BEHAVIOUR"));
+  assert.ok(lamp.some((d) => d.id === "lampDensity" && d.rebuild), "LAMP DENSITY must rebuild lights");
   assert.equal(defs.find((d) => d.id === "floodDay").label, "DAYTIME LAMPS");
 });

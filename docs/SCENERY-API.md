@@ -125,9 +125,10 @@ rule as every other lamp — no light without something visible emitting it.
 a `flood_bank` (cool) or `halogen` (warm) lens into `track.lampPosts` by default,
 on a separate 512-cap mast-lamp budget (not the 96 `lampPost` cap). Pass
 `opts.light: false` when the mast is accent geometry on top of the generic
-`"floodlights"` dressing pass — otherwise the same stretch gets two light
-sources. Circuits that exclude `"floodlights"` and use `floodMastRing` as the
-race-lighting rig leave the default on so pools anchor to the tall fixtures.
+`"lamps"` dressing pass — otherwise the same stretch gets two light
+sources. Circuits that exclude `"lamps"` / `"lighting"` and use `floodMastRing`
+as the race-lighting rig leave the default on so pools anchor to the tall
+fixtures.
 
 ### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
 
@@ -216,26 +217,25 @@ model and records `reason: "vertex budget exceeded"`.
 
 ### Shared dressing exclusions
 
-Generic city, foliage, lamps, and floodlights can be disabled by racing-lap
-sector and side without changing defaults. `"lamps"` and `"floodlights"` stay
-distinct so a circuit can clear decorative clutter without killing night pools;
-`"lighting"` is the umbrella that matches either:
+Generic city, foliage, and lamps can be disabled by racing-lap sector and side.
+Track lighting is one system: `"lamps"` is the canonical dressing kind for the
+generic mast pass (street posts and flood banks). `"floodlights"` is kept as an
+alias; `"lighting"` matches either:
 
 ```js
 dressingExclusions: [
   { kinds: ["city", "lamps"], s0: 0.12, s1: 0.24, side: 1 },
   { kind: "foliage", s0: 0.92, s1: 0.08 }, // wraparound, both sides
-  { kind: "floodlights", s0: 0, s1: 1 },
-  { kind: "lighting", s0: 0.40, s1: 0.55 }, // both lamps + floodlights
+  { kind: "lamps", s0: 0, s1: 1 },         // suppress generic night masts
+  { kind: "lighting", s0: 0.40, s1: 0.55 }, // same family (alias umbrella)
 ]
 ```
 
 The shared furniture `streetLamp()` dressing pass is retired — the generic mast
-pass already draws street-style posts / flood banks (keyed off `fz.lamp`) and
-fills `track.lampPosts`. A bare `"lamps"` exclusion is therefore a geometry
-no-op today (kept so existing circuit rules still parse); `"floodlights"` still
-gates the light-bearing mast pass. `streetLamp` remains on the scenery `api`
-for bespoke circuit calls.
+pass draws street-style posts / flood banks (keyed off `fz.lamp`) and fills
+`track.lampPosts`. Bespoke `floodMast` / `lampPost` register into the same list.
+`streetLamp` remains on the scenery `api` for bespoke circuit calls. Tuner
+**LAMP DENSITY** scales mast spacing (~22 m at 1.0).
 
 ## What `api` gives you
 
