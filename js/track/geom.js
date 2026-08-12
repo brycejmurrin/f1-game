@@ -38,23 +38,43 @@ const TrackGeom = (function () {
     return [a[0] / l, a[1] / l, a[2] / l];
   }
 
+  /* The six faces as DATA, hoisted out of addBox. Each row is four corner
+     sign-triples followed by (axis, sign) naming the outward normal:
+     axis 0 = r, 1 = u, 2 = f. Same faces, same order, same winding as the
+     literal table this replaces — it was rebuilt per call, ~33 fresh arrays
+     every time, and addBox is the hottest emitter in the build (85,130 calls
+     on vegas, 78% of its prop vertices). Int8Array because every entry is
+     -1/0/1/2 and a typed read avoids the boxed-element check.
+
+     MEASURED, whole build, min of 5, and verified bit-identical first — the
+     props buffers of monza/vegas/monaco hash the same as the previous
+     checkout, pos/nrm/col/idx/mat:
+       vegas 4211 -> 4059 ms (3.6%)   monza 1911 -> 1874 (1.9%)
+       silverstone 2378 -> 2349 (1.2%)
+     Modest. Reported to be larger; it is not, at least in the VM harness.
+     Kept because it is free at the call site and the table reads better as
+     data than as a literal rebuilt 85,130 times, not because it is a big win. */
+  const BOX_FACES = new Int8Array([
+    -1, 1, 1,  -1, -1, 1,   1, -1, 1,   1, 1, 1,   2,  1,   // +f
+     1, 1, -1,  1, -1, -1, -1, -1, -1, -1, 1, -1,  2, -1,   // -f
+     1, 1, 1,   1, -1, 1,   1, -1, -1,  1, 1, -1,  0,  1,   // +r
+    -1, 1, -1, -1, -1, -1, -1, -1, 1,  -1, 1, 1,   0, -1,   // -r
+    -1, 1, -1, -1, 1, 1,    1, 1, 1,    1, 1, -1,  1,  1,   // +u
+    -1, -1, 1, -1, -1, -1,  1, -1, -1,  1, -1, 1,  1, -1,   // -u
+  ]);
+  const BOX_STRIDE = 14;
+
   // oriented box; basis optional [right,up,fwd]
   function addBox(out, c, sz, col, basis) {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const hx = sz[0] / 2, hy = sz[1] / 2, hz = sz[2] / 2;
-    const corner = (sx, sy, sz2) => [
-      c[0] + r[0] * sx * hx + u[0] * sy * hy + f[0] * sz2 * hz,
-      c[1] + r[1] * sx * hx + u[1] * sy * hy + f[1] * sz2 * hz,
-      c[2] + r[2] * sx * hx + u[2] * sy * hy + f[2] * sz2 * hz,
-    ];
-    const faces = [
-      [[-1, 1, 1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], f],
-      [[1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1], [-f[0], -f[1], -f[2]]],
-      [[1, 1, 1], [1, -1, 1], [1, -1, -1], [1, 1, -1], r],
-      [[-1, 1, -1], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-r[0], -r[1], -r[2]]],
-      [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1], u],
-      [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [-u[0], -u[1], -u[2]]],
-    ];
+    // Basis pre-scaled by the half-extents once, so a corner is three multiply-
+    // adds off the sign triple instead of nine multiplies through a closure
+    // that returned a fresh [x,y,z]. That closure ran 24x per box.
+    const rx = r[0] * hx, ry = r[1] * hx, rz = r[2] * hx;
+    const ux = u[0] * hy, uy = u[1] * hy, uz = u[2] * hy;
+    const fx = f[0] * hz, fy = f[1] * hz, fz = f[2] * hz;
+    const c0 = c[0], c1 = c[1], c2 = c[2];
     // The face table above is wound CCW-outward for a RIGHT-handed [r,u,f] basis
     // (the default axes give r×u = +f). But callers on the track frame pass
     // r = cross(t,up), u = cross(r,t) — a LEFT-handed basis (r×u = -t) — so every
@@ -70,16 +90,28 @@ const TrackGeom = (function () {
     const cr = cross(r, u);
     const flip = (cr[0] * f[0] + cr[1] * f[1] + cr[2] * f[2]) < 0;
     const m = out._mat || 0, mm = out.mat;
-    for (const fc of faces) {
-      const base = out.pos.length / 3;
-      const nv = fc[4];
+    const col0 = col[0], col1 = col[1], col2 = col[2];
+    const pos = out.pos, nrm = out.nrm, cols = out.col, idx = out.idx;
+    for (let fi = 0; fi < 6; fi++) {
+      const o = fi * BOX_STRIDE;
+      const base = pos.length / 3;
+      // Outward normal: the named basis vector, signed. Unscaled — the
+      // half-extents belong to the corners, not the normal.
+      const ax = BOX_FACES[o + 12], sg = BOX_FACES[o + 13];
+      const bv = ax === 0 ? r : ax === 1 ? u : f;
+      const nx = bv[0] * sg, ny = bv[1] * sg, nz = bv[2] * sg;
       for (let i = 0; i < 4; i++) {
-        const p = corner(fc[i][0], fc[i][1], fc[i][2]);
-        out.pos.push(p[0], p[1], p[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]);
+        const s = o + i * 3;
+        const sx = BOX_FACES[s], sy = BOX_FACES[s + 1], sz2 = BOX_FACES[s + 2];
+        pos.push(c0 + rx * sx + ux * sy + fx * sz2,
+                 c1 + ry * sx + uy * sy + fy * sz2,
+                 c2 + rz * sx + uz * sy + fz * sz2);
+        nrm.push(nx, ny, nz);
+        cols.push(col0, col1, col2);
         if (mm) mm.push(m);
       }
-      if (flip) out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-      else out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      if (flip) idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      else idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
   }
 
