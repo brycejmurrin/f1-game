@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MEASURE = path.join(ROOT, "tools/cdmcp-measure.py");
+const LAMPS = path.join(ROOT, "tools/cdmcp-lamps.py");
+const CLI = path.join(ROOT, "tools/cdmcp-cli.py");
 const BG = path.join(ROOT, "tools/cdmcp-bg.mjs");
 
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
@@ -25,12 +27,37 @@ test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
   assert.match(bg, /= run \(passed\|failed\|timedout\|interrupted\)/);
 });
 
+test("cdmcp-cli.py advertises roots so filePath writes under /workspace work", () => {
+  assert.ok(fs.existsSync(CLI));
+  const py = fs.readFileSync(CLI, "utf8");
+  assert.match(py, /roots\/list/);
+  assert.match(py, /listChanged/);
+  assert.match(py, /file:\/\/\{ROOT\}/);
+});
+
+test("cdmcp-lamps.py exists with terminal-marker log contract", () => {
+  assert.ok(fs.existsSync(LAMPS));
+  const py = fs.readFileSync(LAMPS, "utf8");
+  assert.match(py, /= run (passed|failed|timedout|interrupted)/);
+  assert.match(py, /artifacts\/logs\/cdmcp-lamps\.log/);
+  assert.match(py, /lampDensity/);
+  assert.match(py, /--bg/);
+  assert.match(py, /--status/);
+});
+
 test("cdmcp-measure --help exits 0 and lists profiles", () => {
   const r = spawnSync("python3", [MEASURE, "--help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /boot/);
   assert.match(r.stdout, /--bg/);
   assert.match(r.stdout, /artifacts\/logs/);
+});
+
+test("cdmcp-lamps --help exits 0 and mentions background mode", () => {
+  const r = spawnSync("python3", [LAMPS, "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /--bg/);
+  assert.match(r.stdout, /--status|cdmcp-lamps/);
 });
 
 test("cdmcp-bg with no args exits 2 and prints usage", () => {

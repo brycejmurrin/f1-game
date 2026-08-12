@@ -27,10 +27,13 @@ TIMEOUT = 180
 
 
 class McpClient:
-    def __init__(self) -> None:
+    def __init__(self, roots: list[str] | None = None) -> None:
         self._id = 0
         self._pending: dict[int, dict] = {}
         self._buf = ""
+        # Advertise workspace so take_screenshot(filePath=…) under /workspace works.
+        # docs/research/CHROME-DEVTOOLS-MCP.md — without roots, writes are denied.
+        self._roots = roots or [f"file://{ROOT}"]
         self.proc = subprocess.Popen(
             [str(WRAPPER), "run"],
             stdin=subprocess.PIPE,
@@ -42,6 +45,13 @@ class McpClient:
         assert self.proc.stdin and self.proc.stdout
         threading.Thread(target=self._reader, daemon=True).start()
 
+    def _reply(self, rid: int, result: dict) -> None:
+        assert self.proc.stdin
+        self.proc.stdin.write(
+            json.dumps({"jsonrpc": "2.0", "id": rid, "result": result}) + "\n"
+        )
+        self.proc.stdin.flush()
+
     def _reader(self) -> None:
         assert self.proc.stdout
         for line in self.proc.stdout:
@@ -51,6 +61,23 @@ class McpClient:
             try:
                 msg = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            # Server → client request (e.g. roots/list) — answer it.
+            if "method" in msg and "id" in msg:
+                method = msg["method"]
+                rid = msg["id"]
+                if method == "roots/list":
+                    self._reply(
+                        rid,
+                        {
+                            "roots": [
+                                {"uri": u, "name": Path(u.replace("file://", "")).name or "root"}
+                                for u in self._roots
+                            ]
+                        },
+                    )
+                else:
+                    self._reply(rid, {})
                 continue
             mid = msg.get("id")
             if mid is not None and mid in self._pending:
@@ -86,11 +113,19 @@ class McpClient:
             "initialize",
             {
                 "protocolVersion": "2025-06-18",
-                "capabilities": {},
+                "capabilities": {"roots": {"listChanged": True}},
                 "clientInfo": {"name": "cdmcp-cli", "version": "1"},
             },
         )
         self._notify("notifications/initialized")
+        # Tell the server our roots are ready (some builds wait for this).
+        try:
+            self._notify(
+                "notifications/roots/list_changed",
+                {},
+            )
+        except Exception:
+            pass
 
     def tools_list(self) -> list[str]:
         r = self._request("tools/list")
