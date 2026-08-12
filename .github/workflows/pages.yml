@@ -11,16 +11,21 @@ permissions:
   id-token: write
 
 # GitHub Pages serves ONE deployment at a time per environment, and the deploy
-# request lives on GitHub's backend independently of this Actions job. Cancelling
-# an in-progress run (cancel-in-progress: true) under a burst of rapid pushes
-# abandons deployments GitHub has already accepted, wedging the single-slot queue
-# so later deploys sit in `deployment_queued` until they hit the deploy-pages
-# 10-min timeout ("Timeout reached, aborting!"). false = a new push WAITS for the
-# in-flight deploy instead of killing it — the config the official Pages workflow
-# ships. Intermediate queued runs are still coalesced; the latest one wins.
+# request lives on GitHub's backend independently of this Actions job. The
+# official starter ships `cancel-in-progress: false` so a new push WAITS for the
+# in-flight deploy instead of killing deploy-pages mid-upload (which can wedge
+# the single-slot Pages queue until the 10-min timeout).
+#
+# THAT SETTING ALSO QUEUES FOREVER when the in-flight run never acquires a
+# runner. Measured 2026-08-12: a burst of feature-branch CI left the deploy's
+# five reusable-workflow jobs `pending` for >15 minutes while later pushes
+# stacked behind them under `false` — live version.json stayed at 1126 while
+# the tip was 1141+. Prefer cancelling a run that has not reached deploy-pages
+# over an unbounded wait; the CI slim (skip advisory selected on workflow_call,
+# forward before_sha so sweeps can no-op) cuts how long a deploy holds runners.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   # The deploy gate. This workflow used to ship whatever was pushed, without
