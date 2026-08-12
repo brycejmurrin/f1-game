@@ -86,11 +86,11 @@ const CEILINGS = {
   // actually sets the on-screen UI/HUD size was reading the RAW stored percentage
   // instead of the already-clamped one computed two lines above it for the
   // slider's own label, so an out-of-range apex26.uiScale/hudScale applied
-  // unclamped on every boot while the slider quietly showed something else. Fix
-  // is one line; the rest is the comment recording why the raw read was wrong,
-  // which is exactly the bug-explaining growth this ratchet tolerates.
-  "js/game.js": 7955,
-  // The next three largest. Each is cohesive today (a dev API, an agent view, a
+  // unclamped on every boot while the slider quietly showed something else.
+  // 7955 -> 7970 for UI/HUD SIZE step 0.5: scaleSnap / scaleLabel / SCALE_STEP
+  // beside applyScale so the slider lattice and the stored value stay one
+  // function (and the clamp comment above still applies — snap is the clamp).
+  "js/game.js": 7970,  // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
   // — a dev-API hook growing the dev API is the file doing its job.

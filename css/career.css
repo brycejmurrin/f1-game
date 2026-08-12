@@ -95,6 +95,25 @@
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* SHORT SHEET: tighten the slot picker so guide CTAs stay reachable.
+   Measured 852×393 @115%: with pair on, SLOT 3 and #cr-guide-* sat ~83px past
+   #cr-inner. Compacting padding helps; forcing the stack (high --pair-at) makes
+   #cr-body the scroller so both modes + guides are one finger-flick away. */
+#cr-inner[data-density="compact"] {
+  --pair-at: 2000px;
+}
+#cr-inner[data-density="compact"] .cr-slot { margin-bottom: 4px; }
+#cr-inner[data-density="compact"] .cr-slot-main {
+  padding: calc(var(--pad) * 0.35); gap: 2px;
+}
+#cr-inner[data-density="compact"] .cr-note {
+  margin-bottom: 4px; font-size: 10px; line-height: 1.35;
+}
+#cr-inner[data-density="compact"] .cr-record {
+  padding: calc(var(--pad) * 0.45); gap: 2px;
+}
+#cr-inner[data-density="compact"] .cr-record-line { font-size: 12px; }
+
 /* Section headings reuse .sel-label (css/components.css) — same dim uppercase
    text and skewed red tick as #select and the garage. Only the rhythm between a
    heading and the block above it is career-specific. */

@@ -52,6 +52,8 @@ const MIME = {
 const CHROMIUM_PATHS = [
   "/opt/pw-browsers/chromium",
   "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+  "/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
+  "/opt/google/chrome/chrome",
 ];
 
 /** Preinstalled sandbox Chromium; undefined → playwright's bundled build. */
