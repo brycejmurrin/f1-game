@@ -7,7 +7,14 @@
   {
     id: "miami",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.2325, // GPS-derived (OpenF1 2025, conf=0.451)
+    // Start/finish line. Snapped to the real one: coord 0.7 m off centreline; = trace vertex 0.
+    // Was 0.2325, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.2325,
     name: "MIAMI",
     gp: "Miami GP",
     country: "USA",
@@ -39,8 +46,9 @@
       { t: 0, l: 300 }, { t: 60, l: 80 }, { t: -65, l: 70 }, { t: 0, l: 200 }, { t: -80, l: 90 }, { t: 90, l: 100 },
       { t: -70, l: 80 }, { t: 0, l: 400 }, { t: 80, l: 90 }, { t: -80, l: 90 }, { t: 0, l: 240 },
     ],
-    // Elevations are authored in source-trace coordinates. 0.8925 maps through
-    // startFrac 0.2325 to racing s=0.66: the Turnpike T14–15 crest, ~11 ft.
+    // Elevations are authored in source-trace coordinates. With the line
+    // corrected to 0.0 the fmap is the identity, so 0.8925 is also racing s:
+    // the Turnpike T14–15 crest, ~11 ft. (Was racing 0.66 under startFrac 0.2325.)
     elevations: [{ s: 0.8925, halfM: 220, rise: 3.5 }],
     // Hard Rock is car-park flat and laid over temporary tarmac, so camber is
     // modest throughout — 3-3.5° on the sweeps, nothing dramatic anywhere.

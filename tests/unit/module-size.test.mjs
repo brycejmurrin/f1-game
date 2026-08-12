@@ -97,7 +97,18 @@ const CEILINGS = {
   "js/game/apex.js": 3055,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
-  "js/track/tracks.js": 2600,
+  // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
+  // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
+  // for the six emitters transformSceneryApi never covered (groundPatch,
+  // overheadSpan, circuitKit, groundedSegments, waterField, frameAt). Mostly
+  // the comments explaining why the shift is an ARC-LENGTH fraction and not
+  // `startFrac - sceneryStartFrac` — the trap that cost a full debugging pass.
+  // Raised again 2670 -> 2725: elevation/bridge anchors were remapped against
+  // `startFrac` instead of the authoring origin, sliding the road surface
+  // vertically under its own dressing (measured up to 43 m at Spa) — fixed by
+  // freezing that remap at `sceneryStartFrac` and rotating the bumps and the
+  // undulation ripple by the same arc-length shift in buildCenterline.
+  "js/track/tracks.js": 2725,
 };
 
 test("the big modules are not growing unnoticed", () => {

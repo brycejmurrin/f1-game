@@ -38,7 +38,15 @@
     // Rotate the start/finish line onto the main pit/harbour straight so the lap
     // begins on the straight with the first corner at its end (fraction of the
     // original trace; tuned against the reversed layout).
-    startFrac: 0.28,
+    // Start/finish line. Snapped to the real one: coord 0.5 m off centreline; this trace is stored REVERSED, so its vertex 0 is not the line.
+    // Was 0.28. That already measured straight (mean |k| 0.00298 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.2516,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
     // NOTE: Monaco's geometry comes from the real GPS trace in js/track/geo-paths.js
     // (CircuitPaths.monaco); these segs are only a fallback if that trace is

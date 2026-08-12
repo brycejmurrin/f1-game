@@ -7,7 +7,14 @@
   {
     id: "shanghai",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.1525, // GPS-derived (OpenF1 2025, conf=0.117)
+    // Start/finish line. Snapped to the real one: v0; the researched coord snaps 2 nodes earlier but lands IN A CORNER (mean |k| 0.0057), and its sources disagree by 175 m.
+    // Was 0.1525, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.1525,
     name: "SHANGHAI",
     gp: "Chinese GP",
     country: "China",

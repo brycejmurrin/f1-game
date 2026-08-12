@@ -7,7 +7,14 @@
   {
     id: "monza",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.0125, // GPS-derived (OpenF1 2025, conf=0.316)
+    // Start/finish line. Snapped to the real one: coord 3.9 m off centreline; = trace vertex 0.
+    // Was 0.0125, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.0125,
     name: "MONZA",
     gp: "Italian GP",
     country: "Italy",
@@ -51,7 +58,8 @@
       { t: 0, l: 360 }, { t: 150, l: 220 },
     ],
     // Source-trace coordinates: a shallow Roggia dip and modest Lesmo crest.
-    // startFrac=0.0125 maps these to racing s≈0.30 and s≈0.48.
+    // With the line corrected to 0.0 the fmap is the identity — racing s 0.3125
+    // and 0.4925.
     elevations: [
       { s: 0.3125, halfM: 220, rise: -1.5 },
       { s: 0.4925, halfM: 340, rise: 4.5 },

@@ -7,7 +7,14 @@
   {
     id: "albert_park",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.0925, // GPS-derived (OpenF1 2025, conf=0.201)
+    // Start/finish line. Snapped to the real one: coord 2.5 m off centreline; = trace vertex 0.
+    // Was 0.0925, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.0925,
     name: "ALBERT PARK",
     gp: "Australian GP",
     country: "Australia",

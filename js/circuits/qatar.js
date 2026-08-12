@@ -7,7 +7,14 @@
   {
     id: "qatar",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    startFrac: 0.8000, // GPS-derived (OpenF1 2025, conf=0.212)
+    // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
+    // Was 0.8000, which put the line inside a corner — a start line is
+    // always on a straight. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.8000,
     name: "QATAR",
     gp: "Qatar GP",
     country: "Qatar",
@@ -52,7 +59,8 @@
     ],
     // Desert plain — genuinely gentle, but not the dead 0.0 m the trace shipped
     // with. ~6.5 m of long-wavelength undulation, nothing over ~1.5 %.
-    // (s = SOURCE fraction; startFrac 0.8 shifts these into racing space.)
+    // (s = SOURCE fraction. With the line corrected to 0.0 that shift is the
+    // identity, so these are racing fractions too.)
     elevations: [
       { s: 0.05, halfM: 550, rise: 3.5 },
       { s: 0.42, halfM: 700, rise: 5.5 },

@@ -101,7 +101,13 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
   assert.equal(miami.sceneryCoordinates, "racing");
   assert.equal(miami.flatTerrain, true);
   assert.equal(miami.terrainOuter, 90);
-  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.66) < 1e-12);
+  // Elevations are SOURCE-space and fmap'd through startFrac. This expected
+  // 0.66 while miami's startFrac was 0.2325 (0.8925 - 0.2325); the start line
+  // has since been corrected onto the real one at 0.0, so the map is now the
+  // identity and the source fraction stands unchanged. The assertion is kept
+  // because it still pins WHICH space the field is read in.
+  assert.equal(miami.startFrac, 0);
+  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.8925) < 1e-12);
   // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
   // Hard Rock bowl horizon, marina, and beach club.
   const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual

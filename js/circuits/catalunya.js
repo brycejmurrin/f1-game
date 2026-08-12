@@ -11,9 +11,17 @@
     // Upstream es-1991 already runs clockwise, matching the racing direction
     // (Elf at T1 is a right-hander).
     reverse: false,
-    // The trace opens on the 700 m main straight; nudge the line along it so the
-    // grid sits short of the Turn 1 braking zone. Not GPS-calibrated.
-    startFrac: 0.03,
+    // The trace opens on the 700 m main straight, and its first vertex IS the
+    // start line — measured, not nudged.
+    // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
+    // Was 0.03. That already measured straight (mean |k| 0.00036 over
+    // 120 m) — it was on the wrong PART of the lap, not in a corner.
+    // See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // This circuit's RACING-space scenery, dressingExclusions and corner
+    // boards were authored against the OLD line. Naming it here moves the
+    // line without dragging the dressed world round the lap with it.
+    sceneryStartFrac: 0.03,
     name: "CATALUNYA",
     gp: "Spanish GP",
     country: "Spain",
