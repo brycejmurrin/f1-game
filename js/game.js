@@ -6091,9 +6091,25 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
+    // Distance-gated for RIVALS, exactly as the brake rings above are and for
+    // the same reason — a wing element is ~1 m x 0.15 m, and 4 flaps x 21 AI is
+    // ~84 draws a frame, every one a VAO bind + drawElements (each flap is its
+    // own mesh, so the bind never hits the cache). The cue this exists to sell
+    // is the car AHEAD of you opening its wings, not one two straights away.
+    // 150 m is deliberately generous next to the rings' 40 m: the rings are a
+    // glow that genuinely goes sub-pixel, whereas a rear wing swinging is still
+    // legible at distance. The player is never gated — it is the car you are
+    // looking at.
     if (!carModelBuf) {
-      const aSt = teamDecalState(c.team, c.isPlayer);
-      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
+      let drawFlaps = true;
+      if (!c.isPlayer) {
+        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
+      }
+      if (drawFlaps) {
+        const aSt = teamDecalState(c.team, c.isPlayer);
+        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
+      }
     }
     // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
     // at night — a car's rear/vertical faces receive none of the downward-aimed

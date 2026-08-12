@@ -74,7 +74,6 @@ window.UiLayers = (function () {
      repeat. */
   const sel = (defs) => defs.map((d) => "#" + d.id + ":not([hidden])").join(",");
   const ALL_SEL = sel(DEFS);
-  const GATE_SEL = sel(DEFS.filter((d) => d.gate !== false));
 
   // A zero box is the real test, not the hidden attribute: it also catches an
   // element inside a display:none ancestor, a control in a collapsed section,
@@ -133,8 +132,42 @@ window.UiLayers = (function () {
   // "A menu is open" for the purpose of not driving the car. Ignores the
   // `gate: false` layers (see DEFS). Same zero-size-wrapper allowance as top(),
   // or the LIGHTING TUNER would go on handing arrow keys to the car.
+  /* Resolved by ID rather than by document query, because THIS one is called
+     from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
+     the paused gate, so on menus too) and asks anyOpen() on every one — and
+     the 24-selector comma list it used to pass to querySelectorAll misses
+     Blink's single-selector fast paths and walks the element tree
+     instead. `#id:not([hidden])` is exactly `getElementById(id)` plus an
+     `el.hidden` test, so 24 map lookups give the identical answer without the
+     walk. Cached lazily and re-resolved whenever an entry is missing, so a
+     layer that has not been created yet is picked up as soon as it exists.
+
+     top() deliberately keeps its querySelectorAll: it ranks by z-index and
+     relies on DOCUMENT ORDER to break ties ("the LATER element, which is the
+     one painted on top"), which DEFS order does not promise. It also runs on
+     key events, not per frame. */
+  let _gateEls = null;
+  function gateEls() {
+    if (_gateEls) {
+      for (let i = 0; i < _gateEls.length; i++) if (!_gateEls[i].isConnected) { _gateEls = null; break; }
+    }
+    if (!_gateEls) {
+      const ids = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
+      const els = [];
+      for (const id of ids) { const el = document.getElementById(id); if (el) els.push(el); }
+      // Only cache once every gated layer exists; before that, re-resolve each
+      // call so a late-built layer is never permanently missed.
+      if (els.length === ids.length) _gateEls = els;
+      return els;
+    }
+    return _gateEls;
+  }
+
   function anyOpen() {
-    for (const el of document.querySelectorAll(GATE_SEL)) {
+    const els = gateEls();
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      if (el.hidden) continue;          // the cheap test the selector used to do
       if (shownLayer(el)) return true;
     }
     return false;

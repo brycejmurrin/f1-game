@@ -265,6 +265,8 @@ const GameAudio = (function () {
     currentUrl = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
     engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
+    noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
+                                                            // old ctx throws on the new one
     if (!createCtx()) return;
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
@@ -332,18 +334,49 @@ const GameAudio = (function () {
     return buf;
   }
 
+  /* ONE shared white-noise buffer for the one-shots, instead of a fresh
+     allocation per hit. noiseBuf() fills every sample with Math.random() on the
+     MAIN THREAD, and the one-shots fire while driving: rumble() is
+     noise(0.09, 0.05, 320) throttled to every 0.07 s over a kerb, so a kerb
+     strike was ~14 allocations a second at ~4,800 floats each. thunder() was
+     worse — three calls totalling ~2.9 s, about 140k Math.random() calls in one
+     synchronous burst, mid-race, at an unpredictable moment.
+
+     White noise is stationary, so one buffer played from a RANDOM OFFSET is
+     indistinguishable from a freshly-generated one — and two hits in a row
+     still differ, which a fixed offset would not give. The looping sources
+     (harv, skid, rain) keep their own buffers: those allocate once per start,
+     and rain in particular needs a seamless 4 s loop.
+
+     Context-bound like engBuf/accBuf, so rebuildCtx() must clear it. */
+  const NOISE_POOL_S = 3;
+  let noisePoolBuf = null;
+  function noisePool() {
+    if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
+    return noisePoolBuf;
+  }
+  // Point `src` at the shared buffer and return the offset to start it from.
+  // Falls back to a dedicated buffer for anything longer than the pool.
+  function bindNoise(src, needS) {
+    if (needS >= NOISE_POOL_S) { src.buffer = noiseBuf(needS); return 0; }
+    src.buffer = noisePool();
+    return Math.random() * (NOISE_POOL_S - needS);
+  }
+
   function noise(peak, decay, filterFreq, when) {
     if (!sfxOk()) return;
     const t0 = now() + (when || 0);
     const src = ctx.createBufferSource();
-    src.buffer = noiseBuf(decay + 0.05);
+    // start(t0, off) → stop(t0 + decay + 0.1), so the window needed inside the
+    // pool is decay + 0.1 (a small margin over that keeps the tail clear).
+    const off = bindNoise(src, decay + 0.15);
     const f = ctx.createBiquadFilter();
     f.type = "lowpass";
     f.frequency.value = filterFreq;
     const g = ctx.createGain();
     env(g, t0, peak, 0.005, decay);
     src.connect(f).connect(g).connect(sfxBus);
-    src.start(t0);
+    src.start(t0, off);
     src.stop(t0 + decay + 0.1);
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
@@ -717,7 +750,7 @@ const GameAudio = (function () {
     if (!sfxOk()) return;
     const t0 = now();
     const src = ctx.createBufferSource();
-    src.buffer = noiseBuf(0.55);
+    const off = bindNoise(src, 0.7);        // start(t0, off) -> stop(t0 + 0.6)
     const f = ctx.createBiquadFilter();
     f.type = "bandpass";
     f.Q.value = 1.1;
@@ -726,7 +759,7 @@ const GameAudio = (function () {
     const g = ctx.createGain();
     env(g, t0, 0.3, 0.03, 0.45);
     src.connect(f).connect(g).connect(sfxBus);
-    src.start(t0);
+    src.start(t0, off);
     src.stop(t0 + 0.6);
     src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) {} };
     blip(220, "sawtooth", 0.12, 0.03, 0.4, 880);
