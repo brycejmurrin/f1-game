@@ -89,9 +89,13 @@ window.CircuitMarkings = (function () {
     sectors: [0.3, 0.62],
     turns: [0.0267, 0.0602, 0.1910, 0.2122, 0.2313, 0.2697, 0.2916, 0.3751, 0.4819, 0.5106, 0.5359, 0.5613, 0.7064, 0.7885, 0.8303, 0.9199, 0.9596, 0.0034],
   },
+  // Mirrored (f -> 1-f, re-sorted) when singapore gained `reverse: true`: these
+  // are RACING-lap fractions, which the header says are never fmap'd, so they
+  // had to move by hand or all 19 apexes would sit on the wrong corners. The
+  // physical apex positions are unchanged — only which corner you meet first.
   singapore: {
-    sectors: [0.32, 0.66],
-    turns: [0.0114, 0.1043, 0.1459, 0.1891, 0.2592, 0.3562, 0.4099, 0.4385, 0.4670, 0.5236, 0.5803, 0.5998, 0.6585, 0.6724, 0.7694, 0.8199, 0.9291, 0.9470, 0.9886],
+    sectors: [0.34, 0.68],
+    turns: [0.0114, 0.0530, 0.0709, 0.1801, 0.2306, 0.3276, 0.3415, 0.4002, 0.4197, 0.4764, 0.5330, 0.5615, 0.5901, 0.6438, 0.7408, 0.8109, 0.8541, 0.8957, 0.9886],
   },
   spa: {
     sectors: [0.28, 0.68],

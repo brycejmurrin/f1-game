@@ -8,6 +8,22 @@
     id: "singapore",
     name: "SINGAPORE",
     startFrac: 0.5075, // GPS-derived (OpenF1 2025, conf=0.566)
+    // Marina Bay races ANTI-CLOCKWISE — Pirelli ("cars are driving
+    // anti-clockwise"), f1-fansite ("Driving direction: Counterclockwise"),
+    // and Turn 1 is a sharp left. The imported centreline runs the other way:
+    // of the eleven circuits in tests/data/f1-circuit-reference.geojson that
+    // are anti-clockwise in reality, ten compute anti-clockwise and singapore
+    // alone computes clockwise, so the upstream line is drawn backwards. Left
+    // uncorrected the lap played mirrored — measured 11 right / 6 left against
+    // a real 12 left / 7 right.
+    //
+    // startFrac is unchanged and must stay so: racing 0 maps to source `phi`
+    // under BOTH branches of toSourceFrac, so the start line does not move.
+    reverse: true,
+    // The bespoke scenery below predates this discovery and is anchored in the
+    // racing space of the FORWARD traversal, so it has to be mirrored back or
+    // every landmark lands on the far side of the lap. See TrackSpace.lapMirror.
+    sceneryLapMirror: true,
     gp: "Singapore GP",
     country: "Singapore",
     night: true,

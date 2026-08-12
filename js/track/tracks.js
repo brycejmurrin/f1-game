@@ -278,7 +278,7 @@ const Tracks = (function () {
     for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
-                        "cameraTower", "broadcastCompound",
+                        "cameraTower", "broadcastCompound", "waterSurface",
                         "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
@@ -291,7 +291,7 @@ const Tracks = (function () {
                         "forestEdge", "cityFront", "recordBarrier", "indexSolid",
                         "concreteCanyon",
                         "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow",
-                        "spectatorHill", "sponsorHoarding",
+                        "spectatorHill", "sponsorHoarding", "waterBand",
                         "bleacher", "scaffoldStand", "terrace", "tieredBowl"]) {
       const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
         const range = TrackSpace.sceneryRange(def, s0, s1);
@@ -2387,6 +2387,13 @@ const Tracks = (function () {
       terrainOuter: d.terrainOuter,
       flatTerrain: !!d.flatTerrain,
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
+      // Read off the COPIED def by TrackSpace.lapMirror, so it has to be copied
+      // here — the sixth member of the family the comment below describes. It
+      // fails the same silent way: omitted, lapMirror() just reads undefined,
+      // returns false, and the scenery places unmirrored on a reversed lap.
+      // Singapore's Marina Bay Sands is the canary — it lands in the middle of
+      // the road and modelGroup suppresses it as "footprint rejected".
+      sceneryLapMirror: !!d.sceneryLapMirror,
       dressingExclusions: d.dressingExclusions || null,
       // These five are READ OFF THE COPIED DEF and so have to be copied onto
       // it. Each was authored in js/circuits/<id>.js, never copied here, and
