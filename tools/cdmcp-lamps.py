@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """cdmcp-lamps — night lamp screenshots via local chrome-devtools MCP + localhost.
 
-Runs against the working tree served on http://127.0.0.1:3456 (start that yourself).
+Serves whichever worktree you point at — pass --port / APEX_PORT so parallel
+worktrees do not fight over :3456.
+
 Logs line-buffered to artifacts/logs/cdmcp-lamps.log so a background watcher can
 anchor on the terminal line:
 
   = run passed|failed|timedout|interrupted
 
 Usage:
-  python3 -m http.server 3456 &          # once
-  python3 tools/cdmcp-lamps.py           # foreground
-  python3 tools/cdmcp-lamps.py --bg      # background; prints log path + pid
+  python3 -m http.server 3462 &          # this worktree
+  python3 tools/cdmcp-lamps.py --port 3462
+  APEX_PORT=3462 python3 tools/cdmcp-lamps.py --bg
+  python3 tools/cdmcp-lamps.py --port 3462 --only monza   # smoke subset
 
 Monitor:
   until grep -qE '= run (passed|failed|timedout|interrupted)' artifacts/logs/cdmcp-lamps.log \\
@@ -34,6 +37,9 @@ LOG_DIR = ROOT / "artifacts" / "logs"
 LOG_PATH = LOG_DIR / "cdmcp-lamps.log"
 PID_PATH = LOG_DIR / "cdmcp-lamps.pid"
 STATUS_PATH = LOG_DIR / "cdmcp-lamps.status"
+
+# Default port: APEX_PORT env (worktree convention) then 3456.
+DEFAULT_PORT = int(os.environ.get("APEX_PORT") or os.environ.get("PORT") or "3456")
 
 SHOTS = [
     {"id": "qatar", "frac": 0.90, "label": "sf", "dens": 1.0},
@@ -118,33 +124,42 @@ def boot_js(track: str, frac: float, dens: float) -> str:
 }}"""
 
 
-def run(log: Logger) -> int:
+def select_shots(only: list[str] | None, limit: int | None) -> list[dict]:
+    shots = list(SHOTS)
+    if only:
+        want = {x.lower() for x in only}
+        shots = [s for s in shots if s["id"] in want or s["label"] in want]
+    if limit is not None and limit >= 0:
+        shots = shots[:limit]
+    return shots
+
+
+def run(log: Logger, *, url: str, shots: list[dict]) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     build = json.loads((ROOT / "version.json").read_text())["build"]
-    log.log(f"cdmcp-lamps start build={build} shots={len(SHOTS)} out={OUT}")
+    log.log(f"cdmcp-lamps start build={build} shots={len(shots)} url={url} out={OUT}")
     STATUS_PATH.write_text("running\n")
 
     mod = load_cdmcp()
-    # Advertise /workspace so take_screenshot(filePath=…) is allowed.
+    # Advertise worktree root + /tmp so take_screenshot(filePath=…) is allowed.
     c = mod.McpClient(roots=[f"file://{ROOT}", "file:///tmp"])
     report = []
     status = "failed"
     try:
         log.log("mcp: initialize + roots")
         c.start()
-        url = f"http://127.0.0.1:3456/?v={build}"
         log.log(f"navigate {url}")
         nav = mod.text_result(c.call("navigate_page", {"url": url}))
         log.log(f"navigate result: {nav.splitlines()[0] if nav else '(empty)'}")
         if "ERR_" in nav or "Unable to navigate" in nav:
-            log.log("FATAL: localhost not serving — start: python3 -m http.server 3456")
+            log.log(f"FATAL: not serving — start: python3 -m http.server <port>  (url was {url})")
             status = "failed"
             return 1
         time.sleep(1.5)
 
-        for i, s in enumerate(SHOTS, 1):
+        for i, s in enumerate(shots, 1):
             tag = f"{s['id']}/{s['label']} dens={s['dens']}"
-            log.log(f"shot {i}/{len(SHOTS)} begin {tag}")
+            log.log(f"shot {i}/{len(shots)} begin {tag}")
             t0 = time.time()
             try:
                 meta = c.call(
@@ -169,11 +184,11 @@ def run(log: Logger) -> int:
                 }
                 report.append(row)
                 flag = "BLANK" if blank else "ok"
-                log.progress(i, len(SHOTS), f"{tag} {kb:.1f}KB {flag} ({row['elapsed_s']}s)")
+                log.progress(i, len(shots), f"{tag} {kb:.1f}KB {flag} ({row['elapsed_s']}s)")
             except Exception as e:
                 log.log(f"  ERROR {tag}: {e}")
                 report.append({**s, "error": str(e), "blank": True, "kb": 0})
-                log.progress(i, len(SHOTS), f"{tag} FAILED")
+                log.progress(i, len(shots), f"{tag} FAILED")
 
         try:
             log.log("park about:blank")
@@ -193,11 +208,11 @@ def run(log: Logger) -> int:
             c.close()
         except Exception:
             pass
-        (OUT / "report.json").write_text(json.dumps(report, indent=2))
+        (OUT / "report.json").write_text(json.dumps({"url": url, "shots": report}, indent=2))
         ok = sum(1 for r in report if not r.get("blank") and not r.get("error"))
-        total = len(SHOTS)
+        total = len(shots)
         if status not in ("interrupted",):
-            status = "passed" if ok == total else "failed"
+            status = "passed" if ok == total and total > 0 else "failed"
         STATUS_PATH.write_text(f"{status}\n{ok}/{total}\n")
         log.log(f"summary {ok}/{total} non-blank → {OUT}")
         log.terminal(status)
@@ -205,18 +220,18 @@ def run(log: Logger) -> int:
     return 0 if status == "passed" else 1
 
 
-def spawn_bg() -> int:
+def spawn_bg(forward: list[str]) -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     # Fresh log so a watcher seeded against an old terminal marker does not fire early.
     if LOG_PATH.exists():
         LOG_PATH.write_text("")
     STATUS_PATH.write_text("starting\n")
-    # Detach: re-exec ourselves without --bg, stdout/stderr → log.
-    cmd = [sys.executable, str(Path(__file__).resolve())]
-    # Line-buffered python so the watcher sees heartbeats live.
+    cmd = [sys.executable, str(Path(__file__).resolve()), *forward]
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     with LOG_PATH.open("a") as fp:
-        fp.write(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] spawning cdmcp-lamps\n")
+        fp.write(
+            f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] spawning {' '.join(cmd)}\n"
+        )
         fp.flush()
         proc = __import__("subprocess").Popen(
             cmd,
@@ -238,10 +253,31 @@ def spawn_bg() -> int:
     return 0
 
 
+def resolve_url(args: argparse.Namespace) -> str:
+    if args.url:
+        return args.url
+    build = json.loads((ROOT / "version.json").read_text())["build"]
+    return f"http://127.0.0.1:{args.port}/?v={build}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bg", action="store_true", help="detach to background; log to artifacts/logs/")
     ap.add_argument("--status", action="store_true", help="print pid/status/last log line")
+    ap.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"static server port (default {DEFAULT_PORT}; env APEX_PORT/PORT)",
+    )
+    ap.add_argument("--url", help="full page URL (overrides --port + version.json)")
+    ap.add_argument(
+        "--only",
+        nargs="+",
+        metavar="ID",
+        help="subset by track id and/or label (e.g. monza qatar marina)",
+    )
+    ap.add_argument("--limit", type=int, help="cap shot count after --only filter")
     args = ap.parse_args()
     if args.status:
         pid = PID_PATH.read_text().strip() if PID_PATH.exists() else "?"
@@ -253,10 +289,24 @@ def main() -> int:
         print(f"pid={pid} status={st}\nlast: {last}")
         return 0
     if args.bg:
-        return spawn_bg()
+        forward: list[str] = [f"--port={args.port}"]
+        if args.url:
+            forward.append(f"--url={args.url}")
+        if args.only:
+            forward.append("--only")
+            forward.extend(args.only)
+        if args.limit is not None:
+            forward.append(f"--limit={args.limit}")
+        return spawn_bg(forward)
+
+    url = resolve_url(args)
+    shots = select_shots(args.only, args.limit)
+    if not shots:
+        print("no shots selected", file=sys.stderr)
+        return 2
     log = Logger(LOG_PATH)
     try:
-        return run(log)
+        return run(log, url=url, shots=shots)
     finally:
         log.close()
 

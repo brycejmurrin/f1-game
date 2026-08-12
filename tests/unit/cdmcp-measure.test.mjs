@@ -57,7 +57,26 @@ test("cdmcp-lamps --help exits 0 and mentions background mode", () => {
   const r = spawnSync("python3", [LAMPS, "--help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /--bg/);
-  assert.match(r.stdout, /--status|cdmcp-lamps/);
+  assert.match(r.stdout, /--port/);
+  assert.match(r.stdout, /APEX_PORT|--only/);
+});
+
+test("cdmcp-measure and cdmcp-lamps honour APEX_PORT in --help defaults", () => {
+  const env = { ...process.env, APEX_PORT: "3462" };
+  const m = spawnSync("python3", [MEASURE, "--help"], { encoding: "utf8", env });
+  assert.equal(m.status, 0, m.stderr);
+  assert.match(m.stdout, /3462/);
+  const l = spawnSync("python3", [LAMPS, "--help"], { encoding: "utf8", env });
+  assert.equal(l.status, 0, l.stderr);
+  assert.match(l.stdout, /3462/);
+});
+
+test("cdmcp-lamps.py documents --port and APEX_PORT", () => {
+  const py = fs.readFileSync(LAMPS, "utf8");
+  assert.match(py, /--port/);
+  assert.match(py, /APEX_PORT/);
+  assert.match(py, /--only/);
+  assert.match(py, /--limit/);
 });
 
 test("cdmcp-bg with no args exits 2 and prints usage", () => {

@@ -12,7 +12,9 @@ Examples:
   python3 tools/cdmcp-measure.py --bg             # detach; returns immediately
   python3 tools/cdmcp-measure.py ui --url http://127.0.0.1:3462
   python3 tools/cdmcp-measure.py full --port 3462
+  APEX_PORT=3462 python3 tools/cdmcp-measure.py boot --bg
   node tools/cdmcp-bg.mjs boot                    # same as --bg (test-bg twin)
+  # Parallel worktrees: each serves its own port (3456, 3460, 3461, …).
 
 Profiles:
   boot  — cold navigate, network, console, LCP/trace, lighthouse (default)
@@ -44,6 +46,9 @@ ARTIFACT_DIR = ROOT / "artifacts" / "tmp" / "cdmcp-measure"
 TIMEOUT = 180
 
 PROFILES = ("boot", "ui", "full")
+
+# Default port: APEX_PORT / PORT env (parallel worktrees), else 3456.
+DEFAULT_PORT = int(os.environ.get("APEX_PORT") or os.environ.get("PORT") or "3456")
 
 
 class Log:
@@ -502,7 +507,12 @@ def main(argv: list[str] | None = None) -> int:
         help="measurement profile (default: boot)",
     )
     p.add_argument("--url", help="full page URL (overrides --port + version.json)")
-    p.add_argument("--port", type=int, default=3456, help="local server port (default 3456)")
+    p.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"local server port (default {DEFAULT_PORT}; env APEX_PORT/PORT)",
+    )
     p.add_argument("--bg", action="store_true", help="detach to background; log under artifacts/logs/")
     args = p.parse_args(argv)
 

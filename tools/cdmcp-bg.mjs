@@ -11,9 +11,13 @@
  * Never on heartbeat-like text (there is none — but do not match "failed" inside
  * gate lines alone). Never run while a Playwright group is in flight.
  *
- *   node tools/cdmcp-bg.mjs boot
+ *   APEX_PORT=3462 node tools/cdmcp-bg.mjs ui
  *   node tools/cdmcp-bg.mjs ui --port 3462
  *   node tools/cdmcp-bg.mjs full --url http://127.0.0.1:3462/?v=1138
+ *
+ * Port defaults: --port > APEX_PORT/PORT env > 3456. Each worktree keeps its
+ * own artifacts/logs/; only the HTTP port must differ across concurrent trees.
+ *
  *   node tools/cdmcp-bg.mjs --status
  *   node tools/cdmcp-bg.mjs --wait
  *   node tools/cdmcp-bg.mjs --stop
