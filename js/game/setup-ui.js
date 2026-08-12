@@ -285,9 +285,14 @@ function buildSetup() {
                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
   // LIVERY pseudo-tab (paint jobs) — appended after the parts categories.
+  // No sub-label: unlike a part option's fixed catalog string, a livery name
+  // is arbitrary text (stock names run long, and the creator lets a player
+  // type anything) and this rail is sized for a category label, not a proper
+  // noun — cs-tab-cur truncated "Kannapolis Compound" to "Kannapolis Comp…",
+  // telling the player less than the bare category would. The name is already
+  // shown in full on the option-list row below, which is 2-3x wider.
   {
-    const curLiv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-    tabs.appendChild(pseudoTab("livery", "LIVERY", curLiv ? curLiv.name : "Team",
+    tabs.appendChild(pseudoTab("livery", "LIVERY", "",
                                getLiveryId(team.id) !== "default"));
   }
 

@@ -177,10 +177,14 @@ const AudioPanel = (() => {
       if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
     };
     $("as-close").onclick = () => { $("audioset").hidden = true; };
-    $("as-music-on").onclick = () => { setMusic(true); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-music-off").onclick = () => { setMusic(false); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-sound-on").onclick = () => { setSfx(true); GameAudio.uiTick(); };
-    $("as-sound-off").onclick = () => { GameAudio.uiTick(); setSfx(false); };
+    // stopPropagation: these four buttons live inside MUSIC/SOUND EFFECTS'
+    // <summary> (their section header), and a click on ANY element inside a
+    // summary still reaches the summary's own click handling by default —
+    // without this, pressing ON/OFF would also open or close the section.
+    $("as-music-on").onclick = (e) => { e.stopPropagation(); setMusic(true); if (G.soundOn) GameAudio.uiTick(); };
+    $("as-music-off").onclick = (e) => { e.stopPropagation(); setMusic(false); if (G.soundOn) GameAudio.uiTick(); };
+    $("as-sound-on").onclick = (e) => { e.stopPropagation(); setSfx(true); GameAudio.uiTick(); };
+    $("as-sound-off").onclick = (e) => { e.stopPropagation(); GameAudio.uiTick(); setSfx(false); };
     // `input` not `change`: the level should follow the thumb while dragged.
     $("as-mvol").oninput = (e) => {
       musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);

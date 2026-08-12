@@ -437,13 +437,12 @@ for (const n of ["off", "corner", "full"]) $("pm-line-" + n).onclick = () => {
   store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 };
-$("adv-more").onclick = () => {
-  const open = $("adv-extra").hidden;        // currently hidden → about to open
-  $("adv-extra").hidden = !open;
-  $("adv-more").setAttribute("aria-expanded", String(open));
-  $("adv-more").innerHTML = open ? "ADVANCED &#9652;" : "ADVANCED &#9662;";
+// <details> owns open/closed state, keyboard toggling and the "expanded"
+// announcement itself; the native "toggle" event fires on both directions,
+// so this only has to add the click sound.
+$("adv-details").addEventListener("toggle", () => {
   if (G.soundOn) GameAudio.uiSelect();
-};
+});
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).
 $("advanced-inner").addEventListener("input", refreshMacros);
 applySteerTuning();

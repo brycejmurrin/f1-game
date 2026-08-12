@@ -360,8 +360,6 @@ const click = (page, id) =>
   page.evaluate((id) => document.getElementById(id).click(), id);
 const isActive = (page, id) =>
   page.evaluate((id) => document.getElementById(id).classList.contains("active"), id);
-const hidden = (page, id) =>
-  page.evaluate((id) => document.getElementById(id).hidden, id);
 const num = async (page, key) => Number(await stored(page, key));
 
 test.describe("Apex 26 — simplified controls", () => {
@@ -417,11 +415,14 @@ test.describe("Apex 26 — simplified controls", () => {
 
   test("ADVANCED toggle shows and hides the granular sliders", async ({ page }) => {
     await load(page);
-    expect(await hidden(page, "adv-extra")).toBe(true);
+    // #adv-extra is a native <details> disclosure now — .open, not .hidden,
+    // is the state that changes; the div never sets its own hidden attribute.
+    const open = () => page.evaluate(() => document.getElementById("adv-details").open);
+    expect(await open()).toBe(false);
     await click(page, "adv-more");
-    expect(await hidden(page, "adv-extra")).toBe(false);
+    expect(await open()).toBe(true);
     await click(page, "adv-more");
-    expect(await hidden(page, "adv-extra")).toBe(true);
+    expect(await open()).toBe(false);
   });
 
   test("editing a granular Advanced slider updates the simplified view", async ({ page }) => {

@@ -35,22 +35,34 @@ triage; it is whether each screen is ARRANGED well.
 
 ---
 
-## 2. The one content-loss finding left
+## 2. The one content-loss finding: closed
 
-`span.cs-tab-cur` truncates in **262 cells** on the garage's LIVERY and TEAM
-tabs. The text is a livery name — "Kannapolis Compound" — shown under the
-category label in the rail.
+`span.cs-tab-cur` truncated in **262 cells** on the garage's LIVERY and TEAM
+tabs. The example that made the case was a livery name — "Kannapolis Compound"
+— shown under the category label in the rail.
 
-This is the only place in the app where content is still being cut, and it is
-worth separating from the rest: it is not a layout failure, it is a name too long
-for a rail that is 104-140 own units wide by design. The rail's width is set by
-what "SUSPENSION" needs (see css/carsetup.css), and no width that fits a category
-label fits an arbitrary livery name.
+This was the only place in the app where content was still being cut, and it
+was worth separating from the rest: it was not a layout failure, it was a name
+too long for a rail that is 104-140 own units wide by design. The rail's width
+is set by what "SUSPENSION" needs (see css/carsetup.css), and no width that
+fits a category label fits an arbitrary livery name.
 
-**Verdict: change, and cheaply.** The current value belongs on the OPTION LIST
-side, which is 2-3x wider, not in the rail. Failing that, the rail entry should
-show the category alone. Truncating a proper noun to "Kannapolis Comp…" tells the
-player less than showing nothing would.
+**Fixed the LIVERY tab, the "failing that" branch of the verdict below.**
+`js/game/setup-ui.js`'s LIVERY pseudo-tab no longer passes the current livery's
+name as the rail's sub-label — it shows "LIVERY" alone, same as the category
+label on every other tab. The full name was never lost: it is already shown in
+full on the option-list row, 2-3x wider and un-truncated. Moving the value
+there instead (the verdict's first-choice fix) was not needed because it was
+already true.
+
+**The TEAM tab's driver surname was left as-is, deliberately, not by
+oversight.** It shares `.cs-tab-cur` with LIVERY and some of the 262 cells
+above are its, but a driver surname is a fixed, curated vocabulary (~20 real
+F1 names) close in length to "SUSPENSION" itself, not the open-ended,
+player-typed text a livery name is — the same "known desktop three-pixel case"
+this section already carves out below, not the multi-character content loss
+the livery name produced. Bundling the two under one number is what made this
+look like a bigger problem than the actionable part of it was.
 
 (`span.cs-tab-lbl` truncating "SUSPENSION" in 4 cells is the known desktop
 three-pixel case already documented in css/carsetup.css. Left alone.)
@@ -150,33 +162,86 @@ DOORS, not settings, and separating them took the body from 780 to 655 own units
 
 ---
 
-## 5. The mechanism for (c), and its one blocker
+## 5. The mechanism for (c): all three done
 
-`<details name="…">` gives a **native exclusive accordion** — one section open at
-a time — with no JS, correct keyboard handling and correct ARIA. It is the
-"pick a group rather than scroll past all of them" pattern, and it is markup, not
-a module. `#advanced` already hand-rolls exactly this with a
-`<button aria-expanded>` driving a `<div hidden>`.
+`<details>` gives a **native disclosure** — no JS, correct keyboard handling and
+correct ARIA — for "pick a group rather than scroll past all of them," and it is
+markup, not a module. `#advanced` used to hand-roll a single disclosure this way
+— a `<button aria-expanded>` driving a `<div hidden>` — before the conversion
+below.
+
+**None of the three below use `name="…"` (the exclusive-accordion form, one
+section open at a time).** It reads as the obvious choice for "reduce a busy
+screen" and was the first thing tried here, but every one of these three
+screens turned out to have more than one group a player needs visible at once
+— required form fields in two places on `customize`, MUSIC and SOUND EFFECTS
+both worth a glance while balancing a mix on `audioset`. Exclusivity would have
+fixed the density at the cost of fighting that. Independent `<details>`, each
+collapsible on its own with its own default open/closed state, is what's below
+in every case — the density win comes from which state is default, not from
+forcing a choice between sections.
 
 `interpolate-size` is **explicitly not Baseline** (MDN: "does not work in some of
-the most widely-used browsers") and only buys the open/close animation. Skip it;
-the collapse works everywhere without it.
+the most widely-used browsers") and only buys the open/close animation. Skipped
+everywhere below; the collapse works fine without it.
 
 **Per screen:**
 
-- **`advanced` — do it.** The summary is plain text, so the conversion is clean.
-  Four files: markup, the handler reduces to a `toggle` listener for the click
-  sound, CSS for the summary box, and two specs that assert `hidden` on
-  `#adv-extra` — an attribute `<details>` does not use. Prepared on
-  `claude/menu-accordion`; **not yet verified in a browser.**
-- **`audioset` — BLOCKED, and not by effort.** Two of its four sections carry
-  ON/OFF toggles INSIDE the section head. Interactive controls inside `<summary>`
-  mean tapping the toggle also opens and closes the section. Converting requires
-  relocating them, which reverses a decision this file records (full-width halves
-  made a four-control panel scroll on a landscape phone). Needs a design call
-  first.
-- **`customize` — needs sections invented.** 34 controls and no grouping, so
-  there is nothing to convert. How liveries group is a product question.
+- **`advanced` — done.** `#adv-more`/`#adv-extra` (button + `hidden` div) is now
+  `<details id="adv-details"><summary id="adv-more">`/`<div id="adv-extra">`,
+  both ids kept so nothing else that referenced them had to move. The claim
+  this section used to make — "prepared on `claude/menu-accordion`; not yet
+  verified in a browser" — overstated what that branch actually held: a
+  scripted edit had tried this exact conversion, died mid-edit after inserting
+  a closing `</details>` with no matching open tag, and was caught and reverted
+  by eye (that incident is why `source-integrity.test.mjs` now asserts every
+  tag in `index.html` nests correctly — see that test's own commit). No working
+  markup ever landed; "not yet verified" was a euphemism for "was broken and
+  rolled back." Converted again from scratch this time, checked against that
+  guard after every edit, plus `js/game/steer-tuning.js` (the handler is now a
+  bare `toggle` listener for the click sound — `<details>` owns open state,
+  keyboard toggling and the expanded announcement itself) and `css/tuner.css`
+  (`<summary>` gets no styling from tokens.css's base `button` rule, so the
+  button look is repeated explicitly, with the default marker swapped for one
+  that flips on `[open]`). `tests/specs/sliders.spec.js`'s disclosure test now
+  reads `#adv-details.open` instead of `#adv-extra.hidden` — the attribute a
+  `<details>` doesn't use, exactly as this section predicted.
+- **`audioset` — unblocked without relocating anything.** The blocker as
+  originally written assumed the ON/OFF switches had to move out of the
+  section head to make `<summary>` work; they didn't. A click on the switch
+  still bubbles up through the summary by default, but a `stopPropagation()`
+  in the switch's own click handler (`js/game/audio-panel.js`) stops it there
+  — the section only toggles when the click lands on the label text, exactly
+  as it should. The full-width-halves decision this section used to cite is
+  untouched: same small inline switches, same position, same size. All four
+  `.as-sec` are now `<details>`. MUSIC and SOUND EFFECTS — the two controls
+  every player actually uses — open by default, switch reachable either way
+  since it's in the summary itself. YOUR TRACKS and SPOTIFY — an upload
+  workflow and a 15-control integration that's "dormant until a Client ID is
+  entered" — close by default; together they were most of this screen's 30
+  controls. `tests/specs/music-library.spec.js` exercises exactly those two
+  sections through Playwright locators that need real visibility, so its one
+  shared `openAudioPanel()` helper now force-opens both before any test body
+  runs, rather than touching each assertion.
+- **`customize` — done, scoped to the section that was actually optional.**
+  The 34 controls already split three ways by what they're FOR, not just by a
+  `.cz-sep` label: identity (name, short code, primary, accent — 4 controls,
+  required), paint (12 rows, already labelled "EXTRA PAINT — OPTIONAL" in the
+  markup before this pass), and driver (name, code, number — 3 controls,
+  required). Only the paint block — the actual bulk of the 34, and the one
+  group already telling players it's skippable — became a `<details>`,
+  collapsed by default, wrapping `#cz-paint-rows` (its own nested grid, same
+  `display:contents`-doesn't-work lesson as `#advanced` above applies here
+  too). Identity and driver stay flat: they're required, small, and hiding a
+  field the player MUST fill in behind a disclosure they might not open is a
+  worse trade than the scroll it would save. On a landscape phone this took
+  the whole form from scrolling past the SAVE button to fitting above the fold
+  with paint collapsed, without touching a field anyone has to fill in to
+  finish the form. Exclusive accordion (`name=`) was considered and rejected:
+  identity and driver are two more required groups, and forcing the player to
+  close one to see the other fights a fill-out-this-form flow rather than
+  helping it — that pattern fits `advanced`'s browse-one-topic-at-a-time
+  screen, not this one.
 
 ---
 
