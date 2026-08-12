@@ -142,7 +142,8 @@ const DataLive = (function () {
         Promise.all([
           F1API.weather(meta.sessionKey).catch(catchLive),
           F1API.positions(meta.sessionKey).catch(catchLive),
-          F1API.sessionDrivers(meta.sessionKey).catch(catchLive)
+          F1API.sessionDrivers(meta.sessionKey).catch(catchLive),
+          F1API.intervals(meta.sessionKey).catch(catchLive)
         ]).then(res => {
           if (myGen !== liveRefreshGen) return;
           clear(dataEl);
@@ -150,7 +151,16 @@ const DataLive = (function () {
             dataEl.appendChild(emptyMsg(gateErr.message));
             return;
           }
-          fillLive(dataEl, res[0], res[1], res[2]);
+          const positions = res[1];
+          const gaps = res[3];
+          if (positions && gaps) {
+            positions.forEach(p => {
+              if (p.num !== null && p.num !== undefined && Object.prototype.hasOwnProperty.call(gaps, p.num)) {
+                p.timeDiff = gaps[p.num];
+              }
+            });
+          }
+          fillLive(dataEl, res[0], positions, res[2]);
           const fetchedAt = lastFetchedAt(meta.sessionKey);
           stamp.textContent = "updated " + new Date(fetchedAt || Date.now())
             .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });

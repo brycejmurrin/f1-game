@@ -382,6 +382,30 @@ const F1API = (function () {
     });
   }
 
+  // Gap to leader per driver — OpenF1 tracks it separately from /position,
+  // which carries running order but not the timed gap the LIVE gap bars need.
+  function intervals(sessionKey) {
+    const url = OPENF1 + "/intervals?session_key=" + encodeURIComponent(sessionKey);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      const a = arr(list);
+      if (!a.length) return null;
+      const latest = {}; // driver_number -> latest sample
+      for (let i = 0; i < a.length; i++) {
+        const iv = a[i];
+        if (!iv || iv.driver_number === undefined || iv.driver_number === null) continue;
+        const prev = latest[iv.driver_number];
+        if (!prev || String(iv.date || "") >= String(prev.date || "")) latest[iv.driver_number] = iv;
+      }
+      const out = {};
+      for (const k in latest) {
+        if (Object.prototype.hasOwnProperty.call(latest, k)) {
+          out[k] = num(latest[k].gap_to_leader);
+        }
+      }
+      return out;
+    });
+  }
+
   function sessionDrivers(sessionKey) {
     const url = OPENF1 + "/drivers?session_key=" + encodeURIComponent(sessionKey);
     return request(url, sessionTtl(sessionKey)).then(function (list) {
@@ -519,6 +543,7 @@ const F1API = (function () {
     sessionsForMeeting: sessionsForMeeting,
     weather: weather,
     positions: positions,
+    intervals: intervals,
     sessionDrivers: sessionDrivers,
     fastestLap: fastestLap,
     carData: carData,
