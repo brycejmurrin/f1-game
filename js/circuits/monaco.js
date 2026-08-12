@@ -87,7 +87,7 @@
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
     ],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop, bakedModel } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       const racingSide = (side) => def.reverse ? -side : side;
@@ -814,6 +814,22 @@
         palette: [CREAM, STONE, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });
+      // CC0 Kenney suburban blocks deepen the Rascasse/paddock street wall
+      // (pack-optional; cityFront above remains the always-on massing).
+      {
+        const houses = [
+          ["kenney_sub_building-type-a", 0.88, 1, 22],
+          ["kenney_sub_building-type-c", 0.91, 1, 24],
+          ["kenney_sub_building-type-h", 0.94, 1, 23],
+          ["kenney_sub_building-type-k", 0.89, -1, 16],
+        ];
+        for (const [id, s, side, dist] of houses) {
+          if (!bakedModel(id, K(s), side, dist, { scale: 1.15 }))
+            building(K(s), side, dist, 12, 10, 10,
+              { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
+        }
+        bakedModel("kenney_sub_planter", K(0.90), 1, 7, { scale: 1.2 });
+      }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
       // ── LA RASCASSE — corner-apex clubhouse (s≈0.905, quay side) ────────

@@ -6,9 +6,9 @@ Powered by Poly Haven.
 
 | kind | id | author | licence | source |
 |---|---|---|---|---|
-| material | concrete | Poly Haven contributors | CC0 | polyhaven:concrete_floor_02 |
+| material | concrete | Poly Haven contributors | CC0 | polyhaven:concrete_panels |
 | material | brick | Poly Haven contributors | CC0 | polyhaven:red_brick |
-| material | metal | Poly Haven contributors | CC0 | polyhaven:metal_plate |
+| material | metal | Poly Haven contributors | CC0 | polyhaven:corrugated_iron |
 | material | wood | Poly Haven contributors | CC0 | polyhaven:wood_planks |
 | material | foliage | Poly Haven contributors | CC0 | polyhaven:leafy_grass |
 | material | fabric | Poly Haven contributors | CC0 | polyhaven:denim_fabric |
@@ -37,6 +37,25 @@ Powered by Poly Haven.
 | model | kenney_twr_building-sample-house-b | Kenney | CC0 | kenney:modular-buildings |
 | model | kenney_twr_building-sample-tower-a | Kenney | CC0 | kenney:modular-buildings |
 | model | kenney_twr_building-sample-tower-c | Kenney | CC0 | kenney:modular-buildings |
+| model | kenney_sub_building-type-a | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_building-type-c | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_building-type-h | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_building-type-k | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_building-type-r | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_ind_building-b | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-c | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-e | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-g | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_building-q | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_ind_chimney-large | Kenney | CC0 | kenney:city-kit-industrial |
+| model | kenney_com_building-b | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_building-f | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_building-skyscraper-b | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_low-detail-building-c | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_com_low-detail-building-wide-b | Kenney | CC0 | kenney:city-kit-commercial |
+| model | kenney_sub_fence-low | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_fence | Kenney | CC0 | kenney:city-kit-suburban |
+| model | kenney_sub_planter | Kenney | CC0 | kenney:city-kit-suburban |
 | env | *|default | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
 | env | *|day | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
 | env | *|dusk | Poly Haven contributors | CC0 | polyhaven:industrial_sunset_puresky |
