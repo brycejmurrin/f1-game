@@ -38,6 +38,7 @@ const GameAudio = (function () {
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
+  let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
 
   // Sample-based engine core: real CC0 recordings (assets/sfx/, from
   // pmndrs/racing-game, CC0). engine = idle/low-rev loop, accel = high-rev loop;
@@ -402,6 +403,7 @@ const GameAudio = (function () {
     usingSamples = !!(samplesReady && engBuf && accBuf);
     engA = engB = engC = null;
     engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
+    idleGainRamped = false;   // new gain node, so the fade-in must happen again
     if (usingSamples) {
       // real engine recordings: idle loop + acceleration loop, crossfaded and
       // pitched (playbackRate) by rev/gear in setEngine.
@@ -580,13 +582,23 @@ const GameAudio = (function () {
       const gmul = g <= 3 ? [0.6, 0.72, 0.84][g - 1] : 1.0;
       const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
-      engSrcAcc.playbackRate.setTargetAtTime(rate, t, 0.035);
       // Single coherent voice: run only the steady idle loop, pitched. Crossfading
       // in the second (different) recording made the output incoherent — its
       // brightness FELL as revs rose (measured via the audio test) instead of
       // rising. Brightness/"load" now comes from the lowpass opening with revs.
-      engGainAcc.gain.setTargetAtTime(0, t, 0.05);
-      engGainIdle.gain.setTargetAtTime(0.9, t, 0.05);
+      //
+      // Which makes three of the calls that used to live here provably dead, on
+      // a function the game loop runs EVERY FRAME:
+      //   engGainAcc.gain -> 0   was already 0 from createGain (startEngine) and
+      //                          is set nowhere else, so it scheduled 0 onto 0;
+      //   engSrcAcc.playbackRate pitched a source sitting behind that zero gain;
+      //   engGainIdle.gain -> 0.9 is a constant, so only the FIRST call does
+      //                          anything — but it must still be a ramp, not a
+      //                          direct .value, or the voice snaps in instead of
+      //                          fading over the 0.05 s tau.
+      // Each was a main-thread call plus a cross-thread timeline insertion, 60
+      // times a second, for the whole race.
+      if (!idleGainRamped) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
@@ -625,8 +637,14 @@ const GameAudio = (function () {
     lastEngT = t;
     lastSpeed = s;
     harvLevel += (target - harvLevel) * Math.min(1, (dt || 0.016) / 0.12);
-    harvGain.gain.setTargetAtTime(harvLevel * 0.06 * (usingSamples ? 0 : 1), t, 0.06);  // off for real recordings
-    harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
+    // Off for real recordings — and when it is off, BOTH of these are wasted:
+    // the gain is multiplied to a constant 0, and the filter is being swept
+    // behind that zero. usingSamples is the shipping path, so this was two more
+    // per-frame automation events producing silence.
+    if (!usingSamples) {
+      harvGain.gain.setTargetAtTime(harvLevel * 0.06, t, 0.06);
+      harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
+    }
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
     lfoG.gain.setTargetAtTime(offroad ? 45 : 0, t, 0.05);
