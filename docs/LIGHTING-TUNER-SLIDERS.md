@@ -67,6 +67,34 @@ The last two are why `tools/tuner-sweep.mjs` gained `day-overcast`/`day-fog`
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
+## Five ways a LIVE knob still reads "no observed change"
+
+A follow-up runtime pass sampled one knob per class (shader-uniform, apply-only,
+build-only, per-frame lamp) against a single parked, solo chase-cam capture.
+8 of 12 showed clear pixel or state movement immediately. The other 4
+(`starBright`, `lampCull`, `tailLightMul`, `beamCone`) showed none — and every
+one of them turned out to be correctly wired and live; the capture setup itself
+was blind to each, for a different, traceable reason. A blanket runtime sweep
+of all 178 with one fixed capture recipe would score all four "dead" and be
+wrong every time:
+
+| knob | why this capture missed it | how it was confirmed live |
+|---|---|---|
+| `starBright` | stars are sub-pixel point features; a frame MEAN can't resolve a few dozen brightened pixels in a 160×90 capture | signal `max 22` vs noise `max 14`, `p99 1.33` vs `1.0` — the distribution TAIL moves even though the mean (0.19 vs 0.34) does not |
+| `starBright` (2nd cause) | `sky.js` multiplies stars by `(1 - cityCov)`; Vegas (`street_night`) has heavy city glow that suppresses the star field to near-zero regardless of `starBright` | re-probed on `bahrain` (desert, dark sky) with the camera tilted skyward — still measured no change purely from the mean-vs-point-feature issue above, confirming the FIRST cause is what matters, not the theme |
+| `lampCull` | `lampCap(carCount, …)` only applies the knob `carCount > 1`; the standard `park()` capture teleports every AI car away, leaving the player solo | traced the gate in `js/game/lighting.js`; a capture with traffic present (no `park()`, or a scripted grid start) would show it |
+| `tailLightMul` | `appendCarTailLights` only emits for cars within `tailRange` (160 m); `park()` scatters the field 600 m away, so there are zero tail lights to scale | same fix as above — needs cars in frame, not a parked solo car |
+| `beamCone` | build-only, changes lamp cone SHAPE not brightness — a subtler pixel delta than `poolEnergy` (its build-only sibling, same rebuild path), which DID move measurably in the same capture | `poolEnergy` moving proves `set()` → `rebuild:true` → `track._lights = null` fires correctly; `beamCone` rides the identical path |
+
+The general lesson: **a single fixed capture recipe (one track, parked, solo,
+chase-cam) has systematic blind spots** — sky-effect knobs need a dark sky and
+the right camera angle, traffic/proximity knobs need cars in frame, and any
+sub-pixel-sparse effect needs a distribution statistic (`max`, `p99`), not a
+frame mean. Before calling a knob "inert" from a runtime capture, check: is the
+scene event it drives even happening in this shot (traffic, dark sky, weather),
+and would this effect show up in a MEAN across the whole frame or only in a
+handful of pixels?
+
 ## Reading the table
 
 Resolution order, lowest→highest: `def` below → `LightPresets["*"]` → shipped
