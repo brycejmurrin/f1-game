@@ -1055,7 +1055,7 @@ body:not(.desktop) #sel-preview-rec { font-size: 13px; }
 body:not(.desktop) .spf-fact { font-size: 12px; padding: 3px 8px; }
 body:not(.desktop) .track-row-meta,
 body:not(.desktop) .track-row-rec { font-size: 13px; }
-body:not(.desktop) .trb { font-size: 11px; }
+body:not(.desktop) .trb { font-size: 12px; }
 body:not(.desktop) .track-group-head { font-size: 12px; }
 body:not(.desktop) .season-upcoming-head,
 body:not(.desktop) .sur-rnd,

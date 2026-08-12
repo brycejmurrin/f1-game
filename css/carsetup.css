@@ -682,7 +682,7 @@
   flex: 0 0 auto; width: auto; margin: 0;
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
-  font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
   background: rgba(12,12,16,0.74); color: rgba(255,255,255,0.62);
   border: 1px solid rgba(255,255,255,0.14);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
@@ -699,7 +699,7 @@
 @media (hover: hover) {
   #cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
 }
-.cs-cam-caret { font-size: 8px; line-height: 1; transition: transform 0.15s ease; }
+.cs-cam-caret { font-size: 12px; line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
   border-color: rgba(0,204,136,0.4);
@@ -729,9 +729,9 @@
    width. */
 .cs-pan-row { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
-  flex: 0 0 34px;
-  font-size: 8px; font-weight: 800; letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.32); text-align: right;
+  flex: 0 0 40px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.45); text-align: right;
 }
 .cs-pan-grp, #cs-view, #cs-wing-views {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
@@ -771,7 +771,7 @@
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 }
 .cs-aero-lbl {
-  font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.42);
 }
 .cs-aero-val {
@@ -787,15 +787,15 @@
   /* Touch-ish widths: keep padding/type bumps; height floor is --tap-min /
      --chip-h from the base + body:not(.desktop) rules, not a narrower 34. */
   #cs-aero { padding: 6px 10px; gap: 5px; }
-  .cs-aero-lbl { font-size: 11px; letter-spacing: 0.08em; }
+  .cs-aero-lbl { font-size: 12px; letter-spacing: 0.08em; }
   .cs-aero-val { font-size: 13px; }
-  #cs-cam { padding: 6px 10px; font-size: 11px; }
+  #cs-cam { padding: 6px 10px; font-size: 12px; }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
   padding: 5px 9px; border-radius: var(--r-sm);
   background: rgba(12,12,16,0.74); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
@@ -911,8 +911,9 @@ body:not(.desktop) .cs-opt-desc { font-size: 13px; }
 body:not(.desktop) .cs-delta { font-size: 11px; }
 body:not(.desktop) .cs-cam-lbl,
 body:not(.desktop) .cs-aero-lbl { font-size: 12px; }
-body:not(.desktop) .cs-cam-caret { font-size: 11px; }
+body:not(.desktop) .cs-cam-caret { font-size: 12px; }
 body:not(.desktop) #cs-unlimited { font-size: 12px; }
+body:not(.desktop) #cs-cam { font-size: 12px; }
 /* FREE BUILD COMES OFF THE FULL TAP LADDER ON A SHORT SHEET — and it is the
    single biggest thing in this header, by a distance nobody would guess from
    looking at it. It is a 10px chip with 4px of padding, so its own content is
