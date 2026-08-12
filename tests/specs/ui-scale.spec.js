@@ -206,6 +206,17 @@ test.describe("UI scale", () => {
 
     await page.evaluate(() => window.__apex.hudScale(80));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.8" });
+
+    // Out of range clamps rather than throwing — a stored value from an older
+    // build with a wider range must not be able to produce a 4x interface.
+    const hi = await page.evaluate(() => window.__apex.uiScale(9999));
+    expect(hi.pct).toBe(hi.max);
+
+    // null is "forget it", not "set it to zero": the CSS default takes over and
+    // nothing is left in the store to override it.
+    const cleared = await page.evaluate(() => window.__apex.uiScale(null));
+    expect(cleared.stored).toBeNull();
+    expect(+(await read()).ui).toBeGreaterThan(0.5);
   });
 
   // applyScale() (js/game.js) runs on every boot, reading straight from
@@ -240,17 +251,6 @@ test.describe("UI scale", () => {
       hudLabel: document.getElementById("pm-hudscale-v").textContent,
     }));
     expect(shown).toEqual({ uiInput: "150", uiLabel: "150%", hudInput: "80", hudLabel: "80%" });
-
-    // Out of range clamps rather than throwing — a stored value from an older
-    // build with a wider range must not be able to produce a 4x interface.
-    const hi = await page.evaluate(() => window.__apex.uiScale(9999));
-    expect(hi.pct).toBe(hi.max);
-
-    // null is "forget it", not "set it to zero": the CSS default takes over and
-    // nothing is left in the store to override it.
-    const cleared = await page.evaluate(() => window.__apex.uiScale(null));
-    expect(cleared.stored).toBeNull();
-    expect(+(await read()).ui).toBeGreaterThan(0.5);
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one
