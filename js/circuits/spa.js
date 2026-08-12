@@ -67,7 +67,7 @@
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
-              waterSurface, terrainYAt } = api;
+              waterSurface, terrainYAt, bakedModel, along } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
@@ -189,6 +189,30 @@
       // scenery review (14 of 24 circuits) and no track — Spa included — had
       // any of it.
       broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
+
+      // CC0 Kenney paddock / village buildings near the Stavelot broadcast yard
+      // and Kemmel old pits. Pack-optional with procedural hall fallbacks so
+      // headless verify-track (no Assets) still dresses the same sites.
+      {
+        const pads = [
+          ["kenney_com_building-e", 0.748, -1, 58],
+          ["kenney_ind_building-h", 0.772, -1, 56],
+          ["kenney_com_low-detail-building-wide-a", 0.105, -1, 52],
+          ["kenney_twr_building-sample-tower-a", 0.018, -1, 52],
+        ];
+        for (const [id, s, side, dist] of pads) {
+          if (!bakedModel(id, K(s), side, dist))
+            building(K(s), side, dist, 16, 12, 14,
+              { kind: "hall", wall: [0.70, 0.68, 0.64], window: [0.30, 0.32, 0.34], floor: 4 });
+        }
+      }
+      // Jersey barriers on La Source runoff (pack-optional; tyreWall stays).
+      along(0.015, 0.028, 4.5, (k) => {
+        bakedModel("kenney_construction-barrier", k, 1, 6.2, { scale: 1.15 });
+      });
+      along(0.016, 0.027, 6.0, (k) => {
+        bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
+      });
 
       // --- Ardennes forest terrace: Spa's stands away from the pit straight are
       //     not the modern concrete-and-cantilever kind — they are open decks of
