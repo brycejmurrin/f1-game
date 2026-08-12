@@ -1081,10 +1081,21 @@ const Tracks = (function () {
     // the query point, so it must reach out by this much to find a wide record
     // whose centre line lies outside the cells the query itself touches.
     let barMaxHalf = 0;
+    // Append, and keep the spatial index LIVE rather than dropping it. Nulling
+    // barGrid here made the next barrierClear() re-bucket every segment, and
+    // hedge() is a query-then-dirty pair by construction (scenery-nature.js
+    // queries the clearance, then indexSolid()s its own footprint) — so a
+    // circuit calling hedge() in a loop rebuilt a monotonically growing index
+    // once per call. Measured on redbull, which calls hedge() ~170 times from
+    // inside every(36): 171 rebuilds, 938,569 segments re-bucketed, ~1.0 s, 41%
+    // of its prop build. Incremental insert honours the same invariant the null
+    // was protecting ("queries run mid-scenery") — the grid is never stale,
+    // because it is never behind.
     const pushSeg = (x0, z0, x1, z1, w) => {
+      const i = barSegs.length;
       barSegs.push(x0, z0, x1, z1, w);
       if (w > barMaxHalf) barMaxHalf = w;
-      barGrid = null;                   // invalidate: queries run mid-scenery
+      if (barGrid) barGridInsert(i);
     };
     // Tighten the driving boundary along a solid barrier placed from lap-fraction
     // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
@@ -1212,28 +1223,32 @@ const Tracks = (function () {
     // stored as world-space SEGMENTS, so the query is a plain point-to-segment
     // distance that neither knows nor cares which node a wall came from.
     const BAR_CELL = 24;                // grid cell (m) — comfortably > any canopy
-    // Built lazily and INVALIDATED on every new segment. forestEdge() queries
-    // mid-scenery, while barriers are still being registered around it, so a
-    // grid cached once would go stale and silently under-report for everything
-    // planted afterwards.
+    // Built lazily on the first query, then kept CURRENT by pushSeg — which is
+    // the only writer of barSegs, so the grid can never fall behind it.
+    // forestEdge() queries mid-scenery, while barriers are still being
+    // registered around it; a grid merely cached once would go stale and
+    // silently under-report for everything planted afterwards.
     let barGrid = null;
     const barCellKey = (cx, cz) => cx * 100003 + cz;
+    // Bucket ONE record. Shared by the full build and by pushSeg's incremental
+    // insert, so both place a segment in exactly the same cells.
+    const barGridInsert = (i) => {
+      const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
+      // Bucket by the INFLATED bounds: a wide record (a grandstand, a
+      // building) reaches into cells its centre line never enters, and a
+      // query in one of those cells must still find it.
+      const w = barSegs[i + 4];
+      const cx0 = Math.floor((Math.min(x0, x1) - w) / BAR_CELL), cx1 = Math.floor((Math.max(x0, x1) + w) / BAR_CELL);
+      const cz0 = Math.floor((Math.min(z0, z1) - w) / BAR_CELL), cz1 = Math.floor((Math.max(z0, z1) + w) / BAR_CELL);
+      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+        const key = barCellKey(cx, cz);
+        let b = barGrid.get(key); if (!b) barGrid.set(key, b = []);
+        b.push(i);
+      }
+    };
     const buildBarGrid = () => {
       barGrid = new Map();
-      for (let i = 0; i < barSegs.length; i += SEG) {
-        const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
-        // Bucket by the INFLATED bounds: a wide record (a grandstand, a
-        // building) reaches into cells its centre line never enters, and a
-        // query in one of those cells must still find it.
-        const w = barSegs[i + 4];
-        const cx0 = Math.floor((Math.min(x0, x1) - w) / BAR_CELL), cx1 = Math.floor((Math.max(x0, x1) + w) / BAR_CELL);
-        const cz0 = Math.floor((Math.min(z0, z1) - w) / BAR_CELL), cz1 = Math.floor((Math.max(z0, z1) + w) / BAR_CELL);
-        for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
-          const key = barCellKey(cx, cz);
-          let b = barGrid.get(key); if (!b) barGrid.set(key, b = []);
-          b.push(i);
-        }
-      }
+      for (let i = 0; i < barSegs.length; i += SEG) barGridInsert(i);
     };
     // Distance² from (x,z) to segment i of barSegs.
     const segDist2 = (i, x, z) => {
