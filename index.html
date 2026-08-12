@@ -264,10 +264,22 @@
         <section class="pm-group">
           <h3 class="pm-group-h">DISPLAY</h3>
           <button id="pm-hidehud">HIDE HUD</button>
+          <!-- step 1, NOT 5. These sliders stopped being a pure size control the
+               moment layout tiers started keying off the sheet's own units:
+               `--pair-at` and `--compact-at` (js/game/sheetshape.js) turn columns
+               and the compact head on and off at thresholds that now sit INSIDE
+               this range, so a notch can change the arrangement and not just the
+               scale. MEASURED, garage on a portrait iPhone: two columns at 80%,
+               stacked at 100%; the compact head engages between 105 and 110. At
+               step 5 a player who wants the layout on one side of a threshold and
+               the largest type that still gets it has fifteen stops to hunt
+               through and can easily overshoot it entirely.
+               Nothing else changes: applyScale() (js/game.js) is percentage-based
+               and clamps to SCALE_MIN/MAX, so it never cared about the step. -->
           <label class="tune-row"><span class="tune-label">UI SIZE <b id="pm-uiscale-v">115%</b></span>
-            <input id="pm-uiscale" type="range" min="80" max="150" step="5" value="115" aria-label="Interface size"></label>
+            <input id="pm-uiscale" type="range" min="80" max="150" step="1" value="115" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">115%</b></span>
-            <input id="pm-hudscale" type="range" min="80" max="150" step="5" value="115" aria-label="HUD size"></label>
+            <input id="pm-hudscale" type="range" min="80" max="150" step="1" value="115" aria-label="HUD size"></label>
           <button id="pm-res">RESOLUTION: AUTO</button>
           <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
           <button id="pm-camtune">CAMERA TUNER&hellip;</button>
