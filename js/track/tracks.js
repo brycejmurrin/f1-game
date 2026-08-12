@@ -1347,12 +1347,8 @@ const Tracks = (function () {
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
     };
     const every = (m, fn) => { const stp = Math.max(1, Math.round(m / ds)); for (let k = 0; k < n; k += stp) fn(k); };
-    // Dressing exclusion kinds. "lamps" and "floodlights" stay distinct rule
-    // labels (furniture streetLamp vs light-bearing mast pass) so a circuit can
-    // clear decorative columns without killing night pools. "lighting" is the
-    // umbrella that matches EITHER. The furniture streetLamp pass no longer
-    // runs — the mast pass already uses fz.lamp style — so a bare "lamps"
-    // exclusion is now a geometry no-op but still parses for old rules.
+    // "lamps" / "floodlights" stay distinct; "lighting" matches either. Bare
+    // "lamps" is a geometry no-op now (furniture streetLamp pass retired below).
     const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
     const dressingExcluded = (kind, k, side) => {
       const rules = def.dressingExclusions;
@@ -1361,10 +1357,8 @@ const Tracks = (function () {
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
         let hit = kinds.includes("all") || kinds.includes(kind);
-        // Umbrella: rule "lighting" matches a lamps OR floodlights query;
-        // query "lighting" matches a rule that names either concrete kind.
         if (!hit && LIGHTING_KINDS[kind]) {
-          if (kind === "lighting") hit = kinds.some((knd) => knd === "lamps" || knd === "floodlights" || knd === "lighting");
+          if (kind === "lighting") hit = kinds.some((knd) => LIGHTING_KINDS[knd]);
           else hit = kinds.includes("lighting");
         }
         if (!hit) continue;
@@ -1743,14 +1737,8 @@ const Tracks = (function () {
       else if (kind === "plane") plane(k, side, d, h, col);
       else tree(k, side, d, h, col, crownForm !== "round" ? { crown: crownForm } : undefined);
     };
-    // Lamp posts — the SEPARATE furniture streetLamp() pass is retired. The
-    // generic mast pass below already draws street-style slim posts / flood
-    // banks (using fz.lamp for globe vs arm vs post on street themes) AND fills
-    // track.lampPosts. A second streetLamp() line every ~26 m was a duplicate
-    // pole row that never emitted light — the "lamps vs floodlights" confusion.
-    // dressingExclusions kind "lamps" is kept as a parseable no-op so existing
-    // circuit rules do not break; kind "floodlights" still gates the mast pass.
-    // (streetLamp stays on the scenery api for bespoke circuit calls.)
+    // Furniture streetLamp() pass retired — mast pass below already draws
+    // fz.lamp-styled posts and fills lampPosts (streetLamp stays on the api).
 
     // Roadside trees — every circuit, per-track species/tint, set back behind the
     // edge. Forest/green circuits get a denser stand (a cluster of a few trees at
