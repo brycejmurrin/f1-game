@@ -5,30 +5,10 @@
 //     tests/*.test.{mjs,cjs}     -> tests/unit/
 //     the 7 shared helpers       -> tests/helpers/
 //     tests/physics-baseline.json-> tests/data/
-//     tests/data/, tests/manual/ -> stay
 //
-// WHY THIS IS A TOOL AND NOT A CHECKLIST. AUDIT-SYNTHESIS §R2 lands as a single
-// commit touching ~170 files, and FIVE of its thirteen lockstep items are
-// marked ⚠ "no guard turns red" — a missed rewrite there is green, not broken.
-// A hand-executed 18-item checklist is exactly the shape where one gets missed.
-// More importantly, the checklist itself can be incomplete: it is a list
-// somebody wrote down, and this repo has already produced a reference nobody
-// listed (tools/menu-fit.mjs's swallowed dynamic import was found by writing a
-// scanner, not by reading the plan).
-//
-// So the rewrites are DERIVED FROM THE TREE. For every relative reference in
-// tests/ and tools/ — the same extraction tools/cross-file-paths.mjs uses, and
-// for the same reason: espree, because several test files build fixtures out of
-// source text containing import statements — the tool resolves the target,
-// looks it up in the move map, and recomputes the specifier from the file's NEW
-// location. Anything the plan forgot is still found, because the tree is the
-// authority rather than the plan.
-//
-// String references (package.json's script paths, ci.yml's sweeps filter,
-// read("tests/…") in the guards, docs prose) cannot be derived that way, so
-// they get a second, narrower scan: a literal `tests/<name>.<ext>` token whose
-// basename is in the move map. Narrow on purpose — "tests/" appears in prose
-// constantly, and a rewriter with false positives is worse than a checklist.
+// Rewrites are derived from the tree via the move map (see cross-file-paths.mjs).
+// Dated audit records and docs/archive/research/raw/ are never rewritten — see
+// docs/archive/research/AUDIT-SYNTHESIS-2026-08.md §R2 for the lockstep list.
 //
 // Usage:
 //   node tools/tests-split.mjs             # plan (default) — changes nothing
@@ -161,7 +141,7 @@ const TEXT_EXTS = new Set([".md", ".mjs", ".cjs", ".js", ".json", ".yml"]);
 // HISTORY IS NOT REWRITTEN.
 //
 // The first plan reported 1219 string hits and the largest contributors were
-// docs/archive/, docs/research/raw/ and the dated audit records — 281 in one
+// docs/archive/, docs/archive/research/raw/ and the dated audit records — 281 in one
 // raw workflow dump alone. Those describe the tree AS IT WAS. Rewriting them
 // does not update a reference, it falsifies a record, and it would have been
 // invisible in a 174-file commit.
@@ -169,9 +149,7 @@ const TEXT_EXTS = new Set([".md", ".mjs", ".cjs", ".js", ".json", ".yml"]);
 // The boundary is the one tests/unit/docs-integrity.test.mjs already draws (its
 // LIVE_DOCS skips archive/, research/ and tracks/), restated here so the two
 // cannot disagree about what counts as live. Dated records under
-// docs/research/ hold the R2 lockstep lists themselves — they are the PLAN,
-// not the tree, and a plan that silently rewrites itself to match what
-// happened stops being checkable.
+// docs/archive/research/ hold the R2 lockstep lists — see AUDIT-SYNTHESIS-2026-08.md.
 // This file is excluded for a different reason than the rest: its header
 // DOCUMENTS the transformation ("tests/*.spec.js -> tests/specs/"), so
 // rewriting the left-hand side turns the description of the move into a

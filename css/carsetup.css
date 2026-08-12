@@ -659,7 +659,7 @@
      the panel:  100% -8px (clear) | 115% +61px | 130% +130px | 150% +222px.
      115% is the SHIPPED DEFAULT on a coarse pointer, so CAMERA and ACTIVE AERO
      sat under the panel out of the box on the shape the game is played in.
-     This is the deferred `--cs-sheet-w` defect in docs/research/UI-SCALE-AND-ZOOM.md
+     This is the deferred `--cs-sheet-w` defect in docs/archive/research/UI-SCALE-AND-ZOOM.md
      §5b, and the fix is the one that section prescribes: the correction belongs
      at the CONSUMPTION site, because the two consumers are in different zoom
      spaces and no single declared value can be right for both. */

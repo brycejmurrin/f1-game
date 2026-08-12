@@ -24,7 +24,7 @@
  *     there), and group draw count is identical (one range per group). Same
  *     draws, more cache churn, less alignment with the existing draw list.
  *
- * MEMORY (the mobile-OOM guard, glx/chunked.js:79-131 staged release): the
+ * MEMORY (the mobile-OOM guard, js/render/glx/chunked.js staged release): the
  * source arrays are multi-million-element PLAIN JS arrays that game.js keeps
  * reachable for the whole session via track.propsGeo/glassGeo. Each stage of
  * the build nulls every reference the moment it stops being needed — the
@@ -64,7 +64,7 @@
 (function () {
 
   // ── Gribb–Hartmann plane extraction from a COLUMN-MAJOR view-proj
-  // (m[col*4+row]) — glx/chunked.js:19-55 verbatim. Planes are [a,b,c,d],
+  // (m[col*4+row]) — js/render/glx/chunked.js verbatim. Planes are [a,b,c,d],
   // inside = a*x+b*y+c*z+d >= 0. Scratch is module-static so culling
   // allocates nothing per frame.
   //
@@ -137,7 +137,7 @@
      * references. Index type is Uint32 whenever total verts > 65535 (chunk
      * indices reference the full shared vertex array). The returned handle
      * also works as a plain mesh (top-level geo = chunk 0) so a stray
-     * draw()/castShadow() won't crash — glx/chunked.js:57-141 semantics. */
+     * draw()/castShadow() won't crash — js/render/glx/chunked.js semantics. */
     function build(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       const srcIdx = data.idx;
@@ -176,7 +176,7 @@
       // the raw JS arrays can be GC'd before the bucket index arrays are built
       // — lowers the transient peak on ~5 M-vert street props. `pos` is still
       // needed below for triangle centroids/AABBs, so it's nulled after the
-      // bins (glx/chunked.js:79-86 verbatim).
+      // bins (js/render/glx/chunked.js verbatim).
       data.nrm = data.mat = null;
       if (!data._keepPositions) data.col = null;
       // Bin triangles by centroid cell. Numeric key (fast, no string alloc):
@@ -202,7 +202,7 @@
       // consumed. Dropping data.pos/data.idx matters most — on a ~5 M-vert
       // street circuit they are multi-million-element JS arrays that would
       // otherwise stay resident for the whole session via track.propsGeo/
-      // glassGeo (glx/chunked.js:105-112 verbatim).
+      // glassGeo (js/render/glx/chunked.js verbatim).
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       const IndexArray = big ? Uint32Array : Uint16Array;
@@ -212,7 +212,7 @@
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // typed copy made — drop the growable JS array now so
                          // buckets don't all stay resident while the rest are
-                         // converted (glx/chunked.js:129-131)
+                         // converted (js/render/glx/chunked.js)
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", aPos);
         geo.setAttribute("normal", aNrm);

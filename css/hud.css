@@ -188,7 +188,7 @@
 #announce {
   position: fixed;
   top: calc(30svh / var(--hud-scale)); left: 50%; transform: translateX(-50%);
-  /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see hud.css:34),
+  /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see .hud-top zoom rule above),
      so a bare 8vw renders as 9.2vw at the touch default. `nowrap` + a centring
      translate means the longest banner ran off both edges of a 667px landscape
      phone. The `top` above has always divided; the type had not. */

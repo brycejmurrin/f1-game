@@ -16,7 +16,7 @@
  *  2. THE BACKEND MAY NOT SUPPORT IT. Material arrays need
  *     `gfx.createTextureArray`, which GLX (WebGL2) and TLX (three) implement
  *     and WGX (WebGPU) does not — WGX has not ported the procedural material
- *     system either (js/render/webgpu/wgsl-chunks.js:147), so there is nothing
+ *     system either (js/render/webgpu/wgsl-chunks.js), so there is nothing
  *     there for a baked map to augment. Feature-detected, never assumed.
  *  3. THE KNOB IS THE OFF-SWITCH. The lit shader's uMatTexMix is a LIGHTING
  *     TUNER knob shipped at 1.0 (TUNE_DEFS matTexMix), so a present pack is ON

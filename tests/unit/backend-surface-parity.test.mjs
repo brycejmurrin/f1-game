@@ -21,7 +21,7 @@
 //
 // This has bitten twice, in the same shape. WGX inherited lampShadowBegin and
 // threw inside a null SHD on every night frame, aborting tickBody before
-// present() (js/game.js:5385 documents it). Then TLX, which defined neither
+// present() (js/game.js lampShadowBegin guard). Then TLX, which defined neither
 // makeFrustumPlanes nor aabbInFrustum, made __apex.scene({visible}) throw on
 // the three.js backend — past a guard that was checking for exactly this and
 // could not see it. Both were found by reading, months apart. This test is so

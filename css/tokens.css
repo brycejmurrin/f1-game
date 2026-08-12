@@ -604,7 +604,7 @@ button:disabled:active { background: rgba(255, 255, 255, 0.07); }
    query reads 600, declines to tighten, and hands roomy 22px padding to a sheet
    whose own height is 400px. That is the same coordinate-space fault that put
    the lighting tuner's action bar off the bottom of a phone
-   (docs/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md has the full inventory).
+   (docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md has the full inventory).
 
    `data-density` is the answer that can see both: js/game/sheetshape.js divides
    the measured height by the element's own zoom, against a per-sheet

@@ -2662,7 +2662,7 @@ const api = {
       // rest of this block exists to remove. Deleting it reseeds from vtRaw on
       // the next tick, i.e. identically to a car that has just been built.
       delete c.vertLoad;
-      // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js:2705).
+      // `prog` accumulates via `ds = s - (c._prevS ?? c.s)` (js/game.js).
       // Leaving _prevS at the PREVIOUS episode's final s makes the very first
       // tick bank one bogus delta, so an identically-seeded, identically-driven
       // episode reported a different distanceM depending on what ran before it.

@@ -171,7 +171,7 @@ test("setSpeed sets player speed", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
   // ONE evaluate, deliberately. headless(true) only skips RENDERING — see the
-  // hook's own comment at js/game/apex.js:1513 — so the physics loop keeps
+  // hook's own comment — headless() skips rendering, so the physics loop keeps
   // integrating between round-trips and the car coasts. Read across two
   // evaluates this measured 54.498 against a toBeCloseTo(55, 1) tolerance of
   // 0.05: a real race that only shows up when the box is loaded enough to
@@ -213,7 +213,7 @@ test("spin rotates heading by deg", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
   // ONE evaluate: physics keeps integrating between round-trips even under
-  // headless(true) (that only skips RENDERING — js/game/apex.js:1513), so a
+  // headless(true) (that only skips RENDERING — js/game/apex.js headless()), so a
   // heading sampled in a separate call has drifted by an unknown amount.
   const r = await page.evaluate(() => {
     __apex.reset(0.1, 0);
@@ -223,7 +223,7 @@ test("spin rotates heading by deg", async ({ page }) => {
     return { angleBefore, headBefore,
              angleAfter: __apex.probe().angle, headAfter: __apex.physState().head };
   });
-  // spin() adds exactly deg*PI/180 (apex.js:540), so assert the SIGNED delta.
+  // spin() adds exactly deg*PI/180 (js/game/apex.js spin()), so assert the SIGNED delta.
   // The old form took Math.abs() before the modulo, which passed just as
   // happily for spin(-90) — i.e. it could not tell the hook's direction from
   // its opposite, and direction is the whole contract.

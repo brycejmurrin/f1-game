@@ -521,6 +521,30 @@ test("every relative link in EVERY live doc resolves", () => {
   assert.deepEqual(dead, [], "a live doc links to a path that does not exist");
 });
 
+test("every relative link inside docs/archive/ resolves", () => {
+  // Archive docs cite each other and point at repo paths that existed when
+  // written. Internal cross-links between archived records must still resolve
+  // so the provenance chain is navigable; repo-path claims are exempt above.
+  const dead = [];
+  const archiveDocs = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith(".md")) archiveDocs.push(rel);
+    }
+  })("docs/archive");
+  for (const doc of archiveDocs) {
+    const dir = path.dirname(path.join(ROOT, doc));
+    for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
+      const href = m[1].trim();
+      if (/^(https?:)?\/\//.test(href)) continue;
+      if (!fs.existsSync(path.resolve(dir, href))) dead.push(`${doc} -> ${href}`);
+    }
+  }
+  assert.deepEqual(dead, [], "an archived doc links to a path that does not exist");
+});
+
 test("no live doc points a reader at docs/archive/", () => {
   // Archive is provenance. A live doc citing it is either a doc that should not
   // have been archived, or a reference that should have been rewritten — both

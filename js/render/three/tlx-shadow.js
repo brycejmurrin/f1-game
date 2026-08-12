@@ -12,7 +12,7 @@
  *     record the lit pass gates its PCF to.
  *
  * game.js DRIVES all three passes (snap cache, caster selection, light VPs —
- * game.js:3334-3445 + 3636-3691); this file only implements the seam members.
+ * js/game.js + 3636-3691); this file only implements the seam members.
  * Each pass follows the tlx.js draw-list pattern: Begin sets the depth camera
  * from the column-major lightVP, castShadow accumulates pooled THREE.Mesh
  * casters, End renders once into the pass's depth target. Casters render
@@ -25,7 +25,7 @@
  * textureSampleCompare on WebGPU.
  *
  * TODO M4-PCSS: GLX builds a 512² R16F min-of-4 blocker map from the sun
- * depth texture through a COMPARE-OFF sampler object (glx/shadow.js:151-182)
+ * depth texture through a COMPARE-OFF sampler object (js/render/glx/shadow.js)
  * for the PCSS-lite penumbra search. three has no per-use sampler override —
  * a texture with compareFunction set is ALWAYS declared sampler2DShadow /
  * textureSampleCompare, so the same depth texture cannot also be read as a
@@ -80,7 +80,7 @@
      * material; three's RenderTarget always carries one — its own shadow
      * pipeline pays the same) + a compare-mode DepthTexture the lit pass
      * samples. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
-     * per tap on ES 3.0, exactly GLX's setup (glx/shadow.js:83-88). */
+     * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
     function makeDepthTarget(size, name) {
       const depthTexture = new THREE.DepthTexture(size, size);
       depthTexture.name = name;
@@ -169,7 +169,7 @@
       renderer.setRenderTarget(prev);
       target = null;
       // TODO M4-PCSS: this is where GLX refreshes the 512² blocker map from
-      // the just-rendered sun depth (glx/shadow.js shadowEnd) — see header.
+      // the just-rendered sun depth (js/render/glx/shadow.js shadowEnd) — see header.
     }
 
     // Prime each target once (empty render) so the depth textures exist on the

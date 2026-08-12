@@ -141,7 +141,7 @@ jobs:
       # here and fail on the never-observed count — is broken by construction:
       # artifacts/ is gitignored, so in CI every title is legitimately unobserved
       # and the check would be red on an environment fact. That is precisely the
-      # trap that reddened this job once already (docs/research/CAMPAIGN-2026-08
+      # trap that reddened this job once already (docs/archive/research/CAMPAIGN-2026-08
       # §"a guard that only runs on ONE MACHINE"). tests/unit/ci-coverage.test.mjs
       # guards the TOOL, which is where a guard belongs.
       - name: What does this gate cover?

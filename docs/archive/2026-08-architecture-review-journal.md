@@ -21,8 +21,8 @@
 
 # Apex 26 — architecture review
 
-A review, not a reference. [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) is the
-module contract and [`CLAUDE.md`](../CLAUDE.md) is the working reference; both
+A review, not a reference. [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) is the
+module contract and [`CLAUDE.md`](../../CLAUDE.md) is the working reference; both
 describe the system as it is meant to be. This describes **how it is actually
 built, what that costs, and what has drifted** — and carries the defect register
 the review produced, including the items deliberately left undone.
