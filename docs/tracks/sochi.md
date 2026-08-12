@@ -53,3 +53,8 @@ Reclaimed coastal flat — nearly level. Keep box heights near-constant.
 - Landscape, do not naturalise — clipped hedge banding at the plaza edges, ordered planting on the outer loop only.
 - Let the Caucasus close every distant view; without them the site reads as a flat industrial estate.
 - Keep the ground plane dead level and the tarmac uniform; Sochi's smoothness is part of its identity.
+
+
+## Research pass — verified, already covered
+
+Comprehensively dressed: Medals Plaza, the flame tower, the reflecting pool **with standing jets** (a flat sheet of water alone does not read as a fountain), the Iceberg Skating Palace under its oversailing arc roof, and Fisht. **Nothing added.**

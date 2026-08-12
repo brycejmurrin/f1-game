@@ -106,10 +106,18 @@ per track — it is the last edit before a commit that ships JS.
   spa, monza, suzuka, singapore, cota, interlagos, vegas, madrid, zandvoort,
   jeddah, albert_park, shanghai, miami, imola, montreal, redbull, hungaroring,
   baku, mexico, qatar, abudhabi.
-- **Not started: the 16 retired classics** (#25–40) — hockenheim, nurburgring,
-  catalunya, sepang, istanbul, paul_ricard, portimao, sochi, mugello,
-  magny_cours, estoril, kyalami, watkins_glen, indianapolis, buenos_aires,
-  jacarepagua.
+- **All 40 circuits are now through the loop.**
+
+**The classics were already dressed.** Of the 16, only **Mugello** (vine quilt)
+and **Portimão** (montado — cork oak and olive) needed geometry; the other 14
+were verified complete against research and their briefs record what was
+checked. That is the honest headline of this campaign: the repo was already
+close, and most of the value was in the *second look* — finding the specific
+thing a place has that the circuit didn't — plus fixing the six geometry
+regressions the additions introduced.
+
+Where a circuit needed nothing, its brief says so and says why, so a later pass
+does not redo the research or add something plausible-but-wrong.
 
 **A pattern worth carrying forward.** In the second batch of nine, *most* banked
 findings turned out to be **already implemented** — Zandvoort had all four,
@@ -173,15 +181,15 @@ Guards last run green at build 1075: `test:tiny` 71/71, `test:tooling-fast`
 | 26 | nurburgring | ✓ | ✓ | ✓ | ✓ |
 | 27 | catalunya | ✓ | ✓ | ✓ | ✓ |
 | 28 | sepang | ✓ | ✓ | ✓ | ✓ |
-| 29 | istanbul | | | | |
-| 30 | paul_ricard | | | | |
+| 29 | istanbul | ✓ | ✓ | ✓ | ✓ |
+| 30 | paul_ricard | ✓ | ✓ | ✓ | ✓ |
 | 31 | portimao | ✓ | ✓ | ✓ | ✓ |
-| 32 | sochi | | | | |
+| 32 | sochi | ✓ | ✓ | ✓ | ✓ |
 | 33 | mugello | ✓ | ✓ | ✓ | ✓ |
-| 34 | magny_cours | | | | |
-| 35 | estoril | | | | |
-| 36 | kyalami | | | | |
-| 37 | watkins_glen | | | | |
-| 38 | indianapolis | | | | |
-| 39 | buenos_aires | | | | |
-| 40 | jacarepagua | | | | |
+| 34 | magny_cours | ✓ | ✓ | ✓ | ✓ |
+| 35 | estoril | ✓ | ✓ | ✓ | ✓ |
+| 36 | kyalami | ✓ | ✓ | ✓ | ✓ |
+| 37 | watkins_glen | ✓ | ✓ | ✓ | ✓ |
+| 38 | indianapolis | ✓ | ✓ | ✓ | ✓ |
+| 39 | buenos_aires | ✓ | ✓ | ✓ | ✓ |
+| 40 | jacarepagua | ✓ | ✓ | ✓ | ✓ |

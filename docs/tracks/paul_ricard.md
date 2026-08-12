@@ -53,3 +53,8 @@ The flattest circuit in this set by some way — Le Castellet is a graded platea
 - Corner "stands" are bare scaffold bleachers standing in the middle of the paint, sparsely occupied. Do not give them shells or roofs.
 - Keep the scrub thin, low and far back — the mistral beats it down, and any treeline would close the sightlines the plateau is made of.
 - Dress the aerodrome properly. Without hangars, tower and parked aircraft the plateau reads as empty farmland with a track on it.
+
+
+## Research pass — verified, already covered
+
+The signature is already there and it is the right one: the blue/red **Blue Zone runoff striping** (the thing that makes this circuit identifiable from a single frame), plus the mistral, lavender and vineyard notes. **Nothing added.**
