@@ -1475,31 +1475,44 @@ const api = {
   clearMeshes() { G.hideMeshes = {}; return G.hideMeshes; },
 
   // Combined debug snapshot: camera mode, frozen, dbgCam active, weather.
-  // Lighting snapshot — ambient (sky/ground), the scene sun colour, exposure,
-  // how many point lights are ACTIVE this frame (after nearest-N cull), and how
-  // many are BAKED on the track (pre-cull). LAMP DENSITY changes bakedLights;
-  // LAMP COUNT / traffic changes numLights. MCP dens=1 vs dens=2 looked like a
-  // no-op when it only read numLights (always lampCull≈28 with AI on track).
-  lightState: () => ({
-    ambientSky: G.frame.ambientSky && G.frame.ambientSky.slice(),
-    ambientGround: G.frame.ambientGround && G.frame.ambientGround.slice(),
-    sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
-    exposure: G.frame.exposure != null ? G.frame.exposure : 1,
-    numLights: G.frame.lights ? G.frame.lights.length / 15 : 0,
-    bakedLights: G.track && G.track._lights ? G.track._lights.length / 15 : 0,
-    lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
-    sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
-    builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,
-    floodEmit: G._lastFloodEmit,   // actual prop-emissive ramp value this frame
-    envProbe: (gfx && gfx.envProbeReady) ? gfx.envProbeReady() : null,  // live env-cube captured?
-    fogDensity: G.frame.fogDensity,
-    fogColor: G.frame.fogColor && G.frame.fogColor.slice(),
-    skyHorizon: G.frame.skyHorizon && G.frame.skyHorizon.slice(),
-    frameSkyHorizon: G.frameSky.horizon && G.frameSky.horizon.slice(),
-    skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
-    skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
-    skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
-  }),
+  // Lighting snapshot — ambient, sun, exposure, active floodlights, plus lamp
+  // probes for Chromium MCP / slider harnesses (meanLampRGB, bakedLights,
+  // lampPosts). numLights is AFTER nearest-N cull (≈lampCull with AI) — LAMP
+  // DENSITY moves bakedLights/lampPosts; reading only numLights is a false
+  // no-op. meanLampRGB is the culled set AFTER lampTemp / twilight / lampLevel
+  // scaling — use it to assert LAMP TEMPERATURE warmth.
+  lightState: () => {
+    const L = G.frame.lights;
+    let meanLampRGB = null;
+    if (L && L.length >= 15) {
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i + 5 < L.length; i += 15) {
+        r += L[i + 3]; g += L[i + 4]; b += L[i + 5]; n++;
+      }
+      if (n) meanLampRGB = [r / n, g / n, b / n];
+    }
+    return {
+      ambientSky: G.frame.ambientSky && G.frame.ambientSky.slice(),
+      ambientGround: G.frame.ambientGround && G.frame.ambientGround.slice(),
+      sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
+      exposure: G.frame.exposure != null ? G.frame.exposure : 1,
+      numLights: L ? L.length / 15 : 0,
+      meanLampRGB,
+      bakedLights: G.track && G.track._lights ? G.track._lights.length / 15 : 0,
+      lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
+      sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
+      builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,
+      floodEmit: G._lastFloodEmit,   // actual prop-emissive ramp value this frame
+      envProbe: (gfx && gfx.envProbeReady) ? gfx.envProbeReady() : null,  // live env-cube captured?
+      fogDensity: G.frame.fogDensity,
+      fogColor: G.frame.fogColor && G.frame.fogColor.slice(),
+      skyHorizon: G.frame.skyHorizon && G.frame.skyHorizon.slice(),
+      frameSkyHorizon: G.frameSky.horizon && G.frameSky.horizon.slice(),
+      skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
+      skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
+      skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
+    };
+  },
   // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
   // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
   // reads the latest sample: { supported, on, ms } where ms is the GPU cost of a
