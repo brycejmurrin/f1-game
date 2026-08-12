@@ -13,7 +13,8 @@ function create(G) {
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
         applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
-        loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
+        copyLightTune, loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
+        restoreLightTune,
         rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
         startRace, startWeatherArc, update, wrapS } = G;
 // Deferred: openCareer is declared below the G literal in game.js, so it arrives
@@ -1522,6 +1523,28 @@ const api = {
     const out = {};
     for (const d of TUNE_DEFS) out[d.id] = LT[d.id];
     return out;
+  },
+  // lightCopy(arg?) — the LIGHTING TUNER's COPY ALL, headless. Spreads the
+  // CURRENT (track, time-of-day, weather) profile sideways to every OTHER track
+  // at the same time and weather:
+  //   lightCopy()             → copy this profile's own edits (merged over each
+  //                             target's, so untouched knobs keep their shipped
+  //                             per-track look) → {ok, tracks, changed, undo, …}
+  //   lightCopy("look")       → copy every live value, so all of them render
+  //                             identically at that time and weather
+  //   lightCopy({undo: snap}) → put back exactly what a previous call replaced
+  // Persists in every case. {ok:false, error:"no-edits"} means the condition has
+  // no local overrides to send — tune something, or ask for "look".
+  lightCopy(arg) {
+    if (arg && typeof arg === "object") {
+      const ok = restoreLightTune(arg.undo || arg);
+      if (ok) persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+      return { ok, mode: "undo" };
+    }
+    const r = copyLightTune(arg === "look" ? "look" : "edits");
+    if (r.ok) persistLightTune();
+    return r;
   },
   viewState() {
     return {
