@@ -6722,7 +6722,7 @@ document.addEventListener("pointerdown", () => {
 // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
 // in the stylesheet stands and a phone is correct on its FIRST paint rather
 // than from whenever this module runs.
-const SCALE_MIN = 80, SCALE_MAX = 150, SCALE_STEP = 0.5;
+const SCALE_MIN = 90, SCALE_MAX = 150, SCALE_STEP = 0.5;
 const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
