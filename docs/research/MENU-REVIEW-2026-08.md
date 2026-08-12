@@ -61,10 +61,21 @@ three-pixel case already documented in css/carsetup.css. Left alone.)
 
 Measured clean AND shallow (worst scroll ≤ 3 screens at every size):
 
-`title`, `career`, `datahub`, `vsfriend`, `pause`, `hud` (+ `hudtouch`,
-`hudbuttons`, `hudmanual`), `trackdetail`, `standings`, `careerhistory`,
-`careeroffers`, and all six data-hub tabs (`datatelemetry`, `dataschedule`,
-`datastandings`, `datalastrace`, `datalive`, `dataexport`).
+`title`, `career`, `careerhub`, `datahub`, `vsfriend`, `pause`, `hud`
+(+ `hudtouch`, `hudbuttons`, `hudmanual`), `trackdetail`, `standings`,
+`careerhistory`, `careeroffers`, `teampicker`, `racesettings`, `spotify`, and
+all six data-hub tabs (`datatelemetry`, `dataschedule`, `datastandings`,
+`datalastrace`, `datalive`, `dataexport`).
+
+Four of those earn a word each, because they were fixed DURING this pass rather
+than being clean all along:
+
+| screen | what it took |
+|---|---|
+| `teampicker` | 12 clipped tiles at 150% — the `auto-fill` floor could not shrink below itself |
+| `racesettings` | rides on `#rs-body`'s compact tier; clean at every cell once `data-density` reached the tokens |
+| `careerhub` | shares `.pane-pair` with `select`; the `--pair-at` unit fix corrected it for free |
+| `spotify` | 11 controls, one section, never deep — nothing was ever wrong here |
 
 **Verdict: leave.** Half the app is done. Recording that explicitly matters as
 much as the list of problems — it is the difference between a review and a
@@ -84,7 +95,8 @@ three ways, and conflating them is what made this list look alarming:
 | `select` | 23.8 | forty circuits |
 | `howtoplay` | 24.6 | a prose document |
 | `careerguide` | 31.9 | a prose document |
-| `resultsseason` | 13.8 | a results table |
+| `results` | 6.9 | a results table |
+| `resultsseason` | 13.8 | the same table, a season round |
 | `quali` | 9.5 | a classification table |
 
 A list of forty things is forty things. `deepScroll` cannot tell "a form that
@@ -108,6 +120,13 @@ a tuner is. **Three redesign attempts here were measured and all lost:**
   it truncates.
 - the livery list as a grid — 34.3 screens became **78.1**, because at 124 units
   each row wraps to several lines.
+
+`garagelivery` deserves naming on its own: at **86.2 screens** on a landscape
+phone at 150% it is the deepest cell in the entire 1600, more than twice the
+next. It is 70 livery rows one per line in a 274-unit column. It belongs in this
+category and not in (c) for one measured reason — the obvious fix makes it 2.3x
+worse. A swatch GRID without full-width text rows would be the real answer, and
+that is a visual-design decision about dropping labels, not a layout one.
 - the stat block as one line — clipped CORNERING and BRAKING.
 
 The one lever that moves all of them is the garage HEADER, and its cheap wins are
