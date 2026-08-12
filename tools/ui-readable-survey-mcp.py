@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "tools" / "chrome-devtools-mcp.sh"
-OUT = ROOT / "scratch" / "ui-readable-survey.json"
+OUT = ROOT / "scratch" / "ui-readable-survey-1129.json"
 TIMEOUT = 180
 
 VIEWPORTS = [
@@ -241,7 +241,7 @@ def main() -> None:
         c.start()
         for vp_name, vp in VIEWPORTS:
             c.call("emulate", {"viewport": vp})
-            c.call("navigate_page", {"url": f"http://127.0.0.1:3456/?v={build}"})
+            c.call("navigate_page", {"url": f"http://127.0.0.1:3460/?v={build}"})
             c.eval_json("""async () => {
               for (let i=0;i<80 && !window.__apex;i++) await new Promise(r=>setTimeout(r,200));
               __apex.headless(true);
