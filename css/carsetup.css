@@ -289,12 +289,12 @@
      keeps the box the size the glyphs actually need. */
   flex: 0 0 auto; line-height: 1.35;
 }
-/* Labels wrap (SUSPENSION etc.); current-part line stays single-line ellipsis.
-   letter-spacing cut from 0.12em — at UI 115% + desktop rail width the tracking
-   was the difference between full word and "SUSPEN…". */
+/* Labels stay one line; current-part line keeps ellipsis.
+   Tracking cut from 0.12em → 0.02em (measured: 0.12→97px, 0.02→83px,
+   0→81px for "SUSPENSION" at 14px). Pair rail floor bumped to 120px so the
+   word fits without mid-word wrap. */
 .cs-tab-lbl {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.05em; color: var(--dim);
-  white-space: normal; overflow: visible; text-overflow: unset; line-height: 1.2;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.02em; color: var(--dim);
 }
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
@@ -561,7 +561,10 @@
      label back under what "SUSPENSION" needs. At 31% the rail is 130px on a
      1440px desktop, a shade WIDER than the 128px it had at 460, and the 40px
      comes out of the option list (276px), whose rows are short. */
-  --pair-split: minmax(112px, 31%);
+  /* 120px floor: at --fs-micro 14px + tab pad, "SUSPENSION" needs ~108px
+     border-box (measured chrome-devtools @ UI 115%). 112px left a few px of
+     ellipsis on the desktop pair rail. */
+  --pair-split: minmax(120px, 31%);
   --pair-gap: var(--gap);
 }
 
