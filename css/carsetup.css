@@ -561,10 +561,9 @@
      label back under what "SUSPENSION" needs. At 31% the rail is 130px on a
      1440px desktop, a shade WIDER than the 128px it had at 460, and the 40px
      comes out of the option list (276px), whose rows are short. */
-  /* 120px floor: at --fs-micro 14px + tab pad, "SUSPENSION" needs ~108px
-     border-box (measured chrome-devtools @ UI 115%). 112px left a few px of
-     ellipsis on the desktop pair rail. */
-  --pair-split: minmax(120px, 31%);
+  /* 128px floor: chrome-devtools measure @ default MCP viewport needed
+     ~81px label + tab pad; 120px still ellipsized SUSPENSION (cw 73 / sw 81). */
+  --pair-split: minmax(128px, 31%);
   --pair-gap: var(--gap);
 }
 

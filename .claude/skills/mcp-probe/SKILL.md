@@ -163,6 +163,17 @@ mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 scratch scripts). Screenshots and human-reviewed captures go under `scratch/`,
 never the repo root (CLAUDE.md).
 
+### Background Chromium measure (logged)
+
+```
+node tools/cdmcp-bg.mjs boot --port 3462
+tail -f artifacts/logs/cdmcp-measure.log
+# watcher: until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/cdmcp-measure.log
+```
+
+Profiles `boot` / `ui` / `full`. JSON sidecar: `artifacts/logs/cdmcp-measure.json`.
+See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
+
 ### When this beats a scratch script
 
 - **"Does this visual change look right?"** — one navigate + eval + screenshot,

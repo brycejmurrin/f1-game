@@ -1,0 +1,46 @@
+// cdmcp-measure.test.mjs — guards the Chromium MCP background measure harness.
+// Does NOT launch Chromium (that is minutes + SwiftShader). Checks CLI surface,
+// log terminal-marker contract, and that the bg launcher exists.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const MEASURE = path.join(ROOT, "tools/cdmcp-measure.py");
+const BG = path.join(ROOT, "tools/cdmcp-bg.mjs");
+
+test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
+  assert.ok(fs.existsSync(MEASURE));
+  assert.ok(fs.existsSync(BG));
+  const py = fs.readFileSync(MEASURE, "utf8");
+  assert.match(py, /= run (passed|failed|timedout|interrupted)/);
+  assert.match(py, /artifacts\/logs\/cdmcp-measure\.log/);
+  assert.match(py, /roots\/list/);
+  const bg = fs.readFileSync(BG, "utf8");
+  assert.match(bg, /cdmcp-measure\.py/);
+  assert.match(bg, /--status/);
+  assert.match(bg, /= run \(passed\|failed\|timedout\|interrupted\)/);
+});
+
+test("cdmcp-measure --help exits 0 and lists profiles", () => {
+  const r = spawnSync("python3", [MEASURE, "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /boot/);
+  assert.match(r.stdout, /--bg/);
+  assert.match(r.stdout, /artifacts\/logs/);
+});
+
+test("cdmcp-bg with no args exits 2 and prints usage", () => {
+  const r = spawnSync("node", [BG], { encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr + r.stdout, /usage:/);
+});
+
+test("cdmcp-bg --status is safe when idle", () => {
+  const r = spawnSync("node", [BG, "--status"], { encoding: "utf8", cwd: ROOT });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /cdmcp-measure/);
+});

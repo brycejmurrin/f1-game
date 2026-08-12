@@ -126,6 +126,34 @@ Do not chase SEO on the fan game shell unless product asks.
 
 ---
 
+### Background measure (logged)
+
+```
+node tools/cdmcp-bg.mjs boot --port 3462   # returns immediately
+tail -f artifacts/logs/cdmcp-measure.log
+node tools/cdmcp-bg.mjs --status | --wait | --stop
+```
+
+Or: `python3 tools/cdmcp-measure.py full --bg --port 3462`.
+
+Writes `artifacts/logs/cdmcp-measure.log` + `.json`. Watcher MUST anchor on the
+reporter terminal line — same rule as Playwright groups:
+
+```
+until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/cdmcp-measure.log
+do sleep 15; done
+grep -E "= run " artifacts/logs/cdmcp-measure.log | tail -1
+```
+
+Profiles: `boot` (network/console/LCP/lighthouse), `ui` (settings@90 +
+garage@115 floors), `full` (boot+ui+heap; heap always on a fresh nav after
+lighthouse). Client answers `roots/list` so snapshots land under
+`artifacts/tmp/cdmcp-measure/`.
+
+Never run while a Playwright group is in flight.
+
+---
+
 ## Stdio client note
 
 Cursor-hosted MCP catalogs may only expose `cursor-cloud`. Local agents drive

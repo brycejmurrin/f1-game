@@ -6,6 +6,8 @@ Examples:
   python3 tools/cdmcp-cli.py call navigate_page '{"url":"http://127.0.0.1:3456/"}'
   python3 tools/cdmcp-cli.py call evaluate_script '{"function":"() => document.title"}'
   python3 tools/cdmcp-cli.py survey-title
+  python3 tools/cdmcp-cli.py measure boot --port 3462
+  python3 tools/cdmcp-cli.py measure ui --bg
 """
 from __future__ import annotations
 
@@ -140,6 +142,12 @@ def cmd_call(args: list[str]) -> None:
         c.close()
 
 
+def cmd_measure(args: list[str]) -> None:
+    """Delegate to tools/cdmcp-measure.py (background-friendly Chromium logs)."""
+    script = ROOT / "tools" / "cdmcp-measure.py"
+    raise SystemExit(subprocess.call([sys.executable, str(script), *args]))
+
+
 def cmd_survey_title(_: list[str]) -> None:
     c = McpClient()
     try:
@@ -189,6 +197,8 @@ def main() -> None:
         cmd_call(rest)
     elif cmd == "survey-title":
         cmd_survey_title(rest)
+    elif cmd == "measure":
+        cmd_measure(rest)
     else:
         print(f"unknown: {cmd}", file=sys.stderr)
         sys.exit(1)
