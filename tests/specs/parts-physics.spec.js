@@ -1237,7 +1237,7 @@ test.describe("Parts module — visual recipes", () => {
       const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
       // THE WHOLE CAR, WHEELS INCLUDED. This built with `noWheels: true`, and
       // five of the twenty-seven knobs below are wheel-side — tyres.shoulder
-      // and brakes.discFace reach only addWheel (js/car/car3d.js:474-477), and
+      // and brakes.discFace reach only addWheel in js/car/car3d.js, and
       // the three wheels.* knobs are rim geometry. A wheel knob cannot deform a
       // wheel-less mesh, so those five asserted something the helper made
       // impossible and the test could never pass. (Measured: noWheels 17964

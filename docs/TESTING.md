@@ -131,7 +131,7 @@ budget ran out, never why.**
 M6 cost four wrong mechanisms — a hanging `act()`, a slow prediction,
 arithmetic in an un-timeouted `evaluate`, rAF starvation — and every one was a
 theory about the WAIT. The answer was in the code being waited on:
-`skids.stamp()` is called from `render()` (`js/game.js:6064`), the stint was
+`skids.stamp()` is called from `render()` in js/game.js, the stint was
 driven through `act()` which never presents a frame, and 120 steps of full lock
 crashed the car below both stamp gates before the wait even began.
 
@@ -414,7 +414,7 @@ Three edges that bite when converting a spec:
   it wanted >0.7. The reset now calls `freeze(false)` and `camera("chase")`,
   which clears `dbgCam` and restores the default mode in one call.
 - **Physics keeps running between round-trips.** `headless(true)` only skips
-  RENDERING (`js/game/apex.js:1513`), so a test that sets a value in one
+  RENDERING (`js/game/apex.js` `headless()`), so a test that sets a value in one
   `evaluate` and reads it in the next is racing the game loop. `setSpeed(55)`
   then `probe()` measured 54.498 against a `toBeCloseTo(…, 1)` tolerance of
   0.05 — latent until the box was loaded enough to stretch the gap. Sample both

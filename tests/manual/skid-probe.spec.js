@@ -12,7 +12,7 @@
 //
 // The pipeline has four links and the failure is in exactly one of them:
 //
-//   1. the car slips           js/game.js:6064  skids.stamp(mat, skid > 0.25 ||
+//   1. the car slips           js/game.js skids.stamp() when |slip| > 0.25 ||
 //                              c.offroad, and c.speed > 10) — no slip, no mark
 //   2. marks accumulate        js/game/skidmarks.js  `active` counts them
 //   3. the batch is drawn      skidmarks.js:87  draw() -> gfx.drawSkidBatch(...)
@@ -140,7 +140,7 @@ test("is there a step window where the stamp condition actually holds?", async (
   await page.waitForFunction(() => window.__apex.info().track != null,
     { polling: 100, timeout: 60_000 });
 
-  // js/game.js:6064 lays a mark when `(skidIntensity > 0.25 || offroad) &&
+  // js/game.js skids.stamp() lays a mark when `(skidIntensity > 0.25 || offroad) &&
   // speed > 10`. skidIntensity is clamp((slipAng - 0.10) / 0.20, 0, 1) with
   // slipAng in radians (js/game.js:4082), so > 0.25 means slipAng > 0.15 rad =
   // 8.59 deg — a number physState() already reports as `slipDeg`. Walk the

@@ -114,7 +114,7 @@ once their fix/restructure items landed; their raw evidence sits in
 | [archive/research/UI-LAYOUT-CRITIQUE-2026-08.md](archive/research/UI-LAYOUT-CRITIQUE-2026-08.md) | Every menu measured at 852×393: vertical budget per screen and the height-blind container-query finding. |
 | [archive/research/UI-REMODEL-DECISION-2026-08.md](archive/research/UI-REMODEL-DECISION-2026-08.md) | Remodel decision after 380-cell survey: NO for correctness, YES for maintainability — with deferred triggers. |
 | [archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md](archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md) | Layout coordinate-space analysis: which vh queries are wrong under `zoom`, migration order, and trap fixes. |
-| [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 108-member contract now. |
+| [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 109-member contract now. |
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register — the not-fixed backlog as recorded at the time, kept as provenance for what was found and what has since been worked off. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives and measurements, verbatim. The standing review distilled from it lives at [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md). |
 

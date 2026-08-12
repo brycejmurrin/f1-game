@@ -142,7 +142,7 @@ Everything below is an immediate commit. **Batch A + B touch `js/`, `css/`, `ind
 
 ## Feed the restructure
 
-Mapped to the waves in docs/research/AUDIT-SYNTHESIS-2026-08.md § RESTRUCTURE:
+Mapped to the waves in docs/archive/research/AUDIT-SYNTHESIS-2026-08.md § RESTRUCTURE:
 
 **R1 (audio-panel extraction) — 2 findings.** R1's organizing principle is "panel wiring lives with its panel"; these two are that principle applied:
 - js/game/audio.js:1029 — stale "trackIdx >= 0 → race loop" block above setMusicEnabled, contradicted by startMusic's own :1050-1055 → delete the two lines while re-reading the panel↔audio seam during the extraction.

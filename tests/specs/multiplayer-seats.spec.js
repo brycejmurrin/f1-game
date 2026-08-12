@@ -25,7 +25,7 @@ const EV = { HELLO: "hello", READY: "ready" };
 const RBR = 3;
 
 // Seed the saved entry BEFORE the app boots — teamIdx/driverIdx are read out of
-// localStorage at load (js/game.js:186), so setting them afterwards would be
+// localStorage at load (js/game.js team/driver defaults), so setting them afterwards would be
 // read by nothing.
 async function seatedAs(page, teamIdx, driverIdx) {
   await page.addInitScript(([t, d]) => {

@@ -60,7 +60,7 @@ const R1 = [
   { k: 'game-mod-dm',  scope: 'every js/game/ file whose basename starts with d through m (debrisworld, hud, incidentsim, input, light-*, lighting, menunav, menus, music-lib — ls js/game/ to enumerate).' },
   { k: 'game-mod-nz',  scope: 'every js/game/ file whose basename starts with n through z (particles through uilayers — ls js/game/ to enumerate).' },
   { k: 'track-core',   scope: 'every js/track/ file EXCEPT scenery-*.js (tracks, spline, mesh, geom, graph, space, surface, markings, models, themes, landmark-kit, circuit-kit, geo-paths, maps).' },
-  { k: 'track-scenery', scope: 'js/track/scenery-data.js, scenery-nature.js, scenery-city.js, scenery-structures.js, scenery-identity.js — the buildProps split behind the 107-member frozen contract (docs/SCENERY-API.md).' },
+  { k: 'track-scenery', scope: 'js/track/scenery-data.js, scenery-nature.js, scenery-city.js, scenery-structures.js, scenery-identity.js — the buildProps split behind the 109-member frozen contract (docs/SCENERY-API.md).' },
   { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit.' },
   { k: 'circuits-2',   scope: 'the LAST 20 files of ls js/circuits/ | sort. Same emphases as circuits-1.' },
   { k: 'render-glx',   scope: 'js/render/gfx.js, glx.js, everything under js/render/glx/ and js/render/shaders/, gltf.js, assets.js. Emphasis: shader-uniform drift, header truth, the Gfx seam contract.' },
@@ -161,10 +161,10 @@ const synthesis = await agent(`${COMMON}
 You are the SYNTHESIZER. Below are ${'$'}{0} adversarially-verified findings from a whole-tree audit (code + docs). Write ONE markdown report:
 1. "## Verdict" — 3-6 sentences: how healthy is this tree after the cleanup campaign, where does the remaining mess concentrate.
 2. "## Fix now" — findings worth immediate commits, ordered by severity, each as "file:line — claim → fix". Batch them: which are js/ (need one cache bump), which are docs/tools (no bump).
-3. "## Feed the restructure" — findings the W2 restructure (R1 audio-panel, R2 tests/ split, R3 tools/ subdirs — read docs/research/AUDIT-SYNTHESIS-2026-08.md RESTRUCTURE section) should fold in, mapped to the wave that absorbs them.
+3. "## Feed the restructure" — findings the W2 restructure (R1 audio-panel, R2 tests/ split, R3 tools/ subdirs — read docs/archive/research/AUDIT-SYNTHESIS-2026-08.md RESTRUCTURE section) should fold in, mapped to the wave that absorbs them.
 4. "## Defer" — real but not now, with reasons.
 5. "## Coverage" — what was audited (the scopes), what round-N critics added, and what remains genuinely unaudited.
-Cross-reference: where a finding extends or corrects docs/research/AUDIT-SYNTHESIS-2026-08.md, say so explicitly. Do not invent findings not in the list; do not drop any confirmed finding — every one lands in exactly one of sections 2-4.
+Cross-reference: where a finding extends or corrects docs/archive/research/AUDIT-SYNTHESIS-2026-08.md, say so explicitly. Do not invent findings not in the list; do not drop any confirmed finding — every one lands in exactly one of sections 2-4.
 FINDINGS: ${'$'}{JSON.stringify(confirmed)}`.replace("${0}", String(confirmed.length)).replace('${JSON.stringify(confirmed)}', JSON.stringify(confirmed)),
   { label: 'synthesize', phase: 'Synthesize', effort: 'high' })
 

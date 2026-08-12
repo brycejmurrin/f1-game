@@ -103,7 +103,7 @@ const GROUPS = {
 //  - Part-detail presets (engine/suspension/brakes/tyres/ers/gearbox/fuel) use a
 //    CLOSE distance + a `look` target offset toward the actual part instead of
 //    the car's dead centre — front axle z=+1.7, rear axle z=-1.6 (see
-//    js/car/car3d.js:1162-1163) — so a close shot fills the frame with that part
+//    js/car/car3d.js AXLES) — so a close shot fills the frame with that part
 //    instead of cropping both ends of the car. They also dial the light rig
 //    down (lower --intensity) since a close-up otherwise catches a hot,
 //    distracting specular blowout off the bodywork that the wider stock views
