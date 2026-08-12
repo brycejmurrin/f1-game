@@ -1,10 +1,11 @@
-// TrackMaps turn classes: radius + heading-sweep, not raw peak |k|.
+// TrackMaps turn classes: radius + heading-sweep, with relative spread.
 //
 // Regressions this guards:
 //   1. curated apexes stamped v:0 → every turn read FAST
-//   2. |k| thresholds alone → every chicane read HAIRPIN (Rettifilo, Bus Stop)
-// Real hairpins need tight R AND a large heading change; fast sweeps sit at
-// R ≳ 85 m. Monza's curated list must include Curva Grande (FIA T3).
+//   2. |k| thresholds alone → every chicane read HAIRPIN
+//   3. absolute R<50 alone → Indy/Jacarepagua (and other short-radius packs)
+//      painted every chip SLOW — assignCornerClasses tertile-spreads when one
+//      class dominates.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -61,7 +62,6 @@ test("Monza curated turns include Curva Grande and varied classes", () => {
   const { Tracks, TrackMaps } = loadTrackMaps();
   const monza = Tracks.LIST.find((t) => t.id === "monza");
   assert.equal(monza.turns.length, 11);
-  // Curva Grande ~0.129 must be present (was missing; T3 was Roggia).
   assert.ok(monza.turns.some((f) => Math.abs(f - 0.1288) < 1e-4),
     "Curva Grande apex (~0.1288) missing from CircuitMarkings.monza.turns");
   const crns = TrackMaps.corners(monza);
@@ -71,7 +71,7 @@ test("Monza curated turns include Curva Grande and varied classes", () => {
   assert.equal(crns[0].cls, "SLOW", "T1 Rettifilo must be SLOW, not HAIRPIN");
   assert.equal(crns[1].cls, "SLOW", "T2 Rettifilo must be SLOW, not HAIRPIN");
   assert.equal(crns[2].cls, "FAST", "T3 Curva Grande must be FAST");
-  assert.ok(labels.includes("MEDIUM"), "Lesmo/Parabolica band should appear");
+  assert.equal(crns[5].cls, "MEDIUM", "T6 Lesmo should be MEDIUM");
   assert.ok(new Set(labels).size >= 3, "Monza must show ≥3 classes, got " + labels.join(","));
 });
 
@@ -83,4 +83,28 @@ test("Spa La Source is HAIRPIN; Eau Rouge complex includes FAST", () => {
   assert.ok(crns.slice(1, 4).some((c) => c.cls === "FAST"),
     "Eau Rouge / Raidillon should include a FAST class: " +
     crns.slice(0, 4).map((c) => "T" + c.n + "=" + c.cls).join(" "));
+});
+
+test("no circuit with ≥6 curated turns collapses to a single class", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const collapsed = [];
+  for (const t of Tracks.LIST) {
+    if (!t.turns || t.turns.length < 6) continue;
+    const crns = TrackMaps.corners(t);
+    const kinds = new Set(crns.map((c) => c.cls));
+    if (kinds.size < 2) collapsed.push(t.id + ":" + [...kinds].join(","));
+  }
+  assert.deepEqual(collapsed, [],
+    "single-class circuits (need assignCornerClasses spread):\n  " + collapsed.join("\n  "));
+});
+
+test("Indianapolis and Jacarepagua are no longer all-SLOW", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  for (const id of ["indianapolis", "jacarepagua"]) {
+    const t = Tracks.LIST.find((x) => x.id === id);
+    const crns = TrackMaps.corners(t);
+    const kinds = new Set(crns.map((c) => c.cls));
+    assert.ok(kinds.size >= 2, id + " classes=" + [...kinds].join(","));
+    assert.ok(!kinds.has("SLOW") || kinds.size >= 2);
+  }
 });
