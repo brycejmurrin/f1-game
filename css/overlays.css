@@ -520,7 +520,10 @@ body.hud-hidden .touchbtn { display: none !important; }
   top: calc(8px + var(--sat));
   right: calc(10px + var(--sar));
   z-index: 16;
-  width: 36px; height: 36px;
+  /* The ONE control that brings the HUD back — highest miss-cost target in the
+     app — so it meets the project's own --tap floor, not the old 36px. The glyph
+     stays small via font-size; only the hit box grows. */
+  width: var(--tap); height: var(--tap);
   padding: 0;
   border-radius: var(--r-md);
   font-size: 16px; line-height: 1;

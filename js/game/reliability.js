@@ -110,12 +110,19 @@ function buildQuality(setup, team) {
 // one peer would announce a retirement and park a car at the barrier that was
 // still racing — and still being posed from the wire — on the other. On the solo
 // path isPlayer and human are the same car, so nothing there moves.
-function riskFor(car, scale, build) {
+function riskFor(car, scale, build, networked) {
   if (!scale) return 0;
   const tier = clamp(car.tier | 0, 0, TIER_RISK.length - 1);
   let risk = TIER_RISK[tier];
   risk *= 1 - DEV_RELIEF * devNorm(car.team && car.team.id);
-  if (car.isPlayer && build > 0) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
+  // Build relief is keyed to isPlayer — a per-PEER notion: in a friend race each
+  // peer marks a DIFFERENT car as isPlayer and knows only its OWN build, so peer
+  // A computes a rival's risk at base while peer B relieves it. Same stateless
+  // draw, split threshold → one screen parks a car the other keeps racing. Drop
+  // the relief entirely when networked so every peer computes identical base risk
+  // for every car (the local-player advantage is unshareable without broadcasting
+  // builds; single-authority arming would be the fuller fix).
+  if (car.isPlayer && build > 0 && !networked) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
   return clamp(risk * scale, 0, 1);
 }
 
@@ -123,9 +130,10 @@ function riskFor(car, scale, build) {
 // is also how a car's flags are reset between sessions — a level of "off" leaves
 // every car armed with nothing rather than skipping the reset.
 //
-// `opts`: { level, seed, round, build }. `round` is the career/season round in a
-// championship and a per-session race counter otherwise, so two Grands Prix in a
-// row are not handed the same casualties.
+// `opts`: { level, seed, round, build, networked }. `round` is the career/season
+// round in a championship and a per-session race counter otherwise, so two Grands
+// Prix in a row are not handed the same casualties. `networked` disables the
+// local-player build relief so every peer draws the field at identical risk.
 function arm(cars, opts) {
   const o = opts || {};
   const scale = LEVELS[o.level] || 0;
@@ -134,7 +142,7 @@ function arm(cars, opts) {
     c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null;
     if (!scale) continue;
     const who = c.driverId || c.code || "";
-    if (draw(seed, "dnf", round, who) >= riskFor(c, scale, o.build)) continue;
+    if (draw(seed, "dnf", round, who) >= riskFor(c, scale, o.build, o.networked)) continue;
     c.dnfAt = AT_LO + draw(seed, "dnfAt", round, who) * (AT_HI - AT_LO);
     c.dnfWhy = REASONS[Math.min(REASONS.length - 1,
       Math.floor(draw(seed, "dnfWhy", round, who) * REASONS.length))];

@@ -537,7 +537,13 @@ const DataTelemetry = (function () {
     const laps = tels.filter(function (t) { return t.car && t.car.length; });
     const view = {
       laps: laps,
-      laneCols: laneCols,
+      // laneCols must be indexed the SAME way its consumers read it. The lane
+      // HEADERS iterate `tels` (so they use laneCols over tels), but every
+      // in-chart consumer (map dots, legend, extra-lane speed dots, delta lines)
+      // iterates `view.laps` — the FILTERED array. Re-index laneCols onto `laps`
+      // so a dropped middle lane (no car telemetry) doesn't shift every following
+      // lane onto the next colour, disagreeing with its own header swatch.
+      laneCols: laps.map(function (t) { return laneCols[tels.indexOf(t)]; }),
       primary: primary,
       compare: (compare && compare.car && compare.car.length) ? compare : null,
       multi: laps.length > 2,

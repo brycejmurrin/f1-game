@@ -1026,7 +1026,7 @@ const Car3D = (function () {
   // Geometry for ONE moveable element, in its canonical hinge frame. Built by
   // the SAME planform emitter the baked wing uses, so a flap drawn at its zAngle
   // is the element the mesh would otherwise have contained.
-  function buildFlapGeom(el, col) {
+  function buildFlapGeom(el, col, finish) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     // The element exactly as the wing build emits it...
     addWingFoil(out, {
@@ -1050,6 +1050,15 @@ const Car3D = (function () {
     for (let i = 0; i < out.pos.length; i += 3) {
       out.pos[i + 1] -= el.y;
       out.pos[i + 2] -= el.z;
+    }
+    // Livery FINISH remap, exactly as build() does for the baked mesh: the flaps
+    // are the wing's own paint, so a satin/chrome car must carry the finish here
+    // too. A gloss / absent finish leaves the array byte-identical (no remap).
+    const finishSurface = FINISH_SURFACE[finish];
+    if (finishSurface) {
+      for (let i = 0; i < out.mat.length; i++) {
+        if (out.mat[i] === SURFACES.paint) out.mat[i] = finishSurface;
+      }
     }
     return out;
   }

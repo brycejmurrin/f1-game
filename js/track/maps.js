@@ -132,6 +132,16 @@ const TrackMaps = (function () {
         runStart = -1;
       }
     }
+    // A run still open after the k<=n loop means node 0 is itself straight — the
+    // start/finish line falls INSIDE a straight — so the corner-closing branch
+    // never fired for it. Left as-is, that trailing straight (the run-up to the
+    // line) is silently dropped from the picker/HUD, splitting a seam-crossing
+    // DRS zone in two. Close it at the seam (consumers iterate a→b by node index,
+    // so a wrapping a>b range would break them; two adjacent zones render fine).
+    if (runStart >= 0) {
+      const frac = (n - runStart) / n;
+      if (frac >= MIN_FRAC) zones.push({ a: runStart / n, b: 1 });
+    }
     return zones;
   }
 

@@ -68,6 +68,29 @@
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none !important; }
+  /* Backstop for the infinite loops the curated per-site handling doesn't reach
+     (redline/overtake pulses, the data spinner, the yellow-flag pulse, the
+     rotate-device hint). Don't remove animation — make it instant and non-
+     repeating, so one-shot transitions still complete but nothing throbs.
+     WCAG 2.3.3 / vestibular safety. */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows High Contrast / forced-colors: gradients and translucent panel edges
+   flatten to system colours, so the red-border "selected" cue and panel outlines
+   can vanish. Restate selection and panel edges with system colours + a non-
+   colour outline so the sighted high-contrast user keeps the affordance the
+   aria-pressed mirroring already gives assistive tech. */
+@media (forced-colors: active) {
+  [aria-pressed="true"], [aria-selected="true"], .active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .sheet, .hud-box, dialog { border: 1px solid CanvasText; }
 }
 
 /* Scroll-fade custom properties. The fade is driven by JS, not a scroll

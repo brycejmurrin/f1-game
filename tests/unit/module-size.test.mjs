@@ -68,7 +68,16 @@ const CEILINGS = {
   // separate two halves of one "how far do small car details stay worth
   // drawing" rule. Bug-explaining growth at the site of the bug.
   // game.js: concurrent camera/preview work + wheel-to-wheel racecraft.
-  "js/game.js": 7912,
+  // 7896 -> 7928 for the bug-hunt fix train: the sector-PB incident-invalid gate,
+  // the offT grace-sentinel two-sided decay, the ghost-recorder reset on a backward
+  // line crossing, the G.seasonRound accessor (quali round resolved as reliability
+  // does), the reliability `networked` build-relief opt, and the aero-flap livery
+  // finish thread — each landed with the comment recording the bug it fixes at its
+  // site, the one growth this ratchet tolerates.
+  // Merged with the ACTIVE AERO flap distance gate from the other branch;
+  // the file carries both sets of lines, so neither side's number fits it.
+  // Set from the merged file: 7944.
+  "js/game.js": 7944,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   "js/game/apex.js": 3050,
