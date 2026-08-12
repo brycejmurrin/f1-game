@@ -80,8 +80,13 @@ test("switching the previewed condition disarms a pending COPY ALL", async ({ pa
   // was confirming is worse than none.
   await page.locator("#lt-tod-night").click();
   await expect(page.locator("#lt-spread-edits")).toHaveText("MY EDITS");
+  // This click only ARMS the (now night) condition — it does not fire, so no
+  // copy happens. The one stored key is the ordinary tuner edit from above
+  // (dusk|dry — weather was never switched to wet in this test), persisted by
+  // the plain slider path and untouched by COPY ALL either way.
   await page.locator("#lt-spread-edits").click();
-  expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
+  await expect(page.locator("#lt-spread-edits")).toHaveText(/^COPY TO \d+\?$/);
+  expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|dry"]);
 });
 
 test("__apex.lightCopy('look') levels every track at that condition, and undoes", async ({ page }) => {

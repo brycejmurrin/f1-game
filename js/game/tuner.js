@@ -82,7 +82,13 @@ function buildLtPreview() {
 //               the per-track presets, which is the point of asking for it.
 // 39 profiles at once is worth a second thought, so each button ARMS on the first
 // click and fires on the second, and the previous state stays revertible via UNDO
-// for as long as the panel is open.
+// for as long as the panel is open. The arm window is generous (20 s, not the
+// 2-3 s a plain double-click guard would use) — MEASURED: on this renderer a
+// docked panel keeps painting the live preview behind it, and a background
+// tab or a loaded device can push a single click's actionability wait (visible +
+// stable) past several seconds on its own. A window tight enough to feel like a
+// "confirm" reads as broken the moment ordinary rendering load eats it — the
+// second, deliberate click landing back on the ARM branch instead of firing.
 let _ltUndo = null;            // snapshot from the last copy, or null
 let _ltArmed = null;           // id of the armed button, or null
 let _ltArmT = 0, _ltFlashT = 0;
@@ -114,7 +120,7 @@ function ltSpread(id, btn) {
     ltDisarm();
     _ltArmed = id; btn.classList.add("on");
     btn.textContent = "COPY TO " + ltTargetCount() + "?";
-    _ltArmT = setTimeout(ltDisarm, 6000);
+    _ltArmT = setTimeout(ltDisarm, 20000);
     return;
   }
   clearTimeout(_ltArmT);
