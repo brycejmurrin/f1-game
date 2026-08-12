@@ -51,8 +51,8 @@ const WebBake = (function () {
   // World metres per tile — MUST match tools/assets.mjs SCALES, or a browser
   // bake and an offline bake of the same material would tile differently.
   const SCALES = {
-    1: 4.0, 2: 2.4, 4: 2.0, 5: 2.2, 6: 3.0, 7: 1.5, 8: 6.0,
-    9: 3.0, 10: 5.0, 11: 6.0, 12: 2.0, 13: 3.0, 14: 2.0, 16: 4.0,
+    1: 4.0, 2: 2.4, 4: 2.0, 5: 2.2, 6: 4.0, 7: 1.5, 8: 11.0,
+    9: 4.5, 10: 8.0, 11: 7.0, 12: 2.0, 13: 3.0, 14: 2.0, 16: 3.5,
   };
 
   const NAMES = { 0:"FLAT",1:"CONCRETE",2:"BRICK",3:"GLASS",4:"METAL",5:"WOOD",6:"FOLIAGE",

@@ -68,9 +68,11 @@ const MAT_LAYERS = 17;
 // FLAT (0) is absent by definition — it is the "no material" id.
 const SCALES = {
   [MAT.CONCRETE]: 4.0, [MAT.BRICK]: 2.4, [MAT.METAL]: 2.0, [MAT.WOOD]: 2.2,
-  [MAT.FOLIAGE]: 3.0, [MAT.FABRIC]: 1.5, [MAT.SAND]: 6.0, [MAT.GRASS]: 3.0,
-  [MAT.ROCK]: 5.0, [MAT.SNOW]: 6.0, [MAT.ROOF]: 2.0, [MAT.STONE]: 3.0,
-  [MAT.RUST]: 2.0, [MAT.ASPHALT]: 4.0,
+  // Sand/rock tiling was the clearest remaining tell after the 2k rebake —
+  // larger world-metres/tile = fewer repetitions in the shoulder/runoff.
+  [MAT.FOLIAGE]: 4.0, [MAT.FABRIC]: 1.5, [MAT.SAND]: 11.0, [MAT.GRASS]: 4.5,
+  [MAT.ROCK]: 8.0, [MAT.SNOW]: 7.0, [MAT.ROOF]: 2.0, [MAT.STONE]: 3.0,
+  [MAT.RUST]: 2.0, [MAT.ASPHALT]: 3.5,
 };
 
 const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
@@ -622,15 +624,111 @@ function bakeEnv(args) {
   if (!sky || !ground) fail("--sky and --ground are both required (r,g,b in 0..1 linear)");
   const m = readManifest();
   m.env = m.env || {};
-  m.env[key] = {
+  const rec = {
     ambientSky: sky, ambientGround: ground,
     source: strArg(args, "--source", "manual"),
     licence: strArg(args, "--licence", "CC0"),
     author: strArg(args, "--author", "Apex 26"),
   };
+  const zen = vecArg(args, "--zenith"), hor = vecArg(args, "--horizon");
+  if (zen) rec.skyZenith = zen;
+  if (hor) rec.skyHorizon = hor;
+  m.env[key] = rec;
   m.credits = buildCredits(m);
   writeManifest(m);
-  console.log(`env "${key}" -> sky ${sky} ground ${ground}`);
+  console.log(`env "${key}" -> sky ${sky} ground ${ground}` +
+    (zen ? ` zenith ${zen}` : "") + (hor ? ` horizon ${hor}` : ""));
+}
+
+// Sample a Poly Haven 1k Radiance .hdr equirect into hemisphere ambients and
+// write "*|<tod>" (or --track) env entries. Ambient only by default — zenith/
+// horizon from a naive Reinhard crush read too dark against palette skies.
+async function bakeEnvHdri(args) {
+  const id = args.find((a) => !a.startsWith("--") && !a.includes("|"));
+  const tod = strArg(args, "--tod", null);
+  if (!id || !tod) fail('usage: bake-env-hdri <polyhavenId> --tod day|dusk|dawn|default [--track monza]');
+  const track = strArg(args, "--track", "*");
+  const key = `${track}|${tod}`;
+  const res = strArg(args, "--res", "1k");
+  const url = `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/${res}/${id}_${res}.hdr`;
+  console.log(`fetching ${url}`);
+  const resp = await fetch(url);
+  if (!resp.ok) fail(`HTTP ${resp.status} fetching HDRI`);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  const sampled = sampleRadianceHdr(buf);
+  // Mild Reinhard into the range applyRaceSettings already expects (~0.2–0.5 day).
+  const tone = (v, s) => v.map((c) => Math.min(1, +(c * s / (1 + c * s)).toFixed(4)));
+  const sky = tone(sampled.sky, 0.35);
+  const ground = tone(sampled.ground, 0.45);
+  console.log(`sampled sky=${sky} ground=${ground}`);
+  bakeEnv([key, "--sky", sky.join(","), "--ground", ground.join(","),
+           "--source", `polyhaven:${id}`, "--licence", "CC0",
+           "--author", "Poly Haven contributors"]);
+}
+
+// Minimal Radiance RGBE (.hdr) equirect sampler → solid-angle-weighted
+// upper/lower hemisphere means. No deps — sharp cannot decode HDR.
+function sampleRadianceHdr(buf) {
+  let off = 0;
+  const readLine = () => {
+    let s = "";
+    while (off < buf.length) {
+      const c = buf[off++]; if (c === 10) break; s += String.fromCharCode(c);
+    }
+    return s;
+  };
+  while (true) {
+    const line = readLine();
+    if (line === "") break;
+    if (off >= buf.length) fail("bad HDR header");
+  }
+  const res = readLine().trim().split(/\s+/);
+  // -Y height +X width
+  const h = parseInt(res[1], 10), w = parseInt(res[3], 10);
+  if (!(w > 0 && h > 0)) fail(`bad HDR resolution: ${res.join(" ")}`);
+  const rgba = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const info = buf.subarray(off, off + 4); off += 4;
+    const scanW = (info[2] << 8) | info[3];
+    if (info[0] === 2 && info[1] === 2 && scanW === w) {
+      for (let ch = 0; ch < 4; ch++) {
+        let x = 0;
+        while (x < w) {
+          const code = buf[off++];
+          if (code > 128) {
+            const run = code - 128, val = buf[off++];
+            for (let i = 0; i < run; i++) rgba[(y * w + x++) * 4 + ch] = val;
+          } else {
+            for (let i = 0; i < code; i++) rgba[(y * w + x++) * 4 + ch] = buf[off++];
+          }
+        }
+      }
+    } else {
+      rgba.set(info, y * w * 4);
+      rgba.set(buf.subarray(off, off + w * 4 - 4), y * w * 4 + 4);
+      off += w * 4 - 4;
+    }
+  }
+  const sky = [0, 0, 0], ground = [0, 0, 0];
+  let sn = 0, gn = 0;
+  for (let y = 0; y < h; y++) {
+    const t = (y + 0.5) / h;
+    const lat = Math.PI / 2 - t * Math.PI;
+    const wgt = Math.sin(t * Math.PI);
+    for (let x = 0; x < w; x += 2) {
+      const i = (y * w + x) * 4;
+      const e = rgba[i + 3];
+      let r = 0, g = 0, b = 0;
+      if (e) {
+        const f = Math.pow(2, e - 128) / 255;
+        r = rgba[i] * f; g = rgba[i + 1] * f; b = rgba[i + 2] * f;
+      }
+      if (lat > 0.12) { sky[0] += r * wgt; sky[1] += g * wgt; sky[2] += b * wgt; sn += wgt; }
+      else if (lat < -0.12) { ground[0] += r * wgt; ground[1] += g * wgt; ground[2] += b * wgt; gn += wgt; }
+    }
+  }
+  const avg = (v, n) => v.map((c) => c / Math.max(n, 1e-9));
+  return { sky: avg(sky, sn), ground: avg(ground, gn), width: w, height: h };
 }
 
 // ────────────────────────────── CC0 sources ──────────────────────────────────
@@ -1080,6 +1178,7 @@ const USAGE = `Apex 26 asset bake CLI
   import-pack <dir> [--size N]     install a browser bake (assets/pack/webbake.js)
   bake-model <id> <file.glb>       bake glTF -> the game's own vertex format
   bake-env "<track>|<tod>" --sky r,g,b --ground r,g,b
+  bake-env-hdri <id> --tod day        sample a Poly Haven 1k HDRI → env ambient
   verify                           licences, hashes, budget
   credits                          regenerate assets/pack/CREDITS.md
 `;
@@ -1094,6 +1193,7 @@ async function main() {
     case "import-pack": importPack(args); break;
     case "bake-model": await bakeModel(args); break;
     case "bake-env": bakeEnv(args); break;
+    case "bake-env-hdri": await bakeEnvHdri(args); break;
     case "verify": process.exit(verify()); break;
     case "credits": credits(); break;
     default: console.log(USAGE); process.exit(cmd ? 1 : 0);
