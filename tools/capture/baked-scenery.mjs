@@ -128,7 +128,9 @@ try {
 
     const file = `${shot.id}.png`;
     const path = resolve(outDir, file);
-    const buf = await page.locator("canvas#game").screenshot({ path });
+    const buf = await page.screenshot({ path, type: "png" });
+    // Prefer full-page screenshot: canvas#game locator.screenshot can hang on
+    // heavy circuits (Vegas) waiting for "element stable" under SwiftShader.
     const rec = {
       ...shot,
       file,
