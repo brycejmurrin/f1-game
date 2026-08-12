@@ -407,10 +407,14 @@ delegates to it, so existing calls are unchanged.
 | `tiers` | 1–3 raked decks; each upper deck is set back and lifted with a concourse band closing the step |
 | `h` | back-shell height (default 12) |
 | `roof` | `"cantilever"` (default), `"flat"` (tight over the shell), `"truss"` (open lattice deck on cross-braces), `"none"` (uncovered bleacher) |
-| `suites` | glazed hospitality band under the roof at the back of the top rake |
-| `endWalls` | closing walls at both ends — stops a stand reading as a slab cut off mid-air |
-| `pylons` | support columns under the roof's trackside edge |
+| `suites` | glazed hospitality band under the roof (default ON when `len ≥ 48` and there is a roof; pass `false` to opt out) |
+| `endWalls` | closing walls at both ends (default ON when `len ≥ 40` and there is a roof; pass `false` to opt out) |
+| `pylons` | support columns under the roof's trackside edge (default ON when `len ≥ 36`; pass `false` to opt out) |
 | `roofCol` / `fasciaCol` / `suiteCol` | explicit colour overrides |
+
+Roofed stands also always get underside ribs + nose trim (cantilever/flat), a
+trackside sponsor fascia band, and back-shell panel seams — additive detail so
+a blank slab-with-lid no longer reads as the default silhouette.
 
 Liveries live in `js/track/scenery-data.js`: `STAND_LIVERIES` holds the named
 families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,

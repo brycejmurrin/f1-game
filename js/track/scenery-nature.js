@@ -632,9 +632,7 @@ const SceneryNature = (function () {
       out._mat = 0;
     };
     // grandstandEx(): the full raked-stand model. grandstand() below is the
-    // legacy 6-arg entry point and delegates here with `opts` empty — with no
-    // opts this emits byte-identical geometry to the pre-split implementation,
-    // so every existing call site is untouched.
+    // legacy 6-arg entry point and delegates here with `opts` empty.
     //
     // opts (all optional):
     //   livery     name into TrackSceneryData.STAND_LIVERIES; supplies
@@ -643,10 +641,12 @@ const SceneryNature = (function () {
     //   tiers      1..3 raked decks stacked with a concourse band between them
     //   h          back-shell height (default 12)
     //   roof       "cantilever" (default) | "flat" | "truss" | "none"
-    //   suites     glazed hospitality band under the roof
-    //   endWalls   closing walls at both ends of the stand
-    //   pylons     support columns under the roof's outer edge
+    //   suites     glazed hospitality band (default ON when len≥48 + roof)
+    //   endWalls   closing end walls (default ON when len≥40 + roof)
+    //   pylons     roof support columns (default ON when len≥36)
     //   roofCol / fasciaCol / suiteCol   explicit colour overrides
+    // Additive always-on for roofed stands: underside ribs + nose trim
+    // (cantilever/flat), trackside sponsor fascia, back-shell panel seams.
     const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
       opts = opts || {};
       const lib = TrackSceneryData.STAND_LIVERIES || {};
@@ -753,9 +753,27 @@ const SceneryNature = (function () {
           // "flat" sits tight over the shell; "cantilever" (default) overhangs.
           const rw = roofKind === "flat" ? 10 : 12;
           addBox(out, roofC, [rw, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
+          // Underside ribs + trackside nose trim — a blank cantilever slab reads
+          // as one thick lid; ribs break the underside and the nose casts a
+          // hard shadow-line from trackside. Cheap (one box per bay) and shared
+          // by every stand that does not already use the open "truss" roof.
+          const ribCol = [roofCol[0] * 0.78, roofCol[1] * 0.78, roofCol[2] * 0.80];
+          const ribs = Math.max(3, Math.min(18, Math.round(len / 7)));
+          for (let i = 0; i < ribs; i++) {
+            const off = ((i + 0.5) / ribs - 0.5) * len;
+            addBox(out, vadd(vadd(a.c, a.t, off), a.u, roofY - 0.55),
+                   [rw * 0.92, 0.22, 0.35], ribCol, [a.r, a.u, a.t]);
+          }
+          // Leading-edge gutter / nose along the trackside face of the roof.
+          addBox(out, vadd(vadd(a.c, a.r, -side * (rw / 2 - 0.15)), a.u, roofY - 0.15),
+                 [0.35, 0.55, len + 2.2], ribCol, [a.r, a.u, a.t]);
         }
         // Support columns under the roof's outer (trackside) edge.
-        if (opts.pylons) {
+        // Default ON for longer stands (len ≥ 36) — a floating roof is the
+        // single most common "blank slab" read. Explicit opts.pylons:false
+        // still opts out; short bleacher-length stands stay clean.
+        const wantPylons = opts.pylons != null ? !!opts.pylons : len >= 36;
+        if (wantPylons) {
           const posts = Math.max(2, Math.min(12, Math.round(len / 14)));
           for (let i = 0; i < posts; i++) {
             const off = ((i + 0.5) / posts - 0.5) * len;
@@ -764,8 +782,40 @@ const SceneryNature = (function () {
           }
         }
       }
+      // Trackside sponsor fascia — a dark band hung under the roof's leading
+      // edge so the stand reads as a framed structure rather than a bare box
+      // with a lid. Always on when there is a roof; colour follows fasciaCol.
+      if (roofKind !== "none") {
+        const bandC = vadd(vadd(a.c, a.r, -side * 4.8), a.u, roofY - 1.7);
+        if (!rejBox(bandC, [0.45, 1.4, len - 1], [a.r, a.u, a.t]))
+          addBox(out, bandC, [0.45, 1.4, len - 1], fasciaCol, [a.r, a.u, a.t]);
+      }
+      // Back-shell panel seams: thin vertical strips on the track-facing shell
+      // face so a 60 m wall does not read as one concrete slab.
+      {
+        const shellFace = side * (hw[k] + gap + 7.5 - 5.05);
+        const seamCol = fasciaCol
+          ? [fasciaCol[0] * 0.85, fasciaCol[1] * 0.85, fasciaCol[2] * 0.88]
+          : [0.32, 0.33, 0.36];
+        const seams = Math.max(2, Math.min(16, Math.round(len / 10)));
+        for (let i = 1; i < seams; i++) {
+          const off = (i / seams - 0.5) * len;
+          addBox(out,
+            [px[k] + r[0] * shellFace + t[0] * off,
+             cShell[1],
+             pz[k] + r[2] * shellFace + t[2] * off],
+            [0.22, shellH * 0.92, 0.35], seamCol, [r, u, t]);
+        }
+        // Horizontal mid-band on the shell — breaks the tall blank face.
+        addBox(out,
+          [px[k] + r[0] * shellFace, cShell[1] + shellH * 0.12, pz[k] + r[2] * shellFace],
+          [0.28, 0.55, len * 0.96], seamCol, [r, u, t]);
+      }
       // Glazed hospitality band tucked under the roof at the back of the top rake.
-      if (opts.suites) {
+      // Default ON for big stands (len ≥ 48) — modern F1 stands almost always
+      // carry a glass hospitality strip; short stands stay plain.
+      const wantSuites = opts.suites != null ? !!opts.suites : (roofKind !== "none" && len >= 48);
+      if (wantSuites) {
         const sc = anchor(k, side, gap + 7.0);
         const suiteC = vadd(sc.c, sc.u, roofY - 2.6);
         const suiteCol = opts.suiteCol || (NIGHT ? [1.10, 1.02, 0.80] : [0.34, 0.46, 0.58]);
@@ -773,8 +823,11 @@ const SceneryNature = (function () {
           addBox(out, suiteC, [3.2, 3.0, len - 3], suiteCol, [sc.r, sc.u, sc.t]);
       }
       // Closing walls at both ends — stops a stand reading as a slab cut off
-      // mid-air when seen from along the straight.
-      if (opts.endWalls) {
+      // mid-air when seen from along the straight. Default ON for longer roofed
+      // stands (a roof:"none" shell stays open-ended like a bleacher backdrop).
+      const wantEnds = opts.endWalls != null ? !!opts.endWalls
+        : (roofKind !== "none" && len >= 40);
+      if (wantEnds) {
         for (const sgn of [-1, 1]) {
           const ec = vadd(vadd(a.c, a.t, sgn * (len / 2)), a.u, (roofY - 1) / 2);
           if (!rejBox(ec, [11, roofY - 1, 0.5], [a.r, a.u, a.t]))
