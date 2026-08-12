@@ -42,6 +42,47 @@ const X_ZONE_STEP = 8;                          // m between curvature samples
 // straight (r >= ~700 m), and the length test then does the rest.
 const X_ZONE_K = 0.0014;
 
+// HOW MANY zones each circuit really has. Authored, because zone placement is
+// an FIA decision and not a property of the geometry — measured, the curvature
+// scan below disagrees almost everywhere: baku 8 against 2, qatar 4 against 1,
+// imola 7 against 1, spa 7 against 5. Moving the threshold cannot fix it in
+// either direction:
+//
+//   * 2026 zones are placed for ENERGY HARVESTING, not overtaking, so several
+//     sit on short connectors far below any sensible straight-length bar. F1
+//     calls the Hungaroring "notorious for its relative lack of straights"; it
+//     carries four.
+//   * Lusail has a ~1 km straight and is allowed exactly ONE.
+//   * The FIA's real test is a THREE-SECOND duration at expected speed plus a
+//     per-corner safety veto — a time rule with an override, not a distance one.
+//
+// COUNTS ONLY, deliberately. Zones were first authored as (fromTurn, toTurn)
+// pairs so each row could be checked against its source quote, and that FAILED
+// validation: 35 of 68 resolved spans came out short or curved (catalunya
+// T3->T4 as 26 m, abudhabi T5->T6 as 45 m). The cause is that def.turns numbers
+// corners as "the N strongest curvature peaks in lap order", which is not
+// reliably FIA turn numbering — gentle corners fall below the cut and chicanes
+// merge. Boundaries built on that numbering are not trustworthy, so only the
+// well-sourced half of the research is encoded here: the count. Placement stays
+// with the geometry, which keeps the N longest qualifying straights.
+//
+// A circuit with NO entry keeps the pure length filter — right for the retired
+// classics, which have no FIA zone list under either ruleset.
+const ZONE_COUNT = {
+  // ── 2026 Straight Mode, as published by Formula 1 ────────────────────────
+  // Monaco is 0 on purpose, and not a gap: for 2026 active aero is switched off
+  // entirely there, cars "locked in Corner Mode for the entire Monte Carlo
+  // weekend". The scan already returned 0; now it does so for the stated reason.
+  monaco: 0, suzuka: 2, albert_park: 5, shanghai: 4, miami: 3, montreal: 4,
+  catalunya: 4, redbull: 4, silverstone: 4, spa: 5, hungaroring: 4,
+  // ── 2025 DRS, the stand-in where 2026 is unpublished ─────────────────────
+  // A PROXY, not fact: every 2026 circuit published so far came in 1-3 zones
+  // ABOVE its 2025 DRS count, so these are likely conservative.
+  bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 2, baku: 2,
+  singapore: 4, cota: 2, mexico: 3, interlagos: 2, vegas: 2, qatar: 1,
+  abudhabi: 2,
+};
+
 function create(G) {
   let zones = [];                               // [{start, end, len}] in arc metres
 
@@ -74,6 +115,17 @@ function create(G) {
       } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
     }
     if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
+    // With a known real count, take the N LONGEST straights and ignore the
+    // length rule: it is the count that is well sourced, and the FIA's own test
+    // is a time-at-speed with a safety veto that no distance bar reproduces.
+    // Melbourne's five and the Hungaroring's four include connectors well under
+    // 210 m, so applying X_ZONE_MIN as well would silently under-deliver them.
+    const want = ZONE_COUNT[(track.def && track.def.id)];
+    if (want != null) {
+      zones = runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
+                  .sort((a, b) => a.start - b.start);
+      return zones;
+    }
     for (const r of runs) if (r.len >= X_ZONE_MIN) zones.push(r);
     return zones;
   }

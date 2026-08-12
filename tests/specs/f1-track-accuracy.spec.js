@@ -26,6 +26,14 @@ const RACE_DIRECTION_OVERRIDES = {
   "mc-1929": "CW",   // Monaco
   "fr-1969": "CW",   // Paul Ricard
   "za-1961": "CW",   // Kyalami
+  // Marina Bay races ANTI-clockwise, and this reference line does not: of the
+  // eleven circuits here that are anti-clockwise in reality, ten compute
+  // anti-clockwise and sg-2008 alone computes clockwise. Sourced away from the
+  // upstream dataset — Pirelli ("cars are driving anti-clockwise"), Singapore's
+  // National Library Board ("the cars would run anti-clockwise"), and Turn 1 is
+  // a left. Without this the test still PASSED, because it compares the game
+  // against the reference and both were backwards together.
+  "sg-2008": "CCW",  // Singapore
 };
 
 // game circuit id → bacinger/f1-circuits feature id

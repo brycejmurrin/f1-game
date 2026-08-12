@@ -111,26 +111,57 @@ async function precacheAssetLists() {
   return { essential: Array.from(essential), optional: Array.from(optional) };
 }
 
+// Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
+// immutable URLs — the essentials all carry this project's `?v=N` cache-bust,
+// and the optionals are version-pinned by PATH (vendor/three-0.184.0/…, the
+// content-named woff2s) — which is the exact condition the fetch handler below
+// already relies on when it says a cache hit is always correct without
+// revalidation. `cache: "no-store"` here contradicted that and made a cold
+// first visit download the whole app TWICE: ~5.8 MB for the page's own 145
+// script tags, then the same ~5.8 MB again for the install, in parallel, on one
+// connection. Nothing in the history justifies it — it arrived inside an
+// unrelated commit and no comment defends it.
+//
+// The application shell is still fetched with `no-store` (see
+// precacheAssetLists) because index.html is the one genuinely mutable document
+// here and it is the source of truth for the tag list.
 async function cacheRequiredAsset(cache, url) {
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url);
   if (!res || !res.ok) throw new Error("Unable to precache essential asset: " + url);
   await cache.put(url, res);
 }
 
 async function cacheOptionalAsset(cache, url) {
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url);
     if (res && res.ok) await cache.put(url, res);
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
+}
+
+// Install fan-out, bounded. `Promise.all` over the whole list opened ~190
+// concurrent requests against the same connection the page was still loading
+// through; a small pool gets the same total throughput without starving first
+// paint. Rejections still propagate, so an essential miss fails the install
+// exactly as before.
+async function pooled(items, limit, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
     const cache = await caches.open(name);
-    await Promise.all(urls.essential.map((u) => cacheRequiredAsset(cache, u)));
+    await pooled(urls.essential, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
-    await Promise.all(urls.optional.map((u) => cacheOptionalAsset(cache, u)));
+    await pooled(urls.optional, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();
   })());
 });

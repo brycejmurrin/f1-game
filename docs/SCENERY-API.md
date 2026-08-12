@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **108-member `api` surface is a frozen
+primitives, and composite models. The **109-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -131,7 +131,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 108-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 109-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -226,7 +226,7 @@ dressingExclusions: [
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 108-member contract but not detailed in this doc: `MAT` (material
+Also on the 109-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, the grounding helpers `seat` / `foundation` / `cantilever` and
 `recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
@@ -281,6 +281,7 @@ authored planting, distance is still the fix.
 | `every(metres, fn)` | call `fn(k)` every ~`metres` around the lap |
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge |
+| `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-GROUNDING.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
 | `hash(i)` | deterministic 0–1 pseudo-random |
 | `ATM` / `COL` | named atmosphere & colour packs from `scenery-data.js` (see below) |
 
