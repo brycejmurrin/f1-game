@@ -83,6 +83,94 @@ const ZONE_COUNT = {
   abudhabi: 2,
 };
 
+// WHICH straights, expressed as the turns that bound them — the half of the
+// research ZONE_COUNT's own comment calls "not encoded" and says why: def.turns
+// used to number corners as "the N strongest curvature peaks in lap order",
+// which was not reliable FIA-equivalent numbering, so a hard-coded (fromTurn,
+// toTurn) pair could name the wrong straight outright (35 of 68 resolved spans
+// came out short or curved — catalunya T3->T4 as 26 m, abudhabi T5->T6 as 45 m).
+//
+// `docs/tracks/START-LINES.md` fixed the root cause: every circuit below now has
+// a verified start line (line on a straight, first apex hand-checked), so
+// `def.turns[0]` really is Turn 1 and the array runs in physical order. That
+// makes turn-pair authoring safe again — with one deliberate omission: BAHRAIN
+// and JEDDAH stay on the length-only fallback below, because their start lines
+// were never re-derived (no reliable coordinate was found for either) and
+// jeddah's still measures IN A CORNER (`tools/startline-probe.cjs`). Turn
+// numbers built on an unverified line are exactly the trap this table exists to
+// avoid, so those two circuits are excluded rather than guessed.
+//
+// Each pair is the turn BEFORE the straight and the turn AFTER it (1-based, T1
+// meaning `def.turns[0]`; a pair naming the last turn and T1 wraps across the
+// line). A THIRD element picks the Nth-longest straight in that turn-bounded
+// window when two separate straights share the same bounding pair (a mild kink
+// between them too weak to register its own turn peak) — only albert_park needs
+// it, for the two short straights both bounded by T10/T11.
+//
+// Deliberately NOT independently re-researched corner-by-corner: `ZONE_COUNT`
+// above is the sourced fact (a published zone COUNT); this table names exactly
+// the turns bounding the straights the existing N-longest-by-length selection
+// already picks for that count, verified byte-identical in
+// `tools/aero-zone-turns.cjs`'s derivation and by `tests/unit/aero-zones-turns.test.mjs`.
+// So it does not change which straight is selected anywhere it applies — it
+// only makes the selection ROBUST to a future geometry change (a new curvature
+// scan parameter, an extra dense sample) that would otherwise silently move a
+// zone by re-sorting `runs`, and it gives a future correction (a real published
+// "DRS zone is between Turn 4 and Turn 5" claim) something to be checked
+// against instead of a bare distance.
+const AERO_ZONE_TURNS = {
+  suzuka: [[15, 16], [18, 1]],
+  albert_park: [[2, 3], [10, 11], [10, 11, 2], [11, 12], [14, 1]],
+  shanghai: [[10, 11], [14, 15], [15, 16], [16, 1]],
+  miami: [[11, 12], [17, 18], [19, 1]],
+  montreal: [[8, 9], [11, 12], [13, 14], [14, 1]],
+  catalunya: [[2, 3], [4, 5], [8, 9], [14, 1]],
+  redbull: [[1, 2], [2, 3], [8, 9], [10, 1]],
+  silverstone: [[5, 6], [10, 11], [15, 16], [18, 1]],
+  spa: [[1, 2], [3, 4], [9, 10], [11, 12], [20, 1]],
+  hungaroring: [[1, 2], [4, 5], [10, 11], [14, 1]],
+  imola: [[14, 15]],
+  zandvoort: [[11, 12], [14, 1]],
+  monza: [[9, 10], [11, 1]],
+  baku: [[2, 3], [20, 1]],
+  singapore: [[8, 9], [14, 15], [15, 16], [19, 1]],
+  cota: [[10, 11], [20, 1]],
+  mexico: [[3, 4], [11, 12], [17, 1]],
+  interlagos: [[2, 3], [15, 1]],
+  vegas: [[5, 6], [13, 14]],
+  qatar: [[16, 1]],
+  abudhabi: [[4, 5], [16, 1]],
+};
+
+// Which turns bound a run [start,end) (arc metres, `end` may exceed `total` when
+// the run wraps the line). 1-based, T1 meaning turns[0]; a run starting before
+// the first apex is bounded by the LAST turn (it is the straight the line sits
+// on). Mirrors tools/aero-zone-turns.cjs's derivation exactly — that tool is
+// how AERO_ZONE_TURNS above was generated and re-checked.
+function turnsBounding(turns, total, run) {
+  const f0 = (run.start / total) % 1, f1 = (run.end / total) % 1;
+  let before = -1;
+  for (let i = 0; i < turns.length; i++) { if (turns[i] <= f0) before = i; else break; }
+  const after = turns.findIndex((t) => t >= f1);
+  return [before < 0 ? turns.length : before + 1, after < 0 ? 1 : after + 1];
+}
+
+// Resolve one authored [fromTurn, toTurn, occ?] entry to the actual run the
+// geometry produced. `occ` (default 1) picks the Nth-LONGEST run among those
+// sharing that exact turn pair — needed where a straight is split by a kink too
+// weak to register its own turn apex, so two runs land on the same pair (only
+// albert_park's T10->T11 does today). Returns null if the pair no longer
+// matches anything (a stale entry after a def.turns change) rather than
+// silently grabbing the wrong straight.
+function runForTurnPair(runs, turns, total, entry) {
+  const [fromT, toT, occ] = entry;
+  const matches = runs.filter((r) => {
+    const [f, t] = turnsBounding(turns, total, r);
+    return f === fromT && t === toT;
+  }).sort((a, b) => b.len - a.len);
+  return matches[(occ || 1) - 1] || null;
+}
+
 function create(G) {
   let zones = [];                               // [{start, end, len}] in arc metres
 
@@ -115,12 +203,27 @@ function create(G) {
       } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
     }
     if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
+    const id = track.def && track.def.id;
+    // Turn-keyed, where the start line is trustworthy enough to number turns
+    // by (see AERO_ZONE_TURNS above). Falls through to the length-only
+    // selection below on any pair that no longer resolves, rather than
+    // dropping a zone the circuit is supposed to have.
+    const turnPairs = AERO_ZONE_TURNS[id];
+    if (turnPairs && track.def.turns && track.def.turns.length) {
+      const resolved = turnPairs
+        .map((entry) => runForTurnPair(runs, track.def.turns, total, entry))
+        .filter(Boolean);
+      if (resolved.length === turnPairs.length) {
+        zones = resolved.sort((a, b) => a.start - b.start);
+        return zones;
+      }
+    }
     // With a known real count, take the N LONGEST straights and ignore the
     // length rule: it is the count that is well sourced, and the FIA's own test
     // is a time-at-speed with a safety veto that no distance bar reproduces.
     // Melbourne's five and the Hungaroring's four include connectors well under
     // 210 m, so applying X_ZONE_MIN as well would silently under-deliver them.
-    const want = ZONE_COUNT[(track.def && track.def.id)];
+    const want = ZONE_COUNT[id];
     if (want != null) {
       zones = runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
                   .sort((a, b) => a.start - b.start);
@@ -160,5 +263,10 @@ function create(G) {
   return { build, at, ahead, get zones() { return zones; } };
 }
 
-  return { create, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T };
+  return {
+    create, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
+    // Exposed for tests/tools only (tests/unit/aero-zones-turns.test.mjs,
+    // tools/aero-zone-turns.cjs) — build() is the one real call site.
+    ZONE_COUNT, AERO_ZONE_TURNS, turnsBounding, runForTurnPair,
+  };
 })();

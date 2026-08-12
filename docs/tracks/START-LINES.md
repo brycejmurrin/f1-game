@@ -377,12 +377,24 @@ contract — the shape of an answer that was never physical to begin with.
   40 circuits (the two exceptions are pre-existing and unrelated).
 - **The albert_park / silverstone ordering**, where the final turn sorted before
   T1.
-- **Turn-keyed aero-zone authoring.** The handoff records that authoring zones as
-  `(fromTurn, toTurn)` pairs failed — 35 of 68 spans came out short or curved —
-  because `def.turns` numbered corners as "the N strongest curvature peaks in lap
-  order" against a line in the wrong place. That premise is now repaired; the
-  zones themselves are still derived as "the N longest straights" and are the
-  next piece of work.
+- **Turn-keyed aero-zone authoring — landed.** The handoff records that
+  authoring zones as `(fromTurn, toTurn)` pairs failed — 35 of 68 spans came
+  out short or curved — because `def.turns` numbered corners as "the N
+  strongest curvature peaks in lap order" against a line in the wrong place.
+  With that repaired, `js/game/aerozones.js`'s `AERO_ZONE_TURNS` now names the
+  bounding turns for 21 of the 22 circuits with a published zone count (all
+  but `monaco`, which is 0 zones and needs none). Deliberately NOT a fresh
+  corner-by-corner re-research: each pair is derived from — and verified
+  byte-identical to — the already-sourced `ZONE_COUNT` selection (the N
+  longest qualifying straights), via `tools/aero-zone-turns.cjs` and
+  `tests/unit/aero-zones-turns.test.mjs`. So today it changes nothing about
+  WHICH straight is selected; what it buys is a selection that is ROBUST to a
+  future geometry change (a new curvature-scan parameter would otherwise
+  silently re-sort `runs` and move a zone) and a real per-corner DRS-zone
+  citation to check future corrections against, instead of a bare distance.
+  `bahrain` and `jeddah` are excluded from `AERO_ZONE_TURNS` for the same
+  reason they were excluded from the startFrac fix — their lines were never
+  re-derived, so their turn numbers are not trustworthy.
 
 ## Tools
 
