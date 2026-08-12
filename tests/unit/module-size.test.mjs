@@ -94,7 +94,9 @@ const CEILINGS = {
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
   // — a dev-API hook growing the dev API is the file doing its job.
-  "js/game/apex.js": 3055,
+  // 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
+  // a false no-op when it only read numLights (nearest-N cull).
+  "js/game/apex.js": 3060,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
