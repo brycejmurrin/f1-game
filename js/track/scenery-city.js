@@ -764,7 +764,7 @@ const SceneryCity = (function () {
           // still pass the same dead `setback: true`, so honouring it here
           // alone would also be inconsistent. If the setback look is wanted,
           // do it deliberately across all six sites with the clip baselines
-          // re-measured — see docs/research/CAMPAIGN-2026-08.md.
+          // re-measured — see docs/archive/research/CAMPAIGN-2026-08.md.
         });
         idx++;
       });

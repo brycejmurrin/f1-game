@@ -5,7 +5,7 @@
  *   node tools/cache-bump-only.mjs <base-ref>     # exit 0 = pure bump, 1 = not
  *   node tools/cache-bump-only.mjs <base-ref> --json
  *
- * WHY THIS EXISTS. Change-aware CI (docs/research/TEST-AUDIT-2026-08.md §3)
+ * WHY THIS EXISTS. Change-aware CI (docs/archive/research/TEST-AUDIT-2026-08.md §3)
  * treats `index.html` as an INFRA path — a file whose contents change what test
  * selection MEANS, because the script block IS the load order. Reading it to
  * route your own validity is circular, so any diff touching it falls back to a

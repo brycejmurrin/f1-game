@@ -10,7 +10,7 @@
 // broken by construction: `artifacts/` is gitignored, so in CI every title is
 // legitimately unobserved and the check would be red on an environment fact.
 // That exact trap turned the guards job red once already (see the "a guard that
-// only runs on ONE MACHINE" section in docs/research/CAMPAIGN-2026-08.md).
+// only runs on ONE MACHINE" section in docs/archive/research/CAMPAIGN-2026-08.md).
 // A number in the job log is enough to make a silent gap visible; a gate here
 // would be the third instance of the same mistake.
 //

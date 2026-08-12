@@ -1,6 +1,6 @@
 // select-budget — CAN A CHANGE-AWARE CI JOB ACTUALLY RUN WHAT IT SELECTS?
 //
-// docs/research/TEST-AUDIT-2026-08.md's change-aware CI design is blocked on
+// docs/archive/research/TEST-AUDIT-2026-08.md's change-aware CI design is blocked on
 // gaps 7/8/13, and its own recommendation is explicit: "re-derive the budget
 // against measured per-spec counts" before any YAML lands. This is that
 // derivation, and it is arithmetic over MEASURED numbers rather than a guess.

@@ -8,7 +8,7 @@
 // Both had already failed silently. `--since <ref>` swallowed the ref as an
 // explicit path, so it reported the literal string "HEAD~3" as the only changed
 // file and printed "nothing to run" — for any diff, forever — while the
-// change-aware CI design in docs/research/TEST-AUDIT-2026-08.md §3 was written
+// change-aware CI design in docs/archive/research/TEST-AUDIT-2026-08.md §3 was written
 // on top of it. A selector that wrongly says "run nothing" is the one failure
 // mode that ships regressions, so it gets a test.
 import test from "node:test";
