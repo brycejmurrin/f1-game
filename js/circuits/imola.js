@@ -115,6 +115,60 @@
 
       // Pit straight + Tamburello approach (wraps around 0) — left standside mixed;
       // right riverside = willow/poplar (no pine wall).
+      // ── HILLSIDE VINEYARDS ───────────────────────────────────────────────
+      // Imola's setting is rolling Emilia-Romagna hills, plains and hillside
+      // VINEYARDS, dropping into the Santerno valley. The circuit had the
+      // river, the parkland and the hills, but its high ground was dressed as
+      // undifferentiated woodland — which could be anywhere in Europe. Vine
+      // rows are what make it Italy, and they are almost free to draw: a row
+      // is one long low box, and the read comes entirely from the rows being
+      // PARALLEL, evenly spaced, and following the contour.
+      //
+      // Placed on the high ground behind Piratella and Acque Minerali, out
+      // past the treeline (gap 92-150) so the woodland still fringes the
+      // track and the vineyards sit above and beyond it.
+      {
+        const VINE     = [0.26, 0.36, 0.19];
+        const VINE_DRY = [0.32, 0.40, 0.22];
+        const SOIL     = [0.44, 0.34, 0.24];
+        const POST     = [0.52, 0.44, 0.32];
+        for (const [sf, side, gap, rows, len, ang] of [
+          [0.235, -1, 104, 9, 74, 0.10],
+          [0.300, -1, 138, 7, 60, -0.08],
+          [0.415,  1,  96, 8, 66, 0.06],
+          [0.470,  1, 132, 6, 52, -0.05],
+          [0.600, -1, 112, 8, 70, 0.09],
+          [0.665, -1, 148, 6, 56, -0.07],
+        ]) {
+          const kk = K(sf);
+          const a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 30)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          for (let r = 0; r < rows; r++) {
+            // Each row steps further out and shears slightly, so the block
+            // reads as following a contour rather than as a printed grid.
+            const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
+            if (onTrack(a.c[0], a.c[2], 24)) continue;
+            const hv = hash(kk * 17 + r * 29);
+            const rowLen = len * (0.86 + hv * 0.22);
+            // Bare tilled soil strip under the row — the ground between vine
+            // rows is worked earth, not grass, and that stripe is half the read.
+            addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
+            out._mat = MAT.FOLIAGE;
+            addBox(out, vadd(a.c, a.u, 1.05), [1.5, 1.5, rowLen],
+                   hv < 0.5 ? VINE : VINE_DRY, b);
+            out._mat = 0;
+            // End posts anchoring the wire — the detail that says trained vine
+            // rather than hedge.
+            out._mat = MAT.WOOD;
+            for (const e of [-rowLen / 2, rowLen / 2]) {
+              addCyl(out, vadd(a.c, a.t, e), 0.10, 2.0, POST, 4, b);
+            }
+            out._mat = 0;
+          }
+        }
+      }
+
       forestEdge(0.88, 1.00, -1, 12, { density: 0.42, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
       forestEdge(0.88, 1.00,  1, 12, { density: 0.48, hMin: 10, hMax: 16,

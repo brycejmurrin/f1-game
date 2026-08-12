@@ -570,6 +570,58 @@
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
       building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
+      // The MONTGOLFIER BALLOON. Paris Las Vegas is a two-landmark resort and
+      // the circuit only had one of them: the half-scale Eiffel above, and
+      // nothing for the enormous ornate hot-air balloon that sits at street
+      // level in front of it, carrying the marquee. On the Strip it reads
+      // BIGGER than the tower does, because it is right down at eye height on
+      // the pavement while the tower is 130 m up and half sky. Built as a
+      // stacked frustum envelope in Second-Empire red and gold, on the marquee
+      // box, with the basket slung under it.
+      {
+        const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];
+        const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
+        const GOLD  = [0.94, 0.74, 0.24], BLUE = [0.16, 0.22, 0.52];
+        modelGroup("vegas-paris-balloon", {
+          center: vadd(a.c, a.u, 21), size: [26, 44, 26], basis: b,
+        }, (stage) => {
+          // Marquee plinth the balloon stands on — the sign face itself.
+          addBox(stage, vadd(a.c, a.u, 3.0), [12, 6, 16], [0.20, 0.18, 0.22], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 3.4), [0.5, 4.2, 13], GOLD, b);
+          // Envelope: widest a third of the way up, then closing to the crown.
+          const bc = vadd(a.c, a.u, 7.5);
+          const bands = [
+            [0.0,  5.0,  8.6, 5.5, RED],
+            [5.5,  8.6, 11.2, 5.5, GOLD],
+            [11.0, 11.2, 11.6, 5.0, RED_D],
+            [16.0, 11.6,  9.2, 5.0, GOLD],
+            [21.0,  9.2,  5.4, 4.6, RED],
+            [25.6,  5.4,  1.8, 3.0, GOLD],
+          ];
+          for (const [y, r0, r1, h, col] of bands) {
+            addFrustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 16, b);
+          }
+          // Vertical gore ribs — the thing that makes it read as a balloon and
+          // not a bulb. Thin blue strips up the widest part of the envelope.
+          for (let i = 0; i < 8; i++) {
+            const ang = (i / 8) * Math.PI * 2;
+            const rr = 11.3;
+            addBox(stage, vadd(vadd(vadd(bc, a.r, Math.cos(ang) * rr),
+                                     a.t, Math.sin(ang) * rr), a.u, 13.0),
+                   [0.5, 11.0, 0.5], BLUE, b);
+          }
+          // Basket slung under the envelope on its rigging.
+          const gc = vadd(a.c, a.u, 6.6);
+          addBox(stage, gc, [4.6, 3.2, 4.6], [0.46, 0.30, 0.16], b);
+          addBox(stage, vadd(gc, a.u, 1.8), [5.0, 0.4, 5.0], GOLD, b);
+          stage._mat = MAT.METAL;
+          for (const [dx, dz] of [[-2.0, -2.0], [2.0, -2.0], [-2.0, 2.0], [2.0, 2.0]]) {
+            addCyl(stage, vadd(vadd(vadd(gc, a.r, dx), a.t, dz), a.u, 1.8),
+                   0.07, 2.6, [0.62, 0.55, 0.34], 4, b);
+          }
+          stage._mat = 0;
+        });
+      }
 
       // --- s 0.85 both near: Final neon gates ---
       for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {

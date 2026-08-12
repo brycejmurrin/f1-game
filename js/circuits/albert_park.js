@@ -84,6 +84,48 @@
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
       // ====================================================================
+      // MELBOURNE SPORTS AND AQUATIC CENTRE (MSAC) — the one large permanent
+      // building inside Albert Park, and the circuit had nothing for it. It
+      // sits on the park's eastern side and is impossible to miss in life: a
+      // long low pale hall under a shallow curved roof, with a deep glazed
+      // frontage and the tall blank box of the diving hall breaking the
+      // roofline at one end. Everything else in this park is trees, water and
+      // temporary structures, so a permanent civic mass reads strongly.
+      {
+        const a = anchor(k(0.145), 1, 62);
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const b = [a.r, a.u, a.t];
+          const PALE  = [0.86, 0.86, 0.84];
+          const PALE_D = [0.74, 0.75, 0.74];
+          const GLASS = [0.40, 0.52, 0.60];
+          const TRIM  = [0.24, 0.40, 0.52];
+          modelGroup("albert-msac", {
+            center: vadd(a.c, a.u, 10), size: [46, 24, 108], basis: b,
+          }, (stage) => {
+            // Main hall, glazed along the park frontage.
+            addBox(stage, vadd(a.c, a.u, 5.6), [34, 11.2, 92], PALE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -17.2), a.u, 6.2), [0.6, 7.2, 78], GLASS, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -17.6), a.u, 2.2), [0.5, 1.0, 80], TRIM, b);
+            // Shallow curved roof — a flattened half-cylinder laid along the
+            // building, which is the shape that stops it reading as a shed.
+            addCyl(stage, vadd(a.c, a.u, 10.4), 8.2, 92, PALE_D, 12,
+                   [a.u, a.r, a.t]);
+            addBox(stage, vadd(a.c, a.u, 11.4), [36, 0.5, 93], PALE_D, b);
+            // Diving hall — the tall blank box breaking the roofline.
+            const dc = vadd(a.c, a.t, -38);
+            addBox(stage, vadd(dc, a.u, 10.5), [26, 21, 24], PALE, b);
+            addBox(stage, vadd(dc, a.u, 21.4), [27, 1.0, 25], PALE_D, b);
+            addBox(stage, vadd(vadd(dc, a.r, -13.2), a.u, 14.5), [0.5, 8.0, 18], GLASS, b);
+            // Entry canopy on slim columns at the near end.
+            const ec = vadd(a.c, a.t, 44);
+            addBox(stage, vadd(vadd(ec, a.r, -19), a.u, 4.6), [10, 0.5, 20], TRIM, b);
+            for (const t of [-8, 0, 8]) {
+              addCyl(stage, vadd(vadd(ec, a.r, -23), a.t, t), 0.24, 4.6, PALE_D, 6, b);
+            }
+          });
+        }
+      }
+
       // ALBERT PARK LAKE — broad expanse of calm water dominating the circuit's
       // left side (s≈0.27–0.65 L). Multi-layered water planes with depth
       // and subtle shimmer. Far basin + near-shore ripple edge zones.

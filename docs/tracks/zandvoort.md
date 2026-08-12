@@ -51,3 +51,45 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
 - Tint grandstand top rows orange to evoke the Dutch crowd; concentrate stands at Tarzan, the bankings, and pit straight.
 - Scatter tall thin wind-turbine pole-boxes and a few tiny beach-hut boxes on the seaward horizon for coastal flavour.
 - Keep undulation alive: vary box heights along the ground so no stretch reads dead flat.
+
+## Research pass — findings (not yet built)
+
+- **The circuit is IN the dunes**, north of the town and hard against the North
+  Sea coast — not beside them. Sand should intrude into the outfield
+  everywhere: marram-grassed dune ridges crowding the barriers, blown sand on
+  the run-offs, no trees of any size on the seaward side.
+- **The two banked corners** are the modern signature: **Tarzanbocht** (Turn 1,
+  in use since 1948, the great overtaking corner) and the **Arie
+  Luyendykbocht**, the banked final turn onto the straight. Both deserve
+  visibly banked geometry and banked kerbing, not flat corners with a camber
+  number.
+- **Orange.** The Dutch crowd is the most monochrome in F1 — grandstands,
+  flares and general admission all read as one orange mass. Crowd colour here
+  should be deliberately unvaried, which is the opposite of the usual advice.
+- The North Sea itself sits low on the horizon beyond the seaward dune line.
+
+
+## Outcome
+
+All four researched findings were **already implemented** — the dunes intrude
+everywhere with marram grass, Tarzanbocht and the Arie Luyendykbocht carry real
+18°/19° banking, the crowd is already orange, and the North Sea is on the
+horizon with a wind-farm silhouette. Zandvoort was the best-covered circuit in
+this batch.
+
+What was missing was the **festival**. The Dutch GP is not a race weekend with
+entertainment attached, it is a festival that happens to contain a race —
+dutchgp.com, F1.com and visitzandvoort.com all lead with it. Two things carry
+that on sight:
+
+- **The Ferris wheel** (confirmed on dutchgp.com and visitzandvoort.com's
+  Racefestival page), behind the paddock side at gap 128.
+- **The Fanzone Main Stage**, where the DJ sets run between sessions. A
+  festival stage is a box of scaffolding with a roof, so the exposed **truss**
+  is the silhouette: deck, LED screen face, four legs, cross-truss roof, PA
+  stacks, and a lighting bar of orange cans.
+
+Both sit behind the paddock so they read on the main-straight skyline above the
+deliberately modest pit building without crowding it. **The stage crowd is one
+colour on purpose** — Zandvoort's is the most monochrome crowd in F1, so the
+usual speckle would be wrong here.

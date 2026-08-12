@@ -56,3 +56,8 @@ Large — the circuit runs over a hillside and the Boot is a descent and a climb
 - Stands are open bare timber. Sky through the frame and grey weathering are the point.
 - Exaggerate the Esses drop and the climb out of the Boot; those two moves carry the circuit.
 - Scatter the woodland camps in clearings well off the racing line — informal, not laid out.
+
+
+## Research pass — verified, already covered
+
+The Finger Lakes setting is modelled — maples, autumn colour, the lake, Seneca, barns, The Boot. The Watkins Glen gorge is in the state park in town, not visible from the circuit on its hilltop, so it does not belong trackside. **Nothing added.**

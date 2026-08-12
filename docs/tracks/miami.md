@@ -54,3 +54,11 @@ Essentially flat (built on level reclaimed land). The only real change is the en
 - Palms are cheap and everywhere: thin trunk box + green fan-blob, scattered in rows along straights and the marina.
 - Use the overpass decks as the only vertical drama — grey concrete boxes spanning overhead with a subtle track hump beneath.
 - Contrast clean modern white paddock/stadium boxes (geometric, flat-roofed) against the lush organic palm greenery.
+
+
+## Research pass — verified, already covered
+
+Hard Rock Stadium, the campus, the palms and the marina are all modelled — and
+notably the marina is modelled as what it actually is: **fake vinyl water with
+boats standing on dry tarmac**, which is the detail most versions of this
+circuit get wrong by rendering real water. **Nothing added.**

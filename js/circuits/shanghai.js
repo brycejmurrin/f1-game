@@ -63,10 +63,94 @@
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
-        forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan,
+        forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
         waterSurface, groundPatch, sailCanopy,
         cameraTower, broadcastCompound, sponsorHoarding } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // ── JIADING RICE PADDIES AND REED MARSH ──────────────────────────────
+      // The circuit's origin story is its landscape: this was SWAMPLAND used
+      // as rice paddy, and the ground was so soft that a raft of concrete
+      // piles had to be sunk before anything could be built on it. The lap was
+      // dressed with the city and the pit complex but its outfield was plain
+      // ground, which loses the one thing that makes Jiading look like Jiading
+      // rather than like any Tilke infield.
+      //
+      // Paddies read from three things and nothing else: they are RECTANGULAR,
+      // they are FLOODED (so they mirror the sky, not the grass), and they are
+      // divided by narrow raised earth bunds. Reed fringes where the water
+      // meets untended ground finish the marsh read.
+      {
+        const BUND   = [0.44, 0.38, 0.28];
+        const PADDY  = [0.36, 0.44, 0.34];   // green shoots standing in water
+        const FALLOW = [0.42, 0.40, 0.31];
+        const REED   = [0.52, 0.54, 0.36];
+        const REED_D = [0.44, 0.47, 0.31];
+        for (const [sf, side, gap] of [
+          [0.145, -1, 108], [0.205, -1, 146], [0.330,  1, 122],
+          [0.395,  1, 158], [0.545, -1, 118], [0.615, -1, 152],
+          [0.760,  1, 112], [0.845,  1, 140],
+        ]) {
+          const kk = K(sf), a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 34)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          // A block of 2x3 paddies, each one a flooded rectangle in its bund.
+          for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 3; c++) {
+              const hv = hash(kk * 29 + r * 17 + c * 11);
+              const p = vadd(vadd(a0.c, a0.r, r * 26), a0.t, (c - 1) * 30);
+              if (onTrack(p[0], p[2], 20)) continue;
+              // Every paddy carries its own small height offset. With all six
+              // in a block sharing exact heights, their bund tops and crop
+              // tops all landed on the same planes facing the same way, and
+              // coplanar-audit took shanghai from 5 spots to 14. The jitter is
+              // ~40-120 mm, comfortably past the audit's 20 mm GAP_MAX, and is
+              // physically right anyway: paddies are terraced to hold water at
+              // slightly different levels.
+              const jit = (hash(kk * 61 + r * 23 + c * 37) - 0.5) * 0.24;
+              // Raised bund frame — the paddy sits INSIDE it, slightly sunk.
+              addBox(out, vadd(p, a0.u, 0.28 + jit), [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
+              if (hv < 0.22) {
+                // Fallow / drained paddy: bare worked earth, no water.
+                addBox(out, vadd(p, a0.u, 0.34 + jit), [21, 0.16, 25], FALLOW, b);
+              } else {
+                // Standing water. ONE real reflective sheet per block, not one
+                // per paddy: water finds its level, so every waterSurface sits
+                // at the same height, and ~40 of them across the lap put their
+                // faces on shared planes — that alone took shanghai from 5
+                // coplanar spots to 14 (verified by bisect: with the sheets
+                // disabled and every paddy box still in place, it reads 5).
+                // The remaining paddies get a plain sunk box, which loses the
+                // sky mirror but keeps the flooded tone.
+                if (r === 0 && c === 1) {
+                  waterSurface(kk, side, gap - 0.5, [21, 0.14, 25],
+                               [0.30, 0.38, 0.40],
+                               { id: `shanghai-paddy-${Math.round(sf * 1000)}` });
+                } else {
+                  addBox(out, vadd(p, a0.u, 0.30 + jit), [21, 0.12, 25],
+                         [0.28, 0.36, 0.38], b);
+                }
+                out._mat = MAT.FOLIAGE;
+                addBox(out, vadd(p, a0.u, 0.62 + jit), [20 + jit * 3, 0.42, 24 - jit * 4],
+                       hv < 0.6 ? PADDY : [0.40, 0.48, 0.32], b);
+                out._mat = 0;
+              }
+            }
+          }
+          // Reed fringe along the outer edge of the block — where the paddies
+          // stop being farmed and go back to marsh.
+          out._mat = MAT.FOLIAGE;
+          for (let i = 0; i < 14; i++) {
+            const hv = hash(kk * 43 + i * 7);
+            const p = vadd(vadd(a0.c, a0.r, 54 + hv * 9),
+                           a0.t, (i - 7) * 6.5 + hv * 2);
+            if (onTrack(p[0], p[2], 16)) continue;
+            addCone(out, vadd(p, a0.u, 0.1), 1.5 + hv * 0.9, 2.4 + hv * 1.5,
+                    hv < 0.5 ? REED : REED_D, 5, b);
+          }
+          out._mat = 0;
+        }
+      }
 
       // Places `count` evenly-spaced lotus-petal sails along a stand run —
       // extends the venue's signature canopy (hand-authored at the T1 bowl

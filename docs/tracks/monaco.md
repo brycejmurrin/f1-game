@@ -23,9 +23,11 @@ Clear, bright midday sun, sharp shadows, warm Riviera glow. Minimal fog — just
 | 0.03 | R | close | Pit wall & start grandstand — long low grey box w/ thin railing boxes |
 | 0.05 | R | mid | Sainte Devote chapel — small cream box, dark pitched-roof cap |
 | 0.10 | both | close | Beau Rivage pastel street canyon — sparse cream/ochre boxes gap 2–4 m (not dense cityFront) |
+| 0.185 | L | close | **Massenet statue** — Turn 3's namesake. Bronze seated composer on a stepped stone plinth in the Casino gardens |
 | 0.20 | L | close | Casino de Monte-Carlo — ornate cream box w/ green-tinted roof boxes |
 | 0.21 | R | close | Hôtel de Paris — Casino Square twin, cream mass + ochre mansard opposite Casino |
 | 0.22 | both | close | Casino Square — high-point plaza, low planter boxes, grey kerbs |
+| 0.228 | R | close | **Café de Paris** — the square's THIRD side. Lower and longer than either hotel: belle-époque pavilion under a glazed barrel roof, ochre cornice, and a terrace of red/white striped awning bays with parasols right up against the barrier |
 | 0.40 | R | close | Fairmont hairpin hotel — tall pale block wrapping the tight bend |
 | 0.55 | both | close | Tunnel — dark grey box roof + side walls enclosing the track |
 | 0.65 | L | mid | Harbour & yachts — deep-blue water plane + white deck-stacked boxes, thin mast boxes |
@@ -47,3 +49,29 @@ Clear, bright midday sun, sharp shadows, warm Riviera glow. Minimal fog — just
 - Use the dark tunnel box as a dramatic light/dark beat mid-lap.
 - Keep tarmac clean grey and ground flat except for the Sainte Devote→Casino ramp and the descent to the tunnel.
 - Turquoise pool rectangle and green palm/planter boxes add Riviera colour accents.
+
+## 7. Corner names — what each one is actually named after
+
+Research pass (F1.com's corner-naming piece, Wikipedia). Monaco's corner names
+are almost all *objects that are still there*, which makes them a scenery
+checklist rather than trivia:
+
+| Corner | Named after | Modelled? |
+|---|---|---|
+| T1 Sainte Dévote | The small chapel to Monaco's patron saint, hidden behind the barriers | yes |
+| T2 Beau Rivage | "Beautiful shore" — the uphill run along the coastline | n/a (geometry) |
+| T3 Massenet | Jules Massenet, opera composer — **a statue of him stands by the corner** | yes (added) |
+| T4 Casino Square | Casino de Monte-Carlo, opened 1865, and its fountains | yes |
+| T5/T7 Mirabeau Sup./Inf. | The former Mirabeau Hotel, right of T7 — **now an apartment block** | partial — the block is generic city mass |
+| T6 Hairpin | Was the *Station* Hairpin (a railway station stood there); then Loews, Grand Hotel, now **Fairmont** | yes |
+| T8 Portier | Le Portier, the residential quarter | n/a |
+| T9 Tunnel | — | yes |
+| T10/11 Nouvelle Chicane | Was Chicane du Port; rebuilt and renamed 1986 | yes |
+| T12 Tabac | A tobacconist's shop nestled into the corner | shop not modelled |
+| T13–16 Swimming Pool | **Stade Nautique Rainier III**, which the 1973 layout was rerouted around | yes |
+| T18 La Rascasse | The bar over the barriers, named for a Mediterranean fish | yes |
+| T19 Antony Noghès | Founder of the Monaco GP; also originated the chequered flag | n/a |
+
+Remaining gaps worth a future pass: the **Tabac** tobacconist itself, and
+giving the **Mirabeau** apartment block its own identity instead of generic
+city mass.

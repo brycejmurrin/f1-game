@@ -48,3 +48,36 @@ Variable tropical sky — bright sun one moment, brooding grey cloud and rain th
 - Use a muddy blue-green lake plane beyond the trees on the lake side of the infield.
 - Lean on vivid tropical-green bank boxes everywhere to contrast the grey tarmac and city haze.
 - Keep the pit/control tower a tall distinctive slab with stacked window bands — the circuit's most recognisable built structure.
+
+## Research pass — findings (not yet built)
+
+- **The favelas lap right up to the boundary walls.** This is the single most
+  characteristic thing about Interlagos' setting and the hardest to fake with
+  generic city dressing: dense, small-footprint, irregular brick-and-render
+  houses stacked up the hillsides in unplanned terraces, flat roofs, exposed
+  red blockwork, water tanks and satellite dishes on top — pressed hard against
+  the circuit perimeter rather than set back behind a landscaped buffer.
+- The circuit sits in the Interlagos district — the name means "between lakes"
+  — **between the Guarapiranga and Billings reservoirs**. Open water on the
+  horizon is correct here.
+- São Paulo's high-rise sprawl belongs on the far horizon behind the favela
+  hillsides, not immediately trackside.
+
+
+## Outcome
+
+The favelas were already modelled, and modelled well — stacked houses climbing
+a slope, flat *laje* roofs, occasional upper rooms, rooftop water tanks, alley
+gaps. Two authenticity gaps remained:
+
+- **Every house was painted.** The palette was twelve saturated colours and
+  nothing else, and a hillside where every house is painted is the one thing
+  that reads as a film set rather than São Paulo. In reality a house gets
+  rendered and painted when its owner can afford it. Now ~46 % raw red-brown
+  ceramic **blockwork**, ~14 % bare grey **screed**, the rest painted — with
+  the painted ones reading as punctuation against the raw. An upper storey
+  rolls its finish *separately* from the floor below, which is what happens
+  when a family adds a room years later and never paints it.
+- **Rooftop detail.** Satellite dishes (~38 % of roofs) and, on raw houses
+  only, exposed **rebar stubs** on the unfinished slab — the *laje* left ready
+  for a storey that may never come.

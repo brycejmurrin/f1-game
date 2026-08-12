@@ -40,3 +40,23 @@ Tight 90-degree street corners and slow left-right-left complexes (Sheares T1-3)
 - Lean hard on **emissive faces** (windows, signage, kerbs, floodlight pools) against the dark sky — light, not texture, sells the night.
 - Keep ground/sky nearly black so colored boxes pop; mirror a few bright reflections onto bay-water boxes (s 0.18–0.45, 0.80–0.86).
 - Punctuate straights with tall emissive **billboard quads** in shifting neon hues.
+
+## 7. Research pass — civic Singapore (findings, not yet built)
+
+F1.com's own landmark list for Marina Bay is: the Singapore Flyer, **the
+Supreme Court**, **Parliament**, the Fullerton Hotel, the Anderson Bridge and
+the Merlion. The circuit models the Flyer, Fullerton, Anderson, Merlion, the
+Padang, the Float, Marina Bay Sands, the Helix and the **old** Supreme Court /
+City Hall (now the National Gallery, at s≈0.714 L — colonnade, pediment, low
+rotunda dome).
+
+Still missing, and worth a pass:
+
+- **The new Supreme Court (Foster, 2005).** Stands directly behind the old one
+  and is unmistakable: a broad horizontal block of vertical stone fins with a
+  **flying-saucer disc** — the Court of Appeal — cantilevered on top. That disc
+  is one of the most recognisable silhouettes on the Singapore skyline and the
+  circuit currently only has the neoclassical building it replaced.
+- **Parliament House** — modern block near the river.
+- **St Andrew's Cathedral** — white Gothic spire on the Padang, very visible
+  across the lawn from the circuit's Padang stretch.

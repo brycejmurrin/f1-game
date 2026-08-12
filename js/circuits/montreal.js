@@ -58,7 +58,7 @@
     terrainOuter: 70,
     scenery: function (api) {
       const { out, n, py, pyMin, place, backdrop, wall, grandstandEx,
-        building, anchor, addBox, addCyl, addFrustum, vadd, hash,
+        building, anchor, addBox, addCyl, addCone, addPrism, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         scaffoldStand, broadleafFall,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
@@ -528,6 +528,122 @@
       }
 
       // ===================================================================
+      // ── CALDER'S "TROIS DISQUES" (1967) ──────────────────────────────────
+      // Parc Jean-Drapeau is Expo 67 ground and it is full of public art; the
+      // circuit had the Biosphère and the Casino pavilions but none of the
+      // sculpture. Calder's monumental stabile — commissioned for Expo 67,
+      // formally Trois disques, universally called L'Homme — is the one piece
+      // that is a landmark in its own right, and it stands on the Île
+      // Sainte-Hélène side, so it reads across the water.
+      //
+      // Two things make it recognisable and both are easy to get wrong: it is
+      // built from FLAT PLATES splaying outward from a narrow waist, and it is
+      // UNPAINTED STAINLESS STEEL — not the vermilion or black that most
+      // Calder stabiles wear. A red one here would be the wrong sculpture.
+      {
+        const a = anchor(K(0.335), -1, 210);
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const b = [a.r, a.u, a.t];
+          const STEEL  = [0.78, 0.80, 0.83];
+          const STEEL_D = [0.66, 0.68, 0.72];
+          modelGroup("montreal-calder-trois-disques", {
+            center: vadd(a.c, a.u, 11), size: [26, 26, 26], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            // Four plate legs splaying out from the waist. No arbitrary-axis
+            // rotation available here, so each leg is stepped outward as it
+            // descends — at this distance the stagger reads as a lean.
+            // Each leg gets its OWN spread scale. With all four on identical
+            // spreads, legs sharing a dr sat at the same r and legs sharing a
+            // dt sat at the same t — either way their side faces landed on one
+            // plane. Varying thickness alone did not fix it because the t-faces
+            // depend on the splay, not the thickness. Desynchronising the
+            // splay moves every plane apart at once.
+            // Legs as round tapering members, not flat plates. Calder's real
+            // stabile IS plate steel, but four plate legs converging on one
+            // waist put faces on shared planes no matter how the splay,
+            // thickness or depth was varied — five separate attempts, all
+            // still +1 on coplanar-audit. A frustum has no flat side face to
+            // share, so the fight cannot occur. At this distance (gap 210,
+            // across the water) the silhouette is what carries the sculpture,
+            // and the splay reads the same.
+            const LEGS = [[-1, -1, 1.00], [1, -1, 1.07], [-1, 1, 1.14], [1, 1, 1.21]];
+            for (const [dr, dt, sc] of LEGS) {
+              for (let i = 0; i < 6; i++) {
+                const f = i / 5, f2 = (i + 1) / 5;
+                const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
+                const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
+                const mid = [(s1 + s2) / 2, (y1 + y2) / 2];
+                addFrustum(stage,
+                  vadd(vadd(vadd(a.c, a.r, dr * mid[0]), a.t, dt * mid[0]),
+                       a.u, mid[1]),
+                  0.85 - f * 0.22, 0.85 - f2 * 0.22, Math.abs(y1 - y2) + 0.4,
+                  i % 2 ? STEEL : STEEL_D, 7, b);
+              }
+            }
+            // Waist and body as round members, and ONE disc rather than three.
+            // Three overlapping 14-segment disc rims share facet normals, and
+            // together with the flat body plates they kept montreal at +1 on
+            // coplanar-audit through seven attempts (thickness offsets, depth
+            // offsets, splay desync, relocating the whole sculpture). Rounding
+            // the body and reducing to a single disc removes the last cluster
+            // of parallel flat faces. It is a simplification of Calder's real
+            // plate-steel form, and it is the honest trade: the ratchet exists
+            // to stop exactly this kind of drift, and a decorative landmark is
+            // not worth spending the budget it protects.
+            addFrustum(stage, vadd(a.c, a.u, 11.0), 1.5, 1.1, 2.4, STEEL, 9, b);
+            addFrustum(stage, vadd(a.c, a.u, 14.6), 1.1, 0.7, 5.6, STEEL, 9, b);
+            const disc = [a.u, a.r, a.t];
+            addCyl(stage, vadd(a.c, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
+            stage._mat = 0;
+          });
+        }
+      }
+
+      // ── JARDINS DES FLORALIES ────────────────────────────────────────────
+      // The infield of Île Notre-Dame is not service compound, it is a formal
+      // ornamental garden — the Floralies, laid out for the 1980 Floralies
+      // Internationales and still planted, with canals, footbridges and
+      // massed bedding. Half a million flowers go into its displays. The one
+      // thing that must read is that the planting is GEOMETRIC: rectangular
+      // parterres in blocks of single strong colour, edged in clipped green.
+      // Scattered bushes would say park; blocks say Floralies.
+      {
+        const BED = [
+          [0.86, 0.24, 0.26], [0.94, 0.72, 0.16], [0.88, 0.42, 0.62],
+          [0.62, 0.34, 0.72], [0.96, 0.90, 0.82], [0.90, 0.52, 0.14],
+        ];
+        const EDGE = [0.20, 0.40, 0.20];
+        const GRAVEL = [0.74, 0.71, 0.64];
+        for (const [sf, side, gap] of [
+          // Block gaps must clear each other. Rows step out 11 m x3, so a block
+          // at gap G occupies G..G+22 plus a 10.4 m parterre width — the first
+          // cut paired 54/72 and 60/80, which overlapped (76 vs 72, 82 vs 80)
+          // and put two identical gravel pads at the same height on one plane.
+          // That was montreal's +1 coplanar spot in CI.
+          [0.205, 1, 54], [0.245, 1, 92], [0.560, 1, 60], [0.600, 1, 98],
+        ]) {
+          const kk = K(sf), a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 26)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 4; c++) {
+              const hv = hash(kk * 31 + r * 13 + c * 7);
+              const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
+              if (onTrack(p[0], p[2], 14)) continue;
+              // Gravel walk under and around each parterre.
+              addBox(out, vadd(p, a0.u, 0.05), [10.4, 0.10, 10.4], GRAVEL, b);
+              // Clipped green edging, then the massed colour inside it.
+              out._mat = MAT.FOLIAGE;
+              addBox(out, vadd(p, a0.u, 0.35), [8.6, 0.60, 8.6], EDGE, b);
+              addBox(out, vadd(p, a0.u, 0.52), [7.0, 0.62, 7.0],
+                     BED[Math.floor(hv * 997) % BED.length], b);
+              out._mat = 0;
+            }
+          }
+        }
+      }
+
       // s 0.30 L far — Biosphère geodesic dome (landmark across St. Lawrence)
       // Bare silver-grey steel lattice sphere (acrylic skin burned off 1976):
       // ~76 m wide, ~62 m high. Built as a stack of many thin frustum rings

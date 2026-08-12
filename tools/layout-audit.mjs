@@ -143,6 +143,14 @@ const SCREENS = [
   // the tuner panels and every career sub-screen had never been measured once.
   // A screen nobody measures is exactly where the last four bugs were found.
 
+  // THE CIRCUIT DETAIL DIALOG, absent from this list until 2026-08-08 — 38 screens
+  // were being surveyed and this was not one of them, which is how a landscape
+  // dead-band in it survived a 380-cell run and had to be found by hand. It opens
+  // from the preview MAP in #select, not from a button with its own id.
+  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", open: async (p) => {
+      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await p.click("#sel-preview-map");
+      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 }); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
@@ -655,6 +663,46 @@ const PROBE = (rootSel) => {
     out.scrollers.push({ el: desc(el), box: [px(r.width), px(r.height)],
       hidden: px(el.scrollHeight - el.clientHeight), toFloor: px(sr.bottom - r.bottom) });
   }
+
+  // STARVED: a scroll region with content to show and no height to show it in.
+  //
+  // THIS IS THE FINDING THE FIRST SIX MONTHS OF THIS TOOL COULD NOT SEE, and it
+  // has cost three separate investigations. Every other check here asks whether
+  // something is in the wrong PLACE — clipped, off screen, under the notch. A
+  // list crushed to two pixels is in exactly the right place. It clips nothing,
+  // it overflows nothing, it sits inside its parent, and the cell scores GREEN.
+  //
+  // Three real ones, all found by eye, none by this tool:
+  //   - js/game/sheetshape.js exists because #sel-tracks got TWO PIXELS on a
+  //     rotated monitor. The header of that file is the write-up.
+  //   - #sel-tracks again, 2026-08-12, on a landscape phone at UI SIZE 150% —
+  //     the same two pixels down a different path (flex shrink), and portrait
+  //     scored green at 80/100/130 the whole time it was broken.
+  //   - #cs-options, the garage's parts list, NINE PIXELS on a portrait phone at
+  //     150%: a screen whose entire purpose is choosing parts, showing none.
+  //
+  // The shape is always identical: `scrollHeight` says there is content,
+  // `clientHeight` says there is nowhere to put it. Both numbers were already
+  // being recorded in `scrollers` above and nothing compared them.
+  //
+  // The floor is 44 DEVICE px, not own units: this is a question about what a
+  // player can see and touch, so it is measured in the pixels their eyes are on,
+  // the same reasoning as `tinyTaps`. Under one tap target of height, a vertical
+  // list is not a short list, it is an absent one. `hidden > 8` keeps a region
+  // that genuinely has nothing to scroll out of it — an empty list is a data
+  // state, not a layout defect. overflow-y only, so a horizontal chip strip
+  // (`overflow-x: auto; overflow-y: hidden`) is not dragged in by its height.
+  out.starved = [];
+  for (const el of root.querySelectorAll(SCROLLERS)) {
+    if (!visible(el)) continue;
+    if (!/(auto|scroll)/.test(getComputedStyle(el).overflowY)) continue;
+    const r = el.getBoundingClientRect();
+    const hidden = el.scrollHeight - el.clientHeight;
+    if (hidden > 8 && r.height < 44) {
+      out.starved.push({ el: desc(el), h: px(r.height), hidden: px(hidden),
+        text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) });
+    }
+  }
   out.sheet = sheet === root ? null : { el: desc(sheet), w: px(sr.width), h: px(sr.height) };
   return out;
 };
@@ -849,6 +897,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         : `clipped ${String(n(cell.clipped)).padStart(2)}  offscreen ${String(n(cell.offscreen)).padStart(2)}` +
           `  tapUnder24 ${String(n(cell.tinyTaps)).padStart(2)}  tapSoft ${String(n(cell.smallTaps)).padStart(2)}` +
           `  trunc ${String(n(cell.truncated)).padStart(2)}  underHW ${String(n(cell.underHardware)).padStart(2)}` +
+          `  starved ${String(n(cell.starved)).padStart(2)}` +
           `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}`));
   }
   await page.close();
@@ -878,21 +927,52 @@ fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   rows: merged,
 }, null, 2));
 writeIndex(merged);
-const bad = rows.filter((r) => r.skipped || (r.clipped || []).length || (r.offscreen || []).length
+// COUNT SKIPS SEPARATELY, AND SAY SO. A skipped cell is neither a pass nor a
+// finding: nothing was measured. Folding it into one "something to look at"
+// number made both readings wrong at once — a run with 40 skips looked like a
+// run with 40 defects, and once the eye learned to discount that number a run
+// with 5 skips read as clean. Measured 2026-08-12: five cells skipped on
+// `page.click: Timeout 12000ms exceeded` across a full matrix, survived a
+// `--jobs=1` re-run, and looked for an afternoon like a button that could not be
+// clicked. Re-probed on a quiet box, every one of those clicks landed in ~200 ms
+// and the same two viewports came back 78 cells / 0 findings / 0 skips. The 12 s
+// budget was measuring the machine, exactly as CLAUDE.md warns a timeout does.
+// So: name the skips, and name the retry, because the answer to a skip is never
+// "read the grid harder", it is "run that cell alone".
+const skipped = rows.filter((r) => r.skipped);
+const bad = rows.filter((r) => !r.skipped && ((r.clipped || []).length || (r.offscreen || []).length
   || r.docOverflowX || (r.errors || []).length || (r.tinyTaps || []).length
-  || (r.underHardware || []).length);
-console.log(`\n${rows.length} cells, ${bad.length} with something to look at -> ${path.relative(ROOT, OUT)}/index.html`);
+  || (r.underHardware || []).length || (r.starved || []).length));
+console.log(`\n${rows.length} cells, ${bad.length} with something to look at, ` +
+  `${skipped.length} skipped (nothing measured) -> ${path.relative(ROOT, OUT)}/index.html`);
+if (skipped.length) {
+  const byReason = new Map();
+  for (const r of skipped) {
+    const k = r.skipped.replace(/\d+/g, "N").slice(0, 60);
+    byReason.set(k, (byReason.get(k) || 0) + 1);
+  }
+  for (const [k, c] of [...byReason].sort((a, b) => b[1] - a[1])) console.log(`  ${String(c).padStart(3)}x ${k}`);
+  // --viewports= matches the BASE name; the scale lives on --scale=, so strip
+  // the tag before deduping or the same viewport is named once per scale.
+  const vps = [...new Set(skipped.map((r) => r.viewport.replace(/@\d+$/, "")))].join(",");
+  const scr = [...new Set(skipped.map((r) => r.screen))].join(",");
+  console.log(`  a skip is NOT a pass. Re-run those cells alone before believing them:\n` +
+    `    node tools/layout-audit.mjs --viewports=${vps} --screens=${scr} --jobs=1` +
+    (SCALES[0] == null ? "" : ` --scale=${SCALES.join(",")}`));
+}
 
 function writeIndex(rows) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const cellHtml = (r) => {
     if (r.skipped) return `<td class="skip" title="${esc(r.skipped)}">skipped</td>`;
     const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
-      + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length;
+      + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length
+      + (r.starved || []).length;
     const cls = issues ? "bad" : (r.smallTaps || []).length ? "warn" : "ok";
     const detail = [
       ...(r.clipped || []).map((c) => `clipped ${c.el} past ${c.by}`),
       ...(r.offscreen || []).map((c) => `offscreen ${c.el}`),
+      ...(r.starved || []).map((c) => `starved ${c.el}: ${c.h}px tall, ${c.hidden}px of content it cannot show`),
       ...(r.docOverflowX ? ["horizontal overflow"] : []),
       ...(r.errors || []).map((e) => "error " + e),
       ...(r.underHardware || []).slice(0, 4).map((u) => `under hardware: ${u.el} by ${u.worst}px`),
@@ -925,5 +1005,15 @@ no horizontal overflow and no page errors. Amber means every finding is a contro
 below the house <code>--tap</code> floor but at or above WCAG 2.2 SC 2.5.8's
 24&times;24 &mdash; a preference, not a defect. Red is the count of real findings,
 tap targets under 24px among them &mdash; hover a cell for the list.</p>
+<p><b>STARVED</b> is the one finding here that is not about position. A scroll
+region crushed to a couple of pixels is in exactly the right place &mdash; it
+clips nothing, overflows nothing, sits inside its parent &mdash; and every other
+check scores it green. It has cost three investigations, always the same shape:
+<code>scrollHeight</code> says there is content, <code>clientHeight</code> says
+there is nowhere to put it.</p>
+<p>Grey means SKIPPED: the cell was never measured, so it is not a pass and not a
+finding. Hover it for the reason. A click timeout there is usually the box, not
+the app &mdash; re-run that cell alone at <code>--jobs=1</code> before drawing any
+conclusion from it.</p>
 <table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`);
 }

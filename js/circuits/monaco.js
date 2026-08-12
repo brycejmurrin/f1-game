@@ -227,17 +227,102 @@
       {
         const k = K(0.21);
         const HOTEL = [0.92, 0.88, 0.82];
-        building(k, 1, 3.5, 22, 40, 18,
-          { kind: "tiered", wall: HOTEL, window: WIN, floor: 5, lit: true, windowCol: WINLIT, setback: true });
-        // Ochre mansard / cornice strip + secondary wing toward the square
-        const a = anchor(k, 1, 3.5 + 11);
+        // Built from RAW PRIMITIVES, not building() — deliberately, and the
+        // Casino above does the same for the same reason. `dressingExclusions`
+        // carries `{ kind: "city", s0: 0.17, s1: 0.24 }` to keep generic city
+        // furniture out of the Casino sightline, and building() honours it, so
+        // this landmark was silently dropped: removing the building() call
+        // changed the vertex count by exactly ZERO.
+        //
+        // The decorations below did NOT get dropped with it. The primitive
+        // guard only rejects geometry near road level (bridges and gantries
+        // have to be allowed through), so the ochre cornice at 41 m sailed past
+        // it and hung in the sky over Casino Square with nothing underneath —
+        // a 24 x 3 x 21 m slab, 39 m up, which float-audit ranks as the single
+        // worst float on the circuit.
+        const a = anchor(k, 1, 14.5);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
+          // The mass itself, with its floor bands.
+          addBox(out, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
+          for (let f = 0; f < 7; f++) {
+            addBox(out, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
+          }
+          // Ochre mansard / cornice strip, now sitting ON something.
           addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+          // Secondary wing toward the square.
           addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
           for (let f = 0; f < 5; f++) {
             addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
           }
+        }
+      }
+
+      // ── CAFÉ DE PARIS — the third side of Casino Square (s≈0.228, R) ─────
+      // Casino Square is a THREE-sided room: the Casino on one side, the Hôtel
+      // de Paris opposite, and the Café de Paris closing it. The circuit had
+      // the first two and nothing at all on the third, so the square read as a
+      // corridor between two masses rather than a plaza. The café is lower and
+      // longer than either hotel — a belle-époque pavilion under a glazed
+      // barrel roof, fronted by the terrace that is the actual Monaco image:
+      // rows of parasols and awnings right up against the barrier.
+      {
+        const k = K(0.228);
+        const CAFE  = [0.94, 0.90, 0.83];
+        const AWN_R = [0.68, 0.16, 0.16], AWN_W = [0.93, 0.92, 0.88];
+        // Raw primitives, not building() — same reason as the Hotel de Paris
+        // opposite: the `city` exclusion over s 0.17-0.24 drops building() here
+        // silently, and this landmark had the identical floating-decoration bug
+        // (awnings, parasols and barrel roof hanging at ~20 m over nothing).
+        // dist 14, not 11.5. At 11.5 the onTrack(...,12) guard below
+        // rejected the WHOLE block and this landmark drew nothing at all —
+        // verified by vertex count, which is the only thing that catches a
+        // silently-skipped guard: verify-track prints OK either way.
+        const a = anchor(k, 1, 14);
+        if (!onTrack(a.c[0], a.c[2], 12)) {
+          const b = [a.r, a.u, a.t];
+          // The pavilion mass, lower and longer than either hotel.
+          addBox(out, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
+          for (let f = 0; f < 4; f++) {
+            addBox(out, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
+          }
+          // Glazed barrel roof + ochre cornice, the café's own silhouette.
+          addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
+          addCyl(out, vadd(a.c, a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
+            [a.u, a.r, a.t]);
+          // Terrace: striped awning bays over café tables, facing the square.
+          for (let i = 0; i < 7; i++) {
+            const p = vadd(vadd(a.c, a.t, (i - 3) * 4.6), a.r, -8.5);
+            addBox(out, vadd(p, a.u, 3.5), [5.2, 0.35, 4.2],
+              i % 2 ? AWN_R : AWN_W, b);
+            addCyl(out, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
+            // Parasol + table pair under each bay.
+            addCyl(out, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
+            addCone(out, vadd(vadd(p, a.r, -1.6), a.u, 2.1), 1.5, 0.7, AWN_W, 7, b);
+          }
+        }
+      }
+
+      // ── THE MASSENET STATUE (s≈0.185, L) ─────────────────────────────────
+      // Turn 3 is named for Jules Massenet, and it is named for him because
+      // his statue stands right there in the Casino gardens — the corner's
+      // namesake was the one thing at Massenet the circuit did not have.
+      // Bronze figure on a stepped stone plinth, facing the square.
+      {
+        const k = K(0.185), a = anchor(k, -1, 11);
+        if (!onTrack(a.c[0], a.c[2], 7)) {
+          const b = [a.r, a.u, a.t];
+          const STONE = [0.82, 0.80, 0.74], BRONZE = [0.34, 0.30, 0.20];
+          out._mat = MAT.STONE;
+          addBox(out, vadd(a.c, a.u, 0.22), [3.4, 0.45, 3.4], STONE, b);
+          addBox(out, vadd(a.c, a.u, 0.72), [2.6, 0.55, 2.6], STONE, b);
+          addBox(out, vadd(a.c, a.u, 2.05), [1.5, 2.1, 1.5], [0.86, 0.84, 0.78], b);
+          out._mat = MAT.METAL;
+          // Seated composer: torso, head, and the cloak mass behind him.
+          addBox(out, vadd(a.c, a.u, 3.75), [1.0, 1.3, 0.9], BRONZE, b);
+          addCyl(out, vadd(a.c, a.u, 4.45), 0.26, 0.42, BRONZE, 6, b);
+          addBox(out, vadd(vadd(a.c, a.u, 3.6), a.r, 0.5), [0.4, 1.5, 1.1], BRONZE, b);
+          out._mat = 0;
         }
       }
 

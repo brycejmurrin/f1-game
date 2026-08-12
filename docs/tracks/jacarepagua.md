@@ -54,3 +54,8 @@ Dead flat, and notorious for it. Built on reclaimed coastal flat between water a
 - Water is centred on its anchor, so the lagoon's setback must exceed its own half-width; keep the basin compact (about 120 m across at 120 m out) and let the sandy shoreline separate it from the track.
 - Use sand, not gravel, in every trap and let the same pale tone run through the verges.
 - Keep the ground plane flat and honest. The temptation to add relief is exactly what would stop this reading as Jacarepaguá.
+
+
+## Research pass — verified, already covered
+
+The **Pedra Branca massif** is modelled as the hero — sheer forested granite domes rising straight out of the flats, with `rough` kept low because these are smooth granite domes rather than eroded ridges — plus the morro self-built housing climbing them. **Nothing added.**

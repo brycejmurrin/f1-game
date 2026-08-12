@@ -47,3 +47,19 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 - El Búnker retaining wall at the mid-lap climb/drop and a motorway overpass at the T1 chicane as silhouette landmarks.
 - Float a hazy blue-grey Sierra de Guadarrama ridge on the far horizon for depth; keep it low-detail.
 - Keep palette bright and dry — hard sun, sharp shadows, near-zero fog except a faint horizon haze.
+
+
+## Research pass — verified, already covered
+
+Checked against madring.com, F1.com and racingcircuits.info. The Madring is a
+hybrid: public roads around the **IFEMA** halls joined to permanent sections
+built on adjacent **Valdebebas** land, with **two short tunnels** linking the
+Recinto Ferial to the Valdebebas expansion and back. 5.416 km, main straight
+523 m, 12 m wide except the main straight and Turn 1 (15 m). Its single most
+distinctive real-world fact is that it sits minutes from **Adolfo Suárez
+Madrid-Barajas** airport.
+
+All of that is already modelled — the IFEMA halls, La Monumental banked bowl,
+both tunnel portals, and a Barajas control tower with an airliner on approach.
+**Nothing added.** The one absent nearby landmark is the Estadio Metropolitano,
+~3 km south; judged too far to belong on this skyline.

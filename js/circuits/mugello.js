@@ -58,13 +58,123 @@
       { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine
     ],
     scenery: function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+        indexSolid,
         pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
+
+      // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
+      // Mugello already plants the cypress and the olives, which is two of the
+      // three things that make this landscape. The third was missing: the
+      // hills are worked farmland, quilted with VINE ROWS and punctuated by
+      // stone CASALI. Cypress and olive alone read as "somewhere warm"; add
+      // the vine quilt and the farmhouses and it can only be Tuscany.
+      //
+      // Vine rows follow the Imola pattern, which measures clean on
+      // coplanar-audit: the read is entirely in the repetition, so rows must be
+      // parallel and evenly spaced, each stepping out and shearing slightly to
+      // follow a contour, over bare tilled soil, with end posts on the wire.
+      {
+        const VINE     = [0.27, 0.37, 0.20];
+        const VINE_DRY = [0.33, 0.41, 0.23];
+        const SOIL     = [0.46, 0.35, 0.25];
+        const POST     = [0.53, 0.45, 0.33];
+        for (const [sf, side, gap, rows, len, ang] of [
+          [0.115,  1,  98, 8, 68,  0.09],
+          [0.180, -1, 132, 6, 54, -0.07],
+          [0.310, -1, 104, 7, 62,  0.06],
+          [0.455,  1, 126, 6, 58, -0.05],
+          [0.585,  1,  96, 8, 66,  0.08],
+          [0.720, -1, 118, 7, 60, -0.06],
+          [0.865, -1, 100, 6, 52,  0.07],
+        ]) {
+          const kk = K(sf), a0 = anchor(kk, side, gap);
+          if (onTrack(a0.c[0], a0.c[2], 30)) continue;
+          for (let r = 0; r < rows; r++) {
+            const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
+            if (onTrack(a.c[0], a.c[2], 24)) continue;
+            const b = [a.r, a.u, a.t];
+            const hv = hash(kk * 19 + r * 31);
+            const rowLen = len * (0.85 + hv * 0.24);
+            addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
+            out._mat = MAT.FOLIAGE;
+            addBox(out, vadd(a.c, a.u, 1.05), [1.5, 1.5, rowLen],
+                   hv < 0.5 ? VINE : VINE_DRY, b);
+            out._mat = 0;
+            out._mat = MAT.WOOD;
+            for (const e of [-rowLen / 2, rowLen / 2]) {
+              addCyl(out, vadd(a.c, a.t, e), 0.10, 2.0, POST, 4, b);
+            }
+            out._mat = 0;
+          }
+        }
+
+        // Casali. A Tuscan farmhouse is a squat rectangular block of rough
+        // stone under a shallow terracotta pitch with deep eaves, a square
+        // tower end on the older ones, and — the giveaway — a pair of
+        // cypresses at the gate.
+        //
+        // These were built once before and ABANDONED: wherever they went they
+        // landed on the existing olive and cypress planting (clip-audit
+        // 17 -> 18 severe, the spot list naming it addBox x addCone at frac
+        // 0.64), and a circuit file had no way to say "this ground is taken".
+        // indexSolid() is now on the scenery api and this is its first use:
+        // reserve the footprint, and because foliage is deferred to after
+        // def.scenery(), the roadside scatter and treelines route around it.
+        const RENDER = [0.78, 0.71, 0.58], RENDER_D = [0.70, 0.63, 0.51];
+        const TILE   = [0.62, 0.34, 0.22], TILE_D = [0.54, 0.29, 0.19];
+        const CYP    = [0.14, 0.26, 0.15];
+        for (const [sf, side, gap] of [
+          [0.150, -1, 112], [0.385,  1, 108], [0.640, -1,  98], [0.800,  1, 116],
+        ]) {
+          const kk = K(sf), a = anchor(kk, side, gap);
+          if (onTrack(a.c[0], a.c[2], 26)) continue;
+          const b = [a.r, a.u, a.t];
+          const hv = hash(kk * 43 + gap);
+          const w = 12 + hv * 4, d = 15 + hv * 6, wallH = 7 + hv * 2;
+          // Reserve the whole yard — house, tower and both cypresses — BEFORE
+          // drawing any of it. The half-span along the arc is d plus the
+          // cypress reach, converted to a lap fraction.
+          const halfFrac = (d * 0.5 + w * 1.1) / track.total;
+          indexSolid(sf - halfFrac, sf + halfFrac, side, gap - 4, w * 2.0);
+          out._mat = MAT.STONE;
+          addBox(out, vadd(a.c, a.u, wallH * 0.5), [w, wallH, d],
+                 hv < 0.5 ? RENDER : RENDER_D, b);
+          out._mat = 0;
+          // Shallow terracotta pitch with deep eaves — the eaves are the read.
+          addPrism(out, vadd(a.c, a.u, wallH + w * 0.13), [w * 1.14, w * 0.27, d * 1.10],
+                   hv < 0.5 ? TILE : TILE_D, b);
+          // Square tower end on the older houses. ABUTS the gable, it does not
+          // sink into it — 3 m of overlap is severe interpenetration.
+          if (hv > 0.45) {
+            const tc = vadd(a.c, a.t, d * 0.5 + 3.8);
+            out._mat = MAT.STONE;
+            addBox(out, vadd(tc, a.u, wallH * 0.72), [7.5, wallH * 1.44, 7.5], RENDER_D, b);
+            out._mat = 0;
+            addPrism(out, vadd(tc, a.u, wallH * 1.44 + 1.0), [8.4, 2.0, 8.4], TILE_D, b);
+          }
+          // Shuttered windows, sparse and small — Tuscan walls are mostly wall.
+          for (let i = -1; i <= 1; i++) {
+            addBox(out, vadd(vadd(vadd(a.c, a.r, -w * 0.5), a.t, i * d * 0.28),
+                             a.u, wallH * 0.62),
+                   [0.16, 1.5, 1.0], [0.30, 0.34, 0.26], b);
+          }
+          // The cypress pair at the gate. Cones STACK rather than merge.
+          out._mat = MAT.FOLIAGE;
+          for (const t of [-w * 0.85, w * 0.85]) {
+            const cc = vadd(vadd(a.c, a.t, t), a.r, -w * 0.7);
+            if (onTrack(cc[0], cc[2], 8)) continue;
+            const ch = 12 + hash(kk + t) * 4;
+            addCone(out, vadd(cc, a.u, ch * 0.10), 1.5, ch * 0.55, CYP, 6, b);
+            addCone(out, vadd(cc, a.u, ch * 0.62), 1.15, ch * 0.38, CYP, 6, b);
+          }
+          out._mat = 0;
+        }
+      }
 
       const PINE = [0.12, 0.29, 0.15], PINE_D = [0.09, 0.23, 0.13];
       const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.17];

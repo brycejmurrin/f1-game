@@ -289,8 +289,26 @@ only one of them is fixed in `css/`.
 - **red** — the count of real findings, tap targets under 24px among them. Hover
   for the list; `audit.json` has the element, its clipper, and how many pixels it
   escaped by.
-- **skipped** — the screen could not be reached in that viewport. That is a
-  finding too, and the reason is in the tooltip.
+- **skipped** — the screen could not be reached in that viewport, so **nothing
+  was measured**. A skip is not a pass and it is not a finding; the reason is in
+  the tooltip and the summary line counts skips on their own, with the command to
+  re-run exactly those cells.
+
+  **A click timeout is almost always the box, not the app.** The runner sets a
+  12 s default timeout so an unreachable cell costs seconds instead of thirty,
+  and on a loaded four-core SwiftShader machine that budget lapses on clicks that
+  are fine. Measured 2026-08-12: five cells across a full matrix came back
+  `page.click: Timeout 12000ms exceeded`, survived a `--jobs=1` re-run, and read
+  for an afternoon like a button that could not be clicked. Probed on a quiet
+  box, every one of those clicks landed in ~200 ms, and re-running the two
+  viewports gave 78 cells / 0 findings / 0 skips. **Re-run a skipped cell alone
+  before drawing any conclusion from it** — the same rule CLAUDE.md states for a
+  Playwright timeout, for the same reason.
+
+  This was folded into the "something to look at" total until 2026-08-12, which
+  made both readings wrong at once: a run with 40 skips looked like a run with 40
+  defects, and once the eye learned to discount that number, a run with 5 skips
+  read as clean. It cost time three times before the number was split.
 
 A cell going from green to red between builds is a regression with an address:
 screen, viewport, element, and the number of pixels involved.
