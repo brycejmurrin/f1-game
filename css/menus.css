@@ -44,7 +44,17 @@
      a browser without `safe` drops the second and keeps plain centring.
      Declared here rather than compensated per-scale because the overflow is a
      function of viewport height as much as of the slider: a short enough
-     window does this at 100 %. */
+     window does this at 100 %.
+     ONE AXIS, NOT TWO. This was `overflow: auto`, and the shorthand turns on
+     BOTH — but every word of the reasoning above is about height. A horizontal
+     scroll here is not a feature anybody asked for; it is the title screen
+     silently becoming draggable sideways, with `align-content: safe center`
+     centring nothing along that axis and no scrollbar on touch to hint at it.
+     css/components.css already documents this exact trap on `.pane` ("Setting
+     only overflow-y computes the other axis from `visible` to `auto`") — the
+     shorthand is the same mistake from the other direction. `pan-y` and
+     `contain` complete it, so the title screen behaves like every other scroll
+     region in the app. */
   align-content: center;
   align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
@@ -52,7 +62,8 @@
   background:
     radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
     rgba(6, 6, 10, 0.55);
-  overflow: auto;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain; touch-action: pan-y;
 }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
@@ -418,7 +429,7 @@ body { --compact-at: 600px; }
    progressive pair: an engine that rejects `safe center` must fall back to
    `center`, not to `normal`. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
-  overflow-y: auto; overflow-x: hidden;
+  overflow-y: auto; overscroll-behavior-y: contain; overflow-x: hidden;
   display: flex; flex-direction: column;
   justify-content: center;
   justify-content: safe center;
@@ -813,7 +824,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {
-  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; }
+  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; overscroll-behavior-y: contain; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
