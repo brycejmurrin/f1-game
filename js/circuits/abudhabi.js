@@ -26,11 +26,11 @@
     dressingExclusions: [
       // Preserve the authored leisure-island skyline and keep generic furniture
       // out of the marina water, hotel footprint, and Ferrari World sightline.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.50, s1: 0.76 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.76, s1: 0.92 },
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.44, s1: 0.50 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.14, s1: 0.23, side: 1 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.97, s1: 0.08, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.50, s1: 0.76 },
+      { kinds: ["city", "foliage"], s0: 0.76, s1: 0.92 },
+      { kinds: ["foliage", "lighting"], s0: 0.44, s1: 0.50 },
+      { kinds: ["city", "foliage"], s0: 0.14, s1: 0.23, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.97, s1: 0.08, side: 1 },
       { kind: "floodlights", s0: 0.855, s1: 0.895 },
     ],
     pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], concrete: [0.28, 0.27, 0.26], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },

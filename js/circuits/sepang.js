@@ -30,7 +30,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.90, s1: 0.10 },  // pits + main straight
+      { kinds: ["foliage"], s0: 0.90, s1: 0.10 },  // pits + main straight
       { kind: "foliage", s0: 0.30, s1: 0.40 },              // wide open infield
     ],
     // Equatorial haze: white-hot high sun, heavy humidity, saturated jungle.

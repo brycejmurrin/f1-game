@@ -32,7 +32,7 @@
     // The stadium section is a continuous wall of grandstand — the generic
     // foliage/lamp pass has nowhere to stand there.
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.78, s1: 0.06 },   // Motodrom + pits
+      { kinds: ["foliage"], s0: 0.78, s1: 0.06 },   // Motodrom + pits
       { kind: "foliage", s0: 0.40, s1: 0.50 },               // Spitzkehre runoff
     ],
     // Baden pine forest under a hazy continental summer sky.

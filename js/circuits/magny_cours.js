@@ -22,7 +22,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 115,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.93, s1: 0.08 },
+      { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.40, s1: 0.50 },
     ],
     // Central-French farmland: soft, cool, slightly overcast light over green

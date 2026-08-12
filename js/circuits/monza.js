@@ -28,8 +28,8 @@
     terrainOuter: 120,
     dressingExclusions: [
       { kind: "foliage", s0: 0.93, s1: 0.07 },          // pits / Tribuna Centrale
-      { kinds: ["foliage", "lamps"], s0: 0.20, s1: 0.27, side: -1 }, // west lake
-      { kinds: ["foliage", "lamps"], s0: 0.37, s1: 0.43, side: 1 },  // Villa lake
+      { kinds: ["foliage"], s0: 0.20, s1: 0.27, side: -1 }, // west lake
+      { kinds: ["foliage"], s0: 0.37, s1: 0.43, side: 1 },  // Villa lake
       { kind: "foliage", s0: 0.49, s1: 0.59, side: -1 }, // banking ruin sightline
       { kind: "foliage", s0: 0.69, s1: 0.77 },           // flyover approaches
     ],

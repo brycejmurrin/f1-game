@@ -26,7 +26,7 @@
     terrainOuter: 120,
     dressingExclusions: [
       // Bespoke parkland and selective lamps below own the full circuit.
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
     ],
     pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
     segs: [
@@ -61,7 +61,7 @@
               along, mountain, tree, pine, hedge, bush,
               cypress, stonePine, plane, tieredBowl, terrace,
               grandstand, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
-              fence, guardrail, tyreWall, wall,
+              fence, guardrail, tyreWall, wall, lampPost,
               forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
       const terrainPatch = (id, s, side, gap, size, col, opts) =>
@@ -605,24 +605,32 @@
       }
 
       // ---- Lamp posts along pit straight and corner exits ----
+      // Generic lighting dressing is excluded; register each head so night
+      // pools follow these fixtures instead of the empty-list synthetic fallback.
       along(0.95, 0.10, 18, (k) => {
         const p = anchor(k, -1, 8);
         if (onTrack(p.c[0], p.c[2], 0.5)) return;
         addCyl(out, p.c, 0.12, 8.5, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 8.5), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        const head = vadd(p.c, p.u, 8.5);
+        addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
       });
       along(0.30, 0.38, 20, (k) => {
         const p = anchor(k, -1, 7);
         if (onTrack(p.c[0], p.c[2], 0.5)) return;
         addCyl(out, p.c, 0.12, 8.0, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 8.0), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        const head = vadd(p.c, p.u, 8.0);
+        addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
       });
       along(0.84, 0.92, 22, (k) => {
         const side = hash(k * 11) < 0.5 ? -1 : 1;
         const p = anchor(k, side, 7);
         if (onTrack(p.c[0], p.c[2], 0.5)) return;
         addCyl(out, p.c, 0.12, 8.0, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 8.0), [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        const head = vadd(p.c, p.u, 8.0);
+        addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+        if (typeof lampPost === "function") lampPost({ pos: head, k, side, kind: "halogen" });
       });
 
       // ====================================================================

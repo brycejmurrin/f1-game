@@ -54,13 +54,13 @@
       // facades; keep it (and shared foliage/lamps) out of the bay/hero
       // sightlines only. Floodlights stay excluded lap-wide — the bespoke
       // floodMastRing IS the race-lighting rig (no duplicate poles/pools).
-      { kinds: ["city", "foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.15, s1: 0.48, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.78, s1: 0.90, side: 1 },
       // Same double-build, the remaining quarter of side 1: the two rules above
       // stop at 0.90 and start again at 0.15, but cityFront()'s first call
       // (below) runs 0.90->0.16 across that exact seam. Closes the gap between
       // them rather than widening either.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.90, s1: 0.15, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.90, s1: 0.15, side: 1 },
       // The comment above has always been true for side 1, where the two bay
       // windows exclude the generic pass from the sightlines cityFront() does
       // not reach. It was never applied to side -1, where cityFront() ALSO runs
@@ -82,12 +82,12 @@
       // where two systems draw the same wall twice, not where only one draws
       // it. Measured: these three rules alone took night from 1,271,799 to
       // 1,006,947 with ZERO change to the bespoke facade wall itself.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.00, s1: 0.20, side: -1 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.48, s1: 0.88, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.00, s1: 0.20, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.48, s1: 0.88, side: -1 },
       // Third side=-1 cityFront() call, the pit-straight fencing wall
       // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
       // rules above, just a smaller range.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.955, s1: 0.04, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
       { kind: "floodlights", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even

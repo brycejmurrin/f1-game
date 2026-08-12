@@ -26,7 +26,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.36, s1: 0.48 },
     ],
     // Highveld light: Kyalami sits at 1750 m, so the sun is harsh, the sky is
