@@ -82,6 +82,81 @@ test("every css/ file has balanced braces outside comments", () => {
     "becomes UNLAYERED — which beats every layer, silently");
 });
 
+/* A SELECTOR THAT MATCHES NOTHING IS THE THIRD WAY A STYLESHEET LIES.
+ * The first two are above: a file that does not parse, and a brace that ends a
+ * layer early. This one is quieter than either — the file parses, the braces
+ * balance, the rule is right there in the source, and it simply never applies to
+ * any element that has ever existed.
+ *
+ * Both shapes below are REAL, both from the 2026-08 UI pass, and both survived
+ * every guard in the repo:
+ *
+ *   `#lighting-inner[data-density="compact"] body.photo-mode … #lighting-inner`
+ *
+ *   - `body` as a DESCENDANT of a panel. `body` is an ancestor of everything;
+ *     nothing is inside it in the sense a descendant combinator means. SEVEN
+ *     rules in css/tuner.css carried this — the entire single-column layout the
+ *     lighting tuner uses in FREE CAMERA, plus the `--dock-w` that pays for the
+ *     rail's 210px furniture column. With them dead the panel kept a two-column
+ *     grid at a width that left the sliders 76px, and "KEY LIGHT (SUN)" set one
+ *     word per line. Found by looking at a screenshot, months later.
+ *   - the SAME id twice in one selector. Ids are unique, so `#a … #a` is either
+ *     a no-match or a tautology; either way it is not what was meant. This has
+ *     happened three times in this codebase, always the same way — a scoping
+ *     prefix applied mechanically to a whole block whose rules did not all start
+ *     at the same element.
+ *
+ * Cheap, total, and it needs no browser: the mistake is visible in the text.
+ */
+test("no CSS selector can never match", () => {
+  const files = walk("css", ".css");
+  // Every rule prelude at EVERY depth — these files wrap everything in an
+  // @layer, so a depth-0 scan would see exactly one prelude per file.
+  const preludes = (src) => {
+    const out = []; let buf = "";
+    for (const c of src) {
+      if (c === "{") { out.push(buf.trim()); buf = ""; }
+      else if (c === "}" || c === ";") buf = "";
+      else buf += c;
+    }
+    return out;
+  };
+  // Split on commas OUTSIDE parentheses: `:is(#a, #b)` is one compound, not two.
+  const topLevelSplit = (s, sep) => {
+    const out = []; let d = 0, cur = "";
+    for (const c of s) {
+      if (c === "(") d++; else if (c === ")") d--;
+      if (c === sep && d === 0) { out.push(cur); cur = ""; } else cur += c;
+    }
+    out.push(cur); return out;
+  };
+  const bad = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const p of preludes(src)) {
+      if (!p || p.startsWith("@")) continue;
+      for (const sel of topLevelSplit(p, ",")) {
+        const s = sel.trim();
+        if (!s) continue;
+        // Blank out parenthesised arguments before looking for combinators:
+        // `body:has(#x > #y)` is a body-rooted rule, not a descendant of #x.
+        const outer = s.replace(/\([^()]*\)/g, (m) => " ".repeat(m.length));
+        if (/[\s>+~](body|html)\b/.test(outer)) {
+          bad.push(`${f}: body/html as a descendant — ${s.slice(0, 100)}`);
+        }
+        const ids = outer.match(/#[A-Za-z][-\w]*/g) || [];
+        if (new Set(ids).size !== ids.length) {
+          bad.push(`${f}: the same id twice — ${s.slice(0, 100)}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad, [],
+    "a selector here can never match any element, so its whole rule is dead. A " +
+    "stylesheet reports nothing for this: it parses, it cascades, and the layout " +
+    "it describes simply never happens");
+});
+
 test("tools/layout-audit.mjs knows about every screen in the shell", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const audit = fs.readFileSync(path.join(ROOT, "tools/layout-audit.mjs"), "utf8");
