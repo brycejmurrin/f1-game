@@ -6722,19 +6722,30 @@ document.addEventListener("pointerdown", () => {
 // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
 // in the stylesheet stands and a phone is correct on its FIRST paint rather
 // than from whenever this module runs.
-const SCALE_MIN = 80, SCALE_MAX = 150;
+const SCALE_MIN = 80, SCALE_MAX = 150, SCALE_STEP = 0.5;
 const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
+// Snap to the slider's step so stored values stay on the same lattice the
+// <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
+// between ticks and the label reads a number you cannot scrub back to).
+const scaleSnap = (v) => {
+  const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
+  return Math.round(n / SCALE_STEP) * SCALE_STEP;
+};
 const scalePct = (k) => {
   const v = store.get(k, null);
-  return typeof v === "number" ? Math.max(SCALE_MIN, Math.min(SCALE_MAX, v)) : scaleDefault();
+  return typeof v === "number" ? scaleSnap(v) : scaleDefault();
+};
+const scaleLabel = (pct) => {
+  const t = scaleSnap(pct);
+  return (Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)) + "%";
 };
 function applyScale(key, prop, inputId) {
   const stored = store.get(key, null);
-  if (typeof stored === "number") document.documentElement.style.setProperty(prop, stored / 100);
+  if (typeof stored === "number") document.documentElement.style.setProperty(prop, scaleSnap(stored) / 100);
   else document.documentElement.style.removeProperty(prop);
   const pct = scalePct(key);
   const input = $(inputId); if (input) input.value = String(pct);
-  const out = $(inputId + "-v"); if (out) out.textContent = pct + "%";
+  const out = $(inputId + "-v"); if (out) out.textContent = scaleLabel(pct);
 }
 function applyUiScale()  { applyScale("uiScale",  "--ui-scale",  "pm-uiscale"); }
 function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
@@ -6742,11 +6753,11 @@ function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale");
 // which is the only way to find the right one — the same convention the volume
 // sliders use.
 $("pm-uiscale").oninput = (e) => {
-  store.set("uiScale", +e.target.value || scaleDefault());
+  store.set("uiScale", scaleSnap(+e.target.value || scaleDefault()));
   applyUiScale();
 };
 $("pm-hudscale").oninput = (e) => {
-  store.set("hudScale", +e.target.value || scaleDefault());
+  store.set("hudScale", scaleSnap(+e.target.value || scaleDefault()));
   applyHudScale();
 };
 applyUiScale();
@@ -6757,10 +6768,10 @@ applyHudScale();
 function setScale(key, prop, v) {
   if (v !== undefined) {
     if (v === null) store.set(key, null);
-    else store.set(key, Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v || scaleDefault())));
+    else store.set(key, scaleSnap(+v || scaleDefault()));
     if (key === "uiScale") applyUiScale(); else applyHudScale();
   }
-  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX };
+  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX, step: SCALE_STEP };
 }
 
 // Render resolution setting: AUTO = the frame-time governor adapts the scale;

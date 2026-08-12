@@ -759,6 +759,24 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 .pm-group button { margin: 3px 0; width: 100%; }
+/* SETTINGS CONTROLS SHARE ONE HEIGHT. DRIVING and DISPLAY sit in sibling
+   columns; when DISPLAY's .tune-row was ~80px (label + tap-min track) while
+   every DRIVING button was --tap, row N of one column never met row N of the
+   other — MEASURED 852×393 @100%: HIDE HUD and STEER lined up, then UI SIZE
+   sat 28px taller than RECALIBRATE and the columns drifted for the rest of
+   the sheet. Fix: every interactive row is exactly --tap tall. The label
+   overlays the top of the track (pointer-events: none) so the grab target
+   stays the full row. */
+#pmsettings-inner .pm-group button,
+#pmsettings-inner .pm-doors button {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
 /* A SLIDER IN A BUTTON COLUMN. .pm-group was 100% <button> until UI/HUD SIZE
    arrived, so both of its house rules — the 3px rhythm above and the
    `min-height: var(--tap)` at the top of this file — are keyed to `button` and
@@ -768,8 +786,31 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    The row gets the rhythm; the input itself gets the height, because it is the
    thing you actually grab. .tune-row/.tune-label are unscoped in css/tuner.css,
    so everything else about the slider already works here. */
-.pm-group .tune-row { margin: 3px 0; }
-.pm-group .tune-row input[type="range"] { min-height: var(--tap); }
+.pm-group .tune-row {
+  position: relative;
+  margin: 3px 0;
+  height: var(--tap);
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-sizing: border-box;
+}
+.pm-group .tune-row .tune-label {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.2;
+  pointer-events: none;
+  z-index: 1;
+}
+.pm-group .tune-row input[type="range"] {
+  width: 100%;
+  height: var(--tap);
+  min-height: var(--tap);
+  margin: 0;
+}
 /* THE THRESHOLDS ARE DERIVED FROM THE COLUMN, NOT PICKED FOR THE SHEET.
    A .pm-col needs about 150 own units before its labels start costing more than
    the column saves. MEASURED by forcing extra columns on a phone and counting
@@ -823,13 +864,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    units, 1.55 -> 1.30 screens). More than one, let it be an ordinary cell that
    packs beside the groups and adds to only its own column. */
 .pm-doors {
-  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.6);
+  /* GRID, NOT FLEX-WRAP. Flex `1 1 150px` lets a lone last-row door grow to the
+     full row width — MEASURED compact landscape: ADVANCED/LIGHTING/CAMERA/MUSIC
+     were 179px while HOW TO PLAY alone was 732px. `auto-fill` keeps empty tracks
+     so an orphan occupies ONE cell at the shared size instead of stretching. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: calc(var(--gap) * 0.6);
   align-content: start;
 }
-/* The heading takes its own full line and carries the column's top alignment.
-   `flex: 1 0 100%` rather than a block, because this is a wrap container and a
-   bare child would sit ON the first row of buttons. */
-.pm-doors > .pm-group-h { flex: 1 0 100%; margin: 0; }
+/* The heading takes its own full line and carries the column's top alignment. */
+.pm-doors > .pm-group-h { grid-column: 1 / -1; margin: 0; }
 /* THE RULE BELONGS TO THE SPANNING FORM ONLY. When this nav spans the grid it
    sits UNDER the groups and a rule reads as a separator; when it is a column of
    its own it sits BESIDE them, and a top border plus the extra margin pushed its
@@ -857,12 +902,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   .pm-doors { grid-column: 1 / -1; }
 }
 .pm-doors button {
-  /* `1 1 150px`: the basis is what one of these labels actually needs, so the
-     row seats as many as fit and shares the remainder — the count follows the
-     room rather than the number of doors. `min-width: 0` because a flex item's
-     automatic minimum is its content, the refusal-to-shrink that has cost this
-     pass five separate findings. */
-  flex: 1 1 150px; min-width: 0; margin: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 @container sheet (min-width: 340px) {
