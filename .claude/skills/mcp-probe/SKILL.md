@@ -172,6 +172,17 @@ python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
 after `orbit()`/`view()`/`eyeAt()` (clears dbgCam; see trap above). Screenshots
 go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (CLAUDE.md).
 
+### Background Chromium measure (logged)
+
+```
+node tools/cdmcp-bg.mjs boot --port 3462
+tail -f artifacts/logs/cdmcp-measure.log
+# watcher: until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/cdmcp-measure.log
+```
+
+Profiles `boot` / `ui` / `full`. JSON sidecar: `artifacts/logs/cdmcp-measure.json`.
+See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
+
 ### When this beats a scratch script
 
 - **"Does this visual change look right?"** — one navigate + eval + screenshot,
