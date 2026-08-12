@@ -202,26 +202,78 @@ body { --compact-at: 600px; }
    a LATER rule that used to win — measured: #sel-inner's height cap started
    overriding a rule it had always lost to, and the desktop select golden moved.
    Wrapped in :where(), these rules keep exactly the specificity they had. */
+/* SCROLL THE ZOOMED CHILD, NOT #overlay. Measured MCP: at UI SIZE 150% both
+   landscape (852×393) and portrait (390×844) paint SETTINGS / HOW TO PLAY past
+   vh while body density is already compact. #overlay's own overflow-y:auto is
+   a dead letter here — zoom sits on `#overlay > *`, so the parent's
+   scrollHeight stays equal to clientHeight (844/844 on the portrait phone)
+   while the buttons' border-boxes reach bot 1262. Cap+scroll on #menu-buttons
+   itself (the zoomed node) is what actually moves the doors into reach.
+
+   align-content MUST be `safe center`, not plain `center` — the same trap
+   #overlay documents above. Plain center with overflow:auto parks CAREER
+   above the scrollport (measured T=-30 at landscape 150%) where scrollIntoView
+   cannot recover it; `safe` falls back to start the moment the stack is taller
+   than the cap.
+
+   Type / padding / title-size polish stays out of this change — that lane is
+   separate. This block is reachability only. */
+:where(body[data-density="compact"]) #menu-buttons {
+  max-height: calc(100 * var(--svhz) - 2 * var(--gut));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: center;
+  align-content: safe center;
+}
+/* Portrait: give the button column the leftover row under the brand so the
+   max-height above is not "full viewport on top of the brand" (which would
+   overflow again with no parent scroller). auto / minmax(0,1fr) + stretch is
+   the flex/grid form of "brand sizes itself, buttons get the rest and scroll". */
+@media (orientation: portrait) {
+  :where(body[data-density="compact"]) #overlay {
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
+  }
+  :where(body[data-density="compact"]) #menu-brand { grid-row: 1; }
+  :where(body[data-density="compact"]) #menu-buttons {
+    grid-row: 2;
+    align-self: stretch;
+    min-height: 0;
+    max-height: none; /* the 1fr row is the cap */
+    height: 100%;
+  }
+}
 @media (orientation: landscape) {
   :where(body[data-density="compact"]) #overlay {
     grid-template-columns: auto auto;
-    justify-content: center; align-content: center; justify-items: start;
+    justify-content: center;
+    justify-content: safe center;
+    align-content: center; justify-items: start;
     /* Re-stating `safe center` because this block re-declares align-content and
-       would otherwise take the base rule's overflow bug back — see there. */
+       would otherwise take the base rule's overflow bug back — see there.
+       Same for justify-content: at UI SIZE 150% the brand+button pair can be
+       wider than vw (measured R=884 on 852), and plain center parks the right
+       column past the scrollport's end edge. */
     align-content: safe center;
     column-gap: 32px;
   }
   :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  :where(body[data-density="compact"]) #menu-buttons { grid-column: 2; grid-row: 1; align-self: center; width: auto; }
+  :where(body[data-density="compact"]) #menu-buttons {
+    grid-column: 2; grid-row: 1;
+    align-self: stretch;
+    width: auto;
+  }
   :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: 13px; }
   :where(body[data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
   :where(body[data-density="compact"]) #audiostate { font-size: 11px; }
   :where(body[data-density="compact"]) #disclaimer { font-size: 11px; }
-  /* the group is what gets the width now; the buttons fill their cell */
+  /* 42vwz (was 46): layout-only width cut so the right column clears vw at
+     150% without touching type size (brand+46vw+gap measured ~872 on 852). */
   :where(body[data-density="compact"]) #menu-hero,
   :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(46 * var(--vwz)), 300px); }
+  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 300px); }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
