@@ -22,6 +22,11 @@
                    → localStorage "*"  → localStorage[key]
    so a committed light-presets.js is the shipped baseline and a player's own
    edits always win over it. A missing layer is skipped, never defaulted through.
+
+   copyToTracks() is the one operation that writes profiles the player is NOT
+   looking at: it spreads the condition on screen sideways across the grid, to
+   every other track at the same time-of-day and weather. See its own comment for
+   the two modes and why storing is still sparse.
 */
 "use strict";
 const LightStore = (() => {
@@ -81,17 +86,36 @@ const LightStore = (() => {
       return [F && F["*"], F && k && F[k], profiles["*"], k && profiles[k]];
     }
 
+    // What knob `d` resolves to for condition `k` WITHOUT k's own local profile —
+    // every layer of the ladder except the top one. A null/absent key just skips
+    // the per-condition file layer, which is what an unloaded track should do.
+    function base(k, d) {
+      let v = d.def;
+      const F = window.LightPresets || null;
+      if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
+      if (F && k && F[k] && typeof F[k][d.id] === "number") v = F[k][d.id];
+      if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
+      return clamp(v, d.min, d.max);
+    }
+
     // What a knob would resolve to WITHOUT the current condition's local profile —
     // i.e. the value RESET falls back to. `set` stores only when the edit differs
     // from this, so a profile never fills up with values it was going to get anyway.
-    function fallback(id) {
-      const d = TUNE_DEFS.find((t) => t.id === id);
-      let v = d.def;
-      const F = window.LightPresets || null, k = key();
-      if (F && F["*"] && typeof F["*"][id] === "number") v = F["*"][id];
-      if (F && k && F[k] && typeof F[k][id] === "number") v = F[k][id];
-      if (profiles["*"] && typeof profiles["*"][id] === "number") v = profiles["*"][id];
-      return clamp(v, d.min, d.max);
+    function fallback(id) { return base(key(), TUNE_DEFS.find((t) => t.id === id)); }
+
+    // Write `v` into profile map `prof` for condition `k` under the rule set()
+    // uses: an explicit entry only where it differs from what k would resolve to
+    // on its own. Storing a value that equals the DEFAULT is still required when
+    // a file/global layer would otherwise win — that is how an edit (or a copy)
+    // pulls a shipped value back down. Returns true when the map changed.
+    function put(prof, k, d, v) {
+      v = clamp(v, d.min, d.max);
+      if (v === base(k, d)) {
+        if (!(d.id in prof)) return false;
+        delete prof[d.id]; return true;
+      }
+      if (prof[d.id] === v) return false;
+      prof[d.id] = v; return true;
     }
 
     // A rebuild/reapply/reinit is only worth doing once per call, however many
@@ -142,21 +166,84 @@ const LightStore = (() => {
       const k = key();
       if (k) {
         const prof = profiles[k] || (profiles[k] = {});
-        // Store only when the value differs from what it would resolve to anyway.
-        // Storing an explicit value IS required when it matches the DEFAULT but a
-        // file/global layer would otherwise win — that is how a local edit pulls a
-        // shipped value back down.
-        if (v === fallback(id)) delete prof[id]; else prof[id] = v;
+        put(prof, k, d, v);
         if (!Object.keys(prof).length) delete profiles[k];
       }
       liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
       return true;
     }
 
+    // ── SPREAD ONE CONDITION ACROSS THE GRID ──────────────────────────────────
+    // The tuner edits ONE (track, time, weather) profile at a time. That is right
+    // for dialling a circuit in and wrong for the other thing people do with it:
+    // settle a look for "dusk in the wet" and want it on all 40 circuits. By hand
+    // that is 39 more tuning sessions, so it is one action here — in two flavours,
+    // because "copy my settings" means two different things:
+    //
+    //   "edits" — copy only THIS profile's stored overrides (the knobs that
+    //             differ from what this condition resolves to on its own),
+    //             MERGED over each target's own overrides. Every other track
+    //             keeps its shipped character for the knobs you never touched.
+    //   "look"  — copy every LIVE value, so each track at that time and weather
+    //             resolves identically to this one. It overrides the per-track
+    //             presets in light-presets.js by design; that is the only thing
+    //             "make them all look like this" can mean.
+    //
+    // Both write through put(), so a copy stores an entry only where the target
+    // would not have resolved there anyway: "look" does not stamp 40 copies of
+    // the defaults into localStorage, and a knob sitting at its default is still
+    // written explicitly where a file preset would otherwise win.
+    //
+    // Only OTHER tracks are touched, and only at the source's own time+weather —
+    // the live LT values therefore cannot change, which is why nothing here
+    // re-applies or invalidates anything. The caller persists (the panel and
+    // __apex.lightCopy both do), and hands `undo` back to restore() to revert.
+    function copyToTracks(mode) {
+      const src = key();
+      if (!src) return { ok: false, error: "no-track", tracks: 0, changed: 0 };
+      const [srcId, tod, weather] = src.split("|");
+      mode = mode === "look" ? "look" : "edits";
+      // Driven off TUNE_DEFS in both modes, so a stored id the registry no longer
+      // has is left behind rather than copied onto 39 more profiles.
+      const from = [];
+      for (const d of TUNE_DEFS) {
+        const v = mode === "look" ? LT[d.id] : (profiles[src] || {})[d.id];
+        if (typeof v === "number" && isFinite(v)) from.push([d, v]);
+      }
+      if (!from.length) return { ok: false, error: "no-edits", mode, key: src, tod, weather, tracks: 0, changed: 0 };
+      const out = { ok: true, mode, key: src, tod, weather, knobs: from.length, tracks: 0, changed: 0, undo: {} };
+      const list = (typeof Tracks !== "undefined" && Tracks.LIST) || [];
+      for (const t of list) {
+        if (!t || !t.id || t.id === srcId) continue;
+        const k = t.id + "|" + tod + "|" + weather;
+        out.undo[k] = profiles[k] ? Object.assign({}, profiles[k]) : null;
+        const prof = profiles[k] || (profiles[k] = {});
+        for (const [d, v] of from) if (put(prof, k, d, v)) out.changed++;
+        if (!Object.keys(prof).length) delete profiles[k];
+        out.tracks++;
+      }
+      return out;
+    }
+
+    // Put back exactly what copyToTracks() found — a null entry means the target
+    // had no local profile at all, so the key goes away rather than to {}.
+    // Re-applies, because a snapshot is allowed to name the live condition even
+    // though the copy that produced it never does.
+    function restore(undo) {
+      if (!undo || typeof undo !== "object") return false;
+      for (const k of Object.keys(undo)) {
+        const prev = undo[k];
+        if (prev && typeof prev === "object" && Object.keys(prev).length) profiles[k] = Object.assign({}, prev);
+        else delete profiles[k];
+      }
+      apply();
+      return true;
+    }
+
     function persist() { store.set("lightTune", profiles); }
 
     return {
-      key, layers, fallback, apply, set, persist,
+      key, layers, fallback, apply, set, persist, copyToTracks, restore,
       // The live object, not a copy: js/game/photomode.js deletes a key out of it
       // to implement the tuner's RESET, and merges it for COPY VALUES.
       get profiles() { return profiles; },

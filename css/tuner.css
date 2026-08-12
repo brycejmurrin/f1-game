@@ -89,6 +89,10 @@ body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) {
    still on screen at all. */
 body.photo-mode:not(.pc-nopanel) #lt-preview,
 body.photo-mode:not(.pc-nopanel) #lt-profile,
+/* COPY ALL stands down with them, and for the same reason: it acts on the
+   condition the readout above it names, so it belongs to the setup half of the
+   panel, not to the half you use while framing. */
+body.photo-mode:not(.pc-nopanel) #lt-spread,
 body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
 
 /* THE FLYING PANEL ON A PHONE, which is much narrower than the 300px cap makes

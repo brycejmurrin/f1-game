@@ -31,6 +31,15 @@ the panel. Use **RESET** in the LIGHTING TUNER for the **current** track/tod/wea
 to drop back to shipped values. Legacy `"*"` profiles from older saves may still
 persist — clear that key in DevTools if a global override keeps winning.
 
+**One condition, all 40 circuits.** The panel's COPY ALL row (and
+`__apex.lightCopy()`) spreads the profile on screen to every other track at the
+same time-of-day and weather: `lightCopy()` sends only the knobs tuned here,
+merged, so each circuit keeps its own shipped character; `lightCopy("look")`
+sends every live value so they all render identically, overriding the per-track
+presets. Both persist and both return an `undo` payload — `lightCopy({undo})`
+reverts the whole fan-out. Use it when the thing you are deciding is what a
+CONDITION should look like rather than what a CIRCUIT should look like.
+
 A shipped example of stacking white-balance knobs: `LightPresets["jeddah|dawn|dry"]`
 in `js/game/light-presets.js` sets both `sunTemp: -0.35` (warm the low dawn sun)
 and `tint: 0.1` (warm the overall grade slightly on top) alongside `sunElev`,
