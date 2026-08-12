@@ -921,6 +921,26 @@ body:not(.desktop) #cs-unlimited { font-size: 12px; }
    The shared compact tier already trims this to ~2.9px a side (--pad 13 x 0.22);
    the garage is the densest sheet in the app and needs the last two. */
 #cs-inner[data-density="compact"] > .sheet-foot { padding-top: 1px; padding-bottom: 1px; }
+/* ...AND IT MAY NOT WRAP. Two buttons in a `flex-wrap: wrap` bar is a coin flip
+   decided by a few pixels, and on a portrait phone at UI SIZE 150% it lands the
+   wrong way: BACK and DONE want 226 of the 220 units inside the foot, so DONE
+   drops to a second row and the bar goes 52 units tall to 114. The panel is 340
+   units. That six-unit overshoot cost the parts list a THIRD of the sheet.
+   The comment further up this file already recorded wrapping making this foot
+   132px tall once, in the pair layout, and fixed it by giving the bar more room.
+   That fix does not reach here, because in the stacked layout the bar is the
+   panel's full width and the panel is 246 units wide — there is no more room to
+   give. Two equal columns instead: the buttons share whatever there is and the
+   count of rows is a fact of the layout rather than an outcome of arithmetic.
+   `minmax(0, 1fr)` and `min-width: 0` because a grid item's automatic minimum is
+   its content, which is the same refusal-to-shrink that started this. */
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+#cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot > button {
+  min-width: 0; margin: 0;
+}
 
 /* ---------- portrait: categories as one scrolling strip ---------- */
 /* The stacked category grid is the biggest single item in a portrait garage —
