@@ -740,6 +740,25 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   top: calc(var(--gap) * -0.5 - 1px); height: 1px;
   background: rgba(255, 255, 255, 0.10);
 }
+/* Compact pause stack: on a short landscape phone at UI SIZE 150% four
+   --tap-tall buttons + head overflow the sheet (measured stack 330 / sheet
+   373, quit past vh). Beat `.sheet-body > button { min-height: var(--tap) }`
+   with a lower floor in own units — 36×1.5 zoom still paints ≥54px, well
+   above the 24px WCAG floor. Type size untouched; HUD hide in css/hud.css
+   clears the bottom telemetry behind the scrim. */
+#pausemenu .sheet[data-density="compact"] .stack {
+  gap: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .stack button {
+  min-height: 36px;
+  padding-block: 6px;
+}
+#pausemenu .sheet[data-density="compact"] #pm-quit {
+  margin-top: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .build-tag {
+  margin: 2px 0 0;
+}
 
 /* ---------- settings sub-menu ----------
    DRIVING / AUDIO / DISPLAY read as three short lists instead of one

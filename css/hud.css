@@ -214,6 +214,17 @@
    usable while a dialog is open anyway — you cannot fly a paused game — so the
    whole fly-cam overlay stands down until it closes. */
 body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
+/* Same moment: stand the BOTTOM race chrome down while a dim dialog is open.
+   Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
+   #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
+   painted through the sheet. Top timing/map stay — they clear the centred
+   pause card. Mirrors the photo-controls rule above; gated on body.in-race so
+   menu-time dialogs do not touch a HUD that is already hidden. */
+body.in-race:has(.screen.dim:not([hidden])) .hud-bottom,
+body.in-race:has(.screen.dim:not([hidden])) .dock,
+body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
+  visibility: hidden;
+}
 #photo-controls > * { pointer-events: auto; }
 .pc-stickwrap {
   position: fixed; bottom: calc(20px + var(--sab));

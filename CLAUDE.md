@@ -26,7 +26,7 @@ tools/README.md                       # the index of all 60+ tools (test-asserte
 **The reference is `docs/TESTING.md`** — every group, every spec, fixtures,
 philosophy. `tests/unit/test-groups.test.mjs` fails if it and `package.json`
 disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
-111 Playwright specs plus 75 `node --test` unit suites; the browser half is
+111 Playwright specs plus 76 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
 
 **1. Run browser groups in the BACKGROUND — never block, never poll.**
