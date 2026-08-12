@@ -319,6 +319,11 @@ def measure_ui(c: McpClient, log: Log, url: str, summary: dict) -> None:
         }
       }
       const b = document.getElementById("pm-uiscale-v");
+      // Close SETTINGS before opening GARAGE — leaving it open paints the
+      // overlay on the garage-115 screenshot and confused a prior fail read.
+      document.getElementById("pmsettings")?.querySelector("[data-close],.sheet-back,#pm-back")
+        ?.click();
+      document.getElementById("pmsettings")?.close?.();
       __apex.uiScale(115);
       await new Promise(r => setTimeout(r, 350));
       document.getElementById("mb-garage")?.click();

@@ -561,9 +561,11 @@
      label back under what "SUSPENSION" needs. At 31% the rail is 130px on a
      1440px desktop, a shade WIDER than the 128px it had at 460, and the 40px
      comes out of the option list (276px), whose rows are short. */
-  /* 128px floor: chrome-devtools measure @ default MCP viewport needed
-     ~81px label + tab pad; 120px still ellipsized SUSPENSION (cw 73 / sw 81). */
-  --pair-split: minmax(128px, 31%);
+  /* 140px floor / 34% share: chrome-devtools measure @ UI SIZE 115% (default
+     MCP viewport, .desktop) still ellipsized SUSPENSION at 128px/31%
+     (cw 73 / sw 81 — 8px short). Zoom grows glyph boxes without giving the
+     rail the same free width, so both the floor and the share move. */
+  --pair-split: minmax(140px, 34%);
   --pair-gap: var(--gap);
 }
 

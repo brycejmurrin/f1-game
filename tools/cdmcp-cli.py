@@ -186,12 +186,23 @@ def cmd_measure(args: list[str]) -> None:
     raise SystemExit(subprocess.call([sys.executable, str(script), *args]))
 
 
-def cmd_survey_title(_: list[str]) -> None:
+def cmd_survey_title(argv: list[str]) -> None:
+    import os
+    ap = argparse.ArgumentParser(prog="survey-title")
+    default_port = int(os.environ.get("APEX_PORT") or os.environ.get("PORT") or "3456")
+    ap.add_argument("--port", type=int, default=default_port,
+                    help=f"static server port (default {default_port}; env APEX_PORT/PORT)")
+    args = ap.parse_args(argv)
+    try:
+        build = json.loads((ROOT / "version.json").read_text()).get("build")
+    except Exception:
+        build = None
+    url = f"http://127.0.0.1:{args.port}/" + (f"?v={build}" if build else "")
     c = McpClient()
     try:
         c.start()
-        print("→ navigate_page")
-        print(text_result(c.call("navigate_page", {"url": "http://127.0.0.1:3456/?v=1116"})))
+        print("→ navigate_page", url)
+        print(text_result(c.call("navigate_page", {"url": url})))
         time.sleep(1)
         print("→ evaluate_script (survey harness)")
         js = """async () => {
@@ -219,6 +230,7 @@ def cmd_survey_title(_: list[str]) -> None:
         shot = c.call("take_screenshot", {"filePath": str(shot_path)})
         print(text_result(shot))
         print(f"screenshot: {shot_path}")
+        c.call("navigate_page", {"url": "about:blank"})
     finally:
         c.close()
 
@@ -264,7 +276,12 @@ def cmd_apex_shot(argv: list[str]) -> None:
     p.add_argument("--el", type=float, default=18.0)
     p.add_argument("--dist", type=float, default=45.0)
     p.add_argument("--tod", default="day")
-    p.add_argument("--port", type=int, default=3456)
+    p.add_argument(
+        "--port",
+        type=int,
+        default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"),
+        help="static server port (default APEX_PORT/PORT/3456)",
+    )
     p.add_argument(
         "--out",
         default=str(ROOT / "artifacts" / "tmp" / "cdmcp-apex-shot.png"),
