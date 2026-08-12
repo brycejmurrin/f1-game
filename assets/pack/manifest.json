@@ -2,241 +2,241 @@
   "version": 1,
   "materials": {
     "size": 256,
+    "albedo": "mat-albedo-256.png",
+    "normal": "mat-normal-256.png",
     "layers": [
       {
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
-        "source": "polyhaven:concrete_panels",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 2,
         "id": "brick",
         "scale": 2.8,
-        "source": "polyhaven:red_brick",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-        "source": "polyhaven:corrugated_iron",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
-        "source": "polyhaven:wood_planks",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 6,
         "id": "foliage",
         "scale": 4,
-        "source": "polyhaven:leafy_grass",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
-        "source": "polyhaven:denim_fabric",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 8,
         "id": "sand",
         "scale": 11,
-        "source": "polyhaven:coast_sand_01",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
-        "source": "polyhaven:sparse_grass",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 10,
         "id": "rock",
         "scale": 8,
-        "source": "polyhaven:rock_ground",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 11,
         "id": "snow",
         "scale": 7,
-        "source": "polyhaven:snow_02",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 12,
         "id": "roof",
         "scale": 2.6,
-        "source": "polyhaven:clay_roof_tiles",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
-        "source": "polyhaven:castle_brick_02_red",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 14,
         "id": "rust",
         "scale": 2.5,
-        "source": "polyhaven:rusty_metal",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 16,
         "id": "asphalt",
         "scale": 3.5,
-        "source": "polyhaven:asphalt_track",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       }
     ],
-    "albedo": "mat-albedo-256.png",
     "low": {
       "size": 128,
+      "albedo": "mat-albedo-128.png",
+      "normal": "mat-normal-128.png",
       "layers": [
         {
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
-          "source": "polyhaven:concrete_panels",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 2,
           "id": "brick",
           "scale": 2.8,
-          "source": "polyhaven:red_brick",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-          "source": "polyhaven:corrugated_iron",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
-          "source": "polyhaven:wood_planks",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 6,
           "id": "foliage",
           "scale": 4,
-          "source": "polyhaven:leafy_grass",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
-          "source": "polyhaven:denim_fabric",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 8,
           "id": "sand",
           "scale": 11,
-          "source": "polyhaven:coast_sand_01",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
-          "source": "polyhaven:sparse_grass",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 10,
           "id": "rock",
           "scale": 8,
-          "source": "polyhaven:rock_ground",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 11,
           "id": "snow",
           "scale": 7,
-          "source": "polyhaven:snow_02",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 12,
           "id": "roof",
           "scale": 2.6,
-          "source": "polyhaven:clay_roof_tiles",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
-          "source": "polyhaven:castle_brick_02_red",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 14,
           "id": "rust",
           "scale": 2.5,
-          "source": "polyhaven:rusty_metal",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 16,
           "id": "asphalt",
           "scale": 3.5,
-          "source": "polyhaven:asphalt_track",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         }
-      ],
-      "albedo": "mat-albedo-128.png",
-      "normal": "mat-normal-128.png"
-    },
-    "normal": "mat-normal-256.png"
+      ]
+    }
   },
   "models": {
     "kenney_construction-barrier": {
@@ -792,9 +792,9 @@
         0.0919,
         0.1251
       ],
-      "source": "polyhaven:kloofendal_43d_clear_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|day": {
       "ambientSky": [
@@ -807,9 +807,9 @@
         0.0919,
         0.1251
       ],
-      "source": "polyhaven:kloofendal_43d_clear_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|dusk": {
       "ambientSky": [
@@ -822,9 +822,9 @@
         0.1634,
         0.2016
       ],
-      "source": "polyhaven:industrial_sunset_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|dawn": {
       "ambientSky": [
@@ -837,109 +837,109 @@
         0.0632,
         0.0675
       ],
-      "source": "polyhaven:venice_sunset",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     }
   },
   "credits": [
     {
       "kind": "material",
       "id": "concrete",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:concrete_panels"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "brick",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:red_brick"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "metal",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:corrugated_iron"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "wood",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:wood_planks"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "foliage",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:leafy_grass"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "fabric",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:denim_fabric"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "sand",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:coast_sand_01"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "grass",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:sparse_grass"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "rock",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:rock_ground"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "snow",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:snow_02"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "roof",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:clay_roof_tiles"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "stone",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:castle_brick_02_red"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "rust",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:rusty_metal"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "material",
       "id": "asphalt",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:asphalt_track"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "model",
@@ -1196,30 +1196,30 @@
     {
       "kind": "env",
       "id": "*|default",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:kloofendal_43d_clear_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|day",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:kloofendal_43d_clear_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dusk",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:industrial_sunset_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dawn",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:venice_sunset"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     }
   ]
 }
