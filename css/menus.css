@@ -466,10 +466,6 @@ body { --compact-at: 600px; }
    Capping the map at half the card leaves the facts their room; object-fit
    keeps the outline undistorted when the cap is what binds. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
-  /* Definite width + max-height would stretch the box; yield width so both
-     axes shrink together, and contain as belt-and-braces on the bitmap. */
-  width: auto;
-  max-width: var(--sel-map-w, 100%);
   max-height: 50%;
   object-fit: contain;
 }
@@ -565,8 +561,6 @@ body { --compact-at: 600px; }
        smaller than the cap, the cap simply does not bind. */
     #sel-inner[data-shape="tall"] #sel-track-preview { flex: 1 1 auto; min-height: 0; }
     #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-map {
-      width: auto;
-      max-width: var(--sel-map-w, 100%);
       max-height: calc(100% - 9.5rem);
       object-fit: contain;
     }
@@ -727,10 +721,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      attempts at overriding it that way were silently discarded. A custom
      property cascades by INHERITANCE from the card instead, which no ordering
      can undo. */
-  /* object-fit: contain — when a layout branch caps max-height below the
-     aspect-derived height, the CSS box can go wide-and-short; without contain
-     the canvas bitmap stretches. UI zoom (--ui-scale) still scales the sheet
-     uniformly; contain only stops non-uniform squash inside the map slot. */
+  /* object-fit: contain — belt when a max-height cap and a definite width would
+     otherwise squash the bitmap. JS (updateTrackPreview) also re-fits and pins
+     style width/height to the circuit aspect so the common case needs no
+     letterboxing. UI zoom (--ui-scale) still scales the whole sheet uniformly. */
   flex: none; width: var(--sel-map-w, clamp(140px, 50%, 260px)); height: auto;
   max-width: 100%;
   aspect-ratio: 520 / 300;

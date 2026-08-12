@@ -186,10 +186,11 @@ const TrackMaps = (function () {
     return Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
   }
 
-  // Size a canvas bitmap (+ matching CSS box) to fit maxW×maxH while keeping
-  // the circuit's aspect. Callers still draw via draw(); this only sizes.
-  // Clearing a prior inline size before measuring is the caller's job.
-  function fitCanvas(canvas, maxW, maxH, def) {
+  // Size a canvas bitmap to fit maxW×maxH while keeping the circuit's aspect.
+  // Optionally pin the CSS box to that size (pinCss) so max-height/max-width
+  // cannot reshape the used box after the fact — object-fit:contain remains
+  // belt-and-braces when a later layout pass still clamps.
+  function fitCanvas(canvas, maxW, maxH, def, pinCss) {
     const a = aspect(def);
     let boxW = Math.max(1, Math.floor(maxW || 1));
     let boxH = Math.max(1, Math.floor(maxH || 1));
@@ -198,9 +199,21 @@ const TrackMaps = (function () {
     w = Math.max(1, w); h = Math.max(1, h);
     canvas.width = w;
     canvas.height = h;
-    canvas.style.width = w + "px";
-    canvas.style.height = h + "px";
     canvas.style.aspectRatio = String(a);
+    if (pinCss) {
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      // Defeat stylesheet max-height/max-width caps that would reshape the
+      // box AFTER we pin — those caps are what stretched bitmaps under UI
+      // zoom. We already fitted inside the capped slot before pinning.
+      canvas.style.maxWidth = w + "px";
+      canvas.style.maxHeight = h + "px";
+    } else {
+      canvas.style.width = "";
+      canvas.style.height = "";
+      canvas.style.maxWidth = "";
+      canvas.style.maxHeight = "";
+    }
     return { w: w, h: h, aspect: a };
   }
   function corners(def) {

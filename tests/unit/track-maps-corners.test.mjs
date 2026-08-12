@@ -117,14 +117,19 @@ test("fitCanvas preserves circuit aspect inside a box (no stretch)", () => {
 
   // Minimal canvas stand-in (node has no HTMLCanvasElement).
   const fake = { width: 0, height: 0, style: {} };
-  const wide = TrackMaps.fitCanvas(fake, 400, 100, monza);
+  const wide = TrackMaps.fitCanvas(fake, 400, 100, monza, true);
   assert.equal(wide.w, fake.width);
   assert.equal(wide.h, fake.height);
   assert.ok(Math.abs(wide.w / wide.h - a) < 0.05,
     "wide-box fit drifted: " + wide.w + "x" + wide.h + " aspect=" + (wide.w / wide.h));
   assert.ok(wide.h <= 100 && wide.w <= 400);
+  assert.equal(fake.style.width, wide.w + "px");
+  assert.equal(fake.style.height, wide.h + "px");
+  assert.equal(fake.style.maxWidth, wide.w + "px");
+  assert.equal(fake.style.maxHeight, wide.h + "px");
+  assert.equal(fake.style.aspectRatio, String(a));
 
-  const tall = TrackMaps.fitCanvas(fake, 100, 400, monza);
+  const tall = TrackMaps.fitCanvas(fake, 100, 400, monza, true);
   assert.ok(Math.abs(tall.w / tall.h - a) < 0.05,
     "tall-box fit drifted: " + tall.w + "x" + tall.h);
   assert.ok(tall.w <= 100 && tall.h <= 400);
