@@ -26,6 +26,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
 | **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
 | **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
+| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP (render/heap/perf, the live twin of a scratch script) + tinyfish post-deploy liveness check. |
 | **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
 | **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
 | **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |
