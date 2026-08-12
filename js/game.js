@@ -6723,7 +6723,11 @@ document.addEventListener("pointerdown", () => {
 // in the stylesheet stands and a phone is correct on its FIRST paint rather
 // than from whenever this module runs.
 const SCALE_MIN = 90, SCALE_MAX = 150, SCALE_STEP = 0.5;
-const scaleDefault = () => (Input.touchControlsNeeded() ? 115 : 100);
+// 100 on every pointer. Touch used to ship at 115; after the type floor raised
+// micro/body to ≥14px CSS, that 15% zoom read as "everything too big" on phones
+// (live 1144). SETTINGS ▸ DISPLAY still goes to 150%. Must stay in lockstep with
+// the `:root` / `(pointer: coarse)` defaults in css/tokens.css.
+const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
 // between ticks and the label reads a number you cannot scrub back to).

@@ -371,4 +371,5 @@ re-bless them deliberately rather than by reflex.
   exactly like a layout bug.
 - Leaving the MCP browser on a live game page while Playwright runs — contention
   that produces false timeouts.
-- Testing only at UI scale 100 when the shipped default on touch is 115.
+- Testing only at UI scale 100 — players can still dial 115–150 via SETTINGS,
+  and several layout bugs historically only showed above 100%.

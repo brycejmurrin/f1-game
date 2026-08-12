@@ -20,10 +20,9 @@ export const SCALE_HELP =
   "--scale=80,100,130,150   also audit at each interface size (%, default: the device default alone)";
 
 // No --scale= means "whatever this device defaults to", represented as `null`
-// and NOT as 100: on a coarse pointer the shipped default is 115 %, so a run
-// that quietly pinned the axis to 100 would be measuring a size no phone ever
-// shows. `null` leaves nothing stored, which is exactly the state a fresh
-// install is in.
+// (not a hard-coded 100): leave nothing stored so first paint uses the CSS
+// `:root` / `(pointer: coarse)` defaults — currently 100% on every pointer,
+// but a future touch-only bump must not be silently overridden by the tools.
 export function parseScales(argv) {
   const a = argv.find((x) => x.startsWith("--scale="));
   if (!a) return [null];

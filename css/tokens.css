@@ -426,25 +426,17 @@ body:not(.desktop) {
    the CSS default and the JS default cannot disagree — and unlike the
    `.desktop` class, which is added at boot, it is right on the FIRST paint.
 
-   1.15 is the shipped default, not a ceiling: SETTINGS ▸ DISPLAY ▸ UI SIZE
-   offers 90/100/115/130 and writes this property inline on documentElement.
-   Routing size through one knob with a control behind it is the point — it
-   replaces guessing a number from a screenshot. */
-/* TWO KNOBS, NOT ONE, because the two layers are read differently. Menu type is
-   read at rest, with time; the HUD is glanced at while driving, and how big it
-   wants to be depends on where the phone is mounted and how good your eyes are
-   at 200 km/h. They also compete for the same screen, so trading one against
-   the other is a real choice a player should get to make.
-     --ui-scale   the menus: .sheet (components.css) and #overlay (menus.css)
-     --hud-scale  everything on screen while driving: the HUD clusters
-                  (hud.css) and the touch dock (overlays.css)
-   The DOCK counts as HUD rather than UI. It is a control, not a readout, but it
-   lives in the driving layer and competes with the HUD for the same edges, so
-   one slider owning "how big is the stuff I see while racing" is the model that
-   matches how it is used. */
+    1.0 is the shipped default on every pointer. Touch used to ship at 1.15, but
+   after the 2026-08 type floor raised micro/body to ≥14px CSS (so 90% UI SIZE
+   still paints ≥12px), that 15% zoom made the title and sheets read as "zoomed
+   in" on phones — measured on the live 1144 deploy. Players who want bigger
+   still have SETTINGS ▸ DISPLAY ▸ UI SIZE up to 150%. */
 :root { --ui-scale: 1; --hud-scale: 1; }
+/* Coarse-pointer used to force 1.15 here; left at 1 so first paint matches the
+   JS scaleDefault() (also 100). The media query stays as the place a future
+   touch-only default would live, so the CSS/JS agreement note above still holds. */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1.15; --hud-scale: 1.15; }
+  :root { --ui-scale: 1; --hud-scale: 1; }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed

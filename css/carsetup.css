@@ -667,8 +667,9 @@
      the unscaled number.
      Measured on the primary play shape (852x393), overlap of the camera bar by
      the panel:  100% -8px (clear) | 115% +61px | 130% +130px | 150% +222px.
-     115% is the SHIPPED DEFAULT on a coarse pointer, so CAMERA and ACTIVE AERO
-     sat under the panel out of the box on the shape the game is played in.
+     115% used to be the shipped coarse default (now 100% after the type floor),
+     so CAMERA and ACTIVE AERO sat under the panel out of the box on the shape
+     the game is played in. Players can still dial 115 via UI SIZE.
      This is the deferred `--cs-sheet-w` defect in docs/archive/research/UI-SCALE-AND-ZOOM.md
      §5b, and the fix is the one that section prescribes: the correction belongs
      at the CONSUMPTION site, because the two consumers are in different zoom

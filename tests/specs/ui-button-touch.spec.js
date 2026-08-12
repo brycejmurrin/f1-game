@@ -278,10 +278,11 @@ test.describe("Lighting tuner — free camera touch controls", () => {
      #lighting-inner is a `.sheet`, and css/components.css puts
      `zoom: var(--ui-scale)` on every sheet — so the panel PAINTS --dock-w x
      --ui-scale wide, while css/hud.css positioned the LOOK stick and the
-     climb/dive column from the unscaled --dock-w. --ui-scale is 1 with a mouse
-     and 1.15 by default under `(pointer: coarse)`, so the arithmetic was exact
-     on every desktop and short by 15-30% on an iPad: measured, the stick
-     cleared the panel by ~13px at 115% and sat ON it at UI SIZE 130%. */
+     climb/dive column from the unscaled --dock-w. --ui-scale ships at 1 on every
+     pointer (it used to be 1.15 under `(pointer: coarse)`), so the arithmetic
+     was exact on every desktop and short by 15-30% when a player raised UI SIZE:
+     measured, the stick cleared the panel by ~13px at 115% and sat ON it at
+     UI SIZE 130%. */
   for (const scale of ["1", "1.15", "1.3"]) {
     test(`the LOOK stick clears the tuner panel at UI scale ${scale}`, async ({ page }) => {
       await page.goto("/");

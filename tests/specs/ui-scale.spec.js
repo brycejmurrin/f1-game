@@ -25,13 +25,12 @@
 import { test, expect } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
-// 115 IS IN THE LIST BECAUSE IT IS WHAT SHIPS. `scaleDefault()` in js/game.js
-// returns 115 on a coarse pointer, so it is the size the overwhelming majority
-// of players run — and it was the one value this guard did not test. That is
-// not a theoretical gap: three defects confirmed on 2026-08-08 were invisible
-// at 100% and present at 115%, including the garage panel overlapping the
-// camera bar by 61px (measured -8 / +61 / +130 / +222 at 100/115/130/150). A
-// guard that skips the default cannot see the default's bugs.
+// 115 stays in the ladder even though the shipped default is back at 100
+// (touch used to ship 115; dropped after the type floor made that combo too
+// big). Three defects confirmed on 2026-08-08 were invisible at 100% and
+// present at 115%, including the garage panel overlapping the camera bar by
+// 61px (measured -8 / +61 / +130 / +222 at 100/115/130/150). Players can still
+// dial 115 via SETTINGS ▸ DISPLAY, so the guard must keep seeing it.
 const SCALES = [90, 100, 115, 130, 150];
 
 // The screens reachable from the title without starting a session. Each is

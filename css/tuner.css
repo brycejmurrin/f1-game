@@ -51,11 +51,12 @@ body:has(#camtune:not([hidden])) {
      `zoom: var(--ui-scale)` on every sheet, so BOTH its width and its `right`
      inset are expressed in the zoomed local space: the panel really covers
      (--dock-w + 8px + --sar) x --ui-scale pixels in from the right edge.
-     --ui-scale is 1 with a mouse and 1.15 by default under `(pointer: coarse)`
-     (css/tokens.css), so the un-scaled arithmetic was exact on every desktop
-     and wrong by 15-30% on a touch screen — which is how the free-cam LOOK
-     stick and climb/dive column ended up sitting on the panel on an iPad, and
-     only on an iPad.
+     --ui-scale ships at 1 on every pointer (css/tokens.css); it used to be
+     1.15 under `(pointer: coarse)`, so the un-scaled arithmetic was exact on
+     every desktop and wrong by 15-30% on a touch screen — which is how the
+     free-cam LOOK stick and climb/dive column ended up sitting on the panel
+     on an iPad, and only on an iPad. The `/ var(--ui-scale)` form stays: a
+     player who raises UI SIZE still needs the dock inset in screen pixels.
      Declared here beside --dock-w on purpose: a custom property resolves its
      var() references against this element's own computed values, so the
      flying override and the wide-rail override below both flow through without

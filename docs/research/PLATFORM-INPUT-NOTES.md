@@ -103,11 +103,12 @@ element must scale with it
 `zoom` is standardised now (CSSWG issue 5623) and, unlike `transform: scale()`,
 it **changes the layout box** — the element genuinely occupies its scaled size.
 
-This game puts `zoom: var(--ui-scale)` on every `.sheet`, and `--ui-scale` is
-**1.0 with a mouse and 1.15 by default under `(pointer: coarse)`**. That single
-fact makes a whole class of bug desktop-invisible: any un-scaled arithmetic
-against a zoomed panel is exact on every development machine and wrong by
-15–30 % on a touch screen.
+This game puts `zoom: var(--ui-scale)` on every `.sheet`, and `--ui-scale`
+ships at **1.0 on every pointer** (touch used to default to 1.15 under
+`(pointer: coarse)` until the type floor made that combo too big). Raising UI
+SIZE still makes a whole class of bug desktop-invisible at 100%: any un-scaled
+arithmetic against a zoomed panel is exact at the default and wrong by 15–30 %
+when the player dials up.
 
 Both terms scale, not just the width: a zoomed element's own `right`/`top`
 insets are in its local space too. The docked tuner panel really occupies
