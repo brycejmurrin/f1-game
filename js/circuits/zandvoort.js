@@ -28,7 +28,7 @@
     dressingExclusions: [
       // Keep the seaward dune openings clear so the authored North Sea and sand
       // glimpses remain legible instead of filling with generic trees and lamps.
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0.25, s1: 0.80, side: 1 },
+      { kinds: ["foliage", "lighting"], s0: 0.25, s1: 0.80, side: 1 },
     ],
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
     // outer edge. Authored as explicit fraction windows so the bank lands on the

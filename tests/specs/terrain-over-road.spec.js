@@ -86,7 +86,7 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   expect(audit.dressingExclusions).toEqual(expect.arrayContaining([
     expect.objectContaining({ kind: "city", s0: 0.02, s1: 0.14 }),
     expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
-    expect.objectContaining({ kinds: ["foliage", "lamps", "floodlights"], s0: 0.70, s1: 0.89 }),
+    expect.objectContaining({ kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 }),
   ]));
   // mexico.js authors a deliberate gentle profile. The old "essentially flat"
   // <= 1.0 pin predated that authoring and sat red, unrun, until 2026-08. Pin

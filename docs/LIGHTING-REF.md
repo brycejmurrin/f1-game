@@ -168,15 +168,19 @@ floodlights are activated.
 
 ---
 
-## Floodlights
+## Floodlights / track lamps
 
-`buildTrackLights()` in `js/game/lighting.js` places one point light every ~22 m
-along both edges of every circuit. Activated whenever the scene is dark:
+`buildTrackLights()` in `js/game/lighting.js` places one point light per entry
+in `track.lampPosts` (generic mast pass ~22 m both edges, plus `floodMast` /
+`lampPost` registrations). Activated whenever the scene is dark:
 
 - Any explicit night/dusk/dawn time-of-day, on any track.
 - Default mode on a track whose `_night` flag is set.
 
-Colour is chosen by `floodColor(theme)`:
+The LIGHTING TUNER keeps one **LAMPS** tab (POOLS + BEHAVIOUR sections) for
+every knob that drives this pipeline — street posts and flood banks share the
+same controls. Colour is chosen by `floodColor(theme)` and per-post
+`LAMP_KINDS`:
 
 | Theme | Colour |
 |---|---|
@@ -186,9 +190,10 @@ Colour is chosen by `floodColor(theme)`:
 | `street_day` | Warm street-lamp amber (Monaco/Madrid) |
 | `green` (classic) | Neutral warm white |
 
-**Masts**: `buildProps` (the `js/track/` scenery modules) emits a floodlight mast mesh at every light
-position using the same stride/offset/side — masts are visible day and night, so
-each light pool reads as physically cast by a real structure.
+**Masts**: `buildProps` emits a mast mesh at every light-bearing post using the
+same stride/offset/side — masts are visible day and night, so each light pool
+reads as physically cast by a real structure. Street themes use slim posts
+keyed off the furniture `fz.lamp` style; open circuits get tall flood banks.
 
 `setFrameLights()` culls the full list to the nearest CAP lamps each frame
 (`lampCull` / 32 solo) and uploads the light uniforms. When the sun dominates

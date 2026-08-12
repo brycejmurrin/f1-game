@@ -23,7 +23,7 @@
     terrainOuter: 100,
     dressingExclusions: [
       // Sochi runs through the Olympic Park — paved plaza, not vegetation.
-      { kinds: ["foliage", "lamps"], s0: 0.90, s1: 0.30 },
+      { kinds: ["foliage"], s0: 0.90, s1: 0.30 },
       { kind: "foliage", s0: 0.42, s1: 0.58 },
       // The park stretch is the whole point of this circuit and every building
       // in it is a named 2014 venue built below. The `modern` theme's generic

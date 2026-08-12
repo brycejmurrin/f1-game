@@ -21,14 +21,14 @@
     barrierGap: 2.0,
     dressingExclusions: [
       // Keep generic city furniture out of the tunnel and the Casino sightline.
-      { kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.50, s1: 0.60 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.50, s1: 0.60 },
       { kind: "city", s0: 0.17, s1: 0.24 },
       // Exclusions are always racing-space, even though bespoke scenery is source-space.
       // The harbour occupies the right side of the racing lap from Portier to Rascasse.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.29, s1: 0.70, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.29, s1: 0.70, side: 1 },
       // Harbour front along the pit straight: open water — no props.
       // (Was hard-coded in the engine as `side === 1 && k < n * 0.14`.)
-      { kinds: ["city", "foliage", "lamps"], s0: 0, s1: 0.14, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0, s1: 0.14, side: 1 },
     ],
     // The bundled GPS trace (js/track/geo-paths.js) runs counter-clockwise; real Monaco
     // is driven CLOCKWISE. `reverse` flips the lap direction in the engine

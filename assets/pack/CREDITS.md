@@ -20,3 +20,7 @@ Powered by Poly Haven.
 | material | stone | Poly Haven contributors | CC0 | polyhaven:castle_brick_02_red |
 | material | rust | Poly Haven contributors | CC0 | polyhaven:rusty_metal |
 | material | asphalt | Poly Haven contributors | CC0 | polyhaven:asphalt_track |
+| env | *|default | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
+| env | *|day | Poly Haven contributors | CC0 | polyhaven:kloofendal_43d_clear_puresky |
+| env | *|dusk | Poly Haven contributors | CC0 | polyhaven:industrial_sunset_puresky |
+| env | *|dawn | Poly Haven contributors | CC0 | polyhaven:venice_sunset |

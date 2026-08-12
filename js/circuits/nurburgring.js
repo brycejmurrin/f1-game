@@ -29,7 +29,7 @@
     // short of bridging the tight Arena foldback.
     terrainOuter: 100,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.94, s1: 0.10 },  // pit straight + Arena
+      { kinds: ["foliage"], s0: 0.94, s1: 0.10 },  // pit straight + Arena
       { kind: "foliage", s0: 0.60, s1: 0.68 },              // Dunlop-Kehre runoff
     ],
     // Cool, damp Eifel upland light — the Nürburgring is 600 m up and famously

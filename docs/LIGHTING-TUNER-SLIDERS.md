@@ -18,7 +18,7 @@ be live from a slider drag (not just at track load):
 | build-only | 5 | `buildTrackLights` only (poolEnergy, lampRadiusMul, bleedMul, beamCone, lampGapFill) | `rebuild:true` nulls `track._lights` | `lighting-rebuild.test.mjs` |
 | apply-only | 15 | `applyRaceSettings`/`atmosphere.js` only | `APPLY_RACE_IDS` re-runs it | `lighting-reapply.test.mjs` |
 
-The 16 lamp/tail-light knobs in FLOODLIGHTS / LAMP BEHAVIOUR / CAR are the trap:
+The 16 lamp/tail-light knobs in LAMPS / CAR are the trap:
 11 of them (`lampFlicker`, `lampWarmup*`, `lampCull*`, `lampBehindBias`,
 `tailLightMul`, `brakeGlowMul`, `tailRange`, `tailFade`) are read in
 `lighting.js` too — but inside `setFrameLights`/`appendCarTailLights`/`lampCap`,
@@ -245,12 +245,17 @@ off-grid.
 | `contactStr` | CONTACT SHADOW | 0 … 3 | 1 | — | ✓ | game.js, post.js×4 |
 | `ambContactDark` | AMBIENT CONTACT DARK | 0 … 3 | 1 | `uAmbContactDark` |  | glx.js×2 |
 
-## FLOODLIGHTS  (10)
+## LAMPS  (21)
+
+One tuner tab for every track lamp (street posts and flood banks). Was split as
+FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
+
+### POOLS
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `lampLevel` | LAMP LEVEL | 0.02 … 1.5 | 0.26 | — | ✓ | light-store.js, game.js×3 |
-| `floodDay` | DAYTIME FLOODS | 0 … 1.5 | 0 | — |  | game.js×4 |
+| `floodDay` | DAYTIME LAMPS | 0 … 1.5 | 0 | — |  | game.js×4 |
 | `poolEnergy` | POOL ENERGY | 0.05 … 2 | 0.55 | — | ✓ | lighting.js×5 |
 | `lampRadiusMul` | POOL RADIUS | 0.3 … 3 | 1 | — | ✓ | lighting.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 5 | 1 | — | ✓ | lighting.js×3 |
@@ -260,7 +265,7 @@ off-grid.
 | `beamCone` | BEAM CONE WIDTH | 0.4 … 2.2 | 1 | — | ✓ | lighting.js×3 |
 | `lampWallSpill` | LAMP WALL SPILL | 0 … 3 | 1 | `uLampWallSpill` |  | glx.js×2 |
 
-## LAMP BEHAVIOUR  (11)
+### BEHAVIOUR
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|

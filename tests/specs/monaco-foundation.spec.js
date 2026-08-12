@@ -65,7 +65,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   expect(result.definition.sceneryCoordinates).toBe("source");
   expect(result.definition.dressingExclusions.length).toBeGreaterThanOrEqual(3);
   expect(result.definition.dressingExclusions).toContainEqual({
-    kinds: ["city", "foliage", "lamps"],
+    kinds: ["city", "foliage"],
     s0: 0.29,
     s1: 0.70,
     side: 1,

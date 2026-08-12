@@ -229,14 +229,16 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
   gap: calc(var(--gap) * 0.6);
 }
-.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(13px, calc(3 * var(--vhz)), 18px); }
+/* Min 14px: at UI SIZE 90% (.sheet zoom ≈0.9) painted type stays ≥12px. */
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(14px, calc(3 * var(--vhz)), 18px); }
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
   width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
-     ~54px of the ~230px the content has to live in */
-  font-size: clamp(13px, calc(3.6 * var(--vhz)), 20px);
+     ~54px of the ~230px the content has to live in.
+     Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
+  font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
 /* ---------- pane-pair: the LIST/DETAIL primitive ----------
@@ -779,7 +781,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   align-items: center;
   justify-content: center;
   width: 100%;
-  /* Control labels are glanced mid-corner — --fs-4 (15px) stays ≥~13.5px visual
+  /* Control labels are glanced mid-corner — --fs-4 (17px) stays ≥~15px visual
      at the UI SIZE floor (90%). MEASURED before: compact phone buttons read
      ~10.4 own/--fs-2 and failed the arm's-length floor in the readability survey. */
   font-size: var(--fs-4);
@@ -798,7 +800,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   position: absolute;
   left: 0; right: 0; top: 0;
   margin: 0;
-  font-size: 12px;
+  /* --fs-2 (15px): under .sheet zoom 0.9 paints ≥13.5px (visual floor 12). */
+  font-size: var(--fs-2);
   line-height: 1.2;
   pointer-events: none;
   z-index: 1;
@@ -1003,12 +1006,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     align-content: start;
   }
   #advanced-inner .adv-item { margin: 0; min-width: 0; }
-  /* full-width rows: the intro, the preset picker, the disclosure button, the
-     disclosure itself, and every section heading inside it */
+  /* full-width rows: the intro, the preset picker, the whole <details>
+     disclosure (summary + content flow normally inside it — display:contents
+     was tried here first to keep the summary and #adv-extra as separate grid
+     items the way the old button+div pair were, but Chromium does not
+     promote a <details>'s children out of the box tree for grid placement
+     even with display:contents, so #adv-extra rendered at one column's width
+     instead of spanning the sheet), and every section heading inside
+     #adv-extra's OWN nested grid */
   #advanced-inner .adv-intro,
   #advanced-inner .preset-row,
-  #advanced-inner .adv-more-btn,
-  #advanced-inner #adv-extra,
+  #advanced-inner #adv-details,
   #advanced-inner .adv-sec { grid-column: 1 / -1; }
   #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 }

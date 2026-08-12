@@ -28,15 +28,17 @@ test("Albert Park uses an explicit essentially-flat racing-space terrain contrac
   assert.ok(Math.max(...rises) - Math.min(...rises) <= 1.2);
 });
 
-test("Albert Park excludes shared dressing replaced by bespoke park dressing", () => {
+test("Albert Park excludes shared foliage for bespoke park densification", () => {
   const def = loadDefinition();
   const fullLapKinds = new Set(
     def.dressingExclusions
       ?.filter((rule) => rule.s0 === 0 && rule.s1 === 1)
       .flatMap((rule) => rule.kinds || [rule.kind])
   );
-  for (const kind of ["foliage", "lamps", "floodlights"])
-    assert.ok(fullLapKinds.has(kind), `missing full-lap ${kind} exclusion`);
+  assert.ok(fullLapKinds.has("foliage"), "missing full-lap foliage exclusion");
+  // Generic mast pass owns night lamps — do not blanket-exclude lighting.
+  assert.ok(!fullLapKinds.has("lamps") && !fullLapKinds.has("floodlights") && !fullLapKinds.has("lighting"),
+    "must not exclude lighting full-lap (generic masts provide night lamps)");
 });
 
 test("Albert Park uses typed foundation helpers for water and grounded runoff", () => {

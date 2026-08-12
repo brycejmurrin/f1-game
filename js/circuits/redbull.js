@@ -28,7 +28,7 @@
     terrainOuter: 48,
     dressingExclusions: [
       // Preserve clean sightlines to The Wing, the bull plaza and pit gantries.
-      { kinds: ["foliage", "floodlights"], s0: 0.96, s1: 0.14 },
+      { kinds: ["foliage", "lighting"], s0: 0.96, s1: 0.14 },
       // Bespoke stands and forest rims own the Remus amphitheatre.
       { kind: "foliage", s0: 0.18, s1: 0.38, side: 1 },
     ],

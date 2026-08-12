@@ -43,7 +43,7 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.def.sceneryCoordinates).toBe("racing");
     expect(result.def.terrainOuter).toBe(120);
     expect(result.def.dressingExclusions).toEqual([
-      { kinds: ["foliage", "lamps", "floodlights"], s0: 0, s1: 1 },
+      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
     ]);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
     expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);

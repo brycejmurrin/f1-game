@@ -100,16 +100,16 @@ per-condition preset — focus on the ones the intent notes above call out._
 - `ssaoRadius` [0.1..4.1] def 0.6 — world-space reach of AO sampling
 - `contactStr` [0..3] def 1 — grounding shadow under car/props
 
-### FLOODLIGHTS
-- `lampLevel` [0.02..1.5] def 0.26 — floodlight brightness ceiling
-- `floodDay` [0..1.5] def 0 — light floods during DAY sessions (0 = off; lit-stadium look under a blue sky)
+### LAMPS
+- `lampLevel` [0.02..1.5] def 0.26 — lamp brightness ceiling (street posts + flood banks)
+- `floodDay` [0..1.5] def 0 — light lamps during DAY sessions (0 = off; lit-stadium look under a blue sky)
 - `poolEnergy` [0.05..2] def 0.55 — per-lamp pool luminance
 - `lampRadiusMul` [0.3..3] def 1 — pool reach
 - `bleedMul` [0..5] def 1 — out-of-beam floor (lifts valleys)
 - `glareStr` [0..1.5] def 0.12 — lens-halo strength
 - `lampTemp` [-2..2] def 0 — lamp white-balance; − sodium/amber, + LED/white
 - `lampFlicker` [0..0.6] def 0.1 — aging-lamp pulse
-- `beamCone` [0.4..2.2] def 1 — flood cone width
+- `beamCone` [0.4..2.2] def 1 — lamp cone width
 
 ### NIGHT GLOW & BLOOM
 - `floodEmitMul` [0..3] def 1 — lit buildings/windows/signage brightness

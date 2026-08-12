@@ -797,7 +797,7 @@ test.describe("Madrid track foundation migration", () => {
     expect(result.terrainOuter).toBeGreaterThanOrEqual(48);
     expect(result.dressingExclusions).toEqual(expect.arrayContaining([
       expect.objectContaining({ kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 }),
-      expect.objectContaining({ kinds: ["city", "foliage", "lamps", "floodlights"], s0: 0.68, s1: 0.83 }),
+      expect.objectContaining({ kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 }),
     ]));
     expect(result.elevation.range).toBeGreaterThanOrEqual(20);
     expect(result.elevation.range).toBeLessThanOrEqual(32);

@@ -33,8 +33,8 @@
     // alone) and the floodlight gaps at the Sphere and the Bellagio lake.
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
-      { kind: "floodlights", s0: 0.27, s1: 0.36, side: -1 },
-      { kind: "floodlights", s0: 0.65, s1: 0.71, side: 1 },
+      { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
+      { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],
     pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12] },
     segs: [

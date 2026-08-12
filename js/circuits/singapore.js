@@ -54,13 +54,13 @@
       // facades; keep it (and shared foliage/lamps) out of the bay/hero
       // sightlines only. Floodlights stay excluded lap-wide — the bespoke
       // floodMastRing IS the race-lighting rig (no duplicate poles/pools).
-      { kinds: ["city", "foliage", "lamps"], s0: 0.15, s1: 0.48, side: 1 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.78, s1: 0.90, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.15, s1: 0.48, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.78, s1: 0.90, side: 1 },
       // Same double-build, the remaining quarter of side 1: the two rules above
       // stop at 0.90 and start again at 0.15, but cityFront()'s first call
       // (below) runs 0.90->0.16 across that exact seam. Closes the gap between
       // them rather than widening either.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.90, s1: 0.15, side: 1 },
+      { kinds: ["city", "foliage"], s0: 0.90, s1: 0.15, side: 1 },
       // The comment above has always been true for side 1, where the two bay
       // windows exclude the generic pass from the sightlines cityFront() does
       // not reach. It was never applied to side -1, where cityFront() ALSO runs
@@ -82,13 +82,13 @@
       // where two systems draw the same wall twice, not where only one draws
       // it. Measured: these three rules alone took night from 1,271,799 to
       // 1,006,947 with ZERO change to the bespoke facade wall itself.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.00, s1: 0.20, side: -1 },
-      { kinds: ["city", "foliage", "lamps"], s0: 0.48, s1: 0.88, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.00, s1: 0.20, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.48, s1: 0.88, side: -1 },
       // Third side=-1 cityFront() call, the pit-straight fencing wall
       // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
       // rules above, just a smaller range.
-      { kinds: ["city", "foliage", "lamps"], s0: 0.955, s1: 0.04, side: -1 },
-      { kind: "floodlights", s0: 0, s1: 1 },
+      { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
+      { kind: "lamps", s0: 0, s1: 1 },
     ],
     // The redundant-layer cut above still left night at 1,006,947 — over even
     // a raised budget — because cityFront()'s own along() step (44/62/44/48 m)
@@ -405,13 +405,13 @@
           const c    = a.c;
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
-          // Trunk (dark green). addCyl/addCone in js/track/geom.js are BASE-anchored
-          // (they build from `c` up to `c + u*h`), so the old `c + u*h*0.5` put
-          // the trunk's FOOT half its own height in the air and carried the
-          // canopies up with it. Forward, that was invisible: the trees spread
-          // over the CBD façade mass, which the float audit accepted as support.
-          // Reversed they spread the other way, over open ground, and eleven
-          // trees stood 14-27 m up. Anchor the foot at `c`.
+          // Trunk (dark green). addCyl/addCone are BASE-anchored in TrackGeom
+          // (js/track/geom.js) — they build from `c` up to `c + u*h` — so the
+          // old `c + u*h*0.5` put the trunk's FOOT half its own height in the
+          // air and carried the canopies up with it. Forward, that was invisible:
+          // the trees spread over the CBD façade mass, which the float audit
+          // accepted as support. Reversed they spread the other way, over open
+          // ground, and eleven trees stood 14-27 m up. Anchor the foot at `c`.
           addCyl(out, c, 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
           // Main canopy cap — vivid NEON colour. Base sits 2 m BELOW the trunk
           // top so it overlaps rather than hovers; a cone base exactly at `h`

@@ -76,13 +76,16 @@ costs you a debugging round.
   cheaper: the title screen is **14 lines** against a 2556x1179 PNG. It also shows
   what a screenshot cannot — accessible names, roles, pressed/checked state, and
   the ABSENCE of landmarks. Use it as the default structural probe and reach for a
-  screenshot only when the question is visual.
+  screenshot only when the question is visual. Uids are compound (`1_12`); drive
+  menus with `click({uid})` rather than guessing DOM ids when checking labels.
 - **`list_console_messages`** (`types: ["error","warn"]`) — the layout-audit probe
   asks "did the page throw", and an interactive sweep should too. A layout that
   only looks right because a script died is not right.
 - **`lighthouse_audit`** (`mode: "snapshot"`) — accessibility/SEO/best-practices
   scoring on the CURRENT state without a reload. Excludes performance, which is
   `performance_start_trace`. Expensive; do not run it while a Playwright suite is.
+  Write reports under `/tmp` (or negotiate MCP roots) — see
+  `docs/research/CHROME-DEVTOOLS-MCP.md`.
 
 **`resize_page` does not reliably take on this page** — measured, it reported the
 old viewport back. Use `emulate` with the full descriptor string instead; that

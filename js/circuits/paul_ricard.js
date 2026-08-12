@@ -32,7 +32,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 130,
     dressingExclusions: [
-      { kinds: ["foliage", "lamps"], s0: 0.92, s1: 0.10 },  // pits
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },  // pits
       // Paul Ricard's blue-and-red painted runoff is enormous and bare; the
       // generic foliage pass has no business standing in it.
       { kind: "foliage", s0: 0.20, s1: 0.44 },

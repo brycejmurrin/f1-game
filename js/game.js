@@ -5677,7 +5677,7 @@ function render(dt) {
   // shader whenever the scene is dark enough to read them — night, dusk, or dawn
   // on any circuit, or a night-default track in default mode. In bright day the
   // sun dominates so they're normally left off (no washed-out daylight pools) —
-  // UNLESS the DAYTIME FLOODS knob (LT.floodDay) is turned up, which lights the
+  // UNLESS the DAYTIME LAMPS knob (LT.floodDay) is turned up, which lights the
   // pools under a blue sky for a lit-stadium look (handled in the else-branch).
   const _floodActive = isFloodActiveSession();
   // Daytime floods: only when the session isn't already a dark one AND the knob is
@@ -5714,7 +5714,7 @@ function render(dt) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
       // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
-      // for the whole session (the FLOODLIGHTS sliders had no authority at dusk).
+      // for the whole session (the LAMPS sliders had no authority at dusk).
       // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
       // TWILIGHT FLOOR + TWILIGHT RAMP knobs: the dawn/dusk floor level and how
       // steeply floods climb to full as the sun sets (def 0.30 / 6 = as-shipped).
@@ -5733,9 +5733,9 @@ function render(dt) {
       const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);   // 1 at twilight → 0 deep night
       floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
     } else {
-      // DAYTIME FLOODS: pools lit under a blue sky. No twilight warmth ramp (the
+      // DAYTIME LAMPS: pools lit under a blue sky. No twilight warmth ramp (the
       // "just switched on" amber glow is a dusk cue) — neutral white scaled by
-      // DAYTIME FLOODS × LAMP LEVEL, still honouring LAMP TEMPERATURE.
+      // DAYTIME LAMPS × LAMP LEVEL, still honouring LAMP TEMPERATURE.
       const lvl = _floodDayLvl * LT.lampLevel;
       floodScale = [lvl * _ltr, lvl * _ltg, lvl * _ltb];
     }
@@ -6438,7 +6438,7 @@ function render(dt) {
   // scatters a little), swelling with haze/rain into full volumetric shafts —
   // and coloured per lamp, so neon-spill lights throw coloured beams.
   // Gated to dark sessions (key below ~0.45): visible lamp beams in daylight (the
-  // DAYTIME FLOODS knob also sets frame.lights) would read as odd haze shafts.
+  // DAYTIME LAMPS knob also sets frame.lights) would read as odd haze shafts.
   // Mobile tier sheds the beams entirely: any non-zero value keeps the whole
   // god-ray block alive every night frame (volumetric march with a per-step
   // lamp loop + 4 blur passes + a nearest-lamp re-sort) — a top GPU cost on
