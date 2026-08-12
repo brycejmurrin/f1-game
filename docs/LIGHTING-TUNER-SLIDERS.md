@@ -95,6 +95,59 @@ scene event it drives even happening in this shot (traffic, dark sky, weather),
 and would this effect show up in a MEAN across the whole frame or only in a
 handful of pixels?
 
+## The full day-dry sweep's 18 "no clear signal" knobs: 17 confirmed, 1 open
+
+A later full 178-knob day-dry sweep (`tools/tuner-sweep.mjs --cond=day-dry`)
+carried 18 knobs through to a genuinely clean, isolated re-check (own noise
+floor ≈0.12, not the FLOOR=2.0 the sweep uses) that still showed no signal:
+`sunShaftMul`, `sunShaftDecay`, `mieScatter`, `flareStreak2`, `whites`,
+`carShadow`, `aoStr`, `ssaoRadius`, `ambContactDark`, `carEnvCube`, `carGloss`,
+`carGlow`, `bounceK`, `fogSunCore`, `hazeCloudShare`, `fogHeight`, `cloudDef`,
+`surfDetail`. Driving the live page through the Chrome DevTools MCP (screenshots
++ in-page pixel diffs, `.claude/skills/mcp-probe`) resolved 17 of them — LIVE,
+every time, once the right condition was found — and left one genuinely open.
+
+**Two of this session's own earlier mistakes accounted for most of the false
+"no signal" results**, both now written up in `mcp-probe`'s trap list:
+
+1. **Wrong default/push values.** `mieScatter` was tested against a remembered
+   default of 0.03; the real `TUNE_DEFS` default is **1.0**. `flareStreak2` used
+   0.4 against a real default of **0.5**. `ssaoRadius`, `ambContactDark`,
+   `fogSunCore`, `cloudDef`, `whites` had the same class of error. A knob tested
+   against the wrong starting point isn't tested at all.
+2. **`snapCam()` called right after `orbit()`.** `snapCam()` unconditionally
+   clears the free-cam (`G.dbgCam = null`) before snapping the player camera —
+   calling it after a free-cam positioning call cancels that positioning. The
+   first BEFORE/AFTER pair this session captured showed a wide cityscape and a
+   close-up car: not because anything in the scene changed, but because each
+   `snapCam()` silently discarded the orbit and let the chase cam's own spring
+   settle at a different point each time. Dropping `snapCam()` after free-cam
+   calls fixed every subsequent comparison.
+
+With both fixed, plus matching each knob to the condition its own gate needs
+(bright midday sun for the sun-shaft/flare group — dusk's dim sun color closes
+an internal `_sunGate`; night+wet for `carGlow`/`bounceK`; fog+dusk for
+`fogSunCore`; a close chase-cam shot for the six car-paint/shadow knobs; a
+close low-angle road shot for `surfDetail`), 17 of 18 confirmed LIVE — several
+by a numeric pixel-diff alone (`sunShaftDecay`, `mieScatter`, `ambContactDark`,
+`fogHeight` all sat 4–15× a measured ≈0.12 noise floor with no visible-by-eye
+difference), one (`flareStreak2`) only by scanning horizontal bands and finding
+a single 3-pixel-tall row at 60× the surrounding noise — the same
+sub-pixel-band blind spot as `starBright` above, just narrower.
+
+**`cloudDef` remains genuinely unresolved.** Its shader gate is
+`cloudRich = max(daytime, twilight)` guarding a "billow octave" that sharpens
+cumulus edges (`js/render/shaders/sky.js`) — it needs PARTIAL cloud coverage
+with visible puffy edges in frame, not the full "overcast" weather (renders as a
+flat grey wash with no coverage gradient to sharpen) or the near-clear "dry"
+weather (too few clouds) tried here. Three different conditions (fog+dusk,
+overcast+day, dry+`cloudCover:0.5`) all read at the noise floor. It is very
+likely correctly wired — same registry, same uniform-upload pattern as its 177
+siblings, all independently confirmed clean by the static audit above — but
+finding the exact visual condition needs a dedicated cloud-focused camera setup
+this session didn't land on. Left as an open item rather than a claimed result
+either way.
+
 ## Reading the table
 
 Resolution order, lowest→highest: `def` below → `LightPresets["*"]` → shipped
