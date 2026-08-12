@@ -152,20 +152,75 @@ Not everything elevated is a defect. Expect these and judge them:
 - **Water-borne props** — Monaco's yachts float on water the ground model does
   not treat as a surface.
 
-## 5. Suggested gate
+## 5. The gate
 
-This gate now ships — `npm run test:float` in `package.json`:
+`npm run test:float` (`node tools/float-audit.cjs --all`) existed for a long
+time and **ran nowhere** — no CI job, no test. It could not have been wired up
+as written either: it exits 1 on any floater and 37 of the 40 circuits have
+some, so a fleet-wide gate would have been red from the day it landed. A
+detector nobody runs is a detector that does not exist.
 
-```json
-"test:float": "node tools/float-audit.cjs --all"
-```
+What ships now is the per-circuit ratchet this section always argued for:
 
-Gate per-circuit rather than fleet-wide while counts are non-zero — a ratchet
-that forbids regressions on already-clean circuits is more useful than a red
-build everywhere. (Don't trust a "currently clean" list in prose: measured on
-the current tree it is 5 circuits, not the 2 an earlier draft of this doc
-claimed. Run `node tools/float-audit.cjs --all` rather than believing this
-paragraph.)
+| | |
+|---|---|
+| caps | `tools/float-baseline.json` |
+| test | `tests/unit/scenery-grounding.test.mjs` |
+| runs in | `npm run test:sweeps`, which CI runs |
+
+Semantics are copied from `tests/unit/prop-clipping.test.mjs` so both axes
+behave the same: a circuit ABSENT from the baseline must read 0 (that is what
+makes a new defect or a newly added circuit fail), a listed circuit fails when
+it GROWS, there is no ALLOW hatch, and a cap sitting ABOVE the measured count
+fails as slack — because that slack silently permits regressions up to it.
+
+Two things learned wiring it up, both worth keeping:
+
+- **`--all --json` over a pipe was truncated.** `console.log` to a pipe is
+  async in Node and every exit path called `process.exit()` immediately after,
+  so the ~180 KB payload lost its tail and the consumer got
+  `SyntaxError: ... at position 219264`. It never reproduced locally because a
+  shell redirect to a FILE is a synchronous write. The emitters use
+  `fs.writeSync(1, …)` now. If you add another JSON path here, do the same.
+- **Re-baselining is the move that hollows this out.** Doing it at a MERGE is
+  legitimate — the baseline describes the tree it guards, and a merge makes a
+  different tree — but it has to come with the deltas written down. When the
+  deploy branch merged in, five circuits grew (+12, new scenery written before
+  this guard existed) and two shrank (-4, from that branch's own Monaco fix).
+  The decreases were not optional: the anti-slack test fails a cap left above
+  the measured count, precisely so a fix in one place cannot leave headroom for
+  a regression somewhere else.
+
+Don't trust a "currently clean" list in prose — run the tool. At the time of
+writing it is 3 circuits (miami, portimao, sepang), and an earlier draft of
+this very section claimed 2, then 5.
+
+## 5b. The inherited 12, and where the mechanical fixes ran out
+
+Merging the deploy branch brought 12 new floaters from scenery written before
+the guard existed. Two were **Trap B and fixed mechanically**, both in one line
+once `terrainYAt(x, z)` reached the circuit API:
+
+| | cause | result |
+|---|---|---|
+| spa | one `anchor()` reused along 248 m of the old-circuit ribbon | 7 → 6 |
+| mugello | `anchor()` at the road edge, rows marching 37 m back up a hillside | 16 → 13 |
+
+The rest are **not mechanical, and three were checked and deliberately left**:
+
+- **mugello `terrazza`** — a TERRACED stand. Each row rises by design and steps
+  into the hill; re-seating its rows on the terrain flattens the terrace and
+  deletes the thing it is.
+- **montreal Expo hall** — vertical aluminium fins projecting off each tier's
+  façade. Cantilevered off a building, which is what a fin is.
+- **montreal splayed-leg structure** — frustum segments at mid-height along legs
+  that splay ~9 m out as they descend. The segments are elevated by
+  construction; only the feet should touch.
+
+The lesson for whoever picks this up: **elevated is not unsupported**, and the
+count is not the target. Applying the Trap B pattern to any of the three above
+would have improved the number and damaged the circuit. Judge each one against
+§4's known-legitimate list before touching it.
 
 ## 6. Clipping — the other half
 

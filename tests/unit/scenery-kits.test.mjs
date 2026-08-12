@@ -176,7 +176,8 @@ test("LandmarkKit caps worst-case bounded emission", () => {
   }), true);
   assert.equal(kit.arch(stage, LANDMARK_SPECS.arch), true);
   assert.equal(kit.canopy(stage, LANDMARK_SPECS.canopy), true);
-  assert.equal(emitted.length, 58);
+  // canopy emits 3 (mast cylinder + peaked-roof prism + valance box), up from 2
+  assert.equal(emitted.length, 59);
 });
 
 test("LandmarkKit stops and reports primitive callback failures", () => {

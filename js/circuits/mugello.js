@@ -64,7 +64,8 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
+        terrainYAt } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
@@ -524,9 +525,18 @@
           const b = [a.r, a.u, a.t];
           for (let r = 0; r < rows; r++) {
             const back = r * pitch;
+            // TRAP B (docs/SCENERY-GROUNDING.md §2): anchor() samples the ground
+            // at the ROAD EDGE, and these rows march up to 37 m back from it —
+            // across a Tuscan hillside. Reusing a.c's height that far put the
+            // back rows metres into the air. Re-seat each row on the ground
+            // under it; terrainYAt is null off the rendered ribbon, where a.c
+            // remains the best available guess.
+            const base = vadd(a.c, a.r, side * back);
+            const by = terrainYAt(base[0], base[2]);
+            if (by != null) base[1] = by;
             if (kind === "vine") {
               out._mat = MAT.FOLIAGE;
-              addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, 0.85),
+              addBox(out, vadd(base, a.u, 0.85),
                 [0.9, 1.5, spacing * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], b);
               out._mat = 0;
             } else {
@@ -534,10 +544,10 @@
               // hedge — the gaps between them are the point.
               const h = hash(k * 7 + r * 13);
               if (h < 0.45) continue;
-              addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, 0.7),
+              addCyl(out, vadd(base, a.u, 0.7),
                 0.18, 1.4, [0.42, 0.36, 0.28], 5, b);
               out._mat = MAT.FOLIAGE;
-              addFrustum(out, vadd(vadd(a.c, a.r, side * back), a.u, 1.4),
+              addFrustum(out, vadd(base, a.u, 1.4),
                 1.5, 0.9, 2.2, OLIVE, 6, b);
               out._mat = 0;
             }

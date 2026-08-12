@@ -1,9 +1,23 @@
 // @ts-check
 // ACTIVATION ZONES. The 2026 rule is not "is the road ahead straight enough" —
 // the FIA approves fixed zones per circuit and the standard ECU refuses to
-// rotate the wings outside one. A zone only exists if it exceeds three seconds
-// at racing speed, which is the clause that leaves MONACO with no zones and
-// therefore no active aero at all.
+// rotate the wings outside one.
+//
+// HOW MANY zones a circuit gets is now AUTHORED from the published lists
+// (ZONE_COUNT in js/game/aerozones.js), because it is not derivable: the scan
+// that used to decide it gave baku 8 against a real 2, qatar 4 against 1 and
+// imola 7 against 1. Two consequences for the assertions below.
+//
+// First, MONACO's zero is not "no straight clears three seconds" — that was
+// always a coincidence of the threshold. For 2026 active aero is switched OFF
+// at Monaco outright, cars "locked in Corner Mode for the entire Monte Carlo
+// weekend". Same expected value, honest reason.
+//
+// Second, the three-second minimum is NOT a global invariant any more. 2026
+// zones are placed for energy harvesting, not overtaking, so several sit on
+// short connectors — albert_park's five include 168 m and 176 m runs and the
+// hungaroring's four a 192 m one. The minimum is asserted where it genuinely
+// holds (a fast circuit like monza), not swept across the calendar.
 //
 // That distinction is the mechanic. A rolling look-ahead has no start and no
 // end, so there is nothing to learn and nothing to show; a fixed zone is a
@@ -35,9 +49,25 @@ test.describe("active aero — activation zones", () => {
     expect(Math.max(...zones.map((z) => z.len))).toBeGreaterThan(700);
   });
 
-  test("MONACO has no zone at all — no straight clears three seconds", async ({ page }) => {
+  test("MONACO has no zone at all — 2026 switches active aero off there", async ({ page }) => {
     await loadTrack(page, "monaco");
     expect(await page.evaluate(() => window.__apex.aeroZones())).toEqual([]);
+  });
+
+  // The authored counts are the whole point of ZONE_COUNT, so pin them. These
+  // four are the ones the old curvature scan got most wrong — baku produced
+  // EIGHT zones against a real two, qatar four against one — and they are the
+  // cases a future threshold tweak would silently regress.
+  test("authored circuits get the real number of zones, not a derived guess", async ({ page }) => {
+    for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+      await loadTrack(page, id);
+      const zones = await page.evaluate(() => window.__apex.aeroZones());
+      expect(zones.length, `${id} zone count`).toBe(want);
+      // Every zone must still be a real piece of road, even where it is below
+      // the three-second bar — a zero-length span would mean the picker fell
+      // over rather than that the circuit has a short connector.
+      for (const z of zones) expect(z.len, `${id} zone at ${z.start}m`).toBeGreaterThan(100);
+    }
   });
 
   test("with no zone, the mode can never arm however hard it is asked for", async ({ page }) => {

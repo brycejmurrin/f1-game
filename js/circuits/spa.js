@@ -60,7 +60,7 @@
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
-              waterSurface } = api;
+              waterSurface, terrainYAt } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
@@ -567,6 +567,13 @@
         const a0 = anchor(K(0.170), 1, 16);
         const dir = a0.t, rgt = a0.r, up = a0.u;
         const b = [rgt, up, dir];
+        // TRAP B (docs/SCENERY-GROUNDING.md §2): everything below is placed by
+        // walking `dir` from ONE anchor — up to 248 m out and 46 m lateral — and
+        // this is Spa, which climbs. Reusing a0's height that far left the
+        // treeline hanging up to 17 m in the air and the village huts 10-12 m.
+        // Re-seat each piece on the ground actually under it; terrainYAt returns
+        // null off the rendered ribbon, where a0's height is the best guess left.
+        const seatY = (p) => { const y = terrainYAt(p[0], p[2]); if (y != null) p[1] = y; return p; };
         const OLD_TAR  = [0.29, 0.29, 0.30];
         const OLD_EDGE = [0.62, 0.61, 0.57];
         const ARMCO    = [0.74, 0.75, 0.76];
@@ -574,7 +581,7 @@
         for (let i = 0; i < 16; i++) {
           // Drift gently right of the tangent — the old road fell away downhill
           // toward Burnenville rather than running dead straight.
-          const c = vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16);
+          const c = seatY(vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16));
           if (onTrack(c[0], c[2], 18)) continue;
           // Old road is NARROW: two lanes of a 1960s Ardennes highway.
           addBox(out, vadd(c, up, 0.09), [8.2, 0.16, 15.4], OLD_TAR, b);
@@ -591,7 +598,7 @@
         // A commemorative marker where the two courses part, and the forest
         // closing in behind it — this is a road nobody races on any more.
         if (laid > 4) {
-          const m = vadd(vadd(a0.c, dir, 26), rgt, -9);
+          const m = seatY(vadd(vadd(a0.c, dir, 26), rgt, -9));
           if (!onTrack(m[0], m[2], 12)) {
             out._mat = MAT.STONE;
             addBox(out, vadd(m, up, 0.9), [1.1, 1.8, 2.4], [0.68, 0.66, 0.62], b);
@@ -599,8 +606,8 @@
             out._mat = 0;
           }
           for (let i = 0; i < 9; i++) {
-            const t = vadd(vadd(a0.c, dir, 40 + i * 26),
-                           rgt, -16 - (i % 3) * 7 + i * i * 0.14);
+            const t = seatY(vadd(vadd(a0.c, dir, 40 + i * 26),
+                           rgt, -16 - (i % 3) * 7 + i * i * 0.14));
             if (onTrack(t[0], t[2], 14)) continue;
             const hv = hash(i * 37 + 11), ht = 15 + hv * 9;
             out._mat = MAT.WOOD;
