@@ -597,7 +597,11 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* ── Two-pane split layout (Live + Telemetry) ─────────── */
 .dh-split { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
 .dh-split-L { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
-.dh-split-R { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
+.dh-split-R {
+  display: flex; flex-direction: column; gap: 12px; flex: 1;
+  /* what .pane gives every other scroll region in the app */
+  overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+}
 
 /* Portrait: normal stacked flow, left pane content above right pane */
 .dh-split-L { padding-bottom: 4px; }
@@ -620,6 +624,8 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
     width: 260px;
     flex-shrink: 0;
     overflow-y: auto;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     overflow-x: hidden;
     padding: 10px 12px;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -628,6 +634,8 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-split-R {
     flex: 1;
     overflow-y: auto;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     overflow-x: hidden;
     padding: 10px 14px;
     min-width: 0;
@@ -714,6 +722,8 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   overflow-y: auto;
+  /* what .pane gives every other scroll region in the app */
+  overscroll-behavior-y: contain; touch-action: pan-y;
 }
 
 /* Content areas */
@@ -783,12 +793,16 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-telem-main {
     flex: 1; min-width: 0;
     overflow-y: auto; overflow-x: hidden;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     padding: 10px 12px;
     gap: 7px;
   }
   .dh-telem-side {
     width: 200px; flex-shrink: 0;
     overflow-y: auto; overflow-x: hidden;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     padding: 10px 12px;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
     gap: 8px;
@@ -819,11 +833,15 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-telem-main {
     flex: 1; min-width: 0;
     overflow-y: auto; overflow-x: hidden;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     padding: 12px 14px;
   }
   .dh-telem-side {
     width: 340px; flex-shrink: 0;
     overflow-y: auto; overflow-x: hidden;
+    /* what .pane gives every other scroll region in the app */
+    overscroll-behavior-y: contain; touch-action: pan-y;
     padding: 12px 14px;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
   }

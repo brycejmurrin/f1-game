@@ -429,7 +429,7 @@ body { --compact-at: 600px; }
    progressive pair: an engine that rejects `safe center` must fall back to
    `center`, not to `normal`. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
-  overflow-y: auto; overflow-x: hidden;
+  overflow-y: auto; overscroll-behavior-y: contain; overflow-x: hidden;
   display: flex; flex-direction: column;
   justify-content: center;
   justify-content: safe center;
@@ -824,7 +824,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {
-  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; }
+  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; overscroll-behavior-y: contain; }
 }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;

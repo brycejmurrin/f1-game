@@ -95,6 +95,37 @@ test("every horizontal scroll strip declares the whole pattern", () => {
     "layout audit — every box is the right size, so the cell scores green");
 });
 
+/* THE VERTICAL HALF, asserting ONE declaration rather than two.
+ *
+ * `overscroll-behavior-y: contain` is unambiguous: a flick at the end of an
+ * inner list should not move whatever is behind it. `.pane` sets it, so every
+ * screen built from the primitive is covered — and the F1 data hub is not. It
+ * rolls its own six scroll regions (`.dh-split-L/R`, `.dh-tpopup-body`,
+ * `.dh-telem-main/side`), the largest screen in the app and the one least
+ * covered by the shared vocabulary. Found by reading, not by measuring: nothing
+ * about the boxes is wrong.
+ *
+ * `touch-action` is deliberately NOT required here. On a vertical region it is
+ * usually `pan-y`, but a region that also wants a horizontal gesture inside it
+ * would be broken by that, and this guard cannot tell the two apart. Requiring
+ * only what is always right keeps it from becoming a rule people work around. */
+test("every vertical scroll region contains its own overscroll", () => {
+  const bad = [];
+  for (const f of fs.readdirSync(CSS).filter((n) => n.endsWith(".css"))) {
+    const src = fs.readFileSync(path.join(CSS, f), "utf8");
+    for (const b of blocks(src)) {
+      if (!/overflow-y:\s*(auto|scroll)/.test(b.body)) continue;
+      if (/overscroll-behavior(-y)?\s*:/.test(b.body)) continue;
+      bad.push(`css/${f}:${b.line} — ${b.prelude.slice(0, 70)}`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "a region scrolls vertically without `overscroll-behavior-y: contain`, so a " +
+    "flick at the end of it chains into whatever is behind — the screen, or the " +
+    "page. `.pane` (css/components.css) sets it; anything not built on the " +
+    "primitive has to say it itself");
+});
+
 test("the strips are found at all — anti-vacuity", () => {
   // A guard whose matcher silently stops matching is worse than no guard: it
   // goes green forever. This asserts the search still finds the family it was
