@@ -187,6 +187,18 @@ journal; this is what remains.
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance.
+- **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
+  `indianapolis` 4.74 m over the road against a 0.2 m cap
+  (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
+  spec's own header calls "fully clean (max=0)", so this is a regression, not a
+  residual. The worst offender reports `color [0.28,0.18,0.11]` at `lateral
+  -25.07`, which is none of the barrier emitters. Confirmed PRE-EXISTING at
+  `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
+  tools/graph-parity.cjs cota indianapolis` returns exact parity
+  (max |Δpos| 0.0e+0 m), and a geometry test over identical geometry returns an
+  identical verdict. Unseen because `test:scenery` is not in the CI smoke job —
+  the same gap that let `agent-drive-bench` sit red, and the standing argument
+  for why "a guard nobody runs is prose with extra steps" (§9).
 - **Per-circuit vertex budgets are ad hoc; the repo-wide gate is missing.**
   Qatar itself is resolved — cut 340,858 → 299,386 (a redundant street-lamp
   dressing pass and an over-tripled flood run) with the budget re-set to
