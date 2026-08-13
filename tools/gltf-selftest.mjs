@@ -8,8 +8,8 @@
  * TextDecoder, and Buffer-based base64) so `GLTF` becomes available. Then we
  * build minimal valid .glb files in memory and assert toMesh()'s output.
  *
- * GLTF.load() uses fetch (browser only) and is NOT exercised here — we test
- * parseGLB / toMesh directly with ArrayBuffers.
+ * The surface is parseGLB / toMesh only (the old fetch-based GLTF.load was
+ * deleted unused) — both tested directly with ArrayBuffers.
  *
  * Exits non-zero on any failure.
  */

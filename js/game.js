@@ -191,7 +191,7 @@ function initRainDrops() {
 // ---------- settings ----------
 // Persistence lives in js/game/store.js (GameStore): the cached localStorage
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
-const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId, seasonRoster } = GameStore;
+const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
@@ -4677,7 +4677,7 @@ function coast(c, dt) {
 // the track light builder live in js/game/lighting.js. LT is a plain object
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
-const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
+const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // The PROFILE STORE — which layer of (default / shipped preset / player edit)
 // wins for the conditions on screen — lives in js/game/light-store.js
 // (LightStore.create(G), assigned with the other modules below). These six are

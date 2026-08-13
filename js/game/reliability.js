@@ -164,9 +164,7 @@ function plan(cars) {
   return out;
 }
 
-const levels = () => Object.keys(LEVELS);
 const isLevel = (v) => Object.prototype.hasOwnProperty.call(LEVELS, v);
 
-return { LEVELS, TIER_RISK, REASONS, DEV_RELIEF, BUILD_RELIEF, BUILD_CATS,
-         AT_LO, AT_HI, arm, plan, riskFor, buildQuality, levels, isLevel };
+return { TIER_RISK, REASONS, arm, plan, buildQuality, isLevel };
 })();
