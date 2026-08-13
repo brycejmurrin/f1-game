@@ -578,16 +578,10 @@
                 const f = i / 5, f2 = (i + 1) / 5;
                 const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
                 const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
-                const midR = (s1 + s2) / 2;
-                // addFrustum is BASE-anchored (js/track/geom.js:153) — using
-                // the segment's y MIDPOINT here (rather than y2, its lower/
-                // base end since the leg descends as i climbs) floated every
-                // segment by half its own height; the +0.4 pad on the height
-                // below was clearly meant to feather base-anchored segments
-                // together, not to compensate a centroid.
+                const mid = [(s1 + s2) / 2, (y1 + y2) / 2];
                 addFrustum(stage,
-                  vadd(vadd(vadd(a.c, a.r, dr * midR), a.t, dt * midR),
-                       a.u, y2),
+                  vadd(vadd(vadd(a.c, a.r, dr * mid[0]), a.t, dt * mid[0]),
+                       a.u, mid[1]),
                   0.85 - f * 0.22, 0.85 - f2 * 0.22, Math.abs(y1 - y2) + 0.4,
                   i % 2 ? STEEL : STEEL_D, 7, b);
               }
@@ -684,10 +678,7 @@
           // keep the whole dome bright (only the very base slightly shaded) so the
           // silhouette reads as a rounded pale sphere, never a dark cone.
           const col = yPrev < R * 0.45 ? DOME_D : DOME;
-          // addFrustum is BASE-anchored (js/track/geom.js:153) — this was
-          // authored as the ring's CENTROID (the midpoint of its y-range),
-          // which floats each ring by h/2. Seat it at yPrev, its true base.
-          addFrustum(out, vadd(a.c, a.u, yPrev), Math.max(rb, 1.5),
+          addFrustum(out, vadd(a.c, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
                      Math.max(rt, 1.0), h, col, 18, [a.r, a.u, a.t]);
           yPrev = yTop;
         }
