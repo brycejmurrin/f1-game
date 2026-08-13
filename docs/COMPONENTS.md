@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **510 classes in 53 families**, and until this document there was no
+`css/` holds **509 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -83,6 +83,9 @@ pixel. Nothing in this document is asserted about a family's SIZE, which is
 exactly why the count needs `tests/unit/css-class-ratchet.test.mjs` as well:
 this table proves a family left, the ratchet proves the total came down.
 
+`sel-` shrank the same way and for the same reason: `.sel-section` set one
+declaration on one element in the whole app, and that element already had an id.
+
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,
 `.p1`, `.you`, `.dim`. State is *meant* to be cross-cutting, so this is not a
@@ -150,7 +153,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 510 — a class defined in `css/` and referenced from neither
+None, out of 509 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

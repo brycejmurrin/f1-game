@@ -400,7 +400,13 @@ body { --compact-at: 600px; }
  * `min(40 * svhz, 300px)` cap is viewport-derived and resolves the same way
  * everywhere, so it stays. */
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { order: -1; }
-.sel-section { min-width: 0; }
+/* The grid-item min-width guard for the circuit column. It used to be a
+   sel-section class carried by exactly one element in the whole app, which is a
+   context wearing a class's clothes — same collapse as the mb-prefix pair above
+   and the garage's chip variants (css/carsetup.css). The element's own id says
+   it better, and nothing else in css/ sets min-width on it, so the computed
+   value is unchanged. */
+#sel-track-section { min-width: 0; }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
    parts. Numbers only — the bar chart belongs on CAR SETUP, the screen where

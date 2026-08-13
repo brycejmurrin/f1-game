@@ -81,7 +81,8 @@ export function shellNodes() {
 // 538 after the garage preview bar's two chip variants became --vb-fs / --vb-pad
 // on the buttons' own ids, and .cs-cam-lbl (a duplicate of an inherited value)
 // went entirely.
-const CLASS_CEILING = 538;
+// 537 after .sel-section (one element, one declaration) became #sel-track-section.
+const CLASS_CEILING = 537;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
