@@ -817,8 +817,16 @@
         out._mat = MAT.METAL;
         addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
         addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
-        addBox(out, vadd(sup, u, 11.6 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
-        addCyl(out, vadd(sup, u, 12 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
+        // Flagpole box (addBox, centre-anchored) sat at 11.6*sc while the deck
+        // below it (previous addBox) only reaches 9.0*sc + 1.8*sc/2 = 9.9*sc —
+        // a 1.45*sc gap (1.1-2.3 m over this yacht's sc range), stacked but not
+        // touching (float-audit: EPS is a flat 0.6 m, not scaled by sc). Pulled
+        // down to overlap the deck top by 0.2*sc. The mast (addCyl, base-
+        // anchored) chased the old box position at 12*sc, leaving the same gap
+        // above the deck even after the box moved — pulled down in step to
+        // overlap the box's new top by 0.2*sc (mast top now 15*sc, was 17*sc).
+        addBox(out, vadd(sup, u, 9.95 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
+        addCyl(out, vadd(sup, u, 10.0 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
         out._mat = 0;
         // lit cabin windows
@@ -1264,16 +1272,22 @@
         for (const [y, ln] of [[5.4, 0.5], [8.4, 0.4], [11.2, 0.28]]) {
           addBox(out, vadd(sup, a.u, (y + 0.2) * sc), [W * 0.92, 0.9 * sc, L * ln * 1.01], [0.18, 0.28, 0.40], b);
         }
-        // Radar arch (two legs + crossbar) above the bridge deck
+        // Radar arch (two legs + crossbar) above the bridge deck. The legs
+        // (addCyl, base-anchored) sat at 13.4*sc while the top deck below
+        // (previous addBox) only reaches 11.2*sc + 2.6*sc/2 = 12.5*sc — a
+        // 0.9*sc gap (0.7-0.9 m over this yacht's sc range), stacked but not
+        // touching. Whole arch/mast/flag assembly shifted down 1.1*sc so the
+        // legs overlap the deck top by 0.2*sc; crossbar, mast and flag keep
+        // their original spacing relative to the legs (unchanged internally).
         out._mat = MAT.METAL;
         for (const o of [-W * 0.28, W * 0.28]) {
-          addCyl(out, vadd(vadd(sup, a.r, o), a.u, 13.4 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
+          addCyl(out, vadd(vadd(sup, a.r, o), a.u, 12.3 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
         }
-        addBox(out, vadd(sup, a.u, 14.6 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
+        addBox(out, vadd(sup, a.u, 13.5 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
         // Mast + navigation lights
-        addCyl(out, vadd(sup, a.u, 14.8 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
+        addCyl(out, vadd(sup, a.u, 13.7 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
         out._mat = 0;
-        addBox(out, vadd(sup, a.u, 20.0 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
+        addBox(out, vadd(sup, a.u, 18.9 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
         out._mat = MAT.METAL;
         // Foredeck helipad — pale disc with an "H" bar
         const heli = vadd(vadd(a.c, a.t, L * 0.34), a.u, 4.0 * sc);
