@@ -353,7 +353,13 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, 31), [17, 0.8, 17], WHITE, b);
           addBox(stage, vadd(a.c, a.u, 30.2), [16, 0.6, 16], [0.20, 0.36, 0.62], b);
-          addCyl(stage, vadd(a.c, a.u, 35), 0.13, 10, WHITE, 5, b);
+          // addCyl's position is its BASE, not its centre — starting the mast
+          // at 35 left it 3.6 m above the roof plate's top (31.4) with nothing
+          // between, floating (measured ~34.7 m against raw ground once the
+          // chain never bridged that gap). Base it inside the roof plate's own
+          // Y-range instead and stretch it by the same amount so the tip stays
+          // at the same height (35 + 10 = 45 either way).
+          addCyl(stage, vadd(a.c, a.u, 31), 0.13, 14, WHITE, 5, b);
           stage._mat = 0;
         }, { required: true });
       }
