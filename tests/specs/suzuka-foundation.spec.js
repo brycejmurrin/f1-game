@@ -14,7 +14,10 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
     const at = (fraction) => window.__apex.nodeAt(fraction).y;
     const modelDiagnostics = window.__apex.modelDiagnostics();
     const geometryDiagnostics = window.__apex.geometryDiagnostics();
-    const ground = [0.20, 0.37, 0.45, 0.811].flatMap((fraction) =>
+    // Same physical patches as before 7a173519 (which rotated racing fractions
+    // by the arc shift, +0.6198 here): old probe fracs 0.45/0.811(-ish)/0.20/
+    // 0.37 carried onto their new locations.
+    const ground = [0.070, 0.438, 0.820, 0.990].flatMap((fraction) =>
       [-6, 0, 6].map((lat) => ({ fraction, lat, ...window.__apex.groundY(fraction, lat) }))
     );
 
@@ -29,10 +32,25 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
         elevations: built.elevations.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
         bridges: built.bridges.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
       },
+      // 7a173519 moved the start line (startFrac 0.6125 -> 0.9942), rotating
+      // racing fractions by the arc shift (+0.6198). The def anchors asserted
+      // below (built elevations 0.20/0.45, bridge 0.8173) are UNCHANGED —
+      // resolve() still evaluates them at the authoring origin — but the
+      // physical bumps they build now sit at anchor + shift. Measured in the
+      // new frame (headless VM): esses hump peaks at 0.8201 (relief +11.05),
+      // Degner valley bottoms at 0.0698 (relief -5.02), crossover deck crests
+      // at 0.4376 (relief +13.44). Same +-window widths as before, recentred.
+      //
+      // CONFLATION WARNING: the old crossover probe frac (0.811) sits in the
+      // new frame almost exactly where the ESSES hump now lands (~0.82), so a
+      // probe left there keeps returning a healthy-looking positive relief
+      // (measured +7.4) that has nothing to do with the crossover deck — a
+      // green assertion measuring the wrong hill. The deck itself is at
+      // ~0.4376 now (bridge anchor 0.8173 + 0.6198 wrapped).
       relief: {
-        esses: at(0.20) - (at(0.12) + at(0.28)) / 2,
-        degner: at(0.45) - (at(0.39) + at(0.51)) / 2,
-        crossover: at(0.811) - (at(0.775) + at(0.847)) / 2,
+        esses: at(0.820) - (at(0.740) + at(0.900)) / 2,
+        degner: at(0.070) - (at(0.010) + at(0.130)) / 2,
+        crossover: at(0.438) - (at(0.402) + at(0.474)) / 2,
       },
       ground,
       wallStats: window.__apex.wallStats(),

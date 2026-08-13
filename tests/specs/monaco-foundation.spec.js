@@ -73,10 +73,15 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 
   for (const session of [result.day, result.night]) {
     expect(session.elevation.range).toBeGreaterThanOrEqual(38);
-    expect(session.elevation.maxFrac).toBeGreaterThan(0.14);
-    expect(session.elevation.maxFrac).toBeLessThan(0.22);
-    expect(session.elevation.minFrac).toBeGreaterThan(0.68);
-    expect(session.elevation.minFrac).toBeLessThan(0.78);
+    // 7a173519 moved the start line (startFrac 0.28 -> 0.2516), rotating racing
+    // fractions by the arc shift (+0.938); the Massenet high point and the
+    // harbour low did not move physically. Measured in the new frame (headless
+    // VM, trackProfile(400) grid): max at frac 0.12 / +29.9 m, min at
+    // 0.665 / -10.1 m.
+    expect(session.elevation.maxFrac).toBeGreaterThan(0.08);
+    expect(session.elevation.maxFrac).toBeLessThan(0.16);
+    expect(session.elevation.minFrac).toBeGreaterThan(0.62);
+    expect(session.elevation.minFrac).toBeLessThan(0.71);
 
     expect(session.walls.anyNaN).toBe(false);
     expect(session.walls.tightFrac).toBe(1);

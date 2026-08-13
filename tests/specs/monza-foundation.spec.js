@@ -21,8 +21,13 @@ test.describe("Monza track-owned foundation migration", () => {
       const out = {
         coordinates: def.sceneryCoordinates,
         terrainOuter: def.terrainOuter,
-        roggiaY: window.__apex.nodeAt(0.30).y,
-        lesmoY: window.__apex.nodeAt(0.48).y,
+        // 7a173519 moved the start line (startFrac 0.0125 -> 0.0), rotating
+        // racing fractions by the arc shift (+0.0867); the dip and the crest
+        // did not move physically. Re-pinned onto their measured new locations
+        // (headless VM, extremum scan): the Roggia dip bottoms at frac 0.3869
+        // (y -1.469) and the Lesmo crest peaks at 0.5646 (y +4.492).
+        roggiaY: window.__apex.nodeAt(0.3875).y,
+        lesmoY: window.__apex.nodeAt(0.565).y,
         minY: Math.min(...profile.map((entry) => entry.y)),
         maxY: Math.max(...profile.map((entry) => entry.y)),
         geometry: window.__apex.geometryDiagnostics(),

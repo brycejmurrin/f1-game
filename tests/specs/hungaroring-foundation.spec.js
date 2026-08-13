@@ -50,11 +50,15 @@ test.describe("Hungaroring track foundation", () => {
 
     const low = result.profile.reduce((best, point) => point.y < best.y ? point : best);
     const high = result.profile.reduce((best, point) => point.y > best.y ? point : best);
-    expect(low.frac).toBeGreaterThan(0.08);
-    expect(low.frac).toBeLessThan(0.18);
+    // 7a173519 moved the start line (startFrac 0.9825 -> 0.0), rotating racing
+    // fractions by the arc shift (+0.9029); the valley and the ridge did not
+    // move physically. Measured in the new frame (headless VM, this profile's
+    // own 1/100 grid): low at frac 0.04 / -21.9 m, high at 0.44 / +16.2 m.
+    expect(low.frac).toBeGreaterThan(0.01);
+    expect(low.frac).toBeLessThan(0.09);
     expect(low.y).toBeLessThan(-20);
-    expect(high.frac).toBeGreaterThan(0.45);
-    expect(high.frac).toBeLessThan(0.58);
+    expect(high.frac).toBeGreaterThan(0.40);
+    expect(high.frac).toBeLessThan(0.49);
     expect(high.y).toBeGreaterThan(14);
     for (const probe of result.probes)
       expect(probe.gap === null || probe.gap <= 0.18,
