@@ -37,6 +37,16 @@
      JS had just sized from it. An explicit 100% breaks that loop and gives
      the map the ~990px the layout always meant it to have. */
   width: 100%; height: 100%;
+  /* UI SIZE APPLIES HERE TOO. `zoom: var(--ui-scale)` rides `.sheet` and
+     `#overlay > *`; this dialog is neither, being full-bleed and top-layer, so
+     the setting simply did not reach it. Measured across the layout audit: the
+     select preview scales 267 -> 171 -> 120 px across UI SIZE 100/150/175
+     while this modal returned a byte-identical map at all three, on every
+     viewport — a player at 175% opened a popup still drawn at 100%.
+     Same mechanism as every other surface rather than a second one, and the JS
+     that fits the canvas already measures in local px (clientWidth), which is
+     the space zoom leaves those APIs reporting in. */
+  zoom: var(--ui-scale);
   background: #0a0a0e;
   display: flex; flex-direction: column;
   /* STRETCH, not the shared dialog base's `center`. On a column flex container
@@ -124,7 +134,14 @@
 @media (orientation: portrait) {
   #track-detail { overflow-y: auto; overscroll-behavior-y: contain; }
   #track-detail-body { overflow: visible; flex: none; }
-  #track-detail-canvas-wrap { flex: none; height: min(56vw, 320px); }
+  /* `min(56vw, 320px)` was a PHONE number applied to every portrait window.
+     On a rotated 1080x1920 monitor it pinned the map to 320px of 1920 — the
+     layout audit measured Jeddah filling 20% of its wrap there, the emptiest
+     cell in the whole sweep, while the panel below it had room to spare.
+     56vw still sets the shape on a phone (a 393px-wide screen lands at 220px,
+     unchanged); the ceiling now scales with the window it is actually in, so a
+     tall one spends its height instead of capping at a phone's worth. */
+  #track-detail-canvas-wrap { flex: none; height: min(56vw, 42svh, 640px); }
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
 }
 
