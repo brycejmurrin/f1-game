@@ -105,7 +105,20 @@ const CEILINGS = {
   // baked lamp list) beside the globally-culled frame.lights, so GLXChunked can
   // bind each chunk its own nearest-32. Six lines at the existing setFrameLights
   // call site, which is where the frame's light state is already assembled.
-  "js/game.js": 8009,
+  // 8009 -> 8015: recording frame.tailStart/tailCount around the
+  // appendCarTailLights call, so PER-CHUNK LAMPS can add the per-frame car
+  // tail-lights to each chunk's set. They are appended to frame.lights AFTER
+  // the static cull, so a set built from track._lights alone silently dropped
+  // them — a regression the knob introduced. Sits at the call site that already
+  // assembles the frame's light state.
+  // 8013 -> 8035: PER-CHUNK ROAD. The road is a single mesh, so it can only
+  // carry the one global set of 32 lamps — the reason the far road stays dark
+  // while the buildings beside it light up. Drawing it chunked routes it
+  // through the same GLXChunked per-chunk path. Lazy-built at the existing road
+  // draw site (nothing else knows the knob state at build time), and the
+  // comment records why _keepPositions is mandatory: createChunkedMesh nulls
+  // its source arrays and debrisworld.js + __apex.geo() still read roadGeo.
+  "js/game.js": 8035,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

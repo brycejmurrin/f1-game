@@ -13,8 +13,13 @@ thing the suite never checks — the **deployed artifact**.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*`) — a real `HeadlessChrome`
   with **WebGL2 via SwiftShader** (the same renderer the suite uses; measured:
-  `ANGLE (…SwiftShader…)`). It reaches **both** `http://127.0.0.1:<port>` (your
-  working tree) **and** the deployed site. This is the canvas-**visible** probe:
+  `ANGLE (…SwiftShader…)`). It reaches `http://127.0.0.1:<port>` (your working
+  tree) — but **NOT the deployed site from this container**: MEASURED
+  2026-08-13, `navigate_page` to `https://brycejmurrin.github.io/f1-game/` dies
+  `net::ERR_TUNNEL_CONNECTION_FAILED`, the same egress proxy that gives `curl`
+  a 403 CONNECT on that host. (This file previously claimed it reached both;
+  it does not here.) For anything on the DEPLOYED artifact use tinyfish, which
+  fetches server-side from its own network. This is the canvas-**visible** probe:
   render a track/car, drive `__apex`, screenshot, take a heap snapshot, read the
   console. The interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`.
 - **tinyfish MCP** (`mcp__tinyfish__*`) — `fetch_content` / `search` over the
@@ -397,6 +402,21 @@ while the repo was 1089 — a real lag the local suite could never have caught).
 Fetch `index.html` too and grep the `?v=` tags if you suspect a partial deploy.
 `run_web_automation` can go further — boot the deployed page and assert `__apex`
 responds — but for a smoke check the static fetch is enough and far cheaper.
+
+**Go further than `version.json`: fetch the shipped JS and grep it for your
+change.** A matching build number only proves Pages published *a* build with
+that number, not that your edit is inside it. `fetch_content` on
+`…/js/<path>.js?v=<N>` returns the real deployed source, so a marker unique to
+your change settles it. MEASURED 2026-08-13, confirming a per-chunk-lamp
+feature shipped: `_pickChunkLamps`, `uploadLightSet`, `perChunkLights` and
+`uCarBiasScale` all found in the live artifact.
+
+**Gotcha that will hand you a FALSE negative: `format: "markdown"` escapes
+`*`.** Grepping the fetched text for `d /= k * k` reported ABSENT while the
+code was demonstrably deployed — the fetcher had rendered it `d /= k \\* k`.
+Any pattern containing `*`, `_` or backticks needs the raw text checked
+(`python3 -c "print(repr(t[i-200:i+200]))"` around a nearby unescaped anchor)
+before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
 
 tinyfish `search` is for external grounding (research), not testing.
 

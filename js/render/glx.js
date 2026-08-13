@@ -96,7 +96,7 @@ const GLX = (function () {
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
-  let frameAllLights = null, framePerChunkLights = 0;
+  let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -284,6 +284,8 @@ const GLX = (function () {
         get lights() { return frameLights; },
         get allLights() { return frameAllLights; },
         get perChunkLights() { return framePerChunkLights; },
+        get tailStart() { return frameTailStart; },
+        get tailCount() { return frameTailCount; },
         get time() { return frameTime; },
         get cloud() { return frameCloud; },
         get cloudSpeed() { return frameCloudSpeed; },
@@ -869,6 +871,8 @@ const GLX = (function () {
     frameLights = frame.lights || null;
     frameAllLights = frame.allLights || null;
     framePerChunkLights = frame.perChunkLights ? 1 : 0;
+    frameTailStart = frame.tailStart | 0;
+    frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -1086,20 +1090,32 @@ const GLX = (function () {
   // loop are untouched — only WHICH 32 are bound changes, per draw. That lifts
   // the 32-lamp limit for the SCENE as a whole (each chunk gets its own budget)
   // without costing a uniform slot or a per-fragment iteration.
-  function uploadLightSet(L, idx, n) {
-    const nL = L ? Math.min(32, n | 0) : 0;
+  // L2/o2/n2 (optional): a SECOND source appended after the idx-selected ones —
+  // the per-frame dynamic lights (car tail-lights), which appendCarTailLights
+  // pushes onto frame.lights AFTER the static cull and therefore live outside
+  // track._lights. Without this a per-chunk set would silently drop them and
+  // scenery would stop catching tail-light spill the moment the knob went on.
+  // Tail lights are reserved FIRST (there are at most 5, and a car beside you
+  // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
+  function uploadLightSet(L, idx, n, L2, o2, n2) {
+    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, 32) : 0;
+    const nStatic = L ? Math.max(0, Math.min(32 - nTail, n | 0)) : 0;
+    const nL = nStatic + nTail;
     gl.uniform1i(litU.uNumLights, nL);
     if (nL <= 0) return;
     const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
           cone = _luCone, bleed = _luBleed;
     for (let i = 0; i < nL; i++) {
-      const o = (idx ? idx[i] : i) * 15;
-      pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
-      col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
-      rad[i] = L[o + 6];
-      dir[i * 3] = L[o + 7]; dir[i * 3 + 1] = L[o + 8]; dir[i * 3 + 2] = L[o + 9];
-      cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
-      bleed[i] = L[o + 12];
+      const fromTail = i >= nStatic;
+      const src = fromTail ? L2 : L;
+      const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
+                         : ((idx ? idx[i] : i) * 15);
+      pos[i * 3] = src[o]; pos[i * 3 + 1] = src[o + 1]; pos[i * 3 + 2] = src[o + 2];
+      col[i * 3] = src[o + 3]; col[i * 3 + 1] = src[o + 4]; col[i * 3 + 2] = src[o + 5];
+      rad[i] = src[o + 6];
+      dir[i * 3] = src[o + 7]; dir[i * 3 + 1] = src[o + 8]; dir[i * 3 + 2] = src[o + 9];
+      cone[i * 2] = src[o + 10]; cone[i * 2 + 1] = src[o + 11];
+      bleed[i] = src[o + 12];
     }
     gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
     gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));

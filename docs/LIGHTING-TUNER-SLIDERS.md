@@ -1,4 +1,4 @@
-# LIGHTING TUNER — the 178 sliders, and what each one drives
+# LIGHTING TUNER — the 182 sliders, and what each one drives
 
 Generated from `TUNE_DEFS` in `js/game/lighting.js`; that registry is the
 source of truth and this table is a view of it. Regenerate rather than hand-edit
@@ -7,7 +7,7 @@ source of truth and this table is a view of it. Regenerate rather than hand-edit
 ## Every slider is wired — the full audit
 
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
-sampled file list) gives all 178 knobs a consumer on the shipping (GLX) path —
+sampled file list) gives all 182 knobs a consumer on the shipping (GLX) path —
 **zero unwired**. The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):
 
@@ -40,7 +40,7 @@ these, and they need different fixes:
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
 The third and fourth are the common ones, and the reason a casual "half these do
-nothing" is usually wrong: 69 of the 178 knobs are also set by shipped presets per
+nothing" is usually wrong: 69 of the 182 knobs are also set by shipped presets per
 (track, time-of-day, weather), so what a slider appears to do depends on where
 you are standing when you drag it.
 
@@ -248,6 +248,60 @@ Method note: the first two perf attempts died and it was NOT the feature — exi
 480-frame plan needed 8–16 minutes. Sample single-digit frame counts per block
 and interleave A/B/A/B for drift rather than sampling long.
 
+**PER-CHUNK ROAD (`roadChunkLamps`) is where the original complaint actually
+lived.** PER-CHUNK LAMPS lit the scenery but barely moved the road, and the
+reason is structural: only `props`/`glass` go through `drawChunked`; the road is
+a single `gfx.draw()` mesh, so it can only ever carry the ONE global set of 32 —
+culled nearest the CAMERA, which covers the tarmac around the car and starves
+the road AHEAD. Drawing the ribbon chunked (99 cells at Singapore) routes it
+through the same path. Measured, same frozen chase vantage, `roadChunkLamps`
+0 → 1, and the band profile is the exact inverse of the props-only result:
+
+| band | 0 (sky) | 1 (far road) | 2 (mid road) | 3 (car/HUD) |
+|---|---|---|---|---|
+| props-only | — | 5.82 | 0.95 | 1.11 |
+| **road knob** | 1.04 | **7.67** | **6.28** | 1.62 |
+
+overall MAD 4.15, 38,154 px over threshold, and the diff map is a solid filled
+ribbon following the road into the distance rather than edge outlines.
+`drawChunked` goes from 2 calls/frame to 3, the new one carrying 99 chunks.
+
+**Seams are not possible below the cap, by construction:** `_pickChunkLamps`
+excludes a lamp with the SAME reach test the shader uses (`radius` vs the chunk
+AABB ↔ `if (dist > rad) continue`), so an excluded lamp would have contributed
+exactly zero anyway. The one case that CAN seam is a chunk with more than 32
+lamps reaching it, where the cap drops real contributors — rare for props (2 of
+104 chunks) but unmeasured for road chunks, so check that before defaulting on.
+
+**`_keepPositions` is mandatory when building the chunked road**, not defensive:
+`createChunkedMesh` nulls `data.pos`/`data.idx`, and `track.roadGeo` is still
+read by `debrisworld.js` (the Rapier side-world) and `__apex.trackGeometry()`.
+Verified byte-identical across the build — pos 69,672 / idx 128,256 before and
+after (≈42.7k triangles, comfortably over the 2,000-triangle chunking floor).
+
+**Car tail-lights needed explicit plumbing, and verifying it took three tries.**
+`appendCarTailLights` pushes onto `frame.lights` AFTER the static cull, so those
+records live outside `track._lights` — the array `_pickChunkLamps` builds from.
+Left alone, switching the knob ON silently stopped chunked scenery receiving any
+tail-light contribution. `uploadLightSet` now takes an optional second source and
+reserves the tail-lights FIRST (at most 5; a car beside you outranks the
+32nd-nearest lamp). Confirmed live: `drawChunked` sees
+`[perChunkLights 1, tailCount 5, hasLights 1, hasAllLights 1]`.
+
+Two traps cost a full debugging round each, both worth avoiding:
+
+- **Do not derive the dynamic-light count by measuring `frame.lights` before and
+  after the append.** When the set is already at cap, `appendCarTailLights`
+  TRIMS the farthest static lamps before pushing, so length-in equals
+  length-out and the difference is always 0. The first fix computed exactly
+  that, compiled, passed 442/442 and shipped as a pure no-op. The count is now
+  recorded inside that function, where `nT` is actually known.
+- **`drawChunked` runs only ~2x per frame** (props + glass) while
+  `uploadLightSet` fires ~79 times inside them. A probe armed one rAF before
+  sampling can catch uploads from a frame whose `begin()` had not yet seen the
+  current state, reporting `nTail: 0` while the frame-level value is 5. Assert
+  at `drawChunked` (few calls, unambiguous state) rather than at the upload.
+
 Two instruments that did NOT work, recorded so they are not retried: a
 union-of-distinct-lamps count via wrapping `gl.uniform3fv` reported 64 → 270,
 but 270 exceeds the track's 249 baked lamps — it was catching material/ambient
@@ -433,7 +487,7 @@ off-grid.
 | `contactStr` | CONTACT SHADOW | 0 … 3 | 1 | — | ✓ | game.js, post.js×4 |
 | `ambContactDark` | AMBIENT CONTACT DARK | 0 … 3 | 1 | `uAmbContactDark` |  | glx.js×2 |
 
-## LAMPS  (21)
+## LAMPS  (24)
 
 One tuner tab for every track lamp (street posts and flood banks). Was split as
 FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
@@ -446,6 +500,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `floodDay` | DAYTIME LAMPS | 0 … 1.5 | 0 | — |  | game.js×4 |
 | `poolEnergy` | POOL ENERGY | 0.05 … 2 | 0.55 | — | ✓ | lighting.js×5 |
 | `lampRadiusMul` | POOL RADIUS | 0.3 … 3 | 1 | — | ✓ | lighting.js×3 |
+| `lampDensity` | LAMP DENSITY | 0.5 … 2.5 | 1 | — |  | lighting.js×4, tracks.js×2 |
 | `bleedMul` | VALLEY BLEED | 0 … 5 | 1 | — | ✓ | lighting.js×3 |
 | `glareStr` | LENS GLARE | 0 … 1.5 | 0.12 | — | ✓ | game.js×2 |
 | `lampTemp` | LAMP TEMPERATURE | -2 … 2 | 0 | — | ✓ | game.js |
@@ -464,6 +519,9 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampWarmupDim` | WARM-UP DIP | 0 … 0.9 | 0.3 | — |  | lighting.js×2 |
 | `lampWarmupWarm` | WARM-UP WARMTH | 0 … 3 | 1 | — |  | lighting.js×2 |
 | `lampCull` | LAMP COUNT | 16 … 32 | 28 | — |  | lighting.js×4 |
+| `lampBehindBias` | BEHIND-CAM BIAS | 1 … 10 | 5.25 | — |  | lighting.js |
+| `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |  | lighting.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — |  | game.js, glx.js×2, chunked.js×2 |
 | `lampCullFade` | LAMP CULL FADE | 0.1 … 0.9 | 0.35 | — |  | lighting.js×2 |
 | `lampGapFill` | DARK-GAP FILL | 0 … 400 | 60 | — |  | lighting.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 1 … 10 | 5.25 | — |  | lighting.js×3 |
@@ -484,7 +542,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `threshOff` | BLOOM THRESHOLD | -0.5 … 0.2 | 0 | — | ✓ | game.js |
 | `bloomKnee` | BLOOM ON HIGHLIGHTS | 0 … 1 | 0.5 | `uBloomKnee` |  | post.js×2 |
 
-## ATMOSPHERE  (18)
+## ATMOSPHERE  (19)
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
@@ -506,6 +564,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.8 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 2.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — |  | game.js |
+| `renderDistMul` | RENDER DISTANCE | 0.5 … 2 | 1 | — |  | game.js×2 |
 
 ## ROAD & REFLECTIONS  (10)
 
