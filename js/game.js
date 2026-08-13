@@ -6559,7 +6559,8 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
+  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6911,27 +6912,9 @@ applyResMode();
   }
 }
 
-// GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
-// defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
-// quality for capable phones. These are decided at renderer INIT, so the toggle
-// persists and reloads. Shown only on mobile — desktop is always full quality.
-if (gfx.isMobile) {
-  const gfxBtn = $("pm-gfx");
-  if (gfxBtn) {
-    gfxBtn.hidden = false;
-    const gfxHigh = () => { try { return localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) { return false; } };
-    gfxBtn.textContent = "GRAPHICS: " + (gfxHigh() ? "HIGH" : "STANDARD");
-    gfxBtn.onclick = () => {
-      const next = !gfxHigh();
-      try { localStorage.setItem("apex26.gfxHigh", next ? "1" : "0"); } catch (_) {}
-      gfxBtn.textContent = "GRAPHICS: " + (next ? "HIGH" : "STANDARD") + " — reloading…";
-      if (soundOn) GameAudio.uiSelect();
-      // Reload so the renderer re-inits at the new tier (context AA, target
-      // formats, atlas sizes are all fixed at startup).
-      setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
-    };
-  }
-}
+// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
+// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 
 $("mb-race").onclick = () => {

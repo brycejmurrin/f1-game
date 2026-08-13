@@ -196,3 +196,159 @@ test("restore does NOT fire while frames are still missing", () => {
   assert.ok(scale() <= degraded,
     `scale must not climb while frames are still missing — was ${degraded}, ended at ${scale()}`);
 });
+
+// ── Pinning the resolution must not disable the whole governor ───────────────
+// REGRESSION. `RESOLUTION: LOW/MED/HIGH` (js/game.js, applyResMode) calls
+// setAutoRes(false) so the governor stops fighting the pinned scale. tick()
+// opened with `if (!_autoRes) return;`, which took stage 2 — feature shedding —
+// down with it: a player who pinned the resolution got no adaptation at all for
+// the session, on a control shown to EVERYONE, desktop included. The whole
+// suite above passed throughout, because every case here runs with _autoRes
+// left at its default true. That is what made the bug invisible.
+
+// A device that is genuinely overloaded no matter what the scale is: dt is NOT
+// coupled to scale (the user pinned it, so the governor cannot move it anyway),
+// but IS coupled to tier — shedding features genuinely helps. The cheap frame
+// every 20th tick keeps this distinguishable from an external cap, the same way
+// the GPU-bound case above does.
+function makeGovPinned(scaleAt) {
+  globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = scaleAt;
+  const gfx = {
+    isMobile: true,
+    getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (s === scale) return false; scale = s; return true; },
+  };
+  PerfGov.init(gfx);
+  PerfGov.setAutoRes(false);          // what applyResMode() does for any pinned mode
+  return { PerfGov, scale: () => scale };
+}
+
+test("a PINNED resolution still sheds features when the device is overloaded", () => {
+  const { PerfGov } = makeGovPinned(1);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.ok(PerfGov.tier() > 0,
+    `stage 2 must keep working with the scale pinned — tier stayed at ${PerfGov.tier()}`);
+});
+
+test("a PINNED resolution never moves the scale the user chose", () => {
+  // The other half of the contract: shedding is restored, but the governor must
+  // still keep its hands off the pinned scale in BOTH directions — degrade and
+  // restore. RESOLUTION: HIGH on a struggling device must stay at 1.0.
+  const { PerfGov, scale } = makeGovPinned(1);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.equal(scale(), 1, "a pinned scale must never be degraded by the governor");
+
+  // ...and a pinned LOW scale must not be "restored" upward either.
+  const low = makeGovPinned(0.5);
+  feed(low.PerfGov, () => 16.7, 9000);              // 150 s of flawless frames
+  assert.equal(low.scale(), 0.5, "a pinned scale must never be restored upward either");
+});
+
+test("pinning the resolution drops a pending SCALE verify, not a pending TIER one", () => {
+  // setAutoRes() is called from a click handler, which can land one evaluation
+  // after the governor took a provisional downscale. Without dropping that
+  // pending {kind:"scale"} step, the next evaluation "reverts" it by calling
+  // setRenderScale(prev) — writing over the scale the user just pinned.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 400);   // provoke a real downscale
+  assert.ok(scale() < 1, "precondition: the governor must have taken a scale step to leave pending");
+
+  PerfGov.setAutoRes(false);
+  const pinned = scale();
+  feed(PerfGov, () => 16.7, 3000);
+  assert.equal(scale(), pinned,
+    `no revert may fire after the user pins — pinned at ${pinned}, ended at ${scale()}`);
+});
+
+test("the crash-sentinel floor still cannot be defeated by pinning the resolution", () => {
+  // The floor is the one thing no user control may lift. Pinning must not
+  // become a back door into it.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  PerfGov.setAutoRes(false);
+  assert.equal(PerfGov.tierFloor(), 4, "two strikes must pre-degrade to tier 4");
+  feed(PerfGov, () => 16.7, 9000);            // flawless frames: maximum pressure to restore
+  assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
+});
+
+// ── The GRAPHICS preset's user tier (js/game/gfx-quality.js) ────────────────
+// tier() folds three terms with max(): the crash-sentinel floor, the user's
+// preset floor, and the governor's own live tier. That single expression IS the
+// interaction rule — a manual choice sets the FLOOR of degradation, never the
+// ceiling — so these tests pin the rule, not the plumbing.
+
+test("a user tier sheds at least that much, live, without touching the render path", () => {
+  const { PerfGov } = makeGov();
+  assert.equal(PerfGov.tier(), 0, "precondition: nothing shed on a fresh healthy device");
+  PerfGov.setUserTier(2);
+  assert.equal(PerfGov.tier(), 2, "GRAPHICS: MEDIUM must shed the env probe + lamp shadow/SSR immediately");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.tier(), 0, "and back, with no reload");
+});
+
+test("a user tier is a FLOOR, so the governor may still shed BELOW it but never above", () => {
+  // The governor is free to go further than the user asked (the device is
+  // struggling and that is measured evidence); it must never come back above
+  // the user's floor just because it found headroom.
+  const gov = makeGovAtFloor();
+  gov.setUserTier(1);
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 2000);
+  assert.ok(gov.tier() > 1, `the governor must be able to shed past the user's floor, got ${gov.tier()}`);
+
+  const healthy = makeGovAtFloor();
+  healthy.setUserTier(3);
+  feed(healthy, () => 16.7, 9000);              // 150 s of flawless frames
+  assert.equal(healthy.tier(), 3, "sustained headroom must NOT restore above the user's floor");
+});
+
+test("ULTRA cannot defeat the crash-sentinel floor", () => {
+  // The one thing no user control may lift. A phone that died twice starts at
+  // tier 4; asking for ULTRA (userTier 0) must change nothing.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.tier(), 4, "precondition: two strikes pre-degrade to tier 4");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.tier(), 4, "a preset must not be a back door into the safe-mode floor");
+  feed(PerfGov, () => 16.7, 9000);
+  assert.equal(PerfGov.tier(), 4, "and it must still hold after sustained clean frames");
+});
+
+test("a bad preset cannot invent a tier above the ladder", () => {
+  // Every gate in the render path is `tier() >= N`, so an unclamped value would
+  // satisfy all of them at once and shed passes that have no tier.
+  const { PerfGov } = makeGov();
+  PerfGov.setUserTier(99);
+  assert.equal(PerfGov.userTier(), 4, "clamped to the top of the ladder");
+  PerfGov.setUserTier(-3);
+  assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
+});
+
+test("changing preset drops a pending TIER verify", () => {
+  // Same class as the setAutoRes fix: _pendingVerify attributes the next EMA
+  // delta to the governor's own last provisional step, so a user changing
+  // quality one evaluation later would make it revert a step that was working.
+  const gov = makeGovAtFloor();
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 200);   // provoke a tier step
+  const before = gov.tier();
+  gov.setUserTier(1);
+  feed(gov, () => 16.7, 60);        // inside the cooldown: nothing may be reverted yet
+  assert.ok(gov.tier() >= Math.max(before, 1),
+    `no revert may fire across a user quality change — was ${before}, now ${gov.tier()}`);
+});
