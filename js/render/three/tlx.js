@@ -604,8 +604,13 @@ const TLX = (function () {
       }
 
       function resize() {
-        const cw = canvas.clientWidth || canvas.width || 1;
-        const ch = canvas.clientHeight || canvas.height || 1;
+        // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
+        // writes the backing store, so reading it back here fed the previous frame's
+        // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
+        // doubled its render target every begin() until allocation failed. GLX and
+        // WGX both read clientWidth with a floor of 1 for the same reason.
+        const cw = canvas.clientWidth || 1;
+        const ch = canvas.clientHeight || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         const w = Math.max(1, Math.round(cw * dpr * renderScale));
         const h = Math.max(1, Math.round(ch * dpr * renderScale));

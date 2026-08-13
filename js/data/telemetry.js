@@ -484,10 +484,18 @@ const DataTelemetry = (function () {
     // REFERENCE that deltas and gauges read against. primary/compare stay as
     // aliases so the dense 1- and 2-lane paths render exactly as before; lanes
     // 3-4 add a speed line, a map dot and a delta line each.
-    const primary = tels[0];
-    const compare = tels[1] || null;
+    // Every lane that actually has car telemetry, reference first. The extra
+    // lanes (index >= 2) are "multi" lanes: speed line + map dot + delta line.
+    // THE ALIASES COME OFF THIS FILTERED LIST, not off `tels`. Derived from the
+    // raw tray, a middle lane with no car telemetry (tels = [A, B-no-car, C])
+    // made compare = B, which the car-length test below then nulled — leaving C
+    // as neither compare (laps.length === 2, so `multi` is false) nor a multi
+    // lane. Its header and map dot rendered while its chart trace and the whole
+    // delta strip silently did not.
+    const laps = tels.filter(function (t) { return t.car && t.car.length; });
+    const primary = laps[0] || tels[0];
+    const compare = laps[1] || null;
     const laneCols = laneColors(tels);
-    const pcols = { p: laneCols[0], c: laneCols[1] || null };
     // Session badge on each lane header once a driver is doubled up across
     // sessions (race vs quali), so the headers disambiguate too.
     const dupNum = {};
@@ -525,16 +533,15 @@ const DataTelemetry = (function () {
       mainArea.appendChild(ht);
     });
 
-    if (!primary.car || !primary.car.length) {
+    // NO lane has telemetry — not merely the first one. A tray whose first lane
+    // lacks it but whose second has it still has a chart to draw.
+    if (!laps.length) {
       mainArea.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
       detail.appendChild(mainArea);
       appendStintsPits(mainArea, primary);
       return;
     }
 
-    // Every lane that actually has car telemetry, reference first. The extra
-    // lanes (index >= 2) are "multi" lanes: speed line + map dot + delta line.
-    const laps = tels.filter(function (t) { return t.car && t.car.length; });
     const view = {
       laps: laps,
       // laneCols must be indexed the SAME way its consumers read it. The lane
@@ -545,7 +552,7 @@ const DataTelemetry = (function () {
       // lane onto the next colour, disagreeing with its own header swatch.
       laneCols: laps.map(function (t) { return laneCols[tels.indexOf(t)]; }),
       primary: primary,
-      compare: (compare && compare.car && compare.car.length) ? compare : null,
+      compare: compare,          // already known to carry car telemetry (`laps`)
       multi: laps.length > 2,
       visible: {}, cursorT: 0,
       tMax: 0, speedMax: 1, rpmMax: 1,
@@ -559,7 +566,11 @@ const DataTelemetry = (function () {
     // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
     view.visibleC = {};
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
-    view.colP = pcols.p; view.colC = pcols.c;
+    // The primary/compare trace colours are lanes 0 and 1 OF THE FILTERED list
+    // for the same reason view.laneCols is re-indexed above: taken off `tels`
+    // they painted the compare trace in a dropped lane's colour, disagreeing
+    // with the header swatch of the driver actually drawn.
+    view.colP = view.laneCols[0]; view.colC = view.laneCols[1] || null;
     view._dup = _dupForView;
     function scan(car) {
       for (let i = 0; i < car.length; i++) {
