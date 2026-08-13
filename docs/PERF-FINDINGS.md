@@ -12,6 +12,118 @@ they cannot be verified here — see the env-probe entry.
 
 ---
 
+## 0. Which instrument answers which question
+
+Read this before measuring anything. Picking the wrong instrument here does not
+give you a worse number — it gives you a **confident number about the wrong
+thing**, which is how this project has lost the most time.
+
+| Question | Instrument | Valid on this box? |
+|---|---|---|
+| Where does physics/AI/CPU time go? | `tools/profile-gameloop.mjs <track> physics` | **Yes** — synchronous `__apex.step()`, no compositor. The honest one. |
+| Where does render-path JS time go? | `tools/profile-gameloop.mjs <track> render` | **No** — see below. |
+| How long does a track build take? | Node VM harness (`tools/verify-track.cjs`, `track-build-vm.cjs`) | **Yes** — pure CPU, no GPU. Same harness that produced the 14.0 → 4.5 s win. |
+| How big is the boot script wall? | Static: sum `stat -c%s` over index.html's `src=`s | **Yes** — no browser needed, fully deterministic. |
+| What is boot LCP / DCL made of? | chrome-devtools MCP `performance_start_trace` → `analyze_insight` | **Yes**, with caveats below. |
+| Is a frame GPU-bound? | `__apex.gpuTimer()` | **No** — returns `-1` under SwiftShader. Needs Chrome/Android on real hardware. |
+| Did a shader/fill change help? | frame timing | **No.** See §3. |
+| Does an element overlap another? | Playwright capture, **never** an MCP screenshot | see CHROME-DEVTOOLS-MCP.md trap 6 |
+
+### The three instruments that lie here, and how
+
+1. **`profile-gameloop.mjs … render` reads ~99.9% `(idle)`.** Measured: 30351
+   samples, nothing in JS above 0.0%. Under SwiftShader the main thread is
+   blocked on software rasterisation, so render-path JS *cannot* show up. This
+   is not evidence that render JS is cheap — on a real GPU, where the
+   bottleneck is submission rather than fill, the same code may dominate. An
+   idle render profile means "ask a different instrument", not "nothing to fix".
+
+2. **Frame timing is misleading in the OPTIMISTIC direction** (the §3
+   measurement: 2872 ms median frame on vegas at 640×360). Any change that
+   removes geometry posts a large win here that a real GPU would not repeat.
+
+3. **Local-server insights invent problems.** On `python3 -m http.server`,
+   Chrome's `Cache` insight reports ~650 ms FCP/LCP savings and 6.2 MB wasted
+   because the server sends no cache headers. GitHub Pages plus `sw.js`
+   precache do not have that problem. `DocumentLatency` likewise reports failed
+   compression. **Both are artifacts of the harness.** Ignore them, or measure
+   against a server that sets the real headers.
+
+### Recorded negative result: forced reflow at boot
+
+Chrome's `ForcedReflow` insight fires on a cold boot, and it is **not worth
+acting on**: total reflow time **9 ms**, and Chrome's own estimated savings is
+**none**. Top attributed frames were `tick` (`js/game.js`), `cssSize`
+(`js/render/glx.js`), `updateTrackPreview` (`js/game/menus.js`), `measure`
+(`js/game/scrollfade.js`) and `observe` (`js/game/sheetshape.js`); the single
+largest bucket (42 ms) is `[unattributed]`. It is a one-time boot cost, not a
+per-frame one. Do not re-chase it.
+
+### Measured baseline (2026-08-13, this box)
+
+Kept so the next audit starts from numbers instead of re-deriving them. Taken on
+the 4-core container under concurrent load, so treat the **ratios** as the
+signal and the absolute ms as an upper bound.
+
+**Physics CPU** — `tools/profile-gameloop.mjs vegas physics`, 2748 samples:
+
+| self | function | file |
+|---|---|---|
+| 22.2% | `update` | game.js |
+| 12.4% | `updateCar` | game.js |
+| 5.1% | `pairContact` | game.js |
+| 4.4% | `resolveCollisions` | game.js |
+| 2.8% | `(garbage collector)` | — |
+| 1.1% | `step` | debrisworld.js |
+| 0.9% | `evalSeg` | spline.js |
+
+Summing every `wasm-function[…]` entry with `debrisworld.js:step` puts **~16 %
+of physics CPU in the Rapier debris side-world** — the largest cost centre after
+`update`/`updateCar`, and a subsystem with a recorded history of being the
+expensive one (see the `perf.js` crash-sentinel header on shipping `vendor/`).
+`pairContact` + `resolveCollisions` is a further ~9.5 %.
+
+*Traced, not a defect:* `buildWorld` also appears at 0.6 %, but
+`js/game/debrisworld.js:714` is `if (!world) buildWorld(track, cars);` — the
+one-time lazy build landing inside the sample window. Recorded so it is not
+re-derived.
+
+**Boot script wall** — every `src=` in index.html, `?v=N` stripped, `stat -c%s`
+summed. **146 script tags, 5,466,108 bytes (5.47 MB) of eager JS:**
+
+| dir | bytes | files | share |
+|---|---|---|---|
+| js/circuits | 1,682,896 | 40 | 31% |
+| js/game | 1,377,475 | 46 | 25% |
+| js/track | 675,897 | 19 | 12% |
+| js (log/mat4/game) | 478,286 | 3 | 9% |
+| js/car | 384,223 | 7 | 7% |
+| js/net | 304,833 | 11 | 6% |
+| js/render/shaders | 191,420 | 5 | 3% |
+| js/data | 158,278 | 8 | 3% |
+| js/render + glx | 212,800 | 7 | 4% |
+
+These are **uncompressed on-disk** bytes. Pages serves gzip, so *transfer* is
+far smaller — but the measured LCP cost is 99.7 % *element render delay*, i.e.
+parse and execute of the serial IIFE wall, and that tracks uncompressed bytes.
+Do not discount these as "gzip handles it". Note `js/circuits` is 31 % of the
+wall for data where a session uses exactly **one of 40** files.
+
+**Boot trace** (chrome-devtools MCP): DCL 4712 ms, 146 scripts, **LCP 2306 ms =
+TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
+
+### The standing conclusion
+
+The GPU half of this game is **unmeasurable on this box**, and no amount of
+tooling changes that. So the work that can be justified here is the work whose
+cost is CPU-side and deterministic: the boot script wall, track build time,
+physics/AI, and allocation/GC. GPU-side findings must be argued from
+**mechanism** — work multiplied by zero, a missing guard, a pass that runs
+twice — never from a number produced here. §1 is the record of what happens
+when that rule is relaxed.
+
+---
+
 ## 1. The pattern, which matters more than the list
 
 | Finding | Claimed | Measured | Outcome |
