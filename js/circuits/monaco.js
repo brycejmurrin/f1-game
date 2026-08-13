@@ -90,6 +90,18 @@
       const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop, bakedModel } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
+      /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
+         px/rx/tx readers were authored when startFrac was 0.28; 7a17351 moved
+         the origin to 0.2516 and renumbered the control points, but raw index
+         users never got the renumbering. Same formula the engine uses
+         (tracks.js `j = offNew - iOld`). MEASURED racing positions (curvature
+         peak-pick, build 1188): Ste Devote 0.056 | hairpin (r=10.1m) 0.383 |
+         Portier 0.434 | tunnel 0.449-0.524 | chicane 0.641 | pool ~0.77 |
+         Rascasse 0.88. The authored fracs in this file do NOT equal these. */
+      const _offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
+      const _offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
+      const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
+      const KOLD = (s) => (K(s) + _kShift) % n;
       const racingSide = (side) => def.reverse ? -side : side;
 
       // ── Colour palette ────────────────────────────────────────────────────
@@ -381,16 +393,22 @@
 
       // ── FAIRMONT HAIRPIN HOTEL (s=0.40, R) ──────────────────────────────
       {
+        // Gaps 9-11, not 4-5: a 20-30 m mass at gap 4 beside a 10 m-radius
+        // loop lays its podium courses ACROSS the street on the inside of the
+        // hairpin — measured as flat wall bands 0.1-1.0 m above the tarmac at
+        // racing 0.376-0.390 ("white bars lying on the road"). The real hotel
+        // reads close because it is TALL, not because its plinth is on the
+        // racing line.
         const k = K(0.40);
-        building(k, 1, 4, 20, 48, 30,
+        building(k, 1, 9, 20, 48, 30,
           { kind: "notch", wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
-        building(K(0.385), 1, 5, 22, 40, 18,
+        building(K(0.385), 1, 10, 22, 40, 18,
           { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(K(0.415), 1, 5, 22, 42, 18,
+        building(K(0.415), 1, 10, 22, 42, 18,
           { kind: "podium", wall: [0.88, 0.84, 0.76], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
       }
 
-      // ── SECTOR 4 — TUNNEL (s=0.51→0.585) ───────────────────────────────
+      // ── SECTOR 4 — TUNNEL (old-racing 0.478→0.553 = racing 0.449→0.524) ───────────────────────────────
       // The one piece of Monaco that is not a street: ~250 m bored under the
       // headland, and the only place on the calendar where the driver loses the
       // sky. What it needs, in order of how much each one is missed:
@@ -427,10 +445,6 @@
         // engine uses at tracks.js (`j = offNew - iOld`), same result: the
         // measured hairpin sits at racing 0.383 and the corner sequence puts
         // the tunnel at ~0.48-0.56, which is exactly KOLD(0.51..0.585).
-        const offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
-        const offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
-        const kShift = ((def.reverse ? offNew - offOld : offOld - offNew) % n + n) % n;
-        const KOLD = (s) => (K(s) + kShift) % n;
         // 0.478..0.553 (old-racing) => racing 0.449..0.524: entry ~50 m after
         // Portier (measured apex 0.434), a 247 m bore, exit with a run down to
         // the chicane (0.641). Real Monaco: the tunnel starts immediately after
@@ -804,8 +818,20 @@
         });
       }
       // Swimming pool (L / harbour side — keep clear of inland façades)
+      // KOLD + raw frame, NOT wrapped anchor(): the authored 0.80 is OLD-RACING
+      // (the pool, racing ~0.77). Wrapped anchor treated it as source and set
+      // the whole deck down on the HAIRPIN descent, where the 8 m offset folds
+      // back across the 10 m-radius loop — the white deck edges were the bars
+      // lying on the street at racing 0.35-0.39.
       {
-        const k = K(0.80), a = anchor(k, -1, 8);
+        const k = KOLD(0.80);
+        const gap = hw[k] + 8;
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const cxw = px[k] - rr[0] * gap, czw = pz[k] - rr[2] * gap;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw],
+                    r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 0.3), [14, 0.5, 22], [0.20, 0.60, 0.65], b);
