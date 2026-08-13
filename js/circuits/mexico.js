@@ -78,8 +78,7 @@
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
-              cameraTower, sponsorHoarding, broadcastCompound, circuitKit,
-              terrainYAt, groundYAt } = api;
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
       // Lap sectors where dressingExclusions leaves the generic city generator
       // running — see the def's `dressingExclusions` above.
