@@ -106,11 +106,29 @@
           // The shell: two shallow translucent domes leaning together, open in
           // the middle. That gap — the "eye" over the arena — is the shape
           // everyone recognises, so the roof is built as two halves, not a lid.
+          //
+          // Each half used to be five flat 2.2 m-thick slabs stepped up from
+          // the drum (20 m) to the crown (36 m). The step between slabs grows
+          // toward the crown — up to 7 m between the outermost two — so most
+          // of the slabs never touched their neighbour: only the slab resting
+          // directly on the drum was actually grounded, and float-audit found
+          // the other four hanging with nothing under them (gap up to ~15 m).
+          // Stretching every slab straight down to the drum closed the float
+          // but stacked all five on top of each other for their whole run,
+          // roughly tripling this stadium's coplanar same-facing pairs — so
+          // instead each slab reaches only to the NEXT slab out (telescoping,
+          // like the original stepped silhouette, just with the gaps closed):
+          // its top stays at its own crown height, its bottom is the next
+          // slab's crown, so consecutive slabs touch exactly and the whole
+          // run chains down to the drum-grounded outermost slab.
+          const peakAt = (i) => 20 + (1 - (i / 4) ** 2) * 16;   // i=0..4 -> 36..20
           for (const sgn of [-1, 1]) {
             for (let i = 0; i < 5; i++) {
               const f = i / 4;
-              addBox(stage, vadd(vadd(a.c, a.t, sgn * (26 + f * 30)), a.u, 20 + (1 - f * f) * 16),
-                [100 - f * 30, 2.2, 22], [0.90, 0.93, 0.97], b);
+              const top = peakAt(i);
+              const bottom = i < 4 ? peakAt(i + 1) : top - 2.2;   // last slab: unchanged, already on the drum
+              addBox(stage, vadd(vadd(a.c, a.t, sgn * (26 + f * 30)), a.u, (top + bottom) / 2),
+                [100 - f * 30, top - bottom, 22], [0.90, 0.93, 0.97], b);
             }
           }
           stage._mat = MAT.METAL;
