@@ -226,6 +226,15 @@ journal; this is what remains.
   divides `--sar`/`--sat` by `--hud-scale`, `#pausebtn` does not), so they
   additionally drift apart at non-default HUD SIZE — worth settling in the same
   pass.
+- **`menu-keyboard` › "left/right move along a chip row without leaving it" is
+  red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
+  block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
+  `tools/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
+  base fails in 18.4 s. No timeout on either side, so it is an assertion, not
+  contention. This is the SECOND red test in this file — the `#track-detail`
+  dialog regression above owns "Tab cannot escape the track-detail dialog" — so
+  the file is worth one pass rather than two separate fixes. It is the only
+  failure in `test:ui`, which otherwise runs 100/100.
 - **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
   `indianapolis` 4.74 m over the road against a 0.2 m cap
   (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
