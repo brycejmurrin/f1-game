@@ -73,14 +73,15 @@ function fakeSession() {
   };
 }
 
-/** A G façade with just enough of a grid for start() to seat one rival. */
-function stubG() {
+/** A G façade with just enough of a grid for start() to seat `n - 1` rivals. */
+function stubG(n) {
   const car = (i, local) => ({
     idx: i, local: !!local, human: !!local, isPlayer: !!local,
     s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 0, mods: null,
-    name: "D" + i, code: "D" + i,
+    name: "D" + i, code: "D" + i, driverId: "drv" + i,
   });
-  const cars = [car(0, true), car(1, false)];
+  const cars = [];
+  for (let i = 0; i < (n || 2); i++) cars.push(car(i, i === 0));
   const G = {
     cars,
     player: cars[0],
@@ -88,10 +89,14 @@ function stubG() {
     netStart: null,
     netNow: null,
     caughtCautions: [],
+    caughtQuali: [],
+    caughtQLive: [],
     wireId: (c) => c.idx,
     setCarRole: (c, human, local) => { c.human = human; c.local = local; },
     announce: () => {},
     applyCaution: (d) => { G.caughtCautions.push(d); },
+    onPeerQuali: (d) => { G.caughtQuali.push(d); },
+    onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
     COUNTDOWN_S: 3,
   };
   return G;
@@ -167,4 +172,106 @@ test("the per-peer events a host DOES own are still accepted from a guest", () =
   const { net, s } = started("host");
   s.deliver("lap", { car: 1, lap: 2, t: 91.2 });
   assert.equal(net.peerLaps().length, 1, "a guest still reports its own laps to the host");
+});
+
+// ---- QUALI / QLIVE: the driverId is bound to the sender ---------------------
+// A qualifying time is an input to the GRID, and the payload names its driver —
+// so on the host the payload's word is checked against the car filed for the
+// connection the event arrived on (the event-channel twin of onState's
+// per-connection narrowing). The started() harness seats the peer in cars[1],
+// whose driverId is "drv1".
+
+test("a HOST accepts a QUALI naming the sender's own driver", () => {
+  // Anti-vacuity for the three drop-tests below: same delivery, same host,
+  // only the driverId differs.
+  const { G, s } = started("host");
+  s.deliver("quali", { driverId: "drv1", t: 61.25 });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 61.25 }]);
+});
+
+test("a HOST drops a QUALI naming another driver", () => {
+  const { G, s } = started("host");
+  // The host's own player, and a bystander the sender does not own: a guest
+  // that could post either would be assembling somebody else's grid slot.
+  s.deliver("quali", { driverId: "drv0", t: 1.0 });
+  s.deliver("quali", { driverId: "somebody-else", t: 59.0 });
+  assert.deepEqual(G.caughtQuali, [], "a guest may post a qualifying time for ITS OWN driver only");
+});
+
+test("a HOST drops a QUALI naming no driver at all", () => {
+  // driverId is the whole claim; absent, there is nothing to bind to the
+  // sender and nothing downstream could file the time against.
+  const { G, s } = started("host");
+  s.deliver("quali", { t: 59.0 });
+  assert.deepEqual(G.caughtQuali, []);
+});
+
+test("a GUEST accepts the host's QUALI for any driver", () => {
+  // Guest side there is nothing to narrow to: the only connection is the
+  // host's, and the host legitimately speaks for the whole field — in a room
+  // of three or more, another guest's time can only arrive via the host.
+  const { G, s } = started("guest");
+  s.deliver("quali", { driverId: "anyone-at-all", t: 60.5 });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+});
+
+test("QLIVE is bound to the sender on the host the same way", () => {
+  // Display-only, but keyed by the same driverId — unbound, the same spoof
+  // paints a lap-in-progress over another driver's name.
+  const { G, s } = started("host");
+  s.deliver("qlive", { driverId: "drv1", t: 12.4, frac: 0.2 });
+  s.deliver("qlive", { driverId: "drv0", t: 1.0, frac: 0.9 });
+  assert.deepEqual(G.caughtQLive, [{ driverId: "drv1", t: 12.4, frac: 0.2 }]);
+});
+
+// ---- the star does not launder a guest's declaration ------------------------
+
+test("a guest's CAUTION neither applies on a two-guest host nor reaches the other guest", () => {
+  // "Dropped by another guest" in the only form the star topology can express:
+  // a guest has one connection, to the host, so the only way guest A's caution
+  // could reach guest B is the host applying or relaying it. Pin both offices
+  // shut on a host actually holding two guests.
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sa = fakeSession();
+  const sb = fakeSession();
+  const r = net.start({
+    role: "host",
+    session: sa,  // the lobby hands over both forms — sessions is the map, session the first entry
+    sessions: [{ id: "a", session: sa }, { id: "b", session: sb }],
+    peers: [{ id: "a" }, { id: "b" }],
+  });
+  assert.equal(r.ok, true, `start() must seat two guests: ${r.error || ""}`);
+  const sentBefore = sb.sent.length;
+  sa.deliver("caution", { kind: "sc", lap: 2 });
+  assert.deepEqual(G.caughtCautions, [], "guest A's caution must not apply on the host");
+  const relayed = sb.sent.slice(sentBefore).filter((m) => m.t === "caution");
+  assert.deepEqual(relayed, [], "guest A's caution must not be relayed to guest B");
+});
+
+test("on a two-guest host, each guest's QUALI is accepted for its own seat only", () => {
+  // The binding is PER CONNECTION, not "any driver some guest owns": guest B
+  // must not be able to post guest A's time either.
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sa = fakeSession();
+  const sb = fakeSession();
+  const r = net.start({
+    role: "host",
+    session: sa,  // the lobby hands over both forms — sessions is the map, session the first entry
+    sessions: [{ id: "a", session: sa }, { id: "b", session: sb }],
+    peers: [{ id: "a" }, { id: "b" }],
+  });
+  assert.equal(r.ok, true, `start() must seat two guests: ${r.error || ""}`);
+  // pickRemoteSlot walks the grid in order, so peer "a" is seated in cars[1]
+  // ("drv1") and peer "b" in cars[2] ("drv2") — verified by the accepted
+  // deliveries below rather than assumed: each seat's own time landing is what
+  // proves the mapping this test's drop-assertion depends on.
+  sa.deliver("quali", { driverId: "drv2", t: 58.0 });  // A speaking for B: dropped
+  sa.deliver("quali", { driverId: "drv1", t: 61.0 });  // A speaking for itself: accepted
+  sb.deliver("quali", { driverId: "drv2", t: 60.75 }); // B speaking for itself: accepted
+  assert.deepEqual(G.caughtQuali, [
+    { driverId: "drv1", t: 61.0 },
+    { driverId: "drv2", t: 60.75 },
+  ]);
 });
