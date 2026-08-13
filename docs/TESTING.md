@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 76 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 78 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -808,6 +808,8 @@ what it covers.
 | `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
+| `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
+| `incident-gate.test.mjs` | IncidentSim's notifyCar entry gate vs preStep's per-kind authority in a VM — an r2-only config still queues+promotes a launch at `>= R2_CAR_V`, an r3-band contact under that config promotes nothing (enabling one kind never widens the others), sub-threshold bumps never queue, all-off is inert, and the shipped defaults still resolve a relV=30 pair as r2 |
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
 | `terrain-normals.test.mjs` | the terrain ribbon must be shaded by its own shape: `TrackMesh.buildTerrain` normals are unit length, point up, and carry real tilt spread on both a street and an open circuit. `buildTerrain` shipped `nrm.push(0, 1, 0)` for every vertex — an embankment, a banked verge and a flat runoff all took identical sun — and nothing caught it, because a constant normal throws nothing and changes no vertex count |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
