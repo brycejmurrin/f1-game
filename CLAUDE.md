@@ -301,7 +301,6 @@ js/game/         — game modules, each Module.create(G) with the G ctx façade 
   reliability.js Reliability    DNFs — risk derived from tier/parts, drawn once at
                                   the green light; ships OFF behind a race setting
   menus.js       Menus          menu/select/pause DOM flows
-  scrollfade.js  ScrollFade     scroll-edge fade + position indicator (self-init)
   menunav.js     MenuNav        desktop menu wheel/arrow-key navigation (self-init)
   photomode.js   Photomode      photo mode — the tuner panels' free camera
   aerozones.js   AeroZones      ACTIVE AERO activation zones — pure circuit geometry
