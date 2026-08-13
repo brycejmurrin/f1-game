@@ -838,10 +838,18 @@
         const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
-      // Far mast cluster + breakwater
+      // Far mast cluster + breakwater. anchor()'s `a.c` is quay/terrain
+      // height, but at 90+ m out these masts are past the breakwater, over
+      // open harbour water — the fixed `+u*5` base offset floated them
+      // ~5 m above the anchor with nothing under them (float-audit: gap
+      // ~4.7 m, no support within its 6 m search radius). Base them on the
+      // water surface instead (pyMin - 0.8, same datum yacht()/megaYacht()
+      // use) — the mast base sits right at the waterline, as if rising from
+      // a small unmodelled hull.
       for (let i = 0; i < 6; i++) {
         const k = K(0.62 + i * 0.05), a = anchor(k, -1, 90 + hash(k) * 22);
-        addCyl(out, vadd(a.c, a.u, 5), 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
+        const mastBase = [a.c[0], pyMin - 0.8, a.c[2]];
+        addCyl(out, mastBase, 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 4; i++) {
         const k = K(0.66 + i * 0.05), a = anchor(k, -1, 125);
