@@ -128,8 +128,27 @@
       // ── Continuous Armco lining both sides — tight street feel ───────────
       // 1.2 m leaves the collision limit just outside the authored 5 m road,
       // instead of narrowing the usable tarmac while remaining Monaco-tight.
-      wall(0.0, 1.0, -1, 1.2, 0.8, ARMCO, 0.22);
-      wall(0.0, 1.0, 1, 1.2, 0.8, ARMCO, 0.22);
+      // FULL_LAP stops one node short of 1.0, not 1.0 itself. This circuit is
+      // `sceneryCoordinates: "source"` + `reverse: true`; TrackSpace.range()
+      // maps a SOURCE frac through toRacingFrac(def, s) = wrap01(phi - s), and
+      // wrap01(1.0) === wrap01(0.0), so an exact [0.0, 1.0] source range maps
+      // BOTH ends to the identical racing frac (phi) before sceneryRange()'s
+      // own "whole lap" guard (`|s1-s0| >= 1-1e-9`) ever sees it — the guard
+      // checks the racing-space span, which is already zero by then, not the
+      // 1.0 the caller wrote. along()'s k0===k1 wraparound then duplicates
+      // exactly one node's wall geometry, and because this circuit's origin
+      // is shifted, that node lands mid-lap (k=156, the Casino/Massenet
+      // climb) instead of the harmless start/finish it would be on a
+      // straight source-space circuit — a same-facing, zero-gap coplanar
+      // pair (17.3 m2, 0.0 mm) at that exact spot. Measured: reverting only
+      // the Casino block's KOLD+raw-frame fix (which is unrelated and
+      // correct) does not change this pair; disabling each wall() call in
+      // isolation does, one node-fraction short of a full lap is enough to
+      // break the alias without leaving a visible gap (along()'s own station
+      // spacing here is ~8 m, four times this shim).
+      const FULL_LAP = 1 - 1 / n;
+      wall(0.0, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
+      wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
@@ -778,6 +797,13 @@
 
       // ── YACHT BUILDER ─────────────────────────────────────────────────────
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
+        // Seat the hull on the ACTUAL water surface, not the quay terrain
+        // anchor() resolved: waterSurface()/waterField() lay their sheet at
+        // pyMin - 0.8 (js/track/tracks.js), well below the marina promenade
+        // anchor() samples. X/Z stay the caller's berth position — only Y
+        // moves off the ground and into the harbour, with ~0.25*sc of hull
+        // draught below the waterline so it reads as floating IN the water.
+        yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
         out._mat = MAT.METAL;
@@ -812,10 +838,18 @@
         const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
-      // Far mast cluster + breakwater
+      // Far mast cluster + breakwater. anchor()'s `a.c` is quay/terrain
+      // height, but at 90+ m out these masts are past the breakwater, over
+      // open harbour water — the fixed `+u*5` base offset floated them
+      // ~5 m above the anchor with nothing under them (float-audit: gap
+      // ~4.7 m, no support within its 6 m search radius). Base them on the
+      // water surface instead (pyMin - 0.8, same datum yacht()/megaYacht()
+      // use) — the mast base sits right at the waterline, as if rising from
+      // a small unmodelled hull.
       for (let i = 0; i < 6; i++) {
         const k = K(0.62 + i * 0.05), a = anchor(k, -1, 90 + hash(k) * 22);
-        addCyl(out, vadd(a.c, a.u, 5), 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
+        const mastBase = [a.c[0], pyMin - 0.8, a.c[2]];
+        addCyl(out, mastBase, 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 4; i++) {
         const k = K(0.66 + i * 0.05), a = anchor(k, -1, 125);
@@ -1201,6 +1235,11 @@
       // Hull prism bow + stacked white superstructure decks + wrap-around
       // railings + radar arch + mast + helipad disc + tender on the aft deck.
       const megaYacht = (a, sc, hullCol) => {
+        // Same fix as `yacht()` above: anchor() gives quay-terrain height,
+        // but the hull needs to sit on the harbour water surface
+        // (pyMin - 0.8), draught below the waterline. X/Z keep the berth
+        // position already validated by the onTrack() check at the call site.
+        a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];
