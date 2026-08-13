@@ -193,8 +193,12 @@ const IncidentSim = (function () {
     _cand.push({ a: i, b: -1, sev, kind: "wall" });
   }
   // Car-car contact from the (prog,x) resolver, relV = closing speed (m/s).
+  // _r2 belongs in this gate: a car-car hit above R2_CAR_V is an R2 launch
+  // (preStep classifies it), so gating on only _r3/_c1 made the r2-airborne-only
+  // config unreachable from car contacts. preStep still gates each kind on its
+  // own flag — letting candidates through here widens nothing.
   function notifyCar(a, b, relV) {
-    if (!active() || !(_r3 || _c1) || !a || !b) return;
+    if (!active() || !(_r2 || _r3 || _c1) || !a || !b) return;
     if (!fin(relV) || relV < R3_CAR_V) return;
     const cars = G.cars; if (!cars) return;
     const ia = cars.indexOf(a), ib = cars.indexOf(b);
