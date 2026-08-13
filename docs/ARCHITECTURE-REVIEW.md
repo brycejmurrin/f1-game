@@ -279,15 +279,13 @@ most-load-bearing first.
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
-- **The relational agent policy under-drives, and the bench can finally say so.**
-  `tests/specs/agent-drive-bench.spec.js` › "relational policy out-drives the
-  blind baseline" was red on a premise nobody trusted: the episode started at
-  lap fraction 0.02, where traffic cannot arrive, so the result was deal-luck
-  and the spec's own comment said as much. With the start moved to a measured
-  near-straight (0.4) the bench is honest and **still red** — `relational.dist`
-  245 against a `> 327` / `naive×1.5` floor. That is now a real
-  agent-policy/physics-tuning finding rather than a harness artifact.
-  `test:agent` is not in the CI smoke job, which is why it sat unseen.
+- **The relational agent policy — FIXED (2026-08-13).** The under-drive was
+  never the speed caps: pure feedback steering cannot track road curvature
+  at speed (traced: 13.9 m road departure at 55 m/s with steer 0.04). The
+  bench policy now feeds forward from the road's published curvature
+  (`ahead.pts` v^2/R) with a matching speed bound — Monza 251 -> 1543 m,
+  Interlagos 1119 m, spec 5/5 green, floors untouched.
+
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
   `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
