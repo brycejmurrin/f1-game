@@ -807,7 +807,15 @@
       // ===================================================================
       for (const s of [0.20, 0.30, 0.42, 0.82, 0.88]) {
         const a = anchor(K(s), 1, 24);
-        addBox(out, vadd(a.c, a.u, 3.0), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
+        // s=0.30 sits on a locally steeper stretch of the promenade than the
+        // other four anchors — this 28 m-long strip's single-point ground
+        // sample there reads ~1.8 m shy of where the far end of the box
+        // actually needs to sit. Only that one anchor needs the extra drop;
+        // moving all five identically re-seated the other four flush enough
+        // with the terrain to open new same-facing coplanar spots (measured
+        // 9 -> 14 spots), so this stays per-anchor rather than a shared const.
+        const drop = s === 0.30 ? 0.6 : 0;
+        addBox(out, vadd(a.c, a.u, 3.0 - drop), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
 
