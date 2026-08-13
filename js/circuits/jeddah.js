@@ -578,7 +578,13 @@
       const dhow = (k, gap, sc) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 6)) return;
-        const hull = [a.c[0], pyMin + 0.4 * sc, a.c[2]];
+        // Datum is the WATER surface, which waterSurface/waterBand lay at
+        // pyMin - 0.8, not pyMin itself. Sitting at pyMin + 0.4*sc left every
+        // hull ~1.55 m clear of its own sea — above the 1.0 m footing the
+        // grounding audit allows, so the whole fleet (hull, mast, sail) read as
+        // unsupported. A moored dhow sits DOWN in the water; 0.15 m of draught
+        // keeps the waterline convincing and the footing unambiguous.
+        const hull = [a.c[0], pyMin - 0.95 + 0.05 * sc, a.c[2]];
         out._mat = MAT.WOOD;
         addBox(out, vadd(hull, a.u, 0.8 * sc), [2.6 * sc, 1.7 * sc, 9 * sc], [0.30, 0.20, 0.11], b);   // dark wood hull
         addBox(out, vadd(hull, a.u, 1.8 * sc), [2.2 * sc, 0.5 * sc, 8 * sc], [0.42, 0.29, 0.16], b);   // gunwale
