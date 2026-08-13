@@ -1431,7 +1431,11 @@
           center: vadd(a.c, a.u, 6), size: [11, 12, 11], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 3.4), [10, 6.8, 10], STONE, b);
-          addFrustum(stage, vadd(a.c, a.u, 8.2), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
+          // addFrustum is BASE-anchored (geom.js), but 8.2 was written as if it
+          // centred the roof: the pavilion block below tops out at 3.4+6.8/2=6.8,
+          // so the frustum's base floated 1.4 m clear of it. Based at 6.6 so the
+          // roof overlaps the block's top by 0.2 m instead.
+          addFrustum(stage, vadd(a.c, a.u, 6.6), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [4.8, 1.0, 4.8], [0.34, 0.36, 0.36], b);
         });
       }
