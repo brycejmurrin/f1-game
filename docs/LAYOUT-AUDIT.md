@@ -49,6 +49,27 @@ opening anything: the 3D scene starves the compositor, which makes every wait an
 every capture an order of magnitude slower. A desktop screenshot that timed out
 at four minutes took twenty seconds with the loop stopped.
 
+**But stopping the loop also starves `requestAnimationFrame`, and that makes
+every OBSERVER-dependent measurement unreliable.** ResizeObserver and
+IntersectionObserver deliver on the frame loop, so with the loop stopped they
+fire late or not at all inside the probe's window — and the grid then records
+the *pre-observer* state as if it were the final layout. MEASURED 2026-08-13 at
+834x1194 under the audit's own conditions: the first rAF after a click took
+**5346 ms** and the card's ResizeObserver fired at 5402 ms; with the render loop
+running the same observer fired in **29 ms**.
+
+This is not hypothetical. It is how the circuit preview map came to be reported
+as `map 80x119` — a cosmetic-looking resolution note — when the real behaviour
+on deploy was a map rendering permanently at a tenth of its size in a 762x500
+card. The metric was right about the pixels and wrong about the cause, and the
+cause was the probe.
+
+**So: any check whose answer arrives via an observer must be confirmed with the
+loop RUNNING before it is believed, in either direction** — a clean cell may be
+hiding a defect the observer would have fixed, and a dirty one may be reporting
+a state no player ever sees. `__apex.headless(false)`, or drive it through the
+Chrome DevTools MCP without calling `headless` at all.
+
 ---
 
 ## The viewports, and what each one is for
