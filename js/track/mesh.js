@@ -80,10 +80,27 @@ const TrackMesh = (function () {
     return corners;
   }
 
-  // Author-driven banked corners. A track def can bank its corners two ways:
-  //   • `bankZones: [{ frac, angleDeg, widthM }]` — bank explicit fraction
-  //     windows at authored angles (used by Zandvoort's Hugenholtz/Luyendyk and
-  //     Madrid's La Monumental), OR
+  // Below this the road is straight enough that its curvature SIGN carries no
+  // information — the baked LUT ripples through zero on gentle sections, so a
+  // sign read off it there is noise, not a direction. rad/m.
+  const BANK_STRAIGHT_K = 0.004;
+  // A frac-anchored zone sitting on a straight this far from any curated apex
+  // has missed its corner outright, and is re-seated on the nearest one.
+  const BANK_RESEAT_M = 60;
+  // Ceiling on how fast the banked road EDGE may rise or fall along the lap
+  // (m per m). Camber that reverses has to cross through flat over a long
+  // enough run to stay under this; elevation-tracks.spec.js caps the shipped
+  // number at 0.08, and this leaves margin under it.
+  const BANK_MAX_EDGE_GRADE = 0.05;
+
+  // Author-driven banked corners. A track def can bank its corners three ways:
+  //   • `bankZones: [{ turn, angleDeg, widthM }]` — anchor to a curated FIA
+  //     turn apex (1-based index into def.turns). Already racing-space, so it
+  //     takes NO rotation compensation and survives any future start-line
+  //     remap. PREFER THIS: a lap fraction only means anything against the
+  //     exact centreline it was measured on.
+  //   • `bankZones: [{ frac, angleDeg, widthM }]` — an explicit fraction window
+  //     in the pre-rotation authoring space (Madrid's La Monumental), OR
   //   • `banked: true` — auto-pick the two highest-curvature corners and bank
   //     them at ~18° (legacy fallback for any track without bankZones).
   // Returns null when neither is present; otherwise per-node arrays describing how
@@ -102,6 +119,96 @@ const TrackMesh = (function () {
     const lift = new Float32Array(n);
     const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
 
+    // Smoothed curvature (~±12 m). Every direction decision below reads THIS,
+    // never the raw LUT: raw curvature crosses zero repeatedly on gentle
+    // sections, so a per-node sign taken off it would flap node to node.
+    const SM = Math.max(1, Math.round(12 / ds));
+    const ksm = new Float64Array(n);
+    {
+      const raw = new Float64Array(n);
+      for (let k = 0; k < n; k++) raw[k] = curvature(track, k * ds);
+      for (let k = 0; k < n; k++) {
+        let sum = 0;
+        for (let j = -SM; j <= SM; j++) sum += raw[(k + j + n) % n];
+        ksm[k] = sum / (2 * SM + 1);
+      }
+    }
+
+    // Paint one cosine-windowed bank centred on node kc, spanning `lo`/`hi`
+    // nodes each side. `peak` is the full-width rise at the apex in metres, or
+    // null to derive it per node from tanA and the local half-width.
+    function paint(kc, lo, hi, tanA, peak) {
+      lo = Math.max(1, lo); hi = Math.max(1, hi);
+      const span = lo + hi + 1;
+      let dom = 0;
+      for (let i = -lo; i <= hi; i++) dom += ksm[(kc + i + n) % n];
+      const domSign = dom >= 0 ? 1 : -1;
+      const signed = new Float64Array(span);
+      for (let i = -lo; i <= hi; i++) {
+        const k = (kc + i + n) % n, idx = i + lo;
+        // cosine window: 1 at apex, 0 at the span edges
+        const t = i <= 0 ? (i + lo) / lo : (hi - i) / hi;
+        const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
+        const mag = (peak != null ? peak : 2 * track.hw[k] * tanA) * w;
+        // Outer edge is opposite the turn centre. +curv is a LEFT-hand turn
+        // (measured: a zero-steer run through a +k corner drifts to POSITIVE
+        // lateral, i.e. wide to the right), so its centre is left and its OUTER
+        // edge is the right one.
+        //
+        // Read PER NODE. Taking it once at kc and smearing that one sign over
+        // the whole window cambered the wrong way across every zone that spans
+        // an inflection (65 of 190 shipped zones did), and on a zone centred on
+        // a straight the single sample was pure LUT noise (37 more) — together
+        // ~650 m of road that rolled the car toward the OUTSIDE of its turn.
+        // Where the road is straight the sign means nothing, so the window's
+        // dominant direction fills in: camber is only ever adverse to a turn.
+        const kk = ksm[k];
+        const dir = Math.abs(kk) >= BANK_STRAIGHT_K ? (kk > 0 ? 1 : -1) : domSign;
+        signed[idx] = mag * dir;
+      }
+      for (let i = -lo; i <= hi; i++) {
+        const k = (kc + i + n) % n, v = signed[i + lo], a = Math.abs(v);
+        if (a > lift[k]) { lift[k] = a; bsign[k] = v >= 0 ? 1 : -1; }
+      }
+    }
+
+    // Camber that reverses — inside a zone that spans an inflection, or between
+    // two ADJACENT zones cambering opposite ways, where strongest-wins flips
+    // the winner from one node to the next — must cross THROUGH flat rather
+    // than snap between ±full lift, or the road edge gains a step no car can
+    // track (measured 0.15 m/m at Mugello and 0.12 at Shanghai before this;
+    // the cap is 0.08). Runs once on the assembled profile, so it catches
+    // every transition regardless of which zone produced it. Each crossing
+    // gets just enough run to hold BANK_MAX_EDGE_GRADE, and the blend may only
+    // ever REDUCE a node's lift — it never invents banking anywhere.
+    function relaxSignSteps() {
+      const signed = new Float64Array(n);
+      for (let k = 0; k < n; k++) signed[k] = lift[k] * bsign[k];
+      const cuts = [];
+      for (let k = 0; k < n; k++) {
+        const a = signed[k], b = signed[(k + 1) % n];
+        if (a === 0 || b === 0) continue;
+        if ((a > 0) !== (b > 0)) cuts.push(k);
+      }
+      if (!cuts.length) return;
+      const out = Float64Array.from(signed);
+      for (const c of cuts) {
+        const jump = Math.max(Math.abs(signed[c]), Math.abs(signed[(c + 1) % n]));
+        const R = Math.max(2, Math.ceil(jump / (2 * BANK_MAX_EDGE_GRADE * ds)));
+        for (let i = -R; i <= R; i++) {
+          const k = (c + i + n) % n;
+          let sum = 0;
+          for (let j = -R; j <= R; j++) sum += signed[(k + j + n) % n];
+          const v = sum / (2 * R + 1);
+          if (Math.abs(v) < Math.abs(out[k])) out[k] = v;
+        }
+      }
+      for (let k = 0; k < n; k++) {
+        lift[k] = Math.abs(out[k]);
+        if (out[k] !== 0) bsign[k] = out[k] > 0 ? 1 : -1;
+      }
+    }
+
     // Explicit authored zones take precedence over the curvature auto-pick.
     if (zones && zones.length) {
       // bankZones fracs were authored in the pre-rotation racing/arc space. The
@@ -117,28 +224,62 @@ const TrackMesh = (function () {
       // moves two of them AWAY from their corners).
       const dress = def._sceneryShift || 0;
       const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
-      for (const z of zones) {
-        const frac = ((((z.frac || 0) * mirror + dress) % 1) + 1) % 1;
-        const kc = Math.round(frac * n) % n;
-        const tanA = Math.tan((z.angleDeg || 18) * Math.PI / 180);
-        const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
-        // Outer edge is opposite the turn centre. +curv is a LEFT-hand turn
-        // (measured: a zero-steer run through a +k corner drifts to POSITIVE
-        // lateral, i.e. wide to the right), so its centre is left and its OUTER
-        // edge is the right one. This read "+ = right" and picked the inner edge,
-        // so every authored bank zone banked AGAINST its corner; the agent-facing
-        // corner label was inverted the same way, so the two cancelled and the
-        // camber check passed while the road actually threw the car out.
-        const outer = curvature(track, kc * ds) >= 0 ? 1 : -1;
-        for (let i = -half; i <= half; i++) {
-          const k = (kc + i + n) % n;
-          // cosine window: 1 at apex, 0 at the span edges
-          const t = 1 - Math.abs(i) / half;
-          const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
-          const add = 2 * track.hw[k] * tanA * w;
-          if (add > lift[k]) { lift[k] = add; bsign[k] = outer; }
+      const turns = (def.turns && def.turns.length) ? def.turns : null;
+      const wrap01 = (f) => (((f % 1) + 1) % 1);
+      const centre = new Array(zones.length).fill(null);
+      const taken = new Set();
+
+      // `turn:` anchors resolve straight off the curated apex table.
+      zones.forEach((z, i) => {
+        if (!turns || !Number.isFinite(z.turn)) return;
+        const ti = ((Math.round(z.turn) - 1) % turns.length + turns.length) % turns.length;
+        centre[i] = wrap01(turns[ti]);
+        taken.add(ti);
+      });
+
+      // Frac anchors get the rotation compensation, then a sanity re-seat.
+      // A zone whose compensated centre lands on a STRAIGHT more than
+      // BANK_RESEAT_M from any apex has missed its corner outright — the
+      // authored fraction no longer matches the centreline it was measured
+      // against, and the bank ends up as a bump in the middle of nowhere
+      // (Sochi, Watkins Glen, Estoril, Indianapolis and six more shipped that
+      // way). Those move to the nearest unclaimed apex, closest pair first so
+      // two zones never collapse onto one corner. A zone already ON a corner is
+      // left exactly where it was authored: it may deliberately sit at entry
+      // rather than apex, and re-seating it can only make it worse.
+      const loose = [];
+      zones.forEach((z, i) => {
+        if (centre[i] !== null) return;
+        const f = wrap01((z.frac || 0) * mirror + dress);
+        centre[i] = f;
+        if (!turns) return;
+        if (Math.abs(ksm[Math.round(f * n) % n]) >= BANK_STRAIGHT_K) return;
+        loose.push({ i, f });
+      });
+      if (loose.length) {
+        const cand = [];
+        for (const p of loose) {
+          turns.forEach((tf, ti) => {
+            let d = Math.abs(wrap01(tf) - p.f);
+            if (d > 0.5) d = 1 - d;
+            cand.push({ i: p.i, ti, d });
+          });
+        }
+        cand.sort((a, b) => a.d - b.d);
+        const seated = new Set();
+        for (const c of cand) {
+          if (seated.has(c.i) || taken.has(c.ti)) continue;
+          seated.add(c.i); taken.add(c.ti);
+          if (c.d * track.total > BANK_RESEAT_M) centre[c.i] = wrap01(turns[c.ti]);
         }
       }
+
+      zones.forEach((z, i) => {
+        const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
+        paint(Math.round(centre[i] * n) % n, half, half,
+              Math.tan((z.angleDeg || 18) * Math.PI / 180), null);
+      });
+      relaxSignSteps();
       return { lift, bsign };
     }
 
@@ -150,20 +291,13 @@ const TrackMesh = (function () {
     const picks = scored.slice(0, 2).map((s) => s.c);
     const TAN18 = Math.tan(18 * Math.PI / 180);
     const RUN = 6;                       // extra run-in/out nodes each side
+    // paint() derives the outer edge per node, so the RUN overhang no longer
+    // carries the apex's direction out past the point where the road turns
+    // back the other way.
     for (const c of picks) {
-      const outer = c.sign;              // outer edge is opposite the turn centre;
-                                         // +curv = LEFT turn, so outer = right (see above)
-      const peak = 2 * track.hw[c.k] * TAN18;
-      const lo = c.lo + RUN, hi = c.hi + RUN;
-      for (let i = -lo; i <= hi; i++) {
-        const k = (c.k + i + n) % n;
-        // cosine window: 1 at apex, 0 at the span edges
-        const t = i <= 0 ? (i + lo) / lo : (hi - i) / hi;   // 0..1..0 ramp
-        const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
-        const add = peak * w;
-        if (add > lift[k]) { lift[k] = add; bsign[k] = outer; }
-      }
+      paint(c.k, c.lo + RUN, c.hi + RUN, TAN18, 2 * track.hw[c.k] * TAN18);
     }
+    relaxSignSteps();
     return { lift, bsign };
   }
 
