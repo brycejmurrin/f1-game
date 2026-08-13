@@ -37,6 +37,23 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   is running, wait — or accept you will re-run its false-fails solo.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
   page doesn't tax the next `test-solo`.
+- **"The moment you're done" is a promise you WILL break once you get absorbed in
+  something else — make parking a precondition of starting a Playwright run, not
+  a thing you remember to do first.** MEASURED 2026-08-13: after a multi-shot MCP
+  session proving out a shadow-acne fix, the very last verification screenshot's
+  `navigate_page(about:blank)` call got skipped — attention had moved to writing
+  up the finding — and the live game page sat there actively rendering (frozen
+  car, but the render loop keeps running) through a `test-bg.mjs ab webgl`
+  launch. Load average climbed to 8–12 (guidance: < 3) and produced a real
+  `page.screenshot: Timeout 60000ms exceeded` failure plus several more in the
+  second group — a genuine false failure that took a `ps -eo pid,etimes,args`
+  audit to trace back to 4+ lingering Chromium renderer processes from the MCP
+  session, not to orphans from a killed run (the first, wrong hypothesis — those
+  look identical in `pgrep -cf pw-browsers` and only `ps` with full args
+  distinguishes `chrome-devtools-mcp`'s own tree from Playwright's). **Before
+  every `test-bg.mjs` invocation, `navigate_page(about:blank)` unconditionally**
+  — even (especially) when you're confident you already parked. It's one call;
+  the cost of skipping it once is a full contaminated test run.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
   the MCP. For UI (not 3D) work, `headless(true)` + hide `#game` first — that's
   survey-ui-matrix's department.
