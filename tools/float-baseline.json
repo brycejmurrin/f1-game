@@ -1,8 +1,6 @@
 {
   "monaco": 23,
-  "baku": 16,
   "jeddah": 12,
-  "singapore": 12,
   "mugello": 9,
   "madrid": 8,
   "monza": 6,
@@ -15,7 +13,9 @@
   "qatar": 3,
   "shanghai": 3,
   "silverstone": 3,
+  "singapore": 3,
   "albert_park": 2,
+  "baku": 2,
   "estoril": 2,
   "istanbul": 2,
   "kyalami": 2,
