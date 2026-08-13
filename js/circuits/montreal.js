@@ -126,9 +126,12 @@
             addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -2.36),
               [0.22, 1.55, 5.2], [0.30, 0.46, 0.56], b);
           }
-          addBox(stage, vadd(a.c, a.u, h + 0.2),
+          // Main box top is h*0.96 (centred at h*0.48, height h*0.96), not h --
+          // the roof cap referenced raw h, leaving a 0.63-0.71m gap (h=17..19)
+          // just over the rests-on tolerance. Seat both on the true top.
+          addBox(stage, vadd(a.c, a.u, h * 0.96 + 0.2),
             [7.2, 0.5, 8.0], [0.90, 0.91, 0.92], b);
-          addCyl(stage, vadd(a.c, a.u, h + 0.45),
+          addCyl(stage, vadd(a.c, a.u, h * 0.96 + 0.45),
             0.10, 2.8, [0.36, 0.37, 0.39], 5, b);
         });
       };
@@ -575,10 +578,16 @@
                 const f = i / 5, f2 = (i + 1) / 5;
                 const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
                 const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
-                const mid = [(s1 + s2) / 2, (y1 + y2) / 2];
+                const midR = (s1 + s2) / 2;
+                // addFrustum is BASE-anchored (js/track/geom.js:153) — using
+                // the segment's y MIDPOINT here (rather than y2, its lower/
+                // base end since the leg descends as i climbs) floated every
+                // segment by half its own height; the +0.4 pad on the height
+                // below was clearly meant to feather base-anchored segments
+                // together, not to compensate a centroid.
                 addFrustum(stage,
-                  vadd(vadd(vadd(a.c, a.r, dr * mid[0]), a.t, dt * mid[0]),
-                       a.u, mid[1]),
+                  vadd(vadd(vadd(a.c, a.r, dr * midR), a.t, dt * midR),
+                       a.u, y2),
                   0.85 - f * 0.22, 0.85 - f2 * 0.22, Math.abs(y1 - y2) + 0.4,
                   i % 2 ? STEEL : STEEL_D, 7, b);
               }
@@ -675,7 +684,10 @@
           // keep the whole dome bright (only the very base slightly shaded) so the
           // silhouette reads as a rounded pale sphere, never a dark cone.
           const col = yPrev < R * 0.45 ? DOME_D : DOME;
-          addFrustum(out, vadd(a.c, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
+          // addFrustum is BASE-anchored (js/track/geom.js:153) — this was
+          // authored as the ring's CENTROID (the midpoint of its y-range),
+          // which floats each ring by h/2. Seat it at yPrev, its true base.
+          addFrustum(out, vadd(a.c, a.u, yPrev), Math.max(rb, 1.5),
                      Math.max(rt, 1.0), h, col, 18, [a.r, a.u, a.t]);
           yPrev = yTop;
         }
