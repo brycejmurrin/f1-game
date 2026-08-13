@@ -280,3 +280,75 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
   feed(PerfGov, () => 16.7, 9000);            // flawless frames: maximum pressure to restore
   assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
 });
+
+// ── The GRAPHICS preset's user tier (js/game/gfx-quality.js) ────────────────
+// tier() folds three terms with max(): the crash-sentinel floor, the user's
+// preset floor, and the governor's own live tier. That single expression IS the
+// interaction rule — a manual choice sets the FLOOR of degradation, never the
+// ceiling — so these tests pin the rule, not the plumbing.
+
+test("a user tier sheds at least that much, live, without touching the render path", () => {
+  const { PerfGov } = makeGov();
+  assert.equal(PerfGov.tier(), 0, "precondition: nothing shed on a fresh healthy device");
+  PerfGov.setUserTier(2);
+  assert.equal(PerfGov.tier(), 2, "GRAPHICS: MEDIUM must shed the env probe + lamp shadow/SSR immediately");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.tier(), 0, "and back, with no reload");
+});
+
+test("a user tier is a FLOOR, so the governor may still shed BELOW it but never above", () => {
+  // The governor is free to go further than the user asked (the device is
+  // struggling and that is measured evidence); it must never come back above
+  // the user's floor just because it found headroom.
+  const gov = makeGovAtFloor();
+  gov.setUserTier(1);
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 2000);
+  assert.ok(gov.tier() > 1, `the governor must be able to shed past the user's floor, got ${gov.tier()}`);
+
+  const healthy = makeGovAtFloor();
+  healthy.setUserTier(3);
+  feed(healthy, () => 16.7, 9000);              // 150 s of flawless frames
+  assert.equal(healthy.tier(), 3, "sustained headroom must NOT restore above the user's floor");
+});
+
+test("ULTRA cannot defeat the crash-sentinel floor", () => {
+  // The one thing no user control may lift. A phone that died twice starts at
+  // tier 4; asking for ULTRA (userTier 0) must change nothing.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.tier(), 4, "precondition: two strikes pre-degrade to tier 4");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.tier(), 4, "a preset must not be a back door into the safe-mode floor");
+  feed(PerfGov, () => 16.7, 9000);
+  assert.equal(PerfGov.tier(), 4, "and it must still hold after sustained clean frames");
+});
+
+test("a bad preset cannot invent a tier above the ladder", () => {
+  // Every gate in the render path is `tier() >= N`, so an unclamped value would
+  // satisfy all of them at once and shed passes that have no tier.
+  const { PerfGov } = makeGov();
+  PerfGov.setUserTier(99);
+  assert.equal(PerfGov.userTier(), 4, "clamped to the top of the ladder");
+  PerfGov.setUserTier(-3);
+  assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
+});
+
+test("changing preset drops a pending TIER verify", () => {
+  // Same class as the setAutoRes fix: _pendingVerify attributes the next EMA
+  // delta to the governor's own last provisional step, so a user changing
+  // quality one evaluation later would make it revert a step that was working.
+  const gov = makeGovAtFloor();
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 200);   // provoke a tier step
+  const before = gov.tier();
+  gov.setUserTier(1);
+  feed(gov, () => 16.7, 60);        // inside the cooldown: nothing may be reverted yet
+  assert.ok(gov.tier() >= Math.max(before, 1),
+    `no revert may fire across a user quality change — was ${before}, now ${gov.tier()}`);
+});

@@ -1,0 +1,150 @@
+/* Apex 26 — GRAPHICS quality presets: the user-facing half of the perf
+   governor. Owns the four presets, their persistence, and the #pm-gfx control.
+
+   THE INTERACTION RULE, which is the whole design: a preset sets the FLOOR of
+   degradation, never the ceiling. It is applied by handing PerfGov a user tier
+   that tier() folds in with max(), so the player can always ask for LESS than
+   the governor would run, and never for MORE than the device has measurably
+   earned. ULTRA on a thermally-throttled laptop must not re-enable a pass the
+   governor has just proved unaffordable, and the crash-sentinel floor stays
+   undefeatable because it is a term in the same max().
+
+   Self-initialising (no create(G)): it needs only PerfGov, GameStore and the
+   DOM, so it does not take the G facade. Runs at DOMContentLoaded, i.e. after
+   js/game.js has built the menu. Every global read is at CALL time, so this
+   file has NO eval-time dependencies and needs no HARD_EDGES pair — its
+   position in index.html is not load-bearing. */
+const GfxQuality = (function () {
+  "use strict";
+
+// Resolved at CALL time, never at eval. Reading GameStore in the IIFE body
+// would make this file's position in index.html load-bearing and cost a
+// HARD_EDGES pair in tools/manifest.cjs; every read here happens from init()
+// or a click, long after the whole shell has evaluated. Same for PerfGov and
+// GLX below — this module deliberately has NO eval-time global reads, so it
+// can sit anywhere in the load order.
+function gstore() {
+  return (typeof GameStore !== "undefined" && GameStore.store) || null;
+}
+
+// userTier is a FLOOR on the shedding ladder documented in js/game/perf.js:
+//   0 nothing pinned off · 1 env probe · 2 +lamp shadow/SSR · 3 +car shadow
+//   4 +SSAO/god rays/bloom
+// so a bigger number means "shed at least this much, permanently".
+//
+// ULTRA and HIGH share tier 0 deliberately: both mean "do not pin anything
+// off, let the governor decide". They differ only in the MOBILE boot tier
+// below, because that bit is fixed at renderer init and cannot be a live knob.
+// A separate AUTO stop would be indistinguishable from ULTRA and is omitted
+// rather than shipped as a lie.
+const PRESETS = [
+  { id: "low",    label: "LOW",    tier: 4, mobileHigh: false },
+  { id: "medium", label: "MEDIUM", tier: 2, mobileHigh: false },
+  { id: "high",   label: "HIGH",   tier: 0, mobileHigh: false },
+  { id: "ultra",  label: "ULTRA",  tier: 0, mobileHigh: true  },
+];
+
+// The shipped default differs by device class, and must match what each device
+// ALREADY did before this control existed, so adding a settings button changes
+// nobody's picture until they touch it: desktop ran the full stack (HIGH), and
+// a phone ran the memory-safe STANDARD tier unless it had opted into
+// apex26.gfxHigh (the old mobile-only toggle this control replaces).
+function defaultId(isMobile) {
+  if (!isMobile) return "high";
+  let legacy = false;
+  try { legacy = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  return legacy ? "ultra" : "medium";
+}
+
+function byId(id) { return PRESETS.find((p) => p.id === id) || null; }
+
+let _cur = "high";
+let _isMobile = false;
+
+function current() { return byId(_cur) || PRESETS[2]; }
+
+/* Push the preset's live half at the governor. The tier floor is the only
+   part that can change without a reload — context AA, target formats and
+   atlas sizes are all decided at renderer init (see the mobile boot tier
+   below), so everything else waits for one. */
+function applyLive() {
+  const p = current();
+  if (typeof PerfGov !== "undefined" && PerfGov.setUserTier) PerfGov.setUserTier(p.tier);
+}
+
+/* The boot-time half: the mobile memory tier. Returns true if a reload is
+   genuinely required, i.e. the bit actually CHANGED — a preset switch that
+   leaves it alone (LOW <-> MEDIUM, HIGH on desktop) must not cost the player
+   a page load. */
+function syncBootTier() {
+  if (!_isMobile) return false;
+  const want = current().mobileHigh;
+  let have = false;
+  try { have = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  if (want === have) return false;
+  try { localStorage.setItem("apex26.gfxHigh", want ? "1" : "0"); } catch (_) {}
+  return true;
+}
+
+function label() { return "GRAPHICS: " + current().label; }
+
+function set(id, opts) {
+  const p = byId(id);
+  if (!p) return false;
+  _cur = p.id;
+  const st = gstore(); if (st) st.set("gfxPreset", _cur);
+  applyLive();
+  const needsReload = syncBootTier();
+  const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
+  if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();
+  if (needsReload && !(opts && opts.noReload)) {
+    // Disarm the crash sentinel FIRST. It detects a jetsam/OOM kill by finding
+    // the in-race flag still set at the next boot (js/game/perf.js), so a
+    // settings-driven reload with the flag armed is indistinguishable from the
+    // phone dying — it would cost the player a crash strike and pre-degrade
+    // the very quality they just asked to raise.
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
+    setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
+  }
+  return true;
+}
+
+function cycle() {
+  const i = PRESETS.findIndex((p) => p.id === _cur);
+  return set(PRESETS[(i + 1) % PRESETS.length].id);
+}
+
+function init() {
+  // GLX.isMobile is the device class, NOT GLX.mobileTier — the tier is already
+  // downstream of apex26.gfxHigh (glx.js: MOBILE_TIER = IS_MOBILE && !_gfxHigh),
+  // so reading it here would make the control's default depend on its own last
+  // setting. The typeof guard is the standalone-harness fallback, the same one
+  // js/car/liverytex.js uses.
+  _isMobile = typeof GLX !== "undefined" && !!GLX.isMobile;
+  const st = gstore();
+  _cur = (st && st.get("gfxPreset", null)) || defaultId(_isMobile);
+  if (!byId(_cur)) _cur = defaultId(_isMobile);
+  applyLive();
+
+  const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
+  if (!btn) return;      // shell without the button: the tier floor still applied above
+  // Shown to EVERYONE now. It used to be mobile-only on the reasoning that
+  // "desktop is always full quality", but a desktop that cannot hold its
+  // budget is exactly the case the shedding ladder exists for, and before this
+  // the only desktop-visible control was RESOLUTION — which pins the scale and
+  // says nothing about which passes run.
+  btn.hidden = false;
+  btn.textContent = label();
+  btn.onclick = () => {
+    cycle();
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+  };
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
+}
+
+return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId };
+})();

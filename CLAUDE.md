@@ -124,7 +124,10 @@ js/game/                one Module.create(G) per file; modules never reach into
                         light-store=persistence, light-presets=shipped values.
                         Self-init (no create(G)): scrollfade.js sheetshape.js
                         topmodal.js menunav.js ariastate.js uilayers.js (THE
-                        layer stack) css-zoom.js. apex.js = the __apex dev API.
+                        layer stack) css-zoom.js gfx-quality.js (GRAPHICS
+                        presets; the preset's tier floor enters PerfGov.tier()'s
+                        max(), so the render path has no per-preset branch).
+                        apex.js = the __apex dev API.
                         The full module roster lives in tools/manifest.cjs —
                         the load-order truth; read it, not this file, to
                         enumerate what exists
