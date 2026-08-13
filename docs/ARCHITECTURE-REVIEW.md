@@ -295,10 +295,12 @@ most-load-bearing first.
   `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
   drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
   regexes.
-- **`js/data/live.js` still labels a missing gap "+1 LAP".** `F1API.positions()`
-  no longer fabricates a 1.000 gap where it has no `timeDiff`, so the bar is
-  correctly absent — but the label the bar carried was not fixed with it, and it
-  is the half a viewer actually reads.
+- **A lapped driver's LIVE row now says nothing at all.** `F1API.positions()`
+  used to turn OpenF1's `"+1 LAP"` string into the number 1 via `parseFloat`,
+  so a lapped car was drawn as a one-second gap; it now reports `null` instead,
+  which is correct — but `js/data/live.js` only renders the gap wrapper when
+  `p.timeDiff` is truthy, so the row lost its "+1 LAP" label along with the
+  false bar. The fix belongs on the render side: no bar, but say *lapped*.
 - **The 2026-08 whole-tree audit's deferred list is the standing backlog for
   this section.** 143 verified findings, of which the fix-now batches took 30;
   the rest are recorded by area with file/line evidence in the dated audit
@@ -401,7 +403,7 @@ Deferred with reasoning, none lost:
   The 2026-08-13 panel recorded its non-installation as execution debt; a
   ceiling now exists in the `module-size.test.mjs` idiom, alongside a shell
   node-count ceiling guarding the premise the keep-the-monolith ruling rests
-  on. The first three one-surface collapses took the count 543 → 538; the
+  on. The first three one-surface collapses took the count 543 → 537; the
   remaining clusters are ordered **behind** the zoom/data-density migration
   where they touch the same surfaces.
 
