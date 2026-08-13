@@ -645,7 +645,11 @@
           center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);
-          addPrism(stage, vadd(a.c, a.u, 4.9), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
+          // addPrism is BASE-anchored (js/track/geom.js:153-164): `c` is the
+          // base centre, occupying c -> c+u*sz[1]. 4.9 was authored as a
+          // "centre" height for the h=1.8 roof (half=0.9 above the 4.2 wall
+          // top), floating the whole roof by 0.7m — seat it on the wall top.
+          addPrism(stage, vadd(a.c, a.u, 4.2), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
           addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 1.5), [0.25, 2.2, 1.1],
             [0.34, 0.28, 0.22], b);                              // door
         });
