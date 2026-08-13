@@ -1,0 +1,152 @@
+/* global-registry.test.mjs — a LINKER for the globals architecture.
+ *
+ * Bedrock Phase 0 (docs/research/ARCHITECTURE-REDESIGN-2026-08.md, "Phase 0 —
+ * Observe"). Every js/ file is an IIFE assigning one global; nothing verified
+ * that the file really assigns exactly the global it is supposed to, or that
+ * every global it references is assigned by SOME file that loads first. The
+ * post-extraction ritual was "grep the removed symbols" — this test replaces
+ * it with the real reference graph from tools/scan-globals.mjs (espree +
+ * eslint-scope over every manifest FULL + DEFERRED file, scanned LIVE — no
+ * artifacts/ state, works from a fresh clone).
+ *
+ * Rules, with the currently-known violations FROZEN as baselines in the
+ * module-size ratchet idiom (existing entries are tolerated and documented;
+ * new code cannot add to them — fix the read or extend the manifest instead):
+ *
+ *   1. one file, one global — every file eval-assigns exactly one global.
+ *      Exceptions are enumerated: mat4.js's [M4, V3] pair, and the three
+ *      deliberate multi-writer ACCUMULATOR globals (GLXShaders, TLXShaders,
+ *      TrackDefs) whose writer sets are frozen per name.
+ *   2. eval-time reads resolve in load order — a global referenced during
+ *      evaluation must be assigned by an earlier-or-same file (this is the
+ *      invariant HARD_EDGES hand-records; violating it is a load-time
+ *      ReferenceError). Asserted via the scanner's own --check logic.
+ *   3. call-time reads resolve somewhere — a global referenced inside a
+ *      function body must be assigned by SOME manifest file, be a host/env
+ *      name, or sit in the frozen externals baseline below.
+ *
+ * The scan is EVIDENCE, not a pruner: dynamic `window[expr]` access is a
+ * known false-negative class; the scanner lists such sites and this test
+ * asserts the count stays zero so the class cannot creep in unseen.
+ *
+ * Run: node --test tests/unit/global-registry.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { scanRepo, buildGraph, checkGraph } from "../../tools/scan-globals.mjs";
+
+// One scan serves every test below (~2 s for the 159 files).
+const scan = scanRepo();
+const graph = buildGraph(scan);
+const report = checkGraph(scan);
+
+// ---------------------------------------------------------------------------
+// Frozen baselines (the ratchet). Shrinking any of these is progress; growth
+// is the defect this suite exists to catch.
+
+// Files allowed to eval-assign MORE than one global, with the exact set.
+const MULTI_GLOBAL = {
+  "js/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
+};
+
+// Globals deliberately written by MANY files (accumulator idiom:
+// `window.X = Object.assign(window.X || {}, …)` / `(window.X = window.X || []).push`).
+// Value = the frozen writer count; the writer set may only shrink or stay.
+const SHARED_GLOBALS = {
+  GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
+  TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
+  TrackDefs: 40,  // every circuit file pushes its definition onto the list
+};
+
+// Known reads of names NO manifest file assigns — each with its story. A new
+// external name is a red flag (an undeclared dependency or a typo'd global).
+const KNOWN_EXTERNAL_READS = {
+  "js/track/tracks.js": ["CircuitElevations"],  // future tools/bake-elevation.mjs output; typeof-guarded feature probe
+  "js/game/spotify.js": [
+    "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
+    "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
+    "syncAudioPanel",               // KNOWN DEAD HOOK: defined inside audio-panel.js's IIFE
+                                    // (local, not global), so spotify.js's typeof guard is
+                                    // always false and this call never fires. Phase-0 finding;
+                                    // fixing it is a js/ edit and out of Phase-0 scope.
+  ],
+  "js/game/perf.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
+  "js/game/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
+  "js/game.js": ["__APEX_BUILD", "__apexReportError"],      // so the scan cannot see the writer
+  "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
+};
+
+// ---------------------------------------------------------------------------
+
+test("every manifest file parses (the scan itself is whole)", () => {
+  assert.deepEqual(scan.errors, [], "scan-globals could not parse a manifest file");
+  assert.equal(scan.files.size, scan.all.length, "a manifest file was not scanned");
+});
+
+test("one file, one global — every file eval-assigns exactly its declared global", () => {
+  const bad = [];
+  for (const rel of scan.all) {
+    const r = scan.files.get(rel);
+    const got = [...r.assigns].sort();
+    const expected = MULTI_GLOBAL[rel];
+    if (expected) {
+      if (JSON.stringify(got) !== JSON.stringify([...expected].sort()))
+        bad.push(`${rel} assigns [${got}] (baseline says [${expected}])`);
+    } else if (got.length !== 1) {
+      bad.push(`${rel} assigns ${got.length} globals [${got}] — one file, one global`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "a file's eval-time global assignments drifted from the one-global rule; " +
+    "new multi-global files are not allowed — split the file or fix the leak");
+});
+
+test("every global has one writer, except the frozen accumulator set", () => {
+  const bad = [];
+  for (const [nm, writers] of scan.assignedBy) {
+    const cap = SHARED_GLOBALS[nm] ?? 1;
+    if (writers.length > cap)
+      bad.push(`${nm} is written by ${writers.length} files (baseline ${cap}): ${writers.join(", ")}`);
+  }
+  assert.deepEqual(bad, [],
+    "a global gained a writer — accumulator globals are frozen; a second writer " +
+    "to a normal global is a collision, not a pattern");
+});
+
+test("eval-time reads resolve in load order (manifest FULL is a topological sort)", () => {
+  assert.deepEqual(report.toposort, [],
+    "a file references a global AT EVAL TIME that no earlier file assigns — " +
+    "that is a ReferenceError at load; reorder the manifest (and index.html) or defer the read");
+});
+
+test("deferred-backend globals are never eval-read by tagged files", () => {
+  // A FULL file eval-reading a DEFERRED-only global (TLX/WGX/…) would crash
+  // every boot that does not opt into that backend. The scanner separates
+  // these; today there are none and none may appear.
+  assert.deepEqual(report.deferredProvided, [],
+    "an eval-time read is served only by a deferred (injected) file — that global " +
+    "does not exist at tag-evaluation time");
+});
+
+test("call-time reads resolve to SOME manifest global, or a documented external", () => {
+  const bad = [];
+  for (const rel of scan.all) {
+    const rec = graph.files[rel];
+    const allowed = KNOWN_EXTERNAL_READS[rel] || [];
+    for (const nm of rec.externalReads)
+      if (!allowed.includes(nm))
+        bad.push(`${rel} reads "${nm}" which no manifest file assigns and no baseline explains`);
+  }
+  assert.deepEqual(bad, [],
+    "an undeclared global read appeared — either it is a typo, a missing manifest " +
+    "file, or a genuinely new external dependency (document it in KNOWN_EXTERNAL_READS " +
+    "with its story, in the same commit that adds it)");
+});
+
+test("the unscannable window[<expr>] class stays extinct", () => {
+  const sites = Object.entries(graph.files)
+    .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line} ${u.site}`));
+  assert.deepEqual(sites, [],
+    "dynamic window[expr] access defeats the whole registry — name the global " +
+    "statically, or record the site here with a reason if it is truly unavoidable");
+});
