@@ -433,8 +433,24 @@ const TrackMaps = (function () {
       if (opts.corners) {
       const cs = data.corners;
       const rDot = opts.cornerR || 7;
-      const labelR0 = Math.max(20, rDot + 14);
       const fontPx = opts.cornerFont || 12;
+      // Below this a numbered-label-plus-leader-line per corner cannot fit
+      // without overlapping into noise, however small cornerR/fontPx shrink —
+      // a dense circuit (20+ turns) squeezed into a narrow measured slot (an
+      // elongated street circuit at a small viewport) hits this well before
+      // any single-marker size fix helps. A plain coloured dot per apex still
+      // reads as "corners are here" without the clutter.
+      if (W < 200 || H < 140) {
+        for (let i = 0; i < cs.length; i++) {
+          const x = PX(cs[i].x), y = PY(cs[i].y);
+          const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
+          const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+          g.fillStyle = col;
+          g.beginPath(); g.arc(x, y, Math.max(1.5, rDot * 0.4), 0, Math.PI * 2); g.fill();
+        }
+        return true;
+      }
+      const labelR0 = Math.max(20, rDot + 14);
       const labels = [];
       for (let i = 0; i < cs.length; i++) {
         const x = PX(cs[i].x), y = PY(cs[i].y);
@@ -464,6 +480,19 @@ const TrackMaps = (function () {
             }
           }
         }
+      }
+      // Clamp into the canvas bounds. labelR0's own floor (20px) and the
+      // separation pass above are geometry relative to the OUTLINE, not the
+      // canvas edge — on a narrow/short buffer (an elongated circuit's aspect
+      // fit into a small measured slot) a pushed-out label can land past the
+      // edge with nothing upstream accounting for W/H. This is the one place
+      // that guarantees every label stays visible regardless of circuit shape,
+      // caller-chosen cornerR, or how small the canvas ends up.
+      const bubbleR = fontPx * 0.78;
+      for (let i = 0; i < labels.length; i++) {
+        const L = labels[i];
+        L.lx = Math.min(W - bubbleR, Math.max(bubbleR, L.lx));
+        L.ly = Math.min(H - bubbleR, Math.max(bubbleR, L.ly));
       }
       g.font = "700 " + fontPx + "px system-ui, sans-serif";
       g.textAlign = "center"; g.textBaseline = "middle";

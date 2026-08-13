@@ -125,6 +125,11 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
 
+// The track-detail map's size observer (openTrackDetail). Module-scoped so a
+// re-open disconnects the previous one instead of stacking a fresh observer —
+// and a stale closure over the PREVIOUS circuit — on every visit.
+let detailRO = null;
+
 function trackFilterBar() {
   const bar = document.createElement("div");
   bar.id = "sel-track-filter";
@@ -246,30 +251,36 @@ function buildSelect() {
 
 // large preview of the currently-selected circuit: sector-coloured outline,
 // DRS zones, numbered corners, name / GP / length / turn count, track facts.
-/* THE PREVIEW CARD'S HEIGHT IS NOT KNOWN WHEN THE SCREEN OPENS.
+/* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
  * Same shape as js/game/sheetshape.js's own note: a hidden element measures
  * 0x0, so the first useful measurement is the ResizeObserver callback when its
  * screen is shown, not the call that showed it. updateTrackPreview() runs on
- * that first (unmeasurable) pass; this refits once the card has a box, and
- * again whenever it changes — a UI SIZE change, an orientation flip, or
- * sheetshape.js flipping data-pair / data-shape, all of which move the cap
- * without changing the selected circuit.
+ * that first (unmeasurable) pass and deliberately does not pin; this refits
+ * once the card has a box, and again whenever it changes — a UI SIZE change, an
+ * orientation flip, or sheetshape.js flipping data-pair / data-shape, all of
+ * which move the budget without changing the selected circuit.
  *
- * TERMINATION: refit only when the card's height actually differs from the one
- * we last fitted against. Without that guard this is a classic RO feedback loop
- * — the refit clears the map's pins, which can resize the card, which fires the
- * observer again. The card is height-bounded in both layouts (`flex: 1 1 auto;
- * min-height: 0` when tall, a bounded column when paired), so in practice it
- * settles on the first pass; the guard is what makes that a guarantee rather
- * than an observation. */
-let previewRo = null, previewCardH = -1;
+ * BOTH AXES. The budget in updateTrackPreview is driven by the card's WIDTH
+ * (cardInnerW, and the `beside` switch that keys off it) as much as by the
+ * section's height, so a width-only or height-only guard would sit out the
+ * pair flip that changes the layout most.
+ *
+ * TERMINATION: refit only when the card's box actually differs from the one we
+ * last fitted against. Without that guard this is a classic RO feedback loop —
+ * the refit clears the map's pins and may set data-map-shape, either of which
+ * can resize the card and fire the observer again. Sibling precedent: the
+ * track-detail modal's own observer guards on a `lastFit` key for exactly this
+ * reason. */
+let previewRo = null, previewCardBox = "";
 function watchPreviewCard(card) {
   if (!card || typeof ResizeObserver !== "function") return;
   if (previewRo) return;
   previewRo = new ResizeObserver(() => {
-    const h = card.clientHeight;
-    if (h <= 0 || h === previewCardH) return;
-    previewCardH = h;
+    const w = card.clientWidth, h = card.clientHeight;
+    if (w <= 0 || h <= 0) return;
+    const key = w + "x" + h;
+    if (key === previewCardBox) return;
+    previewCardBox = key;
     updateTrackPreview();
   });
   previewRo.observe(card);
@@ -291,54 +302,112 @@ function updateTrackPreview() {
   map.style.maxWidth = "";
   map.style.maxHeight = "";
   map.style.aspectRatio = String(a);
-  void map.offsetWidth;
-  const slotW = Math.max(120, map.clientWidth || 260);
-  let slotH = Math.max(72, map.clientHeight || Math.round(slotW / a));
-  // Mirror the CSS max-height caps in JS. Percentage max-height often fails to
-  // bind while height is `auto` (indefinite containing-block height), then
-  // clamps AFTER we pin a definite height — which is the stretch. Fitting
-  // against the same cap the stylesheet intends keeps aspect and the facts.
   const card = map.closest("#sel-track-preview");
-  const inner = document.getElementById("sel-inner");
-  // MEASURABLE means the card is laid out. A hidden screen measures 0, and the
-  // first call always lands there: #select is opened by clearing `hidden`, and
-  // this runs before the card has a box AND before js/game/sheetshape.js has
-  // written data-pair / data-shape (both null at that point). The caps below
-  // are then all skipped.
+  const info = document.getElementById("sel-preview-info");
+  const section = map.closest("#sel-track-section");
+  const label = document.getElementById("sel-circuit-label");
+  // THE ARRANGEMENT FOLLOWS THE CIRCUIT, NOT ONLY THE VIEWPORT.
+  //
+  // The caption used to sit UNDER the map in every wide-card layout, and the
+  // map's height was capped by a `cardH - 9.5rem` guess at the caption's size.
+  // That is right for a wide circuit and badly wrong for a tall one: fitting a
+  // 2:1-TALL street circuit (Jeddah, aspect 0.5) into a full-width slot means
+  // only its HEIGHT can be spent, so the outline came out a 128px sliver with
+  // ~190px of dead card beside it and the numbers piled on top of each other.
+  // Measured at 1280x720: 128x255 in a 406x416 card.
+  //
+  // So measure the real budget instead of guessing it, then pick the layout
+  // that spends it: stacked (map over caption) when the circuit is wide enough
+  // to use the card's full width, side-by-side (map beside caption) when it is
+  // tall enough that stacking would strand a third of the card as dead space.
+  // Same card, same caption, no new breakpoint — the circuit chooses.
+  if (card) card.removeAttribute("data-map-shape");
+  void map.offsetWidth;
+  const cardCS = card ? getComputedStyle(card) : null;
+  const px = (v) => parseFloat(v) || 0;
+  const padX = cardCS ? px(cardCS.paddingLeft) + px(cardCS.paddingRight) : 0;
+  const padY = cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0;
+  const gap = cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0;
+  const cardInnerW = card ? Math.max(80, card.clientWidth - padX) : 260;
+  // offsetHeight, NOT getBoundingClientRect(): every box here lives inside
+  // `zoom: var(--ui-scale)`, where gBCR reports VISUAL px while clientWidth /
+  // clientHeight report LOCAL (pre-zoom) px. Mixing the two subtracted
+  // 1.75x-sized caption and label from a 1x-sized column budget at UI SIZE
+  // 175%, drove the budget negative and collapsed every map onto the 72px
+  // floor (measured: 36x72 at 175%). offsetHeight is local, like the rest.
+  const infoH = info ? info.offsetHeight : 0;
+  const labelH = label ? label.offsetHeight : 0;
+  // The scrolling section is the honest ceiling: the card grows to its content,
+  // so measuring the CARD's height to bound the map inside it is circular.
+  const sectionH = section && section.clientHeight > 0 ? section.clientHeight : 0;
+  const ceilFor = (stacked) => {
+    if (!sectionH) return Math.max(72, Math.round(cardInnerW / a));
+    return sectionH - labelH - padY - (stacked ? infoH + gap : 0) - 10;
+  };
+  // Stacked width is capped by the card; anything the height cannot reach is
+  // dead space beside the outline. A third of the card empty is the switch.
+  const stackedH = Math.min(Math.round(cardInnerW / a), ceilFor(true));
+  const stackedW = Math.min(cardInnerW, Math.round(stackedH * a));
+  // Only a circuit TALLER than it is wide can be helped by moving the caption
+  // aside — that is the shape whose height is the binding constraint. A wide
+  // circuit starved of height (a tall caption at a big UI SIZE) also trips the
+  // dead-space test, but turning it sideways makes it worse, not better:
+  // Singapore at 175% went to 181x117 beside where stacking gives 315x204.
+  // Its remedy is the height floor below, which lets the column scroll.
+  const beside = a < 1.1 && cardInnerW >= 360 && (cardInnerW - stackedW) / cardInnerW > 0.34;
+  if (card && beside) { card.setAttribute("data-map-shape", "beside"); void map.offsetWidth; }
+  // Spend the column's HEIGHT first when the map is beside the caption — that
+  // is the axis a tall circuit wants — and take only the width that height
+  // implies, after reserving enough for the caption to keep its facts on one
+  // or two lines. A flat width share instead left the map width-limited with
+  // ~100px of column height unused (measured: 206x412 in a 510px-tall budget)
+  // and squeezed the facts until the third chip overflowed and was clipped.
+  const captionMin = 185;
+  const widthCap = beside ? Math.floor(cardInnerW - gap - captionMin) : Math.floor(cardInnerW);
+  // NEVER TRADE THE MAP AWAY ENTIRELY. At a high UI SIZE the column's local-px
+  // budget shrinks faster than the caption inside it does, and the honest fit
+  // collapsed the outline to 38x76 at 175% — a thumbnail of nothing. Below this
+  // floor the card is allowed to outgrow the column and #sel-track-section
+  // scrolls, which its own CSS already argues is the right way round
+  // ("unreachable content is a defect, a short scroll is an affordance").
+  const floorH = Math.min(240, Math.round(widthCap / a));
+  let slotH = Math.max(floorH, Math.floor(ceilFor(!beside)));
+  let slotW = Math.max(120, Math.min(widthCap, Math.round(slotH * a)));
+  // MEASURABLE means the card is actually laid out. The FIRST call never is:
+  // #select is opened by clearing `hidden`, and this runs before the card has a
+  // box — so `cardInnerW` falls back to its 80px floor, `sectionH` to 0, and
+  // every budget above is computed from placeholders rather than measurements.
   //
   // THAT IS WHY THE PIN IS CONDITIONAL. fitCanvas(pinCss=true) writes inline
-  // max-width/max-height, and an inline style beats any stylesheet rule — so an
-  // uncapped fit pinned here permanently defeats css/menus.css's
-  // `max-height: 50%` and nothing later can undo it. MEASURED at 852x393: the
-  // map came out 344px tall in a 260px card, hung 23px past the viewport, and
-  // pushed the name/GP/length/turns block and all four track facts out of the
-  // card entirely. It self-healed on the first circuit click — the one route
-  // any probe that clicks before measuring erases — so the audit matrix never
-  // saw it.
+  // width/height/max-width/max-height, and an inline style beats any stylesheet
+  // rule — so a fit computed from placeholders freezes into the element and
+  // nothing later undoes it. MEASURED at 852x393 from a cold load, against the
+  // cap-guessing version this replaced: the map pinned 344px tall in a 260px
+  // card, hung 23px past the viewport bottom, and pushed the caption and all
+  // four track facts out of the card. It self-healed on the first circuit
+  // click — the one route any probe that clicks before measuring erases, which
+  // is why the audit matrix scored that cell green throughout.
   //
   // Unmeasurable: draw at the CSS slot and DO NOT pin, leaving the stylesheet's
-  // caps authoritative for that frame. The observer below refits with real
+  // own caps authoritative for that frame. watchPreviewCard refits with real
   // numbers as soon as the card has a box.
-  let measurable = false;
-  if (card && inner) {
-    const cardH = card.clientHeight;
-    if (cardH > 0) {
-      measurable = true;
-      previewCardH = cardH;   // keep the observer's guard in step with direct calls
-      if (inner.getAttribute("data-pair") === "on" && inner.getAttribute("data-shape") !== "tall") {
-        slotH = Math.min(slotH, Math.max(72, Math.floor(cardH * 0.5)));
-      } else if (inner.getAttribute("data-shape") === "tall") {
-        // css: max-height: calc(100% - 9.5rem) — 9.5rem ≈ caption block.
-        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        slotH = Math.min(slotH, Math.max(72, Math.floor(cardH - 9.5 * rem)));
-      }
-    }
-  }
-  TrackMaps.fitCanvas(map, slotW, slotH, t, measurable);
+  const measurable = !!(card && card.clientWidth > 0);
+  const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, measurable);
   watchPreviewCard(card);
+  // Corner markers/casing are drawn at ABSOLUTE canvas px (see TrackMaps.draw),
+  // tuned for the canvas's old fixed 520x300 HTML size. fitCanvas now sizes the
+  // drawing buffer itself to the measured CSS slot (so a narrow layout gets a
+  // narrow buffer), and a fixed-radius marker on a shrunk buffer reads 3-4x
+  // oversized relative to the track outline — measured on the live select
+  // screen at normal desktop widths, markers overlapping into an unreadable
+  // blob. Scale every absolute-px draw param by how far the fitted buffer sits
+  // below that 520x300 reference so markers keep the same box-relative size
+  // the old fixed-buffer-plus-CSS-shrink rendering always had.
+  const mk = Math.min(1, fit.w / 520, fit.h / 300);
   TrackMaps.draw(map, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
-    width: 4, pad: 24, corners: true, cornerR: 9, cornerFont: 11,
+    width: Math.max(2, Math.round(4 * mk)), pad: Math.max(10, Math.round(24 * mk)),
+    corners: true, cornerR: Math.max(4, Math.round(9 * mk)), cornerFont: Math.max(8, Math.round(11 * mk)),
     sectors: true, drs: true
   });
   els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
@@ -516,22 +585,43 @@ function openTrackDetail() {
   // enhancement; the content above is already populated while hidden).
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
-  requestAnimationFrame(function () {
+  const wrap = document.getElementById("track-detail-canvas-wrap");
+  let lastFit = "";
+  const drawDetail = function () {
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
-    const wrap = document.getElementById("track-detail-canvas-wrap");
     const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
     const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
     const maxW = Math.max(200, wrapW > 0 ? wrapW : Math.min(window.innerWidth - 24, 600));
     const maxH = Math.max(150, wrapH > 0 ? wrapH : Math.round(maxW / 1.2));
-    TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
+    const key = maxW + "x" + maxH;
+    if (key === lastFit) return;   // the observer below also fires on our own pin
+    lastFit = key;
+    const fit = TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
+    // Same box-relative marker scaling as the picker preview: these radii were
+    // tuned against a 520x300 buffer and fitCanvas now sizes the buffer itself.
+    const mk = Math.min(1, fit.w / 520, fit.h / 300);
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
-      width: 5, pad: 42, corners: true, cornerR: 6, cornerFont: 12,
+      width: Math.max(2, Math.round(5 * mk)), pad: Math.max(12, Math.round(42 * mk)),
+      corners: true, cornerR: Math.max(4, Math.round(6 * mk)), cornerFont: Math.max(8, Math.round(12 * mk)),
       sectors: true, drs: true
     });
-  });
+  };
+  requestAnimationFrame(drawDetail);
+  // ONE rAF LANDS TOO EARLY. The modal opens through a view transition, so the
+  // first frame measures the dialog mid-animation: 500px of an eventual 645px
+  // wrap, a fifth of the map's height thrown away on every open, and the map
+  // stayed that size because nothing re-measured afterwards. Re-fit whenever
+  // the wrap's box actually changes — which also covers a UI SIZE change or a
+  // rotation while the modal is open. Guarded by lastFit so pinning the canvas
+  // cannot feed itself a second pass.
+  if (wrap && typeof ResizeObserver === "function") {
+    if (detailRO) detailRO.disconnect();
+    detailRO = new ResizeObserver(drawDetail);
+    detailRO.observe(wrap);
+  }
 }
 return { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch };
 }
