@@ -75,9 +75,14 @@ async function episode(page, policy) {
         // straights no corner window covers. Still honest road geometry — an
         // apex speed is a fact about the corner, not a prescribed line.
         const sp = w.ego.speed || 0;
-        const tgt = nc ? nc.apexSpeedKph / 3.6 * 0.5 : 40;
-        const hot = nc && sp > tgt && nc.distM < (nc.suggestBrakeM || 60) * 6;
-        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || hot || sp > 33;
+        // 0.72 of apex speed, braking from 2.5x the suggested distance, with a
+        // 55 m/s cap where no corner window reaches: measured on Monza, the
+        // old 0.5x / 6x / 33 m/s triple was so conservative the "relational"
+        // car lost to a full-throttle baseline on the straights (245 vs 218 x
+        // 1.5) — the fields were actionable, the policy just refused to act.
+        const tgt = nc ? nc.apexSpeedKph / 3.6 * 0.72 : 40;
+        const hot = nc && sp > tgt && nc.distM < (nc.suggestBrakeM || 60) * 2.5;
+        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || hot || sp > 55;
         input = { steer, throttle: !braking, brake: braking && sp > 3 };
       }
       A.act(input, 1 / 60, 6);
