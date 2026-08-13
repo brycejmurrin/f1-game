@@ -155,7 +155,19 @@
 @media (prefers-reduced-motion: reduce) { #hud-flag.flag-vsc { animation: none; } }
 #hud-sectors {
   position: fixed;
-  top: calc(56px + var(--sat) / var(--hud-scale));
+  /* DERIVED FROM --tap, not the old hard-coded 56 — the same fix, on the other
+     axis, that css/overlays.css already made for #btn-cam ("DERIVED, not 58").
+     56 was calibrated against --tap's 44px DESKTOP value (8 + 44 + 4 = 56) and
+     silently stopped holding on touch, where --tap is 52px: #pausebtn is
+     `height: var(--tap)` at `top: 8px`, so it reaches y=60 and this box started
+     at 56. tests/specs/hud-layout.spec.js caught it as
+     hudClash ["#hud-sectors+pausebtn"] on notched-landscape.
+     THE WHOLE OFFSET is divided by --hud-scale, not just the inset: #hud-sectors
+     rides `zoom: var(--hud-scale)` (see the group rule above) while #pausebtn
+     does NOT, so clearing an unscaled box means converting the unscaled sum into
+     this element's own units. Dividing only --sat left the two drifting apart at
+     any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-scale));
   right: calc(10px + var(--sar) / var(--hud-scale));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
