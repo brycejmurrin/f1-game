@@ -128,15 +128,18 @@ once is measuring it once, not measuring the screen.
 |---|---|---|
 | viewport | `852x393` (primary play shape), `393x852`, `834x1194`, `1194x834`, `1440x900`, `1920x1080`, `1080x1920` | a portrait WINDOW can hold a landscape SHEET; the rotated monitor is the cell that keeps finding bugs |
 | orientation | both, per device | not a proxy for sheet shape — see `data-shape` |
-| UI scale | 80, 100, **115 (ships on coarse pointer)**, 130, 150 | `__apex.uiScale(n)`; the default is NOT 100 |
+| UI scale | 80, 100, **115** (formerly the coarse-pointer default, now player-selectable), 130, 150 | `__apex.uiScale(n)`; the default is 100 on EVERY pointer (css/tokens.css) — run above it anyway, that is where the bugs are |
 | HUD scale | same range, independently | `__apex.hudScale(n)` — they must not move together |
 | pointer | `mobile,touch` vs desktop | `body.desktop` flips the whole density ladder |
 
 `emulate` string form: `"<w>x<h>x<dpr>[,mobile][,touch][,landscape]"`.
 
 **Always test 115, not just 100.** Three of this session's confirmed defects were
-invisible at 100% and present at the shipped default — including a 61px panel
-overlap in the garage.
+invisible at 100% and present at 115 — including a 61px panel overlap in the
+garage. 115 was the coarse-pointer default when those were found; it ships at
+1.0 on every pointer now (`css/tokens.css`, and `docs/research/PLATFORM-INPUT-NOTES.md`
+records why), so 115 is a scale players dial rather than one they land on — the
+cell still finds bugs, it just is not the default any more.
 
 ---
 
@@ -197,7 +200,10 @@ function truncIn(root) {
 //   342x16.
 // TRAP 3: getBoundingClientRect() inside `.sheet` returns ZOOMED px
 //   (zoom: var(--ui-scale)). Divide by el.currentCSSZoom for CSS px. A row that
-//   paints 60px is 52 CSS px at the 1.15 default — it PASSES a 52px floor.
+//   paints 60px is 52 CSS px at a UI scale of 1.15 — it PASSES a 52px floor.
+//   (1.15 was the coarse-pointer default when this was written; the shipped
+//   default is 1.0 on every pointer now, so the arithmetic bites only once a
+//   player dials UI SIZE up — which the matrix does deliberately.)
 // TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
 //   full-height tab that is merely NARROW is not a small target. Scoring on the
 //   minimum produced two false alarms out of three findings in one sweep —

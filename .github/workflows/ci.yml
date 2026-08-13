@@ -194,11 +194,12 @@ jobs:
     # after the OOM was fixed, and would have kept failing for a second reason
     # once the first was gone.
     #
-    # The four suites are serial by construction (--test-concurrency=1) and
-    # each rebuilds all 40 circuits, so this is ~4 full fleet rebuilds:
-    # coplanar-faces 250 s, prop-clipping 210 s, then road-under-floor and the
-    # shared-foundation characterization. Nothing here is parallelisable
-    # without reintroducing the 5.4 GB peak that forced the serialisation.
+    # The five suites are serial by construction (--test-concurrency=1) and
+    # each rebuilds all 40 circuits, so this is ~5 full fleet rebuilds:
+    # coplanar-faces 250 s, prop-clipping 210 s, then scenery-grounding,
+    # road-under-floor and the shared-foundation characterization. Nothing here
+    # is parallelisable without reintroducing the 5.4 GB peak that forced the
+    # serialisation.
     timeout-minutes: 35
     # THE HEAP CEILING IS NOT THE SAME HERE AS ON A DEVELOPER'S BOX, and that is
     # why this job failed for days while the identical command passed locally.
@@ -276,7 +277,20 @@ jobs:
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
           echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|tests/unit/(prop-clipping|road-under-floor|coplanar-faces|shared-track-foundation))'; then
+          # The suite half of the filter is DERIVED from package.json's
+          # test:sweeps, not retyped here. The hand-written alternation had
+          # already drifted: scenery-grounding is one of the five suites this
+          # job runs and was missing from it, so a diff touching only that
+          # suite's own file skipped the very sweep it belongs to — a fail-open
+          # in the one filter whose comment above forbids exactly that. A list
+          # that must be edited in two places to stay true will drift again;
+          # reading it from the script that defines it cannot.
+          SUITES_FILE="${RUNNER_TEMP:-.}/sweep-suites.txt"
+          node -e 'const s=require("./package.json").scripts["test:sweeps"]||"";const m=s.match(/tests\/unit\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SUITES_FILE" \
+            || run_all "could not read the sweep suite list out of package.json"
+          echo "--- sweep suites ---"; cat "$SUITES_FILE"; echo "--------------------"
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/)' \
+            || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools or a sweep suite"
           else
