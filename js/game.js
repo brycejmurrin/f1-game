@@ -6559,7 +6559,8 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
+  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

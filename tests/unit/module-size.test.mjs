@@ -118,7 +118,16 @@ const CEILINGS = {
   // draw site (nothing else knows the knob state at build time), and the
   // comment records why _keepPositions is mandatory: createChunkedMesh nulls
   // its source arrays and debrisworld.js + __apex.geo() still read roadGeo.
-  "js/game.js": 8035,
+  // 8035 -> 8036: one comment line at the po.lampVol assignment, paying for a
+  // TIER-4 CORRECTNESS FIX rather than a feature. lampVol was shed only by the
+  // hard !gfx.mobileTier gate where _lampVol is derived, so the BOTTOM rung of
+  // the feature ladder did not actually drop the heaviest night pass on a
+  // struggling DESKTOP: haveGR is `sunGR || lampVol > 0`, so a non-zero lampVol
+  // kept the whole half-res god-ray march + 4 blurs alive after po.godray had
+  // already gone to 0. The gate itself is a same-line edit; the line bought is
+  // the comment explaining why it sits beside its siblings instead of at the
+  // derivation. Raised by exactly 1 — the slack guard below still holds.
+  "js/game.js": 8036,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

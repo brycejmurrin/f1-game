@@ -326,7 +326,6 @@ void main() {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
-    float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
     // The SUN half of the march, gated the way the lamp half below already is.
     // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
     // end — so at uStr == 0 every shadow tap and gCloud() call here is
@@ -352,6 +351,16 @@ void main() {
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the
     // camera; distant cone-crossings were the source of sky-streak noise.
     if (uLampStr > 0.0 && td < 200.0) {
+      // Lamp haze hugs the road (taller beams). Computed HERE, not beside
+      // trans above: hLamp has exactly one consumer — the lampAccum line at
+      // the bottom of this loop — so outside the branch it was 16 exp() per
+      // half-res pixel thrown away on every frame with the lamp beams off,
+      // which is every daytime god-ray frame (lampVol is forced to 0 unless
+      // sunLumGR < 0.45, js/game.js). This is the same zero-gate the SUN half
+      // above already got; the lamp half's hoisted term was left behind it.
+      // Bit-identical: p, groundY and the value are unchanged, and the branch
+      // it moved into already existed, so no new divergence.
+      float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);
       for (int li = 0; li < 6; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;

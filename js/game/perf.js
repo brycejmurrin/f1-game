@@ -178,7 +178,22 @@ function cleanRace() {
 }
 
 function tick(dtMs) {
-  if (!_autoRes) return;
+  // `_autoRes` gates the RESOLUTION stage ONLY — it must not return early here.
+  // It used to, and that made a user-facing control silently disable a safety
+  // system: RESOLUTION: LOW/MED/HIGH (js/game.js, applyResMode) calls
+  // setAutoRes(false) to stop the governor fighting the pinned scale, and this
+  // early return then took stage 2 down with it. A player who pinned the
+  // resolution — a control shown to EVERYONE, desktop included, not just the
+  // phones this file's crash sentinel is written for — got no feature shedding
+  // at all for the session: `_perfTier` froze at whatever init() left it, and
+  // on a device with crash strikes the pre-degraded floor could never be paid
+  // back down either, because cleanRace() alone does not move `_perfTier`.
+  // Pinning the resolution is a statement about SHARPNESS, not a request to
+  // stop adapting; it makes stage 2 MORE important, not less, because the
+  // cheaper lever is now unavailable. So the EMA and the derived floor are
+  // tracked unconditionally (stage 2 judges against the same budget and needs
+  // the data), and `_autoRes` is consulted only at the two places that actually
+  // move the scale.
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
   if (dtMs < 100) {
     _frameEMA += (dtMs - _frameEMA) * 0.1;
@@ -210,7 +225,9 @@ function tick(dtMs) {
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
-    if (cur > 0.5) {
+    // With the scale PINNED (_autoRes false) the ladder is the only lever left,
+    // so fall straight through to shedding instead of skipping the evaluation.
+    if (_autoRes && cur > 0.5) {
       if (_gfx.setRenderScale(cur - 0.1)) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
         _govCool = 30; _downHold = 600;
@@ -226,7 +243,7 @@ function tick(dtMs) {
     // it, a governor that can finally go up could climb straight back into the
     // frame misses it just escaped, which is the oscillation the header warns
     // about arriving from the other side.
-    if (cur < 1) {
+    if (_autoRes && cur < 1) {
       const next = Math.min(1, cur + 0.06);
       if (_gfx.setRenderScale(next)) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
@@ -259,6 +276,17 @@ return {
   fpsEMA: () => _frameEMA,
   floorMs: () => _floorMs,
   autoRes: () => _autoRes,
-  setAutoRes: (on) => { _autoRes = !!on; },
+  // Drop any unverified SCALE step on the way in or out of manual resolution.
+  // _pendingVerify holds {kind:"scale", prev} and the next evaluation would
+  // "revert" it by calling setRenderScale(prev) — writing over the scale the
+  // user just pinned, one evaluation after they pinned it. The tier half of a
+  // pending verify is still valid (the ladder keeps running either way), so
+  // only the scale kind is dropped. The cooldown gives the EMA time to settle
+  // at the new scale before stage 2 judges anything against it.
+  setAutoRes: (on) => {
+    _autoRes = !!on;
+    if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
+    _govCool = Math.max(_govCool, VERIFY_COOL);
+  },
 };
 })();

@@ -196,3 +196,87 @@ test("restore does NOT fire while frames are still missing", () => {
   assert.ok(scale() <= degraded,
     `scale must not climb while frames are still missing — was ${degraded}, ended at ${scale()}`);
 });
+
+// ── Pinning the resolution must not disable the whole governor ───────────────
+// REGRESSION. `RESOLUTION: LOW/MED/HIGH` (js/game.js, applyResMode) calls
+// setAutoRes(false) so the governor stops fighting the pinned scale. tick()
+// opened with `if (!_autoRes) return;`, which took stage 2 — feature shedding —
+// down with it: a player who pinned the resolution got no adaptation at all for
+// the session, on a control shown to EVERYONE, desktop included. The whole
+// suite above passed throughout, because every case here runs with _autoRes
+// left at its default true. That is what made the bug invisible.
+
+// A device that is genuinely overloaded no matter what the scale is: dt is NOT
+// coupled to scale (the user pinned it, so the governor cannot move it anyway),
+// but IS coupled to tier — shedding features genuinely helps. The cheap frame
+// every 20th tick keeps this distinguishable from an external cap, the same way
+// the GPU-bound case above does.
+function makeGovPinned(scaleAt) {
+  globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = scaleAt;
+  const gfx = {
+    isMobile: true,
+    getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (s === scale) return false; scale = s; return true; },
+  };
+  PerfGov.init(gfx);
+  PerfGov.setAutoRes(false);          // what applyResMode() does for any pinned mode
+  return { PerfGov, scale: () => scale };
+}
+
+test("a PINNED resolution still sheds features when the device is overloaded", () => {
+  const { PerfGov } = makeGovPinned(1);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.ok(PerfGov.tier() > 0,
+    `stage 2 must keep working with the scale pinned — tier stayed at ${PerfGov.tier()}`);
+});
+
+test("a PINNED resolution never moves the scale the user chose", () => {
+  // The other half of the contract: shedding is restored, but the governor must
+  // still keep its hands off the pinned scale in BOTH directions — degrade and
+  // restore. RESOLUTION: HIGH on a struggling device must stay at 1.0.
+  const { PerfGov, scale } = makeGovPinned(1);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.equal(scale(), 1, "a pinned scale must never be degraded by the governor");
+
+  // ...and a pinned LOW scale must not be "restored" upward either.
+  const low = makeGovPinned(0.5);
+  feed(low.PerfGov, () => 16.7, 9000);              // 150 s of flawless frames
+  assert.equal(low.scale(), 0.5, "a pinned scale must never be restored upward either");
+});
+
+test("pinning the resolution drops a pending SCALE verify, not a pending TIER one", () => {
+  // setAutoRes() is called from a click handler, which can land one evaluation
+  // after the governor took a provisional downscale. Without dropping that
+  // pending {kind:"scale"} step, the next evaluation "reverts" it by calling
+  // setRenderScale(prev) — writing over the scale the user just pinned.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 400);   // provoke a real downscale
+  assert.ok(scale() < 1, "precondition: the governor must have taken a scale step to leave pending");
+
+  PerfGov.setAutoRes(false);
+  const pinned = scale();
+  feed(PerfGov, () => 16.7, 3000);
+  assert.equal(scale(), pinned,
+    `no revert may fire after the user pins — pinned at ${pinned}, ended at ${scale()}`);
+});
+
+test("the crash-sentinel floor still cannot be defeated by pinning the resolution", () => {
+  // The floor is the one thing no user control may lift. Pinning must not
+  // become a back door into it.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  PerfGov.setAutoRes(false);
+  assert.equal(PerfGov.tierFloor(), 4, "two strikes must pre-degrade to tier 4");
+  feed(PerfGov, () => 16.7, 9000);            // flawless frames: maximum pressure to restore
+  assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
+});
