@@ -101,7 +101,7 @@ const CEILINGS = {
   // bias wasn't scaling with it, which produced visible self-shadow acne on
   // the car above the default SHADOW DISTANCE (confirmed via MCP screenshot,
   // not caught by the numeric-only apex-eval.mjs check from the prior pass).
-  "js/game.js": 8002,
+  "js/game.js": 8003,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
