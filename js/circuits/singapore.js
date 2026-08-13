@@ -154,13 +154,25 @@
       { frac: 0.0114, angleDeg: 3.0, widthM: 130 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, place, backdrop,
+      const { out, MAT, def, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+      // KOLD: converts a frac written in the SAME convention circuitKit's specs
+      // use (its `frameAt` is wrapped with a SHIFT-ONLY remap, js/track/tracks.js
+      // ~361 — no mirror) into the raw racing-node index K() needs. Only
+      // required where a raw anchor()/K() call must land on the SAME spot as a
+      // circuitKit-placed structure (the pit-race-control beacon below); every
+      // other raw K() call in this file was independently tuned against the
+      // engine's raw indexing and does not need it. Same formula tracks.js uses
+      // for def._sceneryShift (monaco.js:93-104 is the worked precedent).
+      const _offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
+      const _offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
+      const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
+      const KOLD = (s) => (K(s) + _kShift) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.
       if (circuitKit) {
@@ -860,9 +872,23 @@
         });
         // Beacon light on the race-control roof — a landmark visible from
         // across the venue, echoing the old hand-rolled tower's night glow.
+        // MIXED COORDINATE SPACES: circuitKit.raceControl's `frac` goes through
+        // circuit-kit.js's SHIFT-ONLY frameAt wrapper (js/track/tracks.js ~361),
+        // but this anchor read `K(0.999)` directly — a raw index with no shift
+        // applied — so the beacon landed nowhere near the tower's footprint
+        // (float-audit's gap tracked the beacon's own height offset 1:1 with no
+        // sign of ever resting on anything, even with a base pushed to mid-
+        // tower height, which only makes sense if the two never overlap in
+        // XZ at all). KOLD converts the SAME literal frac into the raw node
+        // index that lands where circuitKit's shift resolves it.
+        // The tower's "lattice" landmark (js/track/landmark-kit.js:93-110)
+        // stacks 6 levels inset 0.86x, so its real roof surface sits a touch
+        // under the nominal size[1]=34 (~33.6 m), not at 34. addCone is
+        // BASE-anchored, so the beacon's base needs to be near that real
+        // roof height, not the nominal one.
         {
-          const a = anchor(K(0.999), -1, 53);
-          addCone(out, vadd(a.c, a.u, 35), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
+          const a = anchor(KOLD(0.999), -1, 53);
+          addCone(out, vadd(a.c, a.u, 33.4), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
 
