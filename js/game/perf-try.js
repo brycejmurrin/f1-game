@@ -40,18 +40,6 @@ const KEY = "apex26.perfTry";
 // that does nothing is worse than no switch, because it reports a negative
 // result that was never actually tested:
 //
-//   skyLate    Draw the sky AFTER the opaque world. SKY_FS is the second most
-//              expensive shader here (up to 4 fbm() octaves, ~10 pow(), the
-//              star grid, moon disc + halo, city-glow dome) and runs on EVERY
-//              pixel today, 40-70% of which opaque geometry overwrites. Sky sits
-//              at depth 1.0 (SKY_VS: z = w) with depth writes off under LEQUAL,
-//              so drawing it last lets early-Z reject the covered fragments.
-//              BLOCKED ON A REAL ORDERING HAZARD, not on effort: gfx.drawGlow()
-//              is called from INSIDE drawWorldMeshes, so a naive move puts the
-//              sky after the glow — and because the glow does not write depth,
-//              the background stays at 1.0 and the sky would paint straight over
-//              it. Doing this properly means hoisting the glow out of
-//              drawWorldMeshes so the order becomes opaque -> sky -> glow.
 //   floorLast  Draw the base floor plane last among the opaque world meshes.
 //              Everything there writes depth under LEQUAL, so ties go to the
 //              LAST draw, and where terrain and road are near-coplanar a reorder
@@ -60,6 +48,20 @@ const KEY = "apex26.perfTry";
 //
 // Both live in js/game.js, which was under concurrent edit when this landed.
 const FLAGS = {
+  skyLate: {
+    glsl: false,
+    what: "Draw the sky AFTER the opaque world instead of before it.",
+    why: "SKY_FS is the second most expensive shader in the renderer (up to 4 fbm() " +
+         "octaves, ~10 pow(), the hash3 star grid, moon disc + halo, city-glow dome) " +
+         "and today it runs on EVERY pixel of the frame, 40-70% of which opaque " +
+         "geometry then overwrites. The sky sits at depth 1.0 (SKY_VS: z = w) with " +
+         "depth writes off under LEQUAL, so drawing it last lets early-Z reject every " +
+         "covered fragment. Probably the largest single GPU saving in this list.",
+    watch: "The LAMP HALOS are the thing to check. The glow is additive with no depth " +
+           "write, so it had to move after the sky too (opaque -> sky -> glow); if the " +
+           "ordering is wrong the halos vanish against open sky, or the horizon looks " +
+           "clipped. Check a night circuit with floodlights, and the horizon at dusk.",
+  },
   glStateCache: {
     glsl: false,
     what: "Cache CULL_FACE / colorMask / POLYGON_OFFSET_FILL across draws.",

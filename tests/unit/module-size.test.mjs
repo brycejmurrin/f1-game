@@ -131,7 +131,15 @@ const CEILINGS = {
   // the direction the ratchet exists to push: a feature landed and game.js got
   // SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
   // instead of rewriting the eight PerfGov.tier() gates in the render path.
-  "js/game.js": 8018,
+  // 8018 -> 8035: PerfTry.skyLate. The reorder itself is two edited lines; the
+  // rest is the comment explaining the GLOW hazard, which is the whole reason
+  // this could not be a one-line move. drawGlow is additive with depthMask off,
+  // so it writes no depth and leaves the background at 1.0 where it painted —
+  // which a later depth-1.0 sky with blend OFF would erase. The sky-late path
+  // therefore draws the world WITHOUT glow, then the sky, then the glow. That
+  // ordering constraint is invisible at the call site and expensive to
+  // rediscover, so it is written down where the switch lives.
+  "js/game.js": 8035,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
