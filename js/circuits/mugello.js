@@ -75,7 +75,7 @@
         terrainYAt, groundYAt } = api;
       const K = (s) => Math.round(s * n) % n;
       // World-XZ ground query mirroring SceneryNature's groundUnder (js/track/
-      // scenery-nature.js:30): terrainYAt first (exact where the rendered
+      // the groundUnder helper in js/track/scenery-nature.js): terrainYAt first (exact where the rendered
       // ribbon covers the point), else the SAME nearest-node closed form the
       // grounding audit itself falls back to — a footing resolved this way
       // never disagrees with tools/float-audit.cjs's own ground reading,
@@ -199,7 +199,7 @@
             // hillside that the farmhouse's own straight-line lateral offset
             // does not track. Re-seat on the ground actually under the gate.
             // -0.7 sinks the base — the same "sunk base, no slope float" idiom
-            // as pine/tree/palm's trunks (scenery-nature.js:180 etc): the
+            // as pine/tree/palm's trunks (the groundUnder helper in js/track/scenery-nature.js etc): the
             // bottom cone's own footing (ch*0.10, ~1.2-1.6 m up) sits right at
             // the audit's 1.0 m grounded-footing radius, so anything short of
             // that sink reads as its own marginal float and can no longer

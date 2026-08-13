@@ -252,7 +252,7 @@
           stage._mat = MAT.STONE;
           // Stepped-cornice ledges: 0.35 m thick with a reveal between each —
           // the 1.3 m stride left a 0.95 m gap, over float-audit.cjs's 0.6 m
-          // "rests on" bridging tolerance (tools/float-audit.cjs:288), so the
+          // "rests on" bridging tolerance (the support-chain EPS in tools/float-audit.cjs), so the
           // whole flagpole cluster above read as unsupported even though it
           // visually sits right on top. 0.9 m keeps a visible reveal (0.55 m)
           // under the tolerance; the roof cap and flagpole cluster shift down

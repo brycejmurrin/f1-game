@@ -1416,7 +1416,14 @@ const Tracks = (function () {
       // apron instead of co-planar Z-fighting where box meets ground. Anchored to
       // the terrain height at this lateral distance (not the road) so it sits on
       // the ground on elevated/embanked sections.
-      const c = [cx, groundYAt(k, dist) + sz[1] / 2 - 0.8, cz];
+      // Prefer the terrain actually RENDERED under the prop. groundYAt is the
+      // closed-form cross-section, and where a circuit's `elevations` bend the
+      // ribbon the two disagree by metres — madrid's dip at s=0.52 left the
+      // generic marshal post standing 4.3 m off its own ground. Sample the mesh
+      // at the prop's x/z and keep the closed form only as the fallback for
+      // points the ribbon does not cover.
+      const gy = terrainYAt(cx, cz);
+      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + sz[1] / 2 - 0.8, cz];
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       note("prop", c, sz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
