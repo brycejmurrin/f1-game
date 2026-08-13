@@ -58,31 +58,39 @@ async function episode(page, policy) {
       if (pol === "naive") {
         input = { steer: 0, throttle: true, brake: false };
       } else {
-        const w = A.world({ detail: "drive" });
+        const w = A.world({ detail: "drive", horizonS: 3, points: 6 });
         const he = w.ego.headingErrDeg || 0;
         const nc = w.nextCorner;
         const lat = w.ego.lateralM || 0;
-        // Honest geometry only — no prescribed line. Follow the road (cancel the
-        // heading error against the tangent) and stay roughly centred (pull back
-        // toward the centreline). + steer = right; + headingErrDeg = nose points
-        // right, so subtract it; + lateralM = car is right of centre, so subtract.
-        const steer = clamp(-he / 12 - lat / 14, -1, 1);
-        // Regulate ENTRY SPEED, don't just wait for the BRAKE NOW flag. The flag
-        // is a late, binary hint — on Interlagos it fired 6 times in 78 steps
-        // while the car built to 213 kph and was rescued at 248 m. apexSpeedKph
-        // assumes more grip than the default parts have, so aim well under it,
-        // start braking well before suggestBrakeM, and keep a flat cap for the
-        // straights no corner window covers. Still honest road geometry — an
-        // apex speed is a fact about the corner, not a prescribed line.
         const sp = w.ego.speed || 0;
-        // 0.72 of apex speed, braking from 2.5x the suggested distance, with a
-        // 55 m/s cap where no corner window reaches: measured on Monza, the
-        // old 0.5x / 6x / 33 m/s triple was so conservative the "relational"
-        // car lost to a full-throttle baseline on the straights (245 vs 218 x
-        // 1.5) — the fields were actionable, the policy just refused to act.
-        const tgt = nc ? nc.apexSpeedKph / 3.6 * 0.72 : 40;
-        const hot = nc && sp > tgt && nc.distM < (nc.suggestBrakeM || 60) * 2.5;
-        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || hot || sp > 55;
+        // Honest geometry only — no prescribed line. Follow the road, using
+        // what world() publishes about it. Pure feedback (-he/12 - lat/14 and
+        // a flat speed cap) was the previous policy and it could not track
+        // road curvature at speed: traced on Monza, the car cruised at 55 m/s
+        // for 25 steps then drifted 13.9 m off the gentle curve with steer at
+        // 0.04 — feedback only reacts AFTER the error exists, and at 198 kph
+        // the lag is a road departure (rescued at step 77, dist 251). The old
+        // 33 m/s cap was masking exactly this.
+        //
+        // So steer with FEEDFORWARD from the road's own curvature ~0.6 s
+        // ahead (ahead.pts radiusM/dir — the published road, not a line):
+        // required lateral accel is v^2/R, scaled onto the steer range.
+        // + steer = right; dir "L" bends left, so its sign is negative.
+        const pts = (w.ahead && w.ahead.pts) || [];
+        const look = pts.find((p) => p.t >= 0.6) || pts[0];
+        const R = (look && look.radiusM) || 1e9;
+        const dirS = look ? (look.dir === "L" ? -1 : look.dir === "R" ? 1 : 0) : 0;
+        const ff = dirS * clamp(sp * sp / (R * 30), -0.9, 0.9);
+        const steer = clamp(ff - he / 12 - lat / 14, -1, 1);
+        // Speed from the same geometry: hold v^2/R under ~11 m/s^2 across the
+        // lookahead window, and respect the corner fields' apex target. All
+        // still facts about the road, none of it a prescribed line.
+        // Measured (seed 1234): monza 1543 m, interlagos 1119 m, both to the
+        // step cap with no rescue — against floors of 327 and 300.
+        let vCurve = 70;
+        for (const p of pts) { const v = Math.sqrt(11 * Math.max(15, p.radiusM || 1e9)); if (v < vCurve) vCurve = v; }
+        const tgt = Math.min(vCurve, nc ? nc.apexSpeedKph / 3.6 * 0.72 : 70);
+        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || sp > tgt + 2;
         input = { steer, throttle: !braking, brake: braking && sp > 3 };
       }
       A.act(input, 1 / 60, 6);
