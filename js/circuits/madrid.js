@@ -686,6 +686,7 @@
         supportWidth: 1.2,
         color: CONCRETE,
         required: true,
+              supports: false,
       });
       overheadSpan({
         id: "madrid-motorway-overpass-soffit",
@@ -695,6 +696,10 @@
         depth: 10.4,
         supportGap: 2.4,
         supportWidth: 1.2,
+        // The soffit is the underside of the overpass directly above, at the
+        // same frac — it is one bridge drawn in two layers, so it must not
+        // raise a second set of legs on top of that bridge's own.
+        supports: false,
         color: TUNNEL_DARK,
       });
       overheadSpan({
@@ -705,6 +710,7 @@
         depth: 1.8,
         supportGap: 2.0,
         color: STEEL,
+              supports: false,
       });
       // A lightweight IFEMA access bridge marks the return from the permanent
       // loop while retaining generous clearance and narrow off-edge supports.
@@ -717,6 +723,7 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: GLASS,
+              supports: false,
       });
       overheadSpan({
         id: "madrid-ifema-access-bridge-soffit",
@@ -727,6 +734,7 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: TUNNEL_DARK,
+              supports: false,
       });
       for (const side of [-1, 1]) {
         venueGroup(`madrid-overpass-pier-${side}`, 0.085, side, 2.6,

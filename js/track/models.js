@@ -244,6 +244,40 @@ const TrackModels = (function () {
       // its safety contract is explicit underside clearance.
       const stage = emptyBuffer();
       if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      // The legs. supportClear() above already reserved and validated this
+      // exact footprint, and `supportGap`/`supportWidth` were part of the spec
+      // from the start — but nothing ever EMITTED them, so a span was a deck
+      // and nothing else. Circuits that wanted visible supports drew their own
+      // (cota, abudhabi); every span whose circuit did not was a slab hanging
+      // over the road on nothing, which is what the grounding audit reported
+      // across 7 circuits. Pass `supports: false` to keep the bare deck — the
+      // same opt-out supportClear() already honours — for spans that hang off
+      // a building or a tunnel mouth rather than standing on their own legs.
+      if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
+        // Inset and narrowed a touch. Several circuits already draw their own
+        // piers at exactly supportGap + supportWidth/2 (that is what the spec
+        // reserves), so a leg emitted flush with one shares its faces: madrid
+        // 65 -> 66 and suzuka 8 -> 9 coplanar spots. Sitting 0.12 m inboard at
+        // 90% width keeps the leg inside the reserved footprint, still under
+        // the deck and still on the ground, without ever landing on a plane a
+        // circuit pier already occupies.
+        const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
+        const lat = supportGap + sw / 2 + 0.12;
+        const under = clearance;           // deck underside above the road datum
+        for (const side of [-1, 1]) {
+          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
+          if (!finiteArray(foot, 3)) continue;
+          // Base-anchored box would be wrong here: box() centres its `c`. Span
+          // foot -> deck underside, with 0.3 m of embed at the bottom and a
+          // 0.2 m overlap into the deck so the support chain never sees a seam.
+          const top = frame.c[1] + under;
+          const h = top - foot[1] + 0.5;
+          if (!(h > 0.5)) continue;
+          box(stage, [foot[0], foot[1] - 0.3 + h / 2, foot[2]],
+              [sw, h, spec.depth != null ? spec.depth : 1.4],
+              spec.supportColor || spec.color, [frame.r, frame.u, frame.t]);
+        }
+      }
       appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance });
       return true;

@@ -839,11 +839,19 @@ const SceneryNature = (function () {
       }
       // Closing walls at both ends — stops a stand reading as a slab cut off
       // mid-air when seen from along the straight.
+      // Same single-sample trap the pylons above were fixed for, and missed
+      // here at the time: the wall is pushed +/-len/2 along the tangent from
+      // a.c — 75 m on a 150 m stand — and then based at a.c's height, so on a
+      // curved or sloping run it leaves the ground behind exactly as the posts
+      // did. Reach down to the surface under the wall's own x/z instead.
       if (opts.endWalls) {
         for (const sgn of [-1, 1]) {
-          const ec = vadd(vadd(a.c, a.t, sgn * (len / 2)), a.u, (roofY - 1) / 2);
-          if (!rejBox(ec, [11, roofY - 1, 0.5], [a.r, a.u, a.t]))
-            addBox(out, ec, [11, roofY - 1, 0.5], fasciaCol, [a.r, a.u, a.t]);
+          const base = vadd(a.c, a.t, sgn * (len / 2));
+          const drop = Math.max(0, base[1] - groundUnder(base[0], base[2])) + 0.3;
+          const h = roofY - 1 + drop;
+          const ec = vadd(base, a.u, (roofY - 1) / 2 - drop / 2);
+          if (!rejBox(ec, [11, h, 0.5], [a.r, a.u, a.t]))
+            addBox(out, ec, [11, h, 0.5], fasciaCol, [a.r, a.u, a.t]);
         }
       }
       // Rear fascia — closes the gap between the back shell's top and the roof
