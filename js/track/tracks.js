@@ -363,8 +363,14 @@ const Tracks = (function () {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
       if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(SS(frac), ...r);
+      // `rawFrac: true` = "this frac is ALREADY final racing space — hands off".
+      // Monaco's tunnel derives k from the raw racing arrays and builds its
+      // walls off px/py/pz directly (deliberately unremapped); shifting only
+      // the roof tears the vault ~93.6 m off its own bore (0.0284 laps). The
+      // caller knows which space its frac is in; the wrapper cannot.
       if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
-        spec && Number.isFinite(spec.frac) ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
+        spec && Number.isFinite(spec.frac) && !spec.rawFrac
+          ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
       if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
         spec && Array.isArray(spec.points)
           ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })

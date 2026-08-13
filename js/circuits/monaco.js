@@ -417,7 +417,28 @@
       // over-road ceiling is 5.0 m); everything else is a guarded addBox kept
       // outside hw so the road-footprint test drops nothing.
       {
-        const tunS = K(0.51), tunE = K(0.585);
+        // KOLD, not K and not KR. This block was authored against the RAW
+        // racing arrays as they were when startFrac was 0.28 — pre-7a17351,
+        // when array index == authored frac. That commit moved the origin to
+        // 0.2516 and renumbered the control points by (offNew - offOld); raw
+        // index users like this block never got the same renumbering, so the
+        // walls slid ~0.028 laps off the geometric tunnel (and off their own
+        // roof, whose overheadSpan path DID get shifted). Same formula the
+        // engine uses at tracks.js (`j = offNew - iOld`), same result: the
+        // measured hairpin sits at racing 0.383 and the corner sequence puts
+        // the tunnel at ~0.48-0.56, which is exactly KOLD(0.51..0.585).
+        const offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
+        const offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
+        const kShift = ((def.reverse ? offNew - offOld : offOld - offNew) % n + n) % n;
+        const KOLD = (s) => (K(s) + kShift) % n;
+        // 0.478..0.553 (old-racing) => racing 0.449..0.524: entry ~50 m after
+        // Portier (measured apex 0.434), a 247 m bore, exit with a run down to
+        // the chicane (0.641). Real Monaco: the tunnel starts immediately after
+        // Portier and exits 188 m before the Nouvelle Chicane — entry-after-
+        // Portier is the constraint worth matching; the game's Portier->chicane
+        // gap is 170 m longer than the real one, so the exit run stretches.
+        const TUN0 = 0.478, TUN1 = 0.553;
+        const tunS = KOLD(TUN0), tunE = KOLD(TUN1);
         const tunLen = ((tunE - tunS) + n) % n;
         const step = Math.max(2, Math.round(8.0 / ds));
         const dz = ds * step;                    // station pitch (~8 m)
@@ -465,19 +486,19 @@
           // — same-facing coplanar pairs are exactly what the z-fighting ratchet
           // in tests/unit/coplanar-faces.test.mjs exists to catch.
           overheadSpan({
-            id: `monaco-tunnel-roof-${k}`, frac: k / n, clearance: 6.45,
+            id: `monaco-tunnel-roof-${k}`, frac: k / n, rawFrac: true, clearance: 6.45,
             thickness: 1.35, depth: dz * 1.06, span: cw * 0.34,
             color: VAULT3, supports: false, required: true,
           });
           for (const sd of [-1, 1]) {
             const side = sd < 0 ? "l" : "r";
             overheadSpan({
-              id: `monaco-tunnel-haunch-${side}-${k}`, frac: k / n, clearance: 6.05,
+              id: `monaco-tunnel-haunch-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 6.05,
               thickness: 1.75, depth: dz * 1.02, span: cw * 0.28, offset: sd * cw * 0.26,
               color: VAULT2, supports: false, required: true,
             });
             overheadSpan({
-              id: `monaco-tunnel-springing-${side}-${k}`, frac: k / n, clearance: 5.55,
+              id: `monaco-tunnel-springing-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 5.55,
               thickness: 2.25, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
               color: VAULT, supports: false, required: true,
             });
@@ -487,7 +508,7 @@
             // under it) and hanging 0.85 m proud — the bright line a driver
             // actually sees streaming overhead.
             overheadSpan({
-              id: `monaco-tunnel-lamp-${side}-${k}`, frac: k / n, clearance: 5.70,
+              id: `monaco-tunnel-lamp-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 5.70,
               thickness: 0.90, depth: dz * 0.99, span: cw * 0.075, offset: sd * cw * 0.155,
               color: LUM, supports: false, required: true,
             });
@@ -561,12 +582,12 @@
             const kc = (k + step * 2) % n;
             const ridge = 3.0 + hash(k * 5.1) * 2.6;
             overheadSpan({
-              id: `monaco-tunnel-overburden-${k}`, frac: kc / n, clearance: 7.80,
+              id: `monaco-tunnel-overburden-${k}`, frac: kc / n, rawFrac: true, clearance: 7.80,
               thickness: 5.20, depth: dz * 4.06, span: cw * 1.04,
               color: ROCK, supports: false, required: true,
             });
             overheadSpan({
-              id: `monaco-tunnel-headland-${k}`, frac: kc / n, clearance: 13.00,
+              id: `monaco-tunnel-headland-${k}`, frac: kc / n, rawFrac: true, clearance: 13.00,
               thickness: ridge, depth: dz * 4.02, span: cw * (0.66 + hash(k * 2.7) * 0.22),
               color: hash(k * 1.9) > 0.62 ? SCRUB : ROCK, supports: false, required: true,
             });
@@ -580,7 +601,7 @@
         // lintel with open sky behind it, which is what made it read as a
         // concrete overpass on the approach.
         const tunnelPortal = (frac, tag) => {
-          const k = K(frac);
+          const k = KOLD(frac);  // raw-array reader — same KOLD rule as tunS/tunE
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
@@ -596,24 +617,24 @@
           }
           out._mat = 0;
           overheadSpan({
-            id: `monaco-tunnel-portal-${tag}-arch`, frac: k / n, clearance: 8.00,
+            id: `monaco-tunnel-portal-${tag}-arch`, frac: k / n, rawFrac: true, clearance: 8.00,
             thickness: 1.70, depth: 2.60, span: cw * 1.10,
             color: [0.72, 0.70, 0.64], supports: false, required: true,
           });
           overheadSpan({
-            id: `monaco-tunnel-portal-${tag}-face`, frac: k / n, clearance: 9.70,
+            id: `monaco-tunnel-portal-${tag}-face`, frac: k / n, rawFrac: true, clearance: 9.70,
             thickness: 4.20, depth: 2.00, span: cw * 0.98,
             color: ROCK, supports: false, required: true,
           });
           overheadSpan({
-            id: `monaco-tunnel-portal-${tag}-crest`, frac: k / n, clearance: 13.90,
+            id: `monaco-tunnel-portal-${tag}-crest`, frac: k / n, rawFrac: true, clearance: 13.90,
             thickness: 3.20, depth: 1.60, span: cw * 0.72,
             color: SCRUB, supports: false, required: true,
           });
           // Height-limit plate hung under the architrave — what the eye uses to
           // judge the mouth's scale on the run down from Portier.
           overheadSpan({
-            id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, clearance: 6.90,
+            id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, rawFrac: true, clearance: 6.90,
             thickness: 0.55, depth: 0.30, span: cw * 0.13,
             color: [0.94, 0.92, 0.86], supports: false, required: true,
           });
@@ -646,8 +667,8 @@
             });
           }
         };
-        tunnelPortal(0.51, "entry");
-        tunnelPortal(0.585, "exit");
+        tunnelPortal(TUN0, "entry");
+        tunnelPortal(TUN1, "exit");
       }
 
       // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
