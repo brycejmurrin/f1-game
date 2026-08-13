@@ -38,7 +38,7 @@
    the title and wrap under it rather than squeezing the team name. */
 #cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); margin-left: auto; }
 .cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
-.cr-meter-lbl { font-size: 9px; letter-spacing: 0.14em; color: var(--dim); }
+.cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: 0.14em; color: var(--dim); }
 .cr-meter-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ---------- body ---------- */
@@ -396,7 +396,7 @@
 /* Prose, not a data row: this is the one place in career that runs sentences, so
    it gets the line-height and measure they need. .cr-row pairs sit alongside it
    in the same card, which is what lets a section state a rule and then price it. */
-.cg-p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.cg-p { margin: 0; font-size: var(--fs-micro); line-height: 1.5; color: var(--dim); }
 .cg-card .cr-row + .cg-p { margin-top: 3px; }
 
 /* ---------- the round's earnings, on the results sheet ---------- */

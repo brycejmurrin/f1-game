@@ -212,7 +212,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-help-toggle {
   display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
   min-height: var(--tap-min);
-  font-size: 11px; opacity: 0.8; cursor: pointer;
+  font-size: var(--fs-micro); opacity: 0.8; cursor: pointer;
 }
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
 /* Category tabs — split the 80+ sliders into one group at a time. Part of the
@@ -237,7 +237,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
-  padding: 5px 9px; font-size: 10px; letter-spacing: 0.04em;
+  padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.16); border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
   cursor: pointer; transition: background 0.12s, color 0.12s;
@@ -259,7 +259,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding: 0 0 4px;
   color: rgba(255,255,255,.72);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 800;
   letter-spacing: .12em;
 }
@@ -270,7 +270,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: 10px; }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: var(--fs-micro); }
 .lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
@@ -284,7 +284,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    tuner above (the selectors are extended, not duplicated); only the bits that
    are camera-specific live here. */
 #ct-profile {
-  font-size: 11px; letter-spacing: 0.06em; font-weight: 700;
+  font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 700;
   color: var(--red); margin: 2px 0 4px;
 }
 /* A mode whose framing has been changed keeps a red outline even when it is not
@@ -302,18 +302,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--r-sm); padding: 6px;
 }
-.adv-intro { font-size: 12px; opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
+.adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
 .adv-sec {
-  color: var(--red); font-size: 12px; letter-spacing: 0.08em;
+  color: var(--red); font-size: var(--fs-micro); letter-spacing: 0.08em;
   margin: 16px 0 8px; padding-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 .adv-sec span {
-  color: rgba(255, 255, 255, 0.45); font-size: 10px;
+  color: rgba(255, 255, 255, 0.45); font-size: var(--fs-micro);
   letter-spacing: 0.02em; margin-left: 6px;
 }
 .adv-item { margin: 11px 0; }
-.adv-help { font-size: 11px; opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
+.adv-help { font-size: var(--fs-micro); opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
 .tune-row { display: block; margin: 0; }
 /* Name on the left, value on the right — and the VALUE IS THE PART THAT MUST
    NOT BE LOST. `space-between` alone puts the name and the number on one line
@@ -359,7 +359,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    flex row (label, switch) with space-between, and a marker as a third flex
    child there would get its own evenly-spaced slot instead of sitting next to
    the text it belongs to. */
-.as-head .adv-sec::before { content: "\25BE"; font-size: 9px; opacity: 0.6; margin-right: 6px; display: inline-block; }
+.as-head .adv-sec::before { content: "\25BE"; font-size: var(--fs-micro); opacity: 0.6; margin-right: 6px; display: inline-block; }
 details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 /* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
    has the same specificity and comes later in the file, so an unqualified
@@ -368,7 +368,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .opt-row.as-toggle .opt-btn {
   flex: 0 0 auto; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
-  padding: 4px 12px; font-size: 11px; letter-spacing: 0.06em;
+  padding: 4px 12px; font-size: var(--fs-micro); letter-spacing: 0.06em;
 }
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
@@ -381,14 +381,14 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   background: rgba(255,255,255,0.04);
 }
 .as-now-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
-.as-now-cap { font-size: 9px; letter-spacing: 0.14em; color: var(--dim); text-transform: uppercase; }
+.as-now-cap { font-size: var(--fs-micro); letter-spacing: 0.14em; color: var(--dim); text-transform: uppercase; }
 /* The title is the one thing worth reading here, so it gets the size. It also
    has to truncate — uploaded file names are arbitrarily long. */
 .as-now-title {
   font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.25;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.as-now-sub { font-size: 10px; color: var(--dim); }
+.as-now-sub { font-size: var(--fs-micro); color: var(--dim); }
 .as-transport { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .as-tbtn {
   width: var(--tap-sm); height: var(--tap-sm); min-height: var(--tap-sm);
@@ -408,7 +408,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
-.as-note { font-size: 11px; color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
+.as-note { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
 
 /* A slider follows its switch: RED while the thing it controls is on, GREY when
    it is off. Grey via accent-color rather than a low opacity — a ghosted control
@@ -422,7 +422,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   flex: 1; width: auto; margin: 0; padding: 9px 6px; text-align: center;
-  letter-spacing: 0.06em; font-size: 13px;
+  letter-spacing: 0.06em; font-size: var(--fs-micro);
 }
 .preset-btn small {
   font-size: var(--fs-micro); letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
@@ -444,7 +444,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      heights for controls of the same rank */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; letter-spacing: 0.03em; text-align: center;
+  font-size: var(--fs-micro); letter-spacing: 0.03em; text-align: center;
 }
 .opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
 /* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
@@ -493,9 +493,9 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head h2 { font-size: 16px; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: 10.5px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: var(--fs-micro); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-profile,
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-profile { font-size: 10px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-profile { font-size: var(--fs-micro); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row { gap: 3px; margin: 2px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
   /* min-height, not more padding: the short-panel branch squeezes these to 23px
@@ -505,7 +505,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
     padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: var(--tap-min);
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: 10px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: var(--fs-micro); }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts
      that wrap. */
@@ -522,7 +522,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   /* The floor applies to the shrunken foot too: 12px text in 6px padding comes to
      ~27 own px, which is 21-23 ACTUAL px at UI SIZE 80% — RESET, COPY VALUES and
      DONE were the last three controls under the WCAG floor in the 1900-cell run. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: 12px; min-height: var(--tap-min); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-min); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
 
@@ -618,7 +618,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
        COPY VALUES and DONE measured 21-23 ACTUAL px, under WCAG 2.5.8's 24. The
        intent of the 0 was to let the buttons shrink in the rail, and they still
        do: --tap-min only floors the axis a thumb needs. */
-    padding: 5px 6px; font-size: 11px; min-height: var(--tap-min);
+    padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > #lt-close { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
@@ -700,7 +700,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .adv-more-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; list-style: none; cursor: pointer;
-  font: inherit; font-size: 12px; letter-spacing: 0.08em; opacity: 0.85;
+  font: inherit; font-size: var(--fs-micro); letter-spacing: 0.08em; opacity: 0.85;
   color: var(--text); background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; padding: 10px 18px;
 }
@@ -723,16 +723,16 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   padding: 6px 8px; border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 12px;
+  font-size: var(--fs-micro);
 }
 .music-row.playing { border-color: var(--red); background: rgba(225, 6, 0, 0.14); }
 .music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.music-size { flex: 0 0 auto; font-size: 10px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.music-size { flex: 0 0 auto; font-size: var(--fs-micro); opacity: 0.5; font-variant-numeric: tabular-nums; }
 .music-row button {
   /* 30px keeps these inside the 44px touch target the rest of the panel uses
      once the row's own padding is counted. */
   flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0;
-  font-size: 13px; line-height: 1; border-radius: var(--r-sm);
+  font-size: var(--fs-micro); line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
 @media (hover: hover) {
@@ -766,8 +766,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-title { font-size: 14px; font-weight: 700; }
-.sp-artist { font-size: 12px; opacity: 0.75; }
-.sp-on { font-size: 10px; opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
+.sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
+.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
 .sp-bar { height: 3px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
@@ -784,7 +784,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-micro);
   word-break: break-all; opacity: 0.9;
   -webkit-user-select: text; user-select: text; cursor: text;
 }

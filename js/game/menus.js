@@ -251,6 +251,41 @@ function buildSelect() {
 
 // large preview of the currently-selected circuit: sector-coloured outline,
 // DRS zones, numbered corners, name / GP / length / turn count, track facts.
+/* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
+ * Same shape as js/game/sheetshape.js's own note: a hidden element measures
+ * 0x0, so the first useful measurement is the ResizeObserver callback when its
+ * screen is shown, not the call that showed it. updateTrackPreview() runs on
+ * that first (unmeasurable) pass and deliberately does not pin; this refits
+ * once the card has a box, and again whenever it changes — a UI SIZE change, an
+ * orientation flip, or sheetshape.js flipping data-pair / data-shape, all of
+ * which move the budget without changing the selected circuit.
+ *
+ * BOTH AXES. The budget in updateTrackPreview is driven by the card's WIDTH
+ * (cardInnerW, and the `beside` switch that keys off it) as much as by the
+ * section's height, so a width-only or height-only guard would sit out the
+ * pair flip that changes the layout most.
+ *
+ * TERMINATION: refit only when the card's box actually differs from the one we
+ * last fitted against. Without that guard this is a classic RO feedback loop —
+ * the refit clears the map's pins and may set data-map-shape, either of which
+ * can resize the card and fire the observer again. Sibling precedent: the
+ * track-detail modal's own observer guards on a `lastFit` key for exactly this
+ * reason. */
+let previewRo = null, previewCardBox = "";
+function watchPreviewCard(card) {
+  if (!card || typeof ResizeObserver !== "function") return;
+  if (previewRo) return;
+  previewRo = new ResizeObserver(() => {
+    const w = card.clientWidth, h = card.clientHeight;
+    if (w <= 0 || h <= 0) return;
+    const key = w + "x" + h;
+    if (key === previewCardBox) return;
+    previewCardBox = key;
+    updateTrackPreview();
+  });
+  previewRo.observe(card);
+}
+
 function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
@@ -311,7 +346,27 @@ function updateTrackPreview() {
     card.setAttribute("data-map-shape", "beside");
     void map.offsetWidth;
   }
-  const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, true);
+  // MEASURABLE means the card is actually laid out. The FIRST call never is:
+  // #select is opened by clearing `hidden`, so the card has no box yet and
+  // planPreview takes its own documented "pre-layout first paint" fallback —
+  // cardInnerW on its 80px floor, sectionH 0, height from the aspect alone.
+  // Those are placeholders, not measurements.
+  //
+  // THAT IS WHY THE PIN IS CONDITIONAL. fitCanvas(pinCss=true) writes inline
+  // width/height/max-width/max-height, and an inline style beats any stylesheet
+  // rule — so a plan computed from placeholders freezes into the element and
+  // nothing later undoes it. MEASURED at 852x393 from a cold load, before this
+  // guard: 344px of map in a 260px card, 23px past the viewport bottom, with
+  // the caption and all four track facts pushed out. It self-healed on the
+  // first circuit click — the one route any probe that clicks before measuring
+  // erases, which is why the audit matrix scored that cell green throughout.
+  //
+  // Unmeasurable: draw at the CSS slot and DO NOT pin, leaving the stylesheet's
+  // own caps authoritative for that frame. watchPreviewCard refits with real
+  // numbers as soon as the card has a box.
+  const measurable = !!(card && card.clientWidth > 0);
+  const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
+  watchPreviewCard(card);
   // Corner markers/casing are drawn at ABSOLUTE canvas px (see TrackMaps.draw),
   // tuned for the canvas's old fixed 520x300 HTML size. fitCanvas now sizes the
   // drawing buffer itself to the measured CSS slot (so a narrow layout gets a
