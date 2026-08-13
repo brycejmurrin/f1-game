@@ -115,7 +115,7 @@ const TUNE_DEFS = [
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMPS", section: "BEHAVIOUR", min: 0.1, max: 0.9, step: 0.05, def: 0.35, help: "How far inside the nearest-lamp boundary a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
   { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 400, step: 10, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 10, step: 0.25, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. 0/low = lamps ranked purely by distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
-  { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 4, step: 0.1, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. 1 = as-shipped (pure distance + BEHIND-CAM BIAS), higher = lamps ahead win the budget over ones to the side/behind, pushing the boundary where lamps switch on further out. Only matters once a track has more lamps than the LAMP COUNT budget." },
+  { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 4, step: 0.1, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. The number is the REACH MULTIPLIER for a lamp dead ahead: 4 = a lamp four times further away still wins a slot (lamps to the side are unaffected, and 1 = as-shipped, pure distance + BEHIND-CAM BIAS). Only matters once a track has more lamps in range than the LAMP COUNT budget (32 shader slots, 28 with traffic) — where it does, expect the far end of a lit straight to extend rather than the near road to brighten." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 12, step: 0.25, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. Both renderers." },
   // ── NIGHT GLOW & BLOOM ──
   { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT GLOW & BLOOM", min: 0,    max: 3,  step: 0.01,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
@@ -760,7 +760,16 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     } else if (reach > 1) {
       const dl2 = dx * dx + dz * dz || 1;
       const ratio2 = (b * b) / (flen2 * dl2);
-      d /= 1 + (reach - 1) * ratio2;
+      // SQUARED divisor, because `d` here is a SQUARED distance: dividing it by
+      // k shortens the ranked LINEAR distance only by sqrt(k), so the plain
+      // `d /= 1 + (reach-1)*ratio2` this replaced delivered sqrt(reach) — a
+      // slider reading 4 bought 2x reach, not 4x, and measured as a barely
+      // visible +44% at Singapore 0.55. Squaring makes the knob mean what its
+      // label says: a dead-ahead lamp (ratio2 = 1) ranks as if `reach` times
+      // nearer, so REACH 4 really is 4x. Still an exact no-op at the shipped
+      // default of 1, and untouched for lamps to the side (ratio2 -> 0).
+      const k = 1 + (reach - 1) * ratio2;
+      d /= k * k;
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
