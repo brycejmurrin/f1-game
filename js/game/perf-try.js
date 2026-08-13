@@ -141,6 +141,73 @@ function defines() {
   return s;
 }
 
+/* ── The UI ────────────────────────────────────────────────────────────────
+   Rows are GENERATED here, not written into index.html, for the same reason
+   the lighting tuner generates its rows from TUNE_DEFS: the shell carries a
+   DOM-node ratchet (tests/unit/css-class-ratchet.test.mjs, justified by
+   Lighthouse's ~1,400-node error band), and a hand-written row per switch
+   would spend it on markup that changes every time a switch is added or
+   retired. Runtime-injected nodes are not in index.html, so the ratchet is
+   untouched — and the panel stays correct by construction when FLAGS changes.
+
+   It also mints NO new CSS class: the buttons carry no class, exactly like
+   their neighbours (#pm-res, #pm-renderer, #pm-gfx), so the class ceiling is
+   untouched too. */
+const LABELS = { glStateCache: "GL STATE CACHE", flareGate: "FLARE GATE", lampFogGate: "LAMP FOG GATE" };
+
+function labelFor(k) { return LABELS[k] || k.replace(/([A-Z])/g, " $1").toUpperCase(); }
+
+function paint(btn, k) {
+  btn.textContent = labelFor(k) + ": " + (on(k) ? "ON" : "OFF");
+  btn.setAttribute("aria-pressed", on(k) ? "true" : "false");
+}
+
+function initUI() {
+  if (typeof document === "undefined") return;
+  // Anchor on #pm-res's own section rather than a positional selector: the
+  // DISPLAY group has no id, and hunting it by heading text would break the
+  // first time the heading is renamed.
+  const anchor = document.getElementById("pm-res");
+  const host = anchor && anchor.parentNode;
+  if (!host) return;
+
+  const head = document.createElement("h3");
+  head.className = "pm-group-h";          // existing class, nothing new minted
+  head.textContent = "PERF EXPERIMENTS";
+  host.appendChild(head);
+
+  const note = document.createElement("p");
+  // .adv-help is the existing small-explanatory-text class (css/tuner.css:
+  // micro font, 0.6 opacity). Reused rather than minting a `pm-note` that does
+  // not exist in css/ and would have rendered unstyled at body size.
+  note.className = "adv-help";
+  note.textContent = "Off by default. These are unmeasured renderer optimisations — turn one on and see if it helps on YOUR hardware. Changing one reloads the page.";
+  host.appendChild(note);
+
+  for (const k of Object.keys(FLAGS)) {
+    const b = document.createElement("button");
+    b.id = "pm-try-" + k;
+    // The tooltip is the honest part: what it does, and what breaking would
+    // look like, so a tester knows what they are looking for rather than just
+    // watching a frame counter.
+    b.title = FLAGS[k].what + "\n\nWatch for: " + FLAGS[k].watch;
+    paint(b, k);
+    b.onclick = () => {
+      const next = !on(k);
+      set(k, next);                       // persists + reloads (shaders recompile)
+      paint(b, k);
+      b.textContent = labelFor(k) + ": " + (next ? "ON" : "OFF") + " — RELOADING…";
+      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* Audio not up yet (settings opened before first interaction): the toggle still applies. */ }
+    };
+    host.appendChild(b);
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  else initUI();
+}
+
 function list() {
   const out = {};
   for (const k in FLAGS) out[k] = { on: on(k), glsl: !!FLAGS[k].glsl, what: FLAGS[k].what, why: FLAGS[k].why, watch: FLAGS[k].watch };
