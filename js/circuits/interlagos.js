@@ -79,23 +79,42 @@
 
       // -- Bespoke: favela patch — dense cluster of small stacked colourful houses
       // climbing a green slope, each with a flat laje roof, occasional upper room,
-      // and a rooftop water tank (caixa d'água). Grounded via anchor + slope rise. --
-      const favelaPatch = (s, side, baseDist, rows, colsW, slope) => {
-        const k = K(s), a = anchor(k, side, baseDist);
-        const bv = [a.r, a.u, a.t];
+      // and a rooftop water tank (caixa d'água).
+      // GROUNDING (float fix, cause c — fixed-height stack over dropped terrain):
+      // this used to sample ONE anchor at `baseDist` and fake the climb with a
+      // hand-authored `rise = r*slope` per row. Every call site here authors
+      // baseDist in [68,90] — already past this circuit's terrainOuter (45 m) —
+      // so every row's anchor fell back to the SAME flat lap-low floor
+      // (surface.heightAt clamps to floorY once dist >= outerW), and the
+      // invented rise then stacked houses straight up off that flat floor: up
+      // to (rows-1)*slope ~= 18 m of pure daylight under the back rows, with
+      // rooftop tanks/dishes floating even higher. The engine's terrain ribbon
+      // has no "uphill" term at all — it only ever eases DOWN away from the
+      // road — so no fixed rise can ever match it; growing terrainOuter doesn't
+      // help either (verified: it just shifts where the far rows float, not
+      // whether they do). Sampling anchor() per ROW keeps every house on
+      // whatever the real (or real-fallback) ground is at that row's own
+      // lateral distance, matching float-audit's own measurement exactly.
+      const favelaPatch = (s, side, baseDist, rows, colsW) => {
+        const k = K(s);
+        const rowAnchor = [];
+        for (let r = 0; r < rows; r++) rowAnchor.push(anchor(k, side, baseDist + r * 7.5));
+        const a = rowAnchor[0], bv = [a.r, a.u, a.t];
         const depth = rows * 7.5 + 8, width = colsW * 7 + 9;
-        const center = vadd(vadd(a.c, a.r, depth / 2 - 4), a.u, 18);
+        let minY = a.c[1], maxY = a.c[1];
+        for (const ra of rowAnchor) { if (ra.c[1] < minY) minY = ra.c[1]; if (ra.c[1] > maxY) maxY = ra.c[1]; }
+        const center = vadd(vadd(a.c, a.r, depth / 2 - 4), a.u, (maxY - minY) / 2 + 18);
         modelGroup(`interlagos-favela-${Math.round(s * 100)}`, {
-          center, size: [depth, 38, width], basis: bv,
+          center, size: [depth, (maxY - minY) + 40, width], basis: bv,
         }, (stage) => {
           for (let r = 0; r < rows; r++) {
-            const back = r * 7.5, rise = r * slope;
+            const ra = rowAnchor[r];
             for (let c = 0; c < colsW; c++) {
               if (hash(k * 3 + r * 17 + c * 29) > 0.85) continue;   // alleys / gaps
               const off = (c - colsW / 2) * 7 + (hash(k + r * 5 + c) - 0.5) * 2.4;
               const h = 5.5 + hash(k * 7 + r * 11 + c) * 7.5;
               const w = 5 + hash(k * 9 + c) * 2.6, d = 5 + hash(k * 13 + r) * 2.4;
-              const base = vadd(vadd(vadd(a.c, a.r, back), a.u, rise), a.t, off);
+              const base = vadd(ra.c, a.t, off);
               stage._mat = MAT.CONCRETE;
               // Finish state per house: ~46% raw block, ~14% bare screed, the
               // rest painted. Keyed off the house's own hash so it is stable
@@ -503,18 +522,21 @@
                                         col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.15 });
 
       // ---- Layer 2: Fewer, taller, closer favela patches — punch São Paulo colour ----
-      // Three dense climbing communities (was five shorter/farther ones). baseDist
-      // ~36–40 m, rows 8–9, steeper slope so the silhouette reads at race speed.
-      favelaPatch(0.13, -1, 72, 8, 7, 2.6);
-      favelaPatch(0.17, -1, 68, 9, 7, 2.7);
-      favelaPatch(0.22, -1, 72, 8, 6, 2.5);
+      // Three dense climbing communities (was five shorter/farther ones). Measured
+      // baseDist is actually 68-90 m (the "~36-40 m" this comment used to claim was
+      // stale — never matched the call args below), rows 8-9; each patch grounds
+      // per-row against the real terrain now (see favelaPatch), so the old `slope`
+      // arg that used to fake the climb is gone.
+      favelaPatch(0.13, -1, 72, 8, 7);
+      favelaPatch(0.17, -1, 68, 9, 7);
+      favelaPatch(0.22, -1, 72, 8, 6);
       // Dress-pass improvement 2: continue the hillside community toward the
       // Reta Oposta reveal, but with a smaller patch so the straight remains open.
-      favelaPatch(0.265, -1, 82, 6, 6, 2.3);
+      favelaPatch(0.265, -1, 82, 6, 6);
       // Fifth, smaller patch bridging to the dressingExclusions reservoir
       // sightline that opens at s=0.30 — smooths the favela→lake transition
       // instead of the community ending abruptly at 0.265.
-      favelaPatch(0.29, -1, 90, 4, 5, 2.0);
+      favelaPatch(0.29, -1, 90, 4, 5);
       // A couple of taller finished landmark blocks poking above the shanties
       for (let i = 0; i < 3; i++) {
         const s = 0.14 + (i / 3) * 0.10;
