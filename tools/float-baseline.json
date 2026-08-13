@@ -1,6 +1,5 @@
 {
-  "sochi": 33,
-  "monaco": 28,
+  "monaco": 24,
   "singapore": 19,
   "baku": 17,
   "jeddah": 15,
@@ -37,6 +36,7 @@
   "interlagos": 0,
   "portimao": 0,
   "sepang": 0,
+  "sochi": 0,
   "watkins_glen": 0,
   "zandvoort": 0
 }
