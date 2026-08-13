@@ -10,6 +10,7 @@
 > | 1 | 126 sub-floor font sizes | correct; all 126 migrated, ratchet now 0. Raw spacing 529 → 479 |
 > | 2 | the map bug | correct and fixed — but the deploy branch had meanwhile rewritten the same function. Its budget logic supersedes the caps described below; the first-paint pin guard was rebased onto it |
 > | 4 | "`emulate` reloads the page and resets app state" | **wrong as stated.** It sometimes does and sometimes does not. Corrected in the playbook: assert which screen is open before measuring |
+> | 4 | "use dpr 1 for layout review" | **too narrow.** dpr 1 failed too — the same screen captured with the whole brand column missing, animations finished, while the DOM had it at x=86 w=348 opacity 1. The rule is not a dpr setting: do not judge layout from an MCP screenshot on this shell at all. Measure with `evaluate_script`; take pictures with Playwright (`layout-audit --shots`) |
 > | — | "18 pre-existing test failures" | **wrong.** `node_modules` had never been installed in this container. With dependencies present the suite is **426 pass / 0 fail** |
 > | — | the audit matrix | 14 flagged cells → **7**, and six of the seven removed were *probe* defects, not layout ones (see the `content-visibility` finding below) |
 >
