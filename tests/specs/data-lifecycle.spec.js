@@ -9,7 +9,10 @@ async function dataReady(page) {
     window.Teams = { LIST: [] };
   });
   // hub.js calls every tab module's create() at IIFE-eval time (see
-  // HARD_EDGES in tools/manifest.cjs), so ALL data modules must load first.
+  // HARD_EDGES in tools/manifest.cjs), so ALL data modules must load first —
+  // and telemetry.js aliases M4.clamp at eval, so mat4.js loads before them
+  // all, exactly as in the real shell (it is the 2nd script tag there).
+  await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
   await page.addScriptTag({ url: "/js/data/export.js" });

@@ -8,6 +8,8 @@ async function dataReady(page) {
   await page.goto("/version.json");
   await page.setContent('<div id="datahub" hidden></div>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
+  // telemetry.js aliases M4.clamp at eval (HARD_EDGES) — mat4 first, as in the shell.
+  await page.addScriptTag({ url: "/js/mat4.js" });
   for (const u of ["api", "telemetry", "export", "schedule", "standings", "lastrace", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
