@@ -5118,7 +5118,29 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     let m;
     if (wet) { m = night ? _wmRoadWetN : _wmRoadWetD; m.detail = 0.06 * _sd; }
     else { m = night ? _wmRoadDryN : _wmRoadDryD; m.detail = 0.22 * _sd; m.roughness = clamp(0.85 * _rr, 0.04, 1); }
-    gfx.draw(track.meshes.road, MAT_IDENT, m);
+    // PER-CHUNK ROAD: the road is one mesh, so it can only ever carry the single
+    // global set of 32 lamps — which the cull picks nearest the CAMERA, covering
+    // the tarmac around the car and starving the road AHEAD (the original
+    // "lamps switch on right in front of me"). Drawing it chunked gives each
+    // stretch its own lamps via the same GLXChunked path as the props, and
+    // frustum-culls the ribbon as a bonus. Built lazily on first use so the
+    // second copy of the geometry costs nothing while the knob is off.
+    // _keepPositions is REQUIRED: createChunkedMesh nulls its source arrays, and
+    // debrisworld.js + __apex.geo() both still read track.roadGeo.
+    let _roadMesh = track.meshes.road, _roadChunked = false;
+    if (LT.roadChunkLamps && LT.perChunkLights) {
+      if (track.meshes.roadChunked === undefined) {
+        track.meshes.roadChunked = null;
+        if (track.roadGeo && gfx.createChunkedMesh) {
+          track.roadGeo._keepPositions = true;
+          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+        }
+      }
+      const _rc = track.meshes.roadChunked;
+      if (_rc && _rc.chunks) { _roadMesh = _rc; _roadChunked = true; }
+    }
+    if (_roadChunked) gfx.drawChunked(_roadMesh, MAT_IDENT, m);
+    else gfx.draw(_roadMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.startline && track.meshes.startline) gfx.draw(track.meshes.startline, MAT_IDENT,
     wet ? _wmStartWet : (night ? _wmStartN : _wmStartD));
