@@ -141,7 +141,7 @@ function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
 }
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // ---------- save lifecycle ----------
 // SIX SAVES: three DRIVER-career slots and three MY TEAM slots, kept in separate

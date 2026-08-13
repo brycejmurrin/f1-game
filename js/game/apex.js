@@ -387,8 +387,7 @@ const api = {
     const wx = smp.p[0] + smp.r[0] * lat;
     const wz = smp.p[2] + smp.r[2] * lat;
     const p = Tracks.project(G.track, wx, wz, s);
-    let ds = p.s - s; const L = G.track.total;
-    while (ds > L / 2) ds -= L; while (ds < -L / 2) ds += L;
+    const ds = M4.wrapDelta(p.s - s, G.track.total);   // both in [0, L), so the while-loop copy this replaced could never fold twice either
     return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
              err: { s: ds, lat: p.lat - lat } };
   },
@@ -2850,7 +2849,7 @@ const api = {
 
   // persistState() — is localStorage actually storing anything?
   //
-  //   { ok, broken, keys, rev }
+  //   { ok, broken, keys, rev, foreign }
   //
   // `ok:false` means a read or write has thrown, and `broken` names it
   // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
@@ -2861,7 +2860,8 @@ const api = {
   // Browsing, which is the case that actually loses a player's career.
   persistState() {
     const s = GameStore.store;
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev };
+    // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0 };
   },
 
   // save(data, filename) — hand a file back out of the browser.

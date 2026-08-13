@@ -331,19 +331,42 @@ Deferred with reasoning, none lost:
   live preview ~415 ln (blocked on a car-drawing seam), camera disclosure
   ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
   taken: `js/game/cam-modes.js`.)
-- **`wrapDelta` helper** — the shortest-way arc-wrap idiom is hand-written at
-  4 sites; one wrong copy sends a car backwards down the lap once per lap.
-- **Elevation-profile drawing duplicated in `js/game/menus.js`** — two
-  near-identical canvas blocks around its two `TrackMaps.elevProfile()` calls.
-- **Shared `clamp`/`lerp`** — many local copies, one divergent
-  (`js/track/scenery-structures.js`).
+- **`wrapDelta` / shared `clamp`/`lerp` — RESOLVED.** All three now live on
+  `M4` (`js/mat4.js`, the 2nd script tag, so every consumer including the
+  deferred backends can bind them at eval; they hang off the existing global
+  rather than becoming a third one). Consumers ALIAS
+  (`const clamp = M4.clamp;`), so hot paths keep their old call shape. 16 clamp
+  copies, 6 lerps and 5 of the 7 arc-wrap sites migrated;
+  `tests/unit/shared-math.test.mjs` pins the semantics and RATCHETS against a
+  new private copy. The divergent `js/track/scenery-structures.js` clamp
+  (`Math.max(lo, Math.min(hi, v))`) was **not a bug** — the two forms differ
+  only above an inverted range, on `-0`, and on a non-number argument, and all
+  eight of its call sites pass finite numbers with `lo < hi`; migrated anyway,
+  proven vertex-for-vertex by `tools/graph-parity.cjs --all`. Deliberately
+  LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
+  characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
+  which fold an unbounded heading and need a loop rather than one fold.
+- **Elevation-profile drawing duplicated in `js/game/menus.js` — RESOLVED.**
+  One local `drawElevProfile(cv, t, showEl)`; the only real difference between
+  the two blocks was which element carries the `hidden` state.
 - **`simTilt`/`tiltSteering`** now share `tiltTarget()`/`tiltSlew()`;
   `tests/specs/tilt-pipeline.spec.js` pins every stage so the next re-inlining fails.
-- **Mobile-tier detection ×4** — reimplemented in four files; `js/game.js`
-  omits `_forceMobile`, defeating `apex26.forceMobileTier` there.
+- **Mobile-tier detection ×4 — RESOLVED.** `js/render/glx.js` is the one copy
+  and exports `isMobile` / `mobileTier`; `liverytex.js`, `wgx.js` and
+  `js/game.js` read it. glx.js is the 11th tag and the deferred backends load
+  last, so the value is always there. This fixes the defect the entry names:
+  `js/game.js` re-sniffed navigator without `forceMobileTier`, so a desktop
+  with the flag set still loaded an alternate backend — the "phone" path under
+  test was never the phone path.
 - **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places.
-- **`GameStore`** has no cross-tab `storage` listener; two tabs silently
-  overwrite each other's saves.
+- **`GameStore` cross-tab — RESOLVED.** `store.onForeignWrite`, armed by the
+  module itself on `window.storage`. Not a merge (two divergent career saves
+  have no defined join): a foreign `apex26.*` write drops that ONE cached key
+  so the next read goes to disk, and bumps `rev`; a foreign `clear()` empties
+  the cache. An unrelated key stays cached — invalidating everything would put
+  `getItem`/`JSON.parse` back in the render loop, which is why `_cache` exists.
+  Counted in `__apex.persistState().foreign`; pinned by
+  `tests/unit/store-cross-tab.test.mjs`.
 - **Assertion-free specs** — RESOLVED. `tests/specs/ui-audit.spec.js` (34 tests, 0
   `expect`) and the former `ui-desktop.spec.js` (5/0) were screenshot galleries
   presenting as tests. The second is now absorbed into the first as two more

@@ -47,6 +47,8 @@ function load() {
     Parts: { getFactorySetup: () => ({}) },
     Tracks: { LIST: [] },
   });
+  // js/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
+  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
     { filename: "js/game/career.js" });
   return vm.runInContext("Career", ctx);

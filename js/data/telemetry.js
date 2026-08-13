@@ -1427,7 +1427,7 @@ const DataTelemetry = (function () {
     return { loadTelemetry, closeTelemPopup };
   }
 
-  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   // ---- playback position: lap clock -> point on the GPS trace ----------
   // Pure functions of a driver's own sample arrays, so they live at module

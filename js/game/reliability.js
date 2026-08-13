@@ -63,7 +63,7 @@ const DEV_RELIEF = 0.40;
 const BUILD_RELIEF = 0.33;
 const BUILD_CATS = ["engine", "gearbox"];
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // The stateless draw. Career owns the hash (and the xorshift finalizer that makes
 // it a draw rather than a ramp — see js/game/career.js); this passes its own seed

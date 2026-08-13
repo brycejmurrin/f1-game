@@ -84,15 +84,13 @@
 "use strict";
 
 const WGX = (function () {
-  // Mirror GLX's mobile-tier detection (IS_MOBILE/MOBILE_TIER/forceMobileTier).
-  let _forceMobile = false;
-  try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
-  const IS_MOBILE = _forceMobile ||
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
-  let _gfxHigh = false;
-  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
+  // READ GLX's mobile-tier detection rather than mirroring it. This block used
+  // to be a hand-copy ("Mirror GLX's…"), which is how js/game.js's copy came to
+  // omit forceMobileTier without anything noticing. WGX is DEFERRED — injected
+  // at boot, long after glx.js's <script> tag — so GLX is always present here;
+  // the typeof guard is belt-and-braces for a standalone harness.
+  const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.isMobile;
+  const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
 
   // Identity mat4 (column-major) fallback.
   const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);

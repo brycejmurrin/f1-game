@@ -6,17 +6,16 @@
 // these are recognisable-in-silhouette homages, NOT exact trademark repros.
 const LiveryTex = (function () {
   const SIZE = 1024;
-  // Mobile tier (must match glx.js): upload atlases at half size — 22 cars ×
-  // 1024² RGBA + mips was ~117 MB of GPU memory, the biggest consumer on iOS
-  // web apps, whose jetsam budget counts GPU allocations.
-  let _gfxHigh = false, _forceMobile = false;
-  try {
-    _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1";
-    _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1";
-  } catch (_) {}
-  const IS_MOBILE = (_forceMobile ||
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) && !_gfxHigh;
+  // Mobile tier: upload atlases at half size — 22 cars × 1024² RGBA + mips was
+  // ~117 MB of GPU memory, the biggest consumer on iOS web apps, whose jetsam
+  // budget counts GPU allocations. This used to be a hand-copy of glx.js's
+  // sniff ("must match glx.js" — a comment is not a mechanism); it now READS
+  // glx.js's answer, which is the same "phone AND not GRAPHICS: HIGH" tier this
+  // file always meant by IS_MOBILE. glx.js is tagged ahead of this file in both
+  // index.html and the CARVIEW subset, so the value exists at eval; the
+  // typeof guard is the standalone-harness fallback (full-size atlas), never a
+  // path the shipped shell takes.
+  const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
   // maps panel UVs to these rects. Do NOT change these numbers — the geometry

@@ -55,7 +55,7 @@ const AgentView = (function () {
 
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   // Every comparison against NaN is false, so a non-numeric argument does not
   // announce itself — it silently disables whatever test it feeds. A string
@@ -1584,8 +1584,7 @@ const AgentView = (function () {
         }
         const m = model();
         const near = m.pts.filter((q) => {
-          let d = q.s - c.s; if (d > total / 2) d -= total; if (d < -total / 2) d += total;
-          return Math.abs(d) <= 80;
+          return Math.abs(M4.wrapDelta(q.s - c.s, total)) <= 80;
         });
         const byKind = {};
         for (const q of near) byKind[q.p.kind] = (byKind[q.p.kind] || 0) + 1;
@@ -1694,8 +1693,7 @@ const AgentView = (function () {
         if (cs.length) {
           let best = null, bestD = Infinity;
           for (const c of cs) {
-            let d = pos.s - c.s;
-            if (d > total / 2) d -= total; if (d < -total / 2) d += total;
+            const d = M4.wrapDelta(pos.s - c.s, total);
             if (Math.abs(d) < Math.abs(bestD)) { bestD = d; best = c; }
           }
           if (best) {

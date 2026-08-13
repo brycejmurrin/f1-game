@@ -71,7 +71,7 @@ const MAX_DT      = 0.05;              // ONE dt clamp, matching render()'s Math
                                        //   inflated dt-sensitive terms 1.5× on slow frames
 
 const ZERO = Object.freeze({ pitch: 0, roll: 0, heave: 0 });
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // Critically-damped (ζ=1) analytic step toward `to`. Exact closed form of
 // x'' = -ω²(x-to) - 2ω x'  — unconditionally stable at any dt. Math.exp is

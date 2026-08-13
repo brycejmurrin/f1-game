@@ -99,8 +99,10 @@ try {
   // chose "three" yesterday must boot on WebGL2 today without anyone having to
   // find their way back through a menu they cannot read. Desktop keeps both,
   // which is what the migration needs.
-  const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  // GLX owns the ONE mobile-tier detection (js/render/glx.js). This site re-sniffed
+  // navigator and, alone among the four copies, left out apex26.forceMobileTier — so a
+  // desktop with the flag set still loaded the alternate backends: the "phone" under test.
+  const phone = !!(typeof GLX !== "undefined" && GLX.isMobile);
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
@@ -964,8 +966,7 @@ const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sa
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 
 // ---------- helpers ----------
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = M4.clamp, lerp = M4.lerp;   // shared scalar helpers (js/mat4.js) — ALIASED, not called through M4, so every hot-path site keeps its old call shape
 // Rotate an RGB grade-tint's HUE around the luminance axis by `deg`. Tints sit
 // near [1,1,1]; we rotate the chroma OFFSET from grey so a neutral tint stays
 // neutral. Standard NTSC-luma hue matrix. Used by SHADOW/HIGHLIGHT TINT HUE.
@@ -1024,8 +1025,7 @@ function sectorAt(s) {
 function lerpS(prev, cur, a) {
   if (prev === undefined || a >= 1) return cur;
   const L = track.total;
-  let d = cur - prev;
-  if (d > L * 0.5) d -= L; else if (d < -L * 0.5) d += L;
+  const d = M4.wrapDelta(cur - prev, L);   // shortest way round (js/mat4.js)
   return wrapS(prev + d * a);
 }
 // The PLAYER is drawn where it actually is. Its world position is exact and
@@ -4361,8 +4361,8 @@ function updateCar(c, dt, ranked) {
   // instead of cheating progress forward.
   const L = track.total;
   let ds = c.s - oldS;
-  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
-  
+  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap == M4.wrapDelta(ds, L), kept INLINE: physics inner loop, and the characterization golden is a browser spec
+
   // If ds is huge, the car was teleported (jump/park). Reset to prevent glitches.
   if (Math.abs(ds) > 20) {
     ds = c.speed * dt;
