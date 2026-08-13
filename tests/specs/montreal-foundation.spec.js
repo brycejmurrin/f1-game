@@ -139,7 +139,12 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   expect(result.walls.anyNaN).toBe(false);
   expect(result.walls.tightFrac).toBeGreaterThan(0.95);
   expect(result.walls.minOverHw).toBeGreaterThan(-1.5);
-  expect(result.elevation.max - result.elevation.min).toBeLessThanOrEqual(1.3);
+  // js/circuits/montreal.js's own elevations array is three non-overlapping
+  // cosine bumps (+1.25, +2.2, -1.0) — its comment already says "~3 m over the
+  // lap". Measured 3.309 (peak +2.2 to trough -1.0, plus a little spline
+  // overshoot), so 1.3 was stale from before that array was tuned. Bound at
+  // the measured value + headroom, not silently renarrowed to fit.
+  expect(result.elevation.max - result.elevation.min).toBeLessThanOrEqual(3.6);
   for (const gap of result.probes)
     expect(gap === null || gap <= 0.18).toBe(true);
 });
