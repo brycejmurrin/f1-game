@@ -6749,10 +6749,10 @@ document.addEventListener("pointerdown", () => {
 // than from whenever this module runs.
 //
 // SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-// headroom to "zoom way out" on SETTINGS/garage. 50% is the new floor so the
-// slider can shrink menus substantially; default stays 100%. Tap floors still
-// divide by --ui-scale (--tap-min), so WCAG 24px holds in CSS before zoom.
-const SCALE_MIN = 50, SCALE_MAX = 150, SCALE_STEP = 0.5;
+// headroom to "zoom way out"; 50% is the floor now and the default stays 100%.
+// SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
+// Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
+const SCALE_MIN = 50, SCALE_MAX = 175, SCALE_STEP = 0.5;
 const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb

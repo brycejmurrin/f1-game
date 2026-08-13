@@ -25,6 +25,7 @@
       // The bespoke slim-LED-head rhythm (22 m, both sides) is the circuit's
       // lighting identity — the light tunnel. Generic street lamps crowd the
       // wall, clip the fastest curved sweeps, and break the rhythm.
+      { kind: "lamps", s0: 0, s1: 1 },
       // The Red Sea, marina, and lagoon stay open on the seaward side. Bespoke
       // palms below supply the intentional waterfront planting.
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },

@@ -468,14 +468,24 @@ test.describe("__apex.trackProfile()", () => {
       const maxY = Math.max(...pts.map((point) => point.y));
       return {
         range: maxY - minY,
-        turnOneRise: at(0.06).y - minY,
-        turnSixRise: at(0.30).y - minY,
+        // RACING FRACTIONS, and they moved. These sampled 0.06/0.30 until
+        // 7a17351 corrected 22 circuits' start lines: that commit holds the
+        // physical world still (sceneryStartFrac/_sceneryShift) and moves the
+        // LINE, which necessarily re-numbers every feature's racing fraction —
+        // here by shanghai's _sceneryShift of 0.0895. The two authored bumps
+        // (js/circuits/shanghai.js `elevations`) now sit at 0.1495 and 0.3895.
+        // If these ever read ~0.35 again, re-measure the bumps; do NOT "fix"
+        // the elevation transform in js/track/tracks.js — its two-step
+        // fmap+_sceneryShift composition is the documented contract (see the
+        // note at its fmap site and js/circuits/suzuka.js:39-41).
+        firstBumpRise: at(0.1495).y - minY,
+        backStraightCrestRise: at(0.3895).y - minY,
       };
     });
     expect(result.range).toBeGreaterThanOrEqual(5.5);
     expect(result.range).toBeLessThanOrEqual(7.5);
-    expect(result.turnOneRise).toBeGreaterThan(0.35);
-    expect(result.turnSixRise).toBeGreaterThan(0.35);
+    expect(result.firstBumpRise).toBeGreaterThan(0.35);
+    expect(result.backStraightCrestRise).toBeGreaterThan(0.35);
   });
 });
 
@@ -542,8 +552,12 @@ test.describe("shared track foundation diagnostics", () => {
 
     expect(result.elevationRange).toBeGreaterThanOrEqual(10);
     expect(result.elevationRange).toBeLessThanOrEqual(20);
-    expect(Math.abs(result.peakFrac - 0.12)).toBeLessThan(0.03);
-    expect(Math.abs(result.troughFrac - 0.55)).toBeLessThan(0.03);
+    // Peak/trough RACING fractions, rotated by silverstone's _sceneryShift
+    // (0.1502) when 7a17351 moved the start line — the hill itself did not
+    // move. Were 0.12/0.55 against the pre-move line. See the shanghai note
+    // above before touching the elevation transform.
+    expect(Math.abs(result.peakFrac - 0.265)).toBeLessThan(0.03);
+    expect(Math.abs(result.troughFrac - 0.6975)).toBeLessThan(0.03);
     expect(result.ground.every(({ lat, sample }) =>
       (lat === 0 || sample.terrainY != null) &&
       (sample.gap == null || sample.gap <= 0.18)
@@ -624,7 +638,10 @@ test.describe("shared track foundation diagnostics", () => {
     expect(spans).toHaveLength(2);
     expect(spans.every((entry) => entry.overhead && entry.clearance >= 4.8)).toBe(true);
     const peak = result.profile.reduce((best, point) => point.y > best.y ? point : best);
-    expect(Math.abs(peak.frac - 0.66)).toBeLessThan(0.04);
+    // Racing fraction, rotated by miami's _sceneryShift (0.2008) when 7a17351
+    // moved the start line. Was 0.66 against the pre-move line; the crest is
+    // physically unmoved. See the shanghai note before touching the transform.
+    expect(Math.abs(peak.frac - 0.8583)).toBeLessThan(0.04);
     expect(peak.y).toBeGreaterThan(3);
     expect(result.walls.tightFrac).toBeGreaterThan(0.35);
     expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
