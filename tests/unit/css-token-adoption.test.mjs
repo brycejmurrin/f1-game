@@ -74,9 +74,11 @@ function sheets() {
 /* ---- the two ceilings. LOWER THESE WHEN YOU MIGRATE A FILE. --------------- */
 const CEILING = {
   // font-size declarations written as a raw px literal below --fs-micro.
-  // 2026-08-13: menus 40, tuner 28, overlays 16, hud 15, data 10,
-  //             track-detail 8, responsive 4, carsetup 3, career 2.
-  subFloorFontSize: 126,
+  // 2026-08-13: was 126 (menus 40, tuner 28, overlays 16, hud 15, data 10,
+  // track-detail 8, responsive 4, carsetup 3, career 2) — all migrated onto
+  // var(--fs-micro) in the same pass that added this guard. Now ZERO, which is
+  // the one number that needs no justification.
+  subFloorFontSize: 0,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: the FIVE sheets that read no spacing token at all are
   // data.css, overlays.css, hud.css, track-detail.css and responsive.css.

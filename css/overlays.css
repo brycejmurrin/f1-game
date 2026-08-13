@@ -38,7 +38,7 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   width: var(--btn); height: var(--btn);
-  font-size: 13px;
+  font-size: var(--fs-micro);
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
   padding: 0;
@@ -102,7 +102,7 @@
    one-hue-per-control.
    It sits one slot further along whichever column OT is in — every layout below
    moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: 12px;
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: var(--fs-micro);
              background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
 #btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
                   box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); }
@@ -199,14 +199,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #hud-tach { width: 96px; height: 13px; }
   #hud-speed { font-size: 28px; }
   #hud-energy { width: 132px; height: 15px; }
-  .hud-unit { font-size: 12px; margin-left: 2px; }
+  .hud-unit { font-size: var(--fs-micro); margin-left: 2px; }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
      label / 19px value the stylesheet uses everywhere, with NO touch override
      at all — so the one place they are read at arm's length, on a phone, in
      motion, is the place they were smallest relative to the screen. Desktop
      keeps the base sizes; this is the touch notch they never had. */
   body:not(.desktop) .hud-box { padding: 5px 13px; }
-  body:not(.desktop) .hud-label { font-size: 11px; }
+  body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
   body:not(.desktop) .hud-value { font-size: 22px; }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
@@ -283,10 +283,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      it is on screen only while driving and competes with the HUD for the same
      edges, so one slider owns everything you see during a race. */
   body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--hud-scale); }
-  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: 11px; }
+  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
-  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: 13px; }
+  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
   /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
      and the steering arrows are what a thumb rests on for a whole lap, so they
@@ -305,10 +305,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
-    body:not(.desktop) .dock .touchbtn { font-size: 10px; }
+    body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
-    body:not(.desktop) .dock .shiftbtn { font-size: 12px; }
+    body:not(.desktop) .dock .shiftbtn { font-size: var(--fs-micro); }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
@@ -384,7 +384,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body.desktop #hud-tach { width: 172px; height: 18px; }
     body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
     body.desktop #hud-speed { font-size: 42px; }
-    body.desktop .hud-unit { font-size: 13px; margin-left: 4px; }
+    body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: 4px; }
     body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
@@ -463,8 +463,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body:not(.desktop) #hud-energy { width: 108px; }
     body:not(.desktop) #hud-speed { font-size: 24px; }
     body:not(.desktop) #hud-ot,
-    body:not(.desktop) #hud-aero { font-size: 13px; padding: 4px 8px; }
-    body:not(.desktop) .hud-label { font-size: 10px; }
+    body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: 4px 8px; }
+    body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
     body:not(.desktop) .hud-value { font-size: 20px; }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
@@ -497,7 +497,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   min-width: 76px;
   padding: 0 12px;
   border-radius: var(--r-md);
-  font-size: 12px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -553,7 +553,7 @@ body.hud-hidden #hud-restore { display: block; }
   height: var(--chip-h);
   padding: 0 8px;
   border-radius: var(--r-md);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.05em;
   background: rgba(255, 255, 255, 0.08);
@@ -589,14 +589,14 @@ body.hud-hidden #hud-restore { display: block; }
   align-items: start;
 }
 #howtoplay dt {
-  color: var(--red); font-weight: 700; font-size: 12px;
+  color: var(--red); font-weight: 700; font-size: var(--fs-micro);
   letter-spacing: 0.08em; padding: 6px 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
   white-space: nowrap;
 }
 #howtoplay dt:first-child { border-top: none; }
 #howtoplay dd {
-  color: var(--text); font-size: 13px; margin-left: 0; line-height: 1.45;
+  color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
   padding: 6px 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
@@ -619,7 +619,7 @@ body.hud-hidden #hud-restore { display: block; }
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: var(--r-sm);
   padding: 0 5px;
-  font-size: 12px;
+  font-size: var(--fs-micro);
 }
 
 #nogl {

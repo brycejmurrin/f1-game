@@ -470,7 +470,7 @@
   width: 22px; height: 22px;
   min-width: 22px; min-height: 22px;
   padding: 0;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   z-index: 1;
   opacity: 0.92;
 }
@@ -786,7 +786,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 @media (hover: hover) {
   #cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
 }
-.cs-cam-caret { font-size: 12px; line-height: 1; transition: transform 0.15s ease; }
+.cs-cam-caret { font-size: var(--fs-micro); line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
   border-color: rgba(0,204,136,0.4);
@@ -925,7 +925,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   background: rgba(255,255,255,0.16);
 }
 .cs-view-hint {
-  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-micro); letter-spacing: 0.08em; text-transform: uppercase;
   color: rgba(255,255,255,0.34); margin-left: 2px;
 }
 /* No mouse = no drag affordance to advertise, and no room for it either. */

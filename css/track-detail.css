@@ -10,7 +10,7 @@
    `@layer overlays`, which beats `@layer components`, so the clamp pinned the
    whole dialog to 540px in the top-left corner instead of the centred sheet.
    Only the inner scroll region wants a cap of its own. */
-#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: 13px; }
+#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: var(--fs-micro); }
 
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {
@@ -92,10 +92,10 @@
   object-fit: contain;
 }
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
-#track-detail-meta { font-size: 10px; color: #888; letter-spacing: 0.04em; line-height: 1.5; }
+#track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: 0.04em; line-height: 1.5; }
 .tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
 #track-detail-elev { display: block; width: 100%; height: 48px; }
-#track-detail-drs-list { font-size: 11px; color: #888; }
+#track-detail-drs-list { font-size: var(--fs-micro); color: #888; }
 .tdd-zone { padding: 2px 0; }
 #track-detail-corners { flex: 0 0 auto; }
 .tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
@@ -103,13 +103,13 @@
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
   background: rgba(255,255,255,0.06); border-radius: var(--r-sm);
-  padding: 3px 8px; font-size: 11px;
+  padding: 3px 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: #ddd; min-width: 22px; }
-.tdc-fast   { color: #4ade80; font-size: 10px; }
-.tdc-medium { color: #facc15; font-size: 10px; }
-.tdc-slow   { color: #fb923c; font-size: 10px; }
-.tdc-hairpin{ color: #f87171; font-size: 10px; }
+.tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
+.tdc-medium { color: #facc15; font-size: var(--fs-micro); }
+.tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
+.tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
 #track-detail-flags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: 0.1em; padding: 2px 7px;

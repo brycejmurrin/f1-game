@@ -466,9 +466,36 @@ const PROBE = (rootSel) => {
   const SCROLLERS = ".pane,#sel-body,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
+  // A COLLAPSED <details> STILL HAS GEOMETRY, and that is not the same as being
+  // on screen. Chromium hides a closed disclosure with `content-visibility:
+  // hidden` on the `::details-content` PSEUDO-element: the contents are not
+  // rendered and cannot be focused or tapped, but every descendant still
+  // answers getBoundingClientRect() with a real box, laid out below the sheet.
+  //
+  // Two things follow, and both bit this tool. An ancestor walk cannot find the
+  // cause — there is no ELEMENT carrying `content-visibility: hidden`, only a
+  // pseudo-element, so a loop over parentElement reports nothing while the
+  // computed styles of the element itself look perfectly ordinary. And the
+  // offscreen check below then reads those phantom boxes as controls sitting
+  // past the viewport with no scroller to reach them.
+  //
+  // MEASURED on the ADVANCED panel, whose "Advanced" disclosure ships closed:
+  // #adv-details is 50px tall while its own content box is 604px tall at y=819,
+  // outside a sheet that ends at 909 — so #pm-lock, #pm-speedsteer, #pm-line,
+  // #pm-help, #pm-rate and #pm-expo were reported offscreen in six cells of the
+  // matrix. Raising type to the --fs-micro floor grew those notional boxes and
+  // pushed more of them past the line (ipad-portrait 1 -> 3, windowed 3 -> 6),
+  // which read exactly like a regression and was nothing a player could see.
+  //
+  // checkVisibility() is the question actually being asked — "is this being
+  // rendered" — and it returns false inside a collapsed disclosure where the
+  // three computed properties below all look fine. Same family as the
+  // `display: contents` trap documented on `clipper` further down: a box that
+  // exists in the geometry API but not on the screen.
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return false;
+    if (typeof el.checkVisibility === "function" && !el.checkVisibility()) return false;
     const cs = getComputedStyle(el);
     return cs.visibility !== "hidden" && cs.display !== "none" && cs.opacity !== "0";
   };
