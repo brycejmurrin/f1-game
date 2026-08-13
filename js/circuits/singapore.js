@@ -515,12 +515,18 @@
           for (let j = 0; j < 5; j++) {
             const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
             addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
-            addCyl(out,   vadd(c, a.u, 3.5), 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
+            // addCyl is BASE-anchored (js/track/geom.js:153-164) — this is the
+            // pier holding the rib up: base at the deck (c), rising the full
+            // height 7 so its top meets the rib's base flush. The old
+            // `vadd(c, a.u, 3.5)` (h/2) floated the pier's own base 3.5 m off
+            // the deck, so it never touched ground.
+            addCyl(out,   c, 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
           }
           // Decorative bridge-lamp posts on the railing
           for (let j = 0; j < 3; j++) {
             const c = vadd(a.c, a.t, (j - 1) * 18);
-            addCyl(out, vadd(c, a.u, 3), 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
+            // Base-anchored: post rises from the deck, lamp housing sits on top.
+            addCyl(out, c, 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
             addBox(out, vadd(c, a.u, 4.6), [0.6, 0.6, 0.6], WIN_WARM, [a.r, a.u, a.t]);
           }
         }
