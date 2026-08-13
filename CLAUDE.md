@@ -315,7 +315,7 @@ css/             tokens.css + components/menus/hud/overlays/carsetup/data/tuner/
 index.html       shell — script tags, all static DOM, cache-bust version
 sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
-tests/           111 Playwright specs + 75 `node --test` unit suites (docs/TESTING.md)
+tests/           111 Playwright specs + 76 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
 .claude/         skills/ (task recipes, .claude/skills/README.md) and
                  workflows/ (multi-agent orchestration scripts, README there)
