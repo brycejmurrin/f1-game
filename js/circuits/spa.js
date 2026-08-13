@@ -482,8 +482,7 @@
         }
         overheadSpan({
           id, frac: s, clearance: h, thickness: 0.5, depth: 3.4, span,
-          supportGap: 1.5, supportWidth: 3, supports: false,
-          color: deckCol, required: true,
+          supportGap: 1.5, supportWidth: 3, color: deckCol, required: true,
         });
       }
 
