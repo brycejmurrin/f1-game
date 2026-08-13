@@ -204,8 +204,38 @@ journal; this is what remains.
   `indianapolis` 4.74 m over the road against a 0.2 m cap
   (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
   spec's own header calls "fully clean (max=0)", so this is a regression, not a
-  residual. The worst offender reports `color [0.28,0.18,0.11]` at `lateral
-  -25.07`, which is none of the barrier emitters. Confirmed PRE-EXISTING at
+  residual.
+
+  **Both offenders are located and are the same class: a big bespoke
+  `structure`, not foliage, barriers or lighting.** Measured with
+  `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs`, then matched to
+  a prop by footprint via `a.scene({radius})` (`props[].at` / `sizeM`):
+  - **COTA** max **4.79** at frac 0.877, world (709.1, 41.6). The intruding
+    triangles stack vertically at one XZ point (`triY` 1.36 / 2.76 / 4.16), so
+    it is a standing structure, not a canopy. Footprint match: `prop:274`,
+    55.1 × 4.1 × 27.9 at (730.5, 0.8, 44.3) — the **Austin360 Amphitheater**
+    `modelGroup("cota-amphitheater", …)` at `js/circuits/cota.js:83`, built from
+    raw `addBox` calls (stage deck, PA towers, LED wall).
+  - **Indianapolis** max **4.91** across fracs 0.323–0.336, world (183.8–185,
+    453), `triY` 4.14–5.87. Footprint match: `prop:911`, 43.3 × 2.3 × 50.4 at
+    (184.4, 0.8, 429.5). The XZ match is solid; its declared height does not
+    span the offending `triY`, so the exact triangles likely belong to a taller
+    sibling inside the same group — confirm before editing geometry.
+
+  **A hypothesis that looked strong and is WRONG, recorded so it is not
+  retried:** `a43691c` ("Combine track lamps and floodlights into one fixture
+  system") postdates the spec baseline and stripped `"lamps"` from BOTH
+  circuits' `dressingExclusions`, which reads like the cause. It is not — those
+  exclusions are foliage/lighting-scoped and neither offender is foliage or a
+  lamp. The remaining suspect is `7a17351` ("decouple scenery/road from the
+  line"), which changed how authored scenery maps onto the racing line and
+  would move the road under a structure authored beside it; `dressingExcluded()`
+  shifts its windows by `TrackSpace.sceneryOriginDelta` (`js/track/tracks.js`
+  ~:1450). Not confirmed — bisect it rather than believe this paragraph.
+
+  Note these are `modelGroup`/RAW emissions, so the footprint Minkowski
+  preflight that guards `building()`/`neonTower()` does not apply to them.
+  Confirmed PRE-EXISTING at
   `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
   tools/graph-parity.cjs cota indianapolis` returns exact parity
   (max |Δpos| 0.0e+0 m), and a geometry test over identical geometry returns an
