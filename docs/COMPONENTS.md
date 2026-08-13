@@ -78,9 +78,13 @@ file changes a screen owned by another.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
+- `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
+  hidden by a `hud` rule when the pause card is up.
 - `.minibtn` — `menus` + `responsive`
 - `.cs-stat-*` (4 classes) — `carsetup` + `menus` + `responsive`
 - `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components`
+- `.build-tag` — `components` + `menus`. The footer version tag: styled in
+  `menus`, overridden by a compact-density selector in `components`.
 
 **Cross-SCREEN reuse — a component borrowed by a screen that does not own it:**
 
@@ -97,7 +101,7 @@ file changes a screen owned by another.
   `.adv-sec` / `.adv-help` / `.adv-intro` / `.as-note` — `components` + `tuner`
 
 **State classes** (`.active`, `.on`, `.armed`, `.desktop`, `.p1`, `.you`,
-`.screen`, `.dim`) are shared by design and are listed here only so nobody
+`.screen`, `.dim`, `.in-race`) are shared by design and are listed here only so nobody
 mistakes them for components.
 
 **Found by the guard, not by hand** — these were defined in more than one
