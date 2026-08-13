@@ -60,6 +60,7 @@ const GLXShadow = (function () {
       // Dynamic per-frame CAR shadow map — separate from the snap-cached static
       // map so moving cars get live sun shadows.
       carEnabled: false, carTex: null, carLightVP: new Float32Array(16),
+      carBoxScale: 1,          // cBox / default-42m — see carShadowBegin
       carArmed: false,         // set by carShadowBegin, cleared each present()
       carArms: 0,              // lifetime carShadowBegin count (debug introspection)
       // Nearest-FLOODLIGHT spot shadow map (night, desktop): per-frame depth
@@ -245,10 +246,11 @@ const GLXShadow = (function () {
     // Dynamic CAR shadow pass — same depth program/caster as shadowBegin, but
     // into the small per-frame car map. Runs before begin() each frame (game.js
     // guards on this method existing, so WGX silently keeps blob-only shadows).
-    function carShadowBegin(lightVP) {
+    function carShadowBegin(lightVP, boxScale) {
       if (!S.carEnabled) return;
       setDepthMask(true);
       S.carLightVP.set(lightVP);
+      S.carBoxScale = boxScale || 1;
       gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
       gl.viewport(0, 0, CAR_SHADOW_SIZE, CAR_SHADOW_SIZE);
       gl.clear(gl.DEPTH_BUFFER_BIT);

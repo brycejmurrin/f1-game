@@ -219,13 +219,15 @@
         U.pcssPen.value = k("pcssPen", 80.0);
         // Key-luminance fade: cast shadows dissolve as the key dims toward
         // moonlight, floored by MOON SHADOWS × the clear-night factor
-        // (frame.moonK) so bright clear moons keep soft shadows.
+        // (frame.moonGate — clear-night moonK, or above 0.5 the knob itself
+        // forcing the floor open regardless of weather) so bright clear moons
+        // keep soft shadows.
         const _kl = frame.sunColor
           ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
         let _hf = (_kl - 0.28) / 0.14;
         _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
         _hf = _hf * _hf * (3 - 2 * _hf);
-        const _mSh = k("moonShadow", 0.25) * (frame.moonK || 0);
+        const _mSh = k("moonShadow", 0.25) * (frame.moonGate || 0);
         if (_mSh > _hf) _hf = _mSh;
         U.shadowStr.value = k("shadowStr", 1.15) * _hf;
         U.shadowRange.value = k("shadowRange", 80.0);

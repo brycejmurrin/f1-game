@@ -90,7 +90,18 @@ const CEILINGS = {
   // 7955 -> 7970 for UI/HUD SIZE step 0.5: scaleSnap / scaleLabel / SCALE_STEP
   // beside applyScale so the slider lattice and the stored value stay one
   // function (and the clamp comment above still applies — snap is the clamp).
-  "js/game.js": 7980,  // 7973 -> 7980: refresh track-preview map after UI SIZE zoom.
+  // 7980 -> 7997: RENDER DISTANCE knob threading farPlane/cullDist, the
+  // moonGate escape hatch for MOON SHADOWS above 0.5 (prop + car shadow night
+  // gates), and the SHADOW DISTANCE-scaled car shadow box — all tightly
+  // coupled to the existing camera/shadow-pass code already in this file.
+  // 7997 -> 8002: threading a carBoxScale ratio (cBox/42) through to
+  // gfx.carShadowBegin so lit.js can scale the dynamic car-shadow depth bias
+  // with it — the SHADOW DISTANCE-scaled car shadow box above widens the car
+  // shadow map's real-world texel size at a fixed 1024² resolution, and the
+  // bias wasn't scaling with it, which produced visible self-shadow acne on
+  // the car above the default SHADOW DISTANCE (confirmed via MCP screenshot,
+  // not caught by the numeric-only apex-eval.mjs check from the prior pass).
+  "js/game.js": 8003,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -98,7 +109,13 @@ const CEILINGS = {
   // 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
   // a false no-op when it only read numLights (nearest-N cull).
   // 3060 -> 3075 for lightState.meanLampRGB (lampTemp warmth probe / cdmcp-lamps-tune).
-  "js/game/apex.js": 3075,
+  // 3075 -> 3080 for lightState.cullDist/moonK/moonGate/lampCull — direct reads
+  // of the internal gates RENDER DISTANCE / SHADOW DISTANCE / MOON SHADOWS
+  // actually drive, so an MCP session can confirm a slider's effect numerically
+  // instead of only eyeballing a screenshot (which cost a lot of back-and-forth
+  // chasing a black-frame red herring that was actually a broken canvas-readback
+  // sampler, not a render bug).
+  "js/game/apex.js": 3080,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's

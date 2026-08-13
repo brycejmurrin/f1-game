@@ -124,9 +124,10 @@ const api = {
     // new spot and fired a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
     G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
-    // Sync render-interpolation anchors so lerpS(rPrevS, s, alpha) == s regardless
-    // of renderAlpha — ensures the hood/cockpit camera is at exactly this position.
+    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of renderAlpha.
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
+    // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
+    G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
     return { s: G.player.s, total: G.track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
@@ -1511,6 +1512,13 @@ const api = {
       skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
       skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
       skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
+      // Direct reads of the internal gates the RENDER DISTANCE / SHADOW
+      // DISTANCE / MOON SHADOWS sliders actually drive, so their effect can be
+      // confirmed numerically instead of only by eye in a screenshot:
+      cullDist: G.frame.cullDist,   // metres; scenery beyond this is culled (0 = uncapped, only under the debug free-cam)
+      moonK: G.frame.moonK,         // weather-gated clear-moon floor (0 under cloud/fog/wet)
+      moonGate: G.frame.moonGate,   // max(moonK, the moonShadow>0.5 escape hatch) — what the prop/car shadow casts actually gate on
+      lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
     };
   },
   // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer

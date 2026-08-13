@@ -87,7 +87,9 @@
  *   skyZenith:vec3, skyHorizon:vec3          sky/atmosphere colours
  *   fogDensity, fogHeight, groundMist, lampFog, wetness, time, cloud,
  *   cloudSpeed (cloud-scroll rate, default 1),
- *   moonK (clear-night moon factor for the MOON SHADOWS floor)  scalars
+ *   moonK (clear-night moon factor, 0-1), moonGate (moonK floored by the
+ *   MOON SHADOWS knob's own above-0.5 weather override — what the shadow
+ *   floor actually reads)                                       scalars
  *   shadowCtr:vec3                 shadow-fade anchor — the unsnapped ground
  *                                  point the shadow box recentres around
  *                                  (defaults to eye)

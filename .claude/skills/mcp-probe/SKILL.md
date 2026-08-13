@@ -37,6 +37,23 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   is running, wait — or accept you will re-run its false-fails solo.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
   page doesn't tax the next `test-solo`.
+- **"The moment you're done" is a promise you WILL break once you get absorbed in
+  something else — make parking a precondition of starting a Playwright run, not
+  a thing you remember to do first.** MEASURED 2026-08-13: after a multi-shot MCP
+  session proving out a shadow-acne fix, the very last verification screenshot's
+  `navigate_page(about:blank)` call got skipped — attention had moved to writing
+  up the finding — and the live game page sat there actively rendering (frozen
+  car, but the render loop keeps running) through a `test-bg.mjs ab webgl`
+  launch. Load average climbed to 8–12 (guidance: < 3) and produced a real
+  `page.screenshot: Timeout 60000ms exceeded` failure plus several more in the
+  second group — a genuine false failure that took a `ps -eo pid,etimes,args`
+  audit to trace back to 4+ lingering Chromium renderer processes from the MCP
+  session, not to orphans from a killed run (the first, wrong hypothesis — those
+  look identical in `pgrep -cf pw-browsers` and only `ps` with full args
+  distinguishes `chrome-devtools-mcp`'s own tree from Playwright's). **Before
+  every `test-bg.mjs` invocation, `navigate_page(about:blank)` unconditionally**
+  — even (especially) when you're confident you already parked. It's one call;
+  the cost of skipping it once is a full contaminated test run.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
   the MCP. For UI (not 3D) work, `headless(true)` + hide `#game` first — that's
   survey-ui-matrix's department.
@@ -124,6 +141,115 @@ and nudge `cloudCover` — the bare weather default can be near-cloudless in the
 one direction `sky()` looks. A real signal here shows up as a cloud-*shaped*
 blob in a saved diff-map image (`np.abs(a-b).sum(axis=2)`, contrast-boosted and
 written to PNG) sitting where the visible cloud is, not a diffuse scatter.
+
+## A FIFTH trap: only `chase` (and other player-relative modes) hold still for a frozen before/after pair — broadcast-cut cameras and the debug free-cam don't
+
+Three separate ways a "stable" comparison turns out not to be, all found in one
+session (2026-08-13) proving out the lighting-tuner distance sliders:
+
+**1. Broadcast camera modes (`heli`, `far`, and likely others in `CAM_MODES`)
+re-cut/retarget between calls, even with the player frozen.** They aren't
+purely player-relative — some pick a trackside camera or retarget based on
+track position, independent of your `park()`. MEASURED: `camera('heli')` +
+`park(0.15)` + `snapCam()`, then only `lightTune()` + `step()` calls (no camera
+call at all) between two screenshots — `eye`/`target` moved from
+`[90.7, 20.9, 142.0]` to `[94.1, 21.1, 120.9]`, a totally different frame the
+second shot. `camera('far')` did the same, worse (jumped ~280m). Only
+`camera('chase')` (and presumably the other strictly player-relative modes —
+`cockpit`, `hood`, `reverse`, `tcam`) held `eye`/`target` identical to 5+
+decimal places across `lightTune()` + `step()` calls with no re-snap. **Use
+`chase` (or another confirmed player-relative mode) for any comparison pair,
+and verify by diffing `viewState().eye`/`.tgt` between the two states before
+trusting the screenshots** — don't assume any non-`chase` mode is safe just
+because it's not `orbit()`/`view()` (the free-cam family covered by the SECOND
+trap above).
+
+**2. `orbit()`/`view()`/`eyeAt()`-family calls silently zero the draw-distance
+cull.** `game.js`'s `frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0) : ...`
+— on desktop, ANY free-cam hook (`G.dbgCam` set) makes the scenery draw-distance
+cull a no-op (uncapped), and the far-clip plane comes from `dbgCam.far`, not the
+renderDistMul-scaled `farPlane`. A render-distance knob will show **zero**
+effect under `orbit()`/`view()` regardless of whether it works, because the
+thing it scales isn't even being applied. If a knob claims to affect draw
+distance, test it under `chase` (or another `dbgCamActive:false` mode) — check
+`viewState().dbgCamActive` before you trust a null result.
+
+**3. `park()`/`jump()` called before the race's start-lights sequence resolves
+gets overridden the moment you next advance frames.** MEASURED: `go()` →
+`setTimeOfDay('night')` → `park(0.3)` → `snapCam()` → screenshot showed
+`POS -/22, TIME -` (still in the grid/formation hold) with a broadcast-style
+overview framing; the very next call, `step(1/60, 30)`, pushed the race past
+its start and the HUD flipped to `POS 1/22, TIME 0:00.50` — the start sequence
+re-seated the car at its grid slot, discarding the parked position, and the
+camera reset to a completely different chase framing. **Always `step()` well
+past the start (≈120 frames / 2s was enough) before your first `park()`+
+`snapCam()`**, not after — parking into a still-resolving race state is not
+stable no matter how carefully everything after it is done.
+
+The combined safe recipe for a trustworthy before/after pair:
+```js
+__apex.race(track); /* wait for track */ __apex.go();
+__apex.step(1/60, 120);                 // clear the start-lights hold FIRST
+__apex.camera('chase');                 // player-relative — not heli/far/orbit/view
+__apex.park(s); __apex.snapCam();
+// capture "before" viewState().eye/.tgt, screenshot
+// change ONLY the tuned value(s) + a short step() to let effects settle
+// re-check viewState().eye/.tgt matches "before" — if not, the pair is invalid
+// screenshot "after"
+```
+
+NOTE: see the SEVENTH trap below (chase cam auto-cuts after ~2s idle) — the
+`viewState().eye`/`.tgt` re-check above only proves the camera hadn't moved
+*at the moment you captured it*, not at the moment the screenshot itself
+fired. If your setup call and your screenshot call are separated by more than
+about 1.5s of real wall-clock (MCP round-trip latency, not `step()`'s
+simulated time), re-verify `viewState()` again immediately after the
+screenshot, not just before it.
+
+## A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
+
+`playerAnchor()`/`renderPosOf()` (js/game.js) draw the HUMAN car from
+`c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
+toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
+arc-based anchors, which only feed the AI-car branch). `jump()`
+(`js/game/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
+`rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
+between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
+`G.frozen` (physics never steps again, so `renderAlpha` never advances) that
+lerp never resolved — the car sat at a permanent mid-blend position, which on
+a curved track can be off the road, mid-air, or nowhere near either endpoint.
+MEASURED: `park(0.10)` on Monaco (a track with a ~36 m road-over-terrain
+viaduct gap right there) rendered the car airborne against the skyline, no
+road visible under it, in BOTH the chase cam and a free-cam aimed exactly at
+`physState().px/pz` — the free-cam shot showed no car at all, because the
+render position wasn't near the aim point either. `physState()`/`groundY()`
+read correctly the whole time — only the drawn mesh was wrong, which is why
+this reads as "the car is floating," not as an obvious data bug. Fixed by
+also syncing `G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;`
+in `jump()` — verified: same `park(0.10)` now renders the car grounded,
+correctly oriented, at the exact `physState()` position. If a screenshot ever
+shows the car detached from the road again, checking `rPrevPx` vs `px` is the
+first move, not distrusting the shot.
+
+## A SEVENTH trap: the chase cam auto-cuts to a broadcast angle after ~2 s idle
+
+Even with `frozen: true` and `speed: 0`, the CHASE camera (not the free-cam)
+periodically jumps `eye`/`tgt` to an unrelated position — MEASURED: stable for
+~2.0–2.1 s after `park()+snapCam()`, then a hard cut (not an ease) to a
+different vantage, sometimes hundreds of metres away in `z`, and it keeps
+cutting every ~2.2–2.5 s after that. `camMode` stays reported as `"chase"`
+throughout — this is not a mode switch you can detect from `viewState()`
+alone, and the player's own `physState()` position never moves, so it is
+purely a camera-side idle/broadcast-style cycle. A screenshot taken more than
+~1.5 s after `snapCam()` can silently land on one of these cut angles instead
+of the expected close driving shot — combined with the fifth trap above, this
+is what originally made a parked car look like it was "flying" over Monaco's
+harbour. Two ways to avoid it: take the chase-cam shot within ~1.5 s of
+`snapCam()` (before the first cut), or — safer for any multi-shot comparison
+— use the free-cam (`orbit()`/`dolly()`/`view()`) for the whole sequence, same
+as the sky/cloud guidance above; it held perfectly static (six samples, zero
+drift, ~3 s span) in the same session where chase cam cut twice in the same
+window.
 
 ---
 

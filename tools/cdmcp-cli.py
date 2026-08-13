@@ -9,6 +9,14 @@ Examples:
   python3 tools/cdmcp-cli.py measure boot --port 3462
   python3 tools/cdmcp-cli.py measure ui --bg
   python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110
+  python3 tools/cdmcp-cli.py slider-ab bahrain 0.45 --tod night \\
+      --set '{"shadowRange":300,"moonShadow":1}'
+
+apex-shot uses orbit() (a free-cam) to frame shots — great for "does this scenery/
+car geometry look right", WRONG for A/B-ing anything render-distance-sensitive
+(the free-cam zeroes the draw-distance cull; see slider-ab's docstring and
+.claude/skills/mcp-probe's FIFTH trap). Use slider-ab, not apex-shot, to test a
+__apex.lightTune() knob's before/after visual effect.
 """
 from __future__ import annotations
 
@@ -151,6 +159,20 @@ def text_result(result: dict) -> str:
         if c.get("type") == "text":
             parts.append(c.get("text", ""))
     return "\n".join(parts) if parts else json.dumps(result, indent=2)[:4000]
+
+
+def eval_json(result: dict):
+    """Parse the JSON value out of an evaluate_script text_result. The
+    chrome-devtools MCP wraps the raw JS return value as prose + a ```json
+    fence ("Script ran on page and returned:\\n```json\\n{...}\\n```"), not bare
+    JSON — a plain json.loads(text_result(...)) fails on that wrapper."""
+    txt = text_result(result)
+    if "```" in txt:
+        fence = txt.split("```", 2)[1]
+        if fence.startswith("json"):
+            fence = fence[4:]
+        txt = fence
+    return json.loads(txt.strip())
 
 
 def cmd_list_tools(_: list[str]) -> None:
@@ -362,6 +384,205 @@ def cmd_apex_shot(argv: list[str]) -> None:
                 server.kill()
 
 
+def cmd_slider_ab(argv: list[str]) -> None:
+    """A/B a lighting-tuner (or any __apex.lightTune) knob change under a
+    camera setup that's actually stable and actually respects the thing being
+    tested — see .claude/skills/mcp-probe's FIFTH trap for why this exists.
+
+    Unlike apex-shot (which uses orbit(), a free-cam that zeroes the
+    render-distance cull — fine for framing shots, WRONG for A/B-ing a
+    render-distance-sensitive knob), this command:
+      - steps the race well past the start-lights hold BEFORE parking, so the
+        grid-reset doesn't discard the parked position after the fact;
+      - uses `chase` (player-relative, not a free-cam and not a broadcast-cut
+        mode like heli/far that re-targets between calls) so cullDist and
+        farPlane behave as they would for a real player;
+      - re-reads viewState().eye/tgt after the tune change and FAILS LOUDLY if
+        the camera moved, instead of silently comparing two different frames;
+      - diffs the two screenshots (if PIL/numpy are available) and reports a
+        same-scene noise floor alongside the signal, so "no visible effect"
+        and "camera/noise dominated the frame" don't look the same.
+
+    Example:
+      python3 tools/cdmcp-cli.py slider-ab bahrain 0.45 \\
+        --set '{"shadowRange":300,"moonShadow":1,"lampReach":4,"renderDistMul":2}' \\
+        --tod night --out-prefix scratch/captures/shadowrange-ab
+    """
+    p = argparse.ArgumentParser(prog="slider-ab")
+    p.add_argument("track", nargs="?", default="bahrain")
+    p.add_argument("frac", nargs="?", type=float, default=0.45)
+    p.add_argument("--set", required=True,
+                    help='JSON dict of __apex.lightTune() values to apply for the '
+                         '"after" shot, e.g. \'{"shadowRange":300}\'. Pass \'{}\' for '
+                         "a same-value noise-floor check instead of a real A/B.")
+    p.add_argument("--tod", default="night")
+    p.add_argument("--weather", default="dry")
+    p.add_argument("--camera", default="chase",
+                    help="player-relative camera mode (default chase). heli/far/orbit/"
+                         "view are NOT safe here — see the docstring above.")
+    p.add_argument("--start-hold", type=int, default=120,
+                    help="frames to step past the race start-lights hold before parking")
+    p.add_argument("--settle", type=int, default=20,
+                    help="frames to step after each tune change before screenshotting")
+    p.add_argument("--port", type=int,
+                    default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"))
+    p.add_argument("--out-prefix", default=None,
+                    help="default: scratch/captures/slider-ab/<track>-<frac>")
+    p.add_argument("--hud-crop-frac", type=float, default=0.28,
+                    help="top fraction of the frame to exclude from the scene-only MAD "
+                         "(default 0.28 — the POS/LAP/TIME row's race clock ticks every "
+                         "settle step and otherwise dominates the noise floor; see report)")
+    args = p.parse_args(argv)
+
+    try:
+        set_vals = json.loads(args.set)
+    except json.JSONDecodeError as e:
+        print(f"--set is not valid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.camera not in ("chase", "cockpit", "hood", "reverse", "tcam"):
+        print(f"warning: --camera {args.camera!r} is not a confirmed player-relative "
+              "mode (known-safe: chase, cockpit, hood, reverse, tcam) — heli/far/side/"
+              "cinematic/overhead re-cut between calls, and this tool cannot detect "
+              "that for you beyond the eye/tgt check below.", file=sys.stderr)
+
+    prefix = Path(args.out_prefix) if args.out_prefix else \
+        ROOT / "scratch" / "captures" / "slider-ab" / f"{args.track}-{args.frac}"
+    prefix.parent.mkdir(parents=True, exist_ok=True)
+    before_png = Path(f"{prefix}-before.png")
+    after_png = Path(f"{prefix}-after.png")
+
+    server = _ensure_static_server(args.port)
+    url = f"http://127.0.0.1:{args.port}/"
+    c = McpClient()
+    try:
+        c.start()
+        print(f"→ navigate_page {url}")
+        c.call("navigate_page", {"url": url})
+
+        setup_js = f"""async () => {{
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 80 && !window.__apex; i++) await wait(250);
+  if (!window.__apex) return {{ ok: false, error: "no __apex" }};
+  const a = window.__apex;
+  if (typeof Assets !== "undefined" && Assets.loadModels) {{ try {{ await Assets.loadModels(); }} catch (_) {{}} }}
+  a.race({json.dumps(args.track)});
+  for (let i = 0; i < 80 && !(a.info() && a.info().track); i++) await wait(200);
+  a.go();
+  if (a.weather) a.weather({json.dumps(args.weather)});
+  if (a.setTimeOfDay) a.setTimeOfDay({json.dumps(args.tod)});
+  a.step(1/60, {args.start_hold});   // clear the start-lights hold BEFORE parking
+  a.camera({json.dumps(args.camera)});
+  a.park({args.frac});
+  a.snapCam();
+  a.step(1/60, {args.settle});
+  await wait(300);
+  return {{ ok: true, view: a.viewState(), tune: a.lightTune(), info: a.info() }};
+}}"""
+        print("→ evaluate_script (boot → race → step past start → park chase)")
+        setup_r = eval_json(c.call("evaluate_script", {"function": setup_js}))
+        if not setup_r.get("ok"):
+            print(f"setup failed: {setup_r}", file=sys.stderr)
+            sys.exit(1)
+        view_before = setup_r["view"]
+        if view_before.get("dbgCamActive"):
+            print("warning: dbgCamActive=true after park()+snapCam() — the render-"
+                  "distance cull will read as uncapped regardless of the knob under "
+                  "test (frame.cullDist=0 under any free-cam). --camera should not "
+                  "have set G.dbgCam.", file=sys.stderr)
+
+        print(f"→ take_screenshot (before) {before_png}")
+        c.call("take_screenshot", {"filePath": str(before_png)})
+
+        tune_js = f"""async () => {{
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const a = window.__apex;
+  a.lightTune({json.dumps(set_vals)});
+  a.step(1/60, {args.settle});
+  await wait(300);
+  return {{
+    view: a.viewState(), tune: a.lightTune(),
+    errors: a.logs({{level:'error'}}), gfx: a.logs({{ns:'gfx'}}),
+  }};
+}}"""
+        print(f"→ evaluate_script (lightTune({args.set}) → settle)")
+        tune_r = eval_json(c.call("evaluate_script", {"function": tune_js}))
+        view_after = tune_r["view"]
+
+        print(f"→ take_screenshot (after) {after_png}")
+        c.call("take_screenshot", {"filePath": str(after_png)})
+
+        try:
+            c.call("navigate_page", {"url": "about:blank"})
+        except Exception:
+            pass
+    finally:
+        c.close()
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                server.kill()
+
+    # ---- report ----
+    print()
+    print("== slider-ab report ==")
+    cam_stable = True
+    for k in ("eye", "tgt"):
+        b, af = view_before.get(k), view_after.get(k)
+        if b is None or af is None:
+            continue
+        delta = max(abs(x - y) for x, y in zip(b, af))
+        if delta > 1e-3:
+            cam_stable = False
+            print(f"CAMERA MOVED: {k} before={b} after={af} (delta {delta:.4f}) — "
+                  "this before/after pair is NOT a valid comparison, see mcp-probe "
+                  "skill's FIFTH trap")
+    print(f"camera stable: {cam_stable}")
+    print(f"dbgCamActive before/after: {view_before.get('dbgCamActive')}/{view_after.get('dbgCamActive')}")
+    requested = set(set_vals.keys())
+    applied = {k: (setup_r['tune'].get(k), tune_r['tune'].get(k)) for k in requested}
+    print(f"requested knobs (before -> after): {applied}")
+    errs = tune_r.get("errors") or []
+    gfx = tune_r.get("gfx") or []
+    print(f"errors: {len(errs)}  gfx warnings: {len(gfx)}")
+    if errs:
+        print(f"  errors: {errs}")
+    if gfx:
+        print(f"  gfx: {gfx}")
+
+    try:
+        from PIL import Image
+        import numpy as np
+        a = np.array(Image.open(before_png).convert("RGB"), dtype=np.int16)
+        b = np.array(Image.open(after_png).convert("RGB"), dtype=np.int16)
+        diff = np.abs(a - b)
+        mad = float(diff.mean())
+        mx = int(diff.max())
+        hud_rows = int(diff.shape[0] * args.hud_crop_frac)
+        scene_mad = float(diff[hud_rows:].mean())
+        diffmap_png = Path(f"{prefix}-diffmap.png")
+        d = np.abs(a.astype(np.int32) - b.astype(np.int32)).sum(axis=2)
+        d2 = (d / max(d.max(), 1) * 255).astype("uint8")
+        Image.fromarray(d2).save(diffmap_png)
+        print(f"pixel diff: full-frame MAD={mad:.3f}  scene-only MAD={scene_mad:.3f} "
+              f"(below row {hud_rows}, excludes the ticking POS/LAP/TIME HUD)  max={mx}")
+        print(f"  diffmap: {diffmap_png}")
+        print("NOTE: neither MAD is self-interpreting — run this same command again with "
+              "--set '{}' on the same track/frac to get a same-value noise floor (which "
+              "itself won't be ~0 on full-frame, since the race clock ticks every settle "
+              "step regardless of the tune — that's why scene-only exists), and trust a "
+              "signal only if it clears the matching noise-floor MAD by several times over "
+              "(see mcp-probe skill's FOURTH trap).")
+    except ImportError:
+        print("(PIL/numpy not installed — skipping pixel diff; compare "
+              f"{before_png} and {after_png} by eye)")
+
+    print(f"before: {before_png}")
+    print(f"after:  {after_png}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -378,6 +599,8 @@ def main() -> None:
         cmd_measure(rest)
     elif cmd == "apex-shot":
         cmd_apex_shot(rest)
+    elif cmd == "slider-ab":
+        cmd_slider_ab(rest)
     else:
         print(f"unknown: {cmd}", file=sys.stderr)
         sys.exit(1)
