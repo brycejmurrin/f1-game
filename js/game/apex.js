@@ -2635,14 +2635,14 @@ const api = {
   // deliberately stays on Math.random() so it cannot perturb the sim.
   seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
 
-  // reset(frac, speed, x, seed?) — fast episode reset reusing the loaded track.
-  // Reinitialises the grid, repositions the player at lap-fraction frac (0..1),
-  // sets state="race" and raceT=0 without reloading assets. Returns initial obs().
-  // Pass `seed` to make the episode reproducible (it is applied BEFORE the grid
-  // is rebuilt, since grid order/lane/skill are drawn from the seeded stream).
-  // Call __apex.race() first to load the desired track.
+  // reset(frac, speed, x, seed?) — fast episode reset reusing the loaded track (call
+  // __apex.race() first). Reinitialises the grid, repositions the player at lap-fraction
+  // frac (0..1), sets state="race" and raceT=0 without reloading assets, returns obs().
+  // Pass `seed` for a reproducible episode — applied BEFORE gridUp (grid order/lane/skill
+  // come off the seeded stream) and AFTER IncidentSim.reset(), whose _tick/_seq feed it.
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
+    IncidentSim.reset();   // else a live takeover re-imposes its crash pose over the teleport below, every tick
     if (seed !== undefined) G.seed = seed;
     gridUp();
     G.state = "race"; G.raceT = 0;

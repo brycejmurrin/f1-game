@@ -810,8 +810,8 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
+  openQuali();                    // clears the gate FIRST, so arm it after
   qualiNetDone = done || null;
-  openQuali();
   refreshQualiGate();
 }
 
@@ -1629,14 +1629,14 @@ const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp } = CarMesh;
-const _decalTexCache = {};
+const _decalTexCache = {}, _decalTexFail = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
   Object.keys(_decalTexCache).forEach(function (key) {
     if (key.indexOf(prefix) !== 0) return;
     const tex = _decalTexCache[key];
     if (tex && gfx.freeTexture) gfx.freeTexture(tex);
-    delete _decalTexCache[key];
+    delete _decalTexCache[key]; delete _decalTexFail[key];
   });
 }
 function getCarDecalTexture(team, num, isPlayer) {
@@ -1648,7 +1648,14 @@ function getCarDecalTexture(team, num, isPlayer) {
   if (!(key in _decalTexCache)) {
     let t = null;
     try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num, !!isPlayer)); }
-    catch (e) { t = null; }
+    catch (e) {
+      // Swallowed AND cached as null before: one transient miss stripped that
+      // team's numbers/sponsors for the session, unlogged. Log and retry — but
+      // this runs per drawn car per FRAME, so cache the null after 3 tries.
+      const n = _decalTexFail[key] = (_decalTexFail[key] || 0) + 1;
+      Log.warn("gfx", "decal atlas build failed for " + key + " (attempt " + n + ")", e);
+      if (n < 3) return null;
+    }
     _decalTexCache[key] = t;
   }
   return _decalTexCache[key];
@@ -2215,20 +2222,9 @@ function armReliability(field) {
 // exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
-  // The player's OWN top speed — the identical expression updateCar() uses for a
-  // human car — and NOT quali.capFor(). That is the model's INTEGRATION ceiling:
-  // it carries QUALI_TRIM (0.75, the constant that reconciles a simulated lap
-  // with a driven one) and the AI's tierV/skill/difficulty multipliers, none of
-  // which describe the car the player is about to drive. Launching off it would
-  // start them a quarter down on their own straight-line pace and hand the
-  // simulated field a second or more before the first corner.
-  //
-  // Then capped by what the road at the line will actually take, so a circuit
-  // whose start/finish sits in a corner does not launch the car into a wall.
-  Tracks.sample(track, player.s, smp);
   player.x = 0;                       // on the line, not on the grid slot
   player.xVis = 0;
-  const w = worldFromTrack(player.s, player.x, smp);
+  const w = worldFromTrack(player.s, player.x, smp);   // also fills smp for head, below
   player.px = w.x; player.pz = w.z;
   player.head = Math.atan2(smp.t[0], smp.t[2]);
   player.speed = 0;               // standing start, like the real thing
@@ -2767,7 +2763,7 @@ const G = {
   // LAT_MAX and BRAKE are absolute in the driving model (cornering grip and
   // braking do not scale with pace — only acceleration and top speed do), so
   // they pass through as constants; acceleration goes through aTop().
-  LAT_MAX, ACCEL, BRAKE,
+  LAT_MAX, BRAKE,   // ACCEL is deliberately NOT here — reading it was the bug aTop() fixed
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
@@ -2928,6 +2924,7 @@ function quitToMenu() {
   setFlow("gp"); session = "race";
   quali.clear();   // last weekend's classification is not this one's grid
   qualiPeers.clear();
+  qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -4653,7 +4650,11 @@ function onTTLap(lapTime) {
 }
 
 function coast(c, dt) {
-  c.speed = Math.max(24, c.speed - 20 * dt);
+  // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
+  // RAISES a car that finished slower than 24 m/s, and 24 sits above vTop() below
+  // pace ~0.55. Pace-scale the floor, and never speed the car up.
+  const floor = 24 * Math.max(PACE, 0.05);
+  c.speed = Math.min(c.speed, Math.max(floor, c.speed - 20 * dt));
   c.s = wrapS(c.s + c.speed * dt);
   c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
@@ -5932,11 +5933,10 @@ function render(dt) {
   skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
-  const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
-    CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting in
-  // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
-  // shadow — only the body mesh is skipped.
-  const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
+  // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
+  // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
+  // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
+  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
@@ -5949,7 +5949,6 @@ function render(dt) {
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
-    if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -6515,7 +6514,7 @@ function render(dt) {
   }
   // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
-  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
+  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
   // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
   // bright+mip chain in present() — the single biggest post-chain saving left
@@ -6993,7 +6992,7 @@ function refreshCareerButton() {
   if (label) label.textContent = "CAREER MODES";
   // The second line says WHICH career, because with up to three saved,
   // "CONTINUE" on its own does not answer the only question that matters. Blank
-  // when there is nothing to continue — .mb-sub:empty collapses, so a first-time
+  // when there is nothing to continue — #mb-career-sub:empty collapses, so a first-time
   // title screen is unchanged.
   const sub = $("mb-career-sub");
   if (!sub) return;
@@ -7273,6 +7272,7 @@ function openQuali() {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
+  qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
   quali.simulate(0);              // provisional: everyone simulated, including you

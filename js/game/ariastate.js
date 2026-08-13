@@ -30,7 +30,10 @@ window.AriaState = (function () {
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced," +
     "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#quali,#standings," +
-    "#race-settings,#customize,#datahub,#track-detail";
+    // #spotifypanel's SHUFFLE/REPEAT are the same `.active`-class opt-row shape as
+    // the Spotify mode toggles inside #audioset, which ARE synced — one widget
+    // family must not announce its state in one panel and go silent in the other.
+    "#race-settings,#customize,#datahub,#track-detail,#spotifypanel";
 
   const isOn = (el) => ON.some((c) => el.classList.contains(c));
   // Groups whose semantics are already stated explicitly are left alone: a

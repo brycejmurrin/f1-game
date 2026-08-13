@@ -108,9 +108,16 @@ const AgentView = (function () {
         const dist = clamp(o.orbit.dist || 12, 2, 400);
         const head = p.head || 0;
         const dx = Math.sin(head + Math.PI + az), dz = Math.cos(head + Math.PI + az);
-        const eye = [p.px + dx * dist * Math.cos(el), 0.6 + dist * Math.sin(el),
+        // Height is RELATIVE TO THE ROAD, not to datum. Both Y values were a flat
+        // 0.6 absolute, so on any circuit with elevation the shot framed from
+        // metres under (or over) the car while still returning a full, plausible
+        // raster — the same failure the camVantage branch below warns about.
+        // apex.js carOrbit samples the road for exactly this reason.
+        Tracks.sample(G.track, wrapS(p.s), scr);
+        const y0 = scr.p[1] + 0.6;
+        const eye = [p.px + dx * dist * Math.cos(el), y0 + dist * Math.sin(el),
                      p.pz + dz * dist * Math.cos(el)];
-        const tgt = [p.px, 0.6, p.pz];
+        const tgt = [p.px, y0, p.pz];
         return { vp: buildVP(eye, tgt, o.fov || 45), eye, tgt, mode: "orbit", synthetic: true };
       }
       if (o.camera) {
