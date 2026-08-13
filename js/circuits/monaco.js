@@ -957,8 +957,21 @@
       // toward the water, topped by an undulating overhang of tilted slabs.
       // Placed just beyond Rascasse toward Anthony Noghès, clear of the
       // marina yacht ranks and the corner-apex clubhouse above.
+      // KOLD + raw frame, same disease as the pool/Rock/Casino: the authored
+      // 0.955 is OLD-RACING (just beyond Rascasse, racing ~0.88), but the
+      // wrapped anchor() read it as SOURCE and slid the clubhouse onto a
+      // different stretch — the five wave-roof slabs, offset up to +/-12.8 m
+      // off the single a.c sample, floated clear of the real local ground.
       {
-        const k = K(0.955), a = anchor(k, -1, 34);
+        const k = KOLD(0.955);
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const tt = [track.tx[k], track.ty[k], track.tz[k]];
+        const dist = 34;
+        const oo = -1 * (hw[k] + dist);
+        const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const b = [a.r, a.u, a.t];
           const YWHITE = [0.94, 0.95, 0.97], YDECK = [0.86, 0.88, 0.90], YNAVY = [0.10, 0.22, 0.34];
