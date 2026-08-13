@@ -1,5 +1,30 @@
 # UI / CSS research — 2026-08-13
 
+> **STATUS: all six recommendations in §5 are implemented on this branch.** What
+> follows is the research as written; this box records where acting on it
+> corrected it. Read both — the corrections are the more useful half.
+>
+> | § | claim as written | what implementing it showed |
+> |---|---|---|
+> | 1 | four sheets read no spacing token | **five** — `responsive.css` too, found by writing the guard rather than by grepping. It is a different case and stays listed rather than migrated: a media-query sheet legitimately holds viewport-absolute values |
+> | 1 | 126 sub-floor font sizes | correct; all 126 migrated, ratchet now 0. Raw spacing 529 → 479 |
+> | 2 | the map bug | correct and fixed — but the deploy branch had meanwhile rewritten the same function. Its budget logic supersedes the caps described below; the first-paint pin guard was rebased onto it |
+> | 4 | "`emulate` reloads the page and resets app state" | **wrong as stated.** It sometimes does and sometimes does not. Corrected in the playbook: assert which screen is open before measuring |
+> | — | "18 pre-existing test failures" | **wrong.** `node_modules` had never been installed in this container. With dependencies present the suite is **426 pass / 0 fail** |
+> | — | the audit matrix | 14 flagged cells → **7**, and six of the seven removed were *probe* defects, not layout ones (see the `content-visibility` finding below) |
+>
+> Two defects found only by verifying: the title screen's brand column had no
+> shrink floor (`grid-template-columns: auto auto`), and `tools/layout-audit.mjs`
+> was counting collapsed `<details>` content as unreachable controls, because
+> Chromium hides it with `content-visibility: hidden` on the `::details-content`
+> *pseudo-element* — which no ancestor walk can see, while
+> `getBoundingClientRect` still returns real boxes for every descendant.
+> `checkVisibility()` is the question that was actually meant.
+>
+> Still open and NOT addressed here: `garagelivery` reports **68 tap targets
+> under WCAG 2.5.8's 24px floor** in five viewports. Pre-existing, unchanged by
+> this branch, and the largest real defect the matrix knows about.
+
 Why the menus still feel wrong after a year of layout fixes, what modern CSS
 actually offers now, and which tools are worth adding. Measured against the
 working tree at `claude/ui-redesign-css-research-lh445o`, live in Chromium via
@@ -275,10 +300,13 @@ failure mode a 543-class consolidation actually has.
    screen, with a known root cause and a fix that closes the class.
 2. **Add the token-adoption ratchet** (§1) — freeze at 126 / 517, then drive it
    down. Without this, any consolidation regresses silently.
-3. **Migrate the four zero-token files** — `data.css`, `overlays.css`,
-   `hud.css`, `track-detail.css`. This is where "things don't resize" lives, and
-   it is mechanical work with a number attached.
-4. **Amend the MCP playbook** — dpr 1 for layout review; `emulate` reloads.
+3. **Migrate the zero-token files** — `data.css`, `overlays.css`, `hud.css`,
+   `track-detail.css`, plus `responsive.css`, which the guard found and which is
+   a different case (a media-query sheet holds viewport-absolute values by
+   design, so it stays listed rather than migrated). This is where "things
+   don't resize" lives, and it is mechanical work with a number attached.
+4. **Amend the MCP playbook** — dpr 1 for layout review; and *check which screen
+   is open*, because `emulate` resets page state only sometimes.
 5. **Add ARIA snapshots** for the 22 top-level screens before restructuring.
 6. **Then** consider `@scope` for new screens, and `text-wrap: pretty` on
    headings — both cheap, both safe.

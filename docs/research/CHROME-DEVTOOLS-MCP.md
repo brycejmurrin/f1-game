@@ -20,6 +20,32 @@ Interactive twin of Playwright — not a CI gate. Skills:
 4. **`resize_page` is unreliable** on this shell — use `emulate` with the full
    viewport descriptor (`852x393x3,mobile,touch,landscape`).
 5. **Park `about:blank`** before starting Playwright groups.
+6. **Capture at `dpr 1` for anything about LAYOUT.** The `x3` in the descriptor
+   above is right for checking bitmap crispness and wrong for everything else:
+   at `deviceScaleFactor: 3` a capture of this shell contains **duplicated,
+   offset copies of real elements**. Measured 2026-08-13 on the title screen —
+   ghost `TIME TRIAL` and `RACE A FRIEND` about 131px below their true
+   positions, surviving a 1.5 s settle, `display: none` on the WebGL canvas, and
+   a forced repaint, while `take_snapshot` and `getBoundingClientRect` reported
+   20 painted elements with no duplicates and no overlap. Re-capturing the
+   identical page at `852x393x1` produced a correct image. It is a capture
+   artefact of the large backing surface, not a product bug — but it reads
+   exactly like an overlapping-layout defect, and it cost four probes before a
+   dpr A/B settled it. This is `docs/LAYOUT-AUDIT.md`'s "a finding is a claim
+   about the probe" in its most literal form: the PICTURE was wrong and the
+   MEASUREMENT was right, which is the opposite of the usual assumption.
+7. **`emulate` may or may not reset page state — always check which screen is
+   actually open.** Observed both ways in one session: one `emulate` call left
+   the app back on the title screen (a measurement of `#select` then silently
+   described the title), and a later one left five screens open from earlier
+   navigation. Neither is announced. Before measuring, assert the screen you
+   think you are on (`document.querySelectorAll(".screen")` filtered by
+   `hidden`), or reload and re-navigate through the app's own controls. A probe
+   that measures the wrong screen returns clean numbers, which is the failure
+   mode hardest to notice.
+8. **Reloading does not pick up edited `js/`/`css/`** — the shell's `?v=N` URLs
+   are cached. Use `navigate_page` with `ignoreCache: true` after any source
+   edit, or you will verify a fix that is not loaded and conclude it failed.
 
 ---
 
