@@ -222,6 +222,34 @@ count is not the target. Applying the Trap B pattern to any of the three above
 would have improved the number and damaged the circuit. Judge each one against
 §4's known-legitimate list before touching it.
 
+## 5c. Singapore 18 → 19: three floaters that moved with a terrain fix
+
+`3ee48bc` corrected Singapore's `elevations` source-fraction remap (it had been
+solving `racing = source - startFrac` when the circuit's `reverse:true` makes
+the actual remap `racing = wrap01(startFrac - source)`), which moved the
+Sheares underpass dip and the Anderson Bridge rise onto their intended racing
+positions — a real fix, and a net improvement (38 → 19 floating clusters
+measured before → after on this circuit alone). Three of the survivors are new
+at exactly the two moved features, all in §4's known-legitimate categories,
+found by diffing `float-audit.cjs --json` before/after the commit and matching
+each surviving cluster to its source line:
+
+- **Anderson Bridge truss** (`js/circuits/singapore.js:515-522`, ~2.6–6.7 m
+  gap) — an **overhead span**: the arched truss ribs and lamp posts now sit
+  over the terrain rise that was moved here specifically to be under this
+  bridge, so the deck reads as elevated the way a bridge over a rise does.
+- **A second `makePortal` deck** (`:188`, ~7.3 m gap) — also an **overhead
+  span**, `overheadSpan`'s declared clearance over the same newly-graded
+  ground.
+- **Bay water reflection streaks** (`:475`, ~1.3–1.9 m gap) — a **water-borne
+  prop**: thin strips deliberately held 0.5 m above the water surface (see the
+  comment at that line), just over `THRESH` now that the ground height nearby
+  shifted with the terrain fix.
+
+Re-baselined `singapore: 18 → 19` per §5's rule ("doing it at a merge is
+legitimate... but it has to come with the deltas written down"). The other 16
+floating clusters on this circuit are unrelated and untouched by this pass.
+
 ## 6. Clipping — the other half
 
 Grounding and clipping are the same question on different axes, and the
