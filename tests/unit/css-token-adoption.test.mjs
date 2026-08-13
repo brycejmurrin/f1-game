@@ -1,0 +1,162 @@
+/* css-token-adoption.test.mjs — the OTHER direction of the token contract.
+ *
+ * `css-tokens.test.mjs` asserts tokens -> consumers: no token in css/tokens.css
+ * may go unread. Nothing asserted the converse — that a rule needing a size
+ * READS a token instead of writing a literal — and the gap is exactly where a
+ * year of layout drift accumulated. Measured 2026-08-13, on a sheet whose own
+ * prose says the type scale is chosen for a landscape phone at arm's length:
+ *
+ *   372 font-size declarations, 158 via var(--fs-*), 198 raw literals,
+ *   126 of them BELOW the deliberate 14px --fs-micro floor.
+ *
+ * That floor is not a preference. docs/research/UI-DESIGN-PRINCIPLES.md derives
+ * it from the hardest legibility case this UI has and states outright that "a
+ * rung that forces the smallest label UP is a feature, not a regression — that
+ * was the original complaint". 126 declarations quietly opting out of it is how
+ * the complaint survived being fixed.
+ *
+ * Spacing is the same shape with a sharper edge. `--pad` / `--gap` really do
+ * respond to density — measured live on a 852x393 phone they resolve to 13px
+ * and 8px, down from 22px and 12px — but four stylesheets never read them at
+ * all, so those screens cannot respond to the ladder however it is tuned. That
+ * is the literal mechanism behind "things do not resize".
+ *
+ * A RATCHET, NOT A BAN. Both numbers below are today's measurement, frozen. The
+ * suite fails if either goes UP, which is the property that matters: a
+ * consolidation cannot be undone by the next three features with nothing to
+ * notice. Lower the ceiling whenever you migrate a file — that is the whole
+ * protocol, and it is the same one tests/unit/module-size.test.mjs uses to
+ * ratchet game.js.
+ *
+ * WHY NOT ZERO. Some literals are legitimately not sizes on the ladder: hairline
+ * borders, a 1px inset shadow, the 2px focus ring. Driving these to zero is not
+ * the goal and a hard ban would be argued around rather than met. The goal is
+ * that the number only ever falls.
+ *
+ * Run: node --test tests/unit/css-token-adoption.test.mjs  (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/* The floor comes from the sheet, not from a copy of it here: if someone raises
+   --fs-micro, this guard must move with it rather than keep asserting 14. */
+function readMicroFloor(tokensSrc) {
+  const m = tokensSrc.match(/--fs-micro:\s*([0-9.]+)px/);
+  assert.ok(m, "could not read --fs-micro from css/tokens.css — the scan broke, not the sheet");
+  return parseFloat(m[1]);
+}
+
+/** Strip comments as a CSS tokenizer does, so prose citing an old value is not a declaration. */
+function stripComments(src) {
+  let out = "", i = 0;
+  for (;;) {
+    const open = src.indexOf("/*", i);
+    if (open < 0) { out += src.slice(i); break; }
+    out += src.slice(i, open);
+    const close = src.indexOf("*/", open + 2);
+    if (close < 0) break;
+    i = close + 2;
+  }
+  return out;
+}
+
+function sheets() {
+  const dir = path.join(ROOT, "css");
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".css")).sort()
+    .map((f) => ({ name: f, src: stripComments(fs.readFileSync(path.join(dir, f), "utf8")) }));
+}
+
+/* ---- the two ceilings. LOWER THESE WHEN YOU MIGRATE A FILE. --------------- */
+const CEILING = {
+  // font-size declarations written as a raw px literal below --fs-micro.
+  // 2026-08-13: menus 40, tuner 28, overlays 16, hud 15, data 10,
+  //             track-detail 8, responsive 4, carsetup 3, career 2.
+  subFloorFontSize: 126,
+  // padding / gap / margin declarations containing a raw px literal.
+  // 2026-08-13: the FIVE sheets that read no spacing token at all are
+  // data.css, overlays.css, hud.css, track-detail.css and responsive.css.
+  rawSpacing: 529,
+};
+
+test("no new font-size below the --fs-micro floor", () => {
+  const all = sheets();
+  const tokens = all.find((s) => s.name === "tokens.css");
+  assert.ok(tokens, "css/tokens.css missing");
+  const floor = readMicroFloor(tokens.src);
+
+  const offenders = [];
+  for (const { name, src } of all) {
+    for (const m of src.matchAll(/font-size:\s*([0-9.]+)px/g)) {
+      if (parseFloat(m[1]) < floor) offenders.push(`${name}: ${m[1]}px`);
+    }
+  }
+
+  const byFile = {};
+  for (const o of offenders) { const f = o.split(":")[0]; byFile[f] = (byFile[f] || 0) + 1; }
+
+  assert.ok(offenders.length <= CEILING.subFloorFontSize,
+    `${offenders.length} font-size declarations sit below the ${floor}px --fs-micro floor, ` +
+    `ceiling is ${CEILING.subFloorFontSize}. Use a --fs-* token instead of a literal; if the value ` +
+    `genuinely belongs below the floor, say why in a comment and raise the ceiling deliberately.\n` +
+    JSON.stringify(byFile, null, 2));
+
+  // The ratchet's other half: a migration that lands must move the number down,
+  // not bank headroom for the next regression.
+  assert.equal(offenders.length, CEILING.subFloorFontSize,
+    `sub-floor font-sizes are now ${offenders.length}, below the ${CEILING.subFloorFontSize} ceiling — ` +
+    `lower CEILING.subFloorFontSize in this file to ${offenders.length} to lock the win in.`);
+});
+
+test("no new raw px spacing", () => {
+  const offenders = [];
+  for (const { name, src } of sheets()) {
+    for (const m of src.matchAll(/(?:padding|margin|gap|row-gap|column-gap)[a-z-]*:\s*[^;{}]*?[0-9.]+px[^;{}]*/g)) {
+      offenders.push(`${name}: ${m[0].trim().slice(0, 60)}`);
+    }
+  }
+
+  const byFile = {};
+  for (const o of offenders) { const f = o.split(":")[0]; byFile[f] = (byFile[f] || 0) + 1; }
+
+  assert.ok(offenders.length <= CEILING.rawSpacing,
+    `${offenders.length} padding/gap/margin declarations use a raw px literal, ceiling is ` +
+    `${CEILING.rawSpacing}. Read --pad / --gap so the rule responds to the density ladder.\n` +
+    JSON.stringify(byFile, null, 2));
+
+  assert.equal(offenders.length, CEILING.rawSpacing,
+    `raw spacing declarations are now ${offenders.length}, below the ${CEILING.rawSpacing} ceiling — ` +
+    `lower CEILING.rawSpacing in this file to ${offenders.length} to lock the win in.`);
+});
+
+/* The four sheets that read no spacing token at all. This is the list the
+   migration works through; an entry LEAVING it is the win, and a new entry
+   joining it is a new screen that cannot respond to density. */
+test("the zero-spacing-token sheet list only shrinks", () => {
+  /* responsive.css is on this list for a different reason than the other four
+     and should be judged differently: it is the media-query sheet, so several
+     of its raw values are deliberately viewport-absolute (safe-area insets, the
+     landscape-phone caps) rather than density-relative. It is listed because
+     the measurement is the measurement — not because it is queued for the same
+     migration. */
+  const KNOWN_ZERO = ["data.css", "hud.css", "overlays.css", "responsive.css", "track-detail.css"];
+  const zero = sheets()
+    .filter(({ name }) => name !== "tokens.css")
+    .filter(({ src }) => /(?:padding|margin|gap)[a-z-]*:[^;{}]*[0-9.]+px/.test(src))
+    .filter(({ src }) => !/(?:padding|margin|gap)[a-z-]*:[^;{}]*var\(--(?:pad|gap)/.test(src))
+    .map(({ name }) => name)
+    .sort();
+
+  const added = zero.filter((f) => !KNOWN_ZERO.includes(f));
+  assert.deepEqual(added, [],
+    `${added.join(", ")} spaces itself entirely in raw px and reads neither --pad nor --gap, ` +
+    `so it cannot respond to the density ladder. Read the tokens, or add it to KNOWN_ZERO with a reason.`);
+
+  const fixed = KNOWN_ZERO.filter((f) => !zero.includes(f));
+  assert.deepEqual(fixed, [],
+    `${fixed.join(", ")} now reads spacing tokens — remove it from KNOWN_ZERO in this file to lock that in.`);
+});
