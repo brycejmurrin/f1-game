@@ -154,7 +154,9 @@
                  hv < 0.5 ? RENDER : RENDER_D, b);
           out._mat = 0;
           // Shallow terracotta pitch with deep eaves — the eaves are the read.
-          addPrism(out, vadd(a.c, a.u, wallH + w * 0.13), [w * 1.14, w * 0.27, d * 1.10],
+          // addPrism anchors at its BASE (geom.js), so it seats ON the wall top:
+          // the extra half-height (+w*0.13) floated all four roofs ~1.6-2.1 m.
+          addPrism(out, vadd(a.c, a.u, wallH), [w * 1.14, w * 0.27, d * 1.10],
                    hv < 0.5 ? TILE : TILE_D, b);
           // Square tower end on the older houses. ABUTS the gable, it does not
           // sink into it — 3 m of overlap is severe interpenetration.
@@ -163,7 +165,7 @@
             out._mat = MAT.STONE;
             addBox(out, vadd(tc, a.u, wallH * 0.72), [7.5, wallH * 1.44, 7.5], RENDER_D, b);
             out._mat = 0;
-            addPrism(out, vadd(tc, a.u, wallH * 1.44 + 1.0), [8.4, 2.0, 8.4], TILE_D, b);
+            addPrism(out, vadd(tc, a.u, wallH * 1.44), [8.4, 2.0, 8.4], TILE_D, b);  // base-anchored: flush on the tower
           }
           // Shuttered windows, sparse and small — Tuscan walls are mostly wall.
           for (let i = -1; i <= 1; i++) {

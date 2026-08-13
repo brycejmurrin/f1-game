@@ -2273,9 +2273,21 @@ const Tracks = (function () {
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
+    // Anchored with the SAME dressing shift buildCenterline uses to raise the
+    // deck ((b.s + _sceneryShift) % 1) — reading b.s raw put Suzuka's four pillar
+    // pairs at racing frac 0.817 while the deck they support is at 0.437.
+    // Same omission class as the bankZones fix (ed5a310f).
+    // NOTE (measured, suzuka — the only def with `bridges`): none of these eight
+    // boxes actually SHIPS. They sit at hw+0.7 with half-extent 0.8, and rejBox
+    // expands a footprint by the road half-width before testing the centreline
+    // node, so 0.7 < 0.8 + hw always hits and the guarded addBox culls every one.
+    // Only the blockAt() solid records below survive — and those were landing
+    // two thirds of a lap from the deck until this shift went in. Making the
+    // pillars visible needs a wider lateral offset or a RAW.addBox (as the
+    // crossover deck itself uses); that is a separate, reviewable change.
     const brs = def.bridges;
     if (brs) for (const b of brs) {
-      const kc = Math.round(b.s * n) % n;
+      const kc = Math.round(TrackSpace.wrap01(b.s + (def._sceneryShift || 0)) * n) % n;
       for (const off of [-18, -9, 9, 18]) {
         const k = ((kc + off) % n + n) % n;
         const deckY = py[k];
