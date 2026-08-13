@@ -854,10 +854,18 @@
         }
       }
       // Waterfront terrace lip follows the sloping ground at every segment.
+      // K(), NOT KR(): these fracs are OLD-RACING (Tabac->pool = racing
+      // 0.68-0.78) and groundedSegments goes through the engine's SHIFT-ONLY
+      // wrapper, whose SK() applies exactly the old->new renumbering (-24
+      // nodes, the same delta as KOLD). KR() read them as SOURCE first, so the
+      // points landed on the Portier/hairpin bends where the straight chord
+      // between two quay points 66 m apart CUT ACROSS THE ROAD — measured as a
+      // 14 x 0.8 m lip 0.28 m above the street at racing 0.389, the last white
+      // bar on the hairpin.
       groundedSegments({
         id: "monaco-tabac-terrace",
         points: Array.from({ length: 6 }, (_, i) => ({
-          k: KR(0.71 + i * 0.02), side: racingSide(1), dist: 18,
+          k: K(0.71 + i * 0.02), side: racingSide(1), dist: 18,
         })),
         width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
       });
