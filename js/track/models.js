@@ -8,15 +8,23 @@ const TrackModels = (function () {
   const validSize = (v) => finiteArray(v, 3) && v.every((n) => n > 0);
   const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
 
-  function appendBuffer(target, source) {
+  function appendBuffer(target, source, id) {
     const base = target.pos.length / 3;
     // Record where this staged block landed in the target. modelGroup emits
     // into a scratch buffer and copies it out, so a primitive recorded against
     // the STAGE carries vertex indices that mean nothing in the shipped mesh —
     // headless audits (float/clip) could not attribute any modelGroup geometry
     // at all and silently skipped it. One entry per copy is enough to remap.
+    // `id` is what makes the remap ANSWERABLE rather than merely possible. A
+    // block used to say "vertices 1200..1450 came from some staged buffer",
+    // which is enough to skip them and not enough to name them — so a headless
+    // audit could report "4.79 m of prop over the racing line" and nothing
+    // could say WHICH emitter put it there. Every attribution attempt then went
+    // through prop AABBs, which is the wrong question: the audits test whether
+    // a TRIANGLE covers a track point, and one large triangle's centroid can
+    // sit 24 m from the point it covers.
     (target.__blocks || (target.__blocks = []))
-      .push({ base, from: source, count: source.pos.length / 3 });
+      .push({ base, from: source, count: source.pos.length / 3, id: id || null });
     // Indexed loops, not push(...source): spread-apply passes every element as a
     // separate ARGUMENT, so a staged model group large enough (tens of thousands
     // of vertices) blows the engine's argument limit and throws RangeError from
@@ -191,7 +199,7 @@ const TrackModels = (function () {
         (diagnostics.escaped || (diagnostics.escaped = []))
           .push(Object.assign({ id, required, kind, vertices }, escaped));
       }
-      appendBuffer(out, stage);
+      appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required, vertices, kind });
       return true;
     }
@@ -236,7 +244,7 @@ const TrackModels = (function () {
       // its safety contract is explicit underside clearance.
       const stage = emptyBuffer();
       if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
-      appendBuffer(out, stage);
+      appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance });
       return true;
     }
@@ -250,7 +258,7 @@ const TrackModels = (function () {
       }
       const stage = emptyBuffer();
       if (!box(stage, spec.center, spec.size, spec.color || [0.12, 0.34, 0.48], spec.basis)) return false;
-      appendBuffer(water, stage);
+      appendBuffer(water, stage, id);
       diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, water: true });
       return true;
     }
