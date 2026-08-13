@@ -11,6 +11,17 @@ lighting, scenery, gamepad, timing/field hooks, multiplayer, career, the agent
 world view, headless RL, and the tooling contracts that keep the load order and
 the docs honest.
 
+**RUN `npm install` FIRST — an empty `node_modules` does not fail loudly.** It
+fails as ~18 scattered `ERR_MODULE_NOT_FOUND` suites inside an otherwise green
+run (`espree`, `eslint-scope`, `playwright`, `jsqr`), which reads exactly like
+a set of pre-existing breakages someone else left behind. Measured 2026-08-13:
+`test:tooling-fast` reported 344 pass / 18 fail on a fresh container and
+439 pass / 0 fail after `npm install`, with no source change between them —
+and two sessions in a row had by then written those 18 off as an environment
+quirk and baselined against them. If a suite fails with "Cannot find module",
+install before believing it. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps the
+install to seconds; the browsers are already at `/opt/pw-browsers`.
+
 ---
 
 ## 1. How to run tests

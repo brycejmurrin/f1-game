@@ -29,6 +29,13 @@ disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
 111 Playwright specs plus 78 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
 
+**`npm install` FIRST.** A fresh container has no `node_modules`, and the gap
+shows up as ~18 scattered `Cannot find module` suites inside an otherwise
+green run — which reads as someone else's pre-existing breakage, and was
+baselined against as exactly that by two sessions running. Measured: 344/18
+before, 439/0 after, no source change. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
+keeps it to seconds (browsers are already at `/opt/pw-browsers`).
+
 **1. Run browser groups in the BACKGROUND — never block, never poll.**
 A group is minutes to tens of minutes. Start it, arm a watcher, do other work:
 
