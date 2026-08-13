@@ -219,8 +219,22 @@
       }
 
       // ── CASINO DE MONTE-CARLO (s=0.20, L) ───────────────────────────────
+      // KOLD + raw frame, same disease as the pool/terrace/Rock: the authored
+      // 0.20 is OLD-RACING, but the wrapped anchor() read it as SOURCE and
+      // slid the whole mass onto a different, sloped stretch of the climb —
+      // the flanking corner towers' fixed vertical offsets (a single a.c
+      // sample under a 44 m-wide, +/-13 m mass) floated off the real local
+      // ground there. float-audit flagged the two dome caps at ~40 m up.
       {
-        const k = K(0.20), a = anchor(k, -1, 36);   // dist clears the 44-wide mass off the track (inner face ~14m back)
+        const k = KOLD(0.20);
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const tt = [track.tx[k], track.ty[k], track.tz[k]];
+        const dist = 36;   // dist clears the 44-wide mass off the track (inner face ~14m back)
+        const oo = -1 * (hw[k] + dist);
+        const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
