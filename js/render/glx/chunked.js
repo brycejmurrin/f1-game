@@ -182,7 +182,8 @@ const GLXChunked = (function () {
             ch._lampIdx = _pickChunkLamps(F.allLights, ch.min, ch.max);
             ch._lampSrc = F.allLights;
           }
-          core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length);
+          core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
+                              F.lights, F.tailStart, F.tailCount);
         }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo);
         gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, 0);

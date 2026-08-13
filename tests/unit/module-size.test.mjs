@@ -105,7 +105,13 @@ const CEILINGS = {
   // baked lamp list) beside the globally-culled frame.lights, so GLXChunked can
   // bind each chunk its own nearest-32. Six lines at the existing setFrameLights
   // call site, which is where the frame's light state is already assembled.
-  "js/game.js": 8009,
+  // 8009 -> 8015: recording frame.tailStart/tailCount around the
+  // appendCarTailLights call, so PER-CHUNK LAMPS can add the per-frame car
+  // tail-lights to each chunk's set. They are appended to frame.lights AFTER
+  // the static cull, so a set built from track._lights alone silently dropped
+  // them — a regression the knob introduced. Sits at the call site that already
+  // assembles the frame's light state.
+  "js/game.js": 8015,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
