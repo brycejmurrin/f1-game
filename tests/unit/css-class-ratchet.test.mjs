@@ -77,7 +77,8 @@ export function shellNodes() {
 //
 // 543 was the count at install time (STRUCTURE-REDECISION-2026-08 §Q5), and is
 // the figure SKILL.md rule 8 quotes as "the whole finding".
-const CLASS_CEILING = 543;
+// 541 after the `mb-` family collapsed onto #mb-career / #mb-career-sub contexts.
+const CLASS_CEILING = 541;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under

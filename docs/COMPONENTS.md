@@ -59,9 +59,19 @@ not.
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
-`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `mb-`, `rs-`, `no-`, `rotate-`,
+`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `no-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`) is one file each and needs no map.
+
+**A family leaves this list when it leaves `css/`.** The title screen's mb-prefix
+family was here until its two
+classes — `.mb-stack` and `.mb-sub`, both of which dressed a single element
+inside a single button on the title screen — were replaced by `#mb-career > span`
+and `#mb-career-sub`. That is the `--sheet-w` move applied to a family instead of
+a width: a class that can only ever match one element is a context, and a context
+belongs in a selector. `tests/unit/component-inventory.test.mjs` is what makes the
+removal provable — it fails on a family named here that `css/` no longer defines,
+so a consolidation cannot be claimed without this table moving.
 
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,
@@ -116,7 +126,6 @@ most-shared class in the project and had no entry at all:
 - `.cs-stat-row` — `carsetup` + `menus` + `responsive`
 - `.cs-stat-val` — `carsetup` + `menus` + `responsive`
 - `.cz-liv-none` — `components` + `menus`
-- `.mb-sub` — `menus` + `responsive`
 - `.opt-btn` — `components` + `tuner`
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`

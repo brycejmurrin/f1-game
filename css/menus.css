@@ -109,16 +109,28 @@
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }
-.mb-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* THE `mb-` FAMILY IS GONE, AND THIS IS WHAT REPLACED IT. Both of its classes
+   dressed exactly ONE element inside exactly one button, so each was a class
+   that could never be reused and a name nobody could look up — the shape
+   the restructure-screens-css skill rule 12 names ("one property
+   plus N one-line context overrides beats N variant classes") and rule 8's
+   `--sheet-w` table demonstrates: the variation lives on the CONTEXT, not in a
+   class of its own. #mb-career's only element child that is not the icon is the
+   two-line stack, and the save line already carried an id for JS to fill.
+   Selectors are IDs now, so they outrank the class rules they replace by more
+   than the class rules outranked each other — checked against every other rule
+   that touches these two elements (there is one, the touch floor at the end of
+   this file, and one in css/responsive.css, which wins on LAYER either way). */
+#mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 /* The live save line. Dim and small: it is what the button will DO, not a second
    label competing with CAREER. Empty (and therefore zero-height) until a save
    exists, so a first-time title screen is exactly as it was. */
-.mb-sub {
+#mb-career-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.08em;
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
-.mb-sub:empty { display: none; }
+#mb-career-sub:empty { display: none; }
 #menu-secondary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.55);
@@ -279,7 +291,10 @@ body { --compact-at: 600px; }
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
   :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-  :where(body[data-density="compact"]) .mb-sub { font-size: var(--fs-micro); }
+  /* (The save line's font-size used to be re-stated here as var(--fs-micro).
+     That is the SAME value the base rule already gives it, at the same
+     specificity, in the same layer — a declaration that could never change a
+     computed pixel. Deleted rather than re-pointed at the new id.) */
   /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
      back out of the gutter rather than out of the type.
      IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
@@ -1159,5 +1174,5 @@ body:not(.desktop) .sur-rnd,
 body:not(.desktop) .sur-country { font-size: 12px; }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: 12px; }
-body:not(.desktop) .mb-sub { font-size: var(--fs-micro); }
+body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 } /* @layer components */
