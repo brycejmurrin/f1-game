@@ -33,6 +33,35 @@ const TrackModels = (function () {
     for (let i = 0; i < source.length; i++) target.push(source[i]);
   }
 
+  // How far the emitted geometry escapes the box the group DECLARED, per axis,
+  // measured in that box's own basis. Null when everything fits.
+  //
+  // Hand-rolled dot products and an indexed loop for the same reason the
+  // occupancy scans below are written that way: this runs over every vertex of
+  // every model group on every build, including day<->night rebuilds.
+  function boundsEscape(stage, bounds) {
+    const c = bounds.center, sz = bounds.size, b = bounds.basis;
+    if (!c || !sz) return null;
+    const r = b ? b[0] : [1, 0, 0], u = b ? b[1] : [0, 1, 0], f = b ? b[2] : [0, 0, 1];
+    const hr = sz[0] / 2, hu = sz[1] / 2, hf = sz[2] / 2;
+    const p = stage.pos;
+    let or_ = 0, ou = 0, of = 0;
+    for (let i = 0; i < p.length; i += 3) {
+      const dx = p[i] - c[0], dy = p[i + 1] - c[1], dz = p[i + 2] - c[2];
+      const er = Math.abs(dx * r[0] + dy * r[1] + dz * r[2]) - hr;
+      const eu = Math.abs(dx * u[0] + dy * u[1] + dz * u[2]) - hu;
+      const ef = Math.abs(dx * f[0] + dy * f[1] + dz * f[2]) - hf;
+      if (er > or_) or_ = er;
+      if (eu > ou) ou = eu;
+      if (ef > of) of = ef;
+    }
+    // Authoring slack. Below this a box is "right" and the excess is rounding
+    // or a deliberate hairline; above it the declared shape is not the shape.
+    const TOL = 0.05;
+    if (or_ <= TOL && ou <= TOL && of <= TOL) return null;
+    return { overRight: +or_.toFixed(2), overUp: +ou.toFixed(2), overFwd: +of.toFixed(2) };
+  }
+
   // Hand-rolled loops rather than Array.prototype.some(fn). These run over the
   // WHOLE props buffer of every built track — up to ~5 M vertices on Vegas, i.e.
   // ~15 M floats each for pos/nrm/col plus ~20 M indices, as plain (not typed)
@@ -139,6 +168,28 @@ const TrackModels = (function () {
           });
           return false;
         }
+      }
+      // THE DECLARED BOUNDS ARE A PROMISE, AND NOTHING CHECKED IT.
+      // preflight() above tested `bounds` — the box the author DECLARED — and
+      // never looked again, so a group may pass the footprint guard and then
+      // emit its primitives somewhere else entirely. Measured on
+      // `cota-amphitheater`: it declares its centre 8 m off the anchor
+      // (`vadd(vadd(a.c, a.r, 8), a.u, 13)`) and emits its stage deck AT the
+      // anchor, so ~55 x 28 m of geometry lands where the tested box never was
+      // — 4.79 m over the racing line, with the guard reporting success. That
+      // is what tests/specs/props-over-road.spec.js has been failing on for
+      // COTA and Indianapolis.
+      //
+      // REPORTED, NOT REJECTED, and deliberately so: rejecting here would
+      // silently delete authored scenery across 40 circuits on a rule whose
+      // blast radius nobody has measured. The count this produces is the input
+      // to that decision — read it with __apex.modelDiagnostics(). Promote to a
+      // suppression (or re-run preflight on the real AABB) once the population
+      // is known and the offenders' bounds are corrected.
+      const escaped = boundsEscape(stage, bounds);
+      if (escaped) {
+        (diagnostics.escaped || (diagnostics.escaped = []))
+          .push(Object.assign({ id, required, kind, vertices }, escaped));
       }
       appendBuffer(out, stage);
       diagnostics.emitted.push({ id, required, vertices, kind });

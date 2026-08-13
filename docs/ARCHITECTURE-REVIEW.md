@@ -187,7 +187,11 @@ journal; this is what remains.
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance.
-- **`hud-layout` is red on the whole `notched-landscape` row.** All six variants
+- **`hud-layout` `notched-landscape` — FIXED, validated 25/25 across all four
+  viewports.** `#hud-sectors`' top offset is now derived from `var(--tap)`
+  (`css/hud.css`) instead of a hard-coded 56, and the short-landscape override
+  that pulled it UP to 52 is gone (`css/responsive.css`). Kept below for the
+  diagnosis, which is the reusable part. All six variants
   (tilt/buttons/touch × auto/manual gears) fail with three layout problems where
   the spec expects none; the other viewport rows pass, so it is the VIEWPORT —
   852×393 with real safe-area insets (`sal 59, sar 59, sab 21`) — not the input
@@ -255,8 +259,27 @@ journal; this is what remains.
   shifts its windows by `TrackSpace.sceneryOriginDelta` (`js/track/tracks.js`
   ~:1450). Not confirmed — bisect it rather than believe this paragraph.
 
-  Note these are `modelGroup`/RAW emissions, so the footprint Minkowski
-  preflight that guards `building()`/`neonTower()` does not apply to them.
+  **ROOT CAUSE, COTA — confirmed and measured.** An earlier note here said the
+  footprint preflight "does not apply" to `modelGroup`/RAW emissions. That was
+  WRONG: `js/track/models.js` does preflight every group. It just checks the
+  wrong thing — it tests the bounds the author DECLARED and never looks at what
+  was actually emitted, so a group can pass the guard and then put its geometry
+  somewhere else. `cota-amphitheater` declares
+  `center = vadd(vadd(a.c, a.r, 8), a.u, 13)` and emits its stage deck at the
+  anchor, so the tested box sits 8 m further from the circuit than the geometry.
+  `modelGroup` now measures this (`diagnostics.escaped`, read via
+  `__apex.modelDiagnostics()`): the amphitheater escapes its declared box by
+  **9.0 m along the RIGHT axis** — laterally, toward the track — which is the
+  4.79 m of geometry over the racing line. Reported, not rejected: enforcing
+  would delete authored scenery across 40 circuits on an unmeasured rule.
+
+  **Indianapolis is NOT this bug.** Same instrument: 15 of its 21 groups escape
+  their declared bounds, but every one is vertical (≤0.44 m aprons/greens) and
+  **zero escape laterally**, so the declared-bounds gap cannot be what puts
+  geometry over its road. Its offender still needs a cause. (COTA: 4 of 12
+  escape; only the amphitheater does so sideways.) The vertical population is
+  large enough on both circuits that any future promotion to a hard rejection
+  must be lateral-only, or it will fail 40 circuits on harmless apron slack.
   Confirmed PRE-EXISTING at
   `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
   tools/graph-parity.cjs cota indianapolis` returns exact parity
