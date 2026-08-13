@@ -22,9 +22,36 @@
 > `getBoundingClientRect` still returns real boxes for every descendant.
 > `checkVisibility()` is the question that was actually meant.
 >
-> Still open and NOT addressed here: `garagelivery` reports **68 tap targets
-> under WCAG 2.5.8's 24px floor** in five viewports. Pre-existing, unchanged by
-> this branch, and the largest real defect the matrix knows about.
+> `garagelivery`'s **69 sub-24px tap targets** (WCAG 2.5.8) are now fixed — they
+> were not colour swatches as the count suggested but `.cs-liv-edit` /
+> `.cs-liv-del`, the two buttons on every livery row, at 22x22.
+>
+> **STILL OPEN — the preview map is drawn at a low-resolution buffer.** Deploy's
+> circuit-aspect axis reports `map 80x119` on six of eight `select` cells: the
+> canvas is fitted while `#select` is still `hidden`, and nothing re-runs
+> `updateTrackPreview()` once the card has a box, so the bitmap keeps the
+> pre-layout placeholder size. A/B at desktop-1440x900 on the same tree:
+>
+> | | buffer | fill | skew |
+> |---|---|---|---|
+> | deploy's menus.js | 80x119 | **7%** | 0 |
+> | + this branch's pin guard | 80x119 | **46%** | 61.7% |
+>
+> So the guard is an improvement — a correctly-SIZED map instead of a 7%
+> thumbnail — but the map is soft until something re-runs the fit, and the
+> reported skew is `object-fit: contain` letterboxing a low-res bitmap into a
+> correct box, not distortion. It is not a matrix *finding* (the `map` metrics
+> are informational and those cells score 0), which is why it survived.
+>
+> Two fixes were tried and both made it worse, and the failures are worth
+> keeping: a frame-counted `requestAnimationFrame` retry never fires, because
+> `#select` is revealed inside a View Transition and the card is still 0x0 for
+> longer than any small rAF budget; and a `MutationObserver` on `#select`'s
+> `hidden` attribute refits at a moment when the card's height is not yet
+> bounded, producing maps at **fill 487%** that clip. The real fix has to refit
+> after the card's height is *constrained*, not merely after it is visible —
+> which is a question about the select screen's layout order, not about picking
+> a better observer. Left for a session with the budget to do it properly.
 
 Why the menus still feel wrong after a year of layout fixes, what modern CSS
 actually offers now, and which tools are worth adding. Measured against the
