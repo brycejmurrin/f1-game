@@ -36,7 +36,6 @@ const Ghost = (function () {
   let best = null;               // { time, t:[], s:[], x:[] } for current track
   let rec = null;                // in-progress lap: { t:[], s:[], x:[] }
   let lastSampleT = -1;
-  let enabled = true;            // master toggle (time-trial / settings)
 
   function round(v, p) { const m = Math.pow(10, p || 0); return Math.round(v * m) / m; }
 
@@ -62,7 +61,6 @@ const Ghost = (function () {
     lastSampleT = -1;
   }
 
-  function setEnabled(b) { enabled = !!b; }
   function hasGhost() { return !!best; }
   function bestTime() { return best ? best.time : Infinity; }
 
@@ -120,7 +118,7 @@ const Ghost = (function () {
   // or null if there is no ghost / playback is disabled. game.js turns this into
   // a pose with Tracks.sample(track, s) offset laterally by x.
   function at(t) {
-    if (!enabled || !best) return null;
+    if (!best) return null;
     const ts = best.t, ss = best.s, xs = best.x, n = ts.length;
     if (n === 0) return null;
     if (t >= ts[n - 1]) return { s: ss[n - 1], x: xs[n - 1], done: true };
@@ -135,7 +133,7 @@ const Ghost = (function () {
   // lap time when it was at that same position. Uses binary search on best.s[];
   // record() retains only forward-progress samples. Returns null without a ghost.
   function timeAt(s) {
-    if (!enabled || !best || !best.s.length) return null;
+    if (!best || !best.s.length) return null;
     const ss = best.s, ts = best.t, n = ss.length;
     // binary search: find largest index where ss[i] <= s
     let lo = 0, hi = n - 1;
@@ -156,7 +154,7 @@ const Ghost = (function () {
   }
 
   return {
-    setTrack, setEnabled, startLap, record, finishLap, at, timeAt,
+    setTrack, startLap, record, finishLap, at, timeAt,
     hasGhost, bestTime, clear,
   };
 })();

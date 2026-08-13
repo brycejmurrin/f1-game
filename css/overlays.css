@@ -170,21 +170,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 @media (orientation: landscape) {
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
      no longer floats up over the car */
-  .hud-bottom { flex-direction: row; align-items: flex-end; gap: 18px; bottom: calc(8px + var(--sab)); }
-  /* The strip is BOUNDED by the thumb columns, not nudged away from them. It used
-     to be centred with a hand-tuned offset ("20px left of centre so OVERTAKE
-     clears BOOST/OT") — a constant that silently encodes both the strip's width
-     and the button column's, so it went stale the moment ACTIVE AERO added a
-     sixth item and AERO began overlapping BRAKE on a small landscape phone.
-     Pinning both edges to the columns' real extents (button 76px at 16 = 92,
-     the manual/2-column stacks at 100 = 176) can never go stale that way, and
-     it is what the buttons-mode rule below already did.
-     Measured: the strip wants 467px. An iPhone SE landscape leaves 467 here,
-     383 in manual and 287 in buttons mode — so it also has to COMPACT, and
-     wrap rather than collide when even that is not enough. */
+  .hud-bottom { flex-direction: row; }
+  /* Positioning (left/right/bottom) now lives entirely in the INSTRUMENT
+     CLUSTER grid block below (`position: static`, `display: grid`) — this
+     rule only sets what that block does not: how the strip compacts when it
+     does not fit. Measured: the strip wants 467px. An iPhone SE landscape
+     leaves 467 here, 383 in manual and 287 in buttons mode — so it also has
+     to COMPACT, and wrap rather than collide when even that is not enough. */
   .hud-bottom {
-    left: calc(16px + var(--btn) + var(--btn-gap) + var(--sal));
-    right: calc(16px + var(--btn) + var(--btn-gap) + var(--sar));
     transform: none;
     justify-content: center;
     flex-wrap: wrap;

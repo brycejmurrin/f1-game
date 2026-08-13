@@ -68,7 +68,6 @@ const Log = (function () {
 
   const buf = [];                   // ring of {t, ns, level, msg}
   let seq = 0;                      // monotonic id, so logs({since}) can page
-  let sink = null;                  // optional subscriber (tests, tools)
 
   // ── configuration ────────────────────────────────────────────────────────
   function parseLevel(name) {
@@ -168,9 +167,6 @@ const Log = (function () {
     if (toConsole) {
       try { console[CONSOLE_FN[level]]("[" + ns + "] " + msg); } catch (_) {}
     }
-    // The sink sees everything either threshold admitted, so a test can watch
-    // debug records without also printing them into the run log.
-    if (sink) { try { sink(rec); } catch (_) {} }
   }
 
   function now() {
@@ -187,7 +183,6 @@ const Log = (function () {
     warn:  function (ns) { emit(2, ns, [].slice.call(arguments, 1)); },
     info:  function (ns) { emit(3, ns, [].slice.call(arguments, 1)); },
     debug: function (ns) { emit(4, ns, [].slice.call(arguments, 1)); },
-    trace: function (ns) { emit(5, ns, [].slice.call(arguments, 1)); },
 
     enabled: enabled,
 
@@ -228,10 +223,6 @@ const Log = (function () {
     },
 
     clear: function () { buf.length = 0; return true; },
-
-    /* Subscribe to every admitted record. One subscriber at a time (this is a
-       debug seam, not an event bus); pass null to detach. */
-    sink: function (fn) { sink = typeof fn === "function" ? fn : null; return !!sink; },
 
     /* Duration timing that costs nothing when the namespace is quiet:
          const done = Log.time("track", "build monza"); …; done();  */

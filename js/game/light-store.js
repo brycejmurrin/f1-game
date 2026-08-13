@@ -98,11 +98,6 @@ const LightStore = (() => {
       return clamp(v, d.min, d.max);
     }
 
-    // What a knob would resolve to WITHOUT the current condition's local profile —
-    // i.e. the value RESET falls back to. `set` stores only when the edit differs
-    // from this, so a profile never fills up with values it was going to get anyway.
-    function fallback(id) { return base(key(), TUNE_DEFS.find((t) => t.id === id)); }
-
     // Write `v` into profile map `prof` for condition `k` under the rule set()
     // uses: an explicit entry only where it differs from what k would resolve to
     // on its own. Storing a value that equals the DEFAULT is still required when
@@ -243,7 +238,7 @@ const LightStore = (() => {
     function persist() { store.set("lightTune", profiles); }
 
     return {
-      key, layers, fallback, apply, set, persist, copyToTracks, restore,
+      key, layers, apply, set, persist, copyToTracks, restore,
       // The live object, not a copy: js/game/photomode.js deletes a key out of it
       // to implement the tuner's RESET, and merges it for COPY VALUES.
       get profiles() { return profiles; },
