@@ -328,22 +328,6 @@ const Tracks = (function () {
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
-    // overheadSpan takes its fraction in a SPEC OBJECT, so no positional
-    // wrapper caught it and it fell into the shift-only group below — origin
-    // shift, no reverse/mirror. On a reversed circuit that mirrors everything
-    // it builds away from the walls it roofs (Monaco: the whole tunnel), and
-    // props-over-road cannot see it: that audit stops at CEIL = 5 m, so a roof
-    // in the WRONG place looks exactly like one in the right place. The
-    // shift-only note below called this out as a deferred pass; this is it.
-    // `offset` is lateral, so it mirrors with the side or a left haunch
-    // rebuilds itself on the right.
-    if (api.overheadSpan) w.overheadSpan = (spec) => {
-      if (!spec) return api.overheadSpan(spec);
-      const next = Object.assign({}, spec);
-      if (Number.isFinite(spec.frac)) next.frac = RS(spec.frac);
-      if (def.reverse && Number.isFinite(spec.offset)) next.offset = -spec.offset;
-      return api.overheadSpan(next);
-    };
     // floodMastRing places BOTH sides via every() — no remapping needed
     // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
@@ -379,6 +363,8 @@ const Tracks = (function () {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
       if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(SS(frac), ...r);
+      if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
+        spec && Number.isFinite(spec.frac) ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
       if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
         spec && Array.isArray(spec.points)
           ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
