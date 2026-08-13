@@ -10,10 +10,10 @@
 // dead range. This tool replaces "pick a number that feels right" with a
 // measurement, so a recentre can be argued from data.
 //
-//   node tools/tune-sweep.mjs                          # every slider, 3 circuits
-//   node tools/tune-sweep.mjs --sliders pm-rate,pm-pace
-//   node tools/tune-sweep.mjs --tracks monza,monaco --notches 1,3,5,7,10
-//   node tools/tune-sweep.mjs --aggr 0.80 --json out.json
+//   node tools/physics-tune-sweep.mjs                          # every slider, 3 circuits
+//   node tools/physics-tune-sweep.mjs --sliders pm-rate,pm-pace
+//   node tools/physics-tune-sweep.mjs --tracks monza,monaco --notches 1,3,5,7,10
+//   node tools/physics-tune-sweep.mjs --aggr 0.80 --json out.json
 //
 // Env: APEX_WORKERS=N (default 3 — 4+ can OOM SwiftShader on small boxes)
 //

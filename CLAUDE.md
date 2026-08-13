@@ -140,8 +140,9 @@ inside `render()`, the stint was driven through `act()` (which never presents a
 frame), and 120 steps of full lock crashed the car below both stamp gates
 anyway. Both of that file's never-passing tests are green now — M9 env from
 `polling` alone, M6 from being rewritten against what the code actually does.
-The habit that settled it was reaching for an instrument
-(`tests/manual/skid-probe.spec.js`) instead of a fifth theory.
+The habit that settled it was reaching for an instrument — a small script
+that wrapped `GLX.drawSkidBatch` to log call counts — instead of a fifth
+theory.
 
 Write tests against `__apex` hooks, not rendering magnitudes; prefer relative
 assertions ("faster on tarmac than grass") over absolute thresholds. New-test

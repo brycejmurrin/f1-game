@@ -150,3 +150,7 @@ node tools/apex-eval.mjs monza "GLX.hdrMode()" --raw
 # Light state on a night track (Monza has night:false — use vegas/singapore)
 node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```
+
+For wet-road screen-space reflections specifically,
+`node tools/ssr-probe.mjs --track=<id> --debug=<gates|hitmiss|hitcol|mix>`
+(`tools/README.md`).

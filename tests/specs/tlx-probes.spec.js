@@ -27,7 +27,7 @@ async function stopRendering(page) {
 test.describe("TLX — boot", () => {
   /* Budget raised: TLX boot + SwiftShader render is slow. M6/M9 failures were
      test defects (rAF polling starvation; skid marks need render(), not act()).
-     See docs/TESTING.md and tests/manual/skid-probe.spec.js. */
+     See docs/TESTING.md and docs/archive/manual-probes/skid-probe.spec.js. */
   test.slow();
 
   test("boots with the TLX backend installed on the GLX object", async ({ page }) => {
@@ -210,7 +210,7 @@ test.describe("TLX — boot", () => {
     // A SLIDING CAR, HELD SLIDING — not a crashed one.
     // skids.stamp() runs in render(), not act(). Stop inside the slide window,
     // then freeze() — freeze pauses physics but not rendering, so presented
-    // frames stamp. See tests/manual/skid-probe.spec.js and docs/TESTING.md.
+    // frames stamp. See docs/archive/manual-probes/skid-probe.spec.js and docs/TESTING.md.
     await page.evaluate(() => {
       window.__apex.jump(0.1, 70);
       window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 30);
