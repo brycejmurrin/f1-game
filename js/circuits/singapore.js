@@ -168,7 +168,7 @@
       // circuitKit-placed structure (the pit-race-control beacon below); every
       // other raw K() call in this file was independently tuned against the
       // engine's raw indexing and does not need it. Same formula tracks.js uses
-      // for def._sceneryShift (monaco.js:93-104 is the worked precedent).
+      // for def._sceneryShift (the KOLD legend in monaco.js is the worked precedent).
       const _offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
       const _offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
       const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
@@ -390,7 +390,7 @@
           const pc    = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
                          a.c[1],
                          a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          // Outer white shell — addCone is BASE-anchored (js/track/geom.js:153-164),
+          // Outer white shell — addCone is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js),
           // so `pc` (already sitting at ground height) IS the base position;
           // adding a.u*PETAL_H/2 floated the whole cone by half its own height.
           addCone(out, pc, 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
@@ -535,7 +535,7 @@
           for (let j = 0; j < 5; j++) {
             const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
             addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
-            // addCyl is BASE-anchored (js/track/geom.js:153-164) — this is the
+            // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — this is the
             // pier holding the rib up: base at the deck (c), rising the full
             // height 7 so its top meets the rib's base flush. The old
             // `vadd(c, a.u, 3.5)` (h/2) floated the pier's own base 3.5 m off
@@ -889,7 +889,7 @@
         // tower height, which only makes sense if the two never overlap in
         // XZ at all). KOLD converts the SAME literal frac into the raw node
         // index that lands where circuitKit's shift resolves it.
-        // The tower's "lattice" landmark (js/track/landmark-kit.js:93-110)
+        // The tower's "lattice" landmark (the `lattice` branch of tower() in js/track/landmark-kit.js)
         // stacks 6 levels inset 0.86x, so its real roof surface sits a touch
         // under the nominal size[1]=34 (~33.6 m), not at 34. addCone is
         // BASE-anchored, so the beacon's base needs to be near that real

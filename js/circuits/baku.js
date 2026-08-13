@@ -963,7 +963,7 @@
       for (let i = 0; i < 5; i++) {
         if (i === 1) continue;  // s=0.705 — National Flag Square (below) takes this spot instead
         const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
-        // addCyl is BASE-anchored (js/track/geom.js:153-164) — the old `a.u, 6`
+        // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — the old `a.u, 6`
         // offset floated the mast 6m above the water, treating the base arg as
         // if it were the centroid. Base sits directly on the anchor.
         addCyl(out, a.c, 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
@@ -986,7 +986,7 @@
           const plinthH = 0.6;
           addBox(out, vadd(aFlag.c, aFlag.u, plinthH / 2), [16, plinthH, 16], [0.30, 0.30, 0.32], bFlag);
           // Tapered shaft (two stages — slightly narrower toward the top).
-          // addCyl is BASE-anchored (js/track/geom.js:153-164), not centroid —
+          // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js), not centroid —
           // the old `poleH*0.42`/`poleH*0.84+poleH*0.08` args treated it as
           // centroid-anchored (half the stage height), floating each stage by
           // exactly half its own height. Stack bases instead, starting at the

@@ -413,7 +413,7 @@
           addBox(stage, vadd(a.c, a.u, 8), [7, 16, 7], WHITE, b);
           stage._mat = MAT.GLASS;
           // Cab glazing leans outward, as every control cab's does.
-          // addFrustum/addCyl are BASE-anchored (js/track/geom.js:153-164):
+          // addFrustum/addCyl are BASE-anchored (the addPrism base-anchoring note in js/track/geom.js):
           // these were authored as if `c` were the centroid, so the cab
           // floated 2 m above the shaft and the antenna 2 m above the cab —
           // 18/24 were "centre" heights for h=4/h=7 shapes; the base is
@@ -645,7 +645,7 @@
           center: vadd(a.c, a.u, 3), size: [10, 8, 14], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 2.1), [6, 4.2, 8], DRY, b);
-          // addPrism is BASE-anchored (js/track/geom.js:153-164): `c` is the
+          // addPrism is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js): `c` is the
           // base centre, occupying c -> c+u*sz[1]. 4.9 was authored as a
           // "centre" height for the h=1.8 roof (half=0.9 above the 4.2 wall
           // top), floating the whole roof by 0.7m — seat it on the wall top.
