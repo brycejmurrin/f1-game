@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 76 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 78 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -10,6 +10,17 @@ The suite covers physics, behaviour, geometry, cameras, UI, parts, steering,
 lighting, scenery, gamepad, timing/field hooks, multiplayer, career, the agent
 world view, headless RL, and the tooling contracts that keep the load order and
 the docs honest.
+
+**RUN `npm install` FIRST — an empty `node_modules` does not fail loudly.** It
+fails as ~18 scattered `ERR_MODULE_NOT_FOUND` suites inside an otherwise green
+run (`espree`, `eslint-scope`, `playwright`, `jsqr`), which reads exactly like
+a set of pre-existing breakages someone else left behind. Measured 2026-08-13:
+`test:tooling-fast` reported 344 pass / 18 fail on a fresh container and
+439 pass / 0 fail after `npm install`, with no source change between them —
+and two sessions in a row had by then written those 18 off as an environment
+quirk and baselined against them. If a suite fails with "Cannot find module",
+install before believing it. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps the
+install to seconds; the browsers are already at `/opt/pw-browsers`.
 
 ---
 
@@ -690,6 +701,8 @@ what it covers.
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
+| `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
+| `circuit-axis.test.mjs` | `tools/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |

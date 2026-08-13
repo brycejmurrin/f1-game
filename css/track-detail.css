@@ -37,6 +37,16 @@
      JS had just sized from it. An explicit 100% breaks that loop and gives
      the map the ~990px the layout always meant it to have. */
   width: 100%; height: 100%;
+  /* UI SIZE APPLIES HERE TOO. `zoom: var(--ui-scale)` rides `.sheet` and
+     `#overlay > *`; this dialog is neither, being full-bleed and top-layer, so
+     the setting simply did not reach it. Measured across the layout audit: the
+     select preview scales 267 -> 171 -> 120 px across UI SIZE 100/150/175
+     while this modal returned a byte-identical map at all three, on every
+     viewport — a player at 175% opened a popup still drawn at 100%.
+     Same mechanism as every other surface rather than a second one, and the JS
+     that fits the canvas already measures in local px (clientWidth), which is
+     the space zoom leaves those APIs reporting in. */
+  zoom: var(--ui-scale);
   background: #0a0a0e;
   display: flex; flex-direction: column;
   /* STRETCH, not the shared dialog base's `center`. On a column flex container
@@ -124,7 +134,14 @@
 @media (orientation: portrait) {
   #track-detail { overflow-y: auto; overscroll-behavior-y: contain; }
   #track-detail-body { overflow: visible; flex: none; }
-  #track-detail-canvas-wrap { flex: none; height: min(56vw, 320px); }
+  /* `min(56vw, 320px)` was a PHONE number applied to every portrait window.
+     On a rotated 1080x1920 monitor it pinned the map to 320px of 1920 — the
+     layout audit measured Jeddah filling 20% of its wrap there, the emptiest
+     cell in the whole sweep, while the panel below it had room to spare.
+     56vw still sets the shape on a phone (a 393px-wide screen lands at 220px,
+     unchanged); the ceiling now scales with the window it is actually in, so a
+     tall one spends its height instead of capping at a phone's worth. */
+  #track-detail-canvas-wrap { flex: none; height: min(56vw, 42svh, 640px); }
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
 }
 
@@ -153,6 +170,24 @@
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  /* A tall circuit fits by HEIGHT, so the width it does not take is dead —
+     measured at 1280x800: Jeddah 363px of a 982px wrap (37% fill) beside a
+     260px rail holding 27 turn chips three to a row, while Baku fills 99% and
+     wants every pixel of that wrap. js/game/menus.js sets data-map-tall from
+     the circuit's aspect, so the two cases stop sharing one fixed rail.
+     Percentage-capped rather than a flat 460px: on a 3440px ultrawide a rail
+     that wide is a column of whitespace with chips down one edge.
+
+     CLAMPED, NOT `min()`: percentages here resolve against the dialog's LOCAL
+     width, which `zoom: var(--ui-scale)` shrinks — at UI SIZE 175% on a 1280px
+     screen 34% is 248px, i.e. NARROWER than the 260px default this rule exists
+     to widen. Measured exactly that way before the clamp: the tall circuit's
+     rail came out 240 local px against the wide circuit's 260. The lower bound
+     makes the rule one-directional, which is what it always meant. */
+  #track-detail[data-map-tall="1"] #track-detail-panel {
+    flex-basis: clamp(260px, 34%, 460px);
+    max-width: clamp(260px, 34%, 460px);
+  }
 }
 
 /* ---------- Portrait-specific HUD fixes ---------- */
