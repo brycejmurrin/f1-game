@@ -167,9 +167,50 @@ const GLX = (function () {
   function setDepthMask(on) {
     if (on !== _depthWrite) { gl.depthMask(on); _depthWrite = on; }
   }
+  // The same idea extended to the three states draw() currently toggles on
+  // EVERY call — behind PerfTry.glStateCache until someone measures it on real
+  // hardware. GL defaults: culling ON, all four colour channels writable,
+  // polygon offset disabled. resetDrawState() re-syncs to those, and is called
+  // from begin()/present() alongside the blend/depth pair so a cached value can
+  // never outlive the frame that set it.
+  let _cullOn = true, _colorMaskA = true, _polyOffOn = false;
+  const _stateCache = () => { try { return typeof PerfTry !== "undefined" && PerfTry.on("glStateCache"); } catch (_) { return false; } };
+  function setCull(on) {
+    if (!_stateCache()) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); return; }
+    if (on !== _cullOn) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); _cullOn = on; }
+  }
+  function setAlphaWrite(on) {
+    if (!_stateCache()) { gl.colorMask(true, true, true, on); return; }
+    if (on !== _colorMaskA) { gl.colorMask(true, true, true, on); _colorMaskA = on; }
+  }
+  function setPolyOffset(bias) {
+    if (!_stateCache()) {
+      if (bias) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(bias[0], bias[1]); }
+      else { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
+      return;
+    }
+    if (bias) {
+      if (!_polyOffOn) { gl.enable(gl.POLYGON_OFFSET_FILL); _polyOffOn = true; }
+      gl.polygonOffset(bias[0], bias[1]);   // always re-set: the VALUE varies per decal
+    } else if (_polyOffOn) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false; }
+  }
+  function resetDrawState() {
+    gl.enable(gl.CULL_FACE); _cullOn = true;
+    gl.colorMask(true, true, true, true); _colorMaskA = true;
+    gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false;
+  }
 
   function compile(type, src) {
     const sh = gl.createShader(type);
+    // PerfTry #defines (js/game/perf-try.js) — default-off switches for the
+    // GLSL-side optimisations. Injected AFTER the #version line, because GLSL
+    // requires #version to be the first non-comment token; prepending would
+    // fail every compile. This is the single chokepoint for all GLX shaders,
+    // so one insertion covers lit/sky/post/shadow/decal/glow/particle.
+    try {
+      const defs = typeof PerfTry !== "undefined" ? PerfTry.defines() : "";
+      if (defs) src = src.replace(/^(\s*#version[^\n]*\n)/, "$1" + defs);
+    } catch (_) { /* PerfTry absent (standalone shader harness) or storage refused: compile the shader exactly as authored, with no #defines. */ }
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
@@ -389,7 +430,7 @@ const GLX = (function () {
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
     gl.cullFace(gl.BACK);
     gl.frontFace(gl.CCW);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -711,12 +752,12 @@ const GLX = (function () {
     setBlend(true);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);                 // decals are single quads — draw both faces
-    gl.colorMask(true, true, true, false);    // keep the SSR alpha tag underneath
+    setCull(false);                 // decals are single quads — draw both faces
+    setAlphaWrite(false);    // keep the SSR alpha tag underneath
     bindVAO(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    gl.colorMask(true, true, true, true);
-    gl.enable(gl.CULL_FACE);
+    setAlphaWrite(true);
+    setCull(true);
     setDepthMask(true);
   }
 
@@ -897,6 +938,11 @@ const GLX = (function () {
     // depth buffer to clear, and blend off is the opaque-pass default.
     gl.disable(gl.BLEND); _blendOn = false;
     gl.depthMask(true); _depthWrite = true;
+    // Same resync for the three states PerfTry.glStateCache collapses. This is
+    // what keeps a cached value from outliving the frame that set it — and it
+    // runs unconditionally, so the cached and uncached paths start each frame
+    // from identical GL state.
+    resetDrawState();
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -1303,10 +1349,10 @@ const GLX = (function () {
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
-    if (dbl) gl.disable(gl.CULL_FACE);
+    if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
     if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
-    if (dbl) gl.enable(gl.CULL_FACE);
+    if (dbl) setCull(true);
   }
 
   function freeInstancedBatch(batch) {
@@ -1333,12 +1379,12 @@ const GLX = (function () {
     // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
     // an explicit opt-out for opaque FX quads.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
-    if (noAW) gl.colorMask(true, true, true, false);
+    if (noAW) setAlphaWrite(false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
     // whose single-winding tyre walls must show from every angle without any
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
-    if (dbl) gl.disable(gl.CULL_FACE);
+    if (dbl) setCull(false);
     // Depth bias for DECAL geometry (start line, road markings): nudge the
     // fragment's depth toward the camera instead of lifting the mesh in Y.
     // A geometric lift is resolution-dependent — it holds up close and
@@ -1346,11 +1392,11 @@ const GLX = (function () {
     // near plane. polygonOffset scales with the local depth slope, so a
     // decal wins at every distance and grazing angle without moving it.
     const _db = opts && opts.depthBias;
-    if (_db) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(_db[0], _db[1]); }
+    if (_db) { setPolyOffset([_db[0], _db[1]]); }
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    if (_db) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
-    if (dbl) gl.enable(gl.CULL_FACE);
-    if (noAW) gl.colorMask(true, true, true, true);
+    if (_db) { setPolyOffset(null); }
+    if (dbl) setCull(true);
+    if (noAW) setAlphaWrite(true);
   }
 
   function drawSky(sky) {
@@ -1401,10 +1447,10 @@ const GLX = (function () {
     setDepthMask(false);
     // Pull the flat quad toward the camera in depth so it can't z-fight the
     // coplanar road underneath (the "shadow flickering under the car").
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
+    setPolyOffset([-4.0, -8.0]);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
   }
 
   function drawMark(modelMat, w, l) {
@@ -1417,10 +1463,10 @@ const GLX = (function () {
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
+    setPolyOffset([-4.0, -8.0]);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
@@ -1434,14 +1480,14 @@ const GLX = (function () {
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);   // sit on the road, no z-fight
+    setPolyOffset([-4.0, -8.0]);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
     }
     gl.drawArrays(gl.TRIANGLES, 0, vertCount);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
     return true;
   }
 
@@ -1505,11 +1551,11 @@ const GLX = (function () {
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);
+    setCull(false);
     gl.drawArrays(gl.TRIANGLES, 0, nDraw * 6);
     // Restore the default alpha-blend + culling for subsequent passes.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
   }
 
   // Transient FX particle batch (tyre smoke / sparks / kickup / rain spray).
@@ -1533,12 +1579,12 @@ const GLX = (function () {
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);
-    gl.colorMask(true, true, true, false);
+    setCull(false);
+    setAlphaWrite(false);
     gl.drawArrays(gl.TRIANGLES, 0, (floatCount / 10) | 0);
-    gl.colorMask(true, true, true, true);
+    setAlphaWrite(true);
     if (additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
   }
 
   function freeMesh(mesh) {
