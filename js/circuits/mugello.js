@@ -403,9 +403,21 @@
             out._mat = MAT.CONCRETE;
           }
           // Galvanised tube handrail capping the top step.
+          //
+          // Single-anchor extrapolation (cause class c): `a.c` is one ground
+          // sample at the road edge, and on Casanova-Savelli's tight radius
+          // the rail is up to rows*depth (~10 m) further out along `a.r` —
+          // far enough round the corner's fan that reusing a.c's accumulated
+          // step height (0.9 + rows*rise) floated the rail ~8 m above the
+          // actual hillside there. Re-seat on the ground actually under the
+          // rail; terrainYAt is null off the rendered ribbon, where the
+          // accumulated-step estimate remains the best available guess.
           out._mat = MAT.METAL;
           const topBack = 0.9 + rows * depth, topUp = 0.9 + rows * rise;
-          addBox(out, vadd(vadd(a.c, a.r, side * topBack), a.u, topUp + 1.0),
+          const railBase = vadd(a.c, a.r, side * topBack);
+          const railGy = groundUnder(railBase[0], railBase[2]);
+          const railUp = railGy != null ? railGy - a.c[1] + 1.3 : topUp + 1.0;
+          addBox(out, vadd(railBase, a.u, railUp),
             [0.09, 0.09, seg], [0.72, 0.74, 0.76], b);
           out._mat = 0;
         });
