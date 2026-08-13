@@ -223,8 +223,30 @@ an in-frame control:
 
 — overall MAD 3.32, 42,614 px over threshold, and the diff map is solid filled
 building faces, not the edge outlines sub-pixel drift produces. Cost is ~190
-extra uniform uploads/frame at that vantage, so it ships **off** pending a
-mobile-tier perf pass.
+extra uniform uploads/frame at that vantage.
+
+**Perf: it is FASTER, not a cost.** Interleaved A/B/A/B at the same vantage,
+median frame time — the two `off` blocks agree to 0.1%, so the harness is
+reproducible:
+
+| off | on | off | on |
+|---|---|---|---|
+| 6519 ms | **5618 ms** | 6512 ms | **5205 ms** |
+
+≈14–20% faster, which is the mechanism working as designed: a chunk binds only
+lamps whose radius reaches it, so fragments run fewer light-loop iterations, and
+that saving outweighs the extra uploads. Two caveats keep the knob **off by
+default** anyway: (1) these frames are 5–6.5 SECONDS under SwiftShader, ~60x off
+real-time and heavily fragment-bound — exactly the regime where cutting
+per-fragment light iterations wins biggest, so the magnitude will not transfer
+to a real GPU even if the direction does; (2) nothing here measures the mobile
+tier, whose own lamp loop is the cost this would help most and which is also the
+tier most exposed to per-draw upload overhead. Real hardware decides.
+
+Method note: the first two perf attempts died and it was NOT the feature — exit
+143, my own `timeout` firing. Singapore night renders at ~1–2 s/frame here, so a
+480-frame plan needed 8–16 minutes. Sample single-digit frame counts per block
+and interleave A/B/A/B for drift rather than sampling long.
 
 Two instruments that did NOT work, recorded so they are not retried: a
 union-of-distinct-lamps count via wrapping `gl.uniform3fv` reported 64 → 270,
