@@ -860,3 +860,72 @@ what it covers.
 - `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
   `tests/helpers/live-reporter.js` — the infrastructure sources
 - `tools/pick-tests.mjs`, `tools/test-bg.mjs`, `tools/test-shards.sh` — the runners
+
+---
+
+## Operational field notes (moved from CLAUDE.md, 2026-08-13)
+
+The measured history behind the testing gates. CLAUDE.md carries the rules;
+this section carries the evidence so the rules survive re-litigation.
+
+**Watcher anchoring.** Anchor on the reporter's terminal line
+`= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
+heartbeat lines contain `N/M done, K failed`, so a pattern like
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — CLAUDE.md recommended
+exactly that for weeks and every watcher built from it misfired. Match every
+terminal status, not just `passed`: a success-only watcher is silent through a
+crash, and silence looks like "still running". Watch the LOG, never the
+process table — a watcher whose command line contains its own grep pattern
+matches itself (`pgrep -cf "python3 -m http.server"` returned 1 on a box with
+no server; that 1 was the grep). Never `| tail` a live background run — tail
+buffers to EOF and the file stays empty. Adding `|Error:` to the UNTIL pattern
+gives early warning on the first stack trace, but re-arm for the terminal line.
+
+**Long queues (2026-08-07 measurements, seven groups, container-killed at
+80 min).** (1) `Monitor` caps at 30 minutes and `persistent: true` DOES NOT
+lift it — tried twice, both lapsed silently; pair every Monitor with a
+`Bash run_in_background` waiter on the queue's own completion marker. (2) Seed
+the seen-file when arming a de-duplicating watcher, or the first event is the
+entire backlog. (3) Make the driver resumable via terminal-marker files the
+driver writes AFTER a run returns — a fixed-list driver re-ran 86 minutes of
+banked groups after a restart. A group that started and died has no marker and
+correctly re-runs whole: a killed Playwright run banks nothing.
+(2026-08-13 addendum: name the driver's group list anything but `GROUPS` —
+that is a readonly bash builtin array and the assignment fails silently.)
+
+**One process, one browser group.** Local runs set `reuseExistingServer`, so
+a second Playwright process attaches to the first's HTTP server; killing
+either strands the survivor's specs with `net::ERR_CONNECTION_REFUSED`
+(measured: 33 false failures in a row reading like product bugs). Pairing two
+BROWSER groups in one batch runs 2 processes x 2 workers on 4 cores —
+measured on 2026-08-13 as the source of every over-budget timeout in a
+five-batch run (projection at 144-176 s vs a 120 s budget, props-over-road at
+1518 s vs its own comment predicting exactly this). Browser+node pairs are
+fine. To cover more at once, hand every spec to ONE process and raise
+`APEX_WORKERS`.
+
+**Orphans vs a second run.** Orphans from a killed run keep eating the box
+invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
+'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
+"orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
+second run you forgot is indistinguishable from orphans by process count.
+
+**`waitForFunction` on a rendering page.** Playwright polls the predicate on
+`requestAnimationFrame`; a SwiftShader page running the game loop starves the
+poll so the declared timeout never fires. MEASURED: `{ timeout: 3000 }`
+against a never-true predicate ran 109,665 ms on a parked Monza — 36x its
+bound — and overran on a menu page too. Only a THROWING predicate terminates
+promptly (11 ms). Pass `{ polling: 100, timeout: N }` on any rendering page.
+And once polling is fixed, a wait that still overruns means the CONDITION is
+unreachable, not that the page is slow — `tlx-probes`' M6 skid took four
+wrong mechanisms before anyone checked whether `skidVerts` could move
+(`skids.stamp()` runs in `render()`; the stint drove through `act()`, which
+never presents a frame). The habit that settled it: reach for an instrument
+(a wrapper logging call counts) instead of a fifth theory.
+
+**Subagent worktrees.** Worktree isolation bases new worktrees on the
+default-branch ref, and this repo's `origin/main` is a stale unrelated
+lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
+tree with an 8,409-line game.js). Every worktree brief starts with
+`git checkout -B <branch> <session SHA>` plus a fingerprint check of a
+session-known file.
