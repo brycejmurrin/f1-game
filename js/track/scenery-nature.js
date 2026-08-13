@@ -12,12 +12,31 @@ const SceneryNature = (function () {
   "use strict";
 
   function create(ctx) {
-    const { out, track, n, hw, px, py, pz, NIGHT, MAT, def, theme,
+    const { out, track, n, ds, hw, px, py, pz, NIGHT, MAT, def, theme,
             clearTreeDist,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, rejBox, recordBarrier, groundYAt,
             terrainYAt, onTrack, hash, upOf, norm, vadd, bankOffsetAt } = ctx;
     const { CROWD_DAY } = TrackSceneryData;
+
+    // Ground height under an ARBITRARY world x/z, for geometry whose footing
+    // is not at a known (node, lateral) — anything run out along a tangent,
+    // which on a curve leaves the lateral distance it was authored with.
+    // Prefers the rendered terrain; off the ribbon terrainYAt returns null, so
+    // fall back to nearest-node + lateral distance, which is the SAME closed
+    // form tools/float-audit.cjs falls back to. Matching its model is the point:
+    // a footing resolved by any other route disagrees with the grounding audit
+    // exactly where the ribbon ends, which is where long stands actually sit.
+    const groundUnder = (x, z) => {
+      const ty = terrainYAt(x, z);
+      if (ty !== null) return ty;
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < n; i++) {
+        const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
+    };
 
     // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
     // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
@@ -755,12 +774,42 @@ const SceneryNature = (function () {
           addBox(out, roofC, [rw, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
         }
         // Support columns under the roof's outer (trackside) edge.
+        //
+        // ⚠ addCyl is BASE-anchored (geom.js §addPrism: "addCyl/addCone/
+        // addFrustum are base-anchored the same way"). This passed the MIDPOINT
+        // — vadd(pc, u, H/2) — so every pylon on every circuit hung exactly
+        // half its own height in the air: 9.6 m of daylight under Abu Dhabi's
+        // 20 m posts, and floaters on 8 more circuits off this one line. It is
+        // the eighth instance of the base-vs-centroid defect the geom.js note
+        // enumerates. Measured over the 9 affected circuits: 95 -> 56 floating
+        // clusters from seating the base alone.
+        //
+        // The foot is then extended DOWNWARD to the ground under its own world
+        // x/z. A per-node lateral sample will not do: `off` runs along the
+        // tangent at node k while the track curves away, so on a long curved
+        // stand the post's true lateral distance is nowhere near gap+0.4 and
+        // the verge has eased metres further down by then (monaco 31 -> 28).
+        // Only ever lowering a foot already in place keeps this monotone —
+        // re-siting it onto the per-node frame instead moved the row onto
+        // different terrain and made Red Bull Ring WORSE (13 -> 15 floating
+        // primitives), because a foot that lands somewhere new can land worse.
         if (opts.pylons) {
           const posts = Math.max(2, Math.min(12, Math.round(len / 14)));
+          const H = roofY - 0.5;
           for (let i = 0; i < posts; i++) {
             const off = ((i + 0.5) / posts - 0.5) * len;
             const pc = vadd(vadd(a.c, a.t, off), a.r, -side * 4.6);
-            addCyl(out, vadd(pc, a.u, (roofY - 0.5) / 2), 0.28, roofY - 0.5, fasciaCol, 6, [a.r, a.u, a.t]);
+            // Ground under THIS post, queried by its actual WORLD x/z. A
+            // per-node lateral sample is not enough: `off` runs along the
+            // tangent at node k while the track curves away from it, so on a
+            // long curved stand the post's true lateral distance is nowhere
+            // near gap+0.4 and the terrain has eased metres further down by
+            // then. groundUnder resolves the surface at the foot's own world
+            // x/z, including off the terrain ribbon where these stands sit.
+            // 0.3 m of embed absorbs the residual sampling disagreement.
+            const drop = Math.max(0, pc[1] - groundUnder(pc[0], pc[2])) + 0.3;
+            addCyl(out, vadd(pc, a.u, -drop), 0.28, H + drop,
+                   fasciaCol, 6, [a.r, a.u, a.t]);
           }
         }
       }
