@@ -736,7 +736,17 @@
         minH: 12, maxH: 20, depth: 8, step: 20,
         window: WIN, windowCol: WINLIT, lit: true,
       });
-      broadcastCompound(K(0.615), 1, 24, { vans: 3, dishes: 2, mastH: 12 });
+      // gap was 24: broadcastCompound's mast reads terrain height once, at its
+      // own anchor point, then walks its mast/lamp offset out from there
+      // (js/track/scenery-identity.js) — at gap=24 that anchor lands right on
+      // the drop where the inland shoulder falls away toward the harbour, so
+      // the mast (offset further out and along the compound) sampled ground
+      // that wasn't under it and floated ~3.5-16 m depending on which piece
+      // (float-audit). vans=1 alone (a much shorter compound, so a smaller
+      // walk) barely moved the gap, which means the anchor point itself, not
+      // the walk distance, was the problem — gap=16 sits it back from the
+      // drop entirely (float-audit: clean).
+      broadcastCompound(K(0.615), 1, 16, { vans: 3, dishes: 2, mastH: 12 });
       cameraTower(K(0.625), -1, 26, { h: 16, boom: 1.4 });   // clear of the quay scaffold stand (9-19 m)
 
       // Distant landmark towers behind harbour apartments.
