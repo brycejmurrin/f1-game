@@ -73,6 +73,16 @@ belongs in a selector. `tests/unit/component-inventory.test.mjs` is what makes t
 removal provable — it fails on a family named here that `css/` no longer defines,
 so a consolidation cannot be claimed without this table moving.
 
+A family can also shrink without disappearing, and `cs-` did: the garage's
+preview bar had `.cs-view-btn` plus two variants that existed only to restate a
+font-size, a padding and a line-height (`.cs-view-zoom`, `.cs-view-nudge`) on
+buttons that all carry ids anyway, so those became `--vb-fs` / `--vb-pad` set on
+the ids. `.cs-cam-lbl` went with them — its single declaration duplicated the
+value `#cs-cam` already passed down by inheritance, so it could not change a
+pixel. Nothing in this document is asserted about a family's SIZE, which is
+exactly why the count needs `tests/unit/css-class-ratchet.test.mjs` as well:
+this table proves a family left, the ratchet proves the total came down.
+
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,
 `.p1`, `.you`, `.dim`. State is *meant* to be cross-cutting, so this is not a

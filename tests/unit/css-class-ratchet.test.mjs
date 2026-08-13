@@ -77,8 +77,11 @@ export function shellNodes() {
 //
 // 543 was the count at install time (STRUCTURE-REDECISION-2026-08 §Q5), and is
 // the figure SKILL.md rule 8 quotes as "the whole finding".
-// 541 after the `mb-` family collapsed onto #mb-career / #mb-career-sub contexts.
-const CLASS_CEILING = 541;
+// 541 after the mb-prefix family collapsed onto #mb-career / #mb-career-sub.
+// 538 after the garage preview bar's two chip variants became --vb-fs / --vb-pad
+// on the buttons' own ids, and .cs-cam-lbl (a duplicate of an inherited value)
+// went entirely.
+const CLASS_CEILING = 538;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
