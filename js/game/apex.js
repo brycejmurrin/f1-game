@@ -1512,6 +1512,13 @@ const api = {
       skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
       skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
       skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
+      // Direct reads of the internal gates the RENDER DISTANCE / SHADOW
+      // DISTANCE / MOON SHADOWS sliders actually drive, so their effect can be
+      // confirmed numerically instead of only by eye in a screenshot:
+      cullDist: G.frame.cullDist,   // metres; scenery beyond this is culled (0 = uncapped, only under the debug free-cam)
+      moonK: G.frame.moonK,         // weather-gated clear-moon floor (0 under cloud/fog/wet)
+      moonGate: G.frame.moonGate,   // max(moonK, the moonShadow>0.5 escape hatch) — what the prop/car shadow casts actually gate on
+      lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
     };
   },
   // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer

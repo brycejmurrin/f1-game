@@ -299,7 +299,7 @@ const GLX = (function () {
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
-      "uCarShadowMap", "uCarLightVP", "uCarShadowOn",
+      "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
@@ -964,9 +964,11 @@ const GLX = (function () {
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
       // Clear-night moon shadows: floor the key-dim fade with the MOON SHADOWS
-      // knob scaled by the clear-night factor (game.js frame.moonK — bright
-      // moon, low cloud, dry road, no fog). 0 = old fade-to-nothing night.
-      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonK || 0);
+      // knob scaled by the clear-night factor (game.js frame.moonGate — bright
+      // moon, low cloud, dry road, no fog; or, above 0.5, the knob itself
+      // forcing the gate open regardless of weather). 0 = old fade-to-nothing
+      // night.
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
@@ -986,6 +988,7 @@ const GLX = (function () {
         gl.uniform1i(litU.uCarShadowMap, 8);
         gl.uniformMatrix4fv(litU.uCarLightVP, false, SHD.carLightVP);
         gl.uniform1f(litU.uCarShadowOn, SHD.carArmed ? 1.0 : 0.0);
+        gl.uniform1f(litU.uCarBiasScale, SHD.carBoxScale || 1.0);
       } else {
         gl.uniform1f(litU.uCarShadowOn, 0.0);
       }
@@ -1549,7 +1552,7 @@ const GLX = (function () {
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
-    carShadowBegin: (lightVP) => SHD.carShadowBegin(lightVP),
+    carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),
     lampShadowEnd: () => SHD.lampShadowEnd(),
