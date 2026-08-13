@@ -259,10 +259,17 @@ most-load-bearing first.
 - **`career.js`** `matePts` is recomputed from finishing position without the
   `mate.retired` check the comment six lines above warns is required — corrupting
   a MY TEAM sponsor "double" fact.
-- **`js/game/agentview.js` `describe("span:N")`** treats a span's `s0/s1` as arc
-  metres, but the registry stores lap fractions — every `fromS/toS/lengthM` it
-  returns is off by a factor of `track.total`, while `worldModel()` handles the
-  same records correctly.
+- **The title screen's first paint is laid out in the wrong shape.**
+  `body[data-density]` picks `#overlay`'s one-column vs two-column grid, and
+  `js/game/sheetshape.js` used to write it on `DOMContentLoaded` — i.e. behind
+  all ~146 synchronous scripts. That wait is now gone (`classifyBody()` runs at
+  eval time), but it was NOT the whole cause: with the attribute written before
+  first paint, a ~0.43 layout shift still fires, sourced to `#menu-brand`
+  changing WIDTH (326px → 298px) as menu content and webfonts land. The open
+  item is unreserved space in the brand/button column. Numbers and the failed
+  attribution are in that file's comment; CLS scored 0.0073 / 0.444 / 0.540
+  across four runs on a loaded box, so it wants re-measuring somewhere quiet
+  (ideally the deployed Pages build) before anyone changes CSS for it.
 - **`js/game/spotify.js`** the setup-panel PLAY button calls `player.resume()`,
   null in remote mode, so it silently does nothing (should be `BACKEND.start()`).
 - **`gridUp()` draws `simRnd()` inside an `Array.sort` comparator**
@@ -299,9 +306,13 @@ most-load-bearing first.
   `showModal()`/`close()`/`dialog.screen` together. The restoring change already
   exists on an unmerged commit (`33976903`); cherry-pick it rather than
   reconstruct blind.
-- **`results.js`** the human-rival " PLAYER" tag is `appendChild`-ed and then
-  destroyed by a `textContent` assignment on the next line, so it never renders
-  (quali.js does the same thing in the correct order).
+- **Two entries were removed from this list after being checked against the
+  tree, not fixed here.** `agentview.js`'s `describe("span:N")` already converts
+  lap fractions to metres (`s.s0 * total`, with a comment naming the
+  convention), and `results.js` already sets `textContent` BEFORE appending the
+  " PLAYER" tag, with a comment saying why the order matters. Both were verified
+  live as well as by reading. The lesson is the one §1 states: this list is
+  prose, so it drifts in the *safe* direction too — entries outlive their bugs.
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
   `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and

@@ -265,6 +265,33 @@ window.SheetShape = (function () {
     }
   }
 
+  /* BODY DENSITY IS RESOLVED AT EVAL TIME, NOT ON DOMContentLoaded.
+     `body[data-density]` chooses between the title screen's ONE-column and
+     TWO-column grids (css/menus.css, css/responsive.css). Waiting for
+     DOMContentLoaded means waiting for all ~146 synchronous scripts, so the
+     menu's first paint was laid out in the wrong shape and relaid out later.
+     Nothing here needs that wait: every script tag sits AFTER the whole body
+     markup, so document.body and the stylesheets are already present when this
+     file evaluates. classifyBody() guards a missing body itself, so this stays
+     correct if the tag ever moves into <head>, and init() calling it again is
+     idempotent (the hysteresis reads the value it just wrote).
+
+     MEASURED, and NOT the whole story — recorded so the next person does not
+     re-derive it. Removing body[data-density] at runtime does flip #overlay
+     between one 836px column and two 300px columns, which is why this looked
+     like the cause of the title screen's ~0.43 layout shift. But with the
+     attribute written before first paint (measured 19593 ms vs FCP 19632 ms on
+     a loaded box) a shift of the same size STILL fires, and its sources are
+     #menu-brand changing WIDTH (326px -> 298px) as menu content and webfonts
+     land. So this ordering fix is correct on its own terms and removes one real
+     hazard, but it is not what closes CLS; the remaining culprit is unreserved
+     space in the brand/button column. Four runs on a box at load 4+ with a
+     pegged SwiftShader GPU process scored 0.0073 / 0.444 / 0.540 — too noisy to
+     conclude anything further here. Re-measure somewhere quiet before acting.
+
+     A non-default UI SIZE is still corrected later by watchScale(), because
+     --ui-scale is not applied until game.js restores it. */
+  classifyBody();
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
