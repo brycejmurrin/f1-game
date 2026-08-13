@@ -2597,6 +2597,16 @@ const Tracks = (function () {
       // let buildCenterline rotate the result by the same arc-length
       // `_sceneryShift` the scenery uses. Bit-identical output for every
       // circuit, whether or not its line moved.
+      //
+      // BOTH STEPS ARE REQUIRED — do not "simplify" this by dropping the
+      // `+ dress` in buildCenterline. Tried 2026-08-13: it looks like a
+      // double-shift and it is not. fmap is INDEX algebra about phiAuthor;
+      // dress is the ARC-length distance from the new line to that origin.
+      // Composed they equal "map through startFrac" in arc space, which is
+      // the contract js/circuits/suzuka.js states explicitly (source 0.8125/
+      // 0.0625/0.4298 -> racing 0.818/0.068/0.436). Dropping dress yields
+      // 0.200/0.450/0.817 and detaches Suzuka's figure-8 bridge from the
+      // crossover deck under it (verify-track.cjs rejects all three spans).
       const fmap = (s) => TrackSpace.toRacingFrac({ startFrac: phiAuthor, reverse: def.reverse }, s);
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));

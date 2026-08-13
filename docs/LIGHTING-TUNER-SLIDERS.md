@@ -67,6 +67,108 @@ The last two are why `tools/lighting-tuner-sweep.mjs` gained `day-overcast`/`day
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
+### The three DISTANCE knobs: where each one is actually demonstrable
+
+`lampReach` / `renderDistMul` / `shadowRange`+`moonShadow` are the sharpest case
+of "conditional, not dead" in the table above: each has exactly one family of
+(track, position, weather) where it moves anything at all, and the obvious test
+setup — Bahrain, night, dry, free-cam — is the one place where **all three** are
+provably inert. Measured 2026-08-13; use these recipes rather than re-deriving.
+
+**`renderDistMul` — needs DAY, a real player camera, and far scenery.**
+It scales the camera far-clip plane exactly (`M4.perspectiveTo`'s `far` arg,
+wrapped and read directly): 0.5→450 m, 1→900 m, 1.5→1350 m, 2→1800 m. But on
+this box `PerfGov.tier()` is 0, so `frame.cullDist` is the `_fogCull` branch —
+and `_fogCull = ceil(3/fogDensity)` **does not contain `farPlane`**; the far
+plane only gates whether that cull switches on. In clear day fog (~0.0008–0.0013)
+the cull is 0 (uncapped) at *every* multiplier, so the far plane is the ONLY
+lever, and it can only reveal scenery sitting between 900 m and 1800 m. Props in
+that band, measured with `scene({radius}).counts.inRadius`:
+
+| spa | suzuka | vegas | jeddah | singapore | abudhabi | silverstone | mexico | **bahrain** |
+|---|---|---|---|---|---|---|---|---|
+| 1550 | 1492 | 1357 | 538 | 418 | 258 | 210 | 122 | **70** |
+
+Bahrain is last by an order of magnitude — a `renderDistMul` A/B there is
+near-guaranteed to look like a no-op no matter how carefully it is shot. Use
+**daylight, `camera('chase')`**. And never `orbit()`/`view()`: under any free-cam
+`farPlane = dbgCam.far`, so the knob is bypassed entirely (and `cullDist` is
+forced to 0) — a free-cam A/B measures nothing.
+
+**The per-track band count is necessary but NOT sufficient — the VANTAGE must
+have an open sightline, and most do not.** Suzuka 0.10 and Vegas 0.50 both sit
+in the top three tracks by band count and both still showed nothing (MAD 0.99
+and 1.29, at/below the ~0.6–1.0 noise floor): the first is walled in by near
+forest, the second is a corner between casino blocks, so there is no line of
+sight for the extra 900 m to populate. Do not pick the vantage by eye — find it
+by counting **actual chunk draws**, which is exact and cheap: wrap
+`gl.drawElements` on the `#game` canvas, take the MIN over ~8 frames at each
+multiplier (the min rejects the env-probe/shadow-rebuild frames that make a
+single-frame count swing 209↔393), and look for a position where the two minima
+diverge. Measured on Spa, day:
+
+| Spa frac | 0.05 | 0.20 | 0.35 | 0.65 | 0.80 | **0.50** |
+|---|---|---|---|---|---|---|
+| min draws, mul 1 → 2 | 151→151 | 207→427 | 180→472 | 167→497 | 143→468 | **183→528** |
+| delta | **+0** (enclosed) | +220 | +292 | +330 | +325 | **+345 (+188%)** |
+
+**Spa 0.50, day, chase** is the reference shot: a distant hillside and treeline
+appear along the horizon where mul 1 renders bare sky, at **MAD 3.46 overall but
+6.19 in the horizon band vs 1.36–1.44 on the road** — i.e. 5.3× the same-value
+noise floor, and the saved diff-map shows solid tree/hill SHAPES rather than the
+edge outlines that sub-pixel camera drift produces. Spa 0.05, on the same track
+in the same session, gives exactly +0 draws and no visible change — the vantage
+matters more than the track.
+
+**`lampReach` — needs a lamp-saturated view with far lamps that currently lose.**
+For a lamp ahead, `d /= 1 + (reach-1)·cos²θ`; at reach 4 a dead-ahead lamp's
+SQUARED rank distance is quartered, so it ranks as if **half as far**. That only
+changes the selection when (a) lamps in range exceed `lampCull` (28), and (b)
+lamps exist in the newly-reachable band. Farthest selected lamp ahead, reach 1→4:
+
+| Singapore frac | 0.15 | 0.35 | **0.55** | 0.75 |
+|---|---|---|---|---|
+| reach 1 → 4 | 212→275 m | 292→295 m | **217→313 m** | 251→326 m |
+| gain | +63 m | +3 m | **+96 m (+44%)** | +75 m |
+
+**Singapore ~0.55** is the best demo. By contrast Vegas at frac 0.05 gains
+**0 m**: all 28 selected lamps sit within 33 m there (a dense casino cluster), so
+halving a distance cannot pull in anything new. Note frac 0.35 is nearly flat
+too — the spot matters as much as the track. Read the selection by wrapping
+`LightTune.setFrameLights` (it is called via property lookup on the global, so a
+monkeypatch takes effect) and measuring `frame.lights` distances against `eye`.
+
+**`moonShadow`'s escape hatch — needs BAD weather; it is a guaranteed no-op when dry.**
+`frame.moonGate = max(moonK, clamp((moonShadow-0.5)*2, 0, 1))`, and `moonK` is
+already 1 on a clear dry night, so the max() cannot move:
+
+| night weather | moonShadow 0.25 → 1 | moonGate |
+|---|---|---|
+| dry | 1 → 1 | **no change — inert by construction** |
+| wet | 0.101 → 0.056 | 0.101 → **1** |
+| fog | 0 → 0 | 0 → **1** (clean binary flip) |
+
+**Night + fog (or wet)** is the only condition where the gate moves at all: prop/car
+shadow casting goes fully off→on. Every dry-night A/B of this knob is measuring
+nothing, whatever the screenshot shows.
+
+**But the gate flipping is NOT visible, and that is the honest result.** With the
+gate driven 0→1 at Bahrain night/wet, from a frozen chase cam with byte-identical
+`eye`/`tgt`, the frame moved **MAD 1.081 against a same-value noise floor of
+1.061 — a signal/noise ratio of 1.0**, i.e. nothing above frame noise. The first
+attempt looked more promising (MAD 1.02) until a same-value repeat showed rain
+particles alone accounted for MAD 0.648 (ratio 1.58, still short of the "several
+times over" bar this file demands); killing the particles with
+`rainCount:0, drizzleCount:0, particleMul:0` removed that confound and the
+remaining signal vanished with it. The mechanism is sound and the state is
+verifiably live — the shadow simply has almost nothing to draw with: the night
+key light is `sunColor ≈ [0.08, 0.10, 0.15]`, so cast-shadow contrast against
+lamp-dominated night lighting is near zero, and the visible strength is
+`moonShadow × moonGate` on top of that. Treat `moonShadow > 0.5` as a
+state-level feature verified by `lightState().moonGate`, not something to sign
+off from a screenshot. (Unproven, worth checking before relying on it: whether
+raising `moonBright` alongside it gives the shadows enough key to actually read.)
+
 ## Five ways a LIVE knob still reads "no observed change"
 
 A follow-up runtime pass sampled one knob per class (shader-uniform, apply-only,

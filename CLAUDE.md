@@ -26,8 +26,15 @@ tools/README.md                       # the index of all 60+ tools (test-asserte
 **The reference is `docs/TESTING.md`** — every group, every spec, fixtures,
 philosophy. `tests/unit/test-groups.test.mjs` fails if it and `package.json`
 disagree. Concurrency and worktrees: `docs/PARALLEL-WORK.md`. The suite is
-111 Playwright specs plus 77 `node --test` unit suites; the browser half is
+111 Playwright specs plus 79 `node --test` unit suites; the browser half is
 SwiftShader-rendered and slow, which forces three rules:
+
+**`npm install` FIRST.** A fresh container has no `node_modules`, and the gap
+shows up as ~18 scattered `Cannot find module` suites inside an otherwise
+green run — which reads as someone else's pre-existing breakage, and was
+baselined against as exactly that by two sessions running. Measured: 344/18
+before, 439/0 after, no source change. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
+keeps it to seconds (browsers are already at `/opt/pw-browsers`).
 
 **1. Run browser groups in the BACKGROUND — never block, never poll.**
 A group is minutes to tens of minutes. Start it, arm a watcher, do other work:
@@ -316,7 +323,7 @@ css/             tokens.css + components/menus/hud/overlays/carsetup/data/tuner/
 index.html       shell — script tags, all static DOM, cache-bust version
 sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
-tests/           111 Playwright specs + 77 `node --test` unit suites (docs/TESTING.md)
+tests/           111 Playwright specs + 79 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
 .claude/         skills/ (task recipes, .claude/skills/README.md) and
                  workflows/ (multi-agent orchestration scripts, README there)

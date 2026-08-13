@@ -467,8 +467,21 @@
 #cs-options.cs-liv-grid .cs-liv-del {
   position: absolute;
   top: 2px;
-  width: 22px; height: 22px;
-  min-width: 22px; min-height: 22px;
+  /* 24, NOT 22 — WCAG 2.2 SC 2.5.8 (AA) is a 24x24 CSS px CONFORMANCE floor,
+     and at 22 these were the only sub-24 targets left in the whole matrix: 69
+     of them, the same two buttons on every livery row, reported in all five
+     viewports that reach this tab. Two pixels each.
+     The spacing exception does not rescue them. It applies when a 24px circle
+     centred on the target touches no other target's circle, and EDIT and
+     DELETE sit at opposite ends of the same 2px-inset row with the row itself
+     clickable underneath — adjacent targets by construction. Nor the
+     "equivalent control" exception: nothing else on this screen customises or
+     deletes a livery.
+     Kept as an explicit min-width/min-height pair as well as width/height so a
+     narrow grid column cannot shrink them back under the floor — the box is a
+     conformance floor, not a preference, which is why it is not --tap. */
+  width: 24px; height: 24px;
+  min-width: 24px; min-height: 24px;
   padding: 0;
   font-size: var(--fs-micro);
   z-index: 1;

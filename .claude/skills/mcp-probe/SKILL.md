@@ -251,6 +251,41 @@ as the sky/cloud guidance above; it held perfectly static (six samples, zero
 drift, ~3 s span) in the same session where chase cam cut twice in the same
 window.
 
+## An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render
+
+`numLights` is the per-frame ACTIVE (culled) light count, produced inside the
+render loop — so it needs several *rendered frames*, not elapsed wall-clock,
+before it means anything. Read it too early after `race()` or
+`setTimeOfDay()` and you get **0**, which reads exactly like "the floodlights
+aren't firing" — one of the symptoms in `lighting-tuner`'s own table.
+
+MEASURED 2026-08-13 (Monza, polling every 100 ms after `setTimeOfDay("dusk")`
+on a parked car): 0 at every sample through 2611 ms, then 28 at **2711 ms**.
+`bakedLights` stayed 292 the whole time — the baked set was never lost, only
+the active count was not yet computed. The settle time is NOT a constant: in
+a quieter moment the same sequence read 28 after ~1.1 s, and a fixed 1500 ms
+wait landed inside the dead window and produced a false `numLights: 0` that
+briefly looked like a real dusk-vs-dawn lighting bug. Under SwiftShader the
+frame rate — and therefore this window — moves with whatever else is loading
+the box.
+
+So never sample it on a timer. Poll until it settles:
+
+```js
+// RIGHT — wait for frames, not for the clock
+let n = 0;
+for (let i = 0; i < 40 && n === 0; i++) {
+  await new Promise(r => requestAnimationFrame(r));
+  n = __apex.lightState().numLights;
+}
+```
+
+Cross-check with `bakedLights` before believing any `numLights` reading:
+`bakedLights > 0 && numLights === 0` means "not settled yet," whereas
+`bakedLights === 0` is the genuine "this circuit baked no lights" case. Same
+shape as the SIXTH/SEVENTH traps — a real render state that is simply not
+ready yet, misread as a defect because the probe outran the renderer.
+
 ---
 
 ## Chrome DevTools MCP — live 3D / __apex debugging

@@ -20,6 +20,8 @@
 //   node tools/layout-audit.mjs --shots          # also capture a PNG per cell (slow)
 //   node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
 //   node tools/layout-audit.mjs --scale=100,130,150   # each viewport at each UI size
+//   node tools/layout-audit.mjs --circuits             # the two map screens, per circuit aspect
+//   node tools/layout-audit.mjs --circuits=jeddah,baku # or name them
 //
 // --scale JOINS THE VIEWPORT AXIS rather than becoming a third dimension of the
 // grid: a cell is identified as `ios-15-landscape@130`, so the queue, the merge
@@ -33,6 +35,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { pickChromium } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
@@ -73,13 +76,19 @@ const VIEWPORTS = [
     "a rotated monitor: portrait window, but the sheet is capped landscape"],
 ];
 
+// The CIRCUIT ASPECT axis lives in circuit-axis.mjs, beside the UI SIZE axis
+// in ui-scale-axis.mjs. It joins the SCREEN axis (`select#jeddah`) the same
+// way --scale joins the viewport axis, so the queue, the merge and the HTML
+// grid below need no knowledge of it.
+
 // SCREENS: how to get there, and what the eye is supposed to land on. `open`
 // runs in Playwright; anything that throws marks the cell skipped rather than
 // failing the sweep, because a screen that cannot be reached is itself a finding.
 const SCREENS = [
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
-  { id: "select", name: "Circuit select", root: "#select", open: async (p) => {
-      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 }); } },
+  { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
+      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await pickCircuit(p, circuit); } },
   { id: "garage", name: "Garage", root: "#carsetup", open: async (p) => {
       await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
@@ -148,10 +157,14 @@ const SCREENS = [
   // were being surveyed and this was not one of them, which is how a landscape
   // dead-band in it survived a 380-cell run and had to be found by hand. It opens
   // from the preview MAP in #select, not from a button with its own id.
-  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", open: async (p) => {
+  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await pickCircuit(p, circuit);
       await p.click("#sel-preview-map");
-      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 }); } },
+      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 });
+      // The modal fits its map on a ResizeObserver after the open transition
+      // (js/game/menus.js), so the first frame is not the final size.
+      await p.waitForTimeout(500); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
@@ -822,6 +835,92 @@ const PROBE = (rootSel) => {
         h: px(ch), content: px(el.scrollHeight) });
     }
   }
+  // MAPS: what is INSIDE a circuit canvas, which nothing else here can see.
+  //
+  // A canvas passes every check above while being completely wrong. Its box is
+  // present, visible, unclipped, on screen and big enough to tap — and the
+  // drawing in it is a sliver in the corner, or a bitmap stretched out of
+  // shape, or an outline running off the edge. That is precisely the defect
+  // that shipped: a DOM probe cannot fail on it, because in the DOM nothing is
+  // wrong. So read the pixels.
+  out.maps = [];
+  for (const sel of ["#sel-preview-map", "#track-detail-canvas"]) {
+    const cv = root.querySelector(sel);
+    if (!cv || !visible(cv)) continue;
+    const r = cv.getBoundingClientRect();
+    // Local (pre-zoom) px: everything here lives inside `zoom: var(--ui-scale)`
+    // and a raw rect would mix visual px into ratios taken against layout px.
+    const z = cv.currentCSSZoom || 1;
+    const cssW = r.width / z, cssH = r.height / z;
+    const m = { el: desc(cv), buffer: { w: cv.width, h: cv.height }, css: { w: px(cssW), h: px(cssH) } };
+
+    // SQUISH, by its own name: the bitmap's aspect against the box it is
+    // painted into. A fixed 520x300 buffer shown in a 128x255 slot is the
+    // original bug, and it is a single number.
+    const bufAR = cv.width / Math.max(1, cv.height);
+    const boxAR = cssW / Math.max(1, cssH);
+    m.aspectSkewPct = Math.round(Math.abs(bufAR - boxAR) / Math.max(bufAR, boxAR, 0.001) * 1000) / 10;
+
+    // FILL: how much of the space it was given the map actually occupies. Low
+    // fill is not automatically a defect — a tall circuit in a wide slot cannot
+    // fill it — but it is where the dead space is, and dead space is the
+    // question this whole axis was added to answer.
+    const slot = cv.parentElement;
+    if (slot && slot.clientWidth > 0 && slot.clientHeight > 0) {
+      m.fillPct = Math.round((cssW * cssH) / (slot.clientWidth * slot.clientHeight) * 100);
+    }
+
+    // INK: where the drawing actually landed inside its own buffer. A 2D canvas
+    // drawn by this app is same-origin and untainted, so getImageData is safe.
+    try {
+      const g = cv.getContext("2d");
+      if (g && cv.width > 0 && cv.height > 0) {
+        const W = cv.width, H = cv.height;
+        const d = g.getImageData(0, 0, W, H).data;
+        const at = (x, y) => d[(y * W + x) * 4 + 3] > 8;
+        let x0 = W, y0 = H, x1 = -1, y1 = -1, ink = 0;
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            if (at(x, y)) {
+              ink++;
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 < 0) {
+          m.blank = true;            // a canvas that drew NOTHING reads as a fine box
+        } else {
+          m.inkPct = Math.round((ink / (W * H)) * 100);
+          m.inkSpanPct = { w: Math.round(((x1 - x0 + 1) / W) * 100),
+            h: Math.round(((y1 - y0 + 1) / H) * 100) };
+          // CROPPED, measured rather than asserted. "Any ink on the border" is
+          // useless here — corner labels are deliberately clamped flush to the
+          // edge, so a boolean is true on every healthy render (measured: all
+          // of them). What separates a cut-off outline from a tangent label is
+          // the LENGTH of the inked run along an edge. Measured on Baku:
+          // correctly fitted 2% / 2%, the same circuit drawn with no padding
+          // 13% / 19%, and squashed into a narrow buffer 10% / 20%.
+          let edge = 0, longest = 0;
+          for (let x = 0; x < W; x++) { if (at(x, 0)) edge++; if (at(x, H - 1)) edge++; }
+          for (let y = 1; y < H - 1; y++) { if (at(0, y)) edge++; if (at(W - 1, y)) edge++; }
+          const run = (get, n) => {
+            let cur = 0;
+            for (let i = 0; i < n; i++) { if (get(i)) { cur++; if (cur > longest) longest = cur; } else cur = 0; }
+          };
+          run((i) => at(i, 0), W); run((i) => at(i, H - 1), W);
+          run((i) => at(0, i), H); run((i) => at(W - 1, i), H);
+          m.edgeInkPct = Math.round((edge / (2 * W + 2 * (H - 2))) * 100);
+          m.longestEdgeRunPct = Math.round((longest / Math.max(W, H)) * 100);
+          m.cropped = m.longestEdgeRunPct >= 10;
+        }
+      }
+    } catch (e) { m.inkError = String(e).slice(0, 60); }
+    out.maps.push(m);
+  }
+
   out.sheet = sheet === root ? null : { el: desc(sheet), w: px(sr.width), h: px(sr.height) };
   return out;
 };
@@ -837,6 +936,7 @@ const pick = (flag, all) => {
 };
 const viewports = pick("--viewports=", VIEWPORTS);
 const SCALES = parseScales(argv);
+const CIRCUITS_AXIS = parseCircuits(argv);
 const screens = argv.find((x) => x.startsWith("--screens="))
   ? SCREENS.filter((s) => argv.find((x) => x.startsWith("--screens=")).split("=")[1].split(",").includes(s.id))
   : SCREENS;
@@ -924,7 +1024,16 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
   // them last so the cheap overlay cells are already recorded if it times out.
   const ordered = [...screens].sort((a, b) =>
     (["hud", "pause", "results"].indexOf(a.id) + 1 ? 1 : 0) - (["hud", "pause", "results"].indexOf(b.id) + 1 ? 1 : 0));
-  for (const screen of ordered) {
+  // Expand only the screens that DRAW a circuit. Crossing the whole screen list
+  // with the circuit axis would multiply a 15-minute column by five to re-measure
+  // fourteen screens that never show a map.
+  const expanded = [];
+  for (const s of ordered) {
+    if (s.mapAxis && CIRCUITS_AXIS[0] != null) {
+      for (const c of CIRCUITS_AXIS) expanded.push({ ...s, id: s.id + circuitTag(c), circuit: c });
+    } else expanded.push(s);
+  }
+  for (const screen of expanded) {
     const cell = { viewport: vpName, why, screen: screen.id, screenName: screen.name };
     errors = [];
     if (!booted) cell.skipped = "boot failed";
@@ -960,7 +1069,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         await page.waitForTimeout(300);
         errors = [];
       }
-      await screen.open(page);
+      await screen.open(page, screen.circuit);
       // WAIT FOR THE OPEN TRANSITION, DO NOT GUESS AT IT. Every `.screen` is a
       // <dialog> that fades in (js/game/topmodal.js), and a flat 400ms measured
       // it MID-FADE on a loaded box: the probe's own `visible()` test reads
@@ -1018,7 +1127,17 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
           `  trunc ${String(n(cell.truncated)).padStart(2)}  underHW ${String(n(cell.underHardware)).padStart(2)}` +
           `  starved ${String(n(cell.starved)).padStart(2)}` +
           `  deepScroll ${String(n(cell.deepScroll)).padStart(2)}` +
-          `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}`));
+          `  xOverflow ${cell.docOverflowX ? "YES" : "no "}  err ${n(cell.errors)}` +
+          // Only the map screens carry this, and only they print it — a squished
+          // or blank canvas should be readable in the running log, not just in
+          // the JSON afterwards.
+          ((cell.maps || []).length
+            ? "  map " + cell.maps.map((m) => `${m.buffer.w}x${m.buffer.h}` +
+                (m.blank ? " BLANK" : "") +
+                (m.aspectSkewPct > 2 ? ` SKEW${m.aspectSkewPct}%` : "") +
+                (m.cropped ? ` CROP${m.longestEdgeRunPct}%` : "") +
+                (m.fillPct != null ? ` fill${m.fillPct}%` : "")).join(" ")
+            : "")));
   }
   await page.close();
   await ctx.close();
