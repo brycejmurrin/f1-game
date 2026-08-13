@@ -778,6 +778,13 @@
 
       // ── YACHT BUILDER ─────────────────────────────────────────────────────
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
+        // Seat the hull on the ACTUAL water surface, not the quay terrain
+        // anchor() resolved: waterSurface()/waterField() lay their sheet at
+        // pyMin - 0.8 (js/track/tracks.js), well below the marina promenade
+        // anchor() samples. X/Z stay the caller's berth position — only Y
+        // moves off the ground and into the harbour, with ~0.25*sc of hull
+        // draught below the waterline so it reads as floating IN the water.
+        yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
         out._mat = MAT.METAL;
@@ -1201,6 +1208,11 @@
       // Hull prism bow + stacked white superstructure decks + wrap-around
       // railings + radar arch + mast + helipad disc + tender on the aft deck.
       const megaYacht = (a, sc, hullCol) => {
+        // Same fix as `yacht()` above: anchor() gives quay-terrain height,
+        // but the hull needs to sit on the harbour water surface
+        // (pyMin - 0.8), draught below the waterline. X/Z keep the berth
+        // position already validated by the onTrack() check at the call site.
+        a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];
