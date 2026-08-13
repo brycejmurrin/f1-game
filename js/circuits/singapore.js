@@ -1311,8 +1311,13 @@
         addBox(out, vadd(a.c, a.u, 2.4 * sc), [2.6 * sc, 1.8 * sc, 4 * sc], [0.42, 0.30, 0.20], b);  // cabin
         out._mat = 0;
         addBox(out, vadd(a.c, a.u, 2.6 * sc), [2.7 * sc, 0.7 * sc, 4.1 * sc], glow, b);              // lit windows
-        // string of festive lights along the roofline
-        for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 1.4 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
+        // String of festive lights along the roofline. The cabin (above) is
+        // only 4*sc long (half-extent 2*sc along a.t); at the old 1.4*sc
+        // spacing the two end lights (s=-2/+2) sat 2.8*sc out — past the
+        // cabin's own footprint and too high above the hull deck (1.75*sc
+        // clear) to rest on anything, hanging unsupported past the roof's
+        // edge. 0.9*sc keeps the whole 5-light string within the cabin.
+        for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 0.9 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
       };
       for (let i = 0; i < 6; i++) {
         const s = [0.24, 0.33, 0.42, 0.46, 0.83, 0.87][i];
