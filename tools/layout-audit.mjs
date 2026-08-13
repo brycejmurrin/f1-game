@@ -20,6 +20,8 @@
 //   node tools/layout-audit.mjs --shots          # also capture a PNG per cell (slow)
 //   node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
 //   node tools/layout-audit.mjs --scale=100,130,150   # each viewport at each UI size
+//   node tools/layout-audit.mjs --circuits             # the two map screens, per circuit aspect
+//   node tools/layout-audit.mjs --circuits=jeddah,baku # or name them
 //
 // --scale JOINS THE VIEWPORT AXIS rather than becoming a third dimension of the
 // grid: a cell is identified as `ios-15-landscape@130`, so the queue, the merge
@@ -33,6 +35,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { pickChromium } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
@@ -73,13 +76,19 @@ const VIEWPORTS = [
     "a rotated monitor: portrait window, but the sheet is capped landscape"],
 ];
 
+// The CIRCUIT ASPECT axis lives in circuit-axis.mjs, beside the UI SIZE axis
+// in ui-scale-axis.mjs. It joins the SCREEN axis (`select#jeddah`) the same
+// way --scale joins the viewport axis, so the queue, the merge and the HTML
+// grid below need no knowledge of it.
+
 // SCREENS: how to get there, and what the eye is supposed to land on. `open`
 // runs in Playwright; anything that throws marks the cell skipped rather than
 // failing the sweep, because a screen that cannot be reached is itself a finding.
 const SCREENS = [
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
-  { id: "select", name: "Circuit select", root: "#select", open: async (p) => {
-      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 }); } },
+  { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
+      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await pickCircuit(p, circuit); } },
   { id: "garage", name: "Garage", root: "#carsetup", open: async (p) => {
       await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
@@ -148,10 +157,14 @@ const SCREENS = [
   // were being surveyed and this was not one of them, which is how a landscape
   // dead-band in it survived a 380-cell run and had to be found by hand. It opens
   // from the preview MAP in #select, not from a button with its own id.
-  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", open: async (p) => {
+  { id: "trackdetail", name: "Circuit detail", root: "#track-detail", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await pickCircuit(p, circuit);
       await p.click("#sel-preview-map");
-      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 }); } },
+      await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 });
+      // The modal fits its map on a ResizeObserver after the open transition
+      // (js/game/menus.js), so the first frame is not the final size.
+      await p.waitForTimeout(500); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
@@ -810,6 +823,7 @@ const pick = (flag, all) => {
 };
 const viewports = pick("--viewports=", VIEWPORTS);
 const SCALES = parseScales(argv);
+const CIRCUITS_AXIS = parseCircuits(argv);
 const screens = argv.find((x) => x.startsWith("--screens="))
   ? SCREENS.filter((s) => argv.find((x) => x.startsWith("--screens=")).split("=")[1].split(",").includes(s.id))
   : SCREENS;
@@ -897,7 +911,16 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
   // them last so the cheap overlay cells are already recorded if it times out.
   const ordered = [...screens].sort((a, b) =>
     (["hud", "pause", "results"].indexOf(a.id) + 1 ? 1 : 0) - (["hud", "pause", "results"].indexOf(b.id) + 1 ? 1 : 0));
-  for (const screen of ordered) {
+  // Expand only the screens that DRAW a circuit. Crossing the whole screen list
+  // with the circuit axis would multiply a 15-minute column by five to re-measure
+  // fourteen screens that never show a map.
+  const expanded = [];
+  for (const s of ordered) {
+    if (s.mapAxis && CIRCUITS_AXIS[0] != null) {
+      for (const c of CIRCUITS_AXIS) expanded.push({ ...s, id: s.id + circuitTag(c), circuit: c });
+    } else expanded.push(s);
+  }
+  for (const screen of expanded) {
     const cell = { viewport: vpName, why, screen: screen.id, screenName: screen.name };
     errors = [];
     if (!booted) cell.skipped = "boot failed";
@@ -933,7 +956,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         await page.waitForTimeout(300);
         errors = [];
       }
-      await screen.open(page);
+      await screen.open(page, screen.circuit);
       // WAIT FOR THE OPEN TRANSITION, DO NOT GUESS AT IT. Every `.screen` is a
       // <dialog> that fades in (js/game/topmodal.js), and a flat 400ms measured
       // it MID-FADE on a loaded box: the probe's own `visible()` test reads
