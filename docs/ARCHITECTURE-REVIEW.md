@@ -196,10 +196,32 @@ journal; this is what remains.
   `HEAD` 6/6 fail at 20.3–22.1 s, base worktree 6/6 fail at 21.7–22.8 s. No
   timeouts on either side — these are assertion failures, not contention. Repro:
   `node tools/test-solo.mjs tests/specs/hud-layout.spec.js -g notched-landscape`.
-  The three items are truncated by the live reporter, so read them from a run
-  with a full reporter before fixing. Note §7's A19 entry claims the hud-layout
-  coverage gap "is closed for landscape" — closed for COVERAGE, evidently, but
-  the coverage is failing.
+
+  **Diagnosed — one collision, and it IS player-visible.** A `--reporter=list`
+  run gives the actual payload: `hudClash: ["#hud-sectors+pausebtn"]` (a single
+  pair; the "Received +3" in the live reporter is diff LINES, not items). The
+  arithmetic: `#pausebtn` is `width/height: var(--tap)` at `top: calc(8px + …)`
+  (`css/overlays.css:477`), so on touch — where `--tap: 52px`
+  (`css/tokens.css:405`) — it spans y 8→60. `#hud-sectors` is pinned at
+  `top: calc(56px + …)` (`css/hud.css:156`). **A 4 px overlap.** The 56px
+  constant works against the 44px desktop `--tap` (44+8 = 52 < 56) and stops
+  holding at 52. `css/overlays.css:492` records a sibling of the same bug class
+  ("on touch (--tap: 52px) CHASE overlapped…"), so this is a known trap, not a
+  novel one.
+
+  Why it matters more than the portrait case the spec already dismissed: that
+  one (`.hud-top`+`#pausebtn`, a measured 8.7px collision) is unreachable
+  behind the full-screen `z-index: 9000` `#rotate-device` block, which is why
+  `HUD_LANDSCAPE_ONLY` exists and why the spec author correctly refused to move
+  CSS nobody could see move. In LANDSCAPE `#rotate-device` is not up, so this
+  collision is on screen: the sector splits sit on the pause button on a
+  notched phone. The fix is to derive the sectors' offset from the button's
+  real box (`8px + var(--tap) + gap`) instead of the hard-coded 56 — which
+  leaves desktop unchanged (44+8+4 = 56) and moves touch down 8px. Note also
+  that the two elements scale the safe-area inset differently (`#hud-sectors`
+  divides `--sar`/`--sat` by `--hud-scale`, `#pausebtn` does not), so they
+  additionally drift apart at non-default HUD SIZE — worth settling in the same
+  pass.
 - **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
   `indianapolis` 4.74 m over the road against a 0.2 m cap
   (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
