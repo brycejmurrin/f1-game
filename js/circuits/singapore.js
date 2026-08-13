@@ -485,9 +485,18 @@
       }
 
       // Bay water reflection streaks — flat bright strips just above water level.
-      // Placed at dist > 38 m so they sit beyond the barriers.
+      // Placed at dist > 38 m so they sit beyond the barriers. dist was 44,
+      // inside the s=0.20 local water patch's own inner edge (waterBand
+      // gap 52) by 8 m — no water surface reaches that close to shore there,
+      // so the audit's water-as-footing credit never applied and the strips
+      // floated over bare (unrendered) bay. 60 clears every band's inner
+      // edge this loop's s values touch (52/40/58) with margin. Single
+      // anchor(a) also gets walked +/-44 m along the tangent per i (Trap B):
+      // on a curve that chord drifts from the true arc, so the worst i
+      // (i=0/9) needs more clearance than the s-centre alone implies — 74
+      // instead of 60 to clear that drift too.
       for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
-        const a = anchor(K(s), 1, 44);
+        const a = anchor(K(s), 1, 74);
         for (let i = 0; i < 10; i++) {
           const c   = vadd(vadd(a.c, a.t, (i - 4) * 11), a.u, 0.5);
           const hue = (i + Math.round(s * 17)) % 4;
@@ -761,7 +770,16 @@
           // Main structural tube
           addCyl(out, c, 2.4, 4.4, [0.88, 0.90, 0.95], 6, [a.r, a.u, a.t]);
           // Side lattice bar
-          addBox(out, vadd(c, a.r, Math.sin(t2 * 11) * 5.5), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
+          const barOff = Math.sin(t2 * 11) * 5.5;
+          addBox(out, vadd(c, a.r, barOff), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
+          // Connecting strut back to the main tube (cause: cantilever, docs/
+          // SCENERY-GROUNDING.md §3.4). At the widest swing (|barOff|~5.5) the
+          // bar's inner face sits ~3.1 m clear of the tube's own 2.4 m radius
+          // — past the audit's overlap reach, so it hung with no visible arm
+          // carrying it. Spans from the tube out to the bar with a 0.3 m
+          // overlap margin on each end.
+          addBox(out, vadd(c, a.r, barOff / 2), [Math.abs(barOff) + 0.6, 0.4, 0.4],
+                 [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
           // Helix crossbar
           if (j % 2 === 0)
             addBox(out, vadd(c, a.t, Math.cos(t2 * 7) * 3.5), [0.7, 1.1, 5.2], [0.83, 0.85, 0.90], [a.r, a.u, a.t]);
