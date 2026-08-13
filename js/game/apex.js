@@ -918,10 +918,16 @@ const api = {
   // base height (≈ road grade + groundYAt) against terrainY just under it.
   groundY(f, lat = 0) {
     if (!G.track) return false;
-    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
+    const sPos = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, sPos, smp);
+    // Bare centreline p[1] is wrong on any banked corner — same defect eyeAt()
+    // documents above (Zandvoort's outer edge stands 2.4 m proud of the plane).
+    // Ride the bank like buildRoad/buildTerrain and the in-race cameras do.
+    const bk = Tracks.banking(G.track, sPos, lat);
+    const roadY = smp.p[1] + (bk ? bk.dy : 0);
     const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
     const ty = Tracks.terrainY(G.track, x, z);
-    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +smp.p[1].toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - smp.p[1]).toFixed(3) };
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +roadY.toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - roadY).toFixed(3) };
   },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
