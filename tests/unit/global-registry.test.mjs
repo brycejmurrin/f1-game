@@ -14,9 +14,10 @@
  * new code cannot add to them — fix the read or extend the manifest instead):
  *
  *   1. one file, one global — every file eval-assigns exactly one global.
- *      Exceptions are enumerated: mat4.js's [M4, V3] pair, and the three
- *      deliberate multi-writer ACCUMULATOR globals (GLXShaders, TLXShaders,
- *      TrackDefs) whose writer sets are frozen per name.
+ *      Exceptions are enumerated: mat4.js's [M4, V3] pair, plus the deliberate
+ *      multi-writer ACCUMULATOR globals — GLXShaders/TLXShaders (writer counts
+ *      frozen) and TrackDefs (product data designed to grow: every new circuit
+ *      is a new writer, so only its js/circuits/ home is pinned, not a count).
  *   2. eval-time reads resolve in load order — a global referenced during
  *      evaluation must be assigned by an earlier-or-same file (this is the
  *      invariant HARD_EDGES hand-records; violating it is a load-time
@@ -52,10 +53,21 @@ const MULTI_GLOBAL = {
 // Globals deliberately written by MANY files (accumulator idiom:
 // `window.X = Object.assign(window.X || {}, …)` / `(window.X = window.X || []).push`).
 // Value = the frozen writer count; the writer set may only shrink or stay.
+// Growing one is a deliberate act: bump the count in the same commit that
+// adds the writer (e.g. a new shader file merging into GLXShaders).
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
   TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
-  TrackDefs: 40,  // every circuit file pushes its definition onto the list
+};
+
+// Accumulator globals that are PRODUCT DATA designed to grow — no writer-count
+// freeze, only a writer-location rule. TrackDefs gains a writer with every new
+// circuit (`new-track` is a sanctioned routine flow); per-file discipline is
+// already covered by the one-global rule above (each circuit file assigns
+// exactly TrackDefs), so the only thing to pin is that nothing OUTSIDE
+// js/circuits/ ever writes it.
+const GROWABLE_GLOBALS = {
+  TrackDefs: /^js\/circuits\//,
 };
 
 // Known reads of names NO manifest file assigns — each with its story. A new
@@ -101,16 +113,26 @@ test("one file, one global — every file eval-assigns exactly its declared glob
     "new multi-global files are not allowed — split the file or fix the leak");
 });
 
-test("every global has one writer, except the frozen accumulator set", () => {
+test("every global has one writer, except the declared accumulators", () => {
   const bad = [];
   for (const [nm, writers] of scan.assignedBy) {
+    const where = GROWABLE_GLOBALS[nm];
+    if (where) {
+      // growable product-data accumulator: any number of writers, but only
+      // from the declared location.
+      for (const f of writers)
+        if (!where.test(f)) bad.push(`${nm} is written by ${f}, outside its home ${where}`);
+      continue;
+    }
     const cap = SHARED_GLOBALS[nm] ?? 1;
     if (writers.length > cap)
-      bad.push(`${nm} is written by ${writers.length} files (baseline ${cap}): ${writers.join(", ")}`);
+      bad.push(`${nm} is written by ${writers.length} files (frozen at ${cap}): ${writers.join(", ")}`);
   }
   assert.deepEqual(bad, [],
-    "a global gained a writer — accumulator globals are frozen; a second writer " +
-    "to a normal global is a collision, not a pattern");
+    "a global gained a writer. If this is a deliberate new writer — e.g. a new " +
+    "shader file merging into GLXShaders/TLXShaders — bump that name's frozen " +
+    "count in SHARED_GLOBALS in this same commit; a second writer to a normal " +
+    "single-owner global is a collision — rename the new file's global instead");
 });
 
 test("eval-time reads resolve in load order (manifest FULL is a topological sort)", () => {
@@ -143,10 +165,17 @@ test("call-time reads resolve to SOME manifest global, or a documented external"
     "with its story, in the same commit that adds it)");
 });
 
+// Dynamic `window[<expr>]` sites the scanner cannot resolve, frozen as
+// "file:line" strings with a reason. Empty today, and it should stay that
+// way — an entry here is a permanent blind spot in the registry.
+const KNOWN_UNSCANNABLE_SITES = [];
+
 test("the unscannable window[<expr>] class stays extinct", () => {
   const sites = Object.entries(graph.files)
-    .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line} ${u.site}`));
+    .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line}`))
+    .filter((s) => !KNOWN_UNSCANNABLE_SITES.includes(s));
   assert.deepEqual(sites, [],
     "dynamic window[expr] access defeats the whole registry — name the global " +
-    "statically, or record the site here with a reason if it is truly unavoidable");
+    "statically; if truly unavoidable, record the site in KNOWN_UNSCANNABLE_SITES " +
+    "as \"file:line\" with a comment saying why it cannot be static");
 });
