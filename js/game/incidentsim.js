@@ -114,7 +114,7 @@ const IncidentSim = (function () {
     };
   }
   function fin(v) { return typeof v === "number" && Number.isFinite(v); }
-  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   function create(ctx) {
     G = ctx;

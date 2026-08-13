@@ -39,6 +39,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // netplay.js closes over NetSnapshot and NetSession as globals, so they have to
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
 // keeps the interp buffer honest and costs nothing.
+globalThis.M4 = eval(src("js/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;

@@ -11,8 +11,7 @@ const GameCams = (function () {
 let VMAX = 72;              // injected at boot (GameCams.init) — speed normaliser
 function init(opts) { if (opts && opts.vmax) VMAX = opts.vmax; }
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/mat4.js)
 
 // Scratch samples reused every call (no per-frame allocation).
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };

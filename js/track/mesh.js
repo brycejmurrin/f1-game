@@ -15,7 +15,7 @@ const TrackMesh = (function () {
   // js/track/spline.js — eval-time destructures (hard edges).
   const { cross, MAT } = TrackGeom;
   const { curvature } = TrackSpline;
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
   // Uniform Catmull-Rom through p1..p2. C1 where a lerp is only C0, passes
   // through every node, and reproduces a straight line exactly on collinear
   // input — so it is a drop-in wherever a continuous SLOPE is wanted and the

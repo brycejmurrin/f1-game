@@ -9,11 +9,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
 const P = MANIFEST.PATHS;
 
+// Read one js/ file into a fresh sandbox, converting top-level `const` to `var`
+// so the global lands as a sandbox property (same trick as verify-track.cjs).
+// js/mat4.js goes in FIRST every time: it is the second <script> tag in the real
+// shell and the home of the shared scalar helpers (M4.clamp/lerp/wrapDelta), so
+// a file loaded without it is not the file the browser evaluates.
+function runInto(ctx, file) {
+  const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
+  vm.runInContext(source, ctx, { filename: file });
+}
 function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Map, Set };
   sandbox.window = sandbox;
-  const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(source, vm.createContext(sandbox), { filename: file });
+  const ctx = vm.createContext(sandbox);
+  runInto(ctx, "js/mat4.js");
+  runInto(ctx, file);
   return sandbox[name];
 }
 

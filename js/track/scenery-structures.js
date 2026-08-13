@@ -584,7 +584,16 @@ const SceneryStructures = (function () {
       }
       out._mat = prevMat;
     };
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // Was the one DIVERGENT copy in the tree — `Math.max(lo, Math.min(hi, v))`
+    // against everyone else's comparison ladder. VERDICT: not a bug. The two
+    // forms differ only ABOVE an inverted range (lo > hi: the Math form pins to
+    // lo, the ladder to hi), on -0, and on a non-number argument (Math coerces,
+    // `<`/`>` do not). All eight call sites below pass literal lo < hi and a
+    // finite number — every `rows`/`tiers`/`density` in js/circuits/ is a
+    // numeric literal — so the swap is output-identical, verified by
+    // tools/verify-track.cjs. Migrated rather than left so the divergence
+    // cannot be mistaken for intent later.
+    const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
     // bleacher(): open raked seating on a bolted frame — planks on posts, a back
     // guard rail, and nothing else. No back shell, no roof, no fascia. This is

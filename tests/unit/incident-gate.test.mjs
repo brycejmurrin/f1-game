@@ -37,6 +37,8 @@ function load() {
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
     isNaN, isFinite, console, DebrisWorld,
   });
+  // js/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
+  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
   vm.runInContext(SRC, ctx, { filename: "js/game/incidentsim.js" });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mkCar = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0,

@@ -51,7 +51,43 @@ const store = {
     this._cache.set(key, v);
     this.rev++;
   },
+  // ---- cross-tab -----------------------------------------------------------
+  // THE CACHE MAKES A SECOND TAB DANGEROUS, and that is what this fixes. `_cache`
+  // exists so the render loop never calls getItem/JSON.parse, and it is populated
+  // on first read — so once tab A has read `career`, it answers every later get()
+  // from memory and never learns that tab B wrote a newer save. Tab A then writes
+  // its stale object back over B's on its next set(), and neither tab shows an
+  // error: the player finishes a season in one window and finds it gone.
+  //
+  // The minimum correct behaviour is NOT a merge (two divergent career saves have
+  // no defined join) — it is to stop answering from a cache the disk has moved on
+  // from. `storage` fires only for writes made by OTHER documents of the same
+  // origin, so dropping the named key is exactly "forget what I remembered about
+  // the thing that changed"; the next get() re-reads the winner. `rev` bumps so
+  // every memo keyed off it (the same contract set() offers) re-derives too.
+  //
+  // e.key === null is storage.clear() — nothing survives it, so drop everything.
+  // Foreign writes to other origins' keys cannot reach us, but a non-apex26. key
+  // in this origin is not ours and must not bump rev.
+  onForeignWrite(e) {
+    if (!e) return false;
+    if (e.key === null) { this._cache.clear(); this.rev++; this.foreign++; return true; }
+    if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
+    this._cache.delete(e.key);
+    this.rev++;
+    this.foreign++;
+    return true;
+  },
+  foreign: 0,          // applied foreign writes — surfaced by __apex.persistState()
 };
+
+// Self-install. There is no init() in this module's contract and every consumer
+// gets `store` straight off the global, so the listener has to arm itself; a
+// listener that waits to be wired is a listener nobody wires. Guarded because
+// this file also loads in Node VM harnesses with no window.
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("storage", (e) => { store.onForeignWrite(e); });
+}
 
 // Report the FIRST failure loudly and every later one only to the buffer. A dead
 // localStorage fails on every single call, so an unconditional warn would bury

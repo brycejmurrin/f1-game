@@ -25,7 +25,7 @@ const Tracks = (function () {
   // destructured here at eval).
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
 
   // ---------- build ----------
   // Cheap centreline-only build: runs just the spline engine (positions,
