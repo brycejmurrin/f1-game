@@ -162,9 +162,16 @@ const LandmarkKit = (function () {
     function canopy(stage, spec) {
       if (!ready(stage, spec)) return false;
       const mastHeight = spec.size[1] * 0.8;
+      // p.cylinder is BASE-anchored (geom.js: addCyl/addCone/addFrustum take a
+      // base centre, not a centroid), but this centred the mast inside the
+      // canopy's own height the way you would centre a box — leaving its foot
+      // 0.4 * size[1] above the canopy floor with nothing under it, and the
+      // ridge prism resting on the mast floating with it. Seat the foot on the
+      // floor; 0.8 * size[1] of mast then tops out exactly at the ridge's
+      // base (+0.30 * size[1]), which is where the prism expects it.
       const mastCenter = [
         spec.center[0],
-        spec.center[1] - (spec.size[1] - mastHeight) / 2,
+        spec.center[1] - spec.size[1] / 2,
         spec.center[2],
       ];
       const radius = Math.min(spec.size[0], spec.size[2]) * 0.06;
