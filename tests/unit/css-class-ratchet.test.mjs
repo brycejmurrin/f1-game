@@ -89,7 +89,9 @@ const CLASS_CEILING = 537;
 // that error band, so this ceiling is where the ruling's premise is kept true.
 // Growth points named by STRUCTURE-REDECISION §Q1: #advanced (106 nodes),
 // #vsfriend (95).
-const NODE_CEILING = 1138; // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the shell in the deploy merge
+const NODE_CEILING = 1139; // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the shell in the deploy merge
+// +1 2026-08-13: the <script> tag for js/game/perf-try.js (default-off renderer
+// A/B switches, measurable only on real hardware — see the file header).
 // +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden

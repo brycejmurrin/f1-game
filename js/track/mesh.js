@@ -11,6 +11,14 @@
 const TrackMesh = (function () {
   "use strict";
 
+  // Contextified-global aliases — mechanism and honest scope documented once in
+  // js/track/models.js above firstNonFinite. Under vm.createContext a bare
+  // `Math.` read costs ~140-220 ns against ~3.3 ns from a scope slot; in a
+  // browser it is already ~3.3 ns, so this is developer-iteration time, not
+  // framerate. Used in the per-node / per-vertex loops below only — the one-shot
+  // setup inside each builder keeps the plain `Math.` spelling.
+  const __M = Math;
+
   // cross from js/track/geom.js; curvature (baked LUT reader) from
   // js/track/spline.js — eval-time destructures (hard edges).
   const { cross, MAT } = TrackGeom;
@@ -48,7 +56,7 @@ const TrackMesh = (function () {
     const r = [track.rx[k], track.ry[k], track.rz[k]];
     return cross(r, t);
   }
-  const hash = (i) => { let x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  const hash = (i) => { let x = __M.sin(i * 12.9898) * 43758.5453; return x - __M.floor(x); };
 
   // Corner apexes: local maxima of |curvature| above thresh. Returns
   // [{k, sign, lo, hi}] — sign is the raw curvature sign: sign>0 = LEFT turn
@@ -490,7 +498,7 @@ const TrackMesh = (function () {
     let maxHw = 0;
     for (let k = 0; k < n; k++) {
       if (hw[k] > maxHw) maxHw = hw[k];
-      const key = (Math.floor(px[k] / CELL) + OFFSET) * STRIDE + (Math.floor(pz[k] / CELL) + OFFSET);
+      const key = (__M.floor(px[k] / CELL) + OFFSET) * STRIDE + (__M.floor(pz[k] / CELL) + OFFSET);
       let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(k);
     }
     const grid = { maxHw };
@@ -502,8 +510,8 @@ const TrackMesh = (function () {
     // reads `wy` mid-iteration reproduces the original 0..n-1 sequencing exactly.
     grid.query = (x, z, R, out, doSort) => {
       let cnt = 0;
-      const x0 = Math.floor((x - R) / CELL), x1 = Math.floor((x + R) / CELL);
-      const z0 = Math.floor((z - R) / CELL), z1 = Math.floor((z + R) / CELL);
+      const x0 = __M.floor((x - R) / CELL), x1 = __M.floor((x + R) / CELL);
+      const z0 = __M.floor((z - R) / CELL), z1 = __M.floor((z + R) / CELL);
       for (let cx = x0; cx <= x1; cx++)
         for (let cz = z0; cz <= z1; cz++) {
           const arr = map.get((cx + OFFSET) * STRIDE + (cz + OFFSET));
@@ -591,7 +599,7 @@ const TrackMesh = (function () {
           const _cn = grid.query(wx, wz, grid.maxHw + 0.5, _cand, false);
           for (let _ci = 0; _ci < _cn; _ci++) {
             const j = _cand[_ci];
-            let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            let dd = __M.abs(j - k); dd = dd < n - dd ? dd : n - dd;
             if (dd * ds < 6) continue;
             const ex = wx - px[j], ez = wz - pz[j];
             const lim = hw[j] - 0.3;
@@ -742,19 +750,10 @@ const TrackMesh = (function () {
     // For bridge sections the terrain ribbon stays at ground level so the
     // elevated deck floats above flat ground (supported visually by the bridge
     // pillars in buildProps) instead of pulling the whole ground plane up with it.
-    const gY = new Float32Array(py);
-    const brs = track.def.bridges;
-    if (brs) {
-      const ds = total / n;
-      for (const b of brs) {
-        const cs = b.s * total;
-        for (let k = 0; k < n; k++) {
-          let d = Math.abs(k * ds - cs);
-          d = Math.min(d, total - d);
-          if (d < b.halfM) gY[k] -= b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM));
-        }
-      }
-    }
+    // That carve lives in surface.js `ground[]` — and it MUST, because the bridge
+    // fracs are pre-rotation and need `def._sceneryShift` compensation. Do not
+    // re-derive it here from a raw `b.s * total`: that lands the window two thirds
+    // of a lap away — `TrackSurface.profile` in js/track/surface.js carries the fix.
     // Adaptive lateral verts per side: a gravel/runoff verge at the road edge graded
     // out to grass. The old bright concrete apron has been removed — it read as a
     // glaring light slab flanking the track — so the verge is gravel, not tarmac.
@@ -790,7 +789,7 @@ const TrackMesh = (function () {
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const t = NTV <= 1 ? 1 : v / (NTV - 1);
-          const yBase = surface.heightAt(k, Math.abs(lats[v]));
+          const yBase = surface.heightAt(k, __M.abs(lats[v]));
           // Match the centre-pivoted road bank at the verge, then taper its
           // signed height offset to zero so the far ground stays flat.
           let by = 0;
@@ -821,7 +820,7 @@ const TrackMesh = (function () {
           const _cn = grid.query(wx, wz, grid.maxHw + 27, _cand, true);
           for (let _ci = 0; _ci < _cn; _ci++) {
             const j = _cand[_ci];
-            let dd = Math.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            let dd = __M.abs(j - k); dd = dd < n - dd ? dd : n - dd;
             if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
             const ex = wx - px[j], ez = wz - pz[j];
             const d2 = ex * ex + ez * ez;
@@ -861,8 +860,8 @@ const TrackMesh = (function () {
             if (wy > roadYj + 0.3) {
               const fr = hw[j] + 26, nr = hw[j] + 0.5;
               if (d2 < fr * fr) {
-                const dist = Math.sqrt(d2);
-                const tt = Math.max(0, Math.min(1, (dist - nr) / (fr - nr)));
+                const dist = __M.sqrt(d2);
+                const tt = __M.max(0, __M.min(1, (dist - nr) / (fr - nr)));
                 let tgt = (roadYj - 0.4) * (1 - tt * tt) + wy * (tt * tt);
                 // A verge must still MEET the tarmac it borders. The channel
                 // reaches 26 m to catch a broad mound (Miami's Hard Rock rise
@@ -877,7 +876,7 @@ const TrackMesh = (function () {
                 // channel still wins where the mound actually is. Verts that sit
                 // ON another road never get here: the unconditional bury above
                 // fires first and continues.
-                const ownDist = Math.abs(o) - w;
+                const ownDist = __M.abs(o) - w;
                 if (ownDist < 8) {
                   const hold = 1 - ownDist / 8;
                   const floorY = py[k] + bankOffsetAt(track, k, o) - 0.35;
@@ -896,8 +895,8 @@ const TrackMesh = (function () {
             const far = hw[j] + 12;
             if (d2 > far * far) continue;               // not over/near this node's tarmac
             const near = hw[j] + 1.0;
-            const dist = Math.sqrt(d2);
-            const tt = Math.max(0, Math.min(1, (dist - near) / (far - near)));
+            const dist = __M.sqrt(d2);
+            const tt = __M.max(0, __M.min(1, (dist - near) / (far - near)));
             const target = (roadYj - 1.6) + tt * tt * 1.6;   // dip under the road (banked), easing back to grade
             if (wy > target) wy = target;
           }
@@ -989,7 +988,7 @@ const TrackMesh = (function () {
           // threading `flip` through the accumulation.
           const sgn = nrm[i3 + 1] < 0 ? -1 : 1;
           const nx = nrm[i3] * sgn, ny = nrm[i3 + 1] * sgn, nz2 = nrm[i3 + 2] * sgn;
-          const l = Math.hypot(nx, ny, nz2);
+          const l = __M.hypot(nx, ny, nz2);
           // A degenerate corner (every adjoining face zero-area) would divide
           // by zero, so fall back to straight up rather than emit NaN — one
           // NaN vertex is enough for validateGeometry to reject the whole mesh

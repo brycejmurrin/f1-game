@@ -5947,7 +5947,18 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  gfx.drawSky(frameSky);
+  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
+  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
+  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
+  // for the OPAQUE half). The glow is what makes this non-trivial: it is
+  // additive with depthMask off, so it writes no depth — leaving the background
+  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
+  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
+  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
+  // visually equivalent — a prop in front of a lamp occludes the halo either
+  // way, by overwrite before or by depth test after.
+  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
+  if (!_skyLate) gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -5956,7 +5967,13 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, true);
+  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
+  if (_skyLate) {
+    gfx.drawSky(frameSky);
+    // Same guard drawWorldMeshes applies to its own glow call, kept identical
+    // so the two paths differ ONLY in ordering.
+    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
