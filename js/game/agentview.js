@@ -1635,12 +1635,16 @@ const AgentView = (function () {
         const s = sp[idx];
         // Span records store s0/s1 as LAP FRACTIONS (noteSpan's callers pass
         // fractions; along() does s0*n). Reading them as arc-metres reported
-        // sub-metre spans everywhere and fromFrac values of ~1e-4.
+        // sub-metre spans everywhere and fromFrac values of ~1e-4. And spans
+        // WRAP the start line (along() walks s0→s1 modulo the lap; ~20 circuits
+        // fence 0.95→0.06), so length is the wrapped difference — worldModel()'s
+        // formula — not |s1-s0|, which reported the lap-long complement.
         const s0M = s.s0 * total, s1M = s.s1 * total;
         return {
           apiVersion: API_VERSION, id: "span:" + idx, type: "span",
           kind: s.kind, side: sideOf(s.side),
-          fromS: r1(s0M), toS: r1(s1M), lengthM: r1(Math.abs(s1M - s0M)),
+          fromS: r1(s0M), toS: r1(s1M),
+          lengthM: r1((((s.s1 - s.s0) % 1 + 1) % 1) * total),
           fromFrac: +s.s0.toFixed(4), toFrac: +s.s1.toFixed(4),
           heightM: s.h != null ? r1(s.h) : null,
           gapM: s.gap != null ? r1(s.gap) : null,
