@@ -138,9 +138,9 @@ npm run test:physics      # physics + elevation + longitudinal regression
 npm run test:behaviour    # collision + drift + offtrack + collision-ai-fixes
 npm run test:steering     # presets + sliders + steering modes
 ```
-There are also standalone Playwright probes in `tools/` worth running for grip
-work: `node tools/check-grip.mjs`, `check-bank.mjs`, `check-roadfollow.mjs`,
-`check-steer.mjs` (each verifies stability / no-NaN / forward motion).
+There is also a standalone Playwright probe worth running for grip work:
+`node tools/check-physics.mjs <grip|bank|roadfollow|steer>` (each subcommand
+verifies stability / no-NaN / forward motion).
 
 If you edited `js/game.js`, bump the cache version (`bump-cache` skill) before
 committing.

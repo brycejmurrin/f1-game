@@ -80,7 +80,7 @@ test("docs/TESTING.md's coverage table names every root spec and unit suite", ()
   // KIND of spec still has to earn its own row.
   const globs = [...doc.matchAll(/`([a-z0-9_-]*\*[a-z0-9_*-]*\.(?:spec\.js|test\.mjs))`/g)]
     .map((m) => new RegExp("^" + m[1].replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$"));
-  const files = fs.readdirSync(path.join(ROOT, "tests"))
+  const files = ["specs", "unit"].flatMap((d) => fs.readdirSync(path.join(ROOT, "tests", d)))
     .filter((f) => /\.(spec\.js|test\.(mjs|cjs))$/.test(f));
   const missing = files.filter((f) => !doc.includes(f) && !globs.some((re) => re.test(f)));
   assert.deepEqual(missing, [],

@@ -160,12 +160,12 @@ Levelled, namespaced logging with a retained ring buffer. Loads FIRST in
 `tools/manifest.cjs`, so any module can log at evaluation time.
 
 ```
-Log.error/warn/info/debug/trace(ns, ...args)   ns from Log.NAMESPACES
+Log.error/warn/info/debug(ns, ...args)   ns from Log.NAMESPACES
 Log.enabled(ns, level)                -> bool   (guard hot-path debug calls)
 Log.level(spec?)                      -> resolved thresholds; a string applies one
 Log.persist(spec|null)                -> remember it across reloads
 Log.records({ns, level, since, limit}) -> [{id, t, ns, level, msg}]
-Log.clear() / Log.sink(fn|null) / Log.time(ns, label) -> end()
+Log.clear() / Log.time(ns, label) -> end()
 ```
 
 Two independent thresholds: the CONSOLE level (default `warn`) decides what a
@@ -181,20 +181,22 @@ with no `localStorage` and no `location`.
 
 ## js/mat4.js — `M4`, `V3`
 
-Column-major `Float32Array(16)`, compatible with `uniformMatrix4fv`.
+Column-major `Float32Array(16)`, compatible with `uniformMatrix4fv`. Every
+operation is non-allocating (writes into a caller-owned `out`) — the earlier
+allocating siblings (`mul`, `perspective`, `lookAt`, `translation`, `rotX`/
+`rotY`/`rotZ`, `scale`, `invert`, `transformPoint`, `ortho`, and all of `V3`
+except `norm`) were removed as dead code (2026-08): a full second
+implementation nobody had switched away from, zero callers anywhere in the
+repo including tests and tools.
 
 ```
-M4.ident()                            -> mat
-M4.mul(a, b)                          -> mat (a*b)
-M4.perspective(fovY, aspect, near, far) -> mat
-M4.lookAt(eye, target, up)            -> VIEW matrix (already inverted, ready to use)
-M4.translation(x, y, z)               -> mat
-M4.rotX(a) / M4.rotY(a) / M4.rotZ(a)  -> mat
-M4.scale(x, y, z)                     -> mat
-M4.invert(m)                          -> mat (general 4x4 inverse)
-M4.transformPoint(m, [x,y,z])         -> [x,y,z]
-V3.add(a,b) V3.sub(a,b) V3.scale(a,s) V3.dot(a,b) V3.cross(a,b)
-V3.len(a) V3.norm(a) V3.lerp(a,b,t)   -> [x,y,z] / number
+M4.ident()                              -> mat
+M4.mulTo(out, a, b)                     -> out (a*b)
+M4.perspectiveTo(out, fovY, aspect, near, far) -> out
+M4.lookAtTo(out, eye, target, up)       -> out, the VIEW matrix (already inverted, ready to use)
+M4.orthoTo(out, l, r, b, t, n, f)       -> out
+M4.invertTo(out, m)                     -> out (general 4x4 inverse; identity on singular input)
+V3.norm(a)                              -> [x,y,z]
 ```
 
 ## js/render/shaders/ — `GLXChunks`, `GLXShaders`
@@ -540,7 +542,6 @@ network error: serve stale cache if present, else reject. Never auto-poll.
 
 ```
 F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
-F1API.nextRace()              -> same item or null
 F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
 F1API.constructorStandings()  -> [{pos, points, wins, name}]
 F1API.lastRace()              -> {name, round, date, results:[{pos, name, code, team, grid, points, status, time}]}

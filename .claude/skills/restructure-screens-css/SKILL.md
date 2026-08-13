@@ -62,8 +62,11 @@ use the `autofocus` attribute on the descendant element of the dialog that the
 user is expected to immediately interact with."* On a long scrolling sheet, put
 it on `.sheet-body` (the spec's own second example). *Prevents:* focus landing
 on the last focusable element and auto-scrolling the dialog — or the whole
-document — past its own content. **This repo has zero `autofocus` attributes
-across 17 modal dialogs.**
+document — past its own content. **This rule's fix already landed: 16
+`autofocus` attributes now exist across the 17 modal dialogs** (only
+`#results` still lacks one) — re-run `grep -c autofocus index.html` before
+treating this as an open problem, and do not "fix" (remove) an autofocus
+attribute you find; it was added on purpose.
 
 **5. Use `showModal()` and let the platform own inertness, Escape, backdrop and
 focus-return. Never hand-roll a focus trap.** *Prevents:* re-implementing 406
@@ -99,8 +102,9 @@ in this repo, `css/components.css`:
 
 One class, fourteen contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
-16 classes / 251 custom properties**. This repo is **6,463 lines / 538 classes /
-102 custom properties** — 5.3x the classes on 2.3x the lines with 0.4x the
+16 classes / 251 custom properties**. This repo currently measures **7,833
+lines / 543 classes / 76 custom properties** (re-run the commands at the top
+of this file to refresh) — 33.9x the classes on 2.8x the lines with 0.3x the
 tokens. The ratio is inverted, and that is the whole finding.
 
 **9. Reject any CSS methodology that renames without reducing.** Require a
@@ -128,20 +132,28 @@ context overrides beats N variant classes.
 ## DOM size and height
 
 **13. Do NOT split a monolithic HTML file below ~1,400 body nodes.** Lighthouse
-warns at ~800 and errors at ~1,400; this shell measures ~969. **`display:none`
-subtrees are not in the render tree at all** — they cost parse time and memory,
-never frames. *Prevents:* a large cross-cutting refactor bought with a benchmark
-nobody ran. On GitHub Pages, fetch-and-inject partials additionally cost an RTT
-per screen and break `sw.js`, whose precache is derived from the shell's own
-script tags. **Report "leave it alone" when that is the answer** — it usually is.
-The real cost here is CSS selector complexity (538 classes), not node count.
+warns at ~800 and errors at ~1,400; this shell currently measures 1,133 (re-run
+`grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l` — it was ~969 when this
+rule was written, still comfortably under the 1,400 error line, so the
+conclusion below is unaffected by the drift). **`display:none` subtrees are not
+in the render tree at all** — they cost parse time and memory, never frames.
+*Prevents:* a large cross-cutting refactor bought with a benchmark nobody ran.
+On GitHub Pages, fetch-and-inject partials additionally cost an RTT per screen
+and break `sw.js`, whose precache is derived from the shell's own script tags.
+**Report "leave it alone" when that is the answer** — it usually is. The real
+cost here is CSS selector complexity (543 classes), not node count.
 
 **14. Express height responsiveness as at most TWO breakpoints, resolved once
 into a single `data-density` attribute.** *Prevents:* N media queries asking the
 same question N slightly different ways, which is exactly how they drift.
-Material ships three height tiers from two breakpoints; this repo has **eight
-thresholds (500/520/560/599/600/620/640/700 across five files), five of which
-all fire simultaneously at 393px** — not tiers, five copies of one tier.
+Material ships three height tiers from two breakpoints; this repo measured
+eight thresholds (500/520/560/599/600/620/640/700 across five files) when this
+rule was written (2026-08-08) — that consolidation has since happened: it now
+measures **two live `@media (max-height: ...)` thresholds (520px/560px) across
+three files** (`css/data.css`, `responsive.css`, `tokens.css`; `css/tuner.css`
+even carries a comment recording that a third, 620px, was deliberately
+removed), already at the target this rule argues for. Re-run the measurement
+before treating this as an open problem.
 
 **15. `container-type: size` IS usable when the element has an explicit block
 size — do not assume container queries are inline-only.** Baseline widely

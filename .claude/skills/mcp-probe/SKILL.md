@@ -6,7 +6,7 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 # Probing the live game with the MCPs
 
 Two MCP browsers sit alongside the Playwright suite. Neither replaces it — the
-suite is 111 specs + 61 node suites, parallelised, asserted, retried, CI-gated.
+suite is 111 specs + 76 node suites, parallelised, asserted, retried, CI-gated.
 These are **interactive** instruments: one browser, driven a call at a time, for
 the question you can't be bothered to write a `scratch/*.mjs` for, and for the one
 thing the suite never checks — the **deployed artifact**.
@@ -197,6 +197,59 @@ __apex.park(s); __apex.snapCam();
 // re-check viewState().eye/.tgt matches "before" — if not, the pair is invalid
 // screenshot "after"
 ```
+
+NOTE: see the SEVENTH trap below (chase cam auto-cuts after ~2s idle) — the
+`viewState().eye`/`.tgt` re-check above only proves the camera hadn't moved
+*at the moment you captured it*, not at the moment the screenshot itself
+fired. If your setup call and your screenshot call are separated by more than
+about 1.5s of real wall-clock (MCP round-trip latency, not `step()`'s
+simulated time), re-verify `viewState()` again immediately after the
+screenshot, not just before it.
+
+## A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
+
+`playerAnchor()`/`renderPosOf()` (js/game.js) draw the HUMAN car from
+`c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
+toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
+arc-based anchors, which only feed the AI-car branch). `jump()`
+(`js/game/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
+`rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
+between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
+`G.frozen` (physics never steps again, so `renderAlpha` never advances) that
+lerp never resolved — the car sat at a permanent mid-blend position, which on
+a curved track can be off the road, mid-air, or nowhere near either endpoint.
+MEASURED: `park(0.10)` on Monaco (a track with a ~36 m road-over-terrain
+viaduct gap right there) rendered the car airborne against the skyline, no
+road visible under it, in BOTH the chase cam and a free-cam aimed exactly at
+`physState().px/pz` — the free-cam shot showed no car at all, because the
+render position wasn't near the aim point either. `physState()`/`groundY()`
+read correctly the whole time — only the drawn mesh was wrong, which is why
+this reads as "the car is floating," not as an obvious data bug. Fixed by
+also syncing `G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;`
+in `jump()` — verified: same `park(0.10)` now renders the car grounded,
+correctly oriented, at the exact `physState()` position. If a screenshot ever
+shows the car detached from the road again, checking `rPrevPx` vs `px` is the
+first move, not distrusting the shot.
+
+## A SEVENTH trap: the chase cam auto-cuts to a broadcast angle after ~2 s idle
+
+Even with `frozen: true` and `speed: 0`, the CHASE camera (not the free-cam)
+periodically jumps `eye`/`tgt` to an unrelated position — MEASURED: stable for
+~2.0–2.1 s after `park()+snapCam()`, then a hard cut (not an ease) to a
+different vantage, sometimes hundreds of metres away in `z`, and it keeps
+cutting every ~2.2–2.5 s after that. `camMode` stays reported as `"chase"`
+throughout — this is not a mode switch you can detect from `viewState()`
+alone, and the player's own `physState()` position never moves, so it is
+purely a camera-side idle/broadcast-style cycle. A screenshot taken more than
+~1.5 s after `snapCam()` can silently land on one of these cut angles instead
+of the expected close driving shot — combined with the fifth trap above, this
+is what originally made a parked car look like it was "flying" over Monaco's
+harbour. Two ways to avoid it: take the chase-cam shot within ~1.5 s of
+`snapCam()` (before the first cut), or — safer for any multi-shot comparison
+— use the free-cam (`orbit()`/`dolly()`/`view()`) for the whole sequence, same
+as the sky/cloud guidance above; it held perfectly static (six samples, zero
+drift, ~3 s span) in the same session where chase cam cut twice in the same
+window.
 
 ---
 

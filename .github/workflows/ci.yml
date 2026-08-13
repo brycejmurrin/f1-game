@@ -102,11 +102,12 @@ on:
         type: boolean
         required: false
         default: true
-      # TEMP 2026-08-12: pages.yml passes false so a deploy can ship without the
-      # ~15 min SwiftShader smoke job. Rapid pushes were cancelling in-flight
-      # Pages runs mid-smoke and live version.json stayed stuck at 1126. Flip
-      # pages.yml smoke:true (or remove the override) once the site has caught
-      # the tip — do NOT leave this off as the permanent gate.
+      # pages.yml no longer overrides this (removed 2026-08-12 alongside moving
+      # `concurrency` off the whole workflow and onto just the deploy job —
+      # see pages.yml's top-of-file comment). That was the actual fix for the
+      # symptom this override was papering over (rapid pushes cancelling
+      # in-flight Pages runs mid-smoke, live version.json stuck at 1126); the
+      # smoke gate stays on for every deploy via the default below.
       smoke:
         description: "run the Playwright smoke gate (page boots, __apex responds)"
         type: boolean

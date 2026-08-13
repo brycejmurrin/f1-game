@@ -10,28 +10,38 @@ permissions:
   pages: write
   id-token: write
 
-# GitHub Pages serves ONE deployment at a time per environment, and the deploy
-# request lives on GitHub's backend independently of this Actions job. The
-# official starter ships `cancel-in-progress: false` so a new push WAITS for the
-# in-flight deploy instead of killing deploy-pages mid-upload (which can wedge
-# the single-slot Pages queue until the 10-min timeout).
+# GitHub Pages serves ONE deployment at a time per environment — that is a
+# constraint on the DEPLOY step, not on CI. This workflow used to put
+# `concurrency:` at the WORKFLOW level, which serialized the entire ci+deploy
+# pipeline behind one lock and produced two failure modes, tried and reverted
+# in turn on 2026-08-12 under the heavy multi-agent push volume this branch
+# sees:
 #
-# THAT SETTING ALSO QUEUES FOREVER when the in-flight run never acquires a
-# runner. Measured 2026-08-12: a burst of feature-branch CI left the deploy's
-# five reusable-workflow jobs `pending` for >15 minutes while later pushes
-# stacked behind them under `false` — live version.json stayed at 1126 while
-# the tip was 1141+. Prefer cancelling a run that has not reached deploy-pages
-# over an unbounded wait; the CI slim (skip advisory selected on workflow_call,
-# forward before_sha so sweeps can no-op) cuts how long a deploy holds runners.
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
+#   cancel-in-progress: true  — a burst of pushes cancels each other's deploys
+#     before any of them reaches deploy-pages, so the live site can go a long
+#     way (build 971 vs a 1145+ tip, measured) without ever landing a build.
+#   cancel-in-progress: false — a push's WHOLE pipeline (five ci.yml reusable
+#     jobs, easily 10+ minutes) blocks every later push's CI from even
+#     STARTING, so a slow or runner-starved run wedges the queue just as
+#     badly (live stuck at 1126 while the tip was already 1141+).
+#
+# Both symptoms trace to the same mistake: locking CI, which needs no
+# serialization at all (GitHub happily runs many CI jobs in parallel), for a
+# constraint that only actually applies to the Pages upload. Moving
+# `concurrency` onto the `deploy` job alone fixes it structurally rather than
+# picking a lesser evil: every push's `ci` job now runs immediately and in
+# parallel with no queue, so CI feedback stays fast regardless of push volume,
+# and only the short deploy-pages step at the tail end waits its turn — a
+# wait measured in the tens of seconds a Pages upload takes, not the whole CI
+# pipeline. cancel-in-progress: false there is now safe (it is what the
+# official Pages starter workflow ships) because there is nothing left
+# upstream of it to wedge.
 jobs:
   # The deploy gate. This workflow used to ship whatever was pushed, without
   # running a single test — so a red suite reached the live site silently. The
   # deploy job now `needs:` this, which means a failing guard blocks the deploy
-  # instead of merely being available to a human who might run it.
+  # instead of merely being available to a human who might run it. Unlocked
+  # (no concurrency group) on purpose — see the comment above.
   ci:
     uses: ./.github/workflows/ci.yml
     with:
@@ -40,12 +50,14 @@ jobs:
       # always fail-safed into a full 15-minute sweep on every Pages push.
       before_sha: ${{ github.event.before }}
       advisory: false
-      # TEMP: skip ~15 min smoke so this deploy can finish. Re-enable (true /
-      # omit) after live version.json catches the tip. See ci.yml smoke input.
-      smoke: false
 
   deploy:
     needs: ci
+    # The ONLY step that actually touches GitHub's single-slot Pages queue.
+    # See the top-of-file comment for why this moved off the workflow level.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -109,7 +109,13 @@ const CEILINGS = {
   // 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
   // a false no-op when it only read numLights (nearest-N cull).
   // 3060 -> 3075 for lightState.meanLampRGB (lampTemp warmth probe / cdmcp-lamps-tune).
-  "js/game/apex.js": 3075,
+  // 3075 -> 3080 for lightState.cullDist/moonK/moonGate/lampCull — direct reads
+  // of the internal gates RENDER DISTANCE / SHADOW DISTANCE / MOON SHADOWS
+  // actually drive, so an MCP session can confirm a slider's effect numerically
+  // instead of only eyeballing a screenshot (which cost a lot of back-and-forth
+  // chasing a black-frame red herring that was actually a broken canvas-readback
+  // sampler, not a render bug).
+  "js/game/apex.js": 3080,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's

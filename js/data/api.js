@@ -187,16 +187,6 @@ const F1API = (function () {
     });
   }
 
-  function nextRace() {
-    return schedule().then(function (list) {
-      const today = new Date().toISOString().slice(0, 10);
-      for (let i = 0; i < list.length; i++) {
-        if (list[i].date && list[i].date >= today) return list[i];
-      }
-      return null;
-    });
-  }
-
   function driverStandings() {
     return request(JOLPICA + "/" + season() + "/driverstandings.json", TTL_STANDINGS).then(function (json) {
       const sl = jStandingsList(json);
@@ -534,7 +524,6 @@ const F1API = (function () {
 
   return {
     schedule: schedule,
-    nextRace: nextRace,
     driverStandings: driverStandings,
     constructorStandings: constructorStandings,
     lastRace: lastRace,

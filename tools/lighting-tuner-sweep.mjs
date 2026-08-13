@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-/* tuner-sweep.mjs — does each LIGHTING TUNER slider actually change the image?
+/* lighting-tuner-sweep.mjs — does each LIGHTING TUNER slider actually change the image?
  *
  * SHARDED and RESUMABLE. One shard = one (condition, knob-range). Each knob's
  * result is flushed to disk as it lands, so a kill costs the current knob and
  * nothing else, and a re-run skips whatever is already recorded.
  *
- *   node tools/tuner-sweep.mjs --cond=day-dry                 # one condition
- *   node tools/tuner-sweep.mjs --cond=night-dry --from=0 --to=40
- *   node tools/tuner-sweep.mjs --list                         # conditions + knob count
- *   node tools/tuner-sweep.mjs --report                       # read the shards, no browser
- *   node tools/tuner-sweep.mjs --cond=day-dry --force         # ignore recorded results
+ *   node tools/lighting-tuner-sweep.mjs --cond=day-dry                 # one condition
+ *   node tools/lighting-tuner-sweep.mjs --cond=night-dry --from=0 --to=40
+ *   node tools/lighting-tuner-sweep.mjs --list                         # conditions + knob count
+ *   node tools/lighting-tuner-sweep.mjs --report                       # read the shards, no browser
+ *   node tools/lighting-tuner-sweep.mjs --cond=day-dry --force         # ignore recorded results
  *
  * WHY PAIRED SAMPLING. The obvious design — capture one baseline, then compare
  * every knob against it — is WRONG here, and measurably so. The scene animates
@@ -78,7 +78,7 @@ function report() {
   for (const c of conds) for (const [id, r] of Object.entries(loadShard(c))) (all[id] ||= {})[c] = r;
   const ids = Object.keys(all);
   if (!ids.length) { console.log("no shards yet — run a --cond= sweep first"); return; }
-  // NOISE FLOOR, MEASURED (tools/tuner-sweep.mjs noise probe, monaco/day, frozen
+  // NOISE FLOOR, MEASURED (tools/lighting-tuner-sweep.mjs noise probe, monaco/day, frozen
   // scene, five consecutive captures with nothing changed):
   //   no re-park   0.19  0.29  1.74  0.41   <- the policy this tool uses
   //   re-park      0.45 21.30 21.31 21.28   <- park() teleports the AI field

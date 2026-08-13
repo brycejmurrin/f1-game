@@ -135,7 +135,7 @@ theory about the WAIT. The answer was in the code being waited on:
 driven through `act()` which never presents a frame, and 120 steps of full lock
 crashed the car below both stamp gates before the wait even began.
 
-What ended it was an instrument. `tests/manual/skid-probe.spec.js` wraps
+What ended it was an instrument: a script that wraps
 `GLX.drawSkidBatch` before driving and records call count and max `vertCount`,
 because from outside "called with 0" and "never called" are indistinguishable
 and have opposite fixes. **37 seconds, against 360 s of timeouts that said
@@ -322,10 +322,12 @@ separate processes with separate ports, and the sizing guidance above applies.
 All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
 outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
 six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
-is a real gate. `tracks-visual.spec.js` has none, so `npm run test:visual`
-SKIPS itself rather than failing 40 circuits on missing snapshots; generating
-them on Linux/SwiftShader is still outstanding, and the suite re-enables itself
-automatically once the directory exists.
+is a real gate. `tracks-visual.spec.js` has none, so it is PARKED: `npm run
+test:visual` SKIPS itself rather than failing 40 circuits on missing
+snapshots, which means a green run today asserts nothing — not "pixels
+verified", just "skipped". Generating baselines on Linux/SwiftShader is still
+outstanding; the suite re-enables itself automatically once the directory
+exists.
 
 ### Fixtures (`tests/helpers/fixtures.js`)
 
@@ -337,7 +339,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 58 of 111 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 60 of 111 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -651,6 +653,7 @@ what it covers.
 | `audit.spec.js` | edge cases from the codebase audit the other suites missed |
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
+| `aero-zones-turns.test.mjs` | `AERO_ZONE_TURNS` (`js/game/aerozones.js`) reproduces exactly the length-only `ZONE_COUNT` selection in turn-keyed form for every named circuit; bahrain/jeddah never get a turn-pair entry |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
 | `race-control.spec.js` | the CAUTION layer in a real page: defaults ON, and the setting survives a reload (which is the guard on its storage format). The machine itself is `race-control.test.mjs` |
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
@@ -676,7 +679,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `tracks-walls.spec.js` | barrier geometry on all 40 circuits — the car stays inside a sane corridor |
-| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **skipped: no baselines committed** |
+| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **PARKED, 0 verification value: no baselines committed, suite self-skips** |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
@@ -739,10 +742,11 @@ what it covers.
 |---|---|
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
-| `ui-desktop.spec.js` | desktop layout (`body.desktop`), keyboard controls, non-touch UI |
+| `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/game/sheetshape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |
 | `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
+| `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
 | `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
@@ -798,6 +802,9 @@ what it covers.
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
+| `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
+| `lighting-reapply.test.mjs` | every tuner knob consumed only inside `applyRaceSettings()` is listed in `APPLY_RACE_IDS`, or its slider silently does nothing until an unrelated TIME/WEATHER change |
+| `lighting-rebuild.test.mjs` | every tuner knob consumed only inside `buildTrackLights()` carries `rebuild:true`, or its slider is invisible until the next track load |
 | `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
@@ -819,16 +826,19 @@ what it covers.
 | `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. | guards `tools/select-specs.mjs`, the per-spec selector behind ci.yml's advisory `selected` job. Glob expansion against the real tree, dedupe across groups, the budget cut (every spec lands in selected OR the named skip list — silent truncation would read as "covered"), and that the ADVISORY settings (retries 0, 120 s/test) provably fit more tests than smoke's gate settings — the whole reason the job exists |
 | `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 111 Playwright specs**, with 109 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
-| `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, `ui-desktop`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
+| `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/helpers/fixtures.js` do |
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
 | `span-kinds.test.mjs` | the agent view's span vocabulary matches the `ctx.noteSpan(...)` emitters — the list had fallen four kinds behind, so any circuit placing a tiered bowl failed `agent-view.spec.js` with a message that pointed nowhere near the cause |
 | `css-layers.test.mjs` | every rule in a `@layer`-wrapped stylesheet stays inside its declared layer — an unlayered rule (a stray brace closing the layer early) silently outranks every layered rule regardless of specificity, with no parse error and no console warning |
+| `scroll-strips.test.mjs` | every sideways-scrolling strip (garage category rail, data-hub tab strip, lighting-tuner chip tiers) declares the full `overflow-x`/`touch-action`/`scrollbar-gutter` pattern, not a partial hand-rolled copy |
+| `source-integrity.test.mjs` | three cheap syntax/structure checks (an unopened comment block, an early-closed `@layer`, …) that the ~350 behavioural guards don't catch because a `SyntaxError` or a silently reordered layer fails nothing loud — each is a real 2026-08 incident that every other green guard sailed through |
 | `deploy-staging.test.mjs` | the Pages workflow uploads an allow-list of directories — every path the shipped code can fetch must be inside it, or it 404s in production while passing every local run |
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
+| `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 
 ---
 

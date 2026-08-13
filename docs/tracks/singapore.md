@@ -70,11 +70,14 @@ rotunda dome).
 
 Still missing, and worth a pass:
 
-- **The new Supreme Court (Foster, 2005).** Stands directly behind the old one
-  and is unmistakable: a broad horizontal block of vertical stone fins with a
-  **flying-saucer disc** — the Court of Appeal — cantilevered on top. That disc
-  is one of the most recognisable silhouettes on the Singapore skyline and the
-  circuit currently only has the neoclassical building it replaced.
 - **Parliament House** — modern block near the river.
-- **St Andrew's Cathedral** — white Gothic spire on the Padang, very visible
-  across the lawn from the circuit's Padang stretch.
+
+## Outcome
+
+The new Supreme Court (Foster, 2005 — the stone-fin block with the
+cantilevered flying-saucer Court of Appeal disc) and St Andrew's Cathedral
+(the white Gothic spire on the Padang) are both now built —
+`modelGroup("singapore-supreme-court", ...)` and
+`modelGroup("singapore-st-andrews", ...)` in `js/circuits/singapore.js`.
+Parliament House remains the one item from the original research pass not
+yet modelled.

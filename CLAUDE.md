@@ -140,8 +140,9 @@ inside `render()`, the stint was driven through `act()` (which never presents a
 frame), and 120 steps of full lock crashed the car below both stamp gates
 anyway. Both of that file's never-passing tests are green now — M9 env from
 `polling` alone, M6 from being rewritten against what the code actually does.
-The habit that settled it was reaching for an instrument
-(`tests/manual/skid-probe.spec.js`) instead of a fifth theory.
+The habit that settled it was reaching for an instrument — a small script
+that wrapped `GLX.drawSkidBatch` to log call counts — instead of a fifth
+theory.
 
 Write tests against `__apex` hooks, not rendering magnitudes; prefer relative
 assertions ("faster on tarmac than grass") over absolute thresholds. New-test
@@ -315,7 +316,7 @@ css/             tokens.css + components/menus/hud/overlays/carsetup/data/tuner/
 index.html       shell — script tags, all static DOM, cache-bust version
 sw.js            service worker — precache derived from the shell's own tags
 tools/           see tools/README.md (bidirectionally test-asserted index)
-tests/           111 Playwright specs + 75 `node --test` unit suites (docs/TESTING.md)
+tests/           111 Playwright specs + 76 `node --test` unit suites (docs/TESTING.md)
 docs/            the reference library — docs/README.md is the index
 .claude/         skills/ (task recipes, .claude/skills/README.md) and
                  workflows/ (multi-agent orchestration scripts, README there)

@@ -29,9 +29,9 @@ Essentially flat — reclaimed sea-level land. The notable features are the bank
 | 0.96 | both | near | Walls + DRS straight back to start/finish |
 
 ## 5. Track features
-The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Pale grey concrete canyon walls (~1.3–1.5 m) with intermittent Saudi green/gold accent stripes — not a solid green night rail. Bright sawtooth kerbs (red/white box strips). Banked corners at T13 (7°), the sweeper after it and the final right (both 6°).`
-- OLD: `T1-3 banked left complex; pale grey canyon`
-- NEW: `T1-3 left complex; pale grey canyon Slim cool-white LED heads densify both sides (~every 40 m) as a light tunnel.
+The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Pale grey concrete canyon walls (~1.3–1.5 m) with intermittent Saudi green/gold accent stripes — not a solid green night rail. Bright sawtooth kerbs (red/white box strips). Banked corners at T13 (7°), the sweeper after it and the final right (both 6°).
+T1-3 left complex; pale grey canyon. Slim cool-white LED heads densify both
+sides (~every 40 m) as a light tunnel.
 
 ## 6. Modelling notes
 - Build a **continuous pale grey concrete canyon** on both sides for the whole lap; punctuate with intermittent green/gold stripe boxes (never a solid green wall).

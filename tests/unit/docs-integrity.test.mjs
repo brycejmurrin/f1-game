@@ -269,8 +269,8 @@ test("the scenery api member count in the docs matches the frozen contract", () 
   const actual = body[1].split(",").map((s) => s.trim()).filter((s) => s && s.startsWith('"')).length;
 
   const wrong = [];
-  for (const doc of LIVE_DOCS) {
-    for (const m of read(doc).matchAll(/(\d+)[- ]member[s]? (?:`?scenery\(api\)`?|API)/gi))
+  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS]) {
+    for (const m of read(doc).matchAll(/(\d+)[- ]member[s]? (?:`?scenery\(api\)`?|`api`|API)/gi))
       if (Number(m[1]) !== actual) wrong.push(`${doc}: says ${m[1]}, contract has ${actual}`);
   }
   assert.deepEqual(wrong, [], "the frozen scenery(api) contract grew or shrank and the docs did not follow");

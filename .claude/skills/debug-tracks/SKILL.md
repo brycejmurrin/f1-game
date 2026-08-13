@@ -95,7 +95,7 @@ profile sweep:
 ```
 suzuka  18 official / 37 peaks  elev 12.0 m   maxk 0.042
 monaco  19 official / 29 peaks  elev 27.5 m   maxk 0.060
-spa     19 official / 42 peaks  elev 23.4 m   maxk 0.044
+spa     20 official / 42 peaks  elev 23.4 m   maxk 0.044
 vegas   17 official / 27 peaks  elev  4.0 m   maxk 0.030   (night-default → numLights 32)
 ```
 
