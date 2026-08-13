@@ -258,8 +258,13 @@
         modelGroup("jeddah-fountain", {
           center: [a.c[0], pyMin + 154, a.c[2]], size: [16, 312, 16], basis: b,
         }, (stage) => {
+          // Cone base must sit at the jet cylinder's top (base -0.8 + height 255
+          // = 254.2), not at a bare +255 — that 0.8m gap read as unsupported and
+          // the cone floated the full 256m down to the sea (float-audit cause:
+          // mis-derived height, not base/centroid — both prims are already
+          // correctly base-anchored). Small overlap avoids an exact flush seam.
           addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
-          addCone(stage, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
+          addCone(stage, [a.c[0], pyMin + 254.1, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
           addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
         }, { required: true });
       }
