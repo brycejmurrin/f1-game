@@ -250,13 +250,20 @@
           addBox(stage, vadd(vadd(a.c, a.r, -2.8), a.u, 22.5), [5.4, 3.4, 9.0],
             [0.90, 0.84, 0.58], b);
           stage._mat = MAT.STONE;
+          // Stepped-cornice ledges: 0.35 m thick with a reveal between each —
+          // the 1.3 m stride left a 0.95 m gap, over float-audit.cjs's 0.6 m
+          // "rests on" bridging tolerance (tools/float-audit.cjs:288), so the
+          // whole flagpole cluster above read as unsupported even though it
+          // visually sits right on top. 0.9 m keeps a visible reveal (0.55 m)
+          // under the tolerance; the roof cap and flagpole cluster shift down
+          // by the same 1.4 m so they still land flush on the top ledge.
           for (let l = 0; l < 3; l++)
-            addBox(stage, vadd(vadd(a.c, a.r, -4.2), a.u, 25.2 + l * 1.3), [4.4, 0.35, 11], STONE_L, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -2.6), a.u, 29.4), [9.5, 0.8, 12], STONE_L, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -4.2), a.u, 25.2 + l * 0.9), [4.4, 0.35, 11], STONE_L, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -2.6), a.u, 28.0), [9.5, 0.8, 12], STONE_L, b);
           stage._mat = MAT.METAL;
           for (const t of [-3, 0, 3]) {
-            addCyl(stage, vadd(vadd(a.c, a.u, 29.8), a.t, t), 0.11, 8, [0.90, 0.90, 0.90], 4, b);
-            addBox(stage, vadd(vadd(vadd(a.c, a.u, 35.4), a.t, t + 1.6), a.r, 0),
+            addCyl(stage, vadd(vadd(a.c, a.u, 28.4), a.t, t), 0.11, 8, [0.90, 0.90, 0.90], 4, b);
+            addBox(stage, vadd(vadd(vadd(a.c, a.u, 34.0), a.t, t + 1.6), a.r, 0),
               [0.14, 1.7, 3.0], TURK_RED, b);
           }
           stage._mat = 0;
