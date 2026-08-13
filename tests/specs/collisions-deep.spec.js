@@ -62,6 +62,15 @@ test.describe("Apex 26 — collisions (deep)", () => {
   test("driver↔wall: player is stopped at the barrier and loses speed", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
+      // R2 launch bypasses wallAt — recorded 2026-08-13; these tests pin the
+      // clamp in isolation. A hard strike here fires incidentSim.notifyWall at
+      // severity xOver*60 + speed*0.15 >= R2_WALL_SEV, IncidentSim takes
+      // ownership, and game.js skips the wall clamp for owned cars — the
+      // player tumbles past the barrier and maxAbsX measures the takeover, not
+      // the clamp. Bypass: the sanctioned __apex.incident({flags}) hook
+      // (js/game/apex.js -> IncidentSim.setFlags, which also hands back any
+      // live takeover safely). Assertions unchanged.
+      window.__apex.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
       window.__apex.setPhysics({ drift: 0 });
       const hw = window.__apex.probe().hw;
       window.__apex.jump(0.0, 60, 0);
@@ -135,6 +144,11 @@ test.describe("Apex 26 — collisions (deep)", () => {
     await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
+      // R2 launch bypasses wallAt — recorded 2026-08-13; these tests pin the
+      // clamp in isolation (see the driver↔wall test above for the mechanism).
+      // Disable the incident takeovers via the sanctioned __apex.incident hook
+      // so maxWallOvershoot measures the hard boundary, not an owned tumble.
+      window.__apex.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
       window.__apex.setPhysics({ drift: 0 });
       const hw = window.__apex.probe().hw;
       window.__apex.jump(0.2, 55, 0);
