@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **510 classes in 53 families**, and until this document there was no
+`css/` holds **509 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -59,9 +59,32 @@ not.
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
-`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `mb-`, `rs-`, `no-`, `rotate-`,
+`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `no-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`) is one file each and needs no map.
+
+**A family leaves this list when it leaves `css/`.** The title screen's mb-prefix
+family was here until its two
+classes — `.mb-stack` and `.mb-sub`, both of which dressed a single element
+inside a single button on the title screen — were replaced by `#mb-career > span`
+and `#mb-career-sub`. That is the `--sheet-w` move applied to a family instead of
+a width: a class that can only ever match one element is a context, and a context
+belongs in a selector. `tests/unit/component-inventory.test.mjs` is what makes the
+removal provable — it fails on a family named here that `css/` no longer defines,
+so a consolidation cannot be claimed without this table moving.
+
+A family can also shrink without disappearing, and `cs-` did: the garage's
+preview bar had `.cs-view-btn` plus two variants that existed only to restate a
+font-size, a padding and a line-height (`.cs-view-zoom`, `.cs-view-nudge`) on
+buttons that all carry ids anyway, so those became `--vb-fs` / `--vb-pad` set on
+the ids. `.cs-cam-lbl` went with them — its single declaration duplicated the
+value `#cs-cam` already passed down by inheritance, so it could not change a
+pixel. Nothing in this document is asserted about a family's SIZE, which is
+exactly why the count needs `tests/unit/css-class-ratchet.test.mjs` as well:
+this table proves a family left, the ratchet proves the total came down.
+
+`sel-` shrank the same way and for the same reason: `.sel-section` set one
+declaration on one element in the whole app, and that element already had an id.
 
 **The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,
@@ -116,7 +139,6 @@ most-shared class in the project and had no entry at all:
 - `.cs-stat-row` — `carsetup` + `menus` + `responsive`
 - `.cs-stat-val` — `carsetup` + `menus` + `responsive`
 - `.cz-liv-none` — `components` + `menus`
-- `.mb-sub` — `menus` + `responsive`
 - `.opt-btn` — `components` + `tuner`
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
@@ -131,7 +153,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 510 — a class defined in `css/` and referenced from neither
+None, out of 509 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

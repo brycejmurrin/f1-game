@@ -557,7 +557,12 @@ the same reason: `_cache` is filled on first read and was never invalidated, so 
 tab that had read `career` answered from memory forever and wrote its stale copy
 back over the other tab's. `store` now listens for `storage` (which fires only
 for writes made by OTHER documents of this origin), drops the named key so the
-next read goes to disk, bumps `rev`, and counts the event in `foreign`.
+next read goes to disk, bumps `rev`, and counts the event in `foreign`. One
+honest limit: `js/game/career.js` holds its live career as module state and
+`save()` writes THAT object, not a fresh `store.get()` — so an active career
+session can still clobber another tab's finished season; the invalidation
+protects everything read through `store.get()` per use (settings, slots,
+boards, tuner profiles), not the in-play career object itself.
 
 The cache write on failure is deliberate, not a bug: dropping the value would
 break the session as well as the save. What this reports is that the save is

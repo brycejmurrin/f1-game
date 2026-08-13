@@ -79,7 +79,7 @@ MEASURE = r"""async (args) => {
 
   const skipSmall = '.cr-meter-lbl, .hud, #hud, .build-tag, #disclaimer, .cs-cam-caret, .spf-fact, .sur-rnd, .season-upcoming-head';
 
-  for (const el of root.querySelectorAll('button, a, label, p, h1, h2, h3, h4, span, .sel-label, .cr-note, .pm-group-h, .tune-label, .menu-btn, .title-btn, .cs-opt-desc, .cs-tab-lbl, .mb-sub')) {
+  for (const el of root.querySelectorAll('button, a, label, p, h1, h2, h3, h4, span, .sel-label, .cr-note, .pm-group-h, .tune-label, .menu-btn, .title-btn, .cs-opt-desc, .cs-tab-lbl, #mb-career-sub')) {
     if (!vis(el)) continue;
     if (el.closest(skipSmall)) continue;
     const t = (el.innerText || el.textContent || '').trim();
