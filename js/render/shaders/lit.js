@@ -591,8 +591,9 @@ float sampleShadow(vec3 wpos) {
   // Poisson shadow taps, 4 car-map taps — and then threw the result away.
   // glx.js drives uShadowStr to 0 whenever the key luminance falls below ~0.28
   // without a moon floor (cloudy, wet or foggy nights — frame.moonK is forced
-  // to 0 in fog) and whenever the shadow pass is disabled outright, which is
-  // exactly the overcast-night case that is already the heaviest to render.
+  // to 0 in fog, though MOON SHADOWS pushed past 0.5 overrides this via
+  // frame.moonGate) and whenever the shadow pass is disabled outright, which
+  // is exactly the overcast-night case that is already the heaviest to render.
   if (uShadowStr <= 0.0) return 1.0;
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;

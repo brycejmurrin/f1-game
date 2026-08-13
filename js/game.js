@@ -5309,7 +5309,10 @@ function render(dt) {
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
   // whole-track layouts and trackside scenery from any angle.
-  let fovY, farPlane = 900;
+  // RENDER DISTANCE knob: scales the far clip plane (and, below, the chunked-
+  // scenery draw-distance cull that derives from it). dbgCam overwrites
+  // farPlane with its own value right below, so debug/photo-mode is untouched.
+  let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
   if (dbgCam) {
     camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
     camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
@@ -5417,24 +5420,27 @@ function render(dt) {
   // fog-derived cull would visibly pop there).
   // Normal play: fog-wall radial cull — past ~95% fog opacity (3/density) a
   // chunk is invisible anyway, so skip it. Only kicks in when that distance is
-  // inside the 900 m far plane (night city 0.004 -> 750 m, fog/rain closer);
-  // clear day (0.0012 -> 2.5 km) stays uncapped — zero visual change there.
+  // inside the far plane (900 m as-shipped, scaled by the RENDER DISTANCE
+  // knob; night city 0.004 -> 750 m, fog/rain closer); clear day (0.0012 ->
+  // 2.5 km) stays uncapped — zero visual change there.
   // Feature-shedding tier 3+ also caps the radius at the far plane: scenery
   // vertex/draw load is the one big cost class the resolution scale and shed
   // passes don't touch, and by tier 3 the device has proven it can't afford
   // the full vista (the fog wall hides most of the cut).
-  const _fogCull = frame.fogDensity > 3 / 900 ? Math.ceil(3 / frame.fogDensity) : 0;
+  const _fogCull = frame.fogDensity > 3 / farPlane ? Math.ceil(3 / frame.fogDensity) : 0;
   frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
-    : (PerfGov.tier() >= 3 ? Math.min(900, _fogCull || 900) : _fogCull);
+    : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : _fogCull);
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
-  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonK, so
+  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonGate, so
   // moonlight casts soft shadows on clear nights only — fog/overcast/rain
-  // nights stay shadowless. Computed BEFORE the shadow pass because the prop
-  // and car caster gates below feed the snap-cached map from it. Mirrors the
-  // frameSky.moon / frame.cloud plumbing further down (values persist across
-  // frames, so first-frame staleness only delays the gate by one recentre).
+  // nights stay shadowless, UNLESS the MOON SHADOWS knob is pushed past 0.5 (see
+  // moonGate below), a player-facing escape hatch. Computed BEFORE the shadow
+  // pass because the prop and car caster gates below feed the snap-cached map
+  // from it. Mirrors the frameSky.moon / frame.cloud plumbing further down
+  // (values persist across frames, so first-frame staleness only delays the
+  // gate by one recentre).
   {
     const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
       ? 0.85 * LT.moonBright : (frameSky.moon || 0);
@@ -5444,6 +5450,11 @@ function render(dt) {
     _cf = _cf * _cf * (3 - 2 * _cf);
     frame.moonK = raceWeather === "fog" ? 0
       : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
+    // MOON SHADOWS knob above 0.5 overrides the weather gate above (clear/dry/
+    // no-fog) so a player who wants shadows at night through cloud/fog/wet can
+    // have them — ramps from moonK (at 0.5, no change) to fully open (at 1.0).
+    const _msh = LT.moonShadow != null ? LT.moonShadow : 0.25;
+    frame.moonGate = Math.max(frame.moonK, clamp((_msh - 0.5) * 2, 0, 1));
   }
 
   // Resolve the moving player before any shadow-map pass. AI keeps using the
@@ -5529,8 +5540,10 @@ function render(dt) {
       const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Clear-night moon shadows re-open the gate: props must be in the map for
       // the moonlight floor to have anything to cast (snap-cached, so the night
-      // saving only goes when MOON SHADOWS is active and the sky is clear).
-      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      // saving only goes when MOON SHADOWS is active and the sky is clear — or,
+      // above 0.5, the knob itself forces the gate open regardless of weather;
+      // see frame.moonGate above).
+      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
       gfx.shadowEnd();
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
@@ -5538,22 +5551,26 @@ function render(dt) {
     // AI casts use the preceding frame's pooled transforms; the player is
     // rebuilt above from the current interpolation state. Reusing its old matrix
     // trailed the shadow by speed × frame time (6–12 m on low-FPS devices).
-    // ±42 m box on the same gliding anchor (a car shadow beyond that is
-    // sub-pixel), same
-    // depth program and key-luminance gate as the props above. WGX mobile tiers
-    // may no-op the pass (blob fallback); menu/select skip because the car loop
-    // doesn't run and its pooled AI matrices would be stale race positions.
+    // ±42 m box (at the default 80 m SHADOW DISTANCE — a car shadow beyond that
+    // is sub-pixel) on the same gliding anchor, scaled proportionally with
+    // SHADOW DISTANCE above its default so the slider also reaches the car's
+    // own shadow, same depth program and key-luminance gate as the props above.
+    // WGX mobile tiers may no-op the pass (blob fallback); menu/select skip
+    // because the car loop doesn't run and its pooled AI matrices would be
+    // stale race positions.
     if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
         state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
-      // the moonlight floor active (game.js frame.moonK), cars keep casting so
-      // they throw faint moon shadows too instead of popping to blob-only.
-      if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonK || 0) > 0.01)) {
+      // the moonlight floor (or the knob's above-0.5 override) active, cars
+      // keep casting so they throw faint moon shadows too instead of popping
+      // to blob-only.
+      if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
         M4.lookAtTo(_mCView,
           [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
           _shadowCtr, up);
-        M4.orthoTo(_mCProj, -42, 42, -42, 42, 1.0, 320);
+        const cBox = 42 * Math.max(1, sBox / 80);
+        M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
         gfx.carShadowBegin(_mCVP);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);

@@ -1341,8 +1341,10 @@ const WGX = (function () {
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
       // Clear-night moon shadows (GLX parity): floor the key-dim fade with the
-      // MOON SHADOWS knob scaled by the clear-night factor (game.js frame.moonK).
-      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonK || 0);
+      // MOON SHADOWS knob scaled by the clear-night factor (game.js
+      // frame.moonGate — clear-night moonK, or above 0.5 the knob itself
+      // forcing the floor open regardless of weather).
+      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
       d[74] = 1 / SHADOW_SIZE;    // texel size for PCF

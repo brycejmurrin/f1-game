@@ -78,11 +78,11 @@ const TUNE_DEFS = [
   { id: "bounceK",      label: "LAMP BOUNCE",     group: "AMBIENT & BOUNCE", min: 0,   max: 0.3, step: 0.0025, def: 0.04, u: "uBounceK", help: "Pool light bounced onto walls/kerbs/car flanks outside the beam cone." },
   // ── SHADOWS ──
   { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS", min: 0, max: 2, step: 0.01, def: 1.15, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow (ambient fill only inside it), 0 = shadows gone — full sun bleeds back in. Floor stays 0 (already the 'no shadow' extreme); above 1 crushes shadows past neutral toward black for a harder, more graphic look." },
-  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 16, max: 160, step: 2, def: 80, u: "uShadowRange", help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading." },
+  { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 16, max: 300, step: 2, def: 80, u: "uShadowRange", help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading. Car shadow reach and shadow-map texel density scale with this too, so very high values soften/blur shadows in exchange for reach." },
   { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS", min: 5, max: 500, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth)." },
   { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS", min: 0, max: 0.01, step: 0.0001, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
   { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS", min: 0, max: 1.5, step: 0.01, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
-  { id: "moonShadow",   label: "MOON SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 0.01, def: 0.25, help: "Floor for cast-shadow strength under a bright CLEAR moon — soft moonlight shadows at night. Fades out by itself as cloud rolls in, the road gets wet, or fog sets; 0 = night shadows fade fully off (old behaviour)." },
+  { id: "moonShadow",   label: "MOON SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 0.01, def: 0.25, help: "Floor for cast-shadow strength under a bright CLEAR moon — soft moonlight shadows at night. Fades out by itself as cloud rolls in, the road gets wet, or fog sets; 0 = night shadows fade fully off (old behaviour). Above 0.5, this ALSO starts overriding the clear-moon weather gate so buildings/props cast shadows at night through cloud/fog/wet too — 1.0 = shadows cast regardless of weather." },
   { id: "carShadow",    label: "CAR SUN SHADOWS", group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Real sun-projected car shadows from a per-frame car-only shadow map (direction and length match the scene; cars shadow each other). 0 = blob contact shadow only. Desktop WebGL2 tier only." },
   { id: "lampShadow",   label: "LAMP SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Night: the single nearest floodlight casts REAL shadows — a per-frame 512² depth map from that lamp, so cars/walls under it throw radial shadows away from the mast and its volumetric beam is carved by the same occluders. One lamp only (the rest stay cone-shaped, no shadow cost). 0 = off. Desktop WebGL2 tier only." },
   { id: "aoStr",        label: "AMBIENT OCCLUSION", group: "SHADOWS", min: 0, max: 3, step: 0.02, def: 1.0, help: "Crease/contact darkening (SSAO). Floor 0 = off (already the minimum); above 1 pushes creases toward crushed black." },
@@ -115,6 +115,7 @@ const TUNE_DEFS = [
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMPS", section: "BEHAVIOUR", min: 0.1, max: 0.9, step: 0.05, def: 0.35, help: "How far inside the nearest-lamp boundary a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
   { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 400, step: 10, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 10, step: 0.25, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. 0/low = lamps ranked purely by distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
+  { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 4, step: 0.1, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. 1 = as-shipped (pure distance + BEHIND-CAM BIAS), higher = lamps ahead win the budget over ones to the side/behind, pushing the boundary where lamps switch on further out. Only matters once a track has more lamps than the LAMP COUNT budget." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 12, step: 0.25, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. Both renderers." },
   // ── NIGHT GLOW & BLOOM ──
   { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT GLOW & BLOOM", min: 0,    max: 3,  step: 0.01,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp)." },
@@ -146,6 +147,7 @@ const TUNE_DEFS = [
   { id: "lampVolBase",  label: "BEAMS (CLEAR)",   group: "ATMOSPHERE", min: 0, max: 0.8, step: 0.005, def: 0.05, help: "Volumetric lamp-beam strength in clear night air. Mobile tier renders no beams regardless (the volumetric pass is shed for GPU headroom)." },
   { id: "lampVolHaze",  label: "BEAMS (HAZE)",    group: "ATMOSPHERE", min: 0, max: 2.5, step: 0.05, def: 0.65, help: "How much haze/rain swells the lamp beams." },
   { id: "lampVolCap",   label: "BEAM CEILING",    group: "ATMOSPHERE", min: 0, max: 1.5,   step: 0.01, def: 0.70, help: "Hard cap on volumetric beam strength." },
+  { id: "renderDistMul", label: "RENDER DISTANCE", group: "ATMOSPHERE", min: 0.5, max: 2, step: 0.05, def: 1.0, help: "Scales how far the camera can see — the far clipping plane AND the scenery draw-distance cull move together. 1 = as-shipped (900 m). Higher reveals more distant track/scenery at a real GPU cost (more chunks drawn every frame); lower saves performance on weak devices. Fog still fades distant geometry out visually regardless of this setting." },
   // ── REFLECTIONS ──
   { id: "ssrWetMul",    label: "WET MIRROR",      group: "ROAD & REFLECTIONS", min: 0, max: 2.5, step: 0.01, def: 1.0,  help: "Wet-road scene-mirror strength (scales the wetness ramp)." },
   { id: "ssrDryNight",  label: "DRY NIGHT SHEEN", group: "ROAD & REFLECTIONS", min: 0, max: 1, step: 0.005, def: 0.08, help: "Dry tarmac lamp/neon sheen at night." },
@@ -734,6 +736,12 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
   const flen2 = fx * fx + fz * fz || 1;
+  // LAMP REACH AHEAD knob: as-shipped this is 1 (no-op). Above 1, lamps roughly
+  // ahead of the camera get their ranked distance shrunk (mirror of the
+  // BEHIND-CAM BIAS penalty below, applied as a divisor instead of a
+  // multiplier), so they win the nearest-CAP budget from farther out and the
+  // lit zone reaches further down the road on a dense track.
+  const reach = LT.lampReach != null ? LT.lampReach : 1;
   const buf = _lightCullBuf;
   for (let i = 0; i < count; i++) {
     const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
@@ -749,6 +757,10 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
       // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
       // nearest-N rank (def 5.25 = as-shipped forward push).
       d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, ratio2);
+    } else if (reach > 1) {
+      const dl2 = dx * dx + dz * dz || 1;
+      const ratio2 = (b * b) / (flen2 * dl2);
+      d /= 1 + (reach - 1) * ratio2;
     }
     const e = buf[i];
     if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
