@@ -182,7 +182,7 @@
             if (landmark || hash(i * 13 + 1.7) > 0.5) {
               const a = anchor(K(sFrac), side, dist), bv = [a.r, a.u, a.t];
               // backdrop()'s own top (parapet incl.) lands near groundYAt(k,dist)
-              // + h - 0.8 (js/track/tracks.js:1498,1548: cy0 sinks 2 m, the
+              // + h - 0.8 (backdrop() in js/track/tracks.js,1548: cy0 sinks 2 m, the
               // parapet adds 0.6 back). anchor() sinks another 0.3 m off its own
               // (slightly different) ground read. h + 2.5 put the beacon's base
               // ~1.0 m above that real top — just past float-audit's 0.6 m

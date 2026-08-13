@@ -542,7 +542,7 @@
           { kind: "hall", wall: [0.80, 0.80, 0.82], window: [0.32, 0.36, 0.44], floor: 4.5, roof: true });
       }
       // Lit windows on the hospitality row: NOT drawn here. These buildings
-      // use kind:"hall" (js/track/scenery-city.js:655-659, neonTower), whose
+      // use kind:"hall" (the `hall` branch of building() in js/track/scenery-city.js, neonTower), whose
       // body only reaches h*0.5*0.7 = 4.2 m of the nominal h=12 before the
       // gable roof takes over, and which already emits its own eave-neon
       // band from the same `window` option passed to building() above. A
@@ -615,7 +615,7 @@
           { kind: "spire", wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
       }
       // Lit windows on the Milan skyline: NOT drawn here. kind:"spire"
-      // (js/track/scenery-city.js:570-580, neonTower) is a TAPERED round
+      // (the `spire` branch of building() in js/track/scenery-city.js, neonTower) is a TAPERED round
       // shaft (frustum + ring lights), not a flat rectangular wall — a flat
       // 14 m window band centred on it clips the taper on both ends and
       // reads as floating debris. The spire already lights its own rings
@@ -1019,7 +1019,7 @@
             const row = i % 2, alongOff = (Math.floor(i / 2) - 1) * 12;
             const across = (row ? 1 : -1) * 5;
             const p = vadd(vadd(a.c, a.r, across), a.t, alongOff);
-            // addPrism is BASE-anchored (js/track/geom.js:153-164) — the
+            // addPrism is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — the
             // position arg IS the base centre, not the centroid. Passing
             // base + h/2 (as this did) floats the tent by half its height.
             addPrism(stage, p, [5.5, 3, 6.5],
