@@ -102,7 +102,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: clamp(320px, calc(24 * var(--vwz)), 420px); gap: 10px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { width: 100%; }
-  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
+  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: var(--fs-micro); padding: 9px 8px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
   :where(body:not([data-density="compact"])) #subtitle { font-size: clamp(14px, calc(1.05 * var(--vwz)), 18px); }
@@ -130,7 +130,7 @@ body.desktop #pm-calib { display: none !important; }
 @media (min-width: 1200px) {
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
-  .hud-label { font-size: 10px; }
+  .hud-label { font-size: var(--fs-micro); }
   .hud-gaps { font-size: 14px; top: calc(72px + var(--sat) / var(--hud-scale)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
@@ -155,12 +155,13 @@ body.desktop #pm-calib { display: none !important; }
      56px base it overrode. The base is now derived from --tap (css/hud.css) and
      clears the buttons by construction at every scale, so a second hard-coded
      constant here can only drift away from it again. The font/padding trim is
-     what this breakpoint actually wants. */
-  #hud-sectors { font-size: 10px; padding: 3px 6px; }
+     what this breakpoint actually wants. (--fs-micro is deploy's token swap,
+     kept.) */
+  #hud-sectors { font-size: var(--fs-micro); padding: 3px 6px; }
   /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
      without shrinking thumb targets — tap floors stay on the >700px ladder. */
   #minimap { width: 96px; height: 96px; }
-  .hud-gaps { top: calc(56px + var(--sat) / var(--hud-scale)); font-size: 11px; gap: 4px; }
+  .hud-gaps { top: calc(56px + var(--sat) / var(--hud-scale)); font-size: var(--fs-micro); gap: 4px; }
   .hud-top { gap: 6px; }
   .hud-box { padding: 4px 7px; }
 }

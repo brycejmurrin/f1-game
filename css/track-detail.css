@@ -10,7 +10,7 @@
    `@layer overlays`, which beats `@layer components`, so the clamp pinned the
    whole dialog to 540px in the top-left corner instead of the centred sheet.
    Only the inner scroll region wants a cap of its own. */
-#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: 13px; }
+#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: var(--fs-micro); }
 
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {
@@ -26,13 +26,42 @@
      `z-index: 400` is now redundant (the top layer outranks every z-index) but
      harmless; it is what kept the div stacking correctly in the interim. */
   margin: 0;
+  /* AND AN EXPLICIT SIZE, because `inset: 0` alone does NOT fill here. The
+     note above cites CSS2.1 10.3.7 case 6, which resolves a free `width: auto`
+     against both insets — but the UA stylesheet gives `dialog` a
+     `width: fit-content`, so the width is never auto to begin with and the box
+     shrink-wraps its content in the corner instead. Measured at 1280x720: the
+     "full-bleed" modal came out 524px wide — exactly canvas(250) + gap(14) +
+     panel(260) — which also made `#track-detail-canvas-wrap { flex: 1 }`
+     circular, since the only thing it had to expand into was the canvas the
+     JS had just sized from it. An explicit 100% breaks that loop and gives
+     the map the ~990px the layout always meant it to have. */
+  width: 100%; height: 100%;
+  /* UI SIZE APPLIES HERE TOO. `zoom: var(--ui-scale)` rides `.sheet` and
+     `#overlay > *`; this dialog is neither, being full-bleed and top-layer, so
+     the setting simply did not reach it. Measured across the layout audit: the
+     select preview scales 267 -> 171 -> 120 px across UI SIZE 100/150/175
+     while this modal returned a byte-identical map at all three, on every
+     viewport — a player at 175% opened a popup still drawn at 100%.
+     Same mechanism as every other surface rather than a second one, and the JS
+     that fits the canvas already measures in local px (clientWidth), which is
+     the space zoom leaves those APIs reporting in. */
+  zoom: var(--ui-scale);
   background: #0a0a0e;
   display: flex; flex-direction: column;
+  /* STRETCH, not the shared dialog base's `center`. On a column flex container
+     `align-items: center` is a CROSS-axis rule, so it shrink-wrapped
+     #track-detail-body to its content and centred it — 597px of a 1280px
+     dialog, which put the canvas wrap back to exactly the canvas width and
+     re-created the same feedback loop the explicit size above just broke.
+     Costs nothing for the header (it lays itself out with space-between) and
+     gives a wide circuit the full row: Baku's outline goes 323px -> ~980px. */
+  align-items: stretch;
   /* Full safe-area inset on every edge — this is a full-bleed overlay, so
      without the left/right insets the circuit name and close button sat under
      the notch on a landscape phone (was `10px 12px` + only --sab). */
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  box-sizing: border-box; gap: 6px;
+  box-sizing: border-box; gap: calc(var(--gap) * 0.5);
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
@@ -54,7 +83,7 @@
 .tdc-close-btn:active { border-color: rgba(255,255,255,0.6); color: #fff; }
 #track-detail-body {
   flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
   overflow: hidden;
 }
 #track-detail-canvas-wrap {
@@ -73,25 +102,25 @@
   object-fit: contain;
 }
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
-#track-detail-meta { font-size: 10px; color: #888; letter-spacing: 0.04em; line-height: 1.5; }
-.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
+#track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: 0.04em; line-height: 1.5; }
+.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-elev { display: block; width: 100%; height: 48px; }
-#track-detail-drs-list { font-size: 11px; color: #888; }
+#track-detail-drs-list { font-size: var(--fs-micro); color: #888; }
 .tdd-zone { padding: 2px 0; }
 #track-detail-corners { flex: 0 0 auto; }
-.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
+.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
   background: rgba(255,255,255,0.06); border-radius: var(--r-sm);
-  padding: 3px 8px; font-size: 11px;
+  padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: #ddd; min-width: 22px; }
-.tdc-fast   { color: #4ade80; font-size: 10px; }
-.tdc-medium { color: #facc15; font-size: 10px; }
-.tdc-slow   { color: #fb923c; font-size: 10px; }
-.tdc-hairpin{ color: #f87171; font-size: 10px; }
-#track-detail-flags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+.tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
+.tdc-medium { color: #facc15; font-size: var(--fs-micro); }
+.tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
+.tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
+#track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: 0.1em; padding: 2px 7px;
   border-radius: var(--r-xs); border: 1px solid rgba(255,255,255,0.2);
@@ -105,7 +134,14 @@
 @media (orientation: portrait) {
   #track-detail { overflow-y: auto; overscroll-behavior-y: contain; }
   #track-detail-body { overflow: visible; flex: none; }
-  #track-detail-canvas-wrap { flex: none; height: min(56vw, 320px); }
+  /* `min(56vw, 320px)` was a PHONE number applied to every portrait window.
+     On a rotated 1080x1920 monitor it pinned the map to 320px of 1920 — the
+     layout audit measured Jeddah filling 20% of its wrap there, the emptiest
+     cell in the whole sweep, while the panel below it had room to spare.
+     56vw still sets the shape on a phone (a 393px-wide screen lands at 220px,
+     unchanged); the ceiling now scales with the window it is actually in, so a
+     tall one spends its height instead of capping at a phone's worth. */
+  #track-detail-canvas-wrap { flex: none; height: min(56vw, 42svh, 640px); }
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
 }
 
@@ -134,6 +170,24 @@
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  /* A tall circuit fits by HEIGHT, so the width it does not take is dead —
+     measured at 1280x800: Jeddah 363px of a 982px wrap (37% fill) beside a
+     260px rail holding 27 turn chips three to a row, while Baku fills 99% and
+     wants every pixel of that wrap. js/game/menus.js sets data-map-tall from
+     the circuit's aspect, so the two cases stop sharing one fixed rail.
+     Percentage-capped rather than a flat 460px: on a 3440px ultrawide a rail
+     that wide is a column of whitespace with chips down one edge.
+
+     CLAMPED, NOT `min()`: percentages here resolve against the dialog's LOCAL
+     width, which `zoom: var(--ui-scale)` shrinks — at UI SIZE 175% on a 1280px
+     screen 34% is 248px, i.e. NARROWER than the 260px default this rule exists
+     to widen. Measured exactly that way before the clamp: the tall circuit's
+     rail came out 240 local px against the wide circuit's 260. The lower bound
+     makes the rule one-directional, which is what it always meant. */
+  #track-detail[data-map-tall="1"] #track-detail-panel {
+    flex-basis: clamp(260px, 34%, 460px);
+    max-width: clamp(260px, 34%, 460px);
+  }
 }
 
 /* ---------- Portrait-specific HUD fixes ---------- */

@@ -67,6 +67,194 @@ The last two are why `tools/lighting-tuner-sweep.mjs` gained `day-overcast`/`day
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
+### The three DISTANCE knobs: where each one is actually demonstrable
+
+`lampReach` / `renderDistMul` / `shadowRange`+`moonShadow` are the sharpest case
+of "conditional, not dead" in the table above: each has exactly one family of
+(track, position, weather) where it moves anything at all, and the obvious test
+setup — Bahrain, night, dry, free-cam — is the one place where **all three** are
+provably inert. Measured 2026-08-13; use these recipes rather than re-deriving.
+
+**`renderDistMul` — needs DAY, a real player camera, and far scenery.**
+It scales the camera far-clip plane exactly (`M4.perspectiveTo`'s `far` arg,
+wrapped and read directly): 0.5→450 m, 1→900 m, 1.5→1350 m, 2→1800 m. But on
+this box `PerfGov.tier()` is 0, so `frame.cullDist` is the `_fogCull` branch —
+and `_fogCull = ceil(3/fogDensity)` **does not contain `farPlane`**; the far
+plane only gates whether that cull switches on. In clear day fog (~0.0008–0.0013)
+the cull is 0 (uncapped) at *every* multiplier, so the far plane is the ONLY
+lever, and it can only reveal scenery sitting between 900 m and 1800 m. Props in
+that band, measured with `scene({radius}).counts.inRadius`:
+
+| spa | suzuka | vegas | jeddah | singapore | abudhabi | silverstone | mexico | **bahrain** |
+|---|---|---|---|---|---|---|---|---|
+| 1550 | 1492 | 1357 | 538 | 418 | 258 | 210 | 122 | **70** |
+
+Bahrain is last by an order of magnitude — a `renderDistMul` A/B there is
+near-guaranteed to look like a no-op no matter how carefully it is shot. Use
+**daylight, `camera('chase')`**. And never `orbit()`/`view()`: under any free-cam
+`farPlane = dbgCam.far`, so the knob is bypassed entirely (and `cullDist` is
+forced to 0) — a free-cam A/B measures nothing.
+
+**The per-track band count is necessary but NOT sufficient — the VANTAGE must
+have an open sightline, and most do not.** Suzuka 0.10 and Vegas 0.50 both sit
+in the top three tracks by band count and both still showed nothing (MAD 0.99
+and 1.29, at/below the ~0.6–1.0 noise floor): the first is walled in by near
+forest, the second is a corner between casino blocks, so there is no line of
+sight for the extra 900 m to populate. Do not pick the vantage by eye — find it
+by counting **actual chunk draws**, which is exact and cheap: wrap
+`gl.drawElements` on the `#game` canvas, take the MIN over ~8 frames at each
+multiplier (the min rejects the env-probe/shadow-rebuild frames that make a
+single-frame count swing 209↔393), and look for a position where the two minima
+diverge. Measured on Spa, day:
+
+| Spa frac | 0.05 | 0.20 | 0.35 | 0.65 | 0.80 | **0.50** |
+|---|---|---|---|---|---|---|
+| min draws, mul 1 → 2 | 151→151 | 207→427 | 180→472 | 167→497 | 143→468 | **183→528** |
+| delta | **+0** (enclosed) | +220 | +292 | +330 | +325 | **+345 (+188%)** |
+
+**Spa 0.50, day, chase** is the reference shot: a distant hillside and treeline
+appear along the horizon where mul 1 renders bare sky, at **MAD 3.46 overall but
+6.19 in the horizon band vs 1.36–1.44 on the road** — i.e. 5.3× the same-value
+noise floor, and the saved diff-map shows solid tree/hill SHAPES rather than the
+edge outlines that sub-pixel camera drift produces. Spa 0.05, on the same track
+in the same session, gives exactly +0 draws and no visible change — the vantage
+matters more than the track.
+
+**`lampReach` — needs a lamp-saturated view with far lamps that currently lose.**
+For a lamp ahead, `d /= 1 + (reach-1)·cos²θ`; at reach 4 a dead-ahead lamp's
+SQUARED rank distance is quartered, so it ranks as if **half as far**. That only
+changes the selection when (a) lamps in range exceed `lampCull` (28), and (b)
+lamps exist in the newly-reachable band. Farthest selected lamp ahead, reach 1→4:
+
+| Singapore frac | 0.15 | 0.35 | **0.55** | 0.75 |
+|---|---|---|---|---|
+| reach 1 → 4 | 212→275 m | 292→295 m | **217→313 m** | 251→326 m |
+| gain | +63 m | +3 m | **+96 m (+44%)** | +75 m |
+
+**Singapore ~0.55** is the best demo. By contrast Vegas at frac 0.05 gains
+**0 m**: all 28 selected lamps sit within 33 m there (a dense casino cluster), so
+halving a distance cannot pull in anything new. Note frac 0.35 is nearly flat
+too — the spot matters as much as the track. Read the selection by wrapping
+`LightTune.setFrameLights` (it is called via property lookup on the global, so a
+monkeypatch takes effect) and measuring `frame.lights` distances against `eye`.
+
+The table above is the ORIGINAL curve, which under-delivered against its own
+label: `d` in that loop is a SQUARED distance, so dividing it by
+`1 + (reach-1)·cos²θ` shortened the ranked LINEAR distance only by `sqrt(reach)`
+— a slider reading 4 bought 2× reach. The divisor is now squared, so the number
+is the literal reach multiplier for a dead-ahead lamp. Re-measured at Singapore
+0.55, farthest selected lamp ahead:
+
+| reach | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| farthest ahead | 249 m | 379 m | **415 m** | 415 m (saturated) |
+| lamps within 40 m | 4 | 4 | 4 | 4 |
+
+**+67%** (249→415 m) where the old curve gave +44%. Two things worth keeping:
+the near road is NOT starved — lamps inside 40 m hold at 4 and the nearest stays
+~29 m, so the budget is taken from the mid field (80 m band 8→6), not from under
+the car; and the gain **saturates at reach 3** because the track simply has no
+further lamps in that sightline, which is why the 1–4 range needs no widening.
+A knob like this is bounded by lamp availability, so expect a plateau rather
+than a linear response.
+
+**`moonShadow`'s escape hatch — needs BAD weather; it is a guaranteed no-op when dry.**
+`frame.moonGate = max(moonK, clamp((moonShadow-0.5)*2, 0, 1))`, and `moonK` is
+already 1 on a clear dry night, so the max() cannot move:
+
+| night weather | moonShadow 0.25 → 1 | moonGate |
+|---|---|---|
+| dry | 1 → 1 | **no change — inert by construction** |
+| wet | 0.101 → 0.056 | 0.101 → **1** |
+| fog | 0 → 0 | 0 → **1** (clean binary flip) |
+
+**Night + fog (or wet)** is the only condition where the gate moves at all: prop/car
+shadow casting goes fully off→on. Every dry-night A/B of this knob is measuring
+nothing, whatever the screenshot shows.
+
+**But the gate flipping is NOT visible, and that is the honest result.** With the
+gate driven 0→1 at Bahrain night/wet, from a frozen chase cam with byte-identical
+`eye`/`tgt`, the frame moved **MAD 1.081 against a same-value noise floor of
+1.061 — a signal/noise ratio of 1.0**, i.e. nothing above frame noise. The first
+attempt looked more promising (MAD 1.02) until a same-value repeat showed rain
+particles alone accounted for MAD 0.648 (ratio 1.58, still short of the "several
+times over" bar this file demands); killing the particles with
+`rainCount:0, drizzleCount:0, particleMul:0` removed that confound and the
+remaining signal vanished with it. The mechanism is sound and the state is
+verifiably live — the shadow simply has almost nothing to draw with: the night
+key light is `sunColor ≈ [0.08, 0.10, 0.15]`, so cast-shadow contrast against
+lamp-dominated night lighting is near zero, and the visible strength is
+`moonShadow × moonGate` on top of that. Treat `moonShadow > 0.5` as a
+state-level feature verified by `lightState().moonGate`, not something to sign
+off from a screenshot. (Unproven, worth checking before relying on it: whether
+raising `moonBright` alongside it gives the shadows enough key to actually read.)
+
+### PER-CHUNK LAMPS: why the 32-lamp ceiling is not what it looks like
+
+`lampCull`/`lampReach` exist to ration 32 shader slots across the whole visible
+scene. But **`MAX_LIGHTS = 32` is a fragment-shader uniform-array size, so it
+bounds lights per DRAW, not per scene.** Binding a different 32 per draw needs no
+shader change at all — `lit.js`, `MAX_LIGHTS` and the per-fragment loop are
+untouched. Two properties of this codebase make that cheap: track lamps are baked
+and static (`track._lights`), and chunked scenery already carries per-chunk AABBs
+that `drawChunked` frustum-tests, so each chunk's lamp set is computed once
+(`_pickChunkLamps`, radius-vs-AABB) and cached on the chunk.
+
+The generic alternative is worse here. WebGL2 has **no compute shaders and no
+SSBOs**, and UBOs cap at 64 KB with a performance penalty — which is why engines
+pick ~32 rather than it being a device cap. Clustered forward IS reachable via
+CPU-built clusters + data textures (a three.js forward+ demo runs 1000 point
+lights that way) but needs a whole new spatial structure and showed
+hardware-specific breakage on mobile.
+
+Measured at Singapore 0.55, night (`perChunkLights` 0 → 1):
+
+| | uploads/frame | max bound on one draw | GL errors |
+|---|---|---|---|
+| off | 18 | 28 (the global cull) | 0 |
+| on | 190 | **32** (chunks fill the array) | 0 |
+
+Visually the effect lands on the scenery, not the road, and the road doubles as
+an in-frame control:
+
+| band 0–1 (buildings) | band 2–3 (road) |
+|---|---|
+| MAD **5.39 / 5.82** | MAD 0.95 / 1.11 |
+
+— overall MAD 3.32, 42,614 px over threshold, and the diff map is solid filled
+building faces, not the edge outlines sub-pixel drift produces. Cost is ~190
+extra uniform uploads/frame at that vantage.
+
+**Perf: it is FASTER, not a cost.** Interleaved A/B/A/B at the same vantage,
+median frame time — the two `off` blocks agree to 0.1%, so the harness is
+reproducible:
+
+| off | on | off | on |
+|---|---|---|---|
+| 6519 ms | **5618 ms** | 6512 ms | **5205 ms** |
+
+≈14–20% faster, which is the mechanism working as designed: a chunk binds only
+lamps whose radius reaches it, so fragments run fewer light-loop iterations, and
+that saving outweighs the extra uploads. Two caveats keep the knob **off by
+default** anyway: (1) these frames are 5–6.5 SECONDS under SwiftShader, ~60x off
+real-time and heavily fragment-bound — exactly the regime where cutting
+per-fragment light iterations wins biggest, so the magnitude will not transfer
+to a real GPU even if the direction does; (2) nothing here measures the mobile
+tier, whose own lamp loop is the cost this would help most and which is also the
+tier most exposed to per-draw upload overhead. Real hardware decides.
+
+Method note: the first two perf attempts died and it was NOT the feature — exit
+143, my own `timeout` firing. Singapore night renders at ~1–2 s/frame here, so a
+480-frame plan needed 8–16 minutes. Sample single-digit frame counts per block
+and interleave A/B/A/B for drift rather than sampling long.
+
+Two instruments that did NOT work, recorded so they are not retried: a
+union-of-distinct-lamps count via wrapping `gl.uniform3fv` reported 64 → 270,
+but 270 exceeds the track's 249 baked lamps — it was catching material/ambient
+uploads too, so its absolute numbers are unusable. And raw `gl.drawElements`
+counts read 211 → 327 purely from env-probe/shadow-rebuild pass scheduling
+swinging between frames; take the MIN over ~8 frames if you need that number.
+
 ## Five ways a LIVE knob still reads "no observed change"
 
 A follow-up runtime pass sampled one knob per class (shader-uniform, apply-only,

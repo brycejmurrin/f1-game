@@ -5767,6 +5767,12 @@ function render(dt) {
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
+    // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
+    // alongside the globally-culled frame.lights, so GLXChunked can bind each
+    // chunk its own nearest-32 instead of every chunk sharing this one set.
+    // frame.lights stays authoritative for the car and everything non-chunked.
+    frame.allLights = track._lights || null;
+    frame.perChunkLights = LT.perChunkLights ? 1 : 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     if (_floodActive) appendCarTailLights();
   } else if (track.hasAlwaysLamps) {
@@ -6749,10 +6755,10 @@ document.addEventListener("pointerdown", () => {
 // than from whenever this module runs.
 //
 // SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-// headroom to "zoom way out" on SETTINGS/garage. 50% is the new floor so the
-// slider can shrink menus substantially; default stays 100%. Tap floors still
-// divide by --ui-scale (--tap-min), so WCAG 24px holds in CSS before zoom.
-const SCALE_MIN = 50, SCALE_MAX = 150, SCALE_STEP = 0.5;
+// headroom to "zoom way out"; 50% is the floor now and the default stays 100%.
+// SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
+// Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
+const SCALE_MIN = 50, SCALE_MAX = 175, SCALE_STEP = 0.5;
 const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb

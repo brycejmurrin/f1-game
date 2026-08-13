@@ -94,6 +94,9 @@ const GLX = (function () {
   let frameEye = null;
   let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
   let frameLights = null;
+  // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
+  // both to bind a per-chunk light subset instead of this frame's global 32.
+  let frameAllLights = null, framePerChunkLights = 0;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -259,6 +262,7 @@ const GLX = (function () {
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
+      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -278,6 +282,8 @@ const GLX = (function () {
         get skyHi() { return frameSkyHi; },
         get skyLo() { return frameSkyLo; },
         get lights() { return frameLights; },
+        get allLights() { return frameAllLights; },
+        get perChunkLights() { return framePerChunkLights; },
         get time() { return frameTime; },
         get cloud() { return frameCloud; },
         get cloudSpeed() { return frameCloudSpeed; },
@@ -861,6 +867,8 @@ const GLX = (function () {
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
+    frameAllLights = frame.allLights || null;
+    framePerChunkLights = frame.perChunkLights ? 1 : 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -1064,29 +1072,41 @@ const GLX = (function () {
       // Flat stride-15: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
       // bleed, volW, glareW]. volW is consumed by the godray pass only; glareW
       // (lens-glare halo weight) by drawGlow only.
-      const nL = L ? Math.min(32, (L.length / 15) | 0) : 0;
-      gl.uniform1i(litU.uNumLights, nL);
-      if (nL > 0) {
-        const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
-              cone = _luCone, bleed = _luBleed;
-        for (let i = 0; i < nL; i++) {
-          const o = i * 15;
-          pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
-          col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
-          rad[i] = L[o + 6];
-          dir[i * 3] = L[o + 7]; dir[i * 3 + 1] = L[o + 8]; dir[i * 3 + 2] = L[o + 9];
-          cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
-          bleed[i] = L[o + 12];
-        }
-        gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
-        gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
-        gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
-        gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
-        gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
-        gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
-      }
+      uploadLightSet(L, null, L ? (L.length / 15) | 0 : 0);
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
+  }
+
+  // Upload a set of point lights into the lit program's MAX_LIGHTS uniform
+  // arrays. Two callers: begin() sends this frame's globally-culled
+  // frame.lights (idx = null, entries read in order), and GLXChunked sends a
+  // PER-CHUNK subset via an index array into the track's full baked light list
+  // (PER-CHUNK LAMPS knob). The per-chunk path is why this is factored out: the
+  // shader still only ever sees <= 32 lights, so MAX_LIGHTS and the fragment
+  // loop are untouched — only WHICH 32 are bound changes, per draw. That lifts
+  // the 32-lamp limit for the SCENE as a whole (each chunk gets its own budget)
+  // without costing a uniform slot or a per-fragment iteration.
+  function uploadLightSet(L, idx, n) {
+    const nL = L ? Math.min(32, n | 0) : 0;
+    gl.uniform1i(litU.uNumLights, nL);
+    if (nL <= 0) return;
+    const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
+          cone = _luCone, bleed = _luBleed;
+    for (let i = 0; i < nL; i++) {
+      const o = (idx ? idx[i] : i) * 15;
+      pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
+      col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
+      rad[i] = L[o + 6];
+      dir[i * 3] = L[o + 7]; dir[i * 3 + 1] = L[o + 8]; dir[i * 3 + 2] = L[o + 9];
+      cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
+      bleed[i] = L[o + 12];
+    }
+    gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
+    gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
+    gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
+    gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
+    gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
+    gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
   }
 
   // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked

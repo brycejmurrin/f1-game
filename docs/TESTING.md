@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 76 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 79 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -10,6 +10,17 @@ The suite covers physics, behaviour, geometry, cameras, UI, parts, steering,
 lighting, scenery, gamepad, timing/field hooks, multiplayer, career, the agent
 world view, headless RL, and the tooling contracts that keep the load order and
 the docs honest.
+
+**RUN `npm install` FIRST — an empty `node_modules` does not fail loudly.** It
+fails as ~18 scattered `ERR_MODULE_NOT_FOUND` suites inside an otherwise green
+run (`espree`, `eslint-scope`, `playwright`, `jsqr`), which reads exactly like
+a set of pre-existing breakages someone else left behind. Measured 2026-08-13:
+`test:tooling-fast` reported 344 pass / 18 fail on a fresh container and
+439 pass / 0 fail after `npm install`, with no source change between them —
+and two sessions in a row had by then written those 18 off as an environment
+quirk and baselined against them. If a suite fails with "Cannot find module",
+install before believing it. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps the
+install to seconds; the browsers are already at `/opt/pw-browsers`.
 
 ---
 
@@ -690,6 +701,8 @@ what it covers.
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
+| `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
+| `circuit-axis.test.mjs` | `tools/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
@@ -800,6 +813,7 @@ what it covers.
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
+| `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. Ratchets two counts that may only fall — font-sizes below the `--fs-micro` floor (126) and raw px padding/gap/margin (529) — plus the list of sheets that read no spacing token at all and so cannot respond to the density ladder |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |

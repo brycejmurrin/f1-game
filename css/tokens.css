@@ -429,7 +429,7 @@ body:not(.desktop) {
    1.0 is the shipped default on every pointer. Touch used to ship at 1.15, and
    UI SIZE's floor briefly sat at 90% then 80% — players still pegged the
    slider left and wanted more "zoom out". Floor is 50%; default stays 100%.
-   SETTINGS ▸ DISPLAY ▸ UI SIZE still goes up to 150%. */
+   SETTINGS ▸ DISPLAY ▸ UI SIZE still goes up to 175%. */
 :root { --ui-scale: 1; --hud-scale: 1; }
 /* Coarse-pointer used to force 1.15 here; left at 1 so first paint matches
    scaleDefault() (100). The media query stays as the place a future touch-only

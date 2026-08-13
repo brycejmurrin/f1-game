@@ -186,6 +186,58 @@ const TrackMaps = (function () {
     return Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
   }
 
+  // ---- preview-card planning -------------------------------------------
+  // How a circuit-preview card should spend its space, as pure arithmetic over
+  // ONE card's measured geometry. It lives here, beside fitCanvas, rather than
+  // in the menu module for one reason: every bug this logic has had was a
+  // number bug, and numbers can be tested without a browser. The browser sweep
+  // is minutes per run under SwiftShader; this table is milliseconds.
+  //
+  // The knobs, and the failure each one is holding shut:
+  const CAPTION_MIN = 185;        // caption keeps its facts on one or two lines;
+                                  //   a flat width share clipped the third chip
+  const BESIDE_MIN_W = 360;       // below this a card cannot seat both columns
+  const BESIDE_ASPECT_MAX = 1.1;  // only a circuit TALLER than wide is helped by
+                                  //   turning sideways (Singapore got worse)
+  const BESIDE_DEAD_FRAC = 0.34;  // a third of the card empty beside the map is
+                                  //   what "stacking is wasting this" looks like
+  const FLOOR_MAX_H = 240;        // never trade the map away at a big UI SIZE;
+                                  //   let the column scroll instead (36x72 @175%)
+  const MIN_SLOT_W = 120;
+  const SLACK = 10;               // breathing room so the card cannot cause the
+                                  //   scroller it is measured against to appear
+  //
+  // Every length is LOCAL (pre-zoom) CSS px. Mixing in a getBoundingClientRect
+  // value inside `zoom: var(--ui-scale)` is what drove the budget negative at
+  // UI SIZE 175% — the caller owes offsetHeight/clientWidth, not visual px.
+  function planPreview(m) {
+    m = m || {};
+    const a = Math.max(0.05, +m.aspect || 1);
+    const cardInnerW = Math.max(80, +m.cardInnerW || 0);
+    const gap = Math.max(0, +m.gap || 0);
+    const padY = Math.max(0, +m.padY || 0);
+    const infoH = Math.max(0, +m.infoH || 0);
+    const labelH = Math.max(0, +m.labelH || 0);
+    const sectionH = +m.sectionH > 0 ? +m.sectionH : 0;
+    // With no measured column to spend, fall back to the width and let the
+    // aspect pick the height — the pre-layout first paint.
+    const ceilFor = function (stacked) {
+      if (!sectionH) return Math.max(72, Math.round(cardInnerW / a));
+      return sectionH - labelH - padY - (stacked ? infoH + gap : 0) - SLACK;
+    };
+    // What stacking would actually achieve: the height it can afford, and the
+    // width that height implies. Whatever the width leaves over is dead card.
+    const stackedH = Math.min(Math.round(cardInnerW / a), ceilFor(true));
+    const stackedW = Math.min(cardInnerW, Math.round(stackedH * a));
+    const beside = a < BESIDE_ASPECT_MAX && cardInnerW >= BESIDE_MIN_W &&
+      (cardInnerW - stackedW) / cardInnerW > BESIDE_DEAD_FRAC;
+    const widthCap = Math.floor(beside ? cardInnerW - gap - CAPTION_MIN : cardInnerW);
+    const floorH = Math.min(FLOOR_MAX_H, Math.round(widthCap / a));
+    const slotH = Math.max(floorH, Math.floor(ceilFor(!beside)));
+    const slotW = Math.max(MIN_SLOT_W, Math.min(widthCap, Math.round(slotH * a)));
+    return { shape: beside ? "beside" : "stacked", slotW: slotW, slotH: slotH };
+  }
+
   // Size a canvas bitmap to fit maxW×maxH while keeping the circuit's aspect.
   // Optionally pin the CSS box to that size (pinCss) so max-height/max-width
   // cannot reshape the used box after the fact — object-fit:contain remains
@@ -433,8 +485,24 @@ const TrackMaps = (function () {
       if (opts.corners) {
       const cs = data.corners;
       const rDot = opts.cornerR || 7;
-      const labelR0 = Math.max(20, rDot + 14);
       const fontPx = opts.cornerFont || 12;
+      // Below this a numbered-label-plus-leader-line per corner cannot fit
+      // without overlapping into noise, however small cornerR/fontPx shrink —
+      // a dense circuit (20+ turns) squeezed into a narrow measured slot (an
+      // elongated street circuit at a small viewport) hits this well before
+      // any single-marker size fix helps. A plain coloured dot per apex still
+      // reads as "corners are here" without the clutter.
+      if (W < 200 || H < 140) {
+        for (let i = 0; i < cs.length; i++) {
+          const x = PX(cs[i].x), y = PY(cs[i].y);
+          const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
+          const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+          g.fillStyle = col;
+          g.beginPath(); g.arc(x, y, Math.max(1.5, rDot * 0.4), 0, Math.PI * 2); g.fill();
+        }
+        return true;
+      }
+      const labelR0 = Math.max(20, rDot + 14);
       const labels = [];
       for (let i = 0; i < cs.length; i++) {
         const x = PX(cs[i].x), y = PY(cs[i].y);
@@ -464,6 +532,19 @@ const TrackMaps = (function () {
             }
           }
         }
+      }
+      // Clamp into the canvas bounds. labelR0's own floor (20px) and the
+      // separation pass above are geometry relative to the OUTLINE, not the
+      // canvas edge — on a narrow/short buffer (an elongated circuit's aspect
+      // fit into a small measured slot) a pushed-out label can land past the
+      // edge with nothing upstream accounting for W/H. This is the one place
+      // that guarantees every label stays visible regardless of circuit shape,
+      // caller-chosen cornerR, or how small the canvas ends up.
+      const bubbleR = fontPx * 0.78;
+      for (let i = 0; i < labels.length; i++) {
+        const L = labels[i];
+        L.lx = Math.min(W - bubbleR, Math.max(bubbleR, L.lx));
+        L.ly = Math.min(H - bubbleR, Math.max(bubbleR, L.ly));
       }
       g.font = "700 " + fontPx + "px system-ui, sans-serif";
       g.textAlign = "center"; g.textBaseline = "middle";
@@ -508,7 +589,7 @@ const TrackMaps = (function () {
   }
 
   return {
-    outline, aspect, fitCanvas, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
+    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
     SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
