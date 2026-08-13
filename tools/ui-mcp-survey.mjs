@@ -1,12 +1,29 @@
 #!/usr/bin/env node
+// ui-mcp-survey — clip / truncation / tap-target probe over six screens at ONE
+// mobile viewport (852x393 landscape, dsf 3, coarse pointer), plus a PNG each.
+//
+// THE NAME IS HISTORICAL AND THE "mcp" IN IT IS NOT TRUE: this drives PLAYWRIGHT
+// Chromium through tools/harness.mjs, exactly like layout-audit.mjs, and no MCP
+// is involved anywhere in the file. It is kept because `npm run ui:survey`
+// points at it. The MCP-driven survey with sheet shape/pair/density numbers is
+// tools/ui-readable-survey-mcp.py — do not cite one as the other.
+//
+// Needs a static server already on http://127.0.0.1:3456 (npx serve -l 3456 .).
+// Output: <repo>/scratch/ui-survey/*.png and scratch/ui-survey-probe.json.
 "use strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown } from "./harness.mjs";
 import { setupApiMocks } from "../tests/helpers/f1-api-mock.js";
+import { resolveRepoDefault } from "./output-paths.mjs";
 
-const OUT = join("/workspace/scratch/ui-survey");
-const JSON_OUT = join("/workspace/scratch/ui-survey-probe.json");
+// Was hardcoded to /workspace/scratch/... — a container path from another
+// machine, which on this tree means the module-scope mkdirSync either fails or
+// scatters output outside the repo. Output belongs under the repo's scratch/
+// (CLAUDE.md "Output dirs"), derived from this file's own location.
+const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const OUT = resolveRepoDefault(ROOT, "scratch", "ui-survey");
+const JSON_OUT = resolveRepoDefault(ROOT, "scratch", "ui-survey-probe.json");
 mkdirSync(OUT, { recursive: true });
 
 const SCREENS = [

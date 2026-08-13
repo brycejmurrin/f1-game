@@ -145,7 +145,13 @@ function changedFiles(argv) {
   // file, matched no rule, and printed "nothing to run" — the one answer a test
   // selector must never give wrongly. It had never worked, and the change-aware
   // CI design in docs/archive/research/TEST-AUDIT-2026-08.md §3 is built entirely on it.
-  const explicit = argv.filter((a, n) => !a.startsWith("--") && n !== since + 1);
+  //
+  // The `since >= 0` guard is not decoration: `indexOf` returns -1 when --since
+  // is ABSENT, so a bare `n !== since + 1` excludes index 0 unconditionally and
+  // the documented `pick-tests.mjs <paths>` form silently lost its first path
+  // (one path lost ALL of them and fell through to the git-diff default, which
+  // answers a different question and looks like a real answer).
+  const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
   if (explicit.length) return explicit;
   const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   if (argv.includes("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
