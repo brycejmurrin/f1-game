@@ -5767,6 +5767,12 @@ function render(dt) {
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
+    // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
+    // alongside the globally-culled frame.lights, so GLXChunked can bind each
+    // chunk its own nearest-32 instead of every chunk sharing this one set.
+    // frame.lights stays authoritative for the car and everything non-chunked.
+    frame.allLights = track._lights || null;
+    frame.perChunkLights = LT.perChunkLights ? 1 : 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     if (_floodActive) appendCarTailLights();
   } else if (track.hasAlwaysLamps) {
