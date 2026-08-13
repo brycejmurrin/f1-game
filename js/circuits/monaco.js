@@ -721,24 +721,39 @@
       // it now rises on the far shore, well beyond the yacht ranks and
       // breakwater (which top out around dist 135m), so nothing in front
       // occludes the base of the rock.
+      // KOLD + raw frame, same disease as the pool/terrace: the authored
+      // 0.665 is OLD-RACING (the harbour front), but the wrapped anchor read
+      // it as source and set the Rock down ~50 m off CASINO SQUARE — float-
+      // audit's worst cluster on the circuit (the palace deck, dome tier and
+      // turrets hanging at 40-68 m with nothing beneath). The crown is also
+      // pulled INSIDE the r=22 rock top it stands on: the 32x34 deck, the
+      // +/-15 wings and the +/-20 turrets all overhung the tier below, so
+      // their rims floated even where the rock itself was placed correctly.
       {
-        const k = K(0.665), a = anchor(k, -1, 150);
+        const k = KOLD(0.665);
+        const gap = 150;
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const cxw = px[k] - rr[0] * gap, czw = pz[k] - rr[2] * gap;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, Math.min(gy == null ? py[k] : gy, py[k]) - 2, czw],
+                    r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
           const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
           // Rock cliff climbing from the waterline (organic frustum tiers).
           addFrustum(out, vadd(a.c, a.u, 21), 46, 32, 42, ROCK, 8, b);
           addFrustum(out, vadd(a.c, a.u, 42), 32, 22, 16, ROCK2, 8, b);
-          // Palace fortress crowning the rock.
+          // Palace fortress crowning the rock — everything within the r=22 top.
           const py0 = 50;
-          addFrustum(out, vadd(a.c, a.u, py0 + 10), 20, 14, 20, CREAM, 8, b);
+          addFrustum(out, vadd(a.c, a.u, py0 + 10), 18, 12, 20, CREAM, 8, b);
           for (const sd of [-1, 1]) {
-            addBox(out, vadd(vadd(a.c, a.r, sd * 15), a.u, py0 + 8), [8, 16, 20], [0.92, 0.88, 0.82], b);
-            addCyl(out, vadd(vadd(a.c, a.r, sd * 20), a.u, py0 + 18), 2.4, 10, [0.72, 0.70, 0.66], 7, b);
+            addBox(out, vadd(vadd(a.c, a.r, sd * 10), a.u, py0 + 8), [7, 16, 14], [0.92, 0.88, 0.82], b);
+            addCyl(out, vadd(vadd(a.c, a.r, sd * 13), a.u, py0 + 18), 2.0, 10, [0.72, 0.70, 0.66], 7, b);
           }
-          addBox(out, vadd(a.c, a.u, py0 + 3), [32, 1.2, 34], [0.86, 0.85, 0.82], b);
+          addBox(out, vadd(a.c, a.u, py0 + 3), [24, 1.2, 26], [0.86, 0.85, 0.82], b);
           // lit palace windows (reads at any time of day as a warm accent)
-          addBox(out, vadd(a.c, a.u, py0 + 16), [32.4, 3.6, 22], WINLIT, b);
+          addBox(out, vadd(a.c, a.u, py0 + 16), [24.4, 3.6, 16], WINLIT, b);
         }
       }
 
@@ -832,7 +847,15 @@
         const gy = groundYAt(cxw, czw);
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw],
                     r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
-        if (!onTrack(a.c[0], a.c[2], 10)) {
+        // EVERY corner of the 24x23 deck footprint, not just the centre. The
+        // centre-only check passed while a deck EDGE lay across the hairpin
+        // street — Monaco's folds put roads within metres of everything, so a
+        // single-point guard on a 20 m prop is no guard at all. Measured: the
+        // white 16 m edge read as a bar on the road at racing 0.389.
+        const deckClear = [[12, 11.6], [12, -11.6], [-12, 11.6], [-12, -11.6]]
+          .every(([dr, dt]) => !onTrack(cxw + a.r[0] * dr + a.t[0] * dt,
+                                        czw + a.r[2] * dr + a.t[2] * dt, 3));
+        if (deckClear && !onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 0.3), [14, 0.5, 22], [0.20, 0.60, 0.65], b);
           for (const o of [-7.4, 7.4]) addBox(out, vadd(vadd(a.c, a.r, o), a.u, 0.6), [1.4, 0.7, 23], [0.94, 0.94, 0.96], b);
@@ -846,10 +869,18 @@
         }
       }
       // Waterfront terrace lip follows the sloping ground at every segment.
+      // K(), NOT KR(): these fracs are OLD-RACING (Tabac->pool = racing
+      // 0.68-0.78) and groundedSegments goes through the engine's SHIFT-ONLY
+      // wrapper, whose SK() applies exactly the old->new renumbering (-24
+      // nodes, the same delta as KOLD). KR() read them as SOURCE first, so the
+      // points landed on the Portier/hairpin bends where the straight chord
+      // between two quay points 66 m apart CUT ACROSS THE ROAD — measured as a
+      // 14 x 0.8 m lip 0.28 m above the street at racing 0.389, the last white
+      // bar on the hairpin.
       groundedSegments({
         id: "monaco-tabac-terrace",
         points: Array.from({ length: 6 }, (_, i) => ({
-          k: KR(0.71 + i * 0.02), side: racingSide(1), dist: 18,
+          k: K(0.71 + i * 0.02), side: racingSide(1), dist: 18,
         })),
         width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
       });
