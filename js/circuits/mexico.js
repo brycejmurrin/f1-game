@@ -78,7 +78,8 @@
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
-              cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit,
+              terrainYAt, groundYAt } = api;
       const K = (s) => Math.round(s * n) % n;
       // Lap sectors where dressingExclusions leaves the generic city generator
       // running — see the def's `dressingExclusions` above.
@@ -452,7 +453,16 @@
           for (const [rB, rT, h, c] of rings) { addFrustum(stage, vadd(p.c, p.u, y), rB, rT, h, c, 12, bv); y += h; }
           addCone(stage, vadd(p.c, p.u, y), 7, 4, COP, 12, bv);          // crown
           for (const [ex, ez] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-            const cp = vadd(vadd(p.c, p.r, ex * 37), p.t, ez * 37);
+            // Single-anchor extrapolation (p.c) walked +/-37 m*sqrt(2) out to
+            // each corner (~52 m) — one of the four landed 204 m clear of
+            // ground (measured via float-audit); this model already sits
+            // 96 m off-track, so a 52 m corner walk clears the ~120 m
+            // terrain-ribbon reach and falls back to the far-scenery floor
+            // slab (pyMin-3) while p.c itself is not near pyMin. terrainYAt/
+            // groundYAt both return null that far out, so per-corner
+            // re-sampling isn't available; pulled the corners in to 22 m
+            // (~31 m walk) to stay inside the ribbon instead.
+            const cp = vadd(vadd(p.c, p.r, ex * 22), p.t, ez * 22);
             addBox(stage, vadd(cp, p.u, 4.5), [3, 9, 3], [0.50, 0.40, 0.34], bv);   // saddle corner pylon
           }
         }, { required: true });
