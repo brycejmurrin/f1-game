@@ -590,11 +590,11 @@ Static gameplay/render data destructured by game.js at the original sites:
 
 The lighting-tuner core: `TUNE_DEFS` (slider registry — the `def` values ARE
 the shipped tuning), the live `LT` value object (a plain object mutated in
-place by game.js's profile resolution and `__apex.lightTune`), `floodColor` +
-`LAMP_KINDS` (per-theme/fixture light character), `buildTrackLights(track)`
-(bakes the per-track light records), plus the per-frame light upload —
-`setFrameLights` (distance-sorted cull to the frame CAP) and
-`appendCarTailLights`. Profile persistence and the (track, time-of-day,
+place by game.js's profile resolution and `__apex.lightTune`),
+`buildTrackLights(track)` (bakes the per-track light records — colour and
+fixture character come from the internal `floodColor` + `LAMP_KINDS` tables),
+plus the per-frame light upload — `setFrameLights` (distance-sorted cull to
+the frame CAP) and `appendCarTailLights`. Profile persistence and the (track, time-of-day,
 weather) resolution stay in game.js — they read live session state.
 
 ## js/game/carmesh.js — `CarMesh`

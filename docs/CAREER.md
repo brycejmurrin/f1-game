@@ -137,8 +137,8 @@ Two consequences to respect:
 
 - `endRace()` must persist through `Career.save()`, **not** `store.set("season", …)`,
   or a career's standings overwrite the standalone season save.
-- `migrateSeasonPoints` persists unconditionally, so career uses the extracted pure
-  remap `GameStore.remapPoints` instead. Leaving the entry points (`#mb-season`,
+- `migrateSeasonPoints` persists unconditionally, so career goes through the pure
+  remap inside `migrateCareer` instead. Leaving the entry points (`#mb-season`,
   `quitToMenu`) to re-read `apex26.season` is what drops the alias on the way out.
 
 `dev`/`tdev`/`seats` store deltas, never absolutes, so updating the hardcoded 2026

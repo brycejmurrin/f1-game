@@ -199,7 +199,7 @@ function migrateCareer(career) {
   return career;
 }
 
-return { store, ttBoard, ttBoardAdd, TT_BOARD_MAX,
-         hexToRgb, rgbToHex, seasonDriverId, seasonRoster,
-         remapPoints, migrateSeasonPoints, migrateCareer, CAREER_V };
+return { store, ttBoard, ttBoardAdd,
+         hexToRgb, rgbToHex, seasonDriverId,
+         migrateSeasonPoints, migrateCareer, CAREER_V };
 })();

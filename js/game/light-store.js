@@ -238,7 +238,7 @@ const LightStore = (() => {
     function persist() { store.set("lightTune", profiles); }
 
     return {
-      key, layers, apply, set, persist, copyToTracks, restore,
+      key, apply, set, persist, copyToTracks, restore,
       // The live object, not a copy: js/game/photomode.js deletes a key out of it
       // to implement the tuner's RESET, and merges it for COPY VALUES.
       get profiles() { return profiles; },
