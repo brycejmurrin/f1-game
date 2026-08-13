@@ -295,12 +295,11 @@ most-load-bearing first.
   `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
   drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
   regexes.
-- **A lapped driver's LIVE row now says nothing at all.** `F1API.positions()`
-  used to turn OpenF1's `"+1 LAP"` string into the number 1 via `parseFloat`,
-  so a lapped car was drawn as a one-second gap; it now reports `null` instead,
-  which is correct — but `js/data/live.js` only renders the gap wrapper when
-  `p.timeDiff` is truthy, so the row lost its "+1 LAP" label along with the
-  false bar. The fix belongs on the render side: no bar, but say *lapped*.
+- **A lapped driver's LIVE row — FIXED (2026-08-13).** `intervals()` now passes
+  "+1 LAP"/"+2 LAPS" through as a string (null was indistinguishable from
+  missing data) and `live.js` renders a string `timeDiff` as a bar-less
+  label. A lap down is not a time gap and is no longer drawn as one.
+
 - **The 2026-08 whole-tree audit's deferred list is the standing backlog for
   this section.** 143 verified findings, of which the fix-now batches took 30;
   the rest are recorded by area with file/line evidence in the dated audit
