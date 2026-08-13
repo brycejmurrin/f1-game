@@ -959,21 +959,32 @@
         if (!onTrack(aFlag.c[0], aFlag.c[2], 2)) {
           const bFlag = [aFlag.r, aFlag.u, aFlag.t];
           const poleH = 150;
-          // Plaza plinth
-          addBox(out, vadd(aFlag.c, aFlag.u, 0.3), [16, 0.6, 16], [0.30, 0.30, 0.32], bFlag);
-          // Tapered shaft (two stages — slightly narrower toward the top)
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.42), 1.1, poleH * 0.84, [0.72, 0.73, 0.76], 8, bFlag);
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.84 + poleH * 0.08), 0.65, poleH * 0.16, [0.76, 0.77, 0.80], 8, bFlag);
+          // Plaza plinth (addBox centres its arg — 0.3 is plinthH/2, correct)
+          const plinthH = 0.6;
+          addBox(out, vadd(aFlag.c, aFlag.u, plinthH / 2), [16, plinthH, 16], [0.30, 0.30, 0.32], bFlag);
+          // Tapered shaft (two stages — slightly narrower toward the top).
+          // addCyl is BASE-anchored (js/track/geom.js:153-164), not centroid —
+          // the old `poleH*0.42`/`poleH*0.84+poleH*0.08` args treated it as
+          // centroid-anchored (half the stage height), floating each stage by
+          // exactly half its own height. Stack bases instead, starting at the
+          // plinth top.
+          const stage1H = poleH * 0.84, stage2H = poleH * 0.16;
+          const stage1Base = plinthH, stage2Base = stage1Base + stage1H;
+          const poleTop = stage2Base + stage2H;
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage1Base), 1.1, stage1H, [0.72, 0.73, 0.76], 8, bFlag);
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage2Base), 0.65, stage2H, [0.76, 0.77, 0.80], 8, bFlag);
           // Huge tricolour flag panel near the top — three horizontal stripes
           // (blue / red / green, per the real Azerbaijan flag) hung off the shaft.
-          const flagY = poleH * 0.86;
+          const flagY = plinthH + poleH * 0.86;
           const flagW = 22, flagH = 14;
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY + flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], AZ_BLUE, bFlag);
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.80, 0.16, 0.16], bFlag);
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY - flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.14, 0.55, 0.28], bFlag);
-          // Finial ball + aircraft-warning beacon at the very tip
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
-          addBox(out, vadd(aFlag.c, aFlag.u, poleH + 1.6), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
+          // Finial ball + aircraft-warning beacon at the very tip — ball base
+          // sits on the pole top (addCyl, base-anchored); beacon (addBox,
+          // centred) sits on the ball top.
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleTop), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
+          addBox(out, vadd(aFlag.c, aFlag.u, poleTop + 1.4 + 0.25), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
         }
       }
 
