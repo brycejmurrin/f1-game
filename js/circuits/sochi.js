@@ -412,12 +412,22 @@
           }
           // The canopy rib: chords around a half-circle springing from a foot
           // in front of the deck and landing behind the top row.
+          //
+          // The raw arc (across = R - cos(mid)*R) reaches a full 2R past a.c at
+          // mid=pi — for the default R=9.5 that is ~17.6 m beyond the last row
+          // (rows*depth = 11.25 m), assuming flat ground the whole way out. At
+          // Turn 5/Adler Arena that overshoot lands 34-35 m from the centreline,
+          // 10-16 m above the real terrain there (measured via float-audit —
+          // the deck itself never floats, only the far ribs past its edge).
+          // Clamp the reach to the deck's own footprint so the far foot always
+          // lands on/over the top row's box instead of open ground.
           out._mat = MAT.METAL;
           const segs = 8;
+          const reach = (rows - 0.5) * depth;   // top row's outer (far) edge
           for (let j = 0; j < segs; j++) {
             const t0 = j / segs * Math.PI, t1 = (j + 1) / segs * Math.PI;
             const mid = (t0 + t1) / 2;
-            const across = R - Math.cos(mid) * R;
+            const across = Math.min(R - Math.cos(mid) * R, reach + R * 0.15);
             const up = 3.0 + Math.sin(mid) * R * lift;
             const chord = (Math.PI / segs) * R * lift * 1.15;
             // Rib chord, tilted to follow the arc tangent at this station. The
