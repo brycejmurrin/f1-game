@@ -606,7 +606,10 @@
         const a = anchor(k(s), side, d);
         if (!onTrack(a.c[0], a.c[2], 18)) {
           addBox(out, vadd(a.c, a.u, h * 0.4), [w, h * 0.8, ln], [0.56, 0.54, 0.50], [a.r, a.u, a.t]);
-          addPrism(out, vadd(a.c, a.u, h * 0.8 + h * 0.2), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
+          // addPrism is BASE-anchored (see the note at line 521): seat the roof on
+          // the wall top. The extra + h*0.2 was half the prism height, and left a
+          // 1 m air gap on all six sheds.
+          addPrism(out, vadd(a.c, a.u, h * 0.8), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
         }
       }
 
@@ -1181,7 +1184,9 @@
                 // Ridge tent — one prism, the whole point of the budget.
                 const w = 2.2 + hv * 1.6, ln = 2.6 + hv * 2.2;
                 out._mat = MAT.FABRIC;
-                addPrism(out, vadd(a.c, a.u, 0.75), [w, 1.5 + hv * 0.7, ln],
+                // Pitched at a.c — addPrism is BASE-anchored, exactly as the
+                // camping-field tents above already are.
+                addPrism(out, a.c, [w, 1.5 + hv * 0.7, ln],
                          TENT[Math.floor(hv * 997) % TENT.length], b);
                 out._mat = 0;
               }
@@ -1206,7 +1211,8 @@
           if (!onTrack(ma.c[0], ma.c[2], 30)) {
             const mb = [ma.r, ma.u, ma.t];
             out._mat = MAT.FABRIC;
-            addPrism(out, vadd(ma.c, ma.u, 2.6), [14, 4.2, 26],
+            // Seated on the skirt top (1.0 m) — base-anchored, not centred.
+            addPrism(out, vadd(ma.c, ma.u, 1.0), [14, 4.2, 26],
                      [0.92, 0.91, 0.87], mb);
             out._mat = 0;
             addBox(out, vadd(ma.c, ma.u, 0.5), [14.4, 1.0, 26.4],

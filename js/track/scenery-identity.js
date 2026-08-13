@@ -397,7 +397,9 @@ const SceneryIdentity = (function () {
       }
       // Link mast with a warning lamp — the compound's vertical accent.
       const mast = vadd(vadd(p.c, p.t, -(vans * spacing) / 2 - 1.6), p.r, side * 2.6);
-      addCyl(out, vadd(mast, p.u, mastH / 2 - 0.4), 0.16, mastH + 0.8, [0.46, 0.47, 0.50], 5, b);
+      // addCyl is BASE-anchored (geom.js): seat the shaft at -0.4 so it spans
+      // -0.4 → mastH+0.4 and the lamp boxes below land ON it, not inside it.
+      addCyl(out, vadd(mast, p.u, -0.4), 0.16, mastH + 0.8, [0.46, 0.47, 0.50], 5, b);
       addBox(out, vadd(mast, p.u, mastH), [0.9, 0.35, 0.7], dark, b);
       addBox(out, vadd(mast, p.u, mastH + 0.4), [0.26, 0.26, 0.26],
              NIGHT ? [1.60, 0.28, 0.20] : [0.72, 0.16, 0.12], b);
