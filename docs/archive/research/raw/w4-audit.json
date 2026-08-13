@@ -1362,5 +1362,249 @@
   "round2-gap6: SILENT FAILURE-SWALLOW AUDIT (read-only). js/ has 165 empty catch blocks. Most a",
   "round2-gap7: ARIA / ACCESSIBILITY CONTRACT AUDIT (read-only). Scope: js/game/ariastate.js's s",
   "round2-gap8: HOT-PATH ALLOCATION AND PER-FRAME CHURN AUDIT (read-only). No slice examined the"
+ ],
+ "round2Verified": [
+  {
+   "file": "js/game/audio-panel.js",
+   "line": 152,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "After a reload with saved musicSource=\"spotify\", the now-playing SOURCE caption says \"Spotify\" while the source-button row highlights ALL and the built-in soundtrack is what actually plays.",
+   "evidence": "VERIFIED. audio-panel.js:79 `let musicSrc = store.get(\"musicSource\", \"all\")` restores \"spotify\". init() (:224-232) guards `if (musicSrc && musicSrc !== \"spotify\")`, so the stored value is deliberately not applied but the local `musicSrc` is never normalised. syncAudioPanel then paints two disagreeing things: :152 `$(\"as-now-src\").textContent = musicLive ? (SRC_LABEL[musicSrc] || \"\") : \"\"` -> \"Spotify\", while syncMusicSrcRow (:107-108) computes `on` from SpotifyMusic.inUse() ? \"spotify\" : GameAudio.musicSource(), and audio.js:86 `let source = \"all\"` is the default -> the ALL button is lit. Skipping the spotify restore is deliberate (Spotify never auto-connects); leaving the caption variable stale is not.",
+   "fix": "In init(), when the stored source is \"spotify\" and spotifyReady() is false, set the local musicSrc = GameAudio.musicSource() without overwriting the stored preference."
+  },
+  {
+   "file": "js/game/apex.js",
+   "line": 3028,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "__apex.diag().stored.resMode reads a GameStore-owned (JSON-encoded) key with raw localStorage.getItem, so it reports '\"auto\"' with embedded quotes next to raw-written siblings that report unquoted.",
+   "evidence": "VERIFIED. resMode is written only via `store.set(\"resMode\", ...)` (game.js:6839) and GameStore.set JSON.stringifies (store.js:49), so the stored text is '\"auto\"'. apex.js:3024 defines `const ls = (k) => localStorage.getItem(\"apex26.\" + k)` and :3028 reports `resMode: ls(\"resMode\")` verbatim, beside gfxBackend/debris/gfxHigh/forceMobileTier/envProbeOff which really are raw strings (glx.js:34, debrisworld.js:229, game.js:6895). The blob is meant for pasting into bug reports; only this one field is double-quoted.",
+   "fix": "Report resMode through GameStore (or JSON.parse the raw value) before putting it in the diag object."
+  },
+  {
+   "file": "js/game/incidentsim.js",
+   "line": 121,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "Six read-only incident/debris kill-switch localStorage keys (apex26.r2Airborne, r3Contact, c1Pileup, debrisCap, breakBarriers, marbleGrip) have no write path in the app and appear nowhere in docs/ or CLAUDE.md.",
+   "evidence": "VERIFIED. Read sites: incidentsim.js:121-123 (r2Airborne/r3Contact/c1Pileup, `|| \"1\") !== \"0\"`), debrisworld.js:231-232 (breakBarriers/marbleGrip, same idiom), debrisworld.js:321 (debrisCap, parseInt, capped at 256). grep of docs/ + CLAUDE.md for all six returns zero hits (only tests/specs/debris.spec.js:155 uses debrisCap). Sibling flags in the same family ARE documented (apex26.debris, envProbeOff, forceMobileTier in DEBUG-HOOKS.md). __apex.debris()/__apex.incident() toggle session state only and never persist, so localStorage is the sole durable control and it is undiscoverable from the reference docs.",
+   "fix": "Add the six keys and their \"0\"=off / positive-int=cap semantics to the stored-overrides section of docs/DEBUG-HOOKS.md next to apex26.debris."
+  },
+  {
+   "file": "js/net/transport.js",
+   "line": 362,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "apex26.iceRelayOnly and apex26.nostrRelays are read-only dev flags on shipped multiplayer paths that no doc mentions.",
+   "evidence": "VERIFIED. transport.js:361-364 `relayOnly()` reads apex26.iceRelayOnly === \"true\"; nostr.js:174-180 `relayUrls()` reads apex26.nostrRelays as a JSON array filtered by validRelay. grep across docs/ for both keys: zero hits, while DEBUG-HOOKS.md:1347/1374 documents apex26.turn, apex26.turnApi and apex26.freeTurn in the same section. lobby.js:343-346 even ships a runtime warning about iceRelayOnly persisting ('had no reason to remember it'), which is the symptom of an undocumented sticky flag.",
+   "fix": "Document both keys (iceRelayOnly value \"true\"; nostrRelays JSON-array shape plus its validRelay fallback) beside turnProbe()/freeTurn in DEBUG-HOOKS.md."
+  },
+  {
+   "file": "js/game.js",
+   "line": 236,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "customTeam is the only player-authored persisted blob on the boot path with no shape guard: it is pushed verbatim into Teams.LIST and a blob missing `drivers` throws unguarded during boot's season migration.",
+   "evidence": "VERIFIED. game.js:196 `loadCustomTeam() { return store.get(\"customTeam\", DEFAULT_CUSTOM); }` — no fill/sanitize. game.js:236 `Teams.LIST.push(loadCustomTeam())` inside syncCustomTeam(), called at boot (game.js:7923) immediately before migrateSeasonPoints(); store.js:99-101 seasonRoster() runs `team.drivers.forEach(...)` over every Teams.LIST entry. Contrast the other persisted blobs, all of which guard: career (CAREER_V ladder + migrateCareer), steering (STEER_SCHEMA), camTune (sanitize()), lightTune (legacy sniff). game.js:7626 `stats: prev.stats || DEFAULT_CUSTOM.stats` is in-repo proof the shape has already evolved once and only self-heals on re-save. NOTE the only writer (cz-save) always emits a well-formed drivers array, so the exposure is legacy/hand-edited blobs, not normal use — hence low.",
+   "fix": "Give loadCustomTeam() a small fill step (default drivers/stats/color/color2) in the migrateCareer style before the object enters Teams.LIST."
+  },
+  {
+   "file": "js/game.js",
+   "line": 2712,
+   "kind": "dead-code",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "The G facade accessor G.renderStatBars is dead — no module reads it and game.js never calls the binding it destructures.",
+   "evidence": "VERIFIED by exhaustive grep. `renderStatBars` occurs in exactly five places in js/: setup-ui.js:46 (definition), :302/:303/:392 (internal calls), :764 (returned from create); game.js:2712 (facade entry), :2832 (destructure), :1156 (a prose mention in a comment). `grep -rn '\\.renderStatBars' js/` returns NOTHING — no consumer ever reads it off G. tests/ and tools/ have zero references. The entry sits under the 'consumed by js/game/menus.js' block at :2708 and menus.js does not reference it.",
+   "fix": "Delete the facade entry at game.js:2712 and drop renderStatBars from the destructure at game.js:2832; setup-ui.js's internal callers are unaffected."
+  },
+  {
+   "file": "js/game.js",
+   "line": 877,
+   "kind": "drift",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "The COUNTDOWN_S comment names a facade key that does not exist ('via G.countdownS'); the real key is G.COUNTDOWN_S.",
+   "evidence": "VERIFIED. game.js:877 reads '... so js/net/netplay.js needs this number too, via G.countdownS.' The facade exports the shorthand `COUNTDOWN_S` (game.js:2763) and netplay.js:562 reads `G.COUNTDOWN_S + hold`. `grep -rn countdownS js/` finds only the comment — no such identifier exists anywhere.",
+   "fix": "Change the comment to 'via G.COUNTDOWN_S'."
+  },
+  {
+   "file": "js/game.js",
+   "line": 7547,
+   "kind": "drift",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "The openGarage() header claims every garage entry routes through it 'including menus.js, via G.openGarage', but menus.js has no openGarage reference at all.",
+   "evidence": "VERIFIED. game.js:7546-7547 carries the claim. `grep -n openGarage js/game/menus.js` -> nothing; menus.js:155-157 records that the select screen's GARAGE button was removed. The real facade callers are career-ui.js:1231 (G.openGarage(\"career\")) and lobby.js:1618 (G.openGarageFrom(\"vsfriend\")); game.js itself calls openGarage directly at :7239 and :7563.",
+   "fix": "Reword to name career-ui.js (G.openGarage) and lobby.js (G.openGarageFrom) instead of menus.js."
+  },
+  {
+   "file": "js/game.js",
+   "line": 2750,
+   "kind": "drift",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "initRainDrops sits under the facade heading 'Stable helpers consumed by js/game/atmosphere.js' but atmosphere.js never reads it; its only consumer is light-store.js.",
+   "evidence": "VERIFIED. The heading at game.js:2745 covers lines 2746-2753 (clamp, satAdjust, isRaining, isWetRoad, initRainDrops, isFloodActiveSession, _nightAmbientBand, applyLightTune). `grep -rn initRainDrops js/` gives only game.js:186 (def), :2305, :2954 (internal calls), :2750 (facade entry) and js/game/light-store.js:134 `if (reinit && G.isWetRoad()) G.initRainDrops();`. atmosphere.js does not mention it. This matters because the consumed-by headings are what a dead-facade sweep reads.",
+   "fix": "Move the entry beside the light-store-consumed members, or annotate it '(light-store.js)'."
+  },
+  {
+   "file": "js/game/spotify.js",
+   "line": 268,
+   "kind": "dead-code",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "reopenPanel's `typeof syncAudioPanel === \"function\"` guard can never be true, so the MUSIC & SOUND panel reopened after the Spotify OAuth redirect is never resynced.",
+   "evidence": "VERIFIED. spotify.js:268 references a bare identifier `syncAudioPanel`. `grep -rn syncAudioPanel js/` shows it exists ONLY as a closure-local function inside AudioPanel.create(G) (audio-panel.js:128, called at :36/:50/:71/:88/:92/:101/:164/:206) — never on window, never returned (AudioPanel's create returns `{ init }` only, audio-panel.js:236). `typeof` on an undeclared identifier is \"undefined\", so the branch is unreachable and :270 unhides the panel unsynced.",
+   "fix": "Drop the dead call, or expose a real sync hook from AudioPanel (returned API or a custom event) and call that."
+  },
+  {
+   "file": "js/net/handshake.js",
+   "line": 284,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "acceptInvite/acceptAnswer pass attacker-controlled parsed.payload.s to setRemoteDescription with no try/catch and no type check, and the lobby callers have no catch either — so a code whose payload parses but carries a missing/hostile `s` escapes as an unhandled rejection instead of the module's typed 'corrupt code' error.",
+   "evidence": "VERIFIED with one CORRECTION to the original blast-radius claim. handshake.js:284 `await pc.setRemoteDescription({ type: \"offer\", sdp: parsed.payload.s })` and :310 (answer) are both outside any try; decodeCode's try (:147-160) covers only decode/inflate/parse and for .z/.p modes returns {ok:true, payload} for ANY valid JSON (:158-159). lobby.js makeAnswer (:1062-1081) and acceptAnswer (:1084-1096) await NetHandshake with no catch after say(\"Reading invite…\"), and the button handlers at :1603-1604 discard the returned promise. CORRECTION: the failure is NOT silent — index.html:125-127 installs a window 'unhandledrejection' handler that paints a full-screen raw error overlay (index.html:65-96). So the real defect is that a malformed code produces a raw stack-trace overlay plus a lobby stuck on 'Reading invite…', instead of the typed, actionable message this module is built to give. Severity accordingly low, not high.",
+   "fix": "Wrap both setRemoteDescription calls in try/catch returning CORRUPT (or a typed bad_sdp error), and require typeof parsed.payload.s === \"string\" first."
+  },
+  {
+   "file": "js/net/handshake.js",
+   "line": 276,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "decodeCode returns {ok:true, payload:null} for the code APEX1.p.bnVsbA (base64url of \"null\"), and acceptInvite/acceptAnswer then dereference parsed.payload.k on null.",
+   "evidence": "VERIFIED. handshake.js:158-159 `const json = mode === \"z\" ? await inflate(bytes) : dec().decode(bytes); return { ok: true, payload: JSON.parse(json) };` — JSON.parse(\"null\") is null and no object check follows. :276 `if (parsed.payload.k !== \"offer\")` and :293 (answer) then throw TypeError, which propagates out of the async function into the un-caught lobby call path (same route as the finding above: error overlay + wedged lobby, not the typed CORRUPT reply). The .s mode is incidentally safe because `payload.s = sdp` (:155) throws INSIDE the try and returns CORRUPT.",
+   "fix": "After JSON.parse, require a non-null, non-array object before returning ok:true."
+  },
+  {
+   "file": "js/net/session.js",
+   "line": 110,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "addSample validates rtt but not offset, so a peer forging a PONG that echoes a real t0 with t1=NaN plants offset=NaN as the winning lowest-RTT clock sample for the rest of the session.",
+   "evidence": "VERIFIED. session.js:110 `if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;` rejects a NaN rtt but the offset argument — computed at :145 as `t1 - (t0 + roundTrip / 2)` from dv.getFloat64(13), which decodes NaN happily — is pushed unchecked at :111, and the reduce at :114 selects purely on rtt, so the poisoned sample wins with rtt≈0. offset() then returns NaN, and peerToLocal/localToPeer (:122-123) return NaN for every subsequent snapshot stamp (netplay.js:244) and for the synchronized-start instant (netplay.js:566). Corrupt state, not a crash; needs a malicious peer since a legit t1 is always a finite timestamp.",
+   "fix": "Guard on Number.isFinite(offset) (and Number.isFinite(rtt)) before pushing the sample."
+  },
+  {
+   "file": "js/net/netplay.js",
+   "line": 357,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "EV.LAP payloads are appended to peerLaps with no size cap, so a peer flooding LAP events grows the array unboundedly for the life of the race.",
+   "evidence": "VERIFIED. netplay.js:357 `if (name === EV.LAP && d) peerLaps.push(d);` sits in the same onEvent handler whose sibling eventLog IS trimmed two lines earlier (:330-331 `if (eventLog.length > 32) eventLog.shift();`). peerLaps is reset only in start() (:384) and exposed whole via peerLaps() (:741) / __apex.netPeerLaps. Slow memory growth mid-race, no crash — the module header (:102-106) already flags this as a debug channel.",
+   "fix": "Cap peerLaps the way eventLog is capped (shift past a fixed bound)."
+  },
+  {
+   "file": "js/net/nostr.js",
+   "line": 336,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "directExchange's WebSocket onmessage dereferences m[0] outside the try that covers JSON.parse, so a relay delivering the literal message \"null\" throws TypeError out of the handler.",
+   "evidence": "VERIFIED, with the blast radius corrected UPWARD. nostr.js:334-336: `try { m = JSON.parse(String(ev.data)); } catch (e) { return; }` then `if (m[0] === \"EVENT\" && ...)` — JSON.parse(\"null\") yields null and `null[0]` throws outside the try. The original finding called this 'harmless in practice'; in fact an uncaught throw from an event handler reaches index.html:114's window 'error' listener, which paints the full-screen error overlay over the lobby. The module header at :101 explicitly promises 'Never throws'.",
+   "fix": "Gate on Array.isArray(m) before indexing (which also matches the NIP-01 frame shape)."
+  },
+  {
+   "file": "js/net/sdp.js",
+   "line": 281,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "unpack() reads the ufrag/pwd length bytes without checking o is still inside the buffer; on a truncated buffer every later bounds check compares against NaN (always false) and the function returns null only because the NaN cascade happens to reach the `len == null` guard.",
+   "evidence": "VERIFIED, including by execution. sdp.js:277/281 `const ufLen = bytes[o++]` / `const pwLen = bytes[o++]` can read past the end -> undefined; :278/:282 `if (bytes.length < o + ufLen)` becomes `length < NaN` -> false, so the guard passes; ascii(bytes,o,undefined) returns \"\"; `o += pwLen` makes o NaN; in the candidate loop `o >= bytes.length` is false for NaN and kind = bytes[NaN] = undefined, so only `ADDR_LEN[undefined] == null` (:290) finally returns null. I fuzzed every truncation length 0..79 through NetSdp.unpack in a node vm: 0 throws, 0 non-null results — the accidental backstop holds today, and any edit to the candidate loop removes it.",
+   "fix": "Bounds-check before each length-byte read (`if (o >= bytes.length) return null;`) so truncation is rejected explicitly."
+  },
+  {
+   "file": "js/net/sdp.js",
+   "line": 322,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "unpack's ascii() accepts all byte values 0-255 including CR/LF for ufrag/pwd — bytes pack()'s strBytes explicitly refuses — so a crafted .s invite can splice extra lines into the rebuilt SDP template.",
+   "evidence": "VERIFIED. sdp.js:322-326 `function ascii(bytes, off, len) { ... s += String.fromCharCode(bytes[off + i]); ... }` with no range check; the result is interpolated at :311-312 (`\"a=ice-ufrag:\" + ufrag`, `\"a=ice-pwd:\" + pwd`) into an array joined with \"\\r\\n\" (:317), so a 0x0d 0x0a pair inside ufrag terminates the line and starts an attacker-chosen one. Contrast strBytes at :258-267, which returns null for any charCode < 0x20 or > 0x7e with the comment 'refuse rather than mangle it'. CONFIRMED NO NEW CAPABILITY: the .z/.p code formats already deliver a full attacker-authored SDP to the same setRemoteDescription, so this is a pack/unpack validation asymmetry (a trap for future edits), not a privilege boundary.",
+   "fix": "Apply the same 0x20-0x7e check in unpack's ascii() and return null on violation."
+  },
+  {
+   "file": "js/net/handshake.js",
+   "line": 81,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "inflateBytes has no output size cap and decodeCode has no input length cap, so a pasted (or link-delivered) deflate bomb inflates unbounded before JSON.parse sees it.",
+   "evidence": "VERIFIED. handshake.js:81-85 pipes the bytes through DecompressionStream('deflate-raw') and consumes the whole stream via `new Response(stream).arrayBuffer()` unconditionally; decodeCode feeds it whatever survives b64urlToBytes at :150 and :158 with no length check, and index.html's invite/answer inputs carry no maxlength. Delivery: lobby.js:1689-1693 prefills the invite box from a #vs= link (handshake.js:322-327 inviteFromUrl), so a shared link can stage the bomb and one button press detonates it — the QR path is naturally bounded (~850 B). Blast radius: memory spike / tab kill, recoverable by reload.",
+   "fix": "Reject codes over a few KB before inflating, or read the decompressed stream against a byte budget and abort past it."
+  },
+  {
+   "file": "js/game/apex.js",
+   "line": 2645,
+   "kind": "bug",
+   "severity": "high",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "__apex.reset() teleports the player and re-grids the field without releasing or resetting IncidentSim, so an episode that ended under a live incident takeover restarts at the old crash pose, and the takeover tick/seq counters leak across episodes — breaking the documented 'same seed + same inputs => same result' contract.",
+   "evidence": "VERIFIED. reset() (apex.js:2645-2698) writes player s/x/px/pz/head and calls gridUp() with no IncidentSim call anywhere (grep: apex.js references IncidentSim only at :104 and :1650-1654); its own doc block at :2631-2643 promises seeded reproduction. incidentsim.js:159-165 states the teleport contract — 'a live takeover would silently re-impose the Rapier body's old pose over them every tick' — and jump() honours it (apex.js:101-104) as does rescuePlayer. postStep (incidentsim.js:347-383) compares the body pose against inc.good/inc.snap, i.e. against the BODY's own last-good pose, never against the car — so a car teleport is invisible to the guard and the crash pose is written straight back into c.px/c.pz/c.s/c.head. gen is unchanged because reset() reloads neither track nor field. Separately, _tick/_seq are zeroed only by IncidentSim.reset() (incidentsim.js:175-181), whose sole caller is startRace() (game.js:2280), and both feed the launch-kick seed (incidentsim.js:293-294) — so identical episodes diverge by how many ticks ran before them. startRace's own comment (game.js:2271-2279) documents this exact hazard class for the sibling path. Default config: DebrisWorld ships ON from a vendored rapier.mjs (debrisworld.js:17, :225-230) and all three incident flags default ON (incidentsim.js:61-63), headless included.",
+   "fix": "Call IncidentSim.reset() at the top of __apex.reset(), before the seed is applied and gridUp() runs, mirroring startRace() at game.js:2280."
+  },
+  {
+   "file": "js/game/apex.js",
+   "line": 2440,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "round2-gap-finder",
+   "claim": "__apex.aiPlace() teleports an AI car without IncidentSim.release(c), so placing a car under a live takeover is silently undone on the next tick.",
+   "evidence": "VERIFIED. aiPlace (apex.js:2440-2465) writes c.s/c.prog/c.x/c.speed/c.px/c.pz/c.head and the rPrev* render anchors, with no IncidentSim call. incidentsim.js:159-172 defines release() precisely for teleporting callers and names __apex.jump()/rescuePlayer() as the ones that must call it — jump() does at apex.js:104 — while postStep (incidentsim.js:347-383) writes the Rapier body pose back into any owned car every tick, AI cars included (the `else` branch at :374-379).",
+   "fix": "Add IncidentSim.release(c) at the top of aiPlace(), as jump() does."
+  },
+  {
+   "file": "js/game.js",
+   "line": 1651,
+   "kind": "mess",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "lens6-silent-failure-swallow",
+   "claim": "A failure building a car's livery decal atlas is swallowed with the error object discarded, the null is CACHED, and nothing is logged — so a one-off failure permanently strips numbers/sponsors off that team's cars for the session with no diagnostic anywhere.",
+   "evidence": "game.js:1648-1653: `if (!(key in _decalTexCache)) { let t = null; try { t = gfx.createTexture(LiveryTex.buildAtlas(...)); } catch (e) { t = null; } _decalTexCache[key] = t; }` — the catch drops `e` entirely (no Log, no console, no __apex surface) and the assignment puts the KEY in the cache, so `key in _decalTexCache` is true forever after and the atlas is never retried; only invalidateDecalTextures(teamId) (:1633) clears it. This is the one bare catch in game.js's 33 that carries neither a prose reason nor a report: its neighbours all do (e.g. :1590 '/* any parse trouble: fall through to the procedural car */', :2263, :2267, :4100 '/* haptics are advisory */'). CLAUDE.md's logging rule provides Log.warn(\"gfx\", …) for exactly this, and js/render/glx.js:180 already logs program-link failures that way.",
+   "fix": "Log.warn(\"gfx\", \"decal atlas build failed for \" + key, e) in the catch, and do not cache the null (leave the key absent so a transient failure retries)."
+  },
+  {
+   "file": "js/game/ariastate.js",
+   "line": 31,
+   "kind": "bug",
+   "severity": "low",
+   "status": "STILL-OPEN",
+   "source": "lens7-aria-contract",
+   "claim": "AriaState's ROOTS list omits #spotifypanel, so the SHUFFLE and REPEAT toggles in the Spotify panel — the exact 'chosen state lives only in a CSS class' shape the module exists to fix — are never given aria-pressed.",
+   "evidence": "ariastate.js:31-33 enumerates 22 roots; UiLayers' DEFS (uilayers.js:36-64) enumerates 25 screen layers. The three in the ladder but not in ROOTS are #vsfriend, #photo-controls and #spotifypanel. I checked all three for option groups: lobby.js and photomode.js contain no `active`-class group at all (lobby.js:858 hand-sets aria-pressed on its one ready toggle), but spotify.js:1030 `sh.classList.toggle(\"active\", shuffleOn)` and :1033 `rp.classList.toggle(\"active\", repeatMode !== \"off\")` drive #sp-shuffle and #sp-repeat, which index.html:1382-1385 places as the two direct BUTTON children of a `.opt-row` inside `<dialog id=\"spotifypanel\">` (index.html:1364). That is precisely syncGroup's shape (ariastate.js:52-67) — it would work if the root were observed. init() (:110-112) attaches observers only to `document.querySelectorAll(ROOTS)`, so nothing here is ever synced. The identical mode toggles that live inside #audioset (as-sp-mode-remote/browser, spotify.js:1103-1104, index.html:1319) ARE covered, which is the coherence argument: the same widget family announces its state in one panel and not the other.",
+   "fix": "Add #spotifypanel to ariastate.js's ROOTS string."
+  }
  ]
 }
