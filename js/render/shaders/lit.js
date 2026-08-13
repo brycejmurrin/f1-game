@@ -156,10 +156,16 @@ uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/roa
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
 uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
-// map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor.
+// map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor
+// by default — SHADOW DISTANCE can widen it, see uCarBiasScale below.
 uniform highp sampler2DShadow uCarShadowMap;
 uniform mat4 uCarLightVP;
 uniform float uCarShadowOn;
+// cBox / 42 from game.js: the car map's box grows with SHADOW DISTANCE at a fixed
+// 1024² resolution, so its real-world texel size grows too. biasTerm below was
+// tuned for the default ±42m box; scale it by this ratio for the car lookup so a
+// wider box doesn't outrun its bias into self-shadow acne. 1.0 at the default.
+uniform float uCarBiasScale;
 // Nearest-FLOODLIGHT spot shadow (night, desktop): a 512² depth map rendered
 // per frame from the single nearest lamp to the camera (perspective VP down its
 // beam). Only the light-loop slot uLampShadowIdx pays the 4-tap PCF — every
@@ -689,14 +695,16 @@ float sampleShadow(vec3 wpos) {
   }
   // Dynamic CAR shadows: min-combine with the per-frame car-only map so cars
   // cast real sun-projected shadows (direction/length correct, car-on-car
-  // works) on top of the cached static map. Same slope/constant bias; a small
-  // fixed 4-tap PCF (the map is tiny and its content moves every frame, so the
-  // static map's dither/PCSS machinery buys nothing here).
+  // works) on top of the cached static map. Same slope/constant bias SCALED by
+  // uCarBiasScale (the car map's own box/texel ratio vs. the static map's — see
+  // its declaration above); a small fixed 4-tap PCF (the map is tiny and its
+  // content moves every frame, so the static map's dither/PCSS machinery buys
+  // nothing here).
   if (uCarShadowOn > 0.5) {
     vec4 cc = uCarLightVP * vec4(wpos, 1.0);
     vec3 cs = cc.xyz * 0.5 + 0.5;
     if (cs.x > 0.0 && cs.x < 1.0 && cs.y > 0.0 && cs.y < 1.0 && cs.z < 1.0) {
-      float cz = cs.z - biasTerm;
+      float cz = cs.z - biasTerm * uCarBiasScale;
       float ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
       float csh = ( texture(uCarShadowMap, vec3(cs.xy + vec2(-ct, -ct), cz))
                   + texture(uCarShadowMap, vec3(cs.xy + vec2( ct, -ct), cz))

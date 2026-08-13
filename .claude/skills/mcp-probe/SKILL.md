@@ -125,6 +125,62 @@ one direction `sky()` looks. A real signal here shows up as a cloud-*shaped*
 blob in a saved diff-map image (`np.abs(a-b).sum(axis=2)`, contrast-boosted and
 written to PNG) sitting where the visible cloud is, not a diffuse scatter.
 
+## A FIFTH trap: only `chase` (and other player-relative modes) hold still for a frozen before/after pair — broadcast-cut cameras and the debug free-cam don't
+
+Three separate ways a "stable" comparison turns out not to be, all found in one
+session (2026-08-13) proving out the lighting-tuner distance sliders:
+
+**1. Broadcast camera modes (`heli`, `far`, and likely others in `CAM_MODES`)
+re-cut/retarget between calls, even with the player frozen.** They aren't
+purely player-relative — some pick a trackside camera or retarget based on
+track position, independent of your `park()`. MEASURED: `camera('heli')` +
+`park(0.15)` + `snapCam()`, then only `lightTune()` + `step()` calls (no camera
+call at all) between two screenshots — `eye`/`target` moved from
+`[90.7, 20.9, 142.0]` to `[94.1, 21.1, 120.9]`, a totally different frame the
+second shot. `camera('far')` did the same, worse (jumped ~280m). Only
+`camera('chase')` (and presumably the other strictly player-relative modes —
+`cockpit`, `hood`, `reverse`, `tcam`) held `eye`/`target` identical to 5+
+decimal places across `lightTune()` + `step()` calls with no re-snap. **Use
+`chase` (or another confirmed player-relative mode) for any comparison pair,
+and verify by diffing `viewState().eye`/`.tgt` between the two states before
+trusting the screenshots** — don't assume any non-`chase` mode is safe just
+because it's not `orbit()`/`view()` (the free-cam family covered by the SECOND
+trap above).
+
+**2. `orbit()`/`view()`/`eyeAt()`-family calls silently zero the draw-distance
+cull.** `game.js`'s `frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0) : ...`
+— on desktop, ANY free-cam hook (`G.dbgCam` set) makes the scenery draw-distance
+cull a no-op (uncapped), and the far-clip plane comes from `dbgCam.far`, not the
+renderDistMul-scaled `farPlane`. A render-distance knob will show **zero**
+effect under `orbit()`/`view()` regardless of whether it works, because the
+thing it scales isn't even being applied. If a knob claims to affect draw
+distance, test it under `chase` (or another `dbgCamActive:false` mode) — check
+`viewState().dbgCamActive` before you trust a null result.
+
+**3. `park()`/`jump()` called before the race's start-lights sequence resolves
+gets overridden the moment you next advance frames.** MEASURED: `go()` →
+`setTimeOfDay('night')` → `park(0.3)` → `snapCam()` → screenshot showed
+`POS -/22, TIME -` (still in the grid/formation hold) with a broadcast-style
+overview framing; the very next call, `step(1/60, 30)`, pushed the race past
+its start and the HUD flipped to `POS 1/22, TIME 0:00.50` — the start sequence
+re-seated the car at its grid slot, discarding the parked position, and the
+camera reset to a completely different chase framing. **Always `step()` well
+past the start (≈120 frames / 2s was enough) before your first `park()`+
+`snapCam()`**, not after — parking into a still-resolving race state is not
+stable no matter how carefully everything after it is done.
+
+The combined safe recipe for a trustworthy before/after pair:
+```js
+__apex.race(track); /* wait for track */ __apex.go();
+__apex.step(1/60, 120);                 // clear the start-lights hold FIRST
+__apex.camera('chase');                 // player-relative — not heli/far/orbit/view
+__apex.park(s); __apex.snapCam();
+// capture "before" viewState().eye/.tgt, screenshot
+// change ONLY the tuned value(s) + a short step() to let effects settle
+// re-check viewState().eye/.tgt matches "before" — if not, the pair is invalid
+// screenshot "after"
+```
+
 ---
 
 ## Chrome DevTools MCP — live 3D / __apex debugging

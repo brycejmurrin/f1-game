@@ -299,7 +299,7 @@ const GLX = (function () {
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
-      "uCarShadowMap", "uCarLightVP", "uCarShadowOn",
+      "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
@@ -988,6 +988,7 @@ const GLX = (function () {
         gl.uniform1i(litU.uCarShadowMap, 8);
         gl.uniformMatrix4fv(litU.uCarLightVP, false, SHD.carLightVP);
         gl.uniform1f(litU.uCarShadowOn, SHD.carArmed ? 1.0 : 0.0);
+        gl.uniform1f(litU.uCarBiasScale, SHD.carBoxScale || 1.0);
       } else {
         gl.uniform1f(litU.uCarShadowOn, 0.0);
       }
@@ -1551,7 +1552,7 @@ const GLX = (function () {
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
-    carShadowBegin: (lightVP) => SHD.carShadowBegin(lightVP),
+    carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),
     lampShadowEnd: () => SHD.lampShadowEnd(),

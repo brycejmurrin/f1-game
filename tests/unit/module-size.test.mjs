@@ -94,7 +94,14 @@ const CEILINGS = {
   // moonGate escape hatch for MOON SHADOWS above 0.5 (prop + car shadow night
   // gates), and the SHADOW DISTANCE-scaled car shadow box — all tightly
   // coupled to the existing camera/shadow-pass code already in this file.
-  "js/game.js": 7997,
+  // 7997 -> 8002: threading a carBoxScale ratio (cBox/42) through to
+  // gfx.carShadowBegin so lit.js can scale the dynamic car-shadow depth bias
+  // with it — the SHADOW DISTANCE-scaled car shadow box above widens the car
+  // shadow map's real-world texel size at a fixed 1024² resolution, and the
+  // bias wasn't scaling with it, which produced visible self-shadow acne on
+  // the car above the default SHADOW DISTANCE (confirmed via MCP screenshot,
+  // not caught by the numeric-only apex-eval.mjs check from the prior pass).
+  "js/game.js": 8002,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

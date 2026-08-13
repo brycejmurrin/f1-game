@@ -5572,7 +5572,13 @@ function render(dt) {
         const cBox = 42 * Math.max(1, sBox / 80);
         M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
-        gfx.carShadowBegin(_mCVP);
+        // The depth-comparison bias baked into lit.js's biasTerm was tuned for the
+        // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
+        // grows the car map's real-world texel size at the same fixed 1024² resolution,
+        // so the bias needs to grow proportionally or the car self-shadows into acne
+        // (uCarBiasScale, applied in lit.js). cBox/42 == 1 at the default, matching the
+        // originally-tuned bias exactly.
+        gfx.carShadowBegin(_mCVP, cBox / 42);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
         for (let i = 0; i < _shadowCount; i++) {
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
