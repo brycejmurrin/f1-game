@@ -151,7 +151,13 @@
               }
               if (hash(k * 23 + r * 3 + c) > 0.48) {
                 stage._mat = MAT.RUST;
-                addCyl(stage, vadd(base, a.u, h + 0.7), 0.72, 1.3,
+                // Sits ON the laje, not above it (cause b): was h+0.7, a 0.7 m
+                // gap over the roof that the audit's support-chain analysis
+                // can't bridge (its "rests on grounded" check allows only 0.6 m
+                // of slack) — the caixa d'água read as floating whenever the
+                // house had no upper room and no neighbour close enough to
+                // bridge the gap by chance.
+                addCyl(stage, vadd(base, a.u, h + 0.1), 0.72, 1.3,
                        hash(k + c) > 0.5 ? [0.22, 0.32, 0.58] : [0.12, 0.12, 0.14], 6, bv);
                 stage._mat = MAT.CONCRETE;
               }
