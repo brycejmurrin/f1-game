@@ -18,7 +18,11 @@ Light ground fog; gentle distance haze fading greens toward grey.
 Very flat — total change ~15–20 m. Subtle dips around Abbey/Farm (s≈0.55) and a slight rise through Maggotts/Becketts (s≈0.10–0.15). Treat as near-level; use gentle grade only, no dramatic climbs.
 
 ## 4. Landmarks & surroundings by lap position
-S=0.0 at start/finish on the National pit straight; racing direction into Copse.
+S=0.0 sits at the modern Wing/pit straight (`startFrac: 0.5224`), not the
+old National pit straight 1.3 km away; racing direction into Copse. The
+landmark table below is authored against the scenery's own
+`sceneryStartFrac: 0.6400` reference — see `docs/tracks/START-LINES.md` for
+how the two differ.
 
 | Landmark | s | Side | Dist | Box-modelling note |
 |---|---|---|---|---|

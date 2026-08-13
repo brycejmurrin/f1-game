@@ -6,7 +6,7 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 # Probing the live game with the MCPs
 
 Two MCP browsers sit alongside the Playwright suite. Neither replaces it — the
-suite is 111 specs + 61 node suites, parallelised, asserted, retried, CI-gated.
+suite is 111 specs + 76 node suites, parallelised, asserted, retried, CI-gated.
 These are **interactive** instruments: one browser, driven a call at a time, for
 the question you can't be bothered to write a `scratch/*.mjs` for, and for the one
 thing the suite never checks — the **deployed artifact**.
