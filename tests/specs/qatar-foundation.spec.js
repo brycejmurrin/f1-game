@@ -121,30 +121,20 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   expect(night.walls.minB).toBeGreaterThan(1);
   expect(night.walls.maxB).toBeLessThan(60);
   for (const probe of night.ground) {
-    // groundY()'s roadY is the bare centreline height — right off any banked
-    // corner, wrong on one (js/track/mesh.js's own buildRoad/buildTerrain
-    // comment: "against the bare centreline py[j] is wrong on any banked
-    // corner"). At frac 0.74, lat -18 that reads as terrain floating 0.308 m
-    // over a nominal, unbanked road — Qatar's bankZones has a 4° zone at
-    // frac 0.7404 (js/circuits/qatar.js) right where this probe samples, and
-    // the true (banked) road sits close enough to the centreline reading here
-    // that the terrain is not actually floating. Widen only this one probe
-    // rather than the shared 0.18 contract every other circuit's foundation
-    // spec relies on.
-    //
-    // Same mechanism at frac 0.62, lat +18: the 3° zone at frac 0.6217
-    // (js/circuits/qatar.js bankZones) lifts the outer road edge past the
-    // centreline reading; measured 0.203 in the 7a173519 frame (headless VM),
-    // so it carries its own local allowance too.
-    //
-    // MARGIN WARNING: the 0.74/-18 probe measures 0.313 against its 0.32
-    // allowance — 0.007 m of headroom. If it trips, re-measure headlessly
-    // (tools/verify-track.cjs harness) before touching the bound; that little
-    // margin can be eaten by legitimate terrain-mesh jitter alone.
-    const tol = (probe.frac === 0.74 && probe.lat === -18) ? 0.32
-      : (probe.frac === 0.62 && probe.lat === 18) ? 0.25
-      : 0.18;
-    expect(probe.gap === null || probe.gap <= tol,
+    // Every probe holds the SHARED 0.18 contract again. This loop used to
+    // carry a local 0.32 allowance at 0.74/-18 (and briefly a 0.25 at
+    // 0.62/+18): groundY()'s roadY is the bare centreline height, wrong on a
+    // banked corner, and Qatar's authored bankZones were sitting MISPLACED on
+    // the lap — 7a173519's start-line rotation missed them, so cambered road
+    // stood where the def said none should be. ed5a310f fixed that
+    // (bankingProfile now applies _sceneryShift), and the excursions those
+    // tolerances excused vanished with it. Measured on the fixed build
+    // (headless VM, scratchpad qatar-gap.cjs): 0.62/±18 read the nominal
+    // -0.160 verge, 0.74/-18 reads 0.056 and 0.74/+18 reads -0.410 — the 0.74
+    // probe now sits in the authored-0.0415 3° zone landed at ~0.737 by the
+    // +0.6953 shift, comfortably inside the contract. Do not re-add a local
+    // tolerance here without a measurement naming the zone that causes it.
+    expect(probe.gap === null || probe.gap <= 0.18,
       `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
   }
   expect(night.lights.builtNight).toBe(true);
