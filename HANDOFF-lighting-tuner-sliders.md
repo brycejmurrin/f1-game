@@ -1,50 +1,64 @@
 # Handoff: lighting-tuner distance sliders
 
-Branch: `claude/lighting-tuner-sliders-mlkgfk`. Implementation is done and
-committed; **browser/visual verification is NOT done** — that's the next
-agent's job. Delete this file once verification is complete and folded into
-the commit history (it's a handoff note, not permanent documentation).
+Branch: `claude/lighting-tuner-sliders-hj2bmw` (this branch supersedes the
+earlier `claude/lighting-tuner-sliders-mlkgfk` — that branch's two commits
+were fast-forwarded in here since it had no PR open; treat `hj2bmw` as the
+live one from now on). Implementation is done and committed.
+**Numeric/API verification is done** (see below). **Visual/browser
+verification is still NOT done** — that's this next agent's job, and this
+time it should actually be possible: `.mcp.json`'s `chrome-devtools` server
+path fix is committed and pushed on `hj2bmw`, and MCP servers wire up at
+session start, so a **fresh session started on this branch** should have
+`mcp__chrome-devtools__*` tools available (confirmed the underlying script
+itself works: `tools/chrome-devtools-mcp.sh verify` → Chromium 141 detected,
+npx fallback lists 40 tools OK — the only reason it wasn't usable in the
+prior two sessions is that the fix hadn't reached the branch a session
+started from yet). Delete this file once verification is complete and folded
+into the commit history (it's a handoff note, not permanent documentation).
 
 ## Prompt for the next agent
 
-> Continue work on `claude/lighting-tuner-sliders-mlkgfk` in this repo. The
-> previous session implemented three lighting-tuner changes (see "What was
-> implemented" below and the full original plan appended at the bottom of
-> this file) but could not verify them in a browser: Chrome DevTools MCP is
-> misconfigured for this environment (see "MCP note" below — now fixed for
-> *future* sessions, but the fix doesn't apply retroactively to an
-> already-started session), and the session ran out of turns before finishing
-> a Playwright-based verification pass after `npm ci` made Playwright
-> available.
+> Continue work on `claude/lighting-tuner-sliders-hj2bmw` in this repo. Two
+> prior sessions implemented and then numerically verified three
+> lighting-tuner changes (see "What was implemented" and "What's already
+> verified" below, plus the full original plan appended at the bottom of this
+> file) but neither got a real browser/visual look at the result — the
+> chrome-devtools MCP wasn't wired up in either of those sessions because the
+> `.mcp.json` path fix that makes it work wasn't yet on the branch they
+> started from. It is now, so check first (`/mcp` or try a
+> `mcp__chrome-devtools__*` tool) — you likely have it available fresh.
 >
-> Your job: verify the changes actually work, then report back / fix anything
-> broken. Concretely:
+> Your job:
 >
 > 1. `npm ci` (node_modules is gitignored, not committed).
-> 2. Run the exact commands in the "Verification" section of the embedded
->    plan below — `node tools/apex-eval.mjs bahrain "..."` to confirm the new
->    `lampReach` / `renderDistMul` knobs exist in `__apex.lightTune()` with
->    the right defaults (1.0 / 1.0), and that pushing them to their extremes
->    (`lampReach: 4`, `renderDistMul: 2`, `moonShadow: 1`, `shadowRange: 300`)
->    doesn't throw or produce console errors while the game renders a few
->    frames (`__apex.step(1/60, 60)` after `race()`/`go()`/`jump()`).
+> 2. If `mcp__chrome-devtools__*` tools are available: follow
+>    `.claude/skills/mcp-probe` to drive the LIVE game (start a local server,
+>    `npx serve -l 3456 .` or `python3 -m http.server 3456`, then navigate the
+>    MCP browser to it). Load Bahrain at night
+>    (`__apex.race("bahrain")`, `__apex.go()`, `__apex.setTimeOfDay("night")`,
+>    `__apex.jump(0.3, 60, 0)`, `__apex.snapCam()`), screenshot at defaults,
+>    then `__apex.lightTune({lampReach:4, renderDistMul:2, moonShadow:1,
+>    shadowRange:300})`, let a few frames render, screenshot again. Confirm:
+>    the lit-lamp zone visibly reaches further down the road, shadow reach
+>    visibly extends, and nothing looks broken (no black holes, no runaway
+>    bloom, no GL error toasts). Save screenshots under
+>    `scratch/captures/lighting-tuner-verify/`.
+>    If chrome-devtools MCP is STILL not available for some reason, fall back
+>    to local Playwright instead — no need to keep escalating on the MCP
+>    itself: `.claude/skills/playwright-probe/shot.mjs` (or a small custom
+>    script following its pattern) can boot the game headless and screenshot
+>    it directly, no MCP required. Either path produces the same evidence.
 > 3. Run `tests/specs/lighting-ab.spec.js` and `tests/specs/webgl-probes.spec.js`
->    via `node tools/test-bg.mjs ab webgl` in the background (never block/poll
->    — see `docs/TESTING.md` / `CLAUDE.md` for the watcher pattern), since
->    those are the specs most likely to catch a regression from the
->    `frame.moonK` → `frame.moonGate` swap or the `farPlane`/`cullDist`
->    change.
-> 4. If you have a working Chrome DevTools MCP (check `/mcp` or try a
->    `mcp__chrome-devtools__*` tool), use it per `.claude/skills/mcp-probe` to
->    actually SEE the effect: load Bahrain at night, push `lampReach` and
->    `moonShadow` to their max via `__apex.lightTune(...)`, screenshot before
->    /after, and confirm the lit-lamp and shadow reach visibly extends ahead
->    of the car without changing the look at each knob's shipped default.
-> 5. `npm run test:tooling-fast` should be clean except for pre-existing
+>    via `node tools/test-bg.mjs ab webgl` in the background (never
+>    block/poll — see `docs/TESTING.md` / `CLAUDE.md` for the watcher
+>    pattern), since those are the specs most likely to catch a regression
+>    from the `frame.moonK` → `frame.moonGate` swap or the
+>    `farPlane`/`cullDist` change.
+> 4. `npm run test:tooling-fast` should be clean except for pre-existing
 >    unrelated failures (see "Known pre-existing failures" below) — confirm
 >    the count hasn't grown.
-> 6. Once verified, delete this handoff file, commit, and push to
->    `claude/lighting-tuner-sliders-mlkgfk`. Do NOT push to the deploy branch
+> 5. Once verified, delete this handoff file, commit, and push to
+>    `claude/lighting-tuner-sliders-hj2bmw`. Do NOT push to the deploy branch
 >    (`claude/f1-game-project-26h3ng`) without the repo owner's explicit
 >    review — see `CLAUDE.md` § Git branch & deploy.
 
@@ -77,17 +91,38 @@ explaining why, and bumped `index.html`/`version.json` cache-busting to 1157.
 Full diff is in commit `ccdce97` on this branch (and possibly later commits —
 check `git log`).
 
-## MCP note (already fixed for future sessions)
+## What's already verified (this session, via `apex-eval.mjs`)
+
+- Defaults confirmed correct via `__apex.lightTune()` on a fresh Bahrain
+  boot: `lampReach: 1`, `renderDistMul: 1`, `shadowRange: 80`,
+  `moonShadow: 0.25` — matches the shipped `def` values in `TUNE_DEFS`.
+- Pushed all four to their extremes (`lampReach:4, renderDistMul:2,
+  moonShadow:1, shadowRange:300`) at night and stepped 60 frames
+  (`__apex.step(1/60, 60)`) — no throw, and `__apex.logs({level:'error'})` /
+  `__apex.logs({ns:'gfx'})` both came back empty (no GL errors, no gfx
+  warnings). The only warn-level log noise during the run was pre-existing
+  scenery-placement `SUPPRESSED` messages (mountain/backdrop/fence overlap
+  culling), unrelated to this change.
+- This confirms the knobs are wired correctly and don't crash the renderer,
+  but is NOT a substitute for actually looking at a frame — a value can
+  "not throw" while still looking wrong (e.g. a shadow box that scales but
+  clips through the ground, or a lamp-reach bias that's too weak to notice).
+  That visual check is the next agent's job (see prompt above).
+
+## MCP note
 
 `.mcp.json`'s `chrome-devtools` server had a hardcoded absolute command path
 (`/workspace/tools/chrome-devtools-mcp.sh`) that doesn't exist in this
 environment (repo lives at `/home/user/f1-game` here). Changed to a relative
 path (`tools/chrome-devtools-mcp.sh`) so it resolves regardless of clone
-location — this fix is committed. It only takes effect on a **new** session
-(MCP servers wire up at session start), and even then the local clone at
+location — this fix is committed AND now pushed to `origin/hj2bmw`. It only
+takes effect on a **new** session (MCP servers wire up at session start) —
+this session (the one writing this update) still didn't have it, since it
+started before the fix reached this branch's remote. The local clone at
 `scratch/chrome-devtools-mcp` isn't present (gitignored) so it'll fall back to
 `npx chrome-devtools-mcp@latest` on first use, which needs network access —
-should work through this environment's proxy but adds startup latency.
+confirmed working through this environment's proxy (`tools/chrome-devtools-mcp.sh
+verify` succeeded, 40 tools listed) but adds some startup latency.
 
 ## Known pre-existing failures (NOT caused by this branch's changes)
 
