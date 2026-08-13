@@ -189,6 +189,50 @@ state-level feature verified by `lightState().moonGate`, not something to sign
 off from a screenshot. (Unproven, worth checking before relying on it: whether
 raising `moonBright` alongside it gives the shadows enough key to actually read.)
 
+### PER-CHUNK LAMPS: why the 32-lamp ceiling is not what it looks like
+
+`lampCull`/`lampReach` exist to ration 32 shader slots across the whole visible
+scene. But **`MAX_LIGHTS = 32` is a fragment-shader uniform-array size, so it
+bounds lights per DRAW, not per scene.** Binding a different 32 per draw needs no
+shader change at all — `lit.js`, `MAX_LIGHTS` and the per-fragment loop are
+untouched. Two properties of this codebase make that cheap: track lamps are baked
+and static (`track._lights`), and chunked scenery already carries per-chunk AABBs
+that `drawChunked` frustum-tests, so each chunk's lamp set is computed once
+(`_pickChunkLamps`, radius-vs-AABB) and cached on the chunk.
+
+The generic alternative is worse here. WebGL2 has **no compute shaders and no
+SSBOs**, and UBOs cap at 64 KB with a performance penalty — which is why engines
+pick ~32 rather than it being a device cap. Clustered forward IS reachable via
+CPU-built clusters + data textures (a three.js forward+ demo runs 1000 point
+lights that way) but needs a whole new spatial structure and showed
+hardware-specific breakage on mobile.
+
+Measured at Singapore 0.55, night (`perChunkLights` 0 → 1):
+
+| | uploads/frame | max bound on one draw | GL errors |
+|---|---|---|---|
+| off | 18 | 28 (the global cull) | 0 |
+| on | 190 | **32** (chunks fill the array) | 0 |
+
+Visually the effect lands on the scenery, not the road, and the road doubles as
+an in-frame control:
+
+| band 0–1 (buildings) | band 2–3 (road) |
+|---|---|
+| MAD **5.39 / 5.82** | MAD 0.95 / 1.11 |
+
+— overall MAD 3.32, 42,614 px over threshold, and the diff map is solid filled
+building faces, not the edge outlines sub-pixel drift produces. Cost is ~190
+extra uniform uploads/frame at that vantage, so it ships **off** pending a
+mobile-tier perf pass.
+
+Two instruments that did NOT work, recorded so they are not retried: a
+union-of-distinct-lamps count via wrapping `gl.uniform3fv` reported 64 → 270,
+but 270 exceeds the track's 249 baked lamps — it was catching material/ambient
+uploads too, so its absolute numbers are unusable. And raw `gl.drawElements`
+counts read 211 → 327 purely from env-probe/shadow-rebuild pass scheduling
+swinging between frames; take the MIN over ~8 frames if you need that number.
+
 ## Five ways a LIVE knob still reads "no observed change"
 
 A follow-up runtime pass sampled one knob per class (shader-uniform, apply-only,
