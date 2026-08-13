@@ -26,32 +26,44 @@
 > were not colour swatches as the count suggested but `.cs-liv-edit` /
 > `.cs-liv-del`, the two buttons on every livery row, at 22x22.
 >
-> **STILL OPEN — the preview map is drawn at a low-resolution buffer.** Deploy's
-> circuit-aspect axis reports `map 80x119` on six of eight `select` cells: the
-> canvas is fitted while `#select` is still `hidden`, and nothing re-runs
-> `updateTrackPreview()` once the card has a box, so the bitmap keeps the
-> pre-layout placeholder size. A/B at desktop-1440x900 on the same tree:
+> **RESOLVED, and it was bigger than the metric suggested.** Deploy's
+> circuit-aspect axis reports `map 80x119` on six of eight `select` cells, which
+> read as a cosmetic resolution issue and was very nearly filed as "still open".
+> Re-measured WITHOUT `__apex.headless(true)` — that is, with the render loop
+> running, as a player has it:
 >
-> | | buffer | fill | skew |
+> | | fit calls | final CSS box | inside a card of |
 > |---|---|---|---|
-> | deploy's menus.js | 80x119 | **7%** | 0 |
-> | + this branch's pin guard | 80x119 | **46%** | 61.7% |
+> | deploy's menus.js | **1**, pinned at `cardW: 0` | **80x119** | 762x500 |
+> | + this branch's guard + observer | 2, second at `cardW: 762` after **29 ms** | **322x477** | 762x500 |
 >
-> So the guard is an improvement — a correctly-SIZED map instead of a 7%
-> thumbnail — but the map is soft until something re-runs the fit, and the
-> reported skew is `object-fit: contain` letterboxing a low-res bitmap into a
-> correct box, not distortion. It is not a matrix *finding* (the `map` metrics
-> are informational and those cells score 0), which is why it survived.
+> So on deploy the circuit map renders permanently at about a tenth of its
+> intended size — a real, plainly visible defect on the screen every player
+> reaches after RACE, not an informational metric. The pin guard plus the
+> ResizeObserver fix it outright.
 >
-> Two fixes were tried and both made it worse, and the failures are worth
-> keeping: a frame-counted `requestAnimationFrame` retry never fires, because
-> `#select` is revealed inside a View Transition and the card is still 0x0 for
-> longer than any small rAF budget; and a `MutationObserver` on `#select`'s
-> `hidden` attribute refits at a moment when the card's height is not yet
-> bounded, producing maps at **fill 487%** that clip. The real fix has to refit
-> after the card's height is *constrained*, not merely after it is visible —
-> which is a question about the select screen's layout order, not about picking
-> a better observer. Left for a session with the budget to do it properly.
+> **Why the matrix understated it, and the trap that hid it.**
+> `tools/layout-audit.mjs` calls `__apex.headless(true)` before opening any
+> screen — correctly, because a live WebGL canvas starves the compositor and
+> makes every capture slow. But stopping the render loop also starves
+> `requestAnimationFrame`, and ResizeObserver delivery rides on the frame loop.
+> MEASURED under the audit's own conditions: the first rAF after the click took
+> **5346 ms** and the ResizeObserver fired at 5402 ms — long after the probe had
+> measured. With the loop running the same observer fires in 29 ms.
+>
+> **So any audit metric that depends on a post-layout observer is unreliable
+> under headless**, and will report the pre-observer state as if it were final.
+> That is a third instance this session of the instrument being the thing at
+> fault; it is now written into `docs/LAYOUT-AUDIT.md`.
+>
+> Two other fixes were tried first and both were worse — kept because the
+> failures are the useful part. A frame-counted `requestAnimationFrame` retry
+> never fires: `#select` is revealed inside a View Transition, so the card is
+> still 0x0 for longer than any small rAF budget. A `MutationObserver` on
+> `#select`'s `hidden` attribute fires too early: measured, the attribute clears
+> at 78 ms with the card transiently at 747x1238 and the section at 1262, and
+> only settles to 762x505 / 529 by 164 ms — so refitting on visibility produced
+> maps at **fill 487%** that clip. Visible is not the same as laid out.
 
 Why the menus still feel wrong after a year of layout fixes, what modern CSS
 actually offers now, and which tools are worth adding. Measured against the
