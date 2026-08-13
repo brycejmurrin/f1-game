@@ -1638,13 +1638,15 @@ const AgentView = (function () {
         // sub-metre spans everywhere and fromFrac values of ~1e-4. And spans
         // WRAP the start line (along() walks s0→s1 modulo the lap; ~20 circuits
         // fence 0.95→0.06), so length is the wrapped difference — worldModel()'s
-        // formula — not |s1-s0|, which reported the lap-long complement.
+        // formula — not |s1-s0|, which reported the lap-long complement. The
+        // `|| 1` matches along()'s `|| n`: s0≡s1 (mod 1) walks a FULL lap
+        // (monaco/montreal/redbull wall/fence(0.0, 1.0)), not zero metres.
         const s0M = s.s0 * total, s1M = s.s1 * total;
         return {
           apiVersion: API_VERSION, id: "span:" + idx, type: "span",
           kind: s.kind, side: sideOf(s.side),
           fromS: r1(s0M), toS: r1(s1M),
-          lengthM: r1((((s.s1 - s.s0) % 1 + 1) % 1) * total),
+          lengthM: r1(((((s.s1 - s.s0) % 1 + 1) % 1) || 1) * total),
           fromFrac: +s.s0.toFixed(4), toFrac: +s.s1.toFixed(4),
           heightM: s.h != null ? r1(s.h) : null,
           gapM: s.gap != null ? r1(s.gap) : null,
@@ -1992,10 +1994,12 @@ const AgentView = (function () {
         features: m.features,
         // Linear furniture — armco, catch fence, tyre walls, boundary walls —
         // recorded as spans by the emitters rather than per 3-6 m segment.
+        // Length is the wrapped difference, and `|| 1` matches along()'s
+        // `|| n`: s0≡s1 (mod 1) walks a FULL lap, not zero metres.
         spans: reg.spans.map((sp) => ({
           kind: sp.kind, side: sp.side > 0 ? "right" : "left",
           fromFrac: sp.s0, toFrac: sp.s1,
-          lengthM: r1((((sp.s1 - sp.s0) % 1 + 1) % 1) * total),
+          lengthM: r1(((((sp.s1 - sp.s0) % 1 + 1) % 1) || 1) * total),
           gapM: sp.gap, h: sp.h != null ? sp.h : undefined,
         })),
         landmarks: m.landmarks.map((L) => ({
