@@ -161,6 +161,20 @@ def text_result(result: dict) -> str:
     return "\n".join(parts) if parts else json.dumps(result, indent=2)[:4000]
 
 
+def eval_json(result: dict):
+    """Parse the JSON value out of an evaluate_script text_result. The
+    chrome-devtools MCP wraps the raw JS return value as prose + a ```json
+    fence ("Script ran on page and returned:\\n```json\\n{...}\\n```"), not bare
+    JSON — a plain json.loads(text_result(...)) fails on that wrapper."""
+    txt = text_result(result)
+    if "```" in txt:
+        fence = txt.split("```", 2)[1]
+        if fence.startswith("json"):
+            fence = fence[4:]
+        txt = fence
+    return json.loads(txt.strip())
+
+
 def cmd_list_tools(_: list[str]) -> None:
     c = McpClient()
     try:
@@ -414,6 +428,10 @@ def cmd_slider_ab(argv: list[str]) -> None:
                     default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"))
     p.add_argument("--out-prefix", default=None,
                     help="default: scratch/captures/slider-ab/<track>-<frac>")
+    p.add_argument("--hud-crop-frac", type=float, default=0.28,
+                    help="top fraction of the frame to exclude from the scene-only MAD "
+                         "(default 0.28 — the POS/LAP/TIME row's race clock ticks every "
+                         "settle step and otherwise dominates the noise floor; see report)")
     args = p.parse_args(argv)
 
     try:
@@ -462,7 +480,7 @@ def cmd_slider_ab(argv: list[str]) -> None:
   return {{ ok: true, view: a.viewState(), tune: a.lightTune(), info: a.info() }};
 }}"""
         print("→ evaluate_script (boot → race → step past start → park chase)")
-        setup_r = json.loads(text_result(c.call("evaluate_script", {"function": setup_js})))
+        setup_r = eval_json(c.call("evaluate_script", {"function": setup_js}))
         if not setup_r.get("ok"):
             print(f"setup failed: {setup_r}", file=sys.stderr)
             sys.exit(1)
@@ -488,7 +506,7 @@ def cmd_slider_ab(argv: list[str]) -> None:
   }};
 }}"""
         print(f"→ evaluate_script (lightTune({args.set}) → settle)")
-        tune_r = json.loads(text_result(c.call("evaluate_script", {"function": tune_js})))
+        tune_r = eval_json(c.call("evaluate_script", {"function": tune_js}))
         view_after = tune_r["view"]
 
         print(f"→ take_screenshot (after) {after_png}")
@@ -542,14 +560,20 @@ def cmd_slider_ab(argv: list[str]) -> None:
         diff = np.abs(a - b)
         mad = float(diff.mean())
         mx = int(diff.max())
+        hud_rows = int(diff.shape[0] * args.hud_crop_frac)
+        scene_mad = float(diff[hud_rows:].mean())
         diffmap_png = Path(f"{prefix}-diffmap.png")
         d = np.abs(a.astype(np.int32) - b.astype(np.int32)).sum(axis=2)
         d2 = (d / max(d.max(), 1) * 255).astype("uint8")
         Image.fromarray(d2).save(diffmap_png)
-        print(f"pixel diff: MAD={mad:.3f} max={mx}  (diffmap: {diffmap_png})")
-        print("NOTE: MAD is not self-interpreting — run this same command again with "
-              "--set '{}' on the same track/frac to get a same-value noise floor, and "
-              "trust this MAD only if it clears that floor by several times over "
+        print(f"pixel diff: full-frame MAD={mad:.3f}  scene-only MAD={scene_mad:.3f} "
+              f"(below row {hud_rows}, excludes the ticking POS/LAP/TIME HUD)  max={mx}")
+        print(f"  diffmap: {diffmap_png}")
+        print("NOTE: neither MAD is self-interpreting — run this same command again with "
+              "--set '{}' on the same track/frac to get a same-value noise floor (which "
+              "itself won't be ~0 on full-frame, since the race clock ticks every settle "
+              "step regardless of the tune — that's why scene-only exists), and trust a "
+              "signal only if it clears the matching noise-floor MAD by several times over "
               "(see mcp-probe skill's FOURTH trap).")
     except ImportError:
         print("(PIL/numpy not installed — skipping pixel diff; compare "
