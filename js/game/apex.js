@@ -924,7 +924,24 @@ const api = {
     // documents above (Zandvoort's outer edge stands 2.4 m proud of the plane).
     // Ride the bank like buildRoad/buildTerrain and the in-race cameras do.
     const bk = Tracks.banking(G.track, sPos, lat);
-    const roadY = smp.p[1] + (bk ? bk.dy : 0);
+    let bankDy = bk ? bk.dy : 0;
+    // Tracks.banking() clamps to the ROAD's own half-width (right for a car/
+    // camera, which never leaves the tarmac), so it holds bank at full
+    // saturated strength for any lat beyond the road edge. buildTerrain's
+    // ribbon does the opposite past the edge: it tapers bank to ZERO from the
+    // road edge out to the terrain's outer reach (mesh.js ribbon(), "so the
+    // far ground stays flat"). Match that taper here, or a probe far off-road
+    // on a banked corner reads a false float/sink (COTA's Big Red apex at
+    // lat -48, terrainOuter 48, is exactly the terrain's own flat outer edge).
+    if (bankDy) {
+      const surf = G.track.surface, outerW = surf ? surf.outerW : smp.hw;
+      const dist = Math.abs(lat);
+      if (dist > smp.hw) {
+        const t = Math.min(1, (dist - smp.hw) / Math.max(0.01, outerW - smp.hw));
+        bankDy *= (1 - t);
+      }
+    }
+    const roadY = smp.p[1] + bankDy;
     const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
     const ty = Tracks.terrainY(G.track, x, z);
     return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +roadY.toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - roadY).toFixed(3) };
