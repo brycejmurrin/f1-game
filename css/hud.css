@@ -43,7 +43,7 @@
   /* Team-skinned accent stripe (--accent falls back to --red when no team set;
      set on <html> by the HUD). */
   border-left: 3px solid var(--accent);
-  padding: 4px 12px;
+  padding: 4px var(--gap);
   border-radius: var(--r-sm);
   text-align: center;
   /* no backdrop-filter: this panel sits over the live 3D canvas, and a blur
@@ -106,7 +106,7 @@
 #hud-ot {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
-  margin-bottom: 6px;
+  margin-bottom: calc(var(--gap) * 0.5);
 }
 /* The chip is the READOUT for the button of the same name, so it carries the
    button's hue — OT yellow, AERO green — and darkens with it. A cyan readout
@@ -141,7 +141,7 @@
 }
 #hud-flag {
   position: absolute; top: calc(100px + var(--sat) / var(--hud-scale)); left: 50%; transform: translateX(-50%);
-  padding: 6px 16px; border-radius: var(--r-sm); font-weight: 800;
+  padding: calc(var(--gap) * 0.5) 16px; border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
@@ -167,7 +167,7 @@
   line-height: 1.6;
   border-left: 3px solid var(--accent-dim);
 }
-.sec-row { display: flex; gap: 6px; align-items: baseline; }
+.sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; }
 .sec-lbl { font-weight: 800; font-size: var(--fs-micro); letter-spacing: 0.1em; min-width: 16px; }
 .sec-val { color: #e8e8ee; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 
@@ -176,9 +176,9 @@
   position: fixed;
   top: calc((18svh + var(--sat)) / var(--hud-scale));
   left: 50%; transform: translateX(-50%);
-  display: flex; gap: 12px;
+  display: flex; gap: var(--gap);
   background: rgba(8, 8, 12, 0.85);
-  padding: 14px 18px;
+  padding: 14px calc(var(--gap) * 1.5);
   border-radius: var(--r-md);
   z-index: 15;
 }
@@ -228,7 +228,7 @@ body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
 #photo-controls > * { pointer-events: auto; }
 .pc-stickwrap {
   position: fixed; bottom: calc(20px + var(--sab));
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.5);
 }
 .pc-move-wrap { left: calc(20px + var(--sal)); }
 .pc-look-wrap { left: calc(168px + var(--sal)); }
@@ -297,7 +297,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
    panel is actually showing (pc-nopanel tucks it away and frees the width). */
 body.lt-open:not(.pc-nopanel) #pc-bar {
   max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-px) - 40px - var(--sal))));
-  gap: 8px; padding: 6px 10px;
+  gap: 8px; padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
    drop the keyboard hint and shrink the FOV slider/buttons — a compact bar
@@ -312,7 +312,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 }
 .pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
 .pc-fovlab { display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; color: var(--dim); }
-.pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
+.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); }
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;

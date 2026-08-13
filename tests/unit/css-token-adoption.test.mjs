@@ -80,9 +80,13 @@ const CEILING = {
   // the one number that needs no justification.
   subFloorFontSize: 0,
   // padding / gap / margin declarations containing a raw px literal.
-  // 2026-08-13: the FIVE sheets that read no spacing token at all are
-  // data.css, overlays.css, hud.css, track-detail.css and responsive.css.
-  rawSpacing: 529,
+  // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
+  // (data, hud, overlays, track-detail) were migrated in the same pass — but
+  // only for values with an exact ratio to the token (22/11 -> --pad, 12/24/18/
+  // 6/3 -> --gap). The remainder are 2/4/5/8/10px hairline nudges, and turning
+  // those into calc(var(--gap) * 0.41) noise would be worse than leaving them:
+  // a hairline should stay a hairline when the density ladder tightens.
+  rawSpacing: 479,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
@@ -139,13 +143,15 @@ test("no new raw px spacing", () => {
    migration works through; an entry LEAVING it is the win, and a new entry
    joining it is a new screen that cannot respond to density. */
 test("the zero-spacing-token sheet list only shrinks", () => {
-  /* responsive.css is on this list for a different reason than the other four
-     and should be judged differently: it is the media-query sheet, so several
-     of its raw values are deliberately viewport-absolute (safe-area insets, the
-     landscape-phone caps) rather than density-relative. It is listed because
-     the measurement is the measurement — not because it is queued for the same
-     migration. */
-  const KNOWN_ZERO = ["data.css", "hud.css", "overlays.css", "responsive.css", "track-detail.css"];
+  /* data.css, hud.css, overlays.css and track-detail.css came OFF this list on
+     2026-08-13 — they now read --pad / --gap and so move with the density
+     ladder, which is what "things do not resize" actually meant.
+     responsive.css stays, and is a different case that should be judged
+     differently rather than queued for the same migration: it is the
+     media-query sheet, so its raw values are deliberately viewport-absolute
+     (safe-area insets, the landscape-phone caps). It is listed because the
+     measurement is the measurement. */
+  const KNOWN_ZERO = ["responsive.css"];
   const zero = sheets()
     .filter(({ name }) => name !== "tokens.css")
     .filter(({ src }) => /(?:padding|margin|gap)[a-z-]*:[^;{}]*[0-9.]+px/.test(src))

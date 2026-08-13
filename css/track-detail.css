@@ -51,7 +51,7 @@
      without the left/right insets the circuit name and close button sat under
      the notch on a landscape phone (was `10px 12px` + only --sab). */
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  box-sizing: border-box; gap: 6px;
+  box-sizing: border-box; gap: calc(var(--gap) * 0.5);
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
@@ -73,7 +73,7 @@
 .tdc-close-btn:active { border-color: rgba(255,255,255,0.6); color: #fff; }
 #track-detail-body {
   flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
   overflow: hidden;
 }
 #track-detail-canvas-wrap {
@@ -93,24 +93,24 @@
 }
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
 #track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: 0.04em; line-height: 1.5; }
-.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
+.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-elev { display: block; width: 100%; height: 48px; }
 #track-detail-drs-list { font-size: var(--fs-micro); color: #888; }
 .tdd-zone { padding: 2px 0; }
 #track-detail-corners { flex: 0 0 auto; }
-.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 3px; }
+.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
   background: rgba(255,255,255,0.06); border-radius: var(--r-sm);
-  padding: 3px 8px; font-size: var(--fs-micro);
+  padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: #ddd; min-width: 22px; }
 .tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
 .tdc-medium { color: #facc15; font-size: var(--fs-micro); }
 .tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
 .tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
-#track-detail-flags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+#track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: 0.1em; padding: 2px 7px;
   border-radius: var(--r-xs); border: 1px solid rgba(255,255,255,0.2);
