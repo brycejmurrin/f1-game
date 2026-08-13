@@ -67,6 +67,65 @@ The last two are why `tools/lighting-tuner-sweep.mjs` gained `day-overcast`/`day
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
+### The three DISTANCE knobs: where each one is actually demonstrable
+
+`lampReach` / `renderDistMul` / `shadowRange`+`moonShadow` are the sharpest case
+of "conditional, not dead" in the table above: each has exactly one family of
+(track, position, weather) where it moves anything at all, and the obvious test
+setup — Bahrain, night, dry, free-cam — is the one place where **all three** are
+provably inert. Measured 2026-08-13; use these recipes rather than re-deriving.
+
+**`renderDistMul` — needs DAY, a real player camera, and far scenery.**
+It scales the camera far-clip plane exactly (`M4.perspectiveTo`'s `far` arg,
+wrapped and read directly): 0.5→450 m, 1→900 m, 1.5→1350 m, 2→1800 m. But on
+this box `PerfGov.tier()` is 0, so `frame.cullDist` is the `_fogCull` branch —
+and `_fogCull = ceil(3/fogDensity)` **does not contain `farPlane`**; the far
+plane only gates whether that cull switches on. In clear day fog (~0.0008–0.0013)
+the cull is 0 (uncapped) at *every* multiplier, so the far plane is the ONLY
+lever, and it can only reveal scenery sitting between 900 m and 1800 m. Props in
+that band, measured with `scene({radius}).counts.inRadius`:
+
+| spa | suzuka | vegas | jeddah | singapore | abudhabi | silverstone | mexico | **bahrain** |
+|---|---|---|---|---|---|---|---|---|
+| 1550 | 1492 | 1357 | 538 | 418 | 258 | 210 | 122 | **70** |
+
+Bahrain is last by an order of magnitude — a `renderDistMul` A/B there is
+near-guaranteed to look like a no-op no matter how carefully it is shot. Use
+**Spa or Suzuka, daylight, `camera('chase')`**. And never `orbit()`/`view()`:
+under any free-cam `farPlane = dbgCam.far`, so the knob is bypassed entirely
+(and `cullDist` is forced to 0) — a free-cam A/B measures nothing.
+
+**`lampReach` — needs a lamp-saturated view with far lamps that currently lose.**
+For a lamp ahead, `d /= 1 + (reach-1)·cos²θ`; at reach 4 a dead-ahead lamp's
+SQUARED rank distance is quartered, so it ranks as if **half as far**. That only
+changes the selection when (a) lamps in range exceed `lampCull` (28), and (b)
+lamps exist in the newly-reachable band. Farthest selected lamp ahead, reach 1→4:
+
+| Singapore frac | 0.15 | 0.35 | **0.55** | 0.75 |
+|---|---|---|---|---|
+| reach 1 → 4 | 212→275 m | 292→295 m | **217→313 m** | 251→326 m |
+| gain | +63 m | +3 m | **+96 m (+44%)** | +75 m |
+
+**Singapore ~0.55** is the best demo. By contrast Vegas at frac 0.05 gains
+**0 m**: all 28 selected lamps sit within 33 m there (a dense casino cluster), so
+halving a distance cannot pull in anything new. Note frac 0.35 is nearly flat
+too — the spot matters as much as the track. Read the selection by wrapping
+`LightTune.setFrameLights` (it is called via property lookup on the global, so a
+monkeypatch takes effect) and measuring `frame.lights` distances against `eye`.
+
+**`moonShadow`'s escape hatch — needs BAD weather; it is a guaranteed no-op when dry.**
+`frame.moonGate = max(moonK, clamp((moonShadow-0.5)*2, 0, 1))`, and `moonK` is
+already 1 on a clear dry night, so the max() cannot move:
+
+| night weather | moonShadow 0.25 → 1 | moonGate |
+|---|---|---|
+| dry | 1 → 1 | **no change — inert by construction** |
+| wet | 0.101 → 0.056 | 0.101 → **1** |
+| fog | 0 → 0 | 0 → **1** (clean binary flip) |
+
+**Night + fog** is the demo: prop/car shadow casting goes fully off→on. Every
+dry-night A/B of this knob is measuring nothing, whatever the screenshot shows.
+
 ## Five ways a LIVE knob still reads "no observed change"
 
 A follow-up runtime pass sampled one knob per class (shader-uniform, apply-only,
