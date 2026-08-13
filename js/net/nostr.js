@@ -228,7 +228,17 @@ const NetNostr = (function () {
                       + " Use the invite link or QR instead." };
     }
 
-    const hosting = !!(mintOffer || onJoiner);
+    // WHICH SIDE ARE WE? The one that does NOT reply. `reply` is the guest's
+    // whole definition (it cannot speak until it has seen the invite), so it is
+    // the only reliable discriminator — and the header's two-party host, the one
+    // that just passes `send` and waits for the answer, has no mintOffer and no
+    // onJoiner. Classified off those two it came out `hosting === false`:
+    // it published its invite on the "|answer" topic and listened on "|offer",
+    // where the guest was also listening and nobody ever published. Both sides
+    // then sat out the full JOIN_TIMEOUT_MS. Latent because the lobby's public
+    // path always passes onJoiner and swap-as-host only runs on the private
+    // relay — but it is the shape this module's own contract documents.
+    const hosting = !reply;
     // The side we PUBLISH on and the side we LISTEN on. Separate, or a peer
     // reads its own publication straight back and answers itself.
     const mineTopic  = await roomId(code + (hosting ? "|offer" : "|answer"));
@@ -281,11 +291,14 @@ const NetNostr = (function () {
 
         if (hosting) {
           // An answer. Hand it over; the room stays open for more joiners.
-          if (onJoiner) { Promise.resolve().then(() => onJoiner(null, text)).catch(() => {}); }
+          if (onJoiner) { Promise.resolve().then(() => onJoiner(null, text)).catch(() => {}); return; }
+          // No onJoiner: this is the header's two-party host, which "resolves
+          // when the answer arrives". Discarding it here left that caller
+          // waiting out the timeout on an answer it had already been handed.
+          finish({ ok: true, payload: text });
           return;
         }
-        // An offer. Answer it once, publish, and we are finished.
-        if (!reply) { finish({ ok: true, payload: text }); return; }
+        // An offer, and we are the replying side.
         if (seen.has("__answering")) return;
         seen.add("__answering");
         let out = null;
@@ -333,6 +346,12 @@ const NetNostr = (function () {
         w.onmessage = (ev) => {
           let m;
           try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
+          // Array.isArray, not a bare index: JSON.parse("null") succeeds INSIDE
+          // the try and `null[0]` then threw out of the handler — past the
+          // module's "never throws" promise and onto index.html's window error
+          // listener, which paints a full-screen error overlay over the lobby.
+          // NIP-01 frames are arrays anyway, so this is also the shape check.
+          if (!Array.isArray(m)) return;
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string") heard(m[2].content);
         };
         w.onerror = () => {};

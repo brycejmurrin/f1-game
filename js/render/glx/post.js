@@ -533,8 +533,13 @@ const GLXPost = (function () {
       //    only feeds the composite's bloom sampler, which is scaled by bloomAmt —
       //    so when bloom is off (bloomAmt <= 0) skip it all and let the composite
       //    read blackTex (bound below) for a zero contribution.
+      // An EMPTY chain is legal: createTargets() only builds levels while the half-res
+      // size is >= 8px, so a not-yet-laid-out (1x1-clamped) canvas leaves bloomLv = []
+      // with postEnabled still true. Treat that exactly like bloom-off — without the
+      // nLv gate present() dereferenced bloomLv[0] and threw every frame.
       const nLv = bloomLv.length;
-      if (bloomAmt > 0) {
+      const doBloom = bloomAmt > 0 && nLv > 0;
+      if (doBloom) {
         // 1) bright-pass scene -> bloom level 0 (half res)
         gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
         gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[0].fbo);
@@ -595,7 +600,7 @@ const GLXPost = (function () {
       gl.activeTexture(gl.TEXTURE1);
       // When bloom is off the mip chain was skipped and bloomLv[0] holds a stale
       // frame — bind the 1×1 black source so the composite reads zero contribution.
-      gl.bindTexture(gl.TEXTURE_2D, bloomAmt > 0 ? bloomLv[0].tex : blackTex);
+      gl.bindTexture(gl.TEXTURE_2D, doBloom ? bloomLv[0].tex : blackTex);
       gl.uniform1i(compU.uBloom, 1);
       // Normalise the mip-chain accumulation (level 0 holds nLv-1 summed blur
       // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall

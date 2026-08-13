@@ -218,6 +218,14 @@ const AudioPanel = (() => {
     function init() {
       setSound(G.soundOn);
       setMusic(G.musicEnabled);
+      // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,
+      // so the restore below deliberately skips it — but `musicSrc` was left
+      // holding the stored word, and the now-playing caption reads it: after a
+      // reload it said "Spotify" while the source row lit ALL and the built-in
+      // soundtrack played. Follow the audio engine for the caption instead, and
+      // leave the STORED preference alone so it still means something the next
+      // time the player connects.
+      if (musicSrc === "spotify" && !spotifyReady()) musicSrc = GameAudio.musicSource();
       // Restore the saved source once the uploaded tracks are in the playlist —
       // "MY TRACKS" is refused while the library looks empty, which it does
       // until MusicLib's IndexedDB read lands.

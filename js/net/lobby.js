@@ -895,6 +895,21 @@ const NetLobby = (function () {
       return true;
     }
 
+    // SEAL THE ROOM before the race owns the connections. close() only clears the
+    // lobby's own timers, so the room-code subscription reopened by onConnected()
+    // (codeHost({quiet:true}) — a fresh pending transport plus live relay sockets)
+    // survived into the race for the whole 120 s JOIN_TIMEOUT. A second guest
+    // arriving on that still-live code drove onJoiner -> onConnected mid-race:
+    // the lobby's 25 ms pump restarted alongside NetPlay, a session NetPlay never
+    // adopts was built, and openRoom()'s setNetRoom(true) sent later garage /
+    // race-settings exits back to the hidden #vsfriend dialog. Nobody can join a
+    // race that has already started, so stop advertising one.
+    function sealRoom() {
+      codeReopen = null;     // no silent reopen on some later, unrelated connect
+      stopCodeWait();        // cancel the poll loop AND close the Nostr room
+      dropPending();         // and the half-built invite transport it minted
+    }
+
     // Start the race, THEN bind the session to it: NetPlay needs a built track
     // to find grid slots for the two drivers.
     // QUALIFYING COMES BEFORE THE HAND-OFF, which is the whole difficulty.
@@ -907,6 +922,9 @@ const NetLobby = (function () {
     function beginRace() {
       if (G.raceQuali && G.openQualiForNet) {
         say("Qualifying…");
+        // The SESSION stays open through qualifying (it carries the lap times),
+        // but the room does not: a qualifying session is minutes long.
+        sealRoom();
         if (G.setNetRoom) G.setNetRoom(false);
         try {
           G.flow = "gp";
@@ -937,6 +955,7 @@ const NetLobby = (function () {
 
     function finishStart() {
       say("Starting race…");
+      sealRoom();      // idempotent: the quali branch may already have run it
       // Out of the room: the game screens go back to behaving normally, or the
       // next visit to the garage would try to return to a lobby that has been
       // replaced by a Grand Prix.
