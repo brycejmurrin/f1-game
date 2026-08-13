@@ -943,7 +943,10 @@
       for (let i = 0; i < 5; i++) {
         if (i === 1) continue;  // s=0.705 — National Flag Square (below) takes this spot instead
         const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
-        addCyl(out, vadd(a.c, a.u, 6), 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
+        // addCyl is BASE-anchored (js/track/geom.js:153-164) — the old `a.u, 6`
+        // offset floated the mast 6m above the water, treating the base arg as
+        // if it were the centroid. Base sits directly on the anchor.
+        addCyl(out, a.c, 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
