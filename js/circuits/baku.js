@@ -168,6 +168,10 @@
         const a = anchor(k, side, 6);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.16, 10, [0.22, 0.22, 0.25], 5, b);
+        // Bracket bridging the 0.16m-radius pole to the lamp head 1.6m out —
+        // without it the head/bulb boxes sit past the pole with no overlapping
+        // geometry beneath them (float-audit found nothing to rest them on).
+        addBox(out, vadd(vadd(a.c, a.u, 9.7), a.r, side * 0.8), [1.6, 0.2, 0.4], [0.24, 0.24, 0.28], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.6), a.r, side * 1.6), [1.2, 0.4, 1.2], [0.26, 0.26, 0.30], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.4), a.r, side * 1.6), [1.0, 0.2, 1.0], LAMP_WARM, b);
       }
