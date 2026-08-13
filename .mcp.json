@@ -4,7 +4,7 @@
       "url": "http://127.0.0.1:3711/mcp"
     },
     "chrome-devtools": {
-      "command": "/workspace/tools/chrome-devtools-mcp.sh",
+      "command": "tools/chrome-devtools-mcp.sh",
       "args": ["run"]
     }
   }
