@@ -1625,8 +1625,10 @@ const Tracks = (function () {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
         const oA = side * (hw[kA] + barrierOffset), oB = side * (hw[kB] + barrierOffset);
-        const ax = px[kA] + rA[0] * oA, ay = py[kA], az = pz[kA] + rA[2] * oA;
-        const bx = px[kB] + rB[0] * oB, by = py[kB], bz = pz[kB] + rB[2] * oB;
+        // py[] is the CENTRELINE height; on banked road the edge the barrier
+        // hugs is lifted/dropped by the banking pivot (see mesh.js bankOffsetAt).
+        const ax = px[kA] + rA[0] * oA, ay = py[kA] + bankOffsetAt(track, kA, oA), az = pz[kA] + rA[2] * oA;
+        const bx = px[kB] + rB[0] * oB, by = py[kB] + bankOffsetAt(track, kB, oB), bz = pz[kB] + rB[2] * oB;
         const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
@@ -1705,12 +1707,15 @@ const Tracks = (function () {
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const o = outside * (hw[k] + 2.2);
+          // Banked road: py[k] is the centreline; the outside edge the wall
+          // stands beside is lifted by the banking pivot (mesh.js bankOffsetAt).
+          const wy = py[k] + bankOffsetAt(track, k, o);
           const slen = ds * step * 1.1;
-          addBox(out, [px[k] + r[0] * o, py[k] + 0.45, pz[k] + r[2] * o],
+          addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
           // Themed conveyor-belt cap: a bright coloured stripe along the top of
           // the tyre stack, giving the city's corner barriers its identity.
-          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, py[k] + 0.94, pz[k] + r[2] * o],
+          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
