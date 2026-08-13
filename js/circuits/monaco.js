@@ -1186,8 +1186,23 @@
         tubeCol: [0.74, 0.76, 0.78], deckCol: [0.72, 0.68, 0.60],
         bench: [CREAM, [0.28, 0.34, 0.50], TERRA], density: 0.62,
       });
-      grandstandEx(0.76, -1, 9, 180, null, null,
-        { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
+      // Grandstand K, split into twelve 15 m stands instead of one 180 m run.
+      // grandstandEx's "truss" roof lays braces by walking ±len/2 off ONE
+      // anchor's straight tangent (js/track/scenery-nature.js) — over 180 m
+      // of this curving harbourfront the far bays drift off the actual
+      // ground and float (float-audit: 6 clusters, up to 30 m gap; three
+      // 60 m stands still left 4 floating at ~19 m, six 30 m stands left 1
+      // at ~19 m). Each 15 m stand re-anchors at its own node, so no brace
+      // walks more than 7.5 m off a tangent that tracks the curve closely.
+      // The twelve still cover the same overall span, edge to edge — the
+      // end walls this introduces at the eleven internal seams face each
+      // other (anti-parallel), so they do not register as new coplanar
+      // pairs (checked: coplanar-audit unchanged at 5 after this split).
+      const gsLen = 15, gsHalf = gsLen / track.total;
+      for (let i = -5.5; i <= 5.5; i++) {
+        grandstandEx(0.76 + i * gsHalf, -1, 9, gsLen, null, null,
+          { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
+      }
       grandstandEx(0.25,  1, 7, 40, null, null, { livery: "alu", tiers: 1, roof: "flat" });
       grandstandEx(0.72,  1, 9, 36, null, null, { livery: "pastel", tiers: 1, roof: "cantilever", suites: true });
 
