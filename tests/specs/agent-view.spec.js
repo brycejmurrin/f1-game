@@ -1442,7 +1442,13 @@ test.describe("rollout()", () => {
   });
 
   test("full throttle into Monza's first chicane goes off track", async ({ page }) => {
-    await load(page, "monza", 0.0, 55);
+    // Start WITHIN REACH of the chicane. Monza's first bend starts at s≈535 m
+    // and a 6 s full-throttle rollout covers ~390 m, so from s=0 the car
+    // physically CANNOT arrive — this test only ever passed via a seeded AI
+    // contact punt, not the mechanism it names. From frac 0.05 (s≈289, dead
+    // straight) at 60 m/s the car reaches the chicane at ~4 s and overshoots
+    // it with ~2 s of the rollout left to spend off the road.
+    await load(page, "monza", 0.05, 60);
     // Not a physics assertion so much as a sanity check that the digest actually
     // reflects what happened: drive straight at a chicane and you leave the road.
     const r = await page.evaluate(() => window.__apex.rollout({
@@ -1773,6 +1779,13 @@ test.describe("scene()", () => {
 
 async function renderFrames(page, n = 10) {
   await page.evaluate((count) => new Promise((res) => {
+    // load() jump()ed the car; snapCam() is REQUIRED after park()/jump() before
+    // a shot (CLAUDE.md sharp edges) — without it the chase cam spends these
+    // settle frames converging from its pre-jump position through exponential
+    // damping, and ~11 rAF frames under SwiftShader are not always enough. Snap
+    // first (no-op if no player/track), then let the frames draw from a camera
+    // already at its solved vantage.
+    window.__apex.snapCam();
     let i = 0;
     const tick = () => (++i > count ? res(0) : requestAnimationFrame(tick));
     requestAnimationFrame(tick);

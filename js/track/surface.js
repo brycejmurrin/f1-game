@@ -4,7 +4,7 @@ const TrackSurface = (function () {
   "use strict";
 
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
 
   function monotonicRails(def, outerW, street, flat) {
     const seeds = street
@@ -59,10 +59,17 @@ const TrackSurface = (function () {
     const ground = new Float32Array(track.py);
 
     // Bridges lift the deck but not the terrain beneath it.
+    // The bridge fracs were authored in pre-rotation racing space; buildCenterline
+    // raises the deck at `(b.s + def._sceneryShift) % 1` (tracks.js), so this carve
+    // has to use the SAME shift or the flat-terrain window lands somewhere else on
+    // the lap — on Suzuka (shift 0.6198) it carved a 13.5 m trench under plain road
+    // at frac 0.817 and left the real crossover at 0.437 with zero clearance.
+    // Same omission class as the bankZones fix (ed5a310f).
     if (def.bridges) {
       const ds = track.total / n;
+      const dress = def._sceneryShift || 0;
       for (const bridge of def.bridges) {
-        const center = TrackSpace.wrap01(bridge.s) * track.total;
+        const center = TrackSpace.wrap01(bridge.s + dress) * track.total;
         for (let k = 0; k < n; k++) {
           let d = Math.abs(k * ds - center);
           d = Math.min(d, track.total - d);

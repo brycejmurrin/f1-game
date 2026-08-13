@@ -123,7 +123,7 @@ body.desktop #pm-calib { display: none !important; }
   #menu-buttons { gap: 14px; }
   #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
-  .mb-sub { font-size: clamp(14px, calc(1.1 * var(--vwz)), 15px); }
+  #mb-career-sub { font-size: clamp(14px, calc(1.1 * var(--vwz)), 15px); }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */

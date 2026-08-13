@@ -490,13 +490,32 @@ const NetLobby = (function () {
       // pressed start" have to be different messages — they used to be the same
       // one, which is why arriving settings launched the race immediately.
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
+      // The sender-binding NetPlay's bindSession applies (sendersOwnDriver
+      // there) has to hold HERE too, or it guards the wrong phase: qualifying
+      // runs while the LOBBY still holds the connection, and a QUALI is an
+      // input to the grid — qualiDriven() overwrites even the host's own
+      // driven lap with whatever qualiPeers holds under that driverId. On the
+      // host, the driver a connection may speak for is the profile its HELLO
+      // filed under this connection's id (never a `from` in the payload — the
+      // same reasoning as HELLO above), and seat exclusivity makes team:seat
+      // a driver identity; the id format is seasonDriverId's
+      // (js/game/store.js): "team:driver". No profile yet means no claim —
+      // HELLO is sent at connect, long before anyone can drive a lap. On a
+      // guest there is nothing to narrow to: its one connection is the host's,
+      // and the host legitimately speaks for the whole field.
+      function sendersOwnDriver(d) {
+        if (role !== "host") return true;
+        const p = _peers.get(id);
+        return !!(p && p.team && d.driverId != null
+          && d.driverId === p.team + ":" + (p.driver || 0));
+      }
       // Only reaches the game while WE hold the session — once NetPlay owns it,
       // its own handler does this and the lobby is out of the loop.
-      made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d); });
+      made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && sendersOwnDriver(d) && G.onPeerQuali) G.onPeerQuali(d); });
       // The lap in progress. Qualifying runs while the LOBBY still holds the
       // connection, so the live clock has to exist on this side too or it only
       // works after the race has already started — which is never.
-      made.onEvent(NetPlay.EV.QLIVE, (d) => { if (d && G.onPeerQualiLive) G.onPeerQualiLive(d); });
+      made.onEvent(NetPlay.EV.QLIVE, (d) => { if (d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d); });
       made.sendEvent(NetPlay.EV.HELLO, localProfile());
       if (role === "host") publishSettings();
       openRoom();
@@ -876,6 +895,21 @@ const NetLobby = (function () {
       return true;
     }
 
+    // SEAL THE ROOM before the race owns the connections. close() only clears the
+    // lobby's own timers, so the room-code subscription reopened by onConnected()
+    // (codeHost({quiet:true}) — a fresh pending transport plus live relay sockets)
+    // survived into the race for the whole 120 s JOIN_TIMEOUT. A second guest
+    // arriving on that still-live code drove onJoiner -> onConnected mid-race:
+    // the lobby's 25 ms pump restarted alongside NetPlay, a session NetPlay never
+    // adopts was built, and openRoom()'s setNetRoom(true) sent later garage /
+    // race-settings exits back to the hidden #vsfriend dialog. Nobody can join a
+    // race that has already started, so stop advertising one.
+    function sealRoom() {
+      codeReopen = null;     // no silent reopen on some later, unrelated connect
+      stopCodeWait();        // cancel the poll loop AND close the Nostr room
+      dropPending();         // and the half-built invite transport it minted
+    }
+
     // Start the race, THEN bind the session to it: NetPlay needs a built track
     // to find grid slots for the two drivers.
     // QUALIFYING COMES BEFORE THE HAND-OFF, which is the whole difficulty.
@@ -888,6 +922,9 @@ const NetLobby = (function () {
     function beginRace() {
       if (G.raceQuali && G.openQualiForNet) {
         say("Qualifying…");
+        // The SESSION stays open through qualifying (it carries the lap times),
+        // but the room does not: a qualifying session is minutes long.
+        sealRoom();
         if (G.setNetRoom) G.setNetRoom(false);
         try {
           G.flow = "gp";
@@ -918,6 +955,7 @@ const NetLobby = (function () {
 
     function finishStart() {
       say("Starting race…");
+      sealRoom();      // idempotent: the quali branch may already have run it
       // Out of the room: the game screens go back to behaving normally, or the
       // next visit to the garage would try to return to a lobby that has been
       // replaced by a Grand Prix.

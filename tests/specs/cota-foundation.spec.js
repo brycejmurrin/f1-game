@@ -18,7 +18,7 @@ async function loadCota(page, timeOfDay = "day") {
 }
 
 test.describe("COTA shared-foundation migration", () => {
-  test("keeps Big Red at Turn 1 and terrain below the road corridor", async ({ racePage, pageErrors }) => {
+  test("keeps the back-straight crest in place and terrain below the road corridor", async ({ racePage, pageErrors }) => {
     test.setTimeout(300000);
     await racePage.evaluate(() => window.__apex.trackGeometry(true));
     await loadCota(racePage);
@@ -98,8 +98,20 @@ test.describe("COTA shared-foundation migration", () => {
     expect(pageErrors).toHaveLength(0);
     expect(result.range).toBeGreaterThan(15);
     expect(result.range).toBeLessThan(22);
-    expect(result.peakFrac).toBeGreaterThan(0.08);
-    expect(result.peakFrac).toBeLessThan(0.14);
+    // 7a173519 moved the start line (startFrac 0.515 -> 0.0) and rotated racing
+    // fractions by the arc shift (+0.416 here); the physical geometry is
+    // unchanged. The lap's high point is the BACK-STRAIGHT crest (the rise-18
+    // bump in cota.js elevations, not Big Red's rise-3), measured at frac
+    // 0.5225 in the new frame (headless VM, trackProfile(400) grid).
+    //
+    // KNOWN RESIDUAL — do not "fix" this pin to 0.623. cota.js's elevation
+    // comment claims the crest "reads directly as racing s 0.623", but the
+    // engine anchors elevations at the AUTHORING origin (sceneryStartFrac
+    // 0.515) and then rotates by _sceneryShift: 0.6233 - 0.515 + 0.416 =
+    // 0.5225, which is what buildCenterline actually produces. The ~0.10-lap
+    // gap is between the def's comment and the engine, not in this spec.
+    expect(result.peakFrac).toBeGreaterThan(0.48);
+    expect(result.peakFrac).toBeLessThan(0.57);
     expect(result.propMax).toBeLessThanOrEqual(0.20);
     for (const probe of result.probes) {
       expect(probe.gap == null || probe.gap <= 0.18,

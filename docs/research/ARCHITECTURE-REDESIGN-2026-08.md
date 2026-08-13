@@ -564,6 +564,28 @@ Do not run this plan if the repo's observed pain shifts to the two frictions Bed
 
 ## Status
 
-Recorded 2026-08. No phase has been implemented yet. Implementation is to be
-reconciled with the audit workflow's FIX-NOW/RESTRUCTURE synthesis before any
-phase lands.
+Recorded 2026-08. Implementation is to be reconciled with the audit workflow's
+FIX-NOW/RESTRUCTURE synthesis before any phase lands.
+
+**Phase 0 landed 2026-08-13** (`679e85c9` + `a2bb2aac`, merged at `0f0c3b84`):
+`tools/scan-globals.mjs` — a ~2.8 s scan of all 159 eagerly-loaded files — plus
+`tests/unit/global-registry.test.mjs`, which pins every global's writer and
+declares its consumers three ways. The evidence it produced is what makes the
+later phases derivable rather than speculative: the manifest's FULL order **is**
+a valid toposort over the 65 eval-time edges; `HARD_EDGES`' 62 pairs decompose
+into 30 eval-time + 29 call-time + 3 underivable-or-stale, with one stale entry
+in `DEFERRED_EDGES` too; `window[expr]` bracket access is **extinct** in `js/`;
+and every undeclared read has an explanation (a future slot, an SDK injection,
+or an inline global in the shell). One deviation from the plan, forced by
+review: `TrackDefs` is registered **growable** — a location rule (`^js/circuits/`)
+with no count cap — because a frozen count would fail on the next circuit added
+while a rogue writer outside `js/circuits/` still fails.
+
+**Phase 1 (`.d.ts` contracts + `tsc --checkJs` in CI) and Phase 2 (`gen-manifest`)
+are the authorized next steps**, in that order; the 2026-08-13 structure
+re-decision panel re-affirmed Phase 2 as the gating item for the Q3 renames and
+the Q6 `js/ui/` wave, which are sequenced explicitly behind it. Phase 2 should
+split the scanner's single edge list into `EVAL_EDGES` and `CALL_EDGES` along
+the classification Phase 0 already computes, and ship a `--check` mode that
+fails on drift — byte-identical on its first run, regeneration a no-op, and the
+generator never touching `?v=N`.

@@ -86,7 +86,7 @@ const CEILING = {
   // 6/3 -> --gap). The remainder are 2/4/5/8/10px hairline nudges, and turning
   // those into calc(var(--gap) * 0.41) noise would be worse than leaving them:
   // a hairline should stay a hairline when the density ladder tightens.
-  rawSpacing: 479,
+  rawSpacing: 475,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

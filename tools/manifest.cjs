@@ -201,6 +201,10 @@ const CARVIEW = [
 // verification is per-id, so LIST order does not matter there).
 const TRACK_VM = [
   "js/log.js",
+  // mat4.js is not matrix math for the VM's sake — it is the home of the shared
+  // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
+  // Leaving it out is how the track engine ended up with four private lerps.
+  "js/mat4.js",
   "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
@@ -228,6 +232,16 @@ const HARD_EDGES = [
   // the raster module must have evaluated first.
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
+  // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
+  // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
+  // the 2nd tag so the order is never in doubt, but these are real eval-time
+  // edges and the list is what records them; the toposort check derives the rest.
+  ["js/mat4.js", "js/game.js"],
+  ["js/mat4.js", "js/track/spline.js"],
+  ["js/mat4.js", "js/track/scenery-structures.js"],
+  // liverytex sizes its atlas from GLX.mobileTier at EVAL time — the one
+  // mobile-tier detection now lives in glx.js and nowhere else.
+  ["js/render/glx.js", "js/car/liverytex.js"],
   // session.js decodes off the same channel as snapshot.js and shares its ONE
   // toView(); the two hand-rolled copies had already diverged over how a
   // DataView argument is handled, which is exactly the bug a shared helper

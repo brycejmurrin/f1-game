@@ -111,7 +111,8 @@ rule as every other lamp — no light without something visible emitting it.
 
 - `pos` is a RAW WORLD position, like the `px`/`py`/`pz` arrays, and is *not*
   remapped by the reversed-lap wrapper.
-- `kind` names a `LAMP_KINDS` entry (`led`, `fluor`, `halide`, `sodium`, …) and
+- `kind` names an entry in lighting.js's internal `LAMP_KINDS` table (`led`,
+  `fluor`, `halide`, `sodium`, …) and
   sets colour, cone and volumetric weight, exactly as for a mast.
 - `aim` overrides the default beam direction. The default aims at the centre of
   the near lane, which is right for a lamp standing *beside* the road and wrong

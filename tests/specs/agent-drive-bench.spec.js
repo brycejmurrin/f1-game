@@ -39,7 +39,18 @@ async function episode(page, policy) {
     // overtake decisions, or the comparison measures the deal as much as the
     // driving. Before seeding existed this bench compared runs that were never
     // comparable — see tests/specs/agent-determinism.spec.js.
-    A.reset(0.02, 55, 0, 1234);
+    //
+    // Start at frac 0.4, NOT near the grid. reset() repositions only the
+    // PLAYER; the AI pack launches from the grid boxes at s≈0, so a start of
+    // frac 0.02 put the episode 86 m (Interlagos) / 116 m (Monza) ahead of 21
+    // launching cars and both policies spent the 50 s episode in traffic — the
+    // bench measured the deal as much as the driving, and a change to the
+    // grid's seeded draw pattern re-dealt it. frac 0.4 is near-straight road
+    // on both circuits (|k| < 0.0022 over the next 150 m) with ~1.7-2.3 km of
+    // clear track behind the player: the leaders close at well under that over
+    // 500 steps, so traffic never reaches either policy and the comparison is
+    // purely observation-driven driving.
+    A.reset(0.4, 55, 0, 1234);
     const total = A.world().track.lengthM;
     let dist = 0, steps = 0, prevS = A.world().ego.s;
     for (let i = 0; i < 500; i++) {
@@ -93,7 +104,8 @@ test.describe("agent drive bench — the fields are actionable", () => {
       await boot(page, track);
       const naive = await episode(page, "naive");
       const relational = await episode(page, "relational");
-      // The blind car leaves the road at the first corner; the one reading the
+      // The blind car leaves the road at the first corner ahead of the start
+      // (~165 m on at Monza, ~215 m on at Interlagos); the one reading the
       // corner table and heading error stays on it far longer. A comfortable
       // margin so ordinary physics tuning noise never trips it.
       expect(relational.dist).toBeGreaterThan(naive.dist * 1.5);

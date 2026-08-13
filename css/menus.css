@@ -109,16 +109,28 @@
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }
-.mb-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* THE `mb-` FAMILY IS GONE, AND THIS IS WHAT REPLACED IT. Both of its classes
+   dressed exactly ONE element inside exactly one button, so each was a class
+   that could never be reused and a name nobody could look up — the shape
+   the restructure-screens-css skill rule 12 names ("one property
+   plus N one-line context overrides beats N variant classes") and rule 8's
+   `--sheet-w` table demonstrates: the variation lives on the CONTEXT, not in a
+   class of its own. #mb-career's only element child that is not the icon is the
+   two-line stack, and the save line already carried an id for JS to fill.
+   Selectors are IDs now, so they outrank the class rules they replace by more
+   than the class rules outranked each other — checked against every other rule
+   that touches these two elements (there is one, the touch floor at the end of
+   this file, and one in css/responsive.css, which wins on LAYER either way). */
+#mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 /* The live save line. Dim and small: it is what the button will DO, not a second
    label competing with CAREER. Empty (and therefore zero-height) until a save
    exists, so a first-time title screen is exactly as it was. */
-.mb-sub {
+#mb-career-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.08em;
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
-.mb-sub:empty { display: none; }
+#mb-career-sub:empty { display: none; }
 #menu-secondary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.55);
@@ -294,7 +306,10 @@ body { --compact-at: 600px; }
      held furthest from your face. The group widths above cap the row, so the
      extra size comes out of padding rather than pushing anything off screen. */
   :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-  :where(body[data-density="compact"]) .mb-sub { font-size: var(--fs-micro); }
+  /* (The save line's font-size used to be re-stated here as var(--fs-micro).
+     That is the SAME value the base rule already gives it, at the same
+     specificity, in the same layer — a declaration that could never change a
+     computed pixel. Deleted rather than re-pointed at the new id.) */
   /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
      back out of the gutter rather than out of the type.
      IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
@@ -400,7 +415,13 @@ body { --compact-at: 600px; }
  * `min(40 * svhz, 300px)` cap is viewport-derived and resolves the same way
  * everywhere, so it stays. */
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { order: -1; }
-.sel-section { min-width: 0; }
+/* The grid-item min-width guard for the circuit column. It used to be a
+   sel-section class carried by exactly one element in the whole app, which is a
+   context wearing a class's clothes — same collapse as the mb-prefix pair above
+   and the garage's chip variants (css/carsetup.css). The element's own id says
+   it better, and nothing else in css/ sets min-width on it, so the computed
+   value is unchanged. */
+#sel-track-section { min-width: 0; }
 
 /* The car's spec strip: the four numbers that change when you swap team or fit
    parts. Numbers only — the bar chart belongs on CAR SETUP, the screen where
@@ -435,18 +456,8 @@ body { --compact-at: 600px; }
    resolving WIDER than the list it is meant to be narrower than. */
 /* The columns, the spans and the foot placement come from `.pane-pair`
    (css/components.css) — the shared list-detail primitive #carsetup and #career
-   also use. Only the threshold and the split are set here.
-
-   THE SPLIT IS 50%, NOT THE PRIMITIVE'S 42%. The side column here holds the
-   circuit MAP, which is the thing being chosen between; the main column holds
-   a name, a country and a distance per row and was measurably slack — at a
-   1020px sheet the list ran 573px wide with most of that a gap between the
-   name on the left and "Bahrain · 5.4 km" on the right, while the preview
-   column had to fit a map AND its caption into 428px. An even split spends
-   ~80px of that slack on the map: a tall circuit's outline goes from 206px
-   wide to ~255px with its caption still on one line. The list keeps ~510px,
-   which is well clear of where its rows start wrapping. */
-#sel-inner { --pair-at: 620px; --pair-split: minmax(0, 50%); }
+   also use. These happen to be its defaults, so only the threshold is set. */
+#sel-inner { --pair-at: 620px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -758,31 +769,6 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(0, 0, 0, 0.25);
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-
-/* MAP BESIDE THE CAPTION, WHEN THE CIRCUIT IS TALL.
-   js/game/menus.js:updateTrackPreview sets data-map-shape="beside" after
-   measuring that stacking would strand more than a third of the card's width
-   as dead space — which is what a portrait circuit (Jeddah, aspect 0.5) does
-   to a full-width slot. Attribute + ID is (1,1,0), so this beats the plain
-   `#sel-track-preview` (1,0,0) declarations inside the @container blocks below
-   whatever the source order — the same specificity trap --sel-map-w was
-   introduced to dodge. JS pins the canvas box, so no width knob is needed
-   here; this rule only chooses the axis. */
-#sel-track-preview[data-map-shape="beside"] {
-  flex-direction: row;
-  align-items: stretch;
-}
-/* `flex: 1 1 auto; min-width: 0` is the base rule, but the pair/container
-   branches re-declare this element and it computed to `0 0 auto` here — so the
-   caption kept its content width, ran past the card's right edge and had its
-   last fact chip clipped by the card's own `overflow: hidden`. Restate the
-   shrink explicitly on the arrangement that needs it. */
-#sel-track-preview[data-map-shape="beside"] #sel-preview-info {
-  display: block;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-self: center;
-}
 
 /* PORTRAIT: THE MAP IS THE SUBJECT, THE FACTS ARE A CAPTION.
    A phone held upright gives the card width and almost no height, and half of
@@ -1209,5 +1195,5 @@ body:not(.desktop) .sur-rnd,
 body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
-body:not(.desktop) .mb-sub { font-size: var(--fs-micro); }
+body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 } /* @layer components */

@@ -49,14 +49,6 @@
   zoom: var(--ui-scale);
   background: #0a0a0e;
   display: flex; flex-direction: column;
-  /* STRETCH, not the shared dialog base's `center`. On a column flex container
-     `align-items: center` is a CROSS-axis rule, so it shrink-wrapped
-     #track-detail-body to its content and centred it — 597px of a 1280px
-     dialog, which put the canvas wrap back to exactly the canvas width and
-     re-created the same feedback loop the explicit size above just broke.
-     Costs nothing for the header (it lays itself out with space-between) and
-     gives a wide circuit the full row: Baku's outline goes 323px -> ~980px. */
-  align-items: stretch;
   /* Full safe-area inset on every edge — this is a full-bleed overlay, so
      without the left/right insets the circuit name and close button sat under
      the notch on a landscape phone (was `10px 12px` + only --sab). */

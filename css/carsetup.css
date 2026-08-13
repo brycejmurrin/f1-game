@@ -893,10 +893,19 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
+/* ONE CHIP CLASS, TWO CONTEXTS — `--sheet-w`'s shape applied to the preview
+   bar (SKILL.md rule 8: "variation belongs in custom properties on context
+   selectors, not in new classes"). There used to be three classes here:
+   .cs-view-btn plus cs-view-zoom and cs-view-nudge, each of which existed
+   only to restate a font-size, a padding and a line-height on buttons that
+   ALREADY have ids. The two variants are gone; what differed is now two custom
+   properties whose per-button values are set on those ids below.
+   The defaults live in the var() fallbacks so a chip with no context — the five
+   camera presets and the two wing views — is exactly what it was. */
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
-  padding: 5px 9px; border-radius: var(--r-sm);
+  font-size: var(--vb-fs, var(--fs-micro)); font-weight: 800; letter-spacing: 0.08em;
+  padding: var(--vb-pad, 5px 9px); border-radius: var(--r-sm);
   background: rgba(12,12,16,0.74); color: var(--dim);
   border: 1px solid rgba(255,255,255,0.14);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
@@ -925,11 +934,14 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    could not break internally, so SPIN was stranded on a row of its own and the
    bar stacked three deep on a phone. */
 .cs-view-grp { display: contents; }
-.cs-view-zoom { font-size: var(--fs-2); padding: 3px 10px; line-height: 1; }
-/* The arrows repeat while held, so they must not start a text selection or a
-   long-press context menu under the finger. */
-.cs-view-nudge {
-  font-size: var(--fs-micro); padding: 4px 8px; line-height: 1;
+/* THE ZOOM PAIR. One step larger, tighter box — a `+` and a `-` are glyphs, not
+   words, so they read small at the label size the worded chips use. */
+#cs-view-in, #cs-view-out { --vb-fs: var(--fs-2); --vb-pad: 3px 10px; line-height: 1; }
+/* THE EIGHT ARROWS. They repeat while held, so they must not start a text
+   selection or a long-press context menu under the finger. */
+#cs-view-left, #cs-view-right, #cs-view-up, #cs-view-down,
+#cs-pan-left, #cs-pan-right, #cs-pan-fwd, #cs-pan-back {
+  --vb-pad: 4px 8px; line-height: 1;
   touch-action: none; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
@@ -952,10 +964,18 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 @media (max-width: 1000px) {
   #cs-view { gap: 3px; }
   .cs-view-btn {
-    font-size: var(--fs-micro); letter-spacing: 0.05em;
-    padding: 6px 9px; min-height: 34px;
+    letter-spacing: 0.05em;
+    --vb-pad: 6px 9px; min-height: 34px;
   }
-  .cs-view-zoom { font-size: var(--fs-micro); padding: 2px 8px; }
+  #cs-view-in, #cs-view-out { --vb-fs: var(--fs-micro); --vb-pad: 2px 8px; }
+  /* THE ARROWS TAKE THE SHARED COMPACT PADDING, and always did — restated
+     rather than inherited because a custom property set on an id (their
+     `--vb-pad: 4px 8px` above) outranks the class rule that used to beat it on
+     source order alone. Same computed box as before this consolidation: the
+     roomier 4px 8px is the WIDE-bar value, and the bar is what has to wrap to
+     two rows on a handset. */
+  #cs-view-left, #cs-view-right, #cs-view-up, #cs-view-down,
+  #cs-pan-left, #cs-pan-right, #cs-pan-fwd, #cs-pan-back { --vb-pad: 6px 9px; }
   /* The dividers cost width and, once the row wraps, land at arbitrary places
      in it — they read as separators of nothing. */
   .cs-view-sep { display: none; }
@@ -1001,15 +1021,20 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    still decides their PADDING and type above; only the target floor moves here.
    docs/LAYOUT-AUDIT.md states the rule this restores: "Input modality is not
    size. A 1024px iPad is not a desktop." */
+/* .cs-view-btn ALONE covers the zoom pair and the eight arrows: every one of
+   them carries that class in the markup, so the two extra selectors this list
+   used to name were restating a floor they already had. */
 body:not(.desktop) #cs-cam,
 body:not(.desktop) #cs-aero,
-body:not(.desktop) .cs-view-btn,
-body:not(.desktop) .cs-view-zoom,
-body:not(.desktop) .cs-view-nudge { min-height: var(--chip-h); }
+body:not(.desktop) .cs-view-btn { min-height: var(--chip-h); }
 body:not(.desktop) .cs-opt-tag { font-size: var(--fs-micro); }
 body:not(.desktop) .cs-opt-desc { font-size: var(--fs-2); }
 body:not(.desktop) .cs-delta { font-size: var(--fs-micro); }
-body:not(.desktop) .cs-cam-lbl,
+/* cs-cam-lbl is gone with this line, and it was the whole class: its ONLY
+   declaration anywhere in css/ was this font-size, and #cs-cam already sets the
+   same var(--fs-micro) in all three of its rules (base, the max-width:1000px
+   block, and the one below) — so the label inherited that value whatever
+   happened, and the class could never change a rendered pixel. */
 body:not(.desktop) .cs-aero-lbl { font-size: var(--fs-micro); }
 body:not(.desktop) .cs-cam-caret { font-size: var(--fs-micro); }
 body:not(.desktop) #cs-unlimited { font-size: var(--fs-micro); }

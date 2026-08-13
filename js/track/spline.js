@@ -10,7 +10,7 @@ const TrackSpline = (function () {
   "use strict";
 
   const SCALE = 1.45;            // scale authored lengths for arcade racing
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
 
   // ---------- authoring: segment list -> closed control points ----------
   // seg = {t:turnDeg(+left), l:len m, h:hillDelta m, b:bank rad, w:halfWidth}

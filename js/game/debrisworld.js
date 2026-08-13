@@ -717,11 +717,15 @@ function step(dt) {
   // WASM solve + the 22 kinematic-mirror syncs below are pure per-tick cost
   // with no visible effect — and that per-frame variance shows up as
   // micro-stutter at speed on phones. Skip the whole step when there are no
-  // queued impacts, no live debris/marbles, no incident-owned dynamic car, and
-  // no car near a clippable cone (which needs the world running to be punted).
+  // queued impacts, no live debris/marbles/PANELS, no incident-owned dynamic car,
+  // and no car near a clippable cone (which needs the world running to be punted).
   // Cheap CPU checks only — no Rapier calls — and it resumes the instant any of
   // those becomes true (a spawn syncs the mirrors that same tick before use).
-  if (_queue.length === 0 && _dynCars.size === 0
+  // _panels belongs here because panel aging/freeing lives ONLY in updatePanels()
+  // BELOW this gate: without it a promoted panel freezes mid-scatter, keeps being
+  // drawn and counted as a hazard forever, and _panels fills to PANEL_CAP — the
+  // exact permanent leak PANEL_IDLE_DESPAWN_S was added to close.
+  if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
       && !_anyLive(_slots) && !_anyLive(_marbles) && !_carNearFurn(track, cars)) {
     return;
   }

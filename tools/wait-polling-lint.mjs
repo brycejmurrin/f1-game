@@ -12,8 +12,10 @@
 // SwiftShader starves that so badly the declared timeout never gets a turn. The
 // fix is `{ polling: 100, timeout: N }`, which polls on a timer instead.
 //
-// WHY A RATCHET AND NOT A FIX. There are 312 such call sites across 104 specs
-// and not one passes `polling`. Rewriting them all in one commit would be a
+// WHY A RATCHET AND NOT A FIX. There are 382 such call sites — 312 under
+// tests/ and 70 more under tools/, which this lint claimed to scan for months
+// while its file filter admitted only `.js` and every tool is `.mjs`/`.cjs`.
+// Rewriting them all in one commit would be a
 // 300-site behavioural change landing without a run to back it — the exact
 // shape of mistake this session has already made once (58614db2). So: freeze
 // the population, require `polling` on anything NEW, and let the existing sites
@@ -77,7 +79,12 @@ function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) { if (e.name !== "node_modules") yield* walk(p); }
-    else if (/\.(spec|test)\.(js|mjs|cjs)$/.test(e.name) || e.name.endsWith(".js")) yield p;
+    // Any JS source, whatever the extension. The trailing clause used to be
+    // `endsWith(".js")`, which admitted nothing at all from the tools/ tree the
+    // scan list below deliberately includes: every tool is .mjs or .cjs, so the
+    // ~50 Playwright-driving waits under tools/ were invisible to a ratchet
+    // that reported on them by name.
+    else if (/\.(js|mjs|cjs)$/.test(e.name)) yield p;
   }
 }
 

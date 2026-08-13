@@ -186,7 +186,10 @@ journal; this is what remains.
 
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
-  failing — it wants a geometry fix, not a wider tolerance.
+  failing — it wants a geometry fix, not a wider tolerance. It spent part of
+  2026-08 hidden behind a stale count assertion in the same spec that failed
+  first; with the count re-pinned, the pier assertion is visible again and the
+  product question it asks is still unanswered.
 - **`hud-layout` `notched-landscape` — FIXED, validated 25/25 across all four
   viewports.** `#hud-sectors`' top offset is now derived from `var(--tap)`
   (`css/hud.css`) instead of a hard-coded 56, and the short-landscape override
@@ -332,18 +335,12 @@ journal; this is what remains.
 
 ### Found by the 2026-08 whole-codebase survey (unverified beyond a code read)
 
-Each was found by reading the file, not by a failing test; none is fixed here
-(a cleanup pass must not change behaviour without the test that pins it). Listed
+Each was found by reading the file, not by a failing test. The 2026-08-13
+cleanup session worked most of this list off — the fixed entries are gone from
+here and their narratives are in the archived journal — so what is left is what
+survived a fix wave, plus what that session's own gates surfaced. Listed
 most-load-bearing first.
 
-- **Multiplayer event channel is not authority-gated** (`js/net/netplay.js`
-  `bindSession`). The A4 fix gated the *state* channel (host routes on
-  `remoteFor(fromId)`, drops unknown senders) but the *reliable event* channel
-  applies `EV.CAUTION`/`EV.START`/`EV.RESULT` from any peer, and `EV.QUALI`
-  accepts a caller-supplied `driverId` — so a guest can raise a caution, re-arm
-  the start clock, or post another driver's qualifying time. Receipt of these
-  should be gated `role === "guest"` (guests trust the host by construction; the
-  host must not trust a guest). Needs the net suite to pin it.
 - **A possible curvature-sign inconsistency**, flagged independently by three
   surveyors. The measured convention is `+k = LEFT` (`js/track/spline.js`, the
   `bankingProfile` fix, `js/game.js`, and the agent `CONVENTIONS` string all
@@ -357,17 +354,31 @@ most-load-bearing first.
   the *comments* are the drift. **Do not flip any sign without a rendered lap
   that shows kerbs/barriers on the wrong side** — settle it by observation, not
   by grep. If real, it puts kerbs and tyre walls on the inside of every corner.
-- **Banked-reference class, in geometry this time** (not just the test probes of
-  the entry above): the tyre-barrier and street-barrier loops in `tracks.js`
-  place walls off `py[k]` without `bankOffsetAt`, so on Zandvoort's 18–19°
-  banking a tyre wall sits ~2.3 m off the tarmac.
-- **`incidentsim.js`**: `RETAIN_FLOOR` collapses to the measured speed unless it
-  is exactly 0 (contradicting its "never dead-stopped into instant rescue"
-  comment), and the `notifyCar` gate makes the r2-airborne-only launch path
-  unreachable.
-- **`career.js`** `matePts` is recomputed from finishing position without the
-  `mate.retired` check the comment six lines above warns is required — corrupting
-  a MY TEAM sponsor "double" fact.
+  The 2026-08-13 barrier fix stayed deliberately **vertical only** for this
+  reason: it moved wall heights onto the banking pivot and touched no lateral
+  term and no sign.
+- **The wall clamp is bypassed while `IncidentSim` owns the car.** A wall hit of
+  severity ≥34 hands the car to the incident window, and the ownership check in
+  `js/game.js`'s barrier step then skips the clamp entirely — so the player
+  tumbles through the barrier instead of being held by it. Player-only, RNG-free
+  and **pre-existing**: `tests/specs/collisions-deep.spec.js` fails 2/2 at the
+  session-start commit with the identical values, and the spec now isolates the
+  clamp through the sanctioned `__apex.incident` flags-off path so it tests the
+  clamp rather than the takeover. The product question is untouched: should
+  `wallAt` remain an outer bound during an R2 takeover, or is passing through
+  the barrier the intended cost of a launch?
+- **Red Bull Ring's barrier dressing coverage has collapsed.**
+  `tests/specs/redbull-foundation.spec.js` asserts `walls.tightFrac > 0.99` and
+  measures **0.225** — 16 tight nodes out of 1,071. Confirmed pre-existing: a
+  headless recompute is byte-identical between the session-start commit and the
+  fixed tree. This wants a dressing pass over the circuit, not a tolerance edit.
+- **`__apex.scene()` disagrees with its own spec about corners behind the
+  camera.** `tests/specs/agent-view.spec.js` asserts `|bearingDeg| > 120` for a
+  corner flagged `behindCamera`; Monza measures **108.1°**, and the value is
+  stable across camera states (107.7° before a `snapCam()`), so it is not a
+  flake — it is a genuine disagreement between the bearing convention the spec
+  encodes and the one the code computes. Neither side should move before the
+  convention is settled.
 - **Title-screen CLS — FIXED, and the method is the point.** The title screen
   used to paint in the wrong shape and relay out: `body[data-density]` picks
   `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
@@ -389,49 +400,20 @@ most-load-bearing first.
   anything during the synchronous script wall — sample in `requestAnimationFrame`,
   which runs before each paint, and read the computed values rather than a
   timestamp.
-- **`js/game/spotify.js`** the setup-panel PLAY button calls `player.resume()`,
-  null in remote mode, so it silently does nothing (should be `BACKEND.start()`).
-- **`gridUp()` draws `simRnd()` inside an `Array.sort` comparator**
-  (`js/game.js`), so the seeded position after a grid-up depends on the engine's
-  sort implementation — forfeiting the cross-engine half of the "same seed +
-  same inputs → same result" contract that `driverSkill()` protects one function
-  above. A random comparator is also formally inconsistent. Draw the jitter into
-  a keyed array first, then sort on the key.
-- **`buildStudioRig()` emits 14-float light records into the stride-15 light
-  pipeline** (`js/game.js` vs `glx.js`'s `nL = L.length/15`), so every
-  `__apex.studio()` lamp after the first is misread and one is dropped; the
-  sibling `buildSetupPreviewLights` pushes the correct 15. Dev-hook only.
 - **Cross-backend shading divergences the parity test cannot see**: TLX ports the
   pre-fix wet-surface model (soaked grass mirrors the sky on three.js; the wet
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
-- **`tests/specs/agent-drive-bench.spec.js` › "relational policy out-drives the blind
-  baseline on interlagos" is red** and predates this cleanup — the untouched
-  session-start commit fails it with the identical value (`relational.dist` 251
-  against a `> 300` / `naive×1.5` floor), so the relational agent policy simply
-  under-drives Interlagos. An agent-policy/physics-tuning issue, not a
-  cleanup regression; `test:agent` is not in the CI smoke job, which is why it
-  sat unseen.
-- **`#track-detail` regressed from a real `<dialog>` back to a
-  `<div role="dialog">`** in a merge (the markup at `index.html`), so it no
-  longer traps focus or joins the top layer — `tests/specs/menu-keyboard.spec.js`'s
-  "Tab cannot escape the track-detail dialog" fails, and `topmodal.js`'s own
-  comment still says it "migrated to a real dialog". Confirmed pre-existing (red
-  at the session-start commit) and left for a dedicated fix: it is a modal
-  migration, not a markup swap — the show path (`menus.js` `modal.hidden=false`,
-  view-transition-wrapped), the close path (`data-esc-close`/uilayers), and
-  `css/track-detail.css`'s fullscreen positioning all have to move to
-  `showModal()`/`close()`/`dialog.screen` together. The restoring change already
-  exists on an unmerged commit (`33976903`); cherry-pick it rather than
-  reconstruct blind.
-- **Two entries were removed from this list after being checked against the
-  tree, not fixed here.** `agentview.js`'s `describe("span:N")` already converts
-  lap fractions to metres (`s.s0 * total`, with a comment naming the
-  convention), and `results.js` already sets `textContent` BEFORE appending the
-  " PLAYER" tag, with a comment saying why the order matters. Both were verified
-  live as well as by reading. The lesson is the one §1 states: this list is
-  prose, so it drifts in the *safe* direction too — entries outlive their bugs.
+- **The relational agent policy under-drives, and the bench can finally say so.**
+  `tests/specs/agent-drive-bench.spec.js` › "relational policy out-drives the
+  blind baseline" was red on a premise nobody trusted: the episode started at
+  lap fraction 0.02, where traffic cannot arrive, so the result was deal-luck
+  and the spec's own comment said as much. With the start moved to a measured
+  near-straight (0.4) the bench is honest and **still red** — `relational.dist`
+  245 against a `> 327` / `naive×1.5` floor. That is now a real
+  agent-policy/physics-tuning finding rather than a harness artifact.
+  `test:agent` is not in the CI smoke job, which is why it sat unseen.
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
   `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
@@ -451,13 +433,27 @@ most-load-bearing first.
   dark-leaf variant never renders. Cosmetic, and NOT the cause of that
   circuit's `props-over-road` reading (those trees sit 34–54 m out) — found
   while looking for it.
-- **Smaller, catalogued but not itemised here**: `api.js` gives an upcoming GP's
-  session list the 7-day historic cache TTL; `sdp.js` `pack()` over-allocates one
-  byte (a stray `0x00`, decode-harmless); `live.js`'s gap bars read a `timeDiff`
-  field `F1API.positions()` never returns (also in the archived audit); the
-  EXPORT data tab still hardcodes its year list; several dev tools have
-  exit-0 error paths and hardcoded chromium/port assumptions. The full 11-part
-  survey with line references is the backlog record for the cleanup.
+- **A lapped driver's LIVE row now says nothing at all.** `F1API.positions()`
+  used to turn OpenF1's `"+1 LAP"` string into the number 1 via `parseFloat`,
+  so a lapped car was drawn as a one-second gap; it now reports `null` instead,
+  which is correct — but `js/data/live.js` only renders the gap wrapper when
+  `p.timeDiff` is truthy, so the row lost its "+1 LAP" label along with the
+  false bar. The fix belongs on the render side: no bar, but say *lapped*.
+- **The 2026-08 whole-tree audit's deferred list is the standing backlog for
+  this section.** 143 verified findings, of which the fix-now batches took 30;
+  the rest are recorded by area with file/line evidence in the dated audit
+  record indexed from `docs/README.md`, and are not re-itemised here. The
+  round-2 items that were verified still-open and deliberately left out of the
+  fix-now batches are worth naming because they are small and near-miss:
+  `js/net/handshake.js` `payload.k` null-deref and its missing deflate-bomb cap,
+  `js/net/sdp.js` ascii CR/LF handling, `js/data/telemetry.js`'s sprint badge,
+  `js/render/glx/post.js` `hdrOk`, `js/render/three/tlx.js` `boxScale` (and a
+  stale comment in `js/render/three/tlx-post.js`), and a lobby branch in
+  `js/net/lobby.js`.
+- **Smaller, catalogued but not itemised here**: the EXPORT data tab still
+  hardcodes its year list; several dev tools have exit-0 error paths and
+  hardcoded chromium/port assumptions. The full 11-part survey with line
+  references is the backlog record for the cleanup.
 
 ---
 
@@ -468,20 +464,51 @@ Deferred with reasoning, none lost:
 - **game.js extraction candidates**, ranked by boundary crossings (§4): garage
   live preview ~415 ln (blocked on a car-drawing seam), camera disclosure
   ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
-  taken: `js/game/cam-modes.js`.)
-- **`wrapDelta` helper** — the shortest-way arc-wrap idiom is hand-written at
-  4 sites; one wrong copy sends a car backwards down the lap once per lap.
-- **Elevation-profile drawing duplicated in `js/game/menus.js`** — two
-  near-identical canvas blocks around its two `TrackMaps.elevProfile()` calls.
-- **Shared `clamp`/`lerp`** — many local copies, one divergent
-  (`js/track/scenery-structures.js`).
+  taken: `js/game/cam-modes.js`.) The 2026-08-13 structure panel re-affirmed
+  this list as the live decomposition plan and made it **forced rather than
+  optional**: both ratchets are saturated (`js/game.js` and `js/game/apex.js`
+  each sit one line under their ceiling), so the next net-positive edit to
+  either file fails the suite. Candidates may be **added** only after
+  re-measurement by function body (brace count) — the gap-to-next-function
+  method inflated `endRace` from 64 lines to "383" by attributing the
+  un-extractable `G` façade block to it, and figures derived that way are
+  discredited. The `updateCar()` and `render()` megablocks stay fenced.
+- **`wrapDelta` / shared `clamp`/`lerp` — RESOLVED.** All three now live on
+  `M4` (`js/mat4.js`, the 2nd script tag, so every consumer including the
+  deferred backends can bind them at eval; they hang off the existing global
+  rather than becoming a third one). Consumers ALIAS
+  (`const clamp = M4.clamp;`), so hot paths keep their old call shape. 16 clamp
+  copies, 6 lerps and 5 of the 7 arc-wrap sites migrated;
+  `tests/unit/shared-math.test.mjs` pins the semantics and RATCHETS against a
+  new private copy. The divergent `js/track/scenery-structures.js` clamp
+  (`Math.max(lo, Math.min(hi, v))`) was **not a bug** — the two forms differ
+  only above an inverted range, on `-0`, and on a non-number argument, and all
+  eight of its call sites pass finite numbers with `lo < hi`; migrated anyway,
+  proven vertex-for-vertex by `tools/graph-parity.cjs --all`. Deliberately
+  LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
+  characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
+  which fold an unbounded heading and need a loop rather than one fold.
+- **Elevation-profile drawing duplicated in `js/game/menus.js` — RESOLVED.**
+  One local `drawElevProfile(cv, t, showEl)`; the only real difference between
+  the two blocks was which element carries the `hidden` state.
 - **`simTilt`/`tiltSteering`** now share `tiltTarget()`/`tiltSlew()`;
   `tests/specs/tilt-pipeline.spec.js` pins every stage so the next re-inlining fails.
-- **Mobile-tier detection ×4** — reimplemented in four files; `js/game.js`
-  omits `_forceMobile`, defeating `apex26.forceMobileTier` there.
+- **Mobile-tier detection ×4 — RESOLVED.** `js/render/glx.js` is the one copy
+  and exports `isMobile` / `mobileTier`; `liverytex.js`, `wgx.js` and
+  `js/game.js` read it. glx.js is the 11th tag and the deferred backends load
+  last, so the value is always there. This fixes the defect the entry names:
+  `js/game.js` re-sniffed navigator without `forceMobileTier`, so a desktop
+  with the flag set still loaded an alternate backend — the "phone" path under
+  test was never the phone path.
 - **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places.
-- **`GameStore`** has no cross-tab `storage` listener; two tabs silently
-  overwrite each other's saves.
+- **`GameStore` cross-tab — RESOLVED.** `store.onForeignWrite`, armed by the
+  module itself on `window.storage`. Not a merge (two divergent career saves
+  have no defined join): a foreign `apex26.*` write drops that ONE cached key
+  so the next read goes to disk, and bumps `rev`; a foreign `clear()` empties
+  the cache. An unrelated key stays cached — invalidating everything would put
+  `getItem`/`JSON.parse` back in the render loop, which is why `_cache` exists.
+  Counted in `__apex.persistState().foreign`; pinned by
+  `tests/unit/store-cross-tab.test.mjs`.
 - **Assertion-free specs** — RESOLVED. `tests/specs/ui-audit.spec.js` (34 tests, 0
   `expect`) and the former `ui-desktop.spec.js` (5/0) were screenshot galleries
   presenting as tests. The second is now absorbed into the first as two more
@@ -493,13 +520,30 @@ Deferred with reasoning, none lost:
 - **`tests/specs/tracks-visual.spec.js` baselines were never generated** — the spec
   is skip-gated on the snapshot dir existing; generating 40 circuit baselines
   on Linux/SwiftShader is its own operation.
-- **Catalogued dead exports (~60)**, each wanting re-verification before
-  deletion — the catalogue has been wrong before (`NetSnapshot.predict()` and
-  `EV.BYE` were both re-reported dead while having live callers, and the GLX
-  instancing path listed dead is exercised by `tests/specs/instanced-draw.spec.js`).
-  Still believed dead: `Career.isOwned`, `TrackSpline.centerline()` and the
-  authored-`segs` path, the SRTM elevation branch, 8 of `Reliability`'s 14
-  exports.
+- **Catalogued dead exports — VERIFIED, and mostly not dead.** The ~60-item
+  catalogue was walked in four batches before anything was deleted, and the
+  verification is the finding: three of the renderer identifiers it listed
+  **never existed in this branch's history** (they live only on a non-ancestor
+  commit — the catalogue was written against a different lineage), and its claim
+  that `assets.js` consumes `gltf.js` is false today. Most entries resolved to
+  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` is live through
+  three skill docs' console use, `TrackSpline.centerline()` and the authored-
+  `segs` path are dormant **by design** (eval-time destructure, 25 circuits
+  carry `segs:`, the new-track skill documents it), and the SRTM elevation
+  branch is a guarded feature slot with a shipping bake tool. What was genuinely
+  dead has been trimmed: `GLTF.load` and `Reliability.levels` deleted outright,
+  plus export-object entries in `reliability.js`, `store.js`, `lighting.js` and
+  `light-store.js` whose functions stay because they are internally live.
+  Remaining owner decisions, evidence gathered but not acted on:
+  `js/track/themes.js`'s `variants` tables (zero readers anywhere) and
+  `CarMesh.getBoostFlame`.
+- **The CSS class-count ratchet is installed; the collapses are not finished.**
+  The 2026-08-13 panel recorded its non-installation as execution debt; a
+  ceiling now exists in the `module-size.test.mjs` idiom, alongside a shell
+  node-count ceiling guarding the premise the keep-the-monolith ruling rests
+  on. The first three one-surface collapses took the count 543 → 537; the
+  remaining clusters are ordered **behind** the zoom/data-density migration
+  where they touch the same surfaces.
 
 ---
 

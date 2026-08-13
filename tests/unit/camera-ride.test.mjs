@@ -45,6 +45,9 @@ function loadGameCams(Tracks, CamTune) {
   // `typeof CamTune !== "undefined"`, so an absent tuner is the shipped default.
   if (CamTune) globals.CamTune = CamTune;
   const ctx = vm.createContext(globals);
+  // js/mat4.js first — it is the second <script> tag in the shell and the home of
+  // the shared scalar helpers (M4.clamp/lerp), which cameras.js binds at eval.
+  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/game/cameras.js"), "utf8"), ctx,
     { filename: "js/game/cameras.js" });
   return vm.runInContext("GameCams", ctx);

@@ -179,8 +179,8 @@ in `track.lampPosts` (generic mast pass ~22 m both edges, plus `floodMast` /
 
 The LIGHTING TUNER keeps one **LAMPS** tab (POOLS + BEHAVIOUR sections) for
 every knob that drives this pipeline — street posts and flood banks share the
-same controls. Colour is chosen by `floodColor(theme)` and per-post
-`LAMP_KINDS`:
+same controls. Colour is chosen by `floodColor(theme)` and the per-post
+`LAMP_KINDS` table (both internal to `js/game/lighting.js`):
 
 | Theme | Colour |
 |---|---|

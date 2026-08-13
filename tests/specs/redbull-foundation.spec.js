@@ -61,10 +61,15 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   expect(result.terrainOuter).toBeLessThanOrEqual(72);
   expect(result.profile.swing).toBeGreaterThanOrEqual(55);
   expect(result.profile.swing).toBeLessThanOrEqual(65);
-  expect(result.profile.peak.frac).toBeGreaterThan(0.15);
-  expect(result.profile.peak.frac).toBeLessThan(0.28);
-  expect(result.profile.low.frac).toBeGreaterThan(0.34);
-  expect(result.profile.low.frac).toBeLessThan(0.50);
+  // 7a173519 moved the start line (startFrac 0.1875 -> 0.0), rotating racing
+  // fractions by the arc shift (+0.2952); the alpine peak and the valley did
+  // not move physically. Measured in the new frame (headless VM,
+  // trackProfile(800) grid): peak at frac 0.51 / +32.0 m, low at
+  // 0.7113 / -27.9 m.
+  expect(result.profile.peak.frac).toBeGreaterThan(0.45);
+  expect(result.profile.peak.frac).toBeLessThan(0.57);
+  expect(result.profile.low.frac).toBeGreaterThan(0.65);
+  expect(result.profile.low.frac).toBeLessThan(0.77);
   expect(result.profile.maxSlope).toBeLessThan(0.14);
 
   for (const [time, session] of Object.entries(result.sessions)) {

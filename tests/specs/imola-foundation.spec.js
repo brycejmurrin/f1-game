@@ -29,11 +29,20 @@ test.describe("Imola track-owned foundation", () => {
         walls: window.__apex.wallStats(),
         shoulderGaps,
         elevation: {
-          flatApproach: at(0.15),
-          piratella: at(0.34),
-          acqueMinerali: at(0.48),
-          varianteAlta: at(0.64),
-          rivazza: at(0.80),
+          // 7a173519 moved the start line (startFrac 0.495 -> 0.0), rotating
+          // racing fractions by the arc shift (+0.5094); the corners themselves
+          // did not move. Probes re-located onto the corners in the new frame
+          // (headless VM, extremum scan around old frac + shift):
+          //   flat approach 0.15 -> 0.66  (y 0.11)
+          //   Piratella crest 0.34 -> 0.848 (local max 0.8474, y 14.04)
+          //   Acque Minerali 0.48 -> 0.994 (local min 0.9934, y -9.96)
+          //   Variante Alta 0.64 -> 0.148 (local max 0.1487, y 16.10)
+          //   Rivazza 0.80 -> 0.310 (local min 0.3094, y -13.98)
+          flatApproach: at(0.66),
+          piratella: at(0.848),
+          acqueMinerali: at(0.994),
+          varianteAlta: at(0.148),
+          rivazza: at(0.310),
           range: Math.max(...ys) - Math.min(...ys),
         },
       };

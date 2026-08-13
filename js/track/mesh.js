@@ -15,7 +15,7 @@ const TrackMesh = (function () {
   // js/track/spline.js — eval-time destructures (hard edges).
   const { cross, MAT } = TrackGeom;
   const { curvature } = TrackSpline;
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
   // Uniform Catmull-Rom through p1..p2. C1 where a lerp is only C0, passes
   // through every node, and reproduces a straight line exactly on collinear
   // input — so it is a drop-in wherever a continuous SLOPE is wanted and the
@@ -104,8 +104,21 @@ const TrackMesh = (function () {
 
     // Explicit authored zones take precedence over the curvature auto-pick.
     if (zones && zones.length) {
+      // bankZones fracs were authored in the pre-rotation racing/arc space. The
+      // 7a173519 start-line remap rotated racing space and compensated every
+      // other frac-keyed dressing table via `def._sceneryShift` (see
+      // buildCenterline's bridges/elevations) — but missed this one, so the
+      // authored banks landed on whatever the rotation left at the raw frac
+      // (Zandvoort's 19° Luyendyk bowl sat on a straight). Apply the same
+      // shift, with the `sceneryLapMirror` negation racing-space anchors get in
+      // TrackSpace.sceneryFrac: singapore's zones were authored against the
+      // forward traversal like the rest of its dressing, and mirrored+shifted
+      // 5 of its 6 land within 0.001 of the curated turn apexes (shift alone
+      // moves two of them AWAY from their corners).
+      const dress = def._sceneryShift || 0;
+      const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
       for (const z of zones) {
-        const frac = (((z.frac || 0) % 1) + 1) % 1;
+        const frac = ((((z.frac || 0) * mirror + dress) % 1) + 1) % 1;
         const kc = Math.round(frac * n) % n;
         const tanA = Math.tan((z.angleDeg || 18) * Math.PI / 180);
         const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));

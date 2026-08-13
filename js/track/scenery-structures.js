@@ -459,16 +459,20 @@ const SceneryStructures = (function () {
         addFrustum(out, vadd(p.c, p.u, -0.4), 0.46, 0.24, h + 0.8, col, 8, b);
       } else if (cst === "scaffold") {
         // Tube-and-clamp: two standards per side plus ledgers, temporary look.
+        // addCyl is BASE-anchored (geom.js) like the monopole's addFrustum above:
+        // seat the standards at -0.4 so they span -0.4 → h+0.4. The h/2 - 0.4 that
+        // shipped here was the centre-anchored answer and left every leg hanging
+        // h/2 - 0.4 clear of the ground.
         for (const sr of [-1, 1]) for (const st of [-1, 1])
           addCyl(out, vadd(vadd(vadd(p.c, p.r, sr * legR * 0.7), p.t, st * legR * 0.7),
-            p.u, h / 2 - 0.4), 0.09, h + 0.8, col, 4, b);
+            p.u, -0.4), 0.09, h + 0.8, col, 4, b);
         for (let i = 1; i < Math.max(2, Math.round(h / 2.2)); i++)
           addBox(out, vadd(p.c, p.u, (i / Math.max(2, Math.round(h / 2.2))) * h),
             [legR * 1.5, 0.09, legR * 1.5], col, b);
       } else {
         for (const sr of [-1, 1]) for (const st of [-1, 1]) {
           const foot = vadd(vadd(p.c, p.r, sr * legR), p.t, st * legR);
-          addCyl(out, vadd(foot, p.u, h / 2 - 0.4), 0.13, h + 0.8, col, 4, b);
+          addCyl(out, vadd(foot, p.u, -0.4), 0.13, h + 0.8, col, 4, b);   // base-anchored: -0.4 → h+0.4
         }
         // X-bracing every ~3 m — what makes a lattice read as a lattice.
         const bays = Math.max(1, Math.round(h / 3));
@@ -600,7 +604,16 @@ const SceneryStructures = (function () {
       }
       out._mat = prevMat;
     };
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // Was the one DIVERGENT copy in the tree — `Math.max(lo, Math.min(hi, v))`
+    // against everyone else's comparison ladder. VERDICT: not a bug. The two
+    // forms differ only ABOVE an inverted range (lo > hi: the Math form pins to
+    // lo, the ladder to hi), on -0, and on a non-number argument (Math coerces,
+    // `<`/`>` do not). All eight call sites below pass literal lo < hi and a
+    // finite number — every `rows`/`tiers`/`density` in js/circuits/ is a
+    // numeric literal — so the swap is output-identical, verified by
+    // tools/verify-track.cjs. Migrated rather than left so the divergence
+    // cannot be mistaken for intent later.
+    const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
     // bleacher(): open raked seating on a bolted frame — planks on posts, a back
     // guard rail, and nothing else. No back shell, no roof, no fascia. This is

@@ -22,6 +22,15 @@ const GLX = (function () {
   // apex26.forceMobileTier=1 makes a desktop browser take every mobile-tier
   // path — the only way Playwright/desktop DevTools can exercise and A/B the
   // phone-only downgrades (lamp budget, beams-off, atlas sizes, shadow sizes).
+  //
+  // THIS IS THE ONE COPY. The sniff was reimplemented in four files and the
+  // copies had already drifted — js/game.js's omitted `_forceMobile` entirely,
+  // so the override that exists to make the phone tier testable did not reach
+  // the backend gate it most needed to (docs/ARCHITECTURE-REVIEW.md §8).
+  // Everything else reads GLX.isMobile / GLX.mobileTier (exported below):
+  // glx.js is the 11th <script> tag, ahead of every consumer, and the deferred
+  // backends load last, so the value is always there to read. Any new consumer
+  // does the same — do not re-sniff navigator.
   let _forceMobile = false;
   try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
   const IS_MOBILE = _forceMobile ||

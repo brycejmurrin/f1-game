@@ -537,10 +537,13 @@ eyeballing — e.g. sweep `lat` across a verge to see the cross-section profile.
 
 ## Telemetry & diagnostics
 
-### `persistState() → {ok, broken, keys, rev}`
+### `persistState() → {ok, broken, keys, rev, foreign}`
 Is `localStorage` actually storing anything? `ok:false` means a read or write has
 thrown, and `broken` names the exception (`"QuotaExceededError"`,
 `"SecurityError"`); `keys` is how many are cached and `rev` the write counter.
+`foreign` counts cross-tab invalidations applied — a non-zero value means ANOTHER
+tab of this origin has written `apex26.*` keys during this session, which is the
+one condition under which a save can be overwritten from outside.
 
 This needs a hook of its own because **the failure is otherwise invisible from
 inside the session**. `js/game/store.js` caches every value it writes, so when
@@ -549,6 +552,18 @@ the game plays perfectly and only a reload reveals that nothing was ever saved.
 Safari on iOS puts the quota at **zero** in Private Browsing, which is the case
 that actually loses a player's career.
 
+A second tab is the other way a save disappears, and it used to be silent for
+the same reason: `_cache` is filled on first read and was never invalidated, so a
+tab that had read `career` answered from memory forever and wrote its stale copy
+back over the other tab's. `store` now listens for `storage` (which fires only
+for writes made by OTHER documents of this origin), drops the named key so the
+next read goes to disk, bumps `rev`, and counts the event in `foreign`. One
+honest limit: `js/game/career.js` holds its live career as module state and
+`save()` writes THAT object, not a fresh `store.get()` — so an active career
+session can still clobber another tab's finished season; the invalidation
+protects everything read through `store.get()` per use (settings, slots,
+boards, tuner profiles), not the in-play career object itself.
+
 The cache write on failure is deliberate, not a bug: dropping the value would
 break the session as well as the save. What this reports is that the save is
 gone, which is the part nothing used to say. `js/game/store.js` also sends one
@@ -556,7 +571,7 @@ loud `Log.warn` on the first failure and every repeat to the ring buffer only,
 so `__apex.logs({ns:"game"})` has the history without the console being buried.
 
 ```js
-__apex.persistState()   // { ok: true, broken: null, keys: 34, rev: 12 }
+__apex.persistState()   // { ok: true, broken: null, keys: 34, rev: 12, foreign: 0 }
 ```
 
 ### `logLevel(spec?, persist?) → {console, buffer, consoleNs, bufferNs}`

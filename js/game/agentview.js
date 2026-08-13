@@ -55,7 +55,7 @@ const AgentView = (function () {
 
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   // Every comparison against NaN is false, so a non-numeric argument does not
   // announce itself — it silently disables whatever test it feeds. A string
@@ -108,9 +108,16 @@ const AgentView = (function () {
         const dist = clamp(o.orbit.dist || 12, 2, 400);
         const head = p.head || 0;
         const dx = Math.sin(head + Math.PI + az), dz = Math.cos(head + Math.PI + az);
-        const eye = [p.px + dx * dist * Math.cos(el), 0.6 + dist * Math.sin(el),
+        // Height is RELATIVE TO THE ROAD, not to datum. Both Y values were a flat
+        // 0.6 absolute, so on any circuit with elevation the shot framed from
+        // metres under (or over) the car while still returning a full, plausible
+        // raster — the same failure the camVantage branch below warns about.
+        // apex.js carOrbit samples the road for exactly this reason.
+        Tracks.sample(G.track, wrapS(p.s), scr);
+        const y0 = scr.p[1] + 0.6;
+        const eye = [p.px + dx * dist * Math.cos(el), y0 + dist * Math.sin(el),
                      p.pz + dz * dist * Math.cos(el)];
-        const tgt = [p.px, 0.6, p.pz];
+        const tgt = [p.px, y0, p.pz];
         return { vp: buildVP(eye, tgt, o.fov || 45), eye, tgt, mode: "orbit", synthetic: true };
       }
       if (o.camera) {
@@ -1584,8 +1591,7 @@ const AgentView = (function () {
         }
         const m = model();
         const near = m.pts.filter((q) => {
-          let d = q.s - c.s; if (d > total / 2) d -= total; if (d < -total / 2) d += total;
-          return Math.abs(d) <= 80;
+          return Math.abs(M4.wrapDelta(q.s - c.s, total)) <= 80;
         });
         const byKind = {};
         for (const q of near) byKind[q.p.kind] = (byKind[q.p.kind] || 0) + 1;
@@ -1635,12 +1641,18 @@ const AgentView = (function () {
         const s = sp[idx];
         // Span records store s0/s1 as LAP FRACTIONS (noteSpan's callers pass
         // fractions; along() does s0*n). Reading them as arc-metres reported
-        // sub-metre spans everywhere and fromFrac values of ~1e-4.
+        // sub-metre spans everywhere and fromFrac values of ~1e-4. And spans
+        // WRAP the start line (along() walks s0→s1 modulo the lap; ~20 circuits
+        // fence 0.95→0.06), so length is the wrapped difference — worldModel()'s
+        // formula — not |s1-s0|, which reported the lap-long complement. The
+        // `|| 1` matches along()'s `|| n`: s0≡s1 (mod 1) walks a FULL lap
+        // (monaco/montreal/redbull wall/fence(0.0, 1.0)), not zero metres.
         const s0M = s.s0 * total, s1M = s.s1 * total;
         return {
           apiVersion: API_VERSION, id: "span:" + idx, type: "span",
           kind: s.kind, side: sideOf(s.side),
-          fromS: r1(s0M), toS: r1(s1M), lengthM: r1(Math.abs(s1M - s0M)),
+          fromS: r1(s0M), toS: r1(s1M),
+          lengthM: r1(((((s.s1 - s.s0) % 1 + 1) % 1) || 1) * total),
           fromFrac: +s.s0.toFixed(4), toFrac: +s.s1.toFixed(4),
           heightM: s.h != null ? r1(s.h) : null,
           gapM: s.gap != null ? r1(s.gap) : null,
@@ -1688,8 +1700,7 @@ const AgentView = (function () {
         if (cs.length) {
           let best = null, bestD = Infinity;
           for (const c of cs) {
-            let d = pos.s - c.s;
-            if (d > total / 2) d -= total; if (d < -total / 2) d += total;
+            const d = M4.wrapDelta(pos.s - c.s, total);
             if (Math.abs(d) < Math.abs(bestD)) { bestD = d; best = c; }
           }
           if (best) {
@@ -1988,10 +1999,12 @@ const AgentView = (function () {
         features: m.features,
         // Linear furniture — armco, catch fence, tyre walls, boundary walls —
         // recorded as spans by the emitters rather than per 3-6 m segment.
+        // Length is the wrapped difference, and `|| 1` matches along()'s
+        // `|| n`: s0≡s1 (mod 1) walks a FULL lap, not zero metres.
         spans: reg.spans.map((sp) => ({
           kind: sp.kind, side: sp.side > 0 ? "right" : "left",
           fromFrac: sp.s0, toFrac: sp.s1,
-          lengthM: r1((((sp.s1 - sp.s0) % 1 + 1) % 1) * total),
+          lengthM: r1(((((sp.s1 - sp.s0) % 1 + 1) % 1) || 1) * total),
           gapM: sp.gap, h: sp.h != null ? sp.h : undefined,
         })),
         landmarks: m.landmarks.map((L) => ({

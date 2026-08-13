@@ -17,7 +17,7 @@ export const meta = {
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const KNOWN = (A.known || []).map((k, i) => `${i + 1}. ${k}`).join('\n') || '(none supplied this run)'
 
-const COMMON = `Repo: /home/user/f1-game (branch claude/project-cleanup-reorganize-rrztv6). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. A browser test run and another workflow are in flight — do not touch their logs or processes.
+const COMMON = `Repo: /home/user/f1-game (check \`git branch --show-current\` if you need the branch — do not assume). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. Browser test runs may be in flight in the main session — never touch artifacts/logs or test processes.
 Project shape: no-build IIFE modules, one global per file, load order in tools/manifest.cjs; CLAUDE.md is the engineering reference; docs/ splits into reference / research / archive. tests/ per-file semantics are OUT OF SCOPE (a dedicated audit is running) — do not audit test files.
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants of them:
 ${KNOWN}`
@@ -61,8 +61,8 @@ const R1 = [
   { k: 'game-mod-nz',  scope: 'every js/game/ file whose basename starts with n through z (particles through uilayers — ls js/game/ to enumerate).' },
   { k: 'track-core',   scope: 'every js/track/ file EXCEPT scenery-*.js (tracks, spline, mesh, geom, graph, space, surface, markings, models, themes, landmark-kit, circuit-kit, geo-paths, maps).' },
   { k: 'track-scenery', scope: 'js/track/scenery-data.js, scenery-nature.js, scenery-city.js, scenery-structures.js, scenery-identity.js — the buildProps split behind the 109-member frozen contract (docs/SCENERY-API.md).' },
-  { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit.' },
-  { k: 'circuits-2',   scope: 'the LAST 20 files of ls js/circuits/ | sort. Same emphases as circuits-1.' },
+  { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit. The 2026-08 audit never line-read ~20 of the 40 circuit scenery(api) callbacks — treat each scenery callback as FIRST-READ: grounding calls, placement args, side/sign conventions (+k = LEFT), s-ranges vs track.total.' },
+  { k: 'circuits-2',   scope: 'the LAST 20 files of ls js/circuits/ | sort. Same emphases as circuits-1, including the first-read scenery(api) callback treatment.' },
   { k: 'render-glx',   scope: 'js/render/gfx.js, glx.js, everything under js/render/glx/ and js/render/shaders/, gltf.js, assets.js. Emphasis: shader-uniform drift, header truth, the Gfx seam contract.' },
   { k: 'render-alt',   scope: 'js/render/three/ EXCLUDING vendor/, and js/render/webgpu/. Emphasis: parity claims vs reality, descriptor-copy installation, frozen-backend drift. vendor/three-0.184.0 is vendored — do not audit it.' },
   { k: 'net',          scope: 'every js/net/ file plus worker/. Emphasis: wire-format comments vs code, handshake state machines, the host-authority rules in docs/MULTIPLAYER.md vs implementation.' },

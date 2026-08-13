@@ -27,7 +27,14 @@ import { lintSource, lintAll, count } from "../../tools/wait-polling-lint.mjs";
 // that produced the finding, and its largest single holder at 34 sites — was
 // converted. LOWER this as call sites are fixed; raising it needs a
 // reason, and "I added a new wait" is not one.
-const CEILING = 319;
+//
+// 2026-08-13, the one raise so far, and it is SCOPE and not new debt: the lint
+// walked tests/ and tools/ but only admitted `*.js` (plus spec/test files) —
+// and every tool is `.mjs`/`.cjs`, so the tools/ half of its own scan list
+// contributed nothing. Fixing the filter surfaced 70 pre-existing sites
+// (tools/layout-audit.mjs alone holds 24). The tests/ population is unchanged
+// at 312; the ceiling is set to the whole measured population, 382.
+const CEILING = 382;
 // Far enough below and the ratchet has stopped ratcheting — the same trap
 // tools/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 // adoption was 54.

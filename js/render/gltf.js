@@ -6,18 +6,16 @@
  * COLOR_0 attribute) is baked into the per-vertex colour. All primitives of all
  * meshes are merged into one buffer set, with node transforms applied.
  *
- * Usage (browser):
- *   const data = await GLTF.load("assets/models/car.glb");
- *   const mesh = GLX.createMesh(data);
+ * Usage:
+ *   const mesh = GLX.createMesh(GLTF.toMesh(arrayBuffer));
  *   // ...later... GLX.draw(mesh, modelMat);
  *
  * The model's OWN baked colours are used. Team-tinting can be applied later by
- * passing { tint:[r,g,b] } via GLTF.toMesh / GLTF.load opts (multiplies colour).
+ * passing { tint:[r,g,b] } via GLTF.toMesh opts (multiplies colour).
  *
  * API:
  *   GLTF.parseGLB(arrayBuffer)        -> parsed glTF object (throws on malformed)
  *   GLTF.toMesh(arrayBuffer, opts)    -> {pos,nrm,col,idx} for GLX.createMesh
- *   GLTF.load(url[, opts])            -> Promise<{pos,nrm,col,idx}> (never throws sync)
  *
  * opts: { scale?:number (default 1), swapYZ?:bool, tint?:[r,g,b] }
  *
@@ -434,20 +432,5 @@ const GLTF = (function () {
     }
   }
 
-  // ---------- async loader (browser fetch) ----------
-  // Resolves to {pos,nrm,col,idx}; rejects gracefully so callers can fall back
-  // to procedural geometry. Never throws synchronously.
-  function load(url, opts) {
-    return Promise.resolve().then(function () {
-      if (typeof fetch !== "function") throw new Error("GLTF.load: fetch unavailable");
-      return fetch(url).then(function (res) {
-        if (!res.ok) throw new Error("GLTF.load: HTTP " + res.status + " for " + url);
-        return res.arrayBuffer();
-      }).then(function (buf) {
-        return toMesh(buf, opts);
-      });
-    });
-  }
-
-  return { parseGLB, toMesh, load };
+  return { parseGLB, toMesh };
 })();

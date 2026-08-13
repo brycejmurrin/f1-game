@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 79 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 85 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -113,12 +113,16 @@ whether the TLX backend happens to be installed.
 
 **Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
 
-**319 `waitForFunction` calls across 97 specs still carry a timeout without
-`polling`**, so those bounds are decoration. 43 sites now pass it. The count is
-a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails if the population
-grows, and lowering the ceiling as sites are fixed is the intended direction.
-(Count by AST via `tools/wait-polling-lint.mjs`. A grep undercounts the
-multi-line calls; this file said 312 for exactly that reason.)
+**382 `waitForFunction` calls across 123 files still carry a timeout without
+`polling`**, so those bounds are decoration — 312 of them under `tests/` (96
+files) and 70 under `tools/` (27 files, `layout-audit.mjs` alone holding 24).
+The count is a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails
+if the population grows, and lowering the ceiling as sites are fixed is the
+intended direction. (Count by AST via `tools/wait-polling-lint.mjs`. A grep
+undercounts the multi-line calls.) The jump from the 319 this file used to
+quote is SCOPE, not new debt: the lint walked `tools/` but admitted only
+`*.js`, and every tool is `.mjs`/`.cjs`, so its own scan list contributed
+nothing until the filter was fixed on 2026-08-13.
 
 The visible symptom is a test reporting `Test timeout of Nms exceeded` while
 pointing at a line that claims to wait 30 s. `tlx-probes`' M6 skid spent 344 s
@@ -808,11 +812,13 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
+| `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
+| `css-class-ratchet.test.mjs` | RATCHET on the distinct CSS class count across `css/` and on `index.html`'s DOM node count, both measured by the restructure-screens-css skill's own grep so the numbers line up with the 543 / 1,133 written into the decision records. Lower a ceiling when you consolidate onto a `--property` context; raising one is a deliberate edit with a reason in the commit |
 | `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. Ratchets two counts that may only fall — font-sizes below the `--fs-micro` floor (126) and raw px padding/gap/margin (529) — plus the list of sheets that read no spacing token at all and so cannot respond to the density ladder |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
@@ -822,6 +828,10 @@ what it covers.
 | `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
+| `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
+| `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
+| `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |
+| `incident-gate.test.mjs` | IncidentSim's notifyCar entry gate vs preStep's per-kind authority in a VM — an r2-only config still queues+promotes a launch at `>= R2_CAR_V`, an r3-band contact under that config promotes nothing (enabling one kind never widens the others), sub-threshold bumps never queue, all-off is inert, and the shipped defaults still resolve a relV=30 pair as r2 |
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
 | `terrain-normals.test.mjs` | the terrain ribbon must be shaded by its own shape: `TrackMesh.buildTerrain` normals are unit length, point up, and carry real tilt spread on both a street and an open circuit. `buildTerrain` shipped `nrm.push(0, 1, 0)` for every vertex — an embankment, a banked verge and a flat runoff all took identical sun — and nothing caught it, because a constant normal throws nothing and changes no vertex count |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
@@ -834,7 +844,7 @@ what it covers.
 | `test-observed.test.mjs` | the never-run detector's title extraction matches the reporter's EXACTLY. A title derived differently reads as "never observed" forever, and a tool that cries wolf on every spec gets ignored — the same outcome as not having it. Its first version missed Playwright's implicit suite title (a top-level test prints as `file › basename › title`, one inside a describe does not) and reported every describe-less spec as 100% never-run, including one verified green minutes earlier |
 | `evaluate-scope-lint.test.mjs` | no `page.evaluate()` callback closes over a Node-side binding — the callback runs in the BROWSER, so a module `const` read inside it is a `ReferenceError` there, not a closure. Anti-vacuity: one case asserts the lint still finds both real sites in `58614db2`, the commit whose two launch constants killed every elevation track, so the analysis cannot silently stop resolving bindings while the synthetic cases keep passing |
 | `cache-bump-only.test.mjs` | the one exemption change-aware CI may make to the infra gate: an `index.html` diff that is PURELY a `?v=N` rewrite is not a load-order change. Line counts are not enough to decide it — `af05fa98` is +156/-156 and smuggles a real markup edit through, so the check pairs lines POSITIONALLY and a reordered script block cannot pass as a bump |
-| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so 353 call sites carry a bound that is decoration. Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
+| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so 382 call sites carry a bound that is decoration (353 was the 2026-08-07 freeze; the population fell to 312 as specs were fixed, then the lint's file filter was corrected and 70 pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
 | `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. | guards `tools/select-specs.mjs`, the per-spec selector behind ci.yml's advisory `selected` job. Glob expansion against the real tree, dedupe across groups, the budget cut (every spec lands in selected OR the named skip list — silent truncation would read as "covered"), and that the ADVISORY settings (retries 0, 120 s/test) provably fit more tests than smoke's gate settings — the whole reason the job exists |
@@ -864,3 +874,72 @@ what it covers.
 - `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
   `tests/helpers/live-reporter.js` — the infrastructure sources
 - `tools/pick-tests.mjs`, `tools/test-bg.mjs`, `tools/test-shards.sh` — the runners
+
+---
+
+## Operational field notes (moved from CLAUDE.md, 2026-08-13)
+
+The measured history behind the testing gates. CLAUDE.md carries the rules;
+this section carries the evidence so the rules survive re-litigation.
+
+**Watcher anchoring.** Anchor on the reporter's terminal line
+`= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
+heartbeat lines contain `N/M done, K failed`, so a pattern like
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — CLAUDE.md recommended
+exactly that for weeks and every watcher built from it misfired. Match every
+terminal status, not just `passed`: a success-only watcher is silent through a
+crash, and silence looks like "still running". Watch the LOG, never the
+process table — a watcher whose command line contains its own grep pattern
+matches itself (`pgrep -cf "python3 -m http.server"` returned 1 on a box with
+no server; that 1 was the grep). Never `| tail` a live background run — tail
+buffers to EOF and the file stays empty. Adding `|Error:` to the UNTIL pattern
+gives early warning on the first stack trace, but re-arm for the terminal line.
+
+**Long queues (2026-08-07 measurements, seven groups, container-killed at
+80 min).** (1) `Monitor` caps at 30 minutes and `persistent: true` DOES NOT
+lift it — tried twice, both lapsed silently; pair every Monitor with a
+`Bash run_in_background` waiter on the queue's own completion marker. (2) Seed
+the seen-file when arming a de-duplicating watcher, or the first event is the
+entire backlog. (3) Make the driver resumable via terminal-marker files the
+driver writes AFTER a run returns — a fixed-list driver re-ran 86 minutes of
+banked groups after a restart. A group that started and died has no marker and
+correctly re-runs whole: a killed Playwright run banks nothing.
+(2026-08-13 addendum: name the driver's group list anything but `GROUPS` —
+that is a readonly bash builtin array and the assignment fails silently.)
+
+**One process, one browser group.** Local runs set `reuseExistingServer`, so
+a second Playwright process attaches to the first's HTTP server; killing
+either strands the survivor's specs with `net::ERR_CONNECTION_REFUSED`
+(measured: 33 false failures in a row reading like product bugs). Pairing two
+BROWSER groups in one batch runs 2 processes x 2 workers on 4 cores —
+measured on 2026-08-13 as the source of every over-budget timeout in a
+five-batch run (projection at 144-176 s vs a 120 s budget, props-over-road at
+1518 s vs its own comment predicting exactly this). Browser+node pairs are
+fine. To cover more at once, hand every spec to ONE process and raise
+`APEX_WORKERS`.
+
+**Orphans vs a second run.** Orphans from a killed run keep eating the box
+invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
+'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
+"orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
+second run you forgot is indistinguishable from orphans by process count.
+
+**`waitForFunction` on a rendering page.** Playwright polls the predicate on
+`requestAnimationFrame`; a SwiftShader page running the game loop starves the
+poll so the declared timeout never fires. MEASURED: `{ timeout: 3000 }`
+against a never-true predicate ran 109,665 ms on a parked Monza — 36x its
+bound — and overran on a menu page too. Only a THROWING predicate terminates
+promptly (11 ms). Pass `{ polling: 100, timeout: N }` on any rendering page.
+And once polling is fixed, a wait that still overruns means the CONDITION is
+unreachable, not that the page is slow — `tlx-probes`' M6 skid took four
+wrong mechanisms before anyone checked whether `skidVerts` could move
+(`skids.stamp()` runs in `render()`; the stint drove through `act()`, which
+never presents a frame). The habit that settled it: reach for an instrument
+(a wrapper logging call counts) instead of a fifth theory.
+
+**Subagent worktrees.** Worktree isolation bases new worktrees on the
+default-branch ref, and this repo's `origin/main` is a stale unrelated
+lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
+tree with an 8,409-line game.js). Every worktree brief starts with
+`git checkout -B <branch> <session SHA>` plus a fingerprint check of a
+session-known file.

@@ -275,9 +275,17 @@ const NetSdp = (function () {
     const count = bytes[o++];
     if (bytes.length < o + 32) return null;
     const fp = bytesToHex(bytes.slice(o, o + 32), ":"); o += 32;
+    // CHECK THE CURSOR BEFORE EACH LENGTH BYTE, not only the span after it. Past
+    // the end `bytes[o++]` is undefined, every later `bytes.length < o + len`
+    // compares against NaN (always false, so the guards pass) and o itself goes
+    // NaN — truncated input then survived all the way to the candidate loop and
+    // was rejected only because ADDR_LEN[undefined] happens to be null. That
+    // accident is not a bounds check, and any edit to the loop removes it.
+    if (o >= bytes.length) return null;
     const ufLen = bytes[o++];
     if (bytes.length < o + ufLen) return null;
     const ufrag = ascii(bytes, o, ufLen); o += ufLen;
+    if (o >= bytes.length) return null;
     const pwLen = bytes[o++];
     if (bytes.length < o + pwLen) return null;
     const pwd = ascii(bytes, o, pwLen); o += pwLen;

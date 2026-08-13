@@ -232,9 +232,10 @@
           for (let i = 0; i < cnt; i++) {
             const off = (i - (cnt - 1) / 2) * 1.2;
             const h = 1.6 + hash(k * 65 + i + side) * 0.7;
-            // Prism center at a.c + u*0.6 → base at a.c[1] (no float, no clip)
-            addPrism(out, vadd(vadd(a.c, a.t, off), a.u, 0.6),
-                     [0.7, h, 0.8], tuft, b);
+            // addPrism anchors at its BASE (geom.js), so seat the tuft on the
+            // sand itself — the old +u*0.6 was written as if the prism were
+            // centre-anchored and lifted every tuft 0.6 m clear of the ground.
+            addPrism(out, vadd(a.c, a.t, off), [0.7, h, 0.8], tuft, b);
           }
         }
       });
@@ -997,16 +998,20 @@
           size: [10, shaftH + drumH + capH + 2, 10],
           basis: b,
         }, (stage) => {
+          // The whole stack is authored in BASE-anchored coordinates, because
+          // addCyl/addCone build upward from `c` (geom.js). It shipped with the
+          // centre-anchored half-height offsets, which floated the 20 m shaft
+          // 10 m off the ground and swallowed the cap inside the drum.
           stage._mat = MAT.STONE;
-          addCyl(stage, vadd(a.c, a.u, shaftH / 2), shaftR, shaftH, brick, 12, b);
+          addCyl(stage, a.c, shaftR, shaftH, brick, 12, b);                        // 0 → 20
           // Darker brick banding courses break up the shaft's silhouette.
           addCyl(stage, vadd(a.c, a.u, shaftH * 0.35), shaftR + 0.05, 1.0, brickDk, 12, b);
           addCyl(stage, vadd(a.c, a.u, shaftH * 0.70), shaftR + 0.05, 1.0, brickDk, 12, b);
           // Tank drum — wider cylinder cantilevered over the shaft, with a
           // flared cornice course closing the step where it overhangs.
-          addCyl(stage, vadd(a.c, a.u, shaftH + 0.5), shaftR + 1.3, 1.0, brickDk, 12, b);
-          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH / 2), 4.4, drumH, brick, 12, b);
-          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH - 0.4), 4.5, 0.8, brickDk, 12, b);
+          addCyl(stage, vadd(a.c, a.u, shaftH), shaftR + 1.3, 1.0, brickDk, 12, b);       // 20 → 21
+          addCyl(stage, vadd(a.c, a.u, shaftH + 1), 4.4, drumH, brick, 12, b);            // 21 → 27
+          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH - 0.8), 4.5, 0.8, brickDk, 12, b); // flush at 27
           // Conical red cap.
           stage._mat = MAT.ROOF;
           addCone(stage, vadd(a.c, a.u, shaftH + 1 + drumH), 4.7, capH, capCol, 12, b);

@@ -25,7 +25,7 @@ const Tracks = (function () {
   // destructured here at eval).
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
 
   // ---------- build ----------
   // Cheap centreline-only build: runs just the spline engine (positions,
@@ -1631,8 +1631,10 @@ const Tracks = (function () {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
         const oA = side * (hw[kA] + barrierOffset), oB = side * (hw[kB] + barrierOffset);
-        const ax = px[kA] + rA[0] * oA, ay = py[kA], az = pz[kA] + rA[2] * oA;
-        const bx = px[kB] + rB[0] * oB, by = py[kB], bz = pz[kB] + rB[2] * oB;
+        // py[] is the CENTRELINE height; on banked road the edge the barrier
+        // hugs is lifted/dropped by the banking pivot (see mesh.js bankOffsetAt).
+        const ax = px[kA] + rA[0] * oA, ay = py[kA] + bankOffsetAt(track, kA, oA), az = pz[kA] + rA[2] * oA;
+        const bx = px[kB] + rB[0] * oB, by = py[kB] + bankOffsetAt(track, kB, oB), bz = pz[kB] + rB[2] * oB;
         const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
@@ -1711,12 +1713,15 @@ const Tracks = (function () {
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const o = outside * (hw[k] + 2.2);
+          // Banked road: py[k] is the centreline; the outside edge the wall
+          // stands beside is lifted by the banking pivot (mesh.js bankOffsetAt).
+          const wy = py[k] + bankOffsetAt(track, k, o);
           const slen = ds * step * 1.1;
-          addBox(out, [px[k] + r[0] * o, py[k] + 0.45, pz[k] + r[2] * o],
+          addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
           // Themed conveyor-belt cap: a bright coloured stripe along the top of
           // the tyre stack, giving the city's corner barriers its identity.
-          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, py[k] + 0.94, pz[k] + r[2] * o],
+          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
@@ -2274,9 +2279,21 @@ const Tracks = (function () {
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road
+    // Anchored with the SAME dressing shift buildCenterline uses to raise the
+    // deck ((b.s + _sceneryShift) % 1) — reading b.s raw put Suzuka's four pillar
+    // pairs at racing frac 0.817 while the deck they support is at 0.437.
+    // Same omission class as the bankZones fix (ed5a310f).
+    // NOTE (measured, suzuka — the only def with `bridges`): none of these eight
+    // boxes actually SHIPS. They sit at hw+0.7 with half-extent 0.8, and rejBox
+    // expands a footprint by the road half-width before testing the centreline
+    // node, so 0.7 < 0.8 + hw always hits and the guarded addBox culls every one.
+    // Only the blockAt() solid records below survive — and those were landing
+    // two thirds of a lap from the deck until this shift went in. Making the
+    // pillars visible needs a wider lateral offset or a RAW.addBox (as the
+    // crossover deck itself uses); that is a separate, reviewable change.
     const brs = def.bridges;
     if (brs) for (const b of brs) {
-      const kc = Math.round(b.s * n) % n;
+      const kc = Math.round(TrackSpace.wrap01(b.s + (def._sceneryShift || 0)) * n) % n;
       for (const off of [-18, -9, 9, 18]) {
         const k = ((kc + off) % n + n) % n;
         const deckY = py[k];
