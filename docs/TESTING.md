@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 76 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 77 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -690,6 +690,7 @@ what it covers.
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
+| `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
