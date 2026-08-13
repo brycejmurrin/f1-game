@@ -260,6 +260,16 @@
       // =====================================================================
       function cypress(k, side, dist, h) {
         const a = anchor(k, side, dist);
+        // Overhang past the supporting body (cause class b) — via a MISSING
+        // guard, not a geometric one: unlike every other placement helper in
+        // this file, cypress() never checked onTrack(). The "cypress drive"
+        // callers below vary `dist` per tree without checking it either, and
+        // at k=661 dist=80/86 the anchor lands ON the tarmac: the engine's
+        // road-safety guard (js/track/tracks.js ~2098) drops the trunk and
+        // the two wider cones WHOLE (their footprint covers the road) but
+        // spares the narrowest top cone, orphaning it 9-16 m up with nothing
+        // left beneath it. Skip the whole tree instead.
+        if (onTrack(a.c[0], a.c[2], 2)) return;
         const b = [a.r, a.u, a.t];
         const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
         out._mat = MAT.WOOD;
