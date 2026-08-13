@@ -63,7 +63,7 @@ and `js/game/incidentsim.js` implement.
 
 ## Research (cited, but not a description of behaviour)
 
-The docs that survive here (eleven at last count — the table below is the
+The docs that survive here (the table below is the
 authoritative list) are cited from source, from `CLAUDE.md` or from
 each other — that citation is what keeps them live. Everything else that used to
 sit in this table was indexed by nothing and moved to
@@ -106,6 +106,7 @@ once their fix/restructure items landed; their raw evidence sits in
 |---|---|
 | [archive/superpowers/](archive/superpowers/) | 16 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan, maintainability review and four phase build logs. |
+| [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept verbatim as reusable probe patterns; see `CLAUDE.md` and `docs/TESTING.md` for what each found. |
 | [archive/research/](archive/research/) | Twelve investigations kept for provenance — no live doc depends on them for current structure, though two research docs cite them as historical companions (ASSET-API-RESEARCH.md → RENDERING-IMPROVEMENTS.md, SCENE-GRAPH-PLAN.md → EXTERNAL-MODEL-SOURCES.md): steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
 | [archive/research/AUDIT-SYNTHESIS-2026-08.md](archive/research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed) / RESTRUCTURE / DEFER over 35 verified findings; drove the post-cleanup hardening. Archived once its restructure items landed. |
 | [archive/research/TOTAL-AUDIT-2026-08.md](archive/research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc — headlined by the curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; drove the campaign fix waves. Archived once Batch A/B/C worked off. |

@@ -63,7 +63,7 @@ threshold. The five repaired knobs were all confirmed this way:
 | `overcastFogMul` | **overcast only** | `fogDensity` ×3.5 |
 | `fogWxMul` | **fog only** | `fogDensity` ×2.7 |
 
-The last two are why `tools/tuner-sweep.mjs` gained `day-overcast`/`day-fog`
+The last two are why `tools/lighting-tuner-sweep.mjs` gained `day-overcast`/`day-fog`
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
@@ -97,7 +97,7 @@ handful of pixels?
 
 ## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
-A later full 178-knob day-dry sweep (`tools/tuner-sweep.mjs --cond=day-dry`)
+A later full 178-knob day-dry sweep (`tools/lighting-tuner-sweep.mjs --cond=day-dry`)
 carried 18 knobs through to a genuinely clean, isolated re-check (own noise
 floor ≈0.12, not the FLOOR=2.0 the sweep uses) that still showed no signal:
 `sunShaftMul`, `sunShaftDecay`, `mieScatter`, `flareStreak2`, `whites`,

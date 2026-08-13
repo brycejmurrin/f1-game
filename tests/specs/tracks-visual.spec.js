@@ -6,6 +6,9 @@
 //
 // NO BASELINES ARE COMMITTED FOR THIS SUITE, so it is SKIPPED by default.
 //
+// STATUS: PARKED. Until baselines exist, `npm run test:visual` asserts
+// nothing — a green run means "skipped", not "pixels verified".
+//
 // Every assertion here is a toHaveScreenshot() against a golden that does not
 // exist, so a plain run failed 40 circuits with "snapshot doesn't exist" — and
 // `npm run test:visual` was listed as a regression gate anyway. A gate that
