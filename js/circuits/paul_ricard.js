@@ -413,14 +413,28 @@
           addBox(stage, vadd(a.c, a.u, 8), [7, 16, 7], WHITE, b);
           stage._mat = MAT.GLASS;
           // Cab glazing leans outward, as every control cab's does.
-          addFrustum(stage, vadd(a.c, a.u, 18), 4.2, 5.4, 4, [0.22, 0.30, 0.40], 8, b);
+          // addFrustum/addCyl are BASE-anchored (js/track/geom.js:153-164):
+          // these were authored as if `c` were the centroid, so the cab
+          // floated 2 m above the shaft and the antenna 2 m above the cab —
+          // 18/24 were "centre" heights for h=4/h=7 shapes; the base is
+          // c - h/2, so seat them at the shaft/cab TOP instead.
+          addFrustum(stage, vadd(a.c, a.u, 16), 4.2, 5.4, 4, [0.22, 0.30, 0.40], 8, b);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, 20.4), [12, 0.5, 12], [0.86, 0.87, 0.90], b);
-          addCyl(stage, vadd(a.c, a.u, 24), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
-          // Windsock on its own mast beside the tower.
+          addCyl(stage, vadd(a.c, a.u, 20), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
+          // Windsock on its own mast beside the tower — 16 m along the
+          // tangent and 6 m across from the anchor's single ground sample.
+          // TRAP B (docs/SCENERY-GROUNDING.md §2): resample the ground
+          // actually under the mast rather than reusing a.c's height.
           const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
+          const wy = terrainYAt(w[0], w[2]);
+          if (wy != null) w[1] = wy;
           addCyl(stage, w, 0.14, 9, [0.86, 0.86, 0.88], 6, b);
-          addFrustum(stage, vadd(vadd(w, a.u, 8.4), a.t, 1.4), 0.95, 0.35, 2.8,
+          // The sock's mouth (base of this basis-swapped frustum) mounts
+          // AT the mast, then tapers away along the tangent — the old
+          // +1.4 push on the base put the mouth 1.4 m clear of the (0.14 m
+          // radius) mast with nothing between them; seat it on the mast.
+          addFrustum(stage, vadd(w, a.u, 8.4), 0.95, 0.35, 2.8,
             [0.92, 0.44, 0.14], 6, [a.r, a.t, a.u]);
           stage._mat = 0;
         }, { required: true });
