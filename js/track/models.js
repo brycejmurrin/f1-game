@@ -3,8 +3,27 @@
 const TrackModels = (function () {
   "use strict";
 
+  // ---- contextified-global aliases (see firstNonFinite below for the measurement)
+  // Under vm.createContext — tools/verify-track.cjs, tools/graph-parity.cjs, the
+  // float/clip/coplanar audits and the VM unit suites — every BARE global read
+  // (`Math`, `Number`) goes through the contextified global's C++ interceptor at
+  // ~140-220 ns, against ~3.3 ns for a scope-slot read. These aliases turn the
+  // per-vertex reads below into ordinary scope loads.
+  //
+  // HONEST SCOPE: this is a DEV-LOOP fix. In a browser there is no contextified
+  // global, so the same reads already cost ~3.3 ns and hoisting them is worth
+  // ~1-3 % of build time at most — it does not change anyone's framerate. Applied
+  // only where the read sits in a per-vertex or per-primitive loop; one-shot
+  // setup code keeps the plain `Math.`/`Number.` spelling on purpose.
+  //
+  // The ns figures above are inherited from the firstNonFinite finding, not
+  // re-timed for this pass — a shared 4-core box cannot produce a trustworthy
+  // wall time. What WAS verified here is EQUIVALENCE: all 40 circuits build
+  // bit-identical geometry before and after (tools/graph-parity.cjs --all).
+  const __M = Math, __isFinite = Number.isFinite, __isInteger = Number.isInteger;
+
   const finiteArray = (v, length) =>
-    Array.isArray(v) && (!length || v.length === length) && v.every(Number.isFinite);
+    Array.isArray(v) && (!length || v.length === length) && v.every(__isFinite);
   const validSize = (v) => finiteArray(v, 3) && v.every((n) => n > 0);
   const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
 
@@ -56,9 +75,9 @@ const TrackModels = (function () {
     let or_ = 0, ou = 0, of = 0;
     for (let i = 0; i < p.length; i += 3) {
       const dx = p[i] - c[0], dy = p[i + 1] - c[1], dz = p[i + 2] - c[2];
-      const er = Math.abs(dx * r[0] + dy * r[1] + dz * r[2]) - hr;
-      const eu = Math.abs(dx * u[0] + dy * u[1] + dz * u[2]) - hu;
-      const ef = Math.abs(dx * f[0] + dy * f[1] + dz * f[2]) - hf;
+      const er = __M.abs(dx * r[0] + dy * r[1] + dz * r[2]) - hr;
+      const eu = __M.abs(dx * u[0] + dy * u[1] + dz * u[2]) - hu;
+      const ef = __M.abs(dx * f[0] + dy * f[1] + dz * f[2]) - hf;
       if (er > or_) or_ = er;
       if (eu > ou) ou = eu;
       if (ef > of) of = ef;
@@ -115,7 +134,7 @@ const TrackModels = (function () {
     if (!Array.isArray(geo.idx)) return { ok: false, reason: "invalid index" };
     for (let i = 0; i < geo.idx.length; i++) {
       const v = geo.idx[i];
-      if (!Number.isInteger(v) || v < 0 || v >= count)
+      if (!__isInteger(v) || v < 0 || v >= count)
         return { ok: false, reason: "invalid index" };
     }
     return { ok: true, vertices: count, indices: geo.idx.length };
@@ -151,9 +170,9 @@ const TrackModels = (function () {
       const stage = emptyBuffer();
       try {
         const result = emit(stage);
-        if (result === false || !stage.pos.length || stage.pos.some((v) => !Number.isFinite(v)) ||
-            stage.nrm.some((v) => !Number.isFinite(v)) ||
-            stage.idx.some((v) => !Number.isInteger(v) || v < 0 || v >= stage.pos.length / 3)) {
+        if (result === false || !stage.pos.length || stage.pos.some((v) => !__isFinite(v)) ||
+            stage.nrm.some((v) => !__isFinite(v)) ||
+            stage.idx.some((v) => !__isInteger(v) || v < 0 || v >= stage.pos.length / 3)) {
           diagnostics.invalid.push({ id, required, reason: "invalid or empty emission" });
           return false;
         }
