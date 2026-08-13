@@ -84,6 +84,22 @@ test("it is dramatically smaller than the text it replaces", () => {
   assert.ok(b64 < REAL.length / 4, `expected 4x smaller than the raw SDP, got ${b64} vs ${REAL.length}`);
 });
 
+test("pack() allocates exactly the bytes it writes — no stray trailing 0x00", () => {
+  // The regression this pins: the allocation arithmetic once carried a spare
+  // `+ 1`, so every packed struct ended with one 0x00 the writer never touched.
+  // Decode-harmless (unpack walks by count, not to the end) but a wire-format
+  // wart, and a byte of QR density paid for nothing. The struct is
+  //   ver + setup + count | fp(32) | len+ufrag | len+pwd | (kind+addr+port)*
+  // and for REAL that is one mDNS candidate (16-byte uuid + 2-byte port).
+  const packed = NetSdp.pack(REAL);
+  const ufrag = "0BnP", pwd = "cYngfNsQbABEXhLKe2Bg/q3E";
+  const expected = 3 + 32 + (1 + ufrag.length) + (1 + pwd.length) + (1 + 16 + 2);
+  assert.equal(packed.length, expected,
+    `packed length must equal the struct size exactly, got ${packed.length} vs ${expected}`);
+  // And the last byte is the port's low byte, not padding (48941 & 0xff).
+  assert.equal(packed[packed.length - 1], 48941 & 0xff, "struct must END on the port low byte");
+});
+
 test("a server-reflexive IPv4 candidate round-trips with its port", () => {
   // The candidate that actually connects two people on different networks.
   const withSrflx = REAL.replace("a=ice-ufrag:0BnP",
