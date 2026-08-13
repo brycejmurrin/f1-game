@@ -581,8 +581,34 @@ review: `TrackDefs` is registered **growable** — a location rule (`^js/circuit
 with no count cap — because a frozen count would fail on the next circuit added
 while a rogue writer outside `js/circuits/` still fails.
 
-**Phase 1 (`.d.ts` contracts + `tsc --checkJs` in CI) and Phase 2 (`gen-manifest`)
-are the authorized next steps**, in that order; the 2026-08-13 structure
+**Phase 1, first half, landed 2026-08-13**: `types/game-ctx.d.ts` (the `GameCtx`
+interface — all **210** members of `const G` at `js/game.js:2562-2812`, plus the
+`GameModuleFactory` roster), `tools/check-gctx.mjs` and
+`tests/unit/game-ctx-surface.test.mjs`. ~5 s, zero runtime bytes, no cache bump.
+Two deviations from the plan as written, both forced by the constraints:
+
+- **No `// @ts-check` tranche, and the modules are not compiled directly.**
+  Binding a module's `create(G)` parameter to `GameCtx` needs a JSDoc line inside
+  that file — a `js/` edit, which drags the `?v=N` ritual into a types-only
+  change. Instead the tool resolves every `G` reference through eslint-scope
+  (scope-accurate, so the minimap's 2D `ctx` cannot masquerade as the façade) and
+  emits a generated shadow typed against the interface: 1,741 reference sites
+  across 24 ctx modules, checked in one `tsc --noEmit`. A member that does not
+  exist and a write to a getter-only member are both compile errors, reported at
+  the real `js/` file:line. What it does NOT check is expression types *inside*
+  the modules; the per-file `@ts-check` opt-in is still the second half.
+- **TypeScript is not a devDependency**, so the tsc leg is skipped-with-a-notice
+  when no `tsc` resolves, and the espree parity leg (`.d.ts` member set ==
+  `const G` member set, `readonly` == getter-with-no-setter) is the
+  unconditional gate that runs in CI today. Making the compile leg mandatory is
+  one `npm i -D typescript` away and is a deliberate decision, not a side effect.
+
+The façade came out **clean**: no undeclared write, no dead member, no readonly
+violation across all 1,741 sites. `RendererBackend` and `SceneryApi` are not
+authored yet — `SceneryApi` stays frozen by `scenery-api-contract.test.mjs`,
+`RendererBackend` belongs with Phase 3's `GfxPort`.
+
+**Phase 2 (`gen-manifest`) is the authorized next step**; the 2026-08-13 structure
 re-decision panel re-affirmed Phase 2 as the gating item for the Q3 renames and
 the Q6 `js/ui/` wave, which are sequenced explicitly behind it. Phase 2 should
 split the scanner's single edge list into `EVAL_EDGES` and `CALL_EDGES` along

@@ -21,7 +21,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 111 Playwright
-specs plus 82 `node --test` unit suites; the browser half runs on SwiftShader
+specs plus 83 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **ONE Playwright process at a time, ONE browser group per batch.** Two
@@ -128,6 +128,9 @@ css/                    tokens + 10 component files; docs/COMPONENTS.md is
                         test-asserted; class-count + body-node ratchets apply
 index.html              shell: script tags, all static DOM, ?v=N cache busting
 sw.js                   service worker; precache derives from the shell's tags
+types/                  authored .d.ts contracts, NOT loaded at runtime.
+                        game-ctx.d.ts = the 210-member G façade, held to
+                        `const G` by tools/check-gctx.mjs (Bedrock Phase 1)
 tests/ tools/ docs/     see docs/TESTING.md, tools/README.md, docs/README.md
 .claude/ spike/ worker/ skills+workflows / concluded evaluations / optional relay
 ```
