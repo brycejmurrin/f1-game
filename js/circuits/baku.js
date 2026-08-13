@@ -55,7 +55,7 @@
     elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
     scenery: function (api) {
       const {
-        out, MAT, n, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
+        out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
         gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
@@ -450,15 +450,31 @@
 
       // Crenellations — placed at y = wall height (9m top), so they sit
       // ON TOP of the wall, never through it. Each segment has its own anchor.
+      // The wall this rests on only covers [0.36, 0.537) — clamp merlon nodes
+      // to that same span so a wide tangential spread near either end can't
+      // overshoot into the grandstand gap / off the wall's start with nothing
+      // underneath (float-audit found exactly that at both ends). Also skip
+      // the 0.42-0.50 castle squeeze: the narrowed hwZone there can suppress
+      // the outer rampart wall segment (wall() drops a node whose anchor
+      // reads onTrack when hw shrinks), leaving an unsupported gap under the
+      // merlon even though its own position is otherwise fine.
+      const wallLoK = K(0.36), wallHiK = K(0.537);
+      const squeezeLoK = K(0.42), squeezeHiK = K(0.50);
       for (let p = 0; p < 10; p++) {
         if (p === 9) continue;  // s=0.54 — inside the grandstand gap, no wall there to sit on
         const k = K(0.36 + p * 0.020);
-        const a = anchor(k, 1, 20);
-        // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h)
+        // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h).
+        // Each merlon re-anchors at its own node (k + a node offset derived from
+        // ds) instead of extrapolating along ONE anchor's straight tangent —
+        // the old single-anchor version drifted off the curved wall over the
+        // ~49m spread and floated wherever the rampart bent under it.
         for (let j = 0; j < 14; j++) {
           if (j % 2 === 0) {
-            const mc = vadd(vadd(a.c, a.t, (j - 6.5) * 3.8), a.u, 9.9);
-            addBox(out, mc, [2.4, 1.8, 2.2], SAND, [a.r, a.u, a.t]);
+            const kj = k + Math.round(((j - 6.5) * 3.8) / ds);
+            if (kj < wallLoK || kj > wallHiK) continue;
+            if (kj >= squeezeLoK && kj <= squeezeHiK) continue;
+            const aj = anchor(kj, 1, 20);
+            addBox(out, vadd(aj.c, aj.u, 9.9), [2.4, 1.8, 2.2], SAND, [aj.r, aj.u, aj.t]);
           }
         }
       }
