@@ -275,3 +275,150 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
     { driverId: "drv2", t: 60.75 },
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// THE LOBBY PHASE — where qualifying actually runs.
+//
+// The NetPlay gate above covers the window after the hand-off, but qualifying
+// happens BEFORE it: the lobby keeps the connection through the whole session
+// (its reportQuali header says so) and registers its own QUALI/QLIVE handlers
+// in onConnected(). Those must apply the same sender binding, or the gate
+// guards an empty room — during every qualifying session a guest could still
+// post {driverId: the host's, t: 0.001} and qualiDriven() (js/game.js) would
+// overwrite the host's own driven lap with it.
+//
+// These tests drive the REAL js/net/lobby.js over a loopback transport, the
+// exact route the browser room specs take (__apex.lobbyFake + lobbyWatch):
+// host()/join() build the transport from an injected factory, watchForOpen()
+// reaches onConnected(), and the far endpoint plays the other person. The DOM
+// is a stub that answers null — every lobby render path already tolerates a
+// missing element, because the room can be replaced by the garage at any time.
+// ---------------------------------------------------------------------------
+
+globalThis.NetPlay = NetPlay;
+const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
+globalThis.NetTransport = NetTransport;
+const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
+globalThis.NetHandshake = NetHandshake;
+globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+// Three teams so the guest's seat, the host's seat and a bystander's are all
+// distinct. driverId is seasonDriverId's format (js/game/store.js): "team:seat".
+globalThis.Teams = {
+  LIST: [
+    { id: "alpha", name: "Alpha", drivers: [{ code: "AL1", name: "A One", num: 1 }, { code: "AL2", name: "A Two", num: 2 }] },
+    { id: "bravo", name: "Bravo", drivers: [{ code: "BR1", name: "B One", num: 3 }, { code: "BR2", name: "B Two", num: 4 }] },
+    { id: "chase", name: "Chase", drivers: [{ code: "CH1", name: "C One", num: 5 }, { code: "CH2", name: "C Two", num: 6 }] },
+  ],
+};
+const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
+
+function lobbyG() {
+  const G = {
+    teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
+    trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
+    raceQuali: true, difficulty: 1,
+    caughtQuali: [], caughtQLive: [],
+    onPeerQuali: (d) => { G.caughtQuali.push(d); },
+    onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
+    setNetRoom: () => {},
+    store: { get: (k, dflt) => dflt, set: () => {} },
+  };
+  return G;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** A REAL lobby in `role`, connected over loopback; `peerSays` is the far end. */
+async function lobbyUp(role) {
+  const G = lobbyG();
+  const lobby = NetLobby.create(G);
+  let far = null;
+  lobby.setTransportFactory(() => {
+    const pair = NetTransport.loopback({ latencyMs: 0 });
+    far = pair[1];
+    return pair[0];
+  });
+  // readyIce() would otherwise race a real credentials fetch for 2.5 s.
+  const oldPrefetch = NetTransport.prefetchIce;
+  NetTransport.prefetchIce = () => null;
+  try {
+    if (role === "host") await lobby.host(); else await lobby.join();
+  } finally {
+    NetTransport.prefetchIce = oldPrefetch;
+  }
+  // The connect-watcher's first poll is 250 ms out; a loopback is open the
+  // moment it exists, so one poll is all it takes to reach onConnected().
+  lobby.watchForOpen();
+  await sleep(400);
+  assert.ok(far, "the transport factory must have been asked for a connection");
+  assert.equal(lobby.status().guests > 0 || role === "guest", true, "the lobby must have connected");
+  // Send as the other person, exactly like __apex.lobbyPeerEvent: the far
+  // endpoint's pump flushes the send, and the lobby's own 25 ms pump timer
+  // delivers it — so every send is followed by a settle().
+  const peerSays = (t, d) => { far.send("event", JSON.stringify({ t, d })); far.pump(performance.now()); };
+  const settle = () => sleep(80);
+  return { G, lobby, peerSays, settle };
+}
+
+test("LOBBY phase: the host accepts a guest's own-seat QUALI", async () => {
+  // Anti-vacuity for the drop-tests below — same wire, same host, only the
+  // driverId differs. The guest's HELLO filed it in bravo seat 1, so its own
+  // driverId is "bravo:1".
+  const { G, lobby, peerSays, settle } = await lobbyUp("host");
+  try {
+    peerSays("hello", { team: "bravo", driver: 1 });
+    await settle();
+    peerSays("quali", { driverId: "bravo:1", t: 61.25 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 61.25 }]);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: the host drops a QUALI naming another driver", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("host");
+  try {
+    peerSays("hello", { team: "bravo", driver: 1 });
+    await settle();
+    // The host's own seat (alpha:0) — the exact spoof that would overwrite
+    // the host's driven lap through qualiDriven() — and a bystander's.
+    peerSays("quali", { driverId: "alpha:0", t: 0.001 });
+    peerSays("quali", { driverId: "chase:0", t: 59.0 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [], "a guest may post a qualifying time for ITS OWN seat only");
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: no HELLO filed means no claim at all", async () => {
+  // HELLO always precedes a driven lap in the real flow (it is sent at
+  // connect); a connection that never introduced itself speaks for nobody.
+  const { G, lobby, peerSays, settle } = await lobbyUp("host");
+  try {
+    peerSays("quali", { driverId: "bravo:1", t: 59.0 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, []);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: QLIVE is bound to the sender the same way", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("host");
+  try {
+    peerSays("hello", { team: "bravo", driver: 1 });
+    await settle();
+    peerSays("qlive", { driverId: "bravo:1", t: 12.4, frac: 0.2 });
+    peerSays("qlive", { driverId: "alpha:0", t: 1.0, frac: 0.9 });
+    await settle();
+    assert.deepEqual(G.caughtQLive, [{ driverId: "bravo:1", t: 12.4, frac: 0.2 }]);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: a guest accepts the host's QUALI for any driver", async () => {
+  // Guest side there is nothing to narrow to: its one connection is the
+  // host's, which legitimately speaks for the whole field — another guest's
+  // time can only ever arrive through it.
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  try {
+    peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+  } finally { lobby.cancel(); }
+});
