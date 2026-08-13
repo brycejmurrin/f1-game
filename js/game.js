@@ -657,13 +657,13 @@ function buildStudioRig() {
     const e = R.intensity * 0.55;   // same physical energy factor as track lamps
     _studioBuf.push(lx, ly, lz,
       R.color[0] * e, R.color[1] * e, R.color[2] * e,
-      R.radius, ax, ay, az, 0.88, 0.60, 0.12, 0);
+      R.radius, ax, ay, az, 0.88, 0.60, 0.12, 0, 1);
   }
   // Overhead key: straight-down softbox above the car.
   const ek = R.intensity * 0.55 * 1.4;
   _studioBuf.push(cx, cy + R.h + 3, cz,
     R.color[0] * ek, R.color[1] * ek, R.color[2] * ek,
-    R.radius, 0, -1, 0, 0.80, 0.45, 0.15, 0);
+    R.radius, 0, -1, 0, 0.80, 0.45, 0.15, 0, 1);
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
@@ -1520,23 +1520,23 @@ function makeCars() {
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
-// Without one the old behaviour stands: sort by tier, then drop the player into
-// P12 for a climb. GP keeps that on purpose; only a session that actually held a
-// qualifying hour has earned the right to say where everyone starts.
+// Without one: sort by tier, player dropped into P12 for a climb. GP keeps that
+// on purpose; only a session that held a qualifying hour sets its own grid.
 function gridUp(preOrder) {
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
-    // grid order: by tier then random-ish; player at P12 for a fun climb
-    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
+    // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
+    // comparator is inconsistent and its draw count engine-defined.
+    const jit = new Map(cars.map((c) => [c, simRnd()]));
+    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (jit.get(a) - jit.get(b)));
     const pi = o.indexOf(player);
     o.splice(pi, 1);
     o.splice(Math.min(11, o.length), 0, player);
     return o;
   })();
   order.forEach((c, i) => {
-    // Where this car STARTED. The only record of it: `order` is discarded here and
-    // the classification at the flag is built from finishing times. Career's
-    // "out-qualify your team-mate" objective is what reads it, and it is correct
-    // for both branches above — the qualifying grid and the tier-sorted fallback.
+    // Where this car STARTED — the only record: `order` is discarded here and the
+    // flag classification is built from finishing times. Career's "out-qualify
+    // your team-mate" objective reads it; correct for both branches above.
     c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
@@ -2270,14 +2270,14 @@ function dropRaceWake() {
 
 function startRace() {
   // Abort any incident takeover left over from the last race, FIRST — while the
-  // cars it owns and the track they crashed on are both still the current ones.
-  // IncidentSim owns cars by their cars[] INDEX and only releases them via a
-  // hand-back inside the race loop, so quitting to the menu mid-takeover left an
-  // index owned; after makeCars() below that index is a completely different car,
-  // which would then never drive (updateCar early-outs on owns()) and — if the
-  // same track reloaded, leaving DebrisWorld's generation unchanged — could be
-  // posed straight onto the previous race's crash site from the stale body.
+  // cars it owns and the track they crashed on are both still current. IncidentSim
+  // owns cars by their cars[] INDEX and only releases them via a hand-back inside
+  // the race loop, so quitting to the menu mid-takeover left an index owned; after
+  // makeCars() below that index is a completely different car, which would never
+  // drive (updateCar early-outs on owns()) and — if the same track reloaded, with
+  // DebrisWorld's generation unchanged — could be posed onto the stale crash site.
   IncidentSim.reset();
+  raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
   loadTrack(trackIdx);
   makeCars();
   // A qualifying lap is a time trial with the rest of the field simulated: one
