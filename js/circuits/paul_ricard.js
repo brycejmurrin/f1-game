@@ -80,7 +80,7 @@
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop, runoffApron,
-        cameraTower, sponsorHoarding, signBoard,
+        cameraTower, sponsorHoarding, signBoard, terrainYAt,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -601,9 +601,19 @@
               // at the ends of the run — a vineyard reads as rows plus stakes.
               addBox(out, vadd(a.c, a.u, 0.95), [0.85, 1.5, 112],
                 alt ? VINE : VINE_D, b);
-              for (const t of [-54, -18, 18, 54])
-                addCyl(out, vadd(vadd(a.c, a.t, t), a.u, 0.1), 0.07, 2.0,
+              // TRAP B (docs/SCENERY-GROUNDING.md §2): the posts walk up to
+              // 54 m along the tangent from a.c's single ground sample —
+              // reusing that height stranded them up to ~2 m in the air on
+              // this rolling plateau. Re-seat each post on the ground
+              // actually under it; terrainYAt is null off the rendered
+              // ribbon, where a.c's height is the best guess left.
+              for (const t of [-54, -18, 18, 54]) {
+                const pbase = vadd(a.c, a.t, t);
+                const py_ = terrainYAt(pbase[0], pbase[2]);
+                if (py_ != null) pbase[1] = py_;
+                addCyl(out, vadd(pbase, a.u, 0.1), 0.07, 2.0,
                   [0.52, 0.44, 0.32], 4, b);
+              }
             } else {
               // Lavender row: a lower, rounder, grey-violet ridge with bare
               // tilled soil showing between the rows.
