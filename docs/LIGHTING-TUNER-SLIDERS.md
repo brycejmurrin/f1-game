@@ -248,6 +248,37 @@ Method note: the first two perf attempts died and it was NOT the feature — exi
 480-frame plan needed 8–16 minutes. Sample single-digit frame counts per block
 and interleave A/B/A/B for drift rather than sampling long.
 
+**PER-CHUNK ROAD (`roadChunkLamps`) is where the original complaint actually
+lived.** PER-CHUNK LAMPS lit the scenery but barely moved the road, and the
+reason is structural: only `props`/`glass` go through `drawChunked`; the road is
+a single `gfx.draw()` mesh, so it can only ever carry the ONE global set of 32 —
+culled nearest the CAMERA, which covers the tarmac around the car and starves
+the road AHEAD. Drawing the ribbon chunked (99 cells at Singapore) routes it
+through the same path. Measured, same frozen chase vantage, `roadChunkLamps`
+0 → 1, and the band profile is the exact inverse of the props-only result:
+
+| band | 0 (sky) | 1 (far road) | 2 (mid road) | 3 (car/HUD) |
+|---|---|---|---|---|
+| props-only | — | 5.82 | 0.95 | 1.11 |
+| **road knob** | 1.04 | **7.67** | **6.28** | 1.62 |
+
+overall MAD 4.15, 38,154 px over threshold, and the diff map is a solid filled
+ribbon following the road into the distance rather than edge outlines.
+`drawChunked` goes from 2 calls/frame to 3, the new one carrying 99 chunks.
+
+**Seams are not possible below the cap, by construction:** `_pickChunkLamps`
+excludes a lamp with the SAME reach test the shader uses (`radius` vs the chunk
+AABB ↔ `if (dist > rad) continue`), so an excluded lamp would have contributed
+exactly zero anyway. The one case that CAN seam is a chunk with more than 32
+lamps reaching it, where the cap drops real contributors — rare for props (2 of
+104 chunks) but unmeasured for road chunks, so check that before defaulting on.
+
+**`_keepPositions` is mandatory when building the chunked road**, not defensive:
+`createChunkedMesh` nulls `data.pos`/`data.idx`, and `track.roadGeo` is still
+read by `debrisworld.js` (the Rapier side-world) and `__apex.trackGeometry()`.
+Verified byte-identical across the build — pos 69,672 / idx 128,256 before and
+after (≈42.7k triangles, comfortably over the 2,000-triangle chunking floor).
+
 **Car tail-lights needed explicit plumbing, and verifying it took three tries.**
 `appendCarTailLights` pushes onto `frame.lights` AFTER the static cull, so those
 records live outside `track._lights` — the array `_pickChunkLamps` builds from.
