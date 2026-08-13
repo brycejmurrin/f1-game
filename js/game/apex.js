@@ -127,6 +127,17 @@ const api = {
     // Sync render-interpolation anchors so lerpS(rPrevS, s, alpha) == s regardless
     // of renderAlpha — ensures the hood/cockpit camera is at exactly this position.
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
+    // playerAnchor()/renderPosOf() (js/game.js) drive the HUMAN car's drawn
+    // position from rPrevPx/rPrevPz (WORLD space), not rPrevS/rPrevX (those
+    // only feed the AI-car arc-interpolation branch) — rPrevS/rPrevX above
+    // were never what the player's own mesh reads. Without this, the car
+    // renders lerp'd between wherever it was before the teleport and the new
+    // spot, blended by whatever renderAlpha happened to be; under park()'s
+    // G.frozen (physics never steps again, so renderAlpha never advances)
+    // that blend never resolves — the car sits at a permanent straight-line
+    // cut between the two positions, which on a curved track can render off
+    // the road, mid-air, or through scenery.
+    G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
     return { s: G.player.s, total: G.track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
