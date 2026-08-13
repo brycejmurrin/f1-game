@@ -5199,7 +5199,12 @@ function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
-  if (!track) { gfx.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); gfx.present(); return; }
+  // No track yet — live only since boot deferred the flyby build (scheduleFlybyTrack(),
+  // end of file). DRAW NOTHING rather than present the old, dead fogColor clear:
+  // alpha:false makes an undrawn canvas composite as opaque BLACK, which is what the
+  // blessed menu baselines already encode — corners read 4-9/255, i.e. #overlay's
+  // 0.55-alpha wash over black, not the tens a lit flyby would push through it.
+  if (!track) return;
   _frameNo++;
 
   // camera
@@ -8013,7 +8018,17 @@ $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
-loadTrack(trackIdx);
+// THE BOOT PATH TAKES THE SAME DEFERRAL EVERY OTHER MENU TRACK CHANGE TAKES.
+// This was `loadTrack(trackIdx)` as the last statement of the IIFE — a
+// synchronous Tracks.build() inside DOMContentLoaded, measured at 938 ms
+// (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, against a measured
+// DCL of 4712 ms. Nothing on the menu needs it (the picker and detail modal
+// draw from Tracks.LIST defs via TrackMaps; startRace()/openQuali() build the
+// real track themselves), so it is only ever the background flyby — which is
+// what scheduleFlybyTrack() exists for. __apex forces the build on first use
+// (lazyTrackEnsure, js/game/apex.js) so the test harness keeps the synchronous
+// world every spec written before this assumed.
+scheduleFlybyTrack();
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);

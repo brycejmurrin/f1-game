@@ -131,15 +131,21 @@ const CEILINGS = {
   // the direction the ratchet exists to push: a feature landed and game.js got
   // SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
   // instead of rewriting the eight PerfGov.tier() gates in the render path.
-  // 8018 -> 8035: PerfTry.skyLate. The reorder itself is two edited lines; the
-  // rest is the comment explaining the GLOW hazard, which is the whole reason
-  // this could not be a one-line move. drawGlow is additive with depthMask off,
-  // so it writes no depth and leaves the background at 1.0 where it painted —
-  // which a later depth-1.0 sky with blend OFF would erase. The sky-late path
-  // therefore draws the world WITHOUT glow, then the sky, then the glow. That
-  // ordering constraint is invisible at the call site and expensive to
-  // rediscover, so it is written down where the switch lives.
-  "js/game.js": 8035,
+  // 8018 -> 8033 to take the synchronous track build OFF the boot path. Boot's
+  // last statement was `loadTrack(trackIdx)` — a Tracks.build() measured at
+  // 938 ms (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, inside a
+  // measured DCL of 4712 ms. It now calls scheduleFlybyTrack(), the deferral
+  // this file already used for every other menu track change, and render()'s
+  // (previously dead) null-track branch returns instead of presenting a clear.
+  // 8033 -> MERGED: PerfTry.skyLate landed on the other branch over the same
+  // period. The reorder is two edited lines; the rest is the comment recording
+  // the GLOW hazard, which is why it could not be a one-line move — drawGlow is
+  // additive with depthMask off, so it writes no depth and leaves the
+  // background at 1.0 where it painted, which a later depth-1.0 sky with blend
+  // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
+  // sky, then the glow. Neither branch's number fits the merged file; this one
+  // is set FROM it, the same way the earlier flap-gate merge above was.
+  "js/game.js": 8050,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -153,7 +159,16 @@ const CEILINGS = {
   // instead of only eyeballing a screenshot (which cost a lot of back-and-forth
   // chasing a black-frame red herring that was actually a broken canvas-readback
   // sampler, not a render bug).
-  "js/game/apex.js": 3080,
+  // 3080 -> 3106 for lazyTrackEnsure: the boot deferral above means window.__apex
+  // can exist with G.track === null, and ~180 hooks (plus 105 of 112 spec files)
+  // assume the synchronous world boot used to guarantee. One wrapper at the API
+  // boundary restores it for the dev API only — the alternative was a guard at
+  // every staging hook, which is the shape that rots. Not a new hook, so nothing
+  // joins docs/DEBUG-HOOKS.md. Nine of the 26 lines are the wrapper; the rest
+  // record the placement constraint, which is real: quoting the api literal's
+  // opening text in that comment moved hooks-documented.test.mjs's slice point
+  // and invented a hook called `for`.
+  "js/game/apex.js": 3106,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
