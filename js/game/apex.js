@@ -918,33 +918,10 @@ const api = {
   // base height (≈ road grade + groundYAt) against terrainY just under it.
   groundY(f, lat = 0) {
     if (!G.track) return false;
-    const sPos = ((f % 1) + 1) % 1 * G.track.total;
-    Tracks.sample(G.track, sPos, smp);
-    // Bare centreline p[1] is wrong on any banked corner — same defect eyeAt()
-    // documents above (Zandvoort's outer edge stands 2.4 m proud of the plane).
-    // Ride the bank like buildRoad/buildTerrain and the in-race cameras do.
-    const bk = Tracks.banking(G.track, sPos, lat);
-    let bankDy = bk ? bk.dy : 0;
-    // Tracks.banking() clamps to the ROAD's own half-width (right for a car/
-    // camera, which never leaves the tarmac), so it holds bank at full
-    // saturated strength for any lat beyond the road edge. buildTerrain's
-    // ribbon does the opposite past the edge: it tapers bank to ZERO from the
-    // road edge out to the terrain's outer reach (mesh.js ribbon(), "so the
-    // far ground stays flat"). Match that taper here, or a probe far off-road
-    // on a banked corner reads a false float/sink (COTA's Big Red apex at
-    // lat -48, terrainOuter 48, is exactly the terrain's own flat outer edge).
-    if (bankDy) {
-      const surf = G.track.surface, outerW = surf ? surf.outerW : smp.hw;
-      const dist = Math.abs(lat);
-      if (dist > smp.hw) {
-        const t = Math.min(1, (dist - smp.hw) / Math.max(0.01, outerW - smp.hw));
-        bankDy *= (1 - t);
-      }
-    }
-    const roadY = smp.p[1] + bankDy;
+    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
     const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
     const ty = Tracks.terrainY(G.track, x, z);
-    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +roadY.toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - roadY).toFixed(3) };
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +smp.p[1].toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - smp.p[1]).toFixed(3) };
   },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
