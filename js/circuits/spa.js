@@ -456,8 +456,8 @@
           stage._mat = 0;
           addBox(stage, vadd(a.c, a.u, 23), [5.6, 1.6, 5.6], [0.90, 0.92, 0.86], b);// lit interior band
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(a.c, a.u, 26.6), [6, 0.6, 6], [0.30, 0.30, 0.34], b);  // roof slab
-          addCyl(stage, vadd(a.c, a.u, 27), 0.12, 6, [0.42, 0.42, 0.46], 4, b);     // flag mast
+          addBox(stage, vadd(a.c, a.u, 24.7), [6, 0.6, 6], [0.30, 0.30, 0.34], b);  // roof slab
+          addCyl(stage, vadd(a.c, a.u, 24.8), 0.12, 6, [0.42, 0.42, 0.46], 4, b);   // flag mast
           stage._mat = 0;
           addBox(stage, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
                  [0.94, 0.93, 0.88], b);                                           // trackside clock face
@@ -675,7 +675,10 @@
                  hv < 0.4 ? STONE_W : STONE, b);
           out._mat = 0;
           // The roof IS the Ardennes silhouette: steep, dark, deep-eaved.
-          addPrism(out, vadd(a.c, a.u, wallH + w * 0.30), [w * 1.12, w * 0.62, d * 1.06],
+          // addPrism is BASE-anchored (see the addPrism note in
+          // js/track/geom.js) — seat it on the wall top, not w*0.30 (half its
+          // own height) above it.
+          addPrism(out, vadd(a.c, a.u, wallH), [w * 1.12, w * 0.62, d * 1.06],
                    hv < 0.5 ? SLATE : SLATE_D, b);
           // Window band + a chimney on the ridge.
           addBox(out, vadd(vadd(a.c, a.r, -w * 0.5), a.u, wallH * 0.58),
@@ -697,13 +700,21 @@
               addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.0), [7, 16, 7], STONE_W, b);
               stage._mat = 0;
               addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 20.4], SLATE_D, b);
-              addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 21.5), [7.4, 9.5, 7.4],
+              // addPyramid is BASE-anchored (base plane at `c`, apex at
+              // c+u*sz[1] — see addPyramid in js/track/geom.js), not centred;
+              // seat the spire on the tower top (u=16) instead of floating it
+              // by roughly half its own height.
+              addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 15.8), [7.4, 9.5, 7.4],
                          SLATE, b);
               // Clock face and the cross above the spire.
               addBox(stage, vadd(vadd(vadd(a.c, a.t, -11), a.r, -3.6), a.u, 13.5),
                      [0.3, 1.9, 1.9], TRIM, b);
               stage._mat = MAT.METAL;
-              addCyl(stage, vadd(vadd(a.c, a.t, -11), a.u, 26.2), 0.09, 2.2,
+              // addCyl is BASE-anchored — the spire apex is now at u=25.3
+              // (15.8 base + 9.5 height); seat the cross there with a small
+              // overlap instead of the 0.9 m gap the old apex-mismatched
+              // value left.
+              addCyl(stage, vadd(vadd(a.c, a.t, -11), a.u, 25.1), 0.09, 2.2,
                      [0.60, 0.58, 0.52], 4, b);
               stage._mat = 0;
             });
