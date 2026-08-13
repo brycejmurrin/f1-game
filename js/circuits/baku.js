@@ -561,6 +561,15 @@
       along(0.42, 0.50, 7.2, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 2.0);
+          // Measured (float-audit): this merlon cap sat flush on the wall
+          // top (y=11, from wall()'s own h=11) with zero gap, but the wall
+          // itself is emitted through instance()/along() on its OWN node
+          // spacing (6 m) — different from this loop's (7.2 m) — and
+          // extending the cap's own reach down by up to a full wall height
+          // made no difference, so whatever is beneath it there isn't the
+          // wall either. A slim buttress pier from grade up to the cap
+          // gives it its own real support instead of chasing the wall.
+          addBox(out, vadd(a.c, a.u, 5.5), [1.0, 11.4, 1.0], SAND, [a.r, a.u, a.t]);
           addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, [a.r, a.u, a.t]);
         }
       });

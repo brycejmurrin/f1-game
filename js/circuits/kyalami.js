@@ -125,7 +125,7 @@
         const s = k / n;
         if (openArea(s)) return;
         const side = (Math.floor(k / 20) % 2) ? 1 : -1;
-        tree(k, side, 52 + (k % 3) * 4, 18 + hash(k * 7) * 6, GUM);
+        tree(k, side, 52 + (k % 3) * 4, 18 + hash(k * 7) * 6, GUM, { crown: "columnar" });
       });
       // Red-earth scars where the veld is worn through to laterite — the
       // spectator walkways and infield service roads. Highveld ground is not
