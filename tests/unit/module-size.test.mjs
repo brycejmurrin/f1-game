@@ -111,7 +111,7 @@ const CEILINGS = {
   // the static cull, so a set built from track._lights alone silently dropped
   // them — a regression the knob introduced. Sits at the call site that already
   // assembles the frame's light state.
-  "js/game.js": 8015,
+  "js/game.js": 8013,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

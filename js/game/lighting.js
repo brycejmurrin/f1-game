@@ -577,6 +577,13 @@ const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
 function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
+  // PER-CHUNK LAMPS needs to know which records here are the DYNAMIC ones, and
+  // it cannot be derived by measuring frame.lights before/after: when the set is
+  // already at cap this function TRIMS the farthest static lamps before pushing,
+  // so the length is unchanged and a before/after diff reports zero. Record the
+  // range authoritatively instead, and zero it on every early return.
+  frame.tailStart = L ? (L.length / 15) | 0 : 0;
+  frame.tailCount = 0;
   // frame.lights is always the per-frame copy (flicker copies every frame), so
   // appending here never mutates the cached track set.
   if (!L || L === track._lights || !player) return;
@@ -631,6 +638,9 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
       4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
       8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
+  // The nT tail-lights are the LAST nT records — after any trim above.
+  frame.tailCount = nT;
+  frame.tailStart = ((L.length / 15) | 0) - nT;
 }
 
 // Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses

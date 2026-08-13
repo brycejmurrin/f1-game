@@ -5777,10 +5777,8 @@ function render(dt) {
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
     // them. Record the appended range so GLXChunked can add them to every chunk.
-    const _tlStart = frame.lights ? (frame.lights.length / 15) | 0 : 0;
+    frame.tailStart = 0; frame.tailCount = 0;   // appendCarTailLights sets the real range
     if (_floodActive) appendCarTailLights();
-    frame.tailStart = _tlStart;
-    frame.tailCount = frame.lights ? Math.max(0, ((frame.lights.length / 15) | 0) - _tlStart) : 0;
   } else if (track.hasAlwaysLamps) {
     // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
     // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
