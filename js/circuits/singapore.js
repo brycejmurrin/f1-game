@@ -345,12 +345,20 @@
         // Span follows leaned tops (outers closer together at the crown)
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
+        // `mid` (tops[1]) IS the centre tower's top surface height (H, base-anchored
+        // addBox above puts its top exactly there). These three slab boxes are
+        // addBox — CENTRE-anchored — but their old +3.5/+6.0/+5.5 offsets left the
+        // main slab's underside 1.75 m above that top surface, more than the
+        // audit's 0.6 m "rests on" slack, so the whole 200 m-tall assembly read
+        // as unsupported. Shifted down by 1.45 m (every offset moves together,
+        // so the slab/rim/pool stack keeps its original relative geometry) to
+        // seat the main slab's underside ~0.3 m above the tower top.
         // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
-        TrackGeom.addBox(stage, vadd(mid, a.u, 3.5), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 2.05), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         // Glowing neon rim — the iconic cyan strip seen from every angle
-        TrackGeom.addBox(stage, vadd(mid, a.u, 6.0), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 4.55), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
         // Rooftop pool and garden strip — warm amber
-        TrackGeom.addBox(stage, vadd(mid, a.u, 5.5), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 4.05), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
         }, { required: true });
       }
 
