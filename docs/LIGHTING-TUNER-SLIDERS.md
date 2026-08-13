@@ -138,6 +138,26 @@ too — the spot matters as much as the track. Read the selection by wrapping
 `LightTune.setFrameLights` (it is called via property lookup on the global, so a
 monkeypatch takes effect) and measuring `frame.lights` distances against `eye`.
 
+The table above is the ORIGINAL curve, which under-delivered against its own
+label: `d` in that loop is a SQUARED distance, so dividing it by
+`1 + (reach-1)·cos²θ` shortened the ranked LINEAR distance only by `sqrt(reach)`
+— a slider reading 4 bought 2× reach. The divisor is now squared, so the number
+is the literal reach multiplier for a dead-ahead lamp. Re-measured at Singapore
+0.55, farthest selected lamp ahead:
+
+| reach | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| farthest ahead | 249 m | 379 m | **415 m** | 415 m (saturated) |
+| lamps within 40 m | 4 | 4 | 4 | 4 |
+
+**+67%** (249→415 m) where the old curve gave +44%. Two things worth keeping:
+the near road is NOT starved — lamps inside 40 m hold at 4 and the nearest stays
+~29 m, so the budget is taken from the mid field (80 m band 8→6), not from under
+the car; and the gain **saturates at reach 3** because the track simply has no
+further lamps in that sightline, which is why the 1–4 range needs no widening.
+A knob like this is bounded by lamp availability, so expect a plateau rather
+than a linear response.
+
 **`moonShadow`'s escape hatch — needs BAD weather; it is a guaranteed no-op when dry.**
 `frame.moonGate = max(moonK, clamp((moonShadow-0.5)*2, 0, 1))`, and `moonK` is
 already 1 on a clear dry night, so the max() cannot move:
