@@ -90,13 +90,36 @@
       //    enclosing the track like a stadium. Nothing else on the calendar
       //    looks remotely like this.
       // =====================================================================
-      // Outer wall — unbroken along the whole oval portion.
-      for (let i = 0; i < 12; i++) {
-        const s = 0.86 + i * 0.0283;   // wraps through 0 across the front straight
-        grandstandEx(s % 1, 1, 13, 118, null, null, {
-          livery: i % 3 === 0 ? "alu" : (i % 3 === 1 ? "concrete" : "darkSteel"),
-          tiers: 3, roof: i % 4 === 0 ? "cantilever" : null,
-          endWalls: false, pylons: i % 4 === 0,
+      // Outer wall — unbroken along the whole oval portion, built from 30 short
+      // bays rather than 12 long ones. grandstandEx lays every stand out as a
+      // straight CHORD off the tangent at its own node, so a 118 m block sitting
+      // on an oval turn cuts the corner: its seating bank and concourse deck
+      // swing wide enough that their world AABBs reach the road corridor further
+      // round the turn, which is what props-over-road reads (4.75 m at f=0.33 —
+      // the deck itself stays ~18 m clear, the reading comes from that test's
+      // AABB prefilter, but a 118 m chord on a 4076 m oval is a bad
+      // approximation of the arc either way). Shorter bays cut the sagitta.
+      // Same total run and the same colour bands / roofed sections: the livery
+      // and roof cadence key off `g`, the original 12-bay index.
+      //
+      // EACH BAY IS SHORTER THAN ITS PITCH (0.93), so neighbours ABUT instead of
+      // overlapping. The long version overlapped too — 118 m of stand on a
+      // 115.4 m pitch — but its chords met at a steep enough angle that the two
+      // shells were not parallel. Short bays are very nearly parallel, and the
+      // first cut of this fix (bay = 1.02 x pitch) put two shells and two rear
+      // fascias on one plane: a 50 m2 same-facing coplanar pair, the z-fight
+      // class coplanar-faces.test.mjs ratchets. Ending each bay ~1 m short of
+      // the next removes the shared plane rather than papering over it; the seam
+      // sits behind the terrace colour bands, which run continuously past it.
+      const OUTER_BAYS = 30, OUTER_SPAN = 0.3396;   // 12 x 0.0283 — unchanged run
+      const OUTER_RUN = 1384;                       // metres of wall the span covers
+      for (let i = 0; i < OUTER_BAYS; i++) {
+        const s = 0.86 + i * (OUTER_SPAN / OUTER_BAYS);  // wraps through 0 across the front straight
+        const g = Math.floor(i * 12 / OUTER_BAYS);       // original 12-bay index — keeps the banding
+        grandstandEx(s % 1, 1, 13, OUTER_RUN / OUTER_BAYS * 0.93, null, null, {
+          livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
+          tiers: 3, roof: g % 4 === 0 ? "cantilever" : null,
+          endWalls: false, pylons: g % 4 === 0,
         });
       }
       // Inner (infield) stands facing back across the front straight.
