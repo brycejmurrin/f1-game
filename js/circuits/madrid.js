@@ -204,7 +204,12 @@
             const c = vadd(vadd(a.c, a.r, side * tier * 2.4), a.u, 3.0 + tier * 3.0);
             addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], TENDIDO[tier], b);
           }
-          addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 13.6),
+          // addPrism is BASE-anchored (js/track/geom.js:153) — 13.6 was tier2's
+          // top (11.8) plus half the roof height, i.e. authored as if this were
+          // the CENTROID. That left the roof's base floating 1.8 m above the
+          // top tier with nothing filling the gap. Seat it just above tier2's
+          // top (a hair of clearance, not flush, so the two faces don't fight).
+          addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 11.9),
             [18, 3.2, 33], WHITE, b);
           // Inner "barrera" wall — the face the driver actually sees from the
           // banking. It was one blank OFFWHITE slab repeated 54 times; Las

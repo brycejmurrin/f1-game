@@ -126,9 +126,12 @@
             addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -2.36),
               [0.22, 1.55, 5.2], [0.30, 0.46, 0.56], b);
           }
-          addBox(stage, vadd(a.c, a.u, h + 0.2),
+          // Main box top is h*0.96 (centred at h*0.48, height h*0.96), not h --
+          // the roof cap referenced raw h, leaving a 0.63-0.71m gap (h=17..19)
+          // just over the rests-on tolerance. Seat both on the true top.
+          addBox(stage, vadd(a.c, a.u, h * 0.96 + 0.2),
             [7.2, 0.5, 8.0], [0.90, 0.91, 0.92], b);
-          addCyl(stage, vadd(a.c, a.u, h + 0.45),
+          addCyl(stage, vadd(a.c, a.u, h * 0.96 + 0.45),
             0.10, 2.8, [0.36, 0.37, 0.39], 5, b);
         });
       };
