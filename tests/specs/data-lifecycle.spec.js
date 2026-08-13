@@ -10,6 +10,14 @@ async function dataReady(page) {
   });
   // hub.js calls every tab module's create() at IIFE-eval time (see
   // HARD_EDGES in tools/manifest.cjs), so ALL data modules must load first.
+  // mat4.js comes before them, and it is not optional: js/data/telemetry.js
+  // aliases `const clamp = M4.clamp` at EVAL time, so without M4 telemetry.js
+  // throws, DataTelemetry is stranded in its temporal dead zone, and hub.js's
+  // top-level DataTelemetry.create(...) throws in turn — leaving DataHub dead
+  // too. The symptom is a bare `ReferenceError: DataHub is not defined` from
+  // the waitForFunction below, three links away from the cause. index.html has
+  // always loaded mat4.js before js/data/*, so the app was never affected.
+  await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
   await page.addScriptTag({ url: "/js/data/export.js" });

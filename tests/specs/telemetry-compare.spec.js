@@ -8,6 +8,15 @@ async function dataReady(page) {
   await page.goto("/version.json");
   await page.setContent('<div id="datahub" hidden></div>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
+  // mat4.js FIRST, and it is not optional: js/data/telemetry.js aliases
+  // `const clamp = M4.clamp` at EVAL time (telemetry.js), so without M4 that
+  // file throws, DataTelemetry is stranded in its temporal dead zone, and
+  // hub.js's top-level `DataTelemetry.create(...)` throws in turn — leaving
+  // DataHub dead too. The symptom is a bare `ReferenceError: DataHub is not
+  // defined` from the waitForFunction below, three links from the cause.
+  // index.html has always loaded mat4.js before js/data/*, so the app was
+  // never affected; only this standalone harness was.
+  await page.addScriptTag({ url: "/js/mat4.js" });
   for (const u of ["api", "telemetry", "export", "schedule", "standings", "lastrace", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
