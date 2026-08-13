@@ -207,6 +207,11 @@ never return null (failures are `{ok:false, error, message, fix}`);
 Work happens on a `claude/<topic>` branch — `git branch --show-current` is
 the truth. **The deploy branch is `claude/f1-game-project-26h3ng`**: never
 push there without review; `pages.yml` fires only there and ships to
-https://brycejmurrin.github.io/f1-game/. The deploy branch shares NO git
-history with the 2026-08 working lineage (no merge-base) — deploying that
-lineage's work is a deliberate operation, not a fast-forward.
+https://brycejmurrin.github.io/f1-game/. Since the 2026-08-13 unification
+merge (`a560de44`) the deploy branch and the working lineage share history —
+a deploy is an ordinary `git merge`, but OTHER SESSIONS develop directly on
+the deploy branch, so always `git fetch` and merge THEIR new work (both-side
+changes are real conflicts: re-measure baselines on the merged tree, take
+max+1 of both lineages' cache versions), never force-push, and re-run
+`test:tooling-fast` before pushing. The container proxy blocks `github.io` —
+verify a live deploy through an MCP fetch, not curl.
