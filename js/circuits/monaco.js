@@ -128,8 +128,27 @@
       // ── Continuous Armco lining both sides — tight street feel ───────────
       // 1.2 m leaves the collision limit just outside the authored 5 m road,
       // instead of narrowing the usable tarmac while remaining Monaco-tight.
-      wall(0.0, 1.0, -1, 1.2, 0.8, ARMCO, 0.22);
-      wall(0.0, 1.0, 1, 1.2, 0.8, ARMCO, 0.22);
+      // FULL_LAP stops one node short of 1.0, not 1.0 itself. This circuit is
+      // `sceneryCoordinates: "source"` + `reverse: true`; TrackSpace.range()
+      // maps a SOURCE frac through toRacingFrac(def, s) = wrap01(phi - s), and
+      // wrap01(1.0) === wrap01(0.0), so an exact [0.0, 1.0] source range maps
+      // BOTH ends to the identical racing frac (phi) before sceneryRange()'s
+      // own "whole lap" guard (`|s1-s0| >= 1-1e-9`) ever sees it — the guard
+      // checks the racing-space span, which is already zero by then, not the
+      // 1.0 the caller wrote. along()'s k0===k1 wraparound then duplicates
+      // exactly one node's wall geometry, and because this circuit's origin
+      // is shifted, that node lands mid-lap (k=156, the Casino/Massenet
+      // climb) instead of the harmless start/finish it would be on a
+      // straight source-space circuit — a same-facing, zero-gap coplanar
+      // pair (17.3 m2, 0.0 mm) at that exact spot. Measured: reverting only
+      // the Casino block's KOLD+raw-frame fix (which is unrelated and
+      // correct) does not change this pair; disabling each wall() call in
+      // isolation does, one node-fraction short of a full lap is enough to
+      // break the alias without leaving a visible gap (along()'s own station
+      // spacing here is ~8 m, four times this shim).
+      const FULL_LAP = 1 - 1 / n;
+      wall(0.0, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
+      wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
