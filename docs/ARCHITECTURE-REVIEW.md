@@ -258,11 +258,15 @@ most-load-bearing first.
   clamp rather than the takeover. The product question is untouched: should
   `wallAt` remain an outer bound during an R2 takeover, or is passing through
   the barrier the intended cost of a launch?
-- **Red Bull Ring's barrier dressing coverage has collapsed.**
-  `tests/specs/redbull-foundation.spec.js` asserts `walls.tightFrac > 0.99` and
-  measures **0.225** — 16 tight nodes out of 1,071. Confirmed pre-existing: a
-  headless recompute is byte-identical between the session-start commit and the
-  fixed tree. This wants a dressing pass over the circuit, not a tolerance edit.
+- **Red Bull Ring's barrier coverage — FIXED (2026-08-13), and the mechanism
+  was general.** tightFrac 0.225 was not missing dressing: sceneryRange()
+  collapsed every authored full-lap span to zero width (wrap01(1) === 0)
+  before the full-lap guard could see it, so lap-round barriers tightened
+  ONE node per side on shifted circuits. Fixed in js/track/space.js by
+  short-circuiting width >= 1 to {0, 1} — a whole lap is frame-invariant.
+  Verified: fleet A/B shows redbull only (0.225 -> 1.000), characterization
+  + redbull-foundation + tiny + guards all green.
+
 - **`__apex.scene()` disagrees with its own spec about corners behind the
   camera.** `tests/specs/agent-view.spec.js` asserts `|bearingDeg| > 120` for a
   corner flagged `behindCamera`; Monza measures **108.1°**, and the value is
