@@ -1,4 +1,4 @@
-# LIGHTING TUNER — the 178 sliders, and what each one drives
+# LIGHTING TUNER — the 182 sliders, and what each one drives
 
 Generated from `TUNE_DEFS` in `js/game/lighting.js`; that registry is the
 source of truth and this table is a view of it. Regenerate rather than hand-edit
@@ -7,7 +7,7 @@ source of truth and this table is a view of it. Regenerate rather than hand-edit
 ## Every slider is wired — the full audit
 
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
-sampled file list) gives all 178 knobs a consumer on the shipping (GLX) path —
+sampled file list) gives all 182 knobs a consumer on the shipping (GLX) path —
 **zero unwired**. The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):
 
@@ -40,7 +40,7 @@ these, and they need different fixes:
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
 The third and fourth are the common ones, and the reason a casual "half these do
-nothing" is usually wrong: 69 of the 178 knobs are also set by shipped presets per
+nothing" is usually wrong: 69 of the 182 knobs are also set by shipped presets per
 (track, time-of-day, weather), so what a slider appears to do depends on where
 you are standing when you drag it.
 
@@ -433,7 +433,7 @@ off-grid.
 | `contactStr` | CONTACT SHADOW | 0 … 3 | 1 | — | ✓ | game.js, post.js×4 |
 | `ambContactDark` | AMBIENT CONTACT DARK | 0 … 3 | 1 | `uAmbContactDark` |  | glx.js×2 |
 
-## LAMPS  (21)
+## LAMPS  (24)
 
 One tuner tab for every track lamp (street posts and flood banks). Was split as
 FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
@@ -446,6 +446,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `floodDay` | DAYTIME LAMPS | 0 … 1.5 | 0 | — |  | game.js×4 |
 | `poolEnergy` | POOL ENERGY | 0.05 … 2 | 0.55 | — | ✓ | lighting.js×5 |
 | `lampRadiusMul` | POOL RADIUS | 0.3 … 3 | 1 | — | ✓ | lighting.js×3 |
+| `lampDensity` | LAMP DENSITY | 0.5 … 2.5 | 1 | — |  | lighting.js×4, tracks.js×2 |
 | `bleedMul` | VALLEY BLEED | 0 … 5 | 1 | — | ✓ | lighting.js×3 |
 | `glareStr` | LENS GLARE | 0 … 1.5 | 0.12 | — | ✓ | game.js×2 |
 | `lampTemp` | LAMP TEMPERATURE | -2 … 2 | 0 | — | ✓ | game.js |
@@ -464,6 +465,9 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampWarmupDim` | WARM-UP DIP | 0 … 0.9 | 0.3 | — |  | lighting.js×2 |
 | `lampWarmupWarm` | WARM-UP WARMTH | 0 … 3 | 1 | — |  | lighting.js×2 |
 | `lampCull` | LAMP COUNT | 16 … 32 | 28 | — |  | lighting.js×4 |
+| `lampBehindBias` | BEHIND-CAM BIAS | 1 … 10 | 5.25 | — |  | lighting.js |
+| `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |  | lighting.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — |  | game.js, glx.js×2, chunked.js×2 |
 | `lampCullFade` | LAMP CULL FADE | 0.1 … 0.9 | 0.35 | — |  | lighting.js×2 |
 | `lampGapFill` | DARK-GAP FILL | 0 … 400 | 60 | — |  | lighting.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 1 … 10 | 5.25 | — |  | lighting.js×3 |
@@ -484,7 +488,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `threshOff` | BLOOM THRESHOLD | -0.5 … 0.2 | 0 | — | ✓ | game.js |
 | `bloomKnee` | BLOOM ON HIGHLIGHTS | 0 … 1 | 0.5 | `uBloomKnee` |  | post.js×2 |
 
-## ATMOSPHERE  (18)
+## ATMOSPHERE  (19)
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
@@ -506,6 +510,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.8 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 2.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — |  | game.js |
+| `renderDistMul` | RENDER DISTANCE | 0.5 … 2 | 1 | — |  | game.js×2 |
 
 ## ROAD & REFLECTIONS  (10)
 
