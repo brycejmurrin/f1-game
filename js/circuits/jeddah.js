@@ -561,9 +561,16 @@
           stage._mat = MAT.CONCRETE;
           addFrustum(stage, a.c, 26, 9, 250, [0.40, 0.41, 0.45], 8, b);       // tapered unfinished shaft
           stage._mat = 0;
-          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab
-          addBox(stage, vadd(a.c, a.u, 262), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
-          addBox(stage, vadd(vadd(a.c, a.u, 258), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
+          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab (top at 258, flush on the 250 frustum top)
+          // Jib was set to height 262 — 3.55m clear of the cab roof (top 258) and
+          // therefore unsupported all the way down to the sea (float-audit: 261m
+          // gap). Seat it on the cab roof instead (half-height 0.45, small overlap).
+          addBox(stage, vadd(a.c, a.u, 258.4), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
+          // Beacon height was derived independently (258, off the cab roof) instead
+          // of from the jib it is meant to sit on, so it hung 3.25m below the jib
+          // with nothing underneath. Rest it on the jib's top face instead — the
+          // tangent offset (-14) already sits inside the jib's ±17m footprint.
+          addBox(stage, vadd(vadd(a.c, a.u, 259.1), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
         }, { required: false });
       }
 
