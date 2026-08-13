@@ -328,6 +328,35 @@ const Tracks = (function () {
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
+    // overheadSpan takes its fraction in a SPEC OBJECT, which is why it sat in
+    // the shift-only group below and never got the reverse/mirror the rest of
+    // the scenery gets. On a reversed circuit that leaves everything an
+    // overheadSpan builds — on Monaco the entire tunnel: vault, haunches,
+    // springings, luminaires, overburden, headland and both portal arches —
+    // mirrored away from the walls and barriers it is supposed to roof. It
+    // reads in-game as slabs floating over an open section of the lap while the
+    // real bore has no roof, and NO audit catches it: props-over-road stops at
+    // CEIL = 5 m and calls anything higher legitimate overhead clearance, so a
+    // tunnel roof in the wrong PLACE is indistinguishable from one in the right
+    // place to every guard in the repo.
+    //
+    // The shift-only note below flagged this as a deliberate, conservative gap
+    // ("a separate question with its own before/after pass"). This is that
+    // pass. It moves geometry on the four reversed circuits — monaco, kyalami,
+    // paul_ricard, singapore — which is the point: it is currently in the wrong
+    // place there. Every other circuit is untouched, because RS() is identity
+    // without a reverse bit or an origin shift.
+    //
+    // `offset` is a LATERAL offset in the span's own frame, so it mirrors with
+    // the side for the same reason SIDE() exists — otherwise a left haunch
+    // rebuilds itself on the right.
+    if (api.overheadSpan) w.overheadSpan = (spec) => {
+      if (!spec) return api.overheadSpan(spec);
+      const next = Object.assign({}, spec);
+      if (Number.isFinite(spec.frac)) next.frac = RS(spec.frac);
+      if (def.reverse && Number.isFinite(spec.offset)) next.offset = -spec.offset;
+      return api.overheadSpan(next);
+    };
     // floodMastRing places BOTH sides via every() — no remapping needed
     // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
@@ -363,8 +392,6 @@ const Tracks = (function () {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
       if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(SS(frac), ...r);
-      if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
-        spec && Number.isFinite(spec.frac) ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
       if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
         spec && Array.isArray(spec.points)
           ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
