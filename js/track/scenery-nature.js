@@ -438,6 +438,13 @@ const SceneryNature = (function () {
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
       out._mat = MAT.WOOD;
       addCyl(out, vadd(a.c, a.u, -0.5), 0.28, h * 0.62 + 0.5, bark, 5, b);
+      // Crown layer i is centred here. Its rise off the trunk is capped in
+      // METRES, not held at a fraction of h: at h*0.14 per layer a 12 m tree
+      // (the top of the 6 + hash*6 range) opened a 0.88 m step between slabs,
+      // past the 0.6 m the grounding audit will bridge, so the canopy of every
+      // TALL acacia read as floating clear of the tree carrying it — 22 of
+      // cota's clusters and 6 of kyalami's, all crown slabs, never the trunk.
+      const layerY = (i) => h * 0.80 + i * Math.min(h * 0.14, 1.0);
       for (const dr of [-1, 1])                                    // the low fork
         addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
@@ -445,8 +452,17 @@ const SceneryNature = (function () {
       // Flat slabs, not cones: the crown's top and bottom are both near-planar.
       for (let i = 0; i < layers; i++) {
         const f = 1 - i * 0.4;
-        addBox(out, vadd(a.c, a.u, h * (0.80 + i * 0.14)),
-               [spread * f, 0.9 - i * 0.2, spread * f], i % 2 ? c2 : col, b);
+        // The lowest slab thickens on tall trees so its underside still reaches
+        // the fork top (h*0.68 + 0.35). That gap grows as h*0.12 - 0.80 and
+        // passes the 0.6 m the audit bridges at h > ~11.7 — the other half of
+        // the same defect. Thickening the slab rather than raising the fork is
+        // deliberate: the fork halves are 0.22 deep and share both large face
+        // planes with each other, so growing them pushed a pre-existing
+        // same-facing coincidence over the coplanar audit's area threshold
+        // (cota 12 -> 14 spots) for no visual gain.
+        const t = i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
+        addBox(out, vadd(a.c, a.u, layerY(i)),
+               [spread * f, t, spread * f], i % 2 ? c2 : col, b);
       }
       out._mat = 0;
     };
