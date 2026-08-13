@@ -832,7 +832,15 @@
         const gy = groundYAt(cxw, czw);
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw],
                     r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
-        if (!onTrack(a.c[0], a.c[2], 10)) {
+        // EVERY corner of the 24x23 deck footprint, not just the centre. The
+        // centre-only check passed while a deck EDGE lay across the hairpin
+        // street — Monaco's folds put roads within metres of everything, so a
+        // single-point guard on a 20 m prop is no guard at all. Measured: the
+        // white 16 m edge read as a bar on the road at racing 0.389.
+        const deckClear = [[12, 11.6], [12, -11.6], [-12, 11.6], [-12, -11.6]]
+          .every(([dr, dt]) => !onTrack(cxw + a.r[0] * dr + a.t[0] * dt,
+                                        czw + a.r[2] * dr + a.t[2] * dt, 3));
+        if (deckClear && !onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 0.3), [14, 0.5, 22], [0.20, 0.60, 0.65], b);
           for (const o of [-7.4, 7.4]) addBox(out, vadd(vadd(a.c, a.r, o), a.u, 0.6), [1.4, 0.7, 23], [0.94, 0.94, 0.96], b);
