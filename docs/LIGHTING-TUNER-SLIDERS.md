@@ -248,6 +248,29 @@ Method note: the first two perf attempts died and it was NOT the feature — exi
 480-frame plan needed 8–16 minutes. Sample single-digit frame counts per block
 and interleave A/B/A/B for drift rather than sampling long.
 
+**Car tail-lights needed explicit plumbing, and verifying it took three tries.**
+`appendCarTailLights` pushes onto `frame.lights` AFTER the static cull, so those
+records live outside `track._lights` — the array `_pickChunkLamps` builds from.
+Left alone, switching the knob ON silently stopped chunked scenery receiving any
+tail-light contribution. `uploadLightSet` now takes an optional second source and
+reserves the tail-lights FIRST (at most 5; a car beside you outranks the
+32nd-nearest lamp). Confirmed live: `drawChunked` sees
+`[perChunkLights 1, tailCount 5, hasLights 1, hasAllLights 1]`.
+
+Two traps cost a full debugging round each, both worth avoiding:
+
+- **Do not derive the dynamic-light count by measuring `frame.lights` before and
+  after the append.** When the set is already at cap, `appendCarTailLights`
+  TRIMS the farthest static lamps before pushing, so length-in equals
+  length-out and the difference is always 0. The first fix computed exactly
+  that, compiled, passed 442/442 and shipped as a pure no-op. The count is now
+  recorded inside that function, where `nT` is actually known.
+- **`drawChunked` runs only ~2x per frame** (props + glass) while
+  `uploadLightSet` fires ~79 times inside them. A probe armed one rAF before
+  sampling can catch uploads from a frame whose `begin()` had not yet seen the
+  current state, reporting `nTail: 0` while the frame-level value is 5. Assert
+  at `drawChunked` (few calls, unambiguous state) rather than at the upload.
+
 Two instruments that did NOT work, recorded so they are not retried: a
 union-of-distinct-lamps count via wrapping `gl.uniform3fv` reported 64 → 270,
 but 270 exceeds the track's 249 baked lamps — it was catching material/ambient
