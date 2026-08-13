@@ -721,24 +721,39 @@
       // it now rises on the far shore, well beyond the yacht ranks and
       // breakwater (which top out around dist 135m), so nothing in front
       // occludes the base of the rock.
+      // KOLD + raw frame, same disease as the pool/terrace: the authored
+      // 0.665 is OLD-RACING (the harbour front), but the wrapped anchor read
+      // it as source and set the Rock down ~50 m off CASINO SQUARE — float-
+      // audit's worst cluster on the circuit (the palace deck, dome tier and
+      // turrets hanging at 40-68 m with nothing beneath). The crown is also
+      // pulled INSIDE the r=22 rock top it stands on: the 32x34 deck, the
+      // +/-15 wings and the +/-20 turrets all overhung the tier below, so
+      // their rims floated even where the rock itself was placed correctly.
       {
-        const k = K(0.665), a = anchor(k, -1, 150);
+        const k = KOLD(0.665);
+        const gap = 150;
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const cxw = px[k] - rr[0] * gap, czw = pz[k] - rr[2] * gap;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, Math.min(gy == null ? py[k] : gy, py[k]) - 2, czw],
+                    r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
           const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
           // Rock cliff climbing from the waterline (organic frustum tiers).
           addFrustum(out, vadd(a.c, a.u, 21), 46, 32, 42, ROCK, 8, b);
           addFrustum(out, vadd(a.c, a.u, 42), 32, 22, 16, ROCK2, 8, b);
-          // Palace fortress crowning the rock.
+          // Palace fortress crowning the rock — everything within the r=22 top.
           const py0 = 50;
-          addFrustum(out, vadd(a.c, a.u, py0 + 10), 20, 14, 20, CREAM, 8, b);
+          addFrustum(out, vadd(a.c, a.u, py0 + 10), 18, 12, 20, CREAM, 8, b);
           for (const sd of [-1, 1]) {
-            addBox(out, vadd(vadd(a.c, a.r, sd * 15), a.u, py0 + 8), [8, 16, 20], [0.92, 0.88, 0.82], b);
-            addCyl(out, vadd(vadd(a.c, a.r, sd * 20), a.u, py0 + 18), 2.4, 10, [0.72, 0.70, 0.66], 7, b);
+            addBox(out, vadd(vadd(a.c, a.r, sd * 10), a.u, py0 + 8), [7, 16, 14], [0.92, 0.88, 0.82], b);
+            addCyl(out, vadd(vadd(a.c, a.r, sd * 13), a.u, py0 + 18), 2.0, 10, [0.72, 0.70, 0.66], 7, b);
           }
-          addBox(out, vadd(a.c, a.u, py0 + 3), [32, 1.2, 34], [0.86, 0.85, 0.82], b);
+          addBox(out, vadd(a.c, a.u, py0 + 3), [24, 1.2, 26], [0.86, 0.85, 0.82], b);
           // lit palace windows (reads at any time of day as a warm accent)
-          addBox(out, vadd(a.c, a.u, py0 + 16), [32.4, 3.6, 22], WINLIT, b);
+          addBox(out, vadd(a.c, a.u, py0 + 16), [24.4, 3.6, 16], WINLIT, b);
         }
       }
 
