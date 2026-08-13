@@ -815,15 +815,22 @@
         const a = anchor(K(0.62), 1, 260);
         const b = [a.r, a.u, a.t], base = a.c;
         const wallC = [0.82, 0.78, 0.68], roofC = [0.56, 0.30, 0.22];
-        // Scatter of farmhouses with pitched roofs.
+        // Scatter of farmhouses with pitched roofs. Each farmhouse re-anchors
+        // at its OWN (k, dist) rather than walking the single hilltop sample
+        // in a.t/a.r — a straight-line walk of up to 85 m off one ground
+        // reading left several houses floating tens of metres above the
+        // actual hillside. addPrism is also BASE-anchored (see the addPrism
+        // note in js/track/geom.js), not centred, so the roof sits directly
+        // on the wall top instead of at +1.6 (half the roof's own height).
         for (let i = 0; i < 6; i++) {
           const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
-          const f = vadd(vadd(base, a.t, off), a.r, out2);
+          const ai = anchor(K(0.62) + Math.round(off / ds), 1, 260 + out2);
+          const bi = [ai.r, ai.u, ai.t], f = ai.c;
           const w = 12 + hash(i * 7) * 6, hh = 7 + hash(i * 5) * 3;
           out._mat = MAT.STONE;
-          addBox(out, vadd(f, a.u, hh * 0.5), [w, hh, w * 0.8], hash(i) < 0.5 ? wallC : [0.76, 0.72, 0.62], b);
+          addBox(out, vadd(f, ai.u, hh * 0.5), [w, hh, w * 0.8], hash(i) < 0.5 ? wallC : [0.76, 0.72, 0.62], bi);
           out._mat = MAT.ROOF;
-          addPrism(out, vadd(f, a.u, hh + 1.6), [w, 3.2, w * 0.8], roofC, b);
+          addPrism(out, vadd(f, ai.u, hh), [w, 3.2, w * 0.8], roofC, bi);
           out._mat = 0;
         }
         // Village church: white nave + a tall spire.

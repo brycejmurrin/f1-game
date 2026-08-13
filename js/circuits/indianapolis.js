@@ -155,16 +155,22 @@
           // Solid base housing.
           addBox(stage, vadd(a.c, a.u, 5), [20, 10, 24], [0.80, 0.80, 0.82], b);
           // Five diminishing tiers, each with an overhanging eave — the
-          // pagoda profile. Glass band on every tier.
+          // pagoda profile. Glass band on every tier. Stepped at 6.85 m, not
+          // the round 8 m the silhouette suggests: each eave (half-height
+          // 0.45, so its top sits 4.05 above its own tier's y) left a 0.95 m
+          // gap to the NEXT tier's glazing base at an 8 m step — stacked but
+          // not touching, so tiers 2-4 and the mast read as floating. 6.85 m
+          // overlaps each eave into the tier above it by 0.2 m instead.
           for (let t = 0; t < 5; t++) {
             const w = 17 - t * 2.2, d = 21 - t * 2.6;
-            const y = 12 + t * 8;
+            const y = 12 + t * 6.85;
             addBox(stage, vadd(a.c, a.u, y), [w, 6, d], [0.34, 0.44, 0.54], b);          // glazing
             addBox(stage, vadd(a.c, a.u, y + 3.6), [w + 3, 0.9, d + 3.4],
               [0.86, 0.86, 0.88], b);                                                    // eave
           }
-          // Crowning mast.
-          addCyl(stage, vadd(a.c, a.u, 52), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
+          // Crowning mast — seated with the same 0.2 m overlap on the top
+          // tier's eave (top 4 * 6.85 + 12 + 4.05 = 43.45).
+          addCyl(stage, vadd(a.c, a.u, 43.25), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
         }, { required: true });
       }
 
