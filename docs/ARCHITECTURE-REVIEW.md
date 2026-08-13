@@ -187,6 +187,19 @@ journal; this is what remains.
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance.
+- **`hud-layout` is red on the whole `notched-landscape` row.** All six variants
+  (tilt/buttons/touch × auto/manual gears) fail with three layout problems where
+  the spec expects none; the other viewport rows pass, so it is the VIEWPORT —
+  852×393 with real safe-area insets (`sal 59, sar 59, sab 21`) — not the input
+  mode. Confirmed PRE-EXISTING at `d7a1158` by an A/B on a quiet box, both sides
+  via `tools/test-solo.mjs` (which refuses to start above its load gate):
+  `HEAD` 6/6 fail at 20.3–22.1 s, base worktree 6/6 fail at 21.7–22.8 s. No
+  timeouts on either side — these are assertion failures, not contention. Repro:
+  `node tools/test-solo.mjs tests/specs/hud-layout.spec.js -g notched-landscape`.
+  The three items are truncated by the live reporter, so read them from a run
+  with a full reporter before fixing. Note §7's A19 entry claims the hud-layout
+  coverage gap "is closed for landscape" — closed for COVERAGE, evidently, but
+  the coverage is failing.
 - **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
   `indianapolis` 4.74 m over the road against a 0.2 m cap
   (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
@@ -271,17 +284,27 @@ most-load-bearing first.
 - **`career.js`** `matePts` is recomputed from finishing position without the
   `mate.retired` check the comment six lines above warns is required — corrupting
   a MY TEAM sponsor "double" fact.
-- **The title screen's first paint is laid out in the wrong shape.**
-  `body[data-density]` picks `#overlay`'s one-column vs two-column grid, and
-  `js/game/sheetshape.js` used to write it on `DOMContentLoaded` — i.e. behind
-  all ~146 synchronous scripts. That wait is now gone (`classifyBody()` runs at
-  eval time), but it was NOT the whole cause: with the attribute written before
-  first paint, a ~0.43 layout shift still fires, sourced to `#menu-brand`
-  changing WIDTH (326px → 298px) as menu content and webfonts land. The open
-  item is unreserved space in the brand/button column. Numbers and the failed
-  attribution are in that file's comment; CLS scored 0.0073 / 0.444 / 0.540
-  across four runs on a loaded box, so it wants re-measuring somewhere quiet
-  (ideally the deployed Pages build) before anyone changes CSS for it.
+- **Title-screen CLS — FIXED, and the method is the point.** The title screen
+  used to paint in the wrong shape and relay out: `body[data-density]` picks
+  `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
+  `DOMContentLoaded`, behind all ~146 synchronous scripts. Measured on a quiet
+  box at 852×393 over a gzip server: **CLS 0.5241** at `d7a1158`, now **0.0602
+  and 0.0824** on two cold loads ("good" is under 0.1), via a tiny inline script
+  at the top of `<body>` that reads both thresholds back out of CSS.
+  Two wrong answers were measured and discarded on the way, both recorded in
+  the code comments so they are not retried: (1) preloading the webfonts —
+  `CLSCulprits` names `titillium-web-latin-600-normal.woff2`, but with the fonts
+  landing at ~126 ms the shift was unchanged; (2) moving `sheetshape.js` to
+  script #4 — that only makes it a RACE, and the same build on the same box
+  scored 0.0824 and 0.5929 on consecutive loads depending on whether the script
+  beat the first paint. Only something with no network dependency wins reliably.
+  Three measurement traps cost most of the time here and are worth knowing: the
+  service worker serves the previous build's precache, so a fresh ORIGIN (new
+  port) is required per cold load; a loaded box reports incoherent timelines
+  (a shift stamped before its own FCP); and `setTimeout` polling cannot observe
+  anything during the synchronous script wall — sample in `requestAnimationFrame`,
+  which runs before each paint, and read the computed values rather than a
+  timestamp.
 - **`js/game/spotify.js`** the setup-panel PLAY button calls `player.resume()`,
   null in remote mode, so it silently does nothing (should be `BACKEND.start()`).
 - **`gridUp()` draws `simRnd()` inside an `Array.sort` comparator**

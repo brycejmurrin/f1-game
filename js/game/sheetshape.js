@@ -276,18 +276,20 @@ window.SheetShape = (function () {
      correct if the tag ever moves into <head>, and init() calling it again is
      idempotent (the hysteresis reads the value it just wrote).
 
-     MEASURED, and NOT the whole story — recorded so the next person does not
-     re-derive it. Removing body[data-density] at runtime does flip #overlay
-     between one 836px column and two 300px columns, which is why this looked
-     like the cause of the title screen's ~0.43 layout shift. But with the
-     attribute written before first paint (measured 19593 ms vs FCP 19632 ms on
-     a loaded box) a shift of the same size STILL fires, and its sources are
-     #menu-brand changing WIDTH (326px -> 298px) as menu content and webfonts
-     land. So this ordering fix is correct on its own terms and removes one real
-     hazard, but it is not what closes CLS; the remaining culprit is unreserved
-     space in the brand/button column. Four runs on a box at load 4+ with a
-     pegged SwiftShader GPU process scored 0.0073 / 0.444 / 0.540 — too noisy to
-     conclude anything further here. Re-measure somewhere quiet before acting.
+     THIS IS THE SECOND ANSWER, NOT THE FIRST ONE. The first paint's density is
+     set by a tiny inline script in index.html, because ANY external script —
+     including this file at position #4 of the wall — races the browser's first
+     paint and does not reliably win it. Measured on a quiet box, same build,
+     two consecutive cold loads: frame 1 already `compact` (CLS 0.0824) versus
+     frames 1-2 painted at one 828px column before this file ran at t=227ms
+     (CLS 0.5929). The inline script cannot lose that race; this call is what
+     keeps the answer correct if the shell's copy is ever removed, and it costs
+     one getComputedStyle. Both are idempotent, so running twice is free.
+
+     Do not "simplify" by deleting either one: the inline script alone would
+     drift from this file's thresholds, and this file alone reintroduces the
+     race. Baseline for the numbers above was CLS 0.5241; after the inline
+     script, two runs scored 0.0602 and 0.0824 ("good" is under 0.1).
 
      A non-default UI SIZE is still corrected later by watchScale(), because
      --ui-scale is not applied until game.js restores it. */
