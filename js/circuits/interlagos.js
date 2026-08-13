@@ -163,7 +163,16 @@
           // seats (which spread by `len` along a.t and step by rows*step along
           // a.r), leaving whole rows over nothing. A box on the ground covering
           // the real seating footprint carries every row.
-          addBox(stage, vadd(a.c, a.u, rows * rise * 0.5),
+          // FLOAT FIX (class b, overhanging past its supporting body — here the
+          // support instead falls SHORT of what it carries): this box was
+          // centred AT the anchor with no a.r offset, so it only covered dist
+          // [gap-rows*step/2, gap+rows*step/2] — half its depth wasted toward
+          // the road, and every seat past r>=~3 (seats run to gap+(rows-1)*step)
+          // sat beyond the mass's far edge with nothing under it. The declared
+          // modelGroup bounds above already offset their centre forward by
+          // rows*step/2 to span the real seating footprint; the mass box itself
+          // never got the same offset. Match it.
+          addBox(stage, vadd(vadd(a.c, a.r, rows * step * 0.5), a.u, rows * rise * 0.5),
                  [len, rows * rise, rows * step], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
           stage._mat = 0;
           for (let r = 0; r < rows; r++)
