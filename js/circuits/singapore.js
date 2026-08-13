@@ -370,10 +370,12 @@
           const pc    = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
                          a.c[1],
                          a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          // Outer white shell
-          addCone(out, vadd(pc, a.u, PETAL_H * 0.5), 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
+          // Outer white shell — addCone is BASE-anchored (js/track/geom.js:153-164),
+          // so `pc` (already sitting at ground height) IS the base position;
+          // adding a.u*PETAL_H/2 floated the whole cone by half its own height.
+          addCone(out, pc, 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
           // Inner warm-lit face (slightly smaller, glows like up-lit marble)
-          addCone(out, vadd(pc, a.u, PETAL_H * 0.58), 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
+          addCone(out, pc, 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
         }
         // Central podium stem
         addCyl(out, vadd(a.c, a.u, 3), 5, 9, [0.82, 0.82, 0.86], 7, [a.r, a.u, a.t]);
