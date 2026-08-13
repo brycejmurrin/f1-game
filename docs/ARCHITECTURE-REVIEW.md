@@ -434,6 +434,14 @@ most-load-bearing first.
   `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
   drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
   regexes.
+- **`js/circuits/indianapolis.js` infield planting has two dead branches.** The
+  loop guards `if (h < 0.55) return;` and then selects on `h < 0.5` twice —
+  `tree(k, h < 0.5 ? -1 : 1, …, h < 0.5 ? LEAF_D : LEAF)`. After the guard `h`
+  is always ≥ 0.55, so the side is always `1` and `LEAF_D` is unreachable: the
+  ornamental trees only ever plant on one side of the infield and the
+  dark-leaf variant never renders. Cosmetic, and NOT the cause of that
+  circuit's `props-over-road` reading (those trees sit 34–54 m out) — found
+  while looking for it.
 - **Smaller, catalogued but not itemised here**: `api.js` gives an upcoming GP's
   session list the 7-day historic cache TTL; `sdp.js` `pack()` over-allocates one
   byte (a stray `0x00`, decode-harmless); `live.js`'s gap bars read a `timeDiff`
