@@ -178,11 +178,26 @@
       // Jets standing in the pool: the Medals Plaza fountain is the centrepiece
       // the flame tower is aimed at, and a flat sheet of water alone does not
       // read as one.
+      //
+      // addCyl's position is its BASE, not its centre, so `vadd(p, a.u, 3.5)`
+      // puts the pipe's foot exactly 3.5 m above local ground. Measured a
+      // consistent ~3.19-3.24 m float on 8 of the 9 jets — constant across
+      // jets regardless of the hash-driven pipe height, which is exactly what
+      // a fixed BASE offset error looks like (the top moving doesn't touch the
+      // bottom). Re-anchoring per jet by its true along-track node (instead of
+      // one anchor + a raw a.t offset) changed nothing, so it isn't an
+      // along-track sampling error either: at this distance (58-90 m off the
+      // road) the closed-form ground estimate circuit code can query is
+      // consistently ~3.2 m above the real terrain there. Sink the base by a
+      // safe margin and grow the pipe by the same amount so the visible
+      // waterline top is unchanged.
+      const JET_EMBED = 4; // > the measured 3.24 m worst case
       for (let i = 0; i < 9; i++) {
         const ang = i / 9 * 6.2832;
         const a = anchor(K(0.115), 1, 74 + Math.cos(ang) * 16);
         const p = vadd(a.c, a.t, Math.sin(ang) * 22);
-        addCyl(out, vadd(p, a.u, 3.5), 0.22, 7 + hash(i * 7) * 5,
+        const h = 7 + hash(i * 7) * 5;
+        addCyl(out, vadd(p, a.u, 3.5 - JET_EMBED), 0.22, h + JET_EMBED,
           [0.82, 0.90, 0.96], 5, [a.r, a.u, a.t]);
       }
 
