@@ -504,6 +504,15 @@ function openTrackDetail() {
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
   const wrap = document.getElementById("track-detail-canvas-wrap");
+  // A TALL CIRCUIT CANNOT SPEND THE MODAL'S WIDTH, so give it to the panel.
+  // The map fits by height here, and the layout audit measured what that
+  // leaves: at 1280x800 the wrap is 982px wide and Jeddah's outline is 363 of
+  // it — 37% fill, against Baku's 99% — with ~600px of empty wrap sitting
+  // beside a turns list squeezed into a fixed 260px rail. Keyed on the
+  // CIRCUIT'S ASPECT alone, deliberately: deciding from the measured fit would
+  // feed the panel's own width back into the fit that chose it, through the
+  // ResizeObserver below. A circuit's shape cannot oscillate.
+  modal.setAttribute("data-map-tall", TrackMaps.aspect(t) < 1 ? "1" : "0");
   let lastFit = "";
   const drawDetail = function () {
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth

@@ -170,6 +170,24 @@
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  /* A tall circuit fits by HEIGHT, so the width it does not take is dead —
+     measured at 1280x800: Jeddah 363px of a 982px wrap (37% fill) beside a
+     260px rail holding 27 turn chips three to a row, while Baku fills 99% and
+     wants every pixel of that wrap. js/game/menus.js sets data-map-tall from
+     the circuit's aspect, so the two cases stop sharing one fixed rail.
+     Percentage-capped rather than a flat 460px: on a 3440px ultrawide a rail
+     that wide is a column of whitespace with chips down one edge.
+
+     CLAMPED, NOT `min()`: percentages here resolve against the dialog's LOCAL
+     width, which `zoom: var(--ui-scale)` shrinks — at UI SIZE 175% on a 1280px
+     screen 34% is 248px, i.e. NARROWER than the 260px default this rule exists
+     to widen. Measured exactly that way before the clamp: the tall circuit's
+     rail came out 240 local px against the wide circuit's 260. The lower bound
+     makes the rule one-directional, which is what it always meant. */
+  #track-detail[data-map-tall="1"] #track-detail-panel {
+    flex-basis: clamp(260px, 34%, 460px);
+    max-width: clamp(260px, 34%, 460px);
+  }
 }
 
 /* ---------- Portrait-specific HUD fixes ---------- */
