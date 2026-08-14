@@ -138,10 +138,10 @@ test("a tuned camera never touches the other twelve", async ({ page }) => {
 test("values clamp to the slider range, persist, and reset", async ({ page }) => {
   await loadMonza(page);
   const v = await page.evaluate(() => __apex.camTune("cockpit", { height: 99, fov: -999 }));
-  expect(v.height).toBe(5);      // def.max
-  expect(v.fov).toBe(-25);       // def.min
+  expect(v.height).toBe(10);     // def.max (widened -6..10 in the 2026-08 range pass)
+  expect(v.fov).toBe(-35);       // def.min (widened ±35 in the same pass)
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camTune")));
-  expect(stored.cockpit.height).toBe(5);
+  expect(stored.cockpit.height).toBe(10);
   const base = await frame(page, "cockpit");
   await page.evaluate(() => __apex.camTune("cockpit", null));
   expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: 0 });

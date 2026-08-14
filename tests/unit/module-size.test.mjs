@@ -145,7 +145,10 @@ const CEILINGS = {
   // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
   // sky, then the glow. Neither branch's number fits the merged file; this one
   // is set FROM it, the same way the earlier flap-gate merge above was.
-  "js/game.js": 8050,
+  // Merged the range-pass branch (SCALE consts + comments) with deploy's
+  // 8050-era work — the file carries both sides' lines, so neither side's
+  // number fits it. Set from the merged file: 8054.
+  "js/game.js": 8054,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

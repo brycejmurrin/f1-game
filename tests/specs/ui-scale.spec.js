@@ -245,12 +245,21 @@ test.describe("UI scale", () => {
       localStorage.setItem("apex26.hudScale", "-40");
     });
     await boot(page);
+    // Bounds come from the LIVE API, not literals: this test was written when
+    // SCALE_MAX was 150, a merge later moved the constants to 50..175 without
+    // touching the expectations here, and the test sat silently broken (it is
+    // not in the CI gate). Reading __apex.uiScale().min/max keeps it honest
+    // through any future range change.
+    const bounds = await page.evaluate(() => {
+      const u = __apex.uiScale();
+      return { min: u.min, max: u.max };
+    });
     const cs = await page.evaluate(() => {
       const s = getComputedStyle(document.documentElement);
       return { ui: s.getPropertyValue("--ui-scale").trim(), hud: s.getPropertyValue("--hud-scale").trim() };
     });
-    expect(cs.ui, "500 must clamp to SCALE_MAX (150%)").toBe("1.5");
-    expect(cs.hud, "-40 must clamp to SCALE_MIN (50%)").toBe("0.5");
+    expect(cs.ui, `500 must clamp to SCALE_MAX (${bounds.max}%)`).toBe(String(bounds.max / 100));
+    expect(cs.hud, `-40 must clamp to SCALE_MIN (${bounds.min}%)`).toBe(String(bounds.min / 100));
 
     // The slider's own displayed value/label must read the SAME clamped number,
     // not merely a different-but-also-safe one — this is the invariant that
@@ -261,7 +270,10 @@ test.describe("UI scale", () => {
       hudInput: document.getElementById("pm-hudscale").value,
       hudLabel: document.getElementById("pm-hudscale-v").textContent,
     }));
-    expect(shown).toEqual({ uiInput: "150", uiLabel: "150%", hudInput: "50", hudLabel: "50%" });
+    expect(shown).toEqual({
+      uiInput: String(bounds.max), uiLabel: bounds.max + "%",
+      hudInput: String(bounds.min), hudLabel: bounds.min + "%",
+    });
   });
 
   // SETTINGS column count is a property of sheet OWN width (container queries
