@@ -6037,12 +6037,7 @@ function render(dt) {
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   // (Hoisted above the env probe so both world passes share it.)
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  // Clamped to 1.0 below: `color = mix(color, albedo, emissive)` in
-  // js/render/shaders/lit.js is a LERP TOWARD unlit albedo, so 1.0 already means
-  // "fully self-lit" — past it mix() extrapolates and the surface overshoots
-  // albedo into a colour no material has. 14 shipped presets sat above the line
-  // (floodEmitMul > 1.282 at night), the worst at 1.6 -> 1.248.
-  const _floodEmit = Math.min(1, LT.floodEmitMul * (
+  const _floodEmit = Math.min(1, LT.floodEmitMul * (   // min(1): lit.js mix() EXTRAPOLATES past 1
     (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - _sunY * 6, 0, 1)))
