@@ -216,5 +216,11 @@ a deploy is an ordinary `git merge`, but OTHER SESSIONS develop directly on
 the deploy branch, so always `git fetch` and merge THEIR new work (both-side
 changes are real conflicts: re-measure baselines on the merged tree, take
 max+1 of both lineages' cache versions), never force-push, and re-run
-`test:tooling-fast` before pushing. The container proxy blocks `github.io` —
-verify a live deploy through an MCP fetch, not curl.
+`test:tooling-fast` AND — when either side touched `js/track/`,
+`js/circuits/` or `tools/` — `test:sweeps` before pushing: the per-circuit
+baselines (clip/float/coplanar) are exact in BOTH directions, and a
+geometry change that is green on each lineage alone can be red on their
+union (measured 2026-08-14: one engine fix moved clip counts on 8
+circuits and broke CI on every branch that merged the trunk). The
+container proxy blocks `github.io` — verify a live deploy through an MCP
+fetch, not curl.
