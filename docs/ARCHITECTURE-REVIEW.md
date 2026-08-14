@@ -410,6 +410,20 @@ Deferred with reasoning, none lost:
 
 ---
 
+- **`tlx-probes` M6 skid batch is red, and it predates this session's work.**
+  The spec drives a hard slide on Monza, `freeze(true)`s so presented frames
+  stamp, then waits for `GLX.__tlx.fxState().skidVerts > 0` — which never
+  arrives, so the test hits its 360 s budget. A/B on a QUIET box: red at the
+  session tip AND byte-identical red at the pre-batch commit `1aaf91b3`
+  (same `page.waitForFunction ... Test timeout` signature), so nothing in
+  the W4 near-miss batch caused it. Note the coverage gap it exposes:
+  `tlx-probes` is in no CI job and was never run earlier this session, so
+  this had no prior verdict to regress from. Either TLX's fx path stopped
+  stamping skids, or the spec's freeze-then-present premise no longer holds
+  on the TLX backend — deciding which needs a TLX render trace, not a
+  tolerance change. The other 14 TLX probes pass, including every shadow
+  spec.
+
 ## 9. Lessons
 
 **A guard nobody runs is prose with extra steps.** Two of the repo's own guards
