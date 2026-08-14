@@ -1839,7 +1839,7 @@ function cockpitBodyMesh(team) {
 // hub nearer than z ~0.14 puts the whole dash INSIDE it — measured at z 0.10
 // the wheel projected at w 0.276 and EVERY instrument at 0.274: LCD, LED strip,
 // digits and aero lamp all clipped, the wheel a washed-out near-clipped shell.
-const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.56,0.26,1]);
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.63,0.26,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
