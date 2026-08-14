@@ -320,7 +320,25 @@ jobs:
     runs-on: ubuntu-latest
     # TEMP: pages.yml can pass smoke:false to skip this job on deploy (see the
     # workflow_call input). Branch/PR pushes keep the default (true).
-    if: ${{ inputs.smoke != false }}
+    #
+    # `inputs.smoke != false` did NOT deliver that second sentence, and it was
+    # silently skipping this job on EVERY branch and PR push. A workflow's
+    # `inputs` defaults are applied only for workflow_call / workflow_dispatch;
+    # on a plain push the `inputs` context is empty, so `inputs.smoke` is null,
+    # and GitHub coerces null and false to the same value — making
+    # `null != false` FALSE and the job skip. Measured 2026-08-14 on two
+    # consecutive pushes to a branch (runs 31765883905 and 31766287790): smoke
+    # and advisory both `skipped`, each with completed_at BEFORE started_at,
+    # which is the signature of a job-level `if` resolving false rather than of
+    # a step-level filter deciding nothing shipped. The deploy path was
+    # unaffected — pages.yml reaches this through workflow_call, where the
+    # default DOES apply — so the whole CI run still reported green and the
+    # hole stayed invisible.
+    #
+    # Test the EVENT, then the input: on push/pull_request the first operand is
+    # already true and `inputs` is never consulted; under workflow_call it falls
+    # through to the input, so pages.yml keeps its ability to pass smoke:false.
+    if: ${{ github.event_name != 'workflow_call' || inputs.smoke }}
     # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
     # below (two concurrent SwiftShader contexts on one shared runner blow the
     # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
@@ -615,7 +633,14 @@ jobs:
     # SKIP ON Pages deploy. pages.yml passes advisory:false. Do not key this off
     # github.event_name alone — under workflow_call the advisory job still ran
     # and occupied a runner while deploy gates waited.
-    if: ${{ inputs.advisory != false }}
+    #
+    # Same null-coercion defect the smoke job carried (see the long note there):
+    # `inputs.advisory != false` is false on a plain push, because `inputs` is
+    # empty and null == false, so this job never ran on a branch or PR either.
+    # The form below still keys off the input under workflow_call — which is the
+    # requirement the paragraph above states — and only stops treating a MISSING
+    # input as an explicit false.
+    if: ${{ github.event_name != 'workflow_call' || inputs.advisory }}
     #
     # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
