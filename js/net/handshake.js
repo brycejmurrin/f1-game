@@ -79,9 +79,24 @@ const NetHandshake = (function () {
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
   async function inflateBytes(bytes) {
-    const stream = new Blob([bytes]).stream()
-      .pipeThrough(new DecompressionStream("deflate-raw"));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    // THE CODE IS ATTACKER-CONTROLLED: a few hundred base64 chars of
+    // deflate can expand to gigabytes. Read the stream chunk-wise against a
+    // hard cap instead of buffering blind — real codes inflate to ~2-6 KB,
+    // so 256 KB is generous headroom, and past it we stop pulling entirely.
+    const CAP = 256 * 1024;
+    const reader = new Blob([bytes]).stream()
+      .pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+    const chunks = []; let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > CAP) { await reader.cancel(); throw new Error("inflate cap exceeded"); }
+      chunks.push(value);
+    }
+    const out = new Uint8Array(total); let o = 0;
+    for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+    return out;
   }
   const deflate = (text) => deflateBytes(enc().encode(text));
   const inflate = async (bytes) => dec().decode(await inflateBytes(bytes));
@@ -156,7 +171,13 @@ const NetHandshake = (function () {
         return { ok: true, payload };
       }
       const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
-      return { ok: true, payload: JSON.parse(json) };
+      const payload = JSON.parse(json);
+      // JSON.parse happily returns null / a number / a string — and every
+      // caller immediately reads `payload.k`, which THROWS on null past this
+      // try into callers with no catch. A payload that is not an object is
+      // the same thing as a corrupt code, said before it can throw.
+      if (!payload || typeof payload !== "object") return CORRUPT;
+      return { ok: true, payload };
     } catch (e) {
       return CORRUPT;   // decode, inflate and parse all mean the same to a player
     }

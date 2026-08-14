@@ -161,7 +161,7 @@
 
     /* ── UP (UP_FS in js/render/shaders/post.js): 9-tap tent. Two materials: additive
      *    (ONE,ONE) for the intermediate octaves, overwrite for the final into
-     *    level 0 (glx/js/render/shaders/post.js — adding onto the sharp bright-pass
+     *    level 0 (js/render/shaders/post.js — adding onto the sharp bright-pass
      *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. ── */
     const spread = uniform(1.0);
     function makeUp(additive) {

@@ -761,7 +761,7 @@ function openSetup() {
   $("carsetup").hidden = false;
   G.setupPreviewOn = true;
 }
-return { buildSetup, openSetup, renderStatBars };
+return { buildSetup, openSetup };
 }
 
 return { create };

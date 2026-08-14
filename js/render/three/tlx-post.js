@@ -12,7 +12,7 @@
  *   1.  BRIGHT pass  scene -> bloom level 0 (half res)  (bloomAmt gated)
  *   2.  DOWN x(n-1)  13-tap Jimenez mip chain; Karis on the first mip only
  *       UP   x(n-1)  9-tap tent, ADDITIVE into each larger level; the FINAL
- *                    pass into level 0 OVERWRITES (glx/js/render/shaders/post.js)
+ *                    pass into level 0 OVERWRITES (js/render/shaders/post.js)
  *   3.  COMPOSITE    -> LDR target (all 58 uniforms; ACES/grade/SSR/flare)
  *   4.  FXAA         -> canvas
  *
@@ -270,7 +270,7 @@
       if (viz === "ssao") aoStr = Math.max(aoStr, 0.95);
       if (viz === "shafts" || viz === "godray") grStr = Math.max(grStr, 0.8);
 
-      // ── 0) SSAO + separable blur (glx/js/render/shaders/post.js). Runs when EITHER
+      // ── 0) SSAO + separable blur (js/render/shaders/post.js). Runs when EITHER
       // knob is live — contact shadows ride in this pass. ───────────────────
       const haveAO = !!((aoStr > 0 || contactStr > 0) && F.invProj) && ensureAO();
       if (haveAO) {
@@ -294,7 +294,7 @@
         runPass(P.blurAO.mat, ssaoRT);
       }
 
-      // ── 0b) Volumetric sun shafts + lamp beams (glx/js/render/shaders/post.js) ─────
+      // ── 0b) Volumetric sun shafts + lamp beams (js/render/shaders/post.js) ─────
       const sunGR = !!(S && S.enabled) && grStr > 0;
       const haveGR = !!(P.godray && F.invVP && (sunGR || lampVol > 0)) && ensureGR();
       if (haveGR) {
@@ -328,7 +328,7 @@
           for (let i = 0; i < grNL; i++) {
             const oi = _grSel[i].o;
             // Map the record holding this frame's spot-shadow map to its slot
-            // in THIS pass's nearest-N ordering (glx/js/render/shaders/post.js).
+            // in THIS pass's nearest-N ordering (js/render/shaders/post.js).
             if (lampArmed && oi === S.lampIdx * 15) grLampIdx = i;
             P.godray.lightPos[i].set(L[oi], L[oi + 1], L[oi + 2]);
             P.godray.lightCol[i].set(L[oi + 3], L[oi + 4], L[oi + 5]);
@@ -355,7 +355,7 @@
         }
       }
 
-      // ── 1+2) bright pass + mip-chain bloom (glx/js/render/shaders/post.js) ──────────
+      // ── 1+2) bright pass + mip-chain bloom (js/render/shaders/post.js) ──────────
       const haveBloom = bloomAmt > 0 && ensureBloom();
       if (haveBloom) {
         P.bright.U.threshold.value = threshold;
@@ -377,7 +377,7 @@
         }
       }
 
-      // ── 3) composite (glx/js/render/shaders/post.js) ────────────────────────────────
+      // ── 3) composite (js/render/shaders/post.js) ────────────────────────────────
       const C = P.composite.U;
       P.composite.tex.bloom.value = haveBloom ? bloomLv[0].rt.texture : blackTex;
       // Normalise the mip-chain accumulation (nLv-1 summed octaves).
@@ -386,7 +386,7 @@
       C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
       // Sun screen-UV projection + the _sunGate brightness gate + golden-hour
-      // flare curve (glx/js/render/shaders/post.js verbatim).
+      // flare curve (js/render/shaders/post.js verbatim).
       let sunUVx = -2, sunUVy = -2, flareStr = 0, sunShaft = 0;
       if (F.sunDir && F.viewProj) {
         const s = F.sunDir, vp = F.viewProj;

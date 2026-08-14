@@ -68,6 +68,7 @@
       // S.castCullVP 1:1 — consumed by tlx.js castShadowChunked, M7).
       castCullVP: null,
       carEnabled: false, carLightVP: new Float32Array(16),
+      carBoxScale: 1,            // cBox / default-42m — see carShadowBegin (GLX parity)
       carArmed: false,           // set by carShadowBegin, cleared each present()
       carArms: 0,                // lifetime Begin count (debug introspection)
       lampEnabled: false, lampLightVP: new Float32Array(16),
@@ -194,9 +195,13 @@
       beginPass(sunRT, lightVP, S.lightVP);
     }
 
-    function carShadowBegin(lightVP) {
+    function carShadowBegin(lightVP, boxScale) {
       if (!S.carEnabled) return;      // mobile tier: no-op, casts swallowed via depthPassOn
       beginPass(carRT, lightVP, S.carLightVP);
+      // GLX parity: SHADOW DISTANCE widens the car box, and the depth bias
+      // must scale with the box/texel ratio or the widened map self-shadows
+      // (glx/shadow.js carShadowBegin, lit.js uCarBiasScale).
+      S.carBoxScale = boxScale || 1;
       S.carArmed = true;
       S.carArms++;
     }

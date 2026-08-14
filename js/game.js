@@ -1516,7 +1516,7 @@ function makeCars() {
       });
     });
   });
-  player = cars.find((c) => c.isPlayer);
+  player = cars.find((c) => c.isPlayer) || null;   // find() yields undefined; G.player's contract is CarState | null
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
@@ -2705,7 +2705,6 @@ const G = {
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
-  renderStatBars: (...a) => renderStatBars(...a),   // const initialised below — defer
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
   // created before menus.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.
@@ -2825,7 +2824,7 @@ const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/game/atmosphere.js).
 const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
-const { buildSetup, openSetup, renderStatBars } = SetupUI.create(G);
+const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules

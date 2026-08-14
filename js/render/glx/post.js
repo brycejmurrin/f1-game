@@ -807,7 +807,11 @@ const GLXPost = (function () {
 
     return {
       enabled: () => postEnabled,
-      hdrOk: () => colorType === gl.HALF_FLOAT,
+      // The gfx.js contract for this is "the scene buffer is float (HDR)" —
+      // which is only true while the post chain is actually in use. When
+      // setup()/createTargets() fall back to direct rendering the frame goes
+      // to the 8-bit default framebuffer, whatever the extension said.
+      hdrOk: () => postEnabled && colorType === gl.HALF_FLOAT,
       msaa: () => msaaSamples,
       createTargets,
       bindSceneTarget,
