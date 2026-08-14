@@ -206,6 +206,42 @@ Two rules fall out of that:
   reached the live site with nothing red to show for it. **Check the run's
   conclusion after a deploy push; do not treat the push as the deploy.**
 
+### Wrap the FUNCTION, don't read the PIXELS (2026-08-14)
+
+A player reported "the road section in front of me gets darker, and the lighting
+depends on where I'm looking/turning" (at night). Two instruments were tried:
+
+1. **Pixel readback.** Force `preserveDrawingBuffer` in an init script, pin the
+   eye with `__apex.view({eye, yaw, pitch})`, sweep yaw, and read a window that
+   TRACKS one world patch (`ndcX = tan(t0 - d)/tanHalfX`, ndcY unchanged — a pure
+   yaw leaves points on the optical axis' horizontal plane on it). Two traps
+   cost a run each: **`M4.perspectiveTo` takes a VERTICAL fov**, so `tanHalfX`
+   needs `* aspect` — get it wrong and the window slides onto different content
+   and the run is noise; and **a dense night circuit under SwiftShader can miss
+   every frame in a 2 s sleep**, which reports as "no lamps" rather than as slow.
+   Wait on a signal (`waitForFunction` on a generation counter), never a timer.
+2. **Wrapping the producer.** `game.js` calls `LightTune.setFrameLights(...)` as
+   a LIVE property read, so replacing that property from the page captures the
+   exact lamp set the shader will get — identity, position and final intensity —
+   with no rendering, no noise, and no SwiftShader in the loop. It found the bug
+   in one run and graded the fix in one more.
+
+**Prefer (2).** The engine's per-frame data structures are reachable by name;
+pixels are a lossy re-derivation of them. (1) is only needed when the question is
+about the SHADER, not about what the shader was handed.
+
+The bug itself: the night lamp cull ranks lamps by a camera-forward-BIASED
+distance, then faded their brightness against that same biased set's edge — so a
+stationary lamp changed brightness when the player only turned. Measured with the
+eye pinned and the aim swept ±60°: lamps swinging 5.01×, 2.99×, 2.86×, 2.77×,
+2.55×. Fixed in `js/game/lighting.js` (fade on the lamp's own geometric distance
+against a direction-free radius; the biased edge survives only as a narrow
+continuity guard) — the same five lamps then measured 2.07×, 1.07×, 1.01×, 1.00×,
+1.00×. **A "control" run is only a control if it varied the thing you think it
+varied**: the first baseline here snapshotted before the free camera took effect,
+so the camera never yawed and every lamp read a flat 1.00× — a clean bill of
+health from an experiment that did nothing.
+
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 
 §0's table lists the Node VM harness (`tools/verify-track.cjs`,

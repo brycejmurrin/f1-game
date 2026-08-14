@@ -650,7 +650,27 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
+const _gHeap = [];             // pooled max-heap of GEOMETRIC squared distances (see gCap)
 const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
+// The CAP-th smallest value in `buf[i].g` — the radius an UNBIASED nearest-CAP cull
+// would cut at. It depends only on where the camera IS, never on where it POINTS,
+// which is the whole reason the fade below is anchored to it. Same partial-selection
+// shape as the main heap (max-heap of size CAP, one pass), on plain numbers.
+function capRadius2(buf, count, CAP) {
+  const h = _gHeap; h.length = 0;
+  for (let i = 0; i < count; i++) {
+    const g = buf[i].g;
+    if (h.length < CAP) {
+      let ci = h.length; h.push(g);
+      while (ci > 0) { const pi = (ci - 1) >> 1; if (h[pi] < h[ci]) { const t = h[pi]; h[pi] = h[ci]; h[ci] = t; ci = pi; } else break; }
+    } else if (g < h[0]) {
+      h[0] = g;
+      let pi = 0;
+      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && h[l] > h[lg]) lg = l; if (rr < CAP && h[rr] > h[lg]) lg = rr; if (lg === pi) break; const t = h[pi]; h[pi] = h[lg]; h[lg] = t; pi = lg; }
+    }
+  }
+  return h[0] || 1;
+}
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
@@ -784,7 +804,11 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
       d /= k * k;
     }
     const e = buf[i];
-    if (e) { e.d = d; e.o = o; } else buf[i] = { d: d, o: o };
+    // g = the TRUE squared distance, kept alongside the biased rank distance d.
+    // Ranking wants the bias (that is what buys forward reach); the brightness
+    // fade must not have it — see the cullF block after the heap.
+    const g = dx * dx + dy * dy + dz * dz;
+    if (e) { e.d = d; e.g = g; e.o = o; } else buf[i] = { d: d, g: g, o: o };
   }
   buf.length = count;
   // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
@@ -815,11 +839,48 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // path for its sorting), there is no set boundary, and fading "the farthest
   // of the set" would black out a real lamp that used to be lit.
   const truncated = count > CAP;
-  const _cullBand = dEdge * (LT.lampCullFade != null ? LT.lampCullFade : 0.35);   // LAMP CULL FADE knob
+  // ── THE FADE MUST NOT KNOW WHICH WAY THE CAMERA POINTS ────────────────────
+  // This was `(dEdge - e.d) / (dEdge * 0.35)`, and BOTH terms carry camera yaw:
+  // e.d is the behind-biased rank distance, and dEdge is the biased edge of a set
+  // whose composition changes as the camera turns. So a lamp that never moved
+  // changed brightness when the player merely looked somewhere else. Measured on
+  // bahrain/night with the eye pinned and only the aim yawing ±60°
+  // (scratch harness, cap forced to 12 so the cull engages): a lamp 81 m ahead
+  // swung 2.35× — DIMMEST looking straight down the road, because that is when
+  // the most lamps compete and dEdge shrinks — and one at 208 m swung 23.5×.
+  // That is the reported "road section in front of me gets darker when I turn".
+  //
+  // Fade on the lamp's own GEOMETRIC distance g against gRef, a radius built from
+  // the CAP-th nearest lamp by TRUE distance. capRadius2 has no camera direction
+  // in it at all, so the steady-state brightness of every lamp is now a function
+  // of where the camera IS and nothing else. (Temporal smoothing was considered
+  // and rejected: a yaw that is held converges to the same wrong value, so it
+  // turns the step into a ramp without removing the artifact.)
+  //
+  // gRef is scaled by the MAXIMUM rank advantage the bias can grant, so the reach
+  // the bias buys is still fully lit rather than being faded to black the moment
+  // it exceeds the unbiased radius: a behind lamp's d is at most (1+behindBias)·g,
+  // and an ahead lamp under REACH ABOVE 1 has d ≥ g/reach², so no member of the
+  // set can sit beyond gRef.
+  //
+  // edgeGuard keeps the one property the old form did have — a lamp must be at
+  // zero by the time it is dropped, or membership churn pops. It still measures
+  // against the true boundary, but over a NARROW shell (the last 8% of the ranked
+  // distance) instead of the old 35%, so the residual yaw dependence is confined
+  // to lamps that are about to leave the set anyway.
+  const fade = LT.lampCullFade != null ? LT.lampCullFade : 0.35;   // LAMP CULL FADE knob
+  const gRef = truncated
+    ? capRadius2(buf, count, CAP) * (1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25)) * (reach * reach)
+    : 1;
+  const _cullBand = gRef * fade;
+  const _guardBand = dEdge * 0.08;
   out.length = 0;
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = truncated ? Math.max(0, Math.min(1, (dEdge - e.d) / _cullBand)) : 1;
+    const cullF = truncated
+      ? Math.min(Math.max(0, Math.min(1, (gRef - e.g) / _cullBand)),
+                 Math.max(0, Math.min(1, (dEdge - e.d) / _guardBand)))
+      : 1;
     const f = fl(o);
     out.push(src[o], src[o+1], src[o+2],
       src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
