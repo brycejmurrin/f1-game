@@ -136,9 +136,28 @@ const TrackSpline = (function () {
   // that lets the car physics live in world space while gameplay still reasons in
   // (s, lateral). `hint` (an arc-length s from last frame) restricts the search to
   // a small window of segments so it's O(1) per car; omit it for a full search.
-  function project(track, wx, wz, hint) {
+  // `wy` (optional) is the query point's HEIGHT, and it exists for one reason:
+  // this search is otherwise purely XZ, so on a track that crosses ITSELF it
+  // cannot tell the two legs apart even in principle. Suzuka is the case:
+  // measured, its legs pass 1.43 m apart in XZ and 8.07 m apart in Y (s=2529
+  // over s=4893), so the bridge deck and the road beneath it are the same point
+  // to a flat search. Without a hint the nearest-in-XZ answer is a coin toss
+  // between them — 41 verdict flips and 8.47 m of road-height drift when the
+  // debris sweep hit it.
+  //
+  // Passing wy adds a height term to the cost, which separates them. Omitting
+  // it keeps the old behaviour exactly, so every existing caller is unchanged;
+  // this is a capability, not a policy change. The player's physics path does
+  // not come through here at all (see js/game.js — progress is integrated, not
+  // re-projected, precisely so it cannot snap onto the wrong leg), so this
+  // serves the agent view and the debris fallback.
+  function project(track, wx, wz, hint, wy) {
     const n = track.n, L = track.total, ds = L / n;
     const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;
+    // Height is only usable when BOTH the query carries one and the track has a
+    // profile; a track built without py must behave exactly as before.
+    const py = track.py;
+    const useY = (wy != null && isFinite(wy) && py && py.length === n);
     let bestD2 = Infinity, bestCost = Infinity, bestK = 0, bestT = 0, bestCx = 0, bestCz = 0;
     // Continuity bias: when we have a hint (last frame's arc-length), prefer the
     // segment closest to it ALONG THE LAP, not just in space. At a hairpin the
@@ -163,6 +182,17 @@ const TrackSpline = (function () {
       if (hs >= 0) {
         let da = Math.abs(((i + t) * ds) - hs); da = Math.min(da, L - da);
         cost += CONT * da * da;
+      }
+      // Height mismatch, weighted 1:1 with the horizontal distance so the two
+      // read in the same units (metres squared). At Suzuka's crossover that
+      // turns a 1.43 m horizontal tie into an 8.07 m vertical separation —
+      // ~32x the cost — so the correct leg wins decisively rather than by
+      // rounding. On a flat or non-crossing track the term is ~0 for the
+      // nearest segment and changes nothing.
+      if (useY) {
+        const cy = py[i] + (py[j] - py[i]) * t;
+        const ey = wy - cy;
+        cost += ey * ey;
       }
       if (cost < bestCost) { bestCost = cost; bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
     }

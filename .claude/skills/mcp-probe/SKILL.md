@@ -291,6 +291,50 @@ Cross-check with `bakedLights` before believing any `numLights` reading:
 shape as the SIXTH/SEVENTH traps — a real render state that is simply not
 ready yet, misread as a defect because the probe outran the renderer.
 
+## A NINTH trap: `scene()` lists what the circuit ASKED for, not what got drawn
+
+`scene().props` is built from `ctx.note(...)`, and several model helpers note
+themselves BEFORE deciding whether to emit — `building()` notes after its two
+footprint guards but before the `opts.kind` massing branch. A prop that draws
+**nothing at all** therefore still appears, at a plausible `sizeM` and `at`.
+
+MEASURED 2026-08-14: Imola's pit building
+(`building(K(0.00), -1, 1, 16, 11, 130, {kind:"slab"})`) was listed by `scene()`
+throughout a session in which it emitted ZERO vertices — it failed rejBox (its
+padded half-width crossed the road at gap 1) *and* massBlocked (it ran through
+the pit wall and grandstand). The listing is what kept the search pointed at
+camera framing instead of at emission.
+
+The vertex count is the honest instrument, and it is a shell call, not a browser
+one: `node tools/verify-track.cjs <id>`, then comment the call out and run it
+again. Identical `props N` = nothing was emitted. **Run a control first** — add
+a throwaway `for (let i=0;i<50;i++) addBox(out, [0,500+i,0], [10,10,10], [1,0,0]);`
+and confirm the number moves (+1200) — because two equal readings look identical
+whether the geometry is absent or your edit simply isn't being read. Note also
+that MOVING a prop never changes the count, so relocation tests prove nothing
+about emission; only add/remove does.
+
+## A TENTH trap: camera `lat` and circuit `gap` are different spaces
+
+`eyeAt(f, lat, …)` measures `lat` from the **centreline**. A circuit places
+scenery with `anchor(k, side, gap)` / `building(k, side, gap, w, …)`, where
+`gap` is **beyond the road edge**, and `building()` centres its mass half a
+width further out again. Nothing converts between them:
+
+```js
+const lat = side * (hw + gap);            // anchor()-placed prop  (hw ≈ baseHW, ~7)
+const lat = side * (hw + gap + w / 2);    // building() mass centre
+```
+
+MEASURED 2026-08-14: hunting Imola's pit complex at `building(…, -1, 20, 16, …)`
+— really `lat ≈ -35` — was attempted at `lat ±75` and burned a dozen
+screenshots of grass and treetops before the arithmetic was done. When the frame
+already exists, skip the conversion entirely: read `scene().props[].at` for
+world coords and aim with `view({eye, yaw, pitch})`, which takes world space
+directly. (`orbit(f, az, el, dist, h, opts)` always targets the point on the
+CENTRELINE at `f`, so it cannot centre on off-track scenery at all — it can only
+put it somewhere in frame.)
+
 ---
 
 ## Chrome DevTools MCP — live 3D / __apex debugging

@@ -112,6 +112,94 @@ wall for data where a session uses exactly **one of 40** files.
 **Boot trace** (chrome-devtools MCP): DCL 4712 ms, 146 scripts, **LCP 2306 ms =
 TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
 
+### COUNT THE WORK AVOIDED, DO NOT TIME IT
+
+The most useful thing learned in the 2026-08-14 pass, and it reverses the
+conclusion the rest of this section can easily be misread as supporting.
+
+"The GPU is unmeasurable on this box" rules out **timing**. It does not rule out
+**measurement**. Almost every renderer finding has a countable mechanism, and a
+count is the same number on SwiftShader as on a real GPU — so it transfers,
+which is exactly what a millisecond does not.
+
+Worked both ways in one sitting:
+
+- **A claim that vanished.** The audit billed GLX.draw()'s uncached
+  `CULL_FACE`/`colorMask`/`POLYGON_OFFSET_FILL` toggles at "~150-250 redundant
+  GL calls per frame". Counted directly — patch `WebGL2RenderingContext.prototype`
+  before any page script, 12 frames per arm, interleaved on/off — those four
+  calls total **63.5 per frame** and a redundancy cache collapses **zero** of
+  them: 318 disable / 300 enable / 66 colorMask / 78 polygonOffset, byte-identical
+  with the switch on and off. The toggles strictly ALTERNATE (cars are
+  doubleSided, their neighbours are not), so there is no run of identical state
+  to collapse. The switch was deleted.
+- **A claim that held, and grew.** `skyLate`'s saving IS the fraction of the
+  frame opaque geometry covers, because those are the SKY_FS invocations early-Z
+  rejects. `render({what:"view"})` already reports `coveragePct`, so the number
+  was free: **64.3 / 70.8 / 89.0 / 64.3 / 64.3 / 98.5 %** across six views of a
+  vegas lap, mean **75.2%** — larger than the 40-70% estimated.
+
+Two rules fall out of that:
+
+1. **Verify the instrument, not just the result.** The `glStateCache` arms
+   report `PerfTry.on()` as false then true, so identical counts are a measured
+   zero and not a flag that never engaged. Without that check the same numbers
+   would have been indistinguishable from a broken harness.
+2. **An equivalence claim gets tested as one.** The `pairContact` pre-reject was
+   argued from algebra, then run over 3,000,042 pairs — 3M random plus boundary
+   cases on 0, LCAR, L/2, L-LCAR — comparing decision AND returned value to
+   1e-12. Zero mismatches. Cheap, and it converts "I proved it on paper" into a
+   fact.
+
+### More instruments that lie here (2026-08-14)
+
+§0's table lists three. These are the rest, all found the expensive way.
+
+- **`test:baseline` fails on EVERY tree**, including commits predating any local
+  change — verified by running it at the session head, at the deploy SHA, and at
+  the pre-session SHA: 6/6 failed at all three. The goldens were generated in a
+  different container and do not reproduce here. `.github/workflows/ci.yml` says
+  so independently in its own words ("golden images are environment-sensitive …
+  if GitHub's runner renders even slightly differently … the gate goes
+  permanently red"), which is why it is deliberately not in CI. **Do not
+  re-bless the goldens to make it green** — that destroys them for the
+  environment where they do work.
+- **`test:visual` SILENTLY SKIPS all 40 tests** and reports
+  `= run passed (40/40 done, 0 failed)`. `tests/specs/tracks-visual.spec.js`
+  self-skips when no golden PNGs are committed, and per CLAUDE.md goldens exist
+  for the MENUS only. A green line that verifies nothing is more dangerous than
+  a red one: the giveaway is that start and finish carry the same timestamp.
+- **`test:api` is not in CI at all**, so it rots. Found 11 specs failing on a
+  bug that predated the session by weeks: `js/data/telemetry.js` aliases
+  `M4.clamp` at EVAL time, and the two standalone js/data harnesses did not load
+  `js/mat4.js`, so telemetry.js threw, `DataTelemetry` was stranded in its
+  temporal dead zone, and hub.js's top-level `DataTelemetry.create()` threw in
+  turn — surfacing three links away as `ReferenceError: DataHub is not defined`.
+  Diagnosed by evaluating the eight modules in a **Node VM with DOM stubs**
+  (seconds) rather than bisecting a 27-minute browser group.
+- **A `cancelled` CI run carries no information about the code.** With several
+  sessions pushing one deploy branch, each push supersedes the previous PENDING
+  run in the `ci-${{ github.ref }}` group; five jobs then show
+  `created_at == started_at == completed_at` with no steps executed at all.
+  Four consecutive `pages.yml` runs died that way, so the geometry sweeps did
+  not execute on that lineage for hours — which is how a prop-placement change
+  reached the live site with nothing red to show for it. **Check the run's
+  conclusion after a deploy push; do not treat the push as the deploy.**
+
+### Before believing ANY red run
+
+The three failures chased in this session were, in order: SwiftShader
+contention, an environment-sensitive golden, and a pre-existing rot in an
+ungated suite. **None was the change under test.** The habit that caught all
+three is one question — *does this failure predate my change?* — answered by
+running the same thing at an older commit, or by `md5`-ing the files the failing
+test actually loads. It costs minutes; believing a red run costs hours and can
+end in "fixing" working code.
+
+`tools/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
+Trust it. Two specs that blew a 120 s budget under load 8-9 came back at 68.9 s
+and 73.2 s solo.
+
 ### The standing conclusion
 
 The GPU half of this game is **unmeasurable on this box**, and no amount of
