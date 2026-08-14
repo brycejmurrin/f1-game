@@ -280,8 +280,33 @@ Two distinct defects were hiding in there, and both are worth knowing:
   completion for the first time — 173.7 s. **A failing test's duration is only a
   LOWER BOUND on the work it does**, so never size a budget from a red run.
 
-Verified after both fixes: **5/5 pass**, `test-solo` on a quiet box (load 1.23),
-at 191.3 / 173.7 / 155.6 / 135.5 / 53.4 s.
+**Two more defects that only CI could show, and both are worth the general
+lesson.** The first fix passed 5/5 locally and still came back 3/5 on a CI
+runner, with failures the local box never produced:
+
+- **`test.slow()` cannot cover the fixture phase.** CI failed with
+  `Test timeout of 120000ms exceeded while setting up "context"` at exactly
+  120.0 s — the BASE budget, un-multiplied. `test.slow()` is called inside the
+  test BODY, and context setup runs before the body, so the multiplier is not in
+  effect yet. Replaced with `test.describe.configure({ timeout: 360_000 })`,
+  which is set at collection time, covers setup, and survives CI passing an
+  explicit `--timeout=120000` on the command line (which the change-aware job
+  does). Precedent: `zandvoort-foundation.spec.js`.
+- **A 5 s `expect` default masquerading as a functional bug.**
+  `playwright.config.js` declares no `expect` block, so assertions get 5 s. The
+  COPY ALL chip only flips to `COPIED n ✓` once the fan-out has written a
+  profile for all 39 other circuits — real work, not a render. On a loaded
+  runner that passes 5 s, so the assertion fired while the label still read the
+  ARMED text, and the failure printed
+  `Received string: "COPY TO 39?"` — the exact state the line above had just
+  asserted. That reads like a broken feature and is a budget. **When an assertion
+  reports the previous step's expected value, suspect the expect timeout before
+  the app.** Then grep the rest of the file: the UNDO check below it read
+  localStorage exactly once with no retry, the same race one step later, and is
+  now `expect.poll`.
+
+Verified after all four fixes: **5/5 pass** solo on a quiet box at
+177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
 **Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
 `webgl` group correctly, so a local `pick-tests` run would have named it. But no
