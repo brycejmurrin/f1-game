@@ -34,8 +34,14 @@ async function waitForTrack(page, timeout = 10_000) {
 // circuit picker", a spec that is ~pure menu navigation and asserts nothing about
 // the canvas — the single most expensive test in the suite, spending all of it on
 // clicks waiting for frames nobody looks at.
+// `polling: 100` is REQUIRED here, not decoration (tests/unit/wait-polling.test.mjs
+// ratchets it). waitForFunction's default polling is rAF — and this particular wait
+// runs while the render loop is still going, which is the exact condition that
+// starves rAF under SwiftShader, so a declared timeout would never fire. It is the
+// same starvation this helper exists to remove; polling on a wall clock instead of
+// on frames is the only way to wait for the hook that turns it off.
 async function quietRenderer(page) {
-  await page.waitForFunction(() => !!window.__apex, { timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__apex, { polling: 100, timeout: 60_000 });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
