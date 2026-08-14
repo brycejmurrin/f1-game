@@ -116,16 +116,24 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         const bank = Tracks.banking(track, frac * track.total, 0);
         return Math.abs((bank?.roll || 0) * 180 / Math.PI);
       };
+      // Ask the curated apex table where the corners are instead of carrying a
+      // lap fraction. The fractions this test used to assert (0.1575/0.9687)
+      // were measured against a centreline the start-line rotation has since
+      // moved, so they had drifted onto flat road — the test was red, and the
+      // banks it was guarding sat on Scheivlak and Hunserug instead. The two
+      // bowls are anchored by turn index now and cannot drift again.
       return {
-        turns: [rollDeg(0.1575), rollDeg(0.9687)],
-        oldStraightZones: [rollDeg(0.135), rollDeg(0.915)],
+        hugenholtz: rollDeg(def.turns[2]),    // T3, the banked LEFT hairpin
+        luyendyk: rollDeg(def.turns[13]),     // T14, the banked final RIGHT
+        others: def.turns.filter((_, i) => i !== 2 && i !== 13).map(rollDeg),
       };
     });
 
-    expect(result.turns[0], "Hugenholtz banking").toBeGreaterThan(15);
-    expect(result.turns[1], "Arie Luyendyk banking").toBeGreaterThan(15);
-    expect(result.oldStraightZones[0], "old Hugenholtz approach zone").toBeLessThan(1);
-    expect(result.oldStraightZones[1], "old final-straight zone").toBeLessThan(1);
+    expect(result.hugenholtz, "Hugenholtz banking").toBeGreaterThan(15);
+    expect(result.luyendyk, "Arie Luyendyk banking").toBeGreaterThan(15);
+    // The rest of the lap carries ordinary 3-4 deg camber, never a bowl.
+    expect(Math.max(...result.others), "no other corner is banked like a bowl")
+      .toBeLessThan(6);
   });
 
   test("Madrid converts La Monumental's 24 percent bank to degrees", async ({ page }) => {

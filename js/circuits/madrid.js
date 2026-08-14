@@ -204,7 +204,12 @@
             const c = vadd(vadd(a.c, a.r, side * tier * 2.4), a.u, 3.0 + tier * 3.0);
             addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], TENDIDO[tier], b);
           }
-          addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 13.6),
+          // addPrism is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — 13.6 was tier2's
+          // top (11.8) plus half the roof height, i.e. authored as if this were
+          // the CENTROID. That left the roof's base floating 1.8 m above the
+          // top tier with nothing filling the gap. Seat it just above tier2's
+          // top (a hair of clearance, not flush, so the two faces don't fight).
+          addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 11.9),
             [18, 3.2, 33], WHITE, b);
           // Inner "barrera" wall — the face the driver actually sees from the
           // banking. It was one blank OFFWHITE slab repeated 54 times; Las
@@ -686,6 +691,7 @@
         supportWidth: 1.2,
         color: CONCRETE,
         required: true,
+              supports: false,
       });
       overheadSpan({
         id: "madrid-motorway-overpass-soffit",
@@ -695,6 +701,10 @@
         depth: 10.4,
         supportGap: 2.4,
         supportWidth: 1.2,
+        // The soffit is the underside of the overpass directly above, at the
+        // same frac — it is one bridge drawn in two layers, so it must not
+        // raise a second set of legs on top of that bridge's own.
+        supports: false,
         color: TUNNEL_DARK,
       });
       overheadSpan({
@@ -705,6 +715,7 @@
         depth: 1.8,
         supportGap: 2.0,
         color: STEEL,
+              supports: false,
       });
       // A lightweight IFEMA access bridge marks the return from the permanent
       // loop while retaining generous clearance and narrow off-edge supports.
@@ -717,6 +728,7 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: GLASS,
+              supports: false,
       });
       overheadSpan({
         id: "madrid-ifema-access-bridge-soffit",
@@ -727,6 +739,7 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: TUNNEL_DARK,
+              supports: false,
       });
       for (const side of [-1, 1]) {
         venueGroup(`madrid-overpass-pier-${side}`, 0.085, side, 2.6,

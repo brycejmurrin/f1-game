@@ -71,9 +71,24 @@
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
-        waterSurface, groundPatch, sailCanopy,
+        waterSurface, groundPatch, sailCanopy, terrainYAt,
         cameraTower, broadcastCompound, sponsorHoarding } = api;
       const K = (s) => Math.round(s * n) % n;
+      // World-XZ ground query mirroring SceneryNature's groundUnder: terrainYAt
+      // first (exact where the rendered ribbon covers the point), else the same
+      // nearest-node closed form tools/float-audit.cjs itself falls back to — a
+      // footing resolved this way never disagrees with the grounding audit,
+      // unlike reusing one anchor's height across tens of metres of tangent walk.
+      const groundUnder = (x, z) => {
+        const ty = terrainYAt(x, z);
+        if (ty !== null) return ty;
+        let best = 0, bestD = Infinity;
+        for (let i = 0; i < n; i++) {
+          const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
+      };
 
       // ── JIADING RICE PADDIES AND REED MARSH ──────────────────────────────
       // The circuit's origin story is its landscape: this was SWAMPLAND used
@@ -152,6 +167,12 @@
             const p = vadd(vadd(a0.c, a0.r, 54 + hv * 9),
                            a0.t, (i - 7) * 6.5 + hv * 2);
             if (onTrack(p[0], p[2], 16)) continue;
+            // The row walks up to ~46 m along the tangent and out to ~63 m
+            // beyond a0's own lateral offset from a SINGLE ground sample
+            // (a0.c) — on Shanghai's graded/cambered marsh that stranded the
+            // far end of the row above the real terrain. Re-seat per reed.
+            const gy = groundUnder(p[0], p[2]);
+            if (gy !== null) p[1] = gy;
             addCone(out, vadd(p, a0.u, 0.1), 1.5 + hv * 0.9, 2.4 + hv * 1.5,
                     hv < 0.5 ? REED : REED_D, 5, b);
           }
@@ -574,7 +595,13 @@
           const depth = 40 + hash(i * 7) * 50;
           const h     = 55 + hash(i * 11) * 70;
           const w     = 14 + hash(i * 13) * 10;
-          addFrustum(out, vadd(vadd(vadd(a.c, a.r, off), a.t, depth), u, 0),
+          // off/depth walk up to ~150 m off a0's single ground sample — on
+          // graded/cambered ground that stranded some of the 11 towers well
+          // above the real terrain. Re-seat each tower's own base.
+          const base = vadd(vadd(a.c, a.r, off), a.t, depth);
+          const gy = groundUnder(base[0], base[2]);
+          if (gy !== null) base[1] = gy;
+          addFrustum(out, vadd(base, u, 0),
                      w / 2, w / 3.8, h, GLASS_HAZE, 5, b);
         }
 

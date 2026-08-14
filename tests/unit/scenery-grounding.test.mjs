@@ -47,9 +47,24 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // defect list.
 //
 // Known-legitimate flags that the caps still carry (docs/SCENERY-GROUNDING.md
-// §4): wide overhead spans whose deck centre reads as unsupported, suspended
-// rides (Abu Dhabi's coasterLoop, Ferris wheel rims), and Monaco's yachts,
-// which float on water the ground model does not treat as a surface.
+// §4): suspended rides (Abu Dhabi's coasterLoop, Ferris wheel rims) and
+// AIRCRAFT IN FLIGHT — madrid's Barajas airliner on final approach (alt 90 m,
+// 632 m off-track) and mexico's equivalent. The gap the audit reports for
+// those IS the altitude; a plane in flight rests on nothing, and grounding it
+// would delete the model's whole point. They are the reason madrid and mexico
+// are the last non-zero entries here, and the caps are the mechanism for them
+// precisely because this file has no ALLOW escape hatch.
+//
+// Two entries that USED to be on this list are not defects-by-nature and have
+// been fixed rather than carried:
+//   * Monaco's yachts and Jeddah's dhows were never floating "on water the
+//     ground model ignores" — water is now a valid footing in the audit's
+//     support test, and with that in place the hulls turned out to be authored
+//     ~1.55 m ABOVE their own sea (the surface sits at pyMin - 0.8, not pyMin).
+//     A real defect that the missing water term had been hiding.
+//   * Wide overhead spans read as unsupported because overheadSpan emitted a
+//     deck and no legs, despite `supportGap`/`supportWidth` being in its spec
+//     and its footprint already validated. It now raises them.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "float-baseline.json"), "utf8"),
 );

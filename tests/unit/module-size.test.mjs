@@ -187,7 +187,7 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2758, // +8 2026-08-13: deploy merge union — banked-barrier fix (session) + overheadSpan notes (deploy lineage)
+  "js/track/tracks.js": 2762, // +4 2026-08-14: place() anchors props to the RENDERED terrain (terrainYAt) instead of groundYAt's closed form, which drifts metres wherever `elevations` bend the ribbon — the last reachable float on madrid and magny_cours, and unfixable from circuit data since the call site is engine-generic
 };
 
 test("the big modules are not growing unnoticed", () => {

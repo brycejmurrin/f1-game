@@ -241,6 +241,7 @@ const HARD_EDGES = [
   ["js/mat4.js", "js/game.js"],
   ["js/mat4.js", "js/track/spline.js"],
   ["js/mat4.js", "js/track/scenery-structures.js"],
+  ["js/mat4.js", "js/data/telemetry.js"],
   // liverytex sizes its atlas from GLX.mobileTier at EVAL time — the one
   // mobile-tier detection now lives in glx.js and nowhere else.
   ["js/render/glx.js", "js/car/liverytex.js"],

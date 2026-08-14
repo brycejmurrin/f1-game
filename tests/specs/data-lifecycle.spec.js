@@ -17,6 +17,7 @@ async function dataReady(page) {
   // too. The symptom is a bare `ReferenceError: DataHub is not defined` from
   // the waitForFunction below, three links away from the cause. index.html has
   // always loaded mat4.js before js/data/*, so the app was never affected.
+  // The ordering is now asserted: HARD_EDGES carries mat4.js -> telemetry.js.
   await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
