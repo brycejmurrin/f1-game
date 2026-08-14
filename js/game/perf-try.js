@@ -16,7 +16,7 @@
      PerfTry.list()                    every switch: state, what, why, what to watch
      PerfTry.active()                  just the names that are ON
      PerfTry.set("skyLate", true)      turn one on (reloads: shaders recompile)
-     ?perftry=skyLate,glStateCache     URL form, no console needed
+     ?perftry=skyLate,flareGate        URL form, no console needed
      ?perftry=all / ?perftry=none      everything on / everything off
    The URL form overrides storage for that session only, so a link can demo a
    switch without touching anyone's saved state.
@@ -56,23 +56,40 @@ const FLAGS = {
          "and today it runs on EVERY pixel of the frame, 40-70% of which opaque " +
          "geometry then overwrites. The sky sits at depth 1.0 (SKY_VS: z = w) with " +
          "depth writes off under LEQUAL, so drawing it last lets early-Z reject every " +
-         "covered fragment. Probably the largest single GPU saving in this list.",
+         "covered fragment. MEASURED on vegas, six views around the lap: opaque " +
+         "geometry covers 64.3 / 70.8 / 89.0 / 64.3 / 64.3 / 98.5 % of the frame " +
+         "(mean 75.2%), and every covered pixel is a SKY_FS invocation early-Z " +
+         "rejects. That is the fraction of the sky pass this switch removes — " +
+         "counted from render({what:'view'}) coverage, not timed, so the number " +
+         "transfers to a real GPU. It is also LARGER than the 40-70% the audit " +
+         "estimated. What it is worth in ms still depends on your GPU.",
     watch: "The LAMP HALOS are the thing to check. The glow is additive with no depth " +
            "write, so it had to move after the sky too (opaque -> sky -> glow); if the " +
            "ordering is wrong the halos vanish against open sky, or the horizon looks " +
            "clipped. Check a night circuit with floodlights, and the horizon at dusk.",
   },
-  glStateCache: {
-    glsl: false,
-    what: "Cache CULL_FACE / colorMask / POLYGON_OFFSET_FILL across draws.",
-    why: "GLX.draw() brackets EVERY draw with gl.disable/enable(CULL_FACE), a colorMask " +
-         "pair and a polygonOffset pair, while setBlend/setDepthMask ten lines above it " +
-         "already collapse runs of identical state. Every car body and all 8 wheel draws " +
-         "are doubleSided, so this is ~150-250 redundant GL calls per frame. CPU-side, " +
-         "so unlike the others it may show up even on a weak GPU.",
-    watch: "State leaks. If a draw path bypasses the cache the symptom is inverted " +
-           "culling or missing alpha — look at wheels, brake rings and decals.",
-  },
+  // glStateCache: REMOVED after measurement. The audit claimed "~150-250
+  // redundant GL calls per frame" from GLX.draw()'s uncached CULL_FACE /
+  // colorMask / POLYGON_OFFSET_FILL toggles. Counted directly, by patching
+  // WebGL2RenderingContext.prototype before any page script and sampling 12
+  // frames per arm on vegas: those four calls total **63.5 per frame**, and
+  // the cache collapses **zero** of them — 318 disable / 300 enable / 66
+  // colorMask / 78 polygonOffset over 12 frames, byte-identical with the
+  // switch on and off, with the flag verified as actually engaging
+  // (PerfTry.on() read false then true inside the two arms, so this is a
+  // measured zero and not a broken measurement).
+  //
+  // The reason is worth keeping: the toggles strictly ALTERNATE. Cars are
+  // doubleSided and their neighbours are not, so every setCull genuinely
+  // changes state and there is no run of identical state to collapse. A
+  // redundancy cache can only pay where redundancy exists.
+  //
+  // docs/PERF-FINDINGS.md §1's pattern, exactly: findings estimated from
+  // operation counts come in at a fraction of their billing or vanish. This
+  // one vanished. The setCull/setAlphaWrite/setPolyOffset routing in glx.js
+  // is KEPT — it is equivalent to the direct calls and tidier — but the switch
+  // is gone, because a toggle that cannot change anything is a UI element that
+  // can only mislead whoever flips it.
   flareGate: {
     glsl: true,
     what: "Compute the lens-flare occlusion depth fetch only when the flare is actually on.",
@@ -155,7 +172,7 @@ function defines() {
    It also mints NO new CSS class: the buttons carry no class, exactly like
    their neighbours (#pm-res, #pm-renderer, #pm-gfx), so the class ceiling is
    untouched too. */
-const LABELS = { glStateCache: "GL STATE CACHE", flareGate: "FLARE GATE", lampFogGate: "LAMP FOG GATE" };
+const LABELS = { skyLate: "SKY LATE", flareGate: "FLARE GATE", lampFogGate: "LAMP FOG GATE" };
 
 function labelFor(k) { return LABELS[k] || k.replace(/([A-Z])/g, " $1").toUpperCase(); }
 
