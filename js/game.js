@@ -1825,11 +1825,11 @@ const cockpitBodyOrder = [];
 function cockpitBodyMesh(team) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
-  const key = team.id + ":" + playerVisualKey;
+  const key = team.id + ":" + playerVisualKey + (CockpitOpts.halo() ? ":H" : "");   // halo keys the cache: toggling rebuilds, no reload
   return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
     return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-      { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: CockpitOpts.halo(), num: team.drivers && team.drivers[0] && team.drivers[0].num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
   }, COCKPIT_BODY_CACHE_MAX);
 }
