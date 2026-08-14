@@ -335,7 +335,42 @@ hundreds of chunk draw calls for 4096 pixels of blurred reflection. This is the
 only finding where the win is draw-call submission rather than a shaved
 constant, and game.js already calls this pass "the biggest per-frame load
 multiplier" — the mitigation that shipped halved its *rate*, not its *reach*.
-**Profile before touching**, and note that this box cannot do it. Attempted:
+
+**NO LONGER AN ESTIMATE (2026-08-14).** "Potentially hundreds of chunk draws"
+was a guess; the reach is now COUNTED, by the method this document argues for —
+replicate `createChunkedMesh`'s 72 m centroid binning in the Node VM build
+harness (`tools/track-build-vm.cjs`) and count what survives, at 12 stations a
+lap. Over a full 6-face cube the probe sees every direction, so its coverage is
+exactly a SPHERE of the far radius and the count is orientation-independent —
+which is what makes this measurable without a GPU at all:
+
+| probe far | vegas chunks / indices | spa | monza |
+|---|---|---|---|
+| **900 m (shipped)** | **238.3 / 1,256,344** | **373.6 / 344,888** | **195.1 / 516,647** |
+| 400 m | 63.2 / 492,715 | 98.4 / 141,175 | 64.4 / 204,214 |
+| 300 m | 45.3 / 376,791 | 64.6 / 110,233 | 43.8 / 141,843 |
+| 200 m | 29.8 / 267,784 | 33.5 / 67,938 | 26.8 / 85,366 |
+
+A 300 m probe cull removes **68-72% of the indices and 78-83% of the chunks**,
+and the three circuits agree closely despite very different scenery (spa is
+1594 small tree chunks over 207 k tris; vegas is 914 large building chunks over
+885 k tris). That consistency is the useful part — it is a property of the
+radius, not of a circuit.
+
+The sub-pixel argument for why 300 m is defensible: a face is 90 deg across 64
+pixels = 1.41 deg per pixel. A 20 m building subtends atan(20/300) = 3.8 deg
+(~2.7 px) at 300 m, and atan(20/900) = 1.27 deg (**0.9 px**) at 900 m — under
+one pixel, in a target that is then mipmapped and blurred for a car-paint
+reflection. Everything between 300 m and 900 m is paying full vertex cost to
+move less than a pixel.
+
+**This is NOT bit-identical**, unlike everything else taken today, so it does
+not get taken the same way: it belongs behind a `PerfTry` default-OFF switch
+(`js/game/perf-try.js`) where it can be A/B'd on real hardware, which is the
+mechanism that already exists for exactly this class of change.
+
+Everything below was the original note on why this box could not settle it, and
+stays because the negative results are still true of frame TIMING here:
 
 - Counting `drawChunked` CALLS separates the passes (1 env / 2 main per frame)
   but not the chunks inside them, which is where the cost is. Useless.

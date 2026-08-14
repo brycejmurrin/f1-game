@@ -59,6 +59,30 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   every `test-bg.mjs` invocation, `navigate_page(about:blank)` unconditionally**
   — even (especially) when you're confident you already parked. It's one call;
   the cost of skipping it once is a full contaminated test run.
+- **Parking is NECESSARY BUT NOT SUFFICIENT — verify by CPU, then kill by age.**
+  The bullet above reads as though `about:blank` ends the problem. It does not.
+  MEASURED 2026-08-14: after a mobile-emulation session, `navigate_page` to
+  `about:blank` returned success and the page WAS blank, yet the MCP browser's
+  GPU process still held **174% CPU** five minutes later, and a `test:webgl`
+  launched on top of it inherited that load. (A plausible contributor: CPU
+  throttling / device-metrics overrides set via `emulate` survive the
+  navigation — the emulation banner is re-printed on every subsequent call —
+  so the compositor keeps working even with nothing to draw.) So park, then
+  CHECK, then kill:
+
+  ```sh
+  # Ages separate the two trees far more reliably than args do: the run you
+  # just started is seconds old, an MCP browser is minutes old.
+  ps -eo pid,etimes,pcpu,comm | awk '$4 ~ /chrome/ {print $1, $2"s", $3"%"}'
+  for p in $(ps -eo pid,etimes,comm | awk '$2>120 && $3 ~ /chrome/ {print $1}'); do
+    kill -9 $p 2>/dev/null            # >120s = pre-dates the run; MCP's, not Playwright's
+  done
+  ```
+
+  Do this AFTER `test-bg.mjs` has started (so its own processes are the young
+  ones) and confirm every survivor shares the run's age. A parked-but-spinning
+  MCP browser is indistinguishable from a healthy box by load average alone,
+  which is why the check has to be per-process.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
   the MCP. For UI (not 3D) work, `headless(true)` + hide `#game` first — that's
   survey-ui-matrix's department.
