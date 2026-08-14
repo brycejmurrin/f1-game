@@ -207,6 +207,45 @@ out — behind the wheel, so it reads as dash surface) and drops the seat-surrou
 span entirely, since the `ckpt` bolsters and inner tub walls already model that
 from the inside.
 
+### …and the same cap, moved, then hid the nose
+
+Moving a wall is not removing it. A follow-up run — this time rasterising the
+whole `ckpt` body against the frame and reporting **visible coverage per part**,
+rather than one mesh against one other — put the honest state of the view in a
+table:
+
+| part | share of frame |
+|---|---|
+| `bolsters` (tub walls + coaming + shroud) | 16.30% |
+| steering wheel + instruments | 13.15% |
+| `mirrors` | 1.55% |
+| `chassis` | 0.79% |
+| `sidepods` | 0.31% |
+| `frontWing` | 0.14% |
+| `hood` | **absent** |
+
+`hood` absent is the finding. A first-person view of an F1 car whose most
+recognisable feature — the long nose running out ahead between the front tyres —
+is not on screen at all is wrong however good the dash looks.
+
+Rasterising `hood` **alone** and then asking who beats it separates "off-screen"
+from "occluded", which the coverage table cannot:
+
+```
+hoodPixelsIfAlone: 2626      rows 117..179 of 180      beatenBy: { chassis: 2428, livery: 16 }
+```
+
+On screen, in the lower third, and 92% of it lost to the cap that had just been
+moved to z 0.45. Its top sat at y 0.599; the sightline from the eye to the
+hood's near top edge (y 0.44 at z 0.58) passes through y 0.488 at that station,
+so the top goes to **0.48** and the driver sees over the dash onto the vanity
+deck and the nose.
+
+The lesson is the reason this doc exists: **each fix needs its own measurement.**
+The z-0.45 move was correct and verified against the wheel (2722 px → 0), and
+that verification said nothing whatever about the nose. Re-run the probe against
+what you changed, not against what you fixed last time.
+
 ## 5. When to reach for this
 
 - Anything hidden behind anything, in any camera, where you cannot simply orbit
