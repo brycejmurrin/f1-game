@@ -5346,7 +5346,7 @@ function render(dt) {
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
-  const gentleHead = onboard && (camId === "cockpit" || camId === "hood");
+  const gentleHead = onboard && (camId === "cockpit" || camId === "hood") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
   for (let i = 0; i < 3; i++) {
     camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
