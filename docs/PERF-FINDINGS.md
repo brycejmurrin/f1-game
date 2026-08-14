@@ -244,6 +244,53 @@ NEGATIVE on vegas**, which is `addBox`-dominated. The equivalence was proven and
 the win was not there. §1's pattern again: mechanism-by-reading held, the
 operation count did not.
 
+### A worked example of the rule below (2026-08-14)
+
+`tests/specs/lighting-tuner-grade.spec.js` came back **4 failed / 31** in the
+`webgl` group right after a perf change landed. It would have been very easy to
+read that as the change's fault. It was not, and the two steps that established
+that are the whole point of the next section:
+
+1. **`tools/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
+   returned *"FAIL on a quiet box is REAL. It is not the machine. Bisect it."*
+   So it was not contention — three of the four were genuine.
+2. **The same spec was then run at the PREVIOUS DEPLOY SHA**, which had already
+   shipped. Identical three tests, identical errors, identical durations. The
+   failures predated the change entirely.
+
+Two distinct defects were hiding in there, and both are worth knowing:
+
+- **`window.LightTune` is undefined, and always was.** `js/game/lighting.js`
+  declares `const LightTune = (function () {`, and a top-level `const` in a
+  CLASSIC script creates a **script-scoped binding, not a property of `window`**
+  — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
+  `css-zoom.js` and `sheetshape.js` use. The spec's `page.evaluate` reached for
+  `window.LightTune.TUNE_DEFS` and threw. It was the ONLY `window.LightTune` in
+  the tree; every other reader uses the bare identifier, as `js/game/apex.js`
+  does itself. **When a page global is missing under `page.evaluate`, check how
+  it is DECLARED before assuming a load-order break** — `const` and `window.X =`
+  are both "one global per file" and only one of them is on `window`.
+- **Three tests are genuinely over the 120 s budget** (158.4 / 120.4 / 160.7 s
+  solo), not flaky. Each boots the game, races, walks four menu levels and fans a
+  lighting profile across all 40 circuits under SwiftShader. Now `test.slow()`.
+  Note CI already concedes this globally — its Smoke job runs with
+  `--timeout=420000`. **It was four tests, not three**, and the fourth is the
+  instructive one: it had been dying at 66.5 s on the `window.LightTune` error,
+  and 66.5 s was mistaken for its cost. Fixing the error let it run to
+  completion for the first time — 173.7 s. **A failing test's duration is only a
+  LOWER BOUND on the work it does**, so never size a budget from a red run.
+
+Verified after both fixes: **5/5 pass**, `test-solo` on a quiet box (load 1.23),
+at 191.3 / 173.7 / 155.6 / 135.5 / 53.4 s.
+
+**Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
+`webgl` group correctly, so a local `pick-tests` run would have named it. But no
+browser group GATES in CI — the change-aware job is advisory — so a red
+`lighting-tuner-grade` can sit on the deploy branch indefinitely with every CI
+run green. Same shape as the `test:api` entry above. That is a deliberate
+speed trade-off, not an oversight; the cost is that these suites need a human to
+run them.
+
 ### Before believing ANY red run
 
 The three failures chased in this session were, in order: SwiftShader

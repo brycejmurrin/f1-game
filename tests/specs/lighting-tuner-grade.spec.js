@@ -41,7 +41,22 @@ test("IMAGE & COLOUR exposes ordered professional grading sections", async ({ pa
 // because the profiles being written belong to tracks that are not loaded.
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.lightTune") || "{}"));
 
+// FOUR OF THE FIVE TESTS HERE ARE GENUINELY OVER THE DEFAULT BUDGET, not flaky.
+// Measured with tools/test-solo.mjs (APEX_WORKERS=1, box gated quiet): 191.8 s,
+// 163.6 s, 131.3 s and 129.3 s against playwright.config.js's 120 s. Only
+// "IMAGE & COLOUR exposes ordered…" (66.5 s) fits, and it is left alone.
+// They were red on BOTH lineages — the same three failed identically at the
+// previous deploy SHA, so this is an undersized budget that predates any recent
+// change, not a regression. tools/test-solo.mjs's own header already names this
+// file as the case it was written to make visible.
+// The cost is real: each one boots the game, races bahrain, walks the pause →
+// SETTINGS → LIGHTING → IMAGE & COLOUR path, then fans a lighting profile out
+// across all 40 circuits and undoes it — under SwiftShader. test.slow() triples
+// the budget rather than hiding the cost, which is the form aero-zones.spec.js
+// already uses and the honest one: if these ever get FASTER, the headroom is
+// visible in the duration, not baked into a bespoke number.
 test("COPY ALL arms, spreads the condition to every other track, and undoes", async ({ page }) => {
+  test.slow();
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.locator("#lt-wx-wet").click();
@@ -70,6 +85,7 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
 });
 
 test("switching the previewed condition disarms a pending COPY ALL", async ({ page }) => {
+  test.slow();   // see the note above — sits right ON the default budget
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.evaluate(() => window.__apex.lightTune({ gainB: 1.2 }));
@@ -90,6 +106,7 @@ test("switching the previewed condition disarms a pending COPY ALL", async ({ pa
 });
 
 test("__apex.lightCopy('look') levels every track at that condition, and undoes", async ({ page }) => {
+  test.slow();   // see the note above
   await openImageTuner(page);
   await page.evaluate(() => { window.__apex.setTimeOfDay("night"); window.__apex.weather("wet"); });
   const r = await page.evaluate(() => window.__apex.lightCopy("look"));
@@ -113,6 +130,11 @@ test("__apex.lightCopy('look') levels every track at that condition, and undoes"
 });
 
 test("new grading controls clamp, persist, reset, and export", async ({ page }) => {
+  // 131.3 s once it actually RUNS. It used to die at 66.5 s on the
+  // `window.LightTune` TypeError below, and 66.5 s was mistaken for its real
+  // cost — a failing test's duration is only a LOWER BOUND on the work it does,
+  // because it stopped early. Fixing the error is what revealed the budget.
+  test.slow();
   await openImageTuner(page);
   await page.evaluate(() => window.__apex.lightTune({ shadows: 9, gammaG: 0.1, gainB: 1.25 }));
   // Read the clamp bounds from the REGISTRY, not from memory. This assertion was
@@ -125,7 +147,16 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // silent about a range the tuner is free to change. Same rule the mcp-probe
   // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
   const bounds = await page.evaluate(() => {
-    const pick = (id) => (window.LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
+    // BARE `LightTune`, not `window.LightTune`. js/game/lighting.js declares it
+    // as `const LightTune = (function () {`, and a top-level `const` in a
+    // CLASSIC script creates a script-scoped binding — it is NOT a property of
+    // window, unlike `var` or the explicit `window.X =` form that ariastate.js,
+    // css-zoom.js and sheetshape.js use. So `window.LightTune` was undefined and
+    // this line threw `Cannot read properties of undefined (reading
+    // 'TUNE_DEFS')`. The bare identifier resolves through the same global scope
+    // the page's own modules use, which is how every other LightTune reader in
+    // tests/ already does it. This was the only `window.LightTune` in the tree.
+    const pick = (id) => (LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
     return { shadowsMax: pick("shadows").max, gammaGMin: pick("gammaG").min };
   });
   expect(bounds.shadowsMax, "SHADOWS has no max in TUNE_DEFS — the clamp test would be vacuous").toBeGreaterThan(0);
