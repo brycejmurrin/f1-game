@@ -6083,7 +6083,7 @@ function render(dt) {
     // never touched. When disabled these all come back 0 (rigid chassis).
     // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
     // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1]);
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
     // Pitch: rotate forward+up around the right axis (positive = nose up). This
     // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
