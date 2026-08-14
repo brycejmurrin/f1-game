@@ -184,6 +184,27 @@ window.MenuNav = (function () {
   //   `sign` > 0 for Down / Right. `best` is the nearest thing ahead in the band;
   //   `edge` is the FURTHEST thing behind in it, i.e. where a wrap lands.
   function step(from, dx, dy, list) {
+    // A `.chip-row` is a BOUNDED SELECTOR — the two DRIVER chips in the garage,
+    // and every race-settings option group (`role="group"`). Left/Right move
+    // between that group's OWN chips in reading order and leave only from an end.
+    // Pure geometry gets this wrong the moment a chip row WRAPS: in the garage's
+    // narrow TEAM panel the two driver chips stack into a column, so `#1` sits
+    // ABOVE `#2` rather than left of it, and ArrowLeft from `#2` finds the
+    // SUSPENSION button — which really is the nearest thing in `#2`'s leftward
+    // band — instead of `#1`. Keying off the group, not the pixels, keeps
+    // Left/Right on the chips whether the row is laid out flat or wrapped. This
+    // is identical to the spatial result for a row that does NOT wrap (DOM order
+    // is reading order there), and falling through at the ends preserves the
+    // "no sideways wrap" rule below — Right off the last chip still leaves.
+    // Vertical moves stay geometric, which is how you step off a STACKED row.
+    if (dx) {
+      const row = from.closest && from.closest(".chip-row");
+      if (row) {
+        const chips = list.filter((el) => row.contains(el));
+        const j = chips.indexOf(from) + (dx > 0 ? 1 : -1);
+        if (chips[j]) return chips[j];
+      }
+    }
     const a = centre(from);
     const sign = dx + dy;
     let best = null, bestCost = Infinity;

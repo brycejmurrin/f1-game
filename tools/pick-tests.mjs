@@ -54,7 +54,18 @@ export const RULES = [
    "load order, docs integrity, api contracts — 4 s, catches the structural slips"],
 
   // ── renderer ────────────────────────────────────────────────────────────
-  [/^js\/render\/(glx|gfx)/, ["webgl", "visual"], "the shipped WebGL2 path"],
+  // NOT "visual" — tests/specs/tracks-visual.spec.js is PARKED. It has no
+  // committed golden baselines and self-skips all 40 circuits, so the group
+  // reports `= run passed (40/40 done, 0 failed)` at 0.0 s per test while
+  // asserting nothing. Recommending it here made that vacuous green look like
+  // renderer verification: measured 2026-08-14, a chunked-draw change was very
+  // nearly signed off on it. The spec's own header states the principle — "a
+  // gate that cannot pass is worse than no gate: it trains everyone to ignore
+  // the group" — and being RECOMMENDED as a gate is how it kept getting run.
+  // tests/unit/pick-tests.test.mjs holds this to the baselines actually being
+  // absent, so generating them re-opens the question instead of leaving a
+  // stale exclusion behind.
+  [/^js\/render\/(glx|gfx)/, ["webgl"], "the shipped WebGL2 path"],
   [/^js\/render\/shaders\//, ["webgl", "ab"], "GLSL leaves feed every lit surface"],
   [/^js\/render\/webgpu\//, ["webgl"], "WGX is feature-detected; GLX must still boot"],
   [/^js\/render\/three\//, ["tlx"], "the three.js backend has its own probe spec"],

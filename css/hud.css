@@ -30,11 +30,29 @@
    a selector above, compensate its anchor in the same edit. Conversely the
    photo-mode controls further down are NOT zoomed and must NOT divide; two of
    them did, inertly, until this pass. */
-.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-flag, #hud-sectors,
-#lights, #announce { zoom: var(--hud-scale); }
+/* TWO BANDS, TWO CAPS. Each cluster is anchored in its own corner and multiplied
+   by the zoom, and nothing here relates a cluster's size to the VIEWPORT's — so
+   above ~150% on a small screen the clusters simply exceed the screen. Surveyed
+   across 5 shapes x 5 sizes: `#minimap` runs into `.hud-top` on 667x375 from
+   150% and on 1280x800 at 200%; the bottom cluster runs OFF-SCREEN on 1280x800
+   from 175%. 1920x1080 is clean everywhere, which is the tell — the defect is a
+   ratio, not a size.
+   So the zoom each band actually gets is the player's --hud-scale capped by what
+   the viewport can hold, computed in js/game/hud.js (fitHud) from each band's
+   MEASURED intrinsic width. The two bands are capped separately because they run
+   out of room at different points, and the top band caps as ONE unit so the map,
+   the gap readout and the centred POS row keep their relationship.
+   The fallback is --hud-scale itself: before the first measurement, and on any
+   screen that never needs a cap, this is exactly the old behaviour.
+   --hud-z is each band's OWN effective zoom, and every anchor below divides by
+   THAT rather than by --hud-scale: the compensation has to use the number the
+   element is actually zoomed by, or a capped band double-counts its notch. */
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors,
+#lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+.hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 .hud-top {
   position: absolute;
-  top: calc(8px + var(--sat) / var(--hud-scale));
+  top: calc(8px + var(--sat) / var(--hud-z));
   left: 50%; transform: translateX(-50%);
   display: flex; gap: 10px;
 }
@@ -76,8 +94,8 @@
      61px left at 175%, so there is no CSS fix at that end and no point pursuing
      one; docking below `.hud-top` does clear at every scale, and was tried, but
      it breaks up the top-left cluster. */
-  top: calc(8px + var(--sat) / var(--hud-scale));
-  left: calc(130px + var(--sal) / var(--hud-scale));
+  top: calc(8px + var(--sat) / var(--hud-z));
+  left: calc(130px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
      floor) and deliberately so: that scale is calibrated for menu chrome a
      stopped player reads, while this is a peripheral glance during a lap, in
@@ -87,7 +105,7 @@
      matter how far HUD SIZE is pushed. Left to grow with the zoom the pair
      rendered as a slab about as wide as the minimap — a banner, not telemetry.
      Now it grows 12 -> 16px screen across 100 -> 150% and then holds. */
-  text-align: left; font-size: min(12px, calc(16px / var(--hud-scale)));
+  text-align: left; font-size: min(12px, calc(16px / var(--hud-z)));
   font-weight: 700; letter-spacing: 0.02em; color: #ddd;
   line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
@@ -109,10 +127,10 @@
    below `.hud-top`'s bottom edge, where the strip is empty to the far side of
    the screen. 62px is that edge — a constant 58 in this element's own zoomed
    units, because `.hud-top` rides the same `zoom` group — plus 4px of air. */
-:root[data-gap-drop] .hud-gaps { top: calc(62px + var(--sat) / var(--hud-scale)); }
+:root[data-gap-drop] .hud-gaps { top: calc(62px + var(--sat) / var(--hud-z)); }
 .hud-bottom {
   position: absolute;
-  bottom: calc(12px + var(--sab) / var(--hud-scale));
+  bottom: calc(12px + var(--sab) / var(--hud-z));
   left: 50%; transform: translateX(-50%);
   /* compact centred stack so it never collides with the corner buttons */
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -180,14 +198,14 @@
 @keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;
-  left: calc(10px + var(--sal) / var(--hud-scale));
-  top: calc(8px + var(--sat) / var(--hud-scale));
+  left: calc(10px + var(--sal) / var(--hud-z));
+  top: calc(8px + var(--sat) / var(--hud-z));
   width: 112px; height: 112px;
   opacity: 0.90;
   background: rgba(8,8,14,0.55); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
 #hud-flag {
-  position: absolute; top: calc(100px + var(--sat) / var(--hud-scale)); left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(100px + var(--sat) / var(--hud-z)); left: 50%; transform: translateX(-50%);
   padding: calc(var(--gap) * 0.5) 16px; border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
@@ -214,8 +232,8 @@
      does NOT, so clearing an unscaled box means converting the unscaled sum into
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
-  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-scale));
-  right: calc(10px + var(--sar) / var(--hud-scale));
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z));
+  right: calc(10px + var(--sar) / var(--hud-z));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
   padding: 5px 9px;
@@ -233,7 +251,7 @@
 /* ---------- start lights ---------- */
 #lights {
   position: fixed;
-  top: calc((18svh + var(--sat)) / var(--hud-scale));
+  top: calc((18svh + var(--sat)) / var(--hud-z));
   left: 50%; transform: translateX(-50%);
   display: flex; gap: var(--gap);
   background: rgba(8, 8, 12, 0.85);
@@ -246,7 +264,7 @@
 
 #announce {
   position: fixed;
-  top: calc(30svh / var(--hud-scale)); left: 50%; transform: translateX(-50%);
+  top: calc(30svh / var(--hud-z)); left: 50%; transform: translateX(-50%);
   /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see .hud-top zoom rule above),
      so a bare 8vw renders as 9.2vw at the touch default. `nowrap` + a centring
      translate means the longest banner ran off both edges of a 667px landscape

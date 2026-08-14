@@ -5868,7 +5868,12 @@ function render(dt) {
     // chunk its own nearest-32 instead of every chunk sharing this one set.
     // frame.lights stays authoritative for the car and everything non-chunked.
     frame.allLights = track._lights || null;
-    frame.perChunkLights = LT.perChunkLights ? 1 : 0;
+    // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
+    // turns per-chunk lamp sets on and doubles as the track-lamp intensity
+    // scale, because the feature genuinely delivers more light per fragment
+    // (each chunk gets 32 lamps that actually reach it instead of sharing one
+    // global 32) and needs a dimmer to be usable at the shipped LAMP LEVEL.
+    frame.perChunkLights = +LT.perChunkLights || 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop

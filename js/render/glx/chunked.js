@@ -123,21 +123,52 @@ const GLXChunked = (function () {
       if (hasMat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+      const BPI = big ? 4 : 2;                 // bytes per index
+      // ONE index buffer for the whole mesh. A chunk is a (byteOffset, count)
+      // RANGE into it rather than a buffer of its own, which is what lets the
+      // draw loops below merge adjacent visible chunks into a single
+      // drawElements — the chunked scenery is otherwise the largest draw-call
+      // block in the frame (measured over 12 stations a lap against the real
+      // camera frustum: 146.9 visible chunks on spa, 100.9 on vegas, 79.3 on
+      // monza, plus 36.8 for vegas glass, each one its own draw AND its own
+      // ELEMENT_ARRAY_BUFFER bind).
+      //
+      // Nothing has to be rebased: bucket indices are already ABSOLUTE into the
+      // shared VBO (the binning loop above pushes raw srcIdx values) and the
+      // index TYPE is uniform per mesh, so concatenating in bucket order is a
+      // byte-for-byte copy. Buckets keep Map insertion order, which is the
+      // order triangles were emitted — along the arc — so the ranges are
+      // already spatially coherent and no reorder is needed or wanted.
+      //
+      // Allocated by SIZE then filled with bufferSubData per bucket, rather
+      // than concatenating on the CPU first: that keeps the transient peak at
+      // one bucket's index array, exactly as before. On a ~5 M-vert street
+      // circuit the whole-mesh array would be tens of MB held at once.
+      let total = 0;
+      buckets.forEach((bk) => { total += bk.idx.length; });
+      const ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, total * BPI, gl.STATIC_DRAW);
       const chunks = [];
-      let firstIb = null;
+      let off = 0;                             // running offset, in INDICES
       buckets.forEach((bk) => {
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
                          // don't all stay resident while the rest are converted
-        const ibo = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arr, gl.STATIC_DRAW);
-        if (!firstIb) firstIb = ibo;
-        chunks.push({ ibo, count: arr.length, indexType, min: bk.mn, max: bk.mx });
+        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
+        chunks.push({ byteOffset: off * BPI, count: arr.length, indexType, min: bk.mn, max: bk.mx });
+        off += arr.length;
       });
+      // This bind happened INSIDE the bindVertexArray(vao) block above, so the
+      // VAO records it — and now records the one buffer every chunk draws from,
+      // where before it happened to record whichever bucket converted last.
       gl.bindVertexArray(null);
       core.invalidateVAO();   // keep glx.js's VAO bind cache in sync with the direct bind above
-      return { vao, vbo, ib: firstIb, count: chunks.length ? chunks[0].count : 0, indexType, chunks, cellSize: cell };
+      // `count` is now the WHOLE mesh, not chunks[0]. That only affects the
+      // "works as a plain mesh" fallback, which it makes correct: a stray
+      // draw()/castShadow() on a chunked mesh used to render one arbitrary
+      // cell, and now renders all of it.
+      return { vao, vbo, ib: ibo, count: total, indexType, chunks, cellSize: cell };
     }
 
     // Draw a chunked mesh, frustum-culling each chunk against the camera. Material
@@ -172,21 +203,49 @@ const GLXChunked = (function () {
       // circuit then lights every chunk to its own budget instead of making the
       // whole visible world compete for 32 slots, and per-fragment cost FALLS
       // (a chunk binds only lamps that actually reach it). Off by default.
-      const perChunk = F.perChunkLights && F.allLights;
-      for (let i = 0; i < chunks.length; i++) {
-        const ch = chunks[i];
-        if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
-        if (perChunk) {
+      // > 0, not truthiness: the knob is a 0..1 amount now (its value is the
+      // lamp-intensity scale glx.js applies), so any positive value enables it.
+      const perChunk = F.perChunkLights > 0 && F.allLights;
+      // One element-buffer bind for the whole pass. The VAO already records it
+      // (see createChunkedMesh), so this is belt-and-braces against a stray
+      // bind made under this VAO — not a per-draw cost.
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
+      if (perChunk) {
+        // No merging here BY CONSTRUCTION: each chunk binds its own nearest-32
+        // lamp set between draws, so two chunks cannot share one drawElements.
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
+          if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
           if (ch._lampIdx === undefined || ch._lampSrc !== F.allLights) {
             ch._lampIdx = _pickChunkLamps(F.allLights, ch.min, ch.max);
             ch._lampSrc = F.allLights;
           }
           core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
                               F.lights, F.tailStart, F.tailCount);
+          gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, ch.byteOffset);
         }
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo);
-        gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, 0);
+      } else {
+        // Merge RUNS of adjacent visible chunks into one draw. Chunks were
+        // written to the index buffer in array order, so chunks adjacent in the
+        // array are contiguous in the buffer — accumulating `count` over a run
+        // and drawing from the run's first byteOffset submits exactly the same
+        // triangles in exactly the same order as the per-chunk loop did. A
+        // culled chunk breaks the run; nothing else does.
+        let runOff = -1, runCount = 0;
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          const vis = _aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
+                      !(cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
+          if (vis) {
+            if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
+            else runCount += ch.count;
+          } else if (runOff >= 0) {
+            gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
+            runOff = -1; runCount = 0;
+          }
+        }
+        if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
       }
       // Restore the frame-global set so later non-chunked draws (car, road
       // furniture) are unaffected by whatever the last chunk happened to bind.
@@ -226,19 +285,30 @@ const GLXChunked = (function () {
       // of city chunks instead of the whole circuit.
       _extractPlanes(SH.castCullVP || SH.lightVP, _fcPlanes);
       const chunks = mesh.chunks;
+      // Same single bind + run-merging as drawChunked; see the notes there. The
+      // lamp shadow pass runs this EVERY night frame against a tight cone, so
+      // its surviving chunk set is small and highly contiguous.
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
+      let runOff = -1, runCount = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo);
-        gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, 0);
+        if (_aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
+          if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
+          else runCount += ch.count;
+        } else if (runOff >= 0) {
+          gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
+          runOff = -1; runCount = 0;
+        }
       }
+      if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
     }
 
     function freeChunkedMesh(mesh) {
       if (!mesh) return;
       core.unbindVAOIf(mesh.vao);
-      if (mesh.chunks) for (let i = 0; i < mesh.chunks.length; i++) gl.deleteBuffer(mesh.chunks[i].ibo);
-      else if (mesh.ib) gl.deleteBuffer(mesh.ib);
+      // One index buffer per mesh now, chunked or not — chunks are ranges into
+      // mesh.ib and own nothing to delete.
+      if (mesh.ib) gl.deleteBuffer(mesh.ib);
       if (mesh.vbo) gl.deleteBuffer(mesh.vbo);
       if (mesh.vao) gl.deleteVertexArray(mesh.vao);
     }

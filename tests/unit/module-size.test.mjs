@@ -196,7 +196,15 @@ const CEILINGS = {
   // carries the load-bearing part: the bound is the lamp RADIUS on a
   // shadow-rays-travel-outward argument, NOT the frustum, whose 149-degree far
   // corners reach ~5x its far plane and would make a frustum-radius cull wrong.
-  "js/game.js": 8145,
+  // -> 8150: PER-CHUNK LAMPS stops being a toggle. frame.perChunkLights now
+  // carries the knob's 0..1 VALUE instead of `? 1 : 0`, because the feature
+  // genuinely delivers more light per fragment (each chunk binds 32 lamps that
+  // actually reach it, instead of the whole scene sharing one global 32) and so
+  // needs a dimmer to be usable at the shipped LAMP LEVEL — reported from the
+  // live game as "all the lamps are way too powerful". Five lines are the
+  // comment recording why the value must not be coerced here, which is exactly
+  // the mistake the old line made.
+  "js/game.js": 8150,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
