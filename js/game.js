@@ -684,19 +684,20 @@ let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.lengt
 let flow = "gp";            // "gp" | "season" | "career"
 let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
 const isChampionship = () => flow === "season" || flow === "career";
-// Does the grid come from a qualifying classification? A championship always
-// does; a one-off does when the player asked for it. Both startRace() (which
-// reads quali.order) and the race-settings GO button ask this, and they must
-// agree — a race that qualified and then gridded up P12 would throw the session
-// away, and one that gridded from a classification it never ran would read a
-// stale one.
-const gridFromQuali = () => isChampionship() || (raceQuali && !isTimeTrial());
+// Does the grid come from a qualifying classification? A championship does
+// unless its FORMAT switched qualifying off (quali() is true for a career and a
+// friend race, so only a standalone season can); a one-off does when the player
+// asked for it. Both startRace() (which reads quali.order) and the race-settings
+// GO button ask this, and they must agree — a race that qualified and then
+// gridded up P12 would throw the session away, and one that gridded from a
+// classification it never ran would read a stale one.
+const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (raceQuali && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/game/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
 // development and its garage. Funnelling every write through here means that flag
 // can never drift out of step with the mode.
-function setFlow(v) { flow = v; Career.engage(v === "career"); }
+function setFlow(v) { flow = v; Career.engage(v === "career"); SeasonCal.engage(v); }
 const isTimeTrial = () => session === "tt";
 const isQuali = () => session === "quali";
 // The full field as it was before startRace() narrowed `cars` to the lone
@@ -2204,7 +2205,10 @@ function armReliability(field) {
   Reliability.arm(field, {
     level: raceReliability,
     seed: Career.inCareer() && c ? c.seed : simSeed(),
-    round: isChampionship() ? season.round : raceIndex,
+    // drawRound(), not season.round: arm() hashes (seed, round, driver) and the
+    // two legs of a sprint weekend share a round, so both would retire the same
+    // cars. Career and no-sprint seasons get season.round back unchanged.
+    round: isChampionship() ? SeasonCal.drawRound(season) : raceIndex,
     // The player's own build is the R&D economy's grip on this: an AI runs its
     // team's works car, which `tier` already says everything about.
     build: Reliability.buildQuality(getTeamParts(team.id), team),
@@ -2301,7 +2305,9 @@ function startRace() {
     ttLaps = [];
     ttSessionTs = Date.now();
   } else {
-    lapsTarget = raceLaps;
+    // raceLaps stays the one source of truth for distance; lapsFor() only ever
+    // DIVIDES it, and only on the sprint leg of a sprint weekend.
+    lapsTarget = SeasonCal.lapsFor(raceLaps, season);
   }
   applyRaceSettings();
   if (isWetRoad()) {           // "rain" = storm; "wet" = the DRIZZLE tier —
@@ -2310,7 +2316,7 @@ function startRace() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
-  gridUp(gridFromQuali() ? quali.order(cars) : null);
+  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2531,27 +2537,19 @@ function endRace(forcedOrder) {
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
-    order.forEach((c, i) => {
-      // A retirement scores nothing. Explicit rather than relying on it landing
-      // outside POINTS' ten slots: `i` still advances, so every classified car
-      // above keeps the points its position earns.
-      const pts = c.retired ? 0 : (Teams.POINTS[i] || 0);
-      season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
-      season.driverCodes[c.driverId] = c.code;
-      season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
-    });
-    season.round++;
+    // POINTS, and whether the WEEKEND is over — js/game/season-cal.js owns both:
+    // a season may sprint before the Grand Prix, and only the second of those two
+    // scoring sessions closes the round. A career never sprints, so award() there
+    // is the old block verbatim.
+    const settles = SeasonCal.award(season, order) === "race";
     // In career `season` IS career.season (same object, same shape — which is what
-    // lets buildResults/buildStandings/the HUD work in career untouched). Persist
-    // through the career save, or this would overwrite the standalone SEASON save
-    // with career's standings.
-    // KEEP the settlement. It was being computed and thrown away: prize money,
-    // salary, the points bonus, the brief and the wage bill all resolved here and
-    // the player saw only a changed balance on the next screen. buildResults()
-    // renders it, which is the one place the economy is legible at the moment it
-    // actually moves.
-    if (isCareer()) { Career.save(); careerSettlement = Career.settleRound(order, player); }
-    else store.set("season", season);
+    // lets buildResults/buildStandings/the HUD work in career untouched), so it
+    // persists through the career save or this would overwrite the standalone
+    // SEASON save with career's standings. KEEP the settlement: prize money,
+    // salary, the bonus, the brief and the wage bill all resolve here, and
+    // buildResults() is where the economy is legible as it moves.
+    if (isCareer()) { if (settles) { Career.save(); careerSettlement = Career.settleRound(order, player); } }
+    else store.set("season", season);   // the sprint's points AND its stage, one write
   }
   dbgCam = null;
   buildResults(order);
@@ -2722,6 +2720,10 @@ const G = {
   openCustomize: (...a) => openCustomize(...a),
   // Career plumbing — same deferred-arrow reason as the block above.
   openRaceSettings: (...a) => openRaceSettings(...a),
+  // SEASON SETUP: menus.js draws the button, season-ui.js owns the screen, and
+  // both need the OTHER one's entry point — hence the pair.
+  openSeasonSetup: () => seasonUi.open(),
+  buildSelect: (...a) => buildSelect(...a),
   // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
   qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
@@ -2824,7 +2826,7 @@ ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/game/racecontrol.js).
 raceCtl = RaceControl.create(G);
 // Results / TT-leaderboard / standings DOM builders (js/game/results.js).
-const { buildResults, buildTTResults, buildStandings } = GameResults.create(G);
+const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/game/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
@@ -2837,6 +2839,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwa
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
+// SEASON SETUP screen (js/game/season-ui.js) — the calendar and weekend format.
+// Same split: the rules and the save live in js/game/season-cal.js.
+const seasonUi = SeasonUI.create(G);
 // QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
 // measured against. Holds the classification between the session and the grid.
 const quali = Quali.create(G);
@@ -2934,8 +2939,9 @@ function quitToMenu() {
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
-  // Show standings button when an active season is in progress
-  const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
+  // Standings once an active season has scored. hasProgress(), not `round > 0`:
+  // a sprint banks points while its round is still open (js/game/season-cal.js).
+  const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
 }
@@ -7122,13 +7128,12 @@ $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Re-read the STANDALONE save. In career `season` is an alias of the career
   // championship (see openCareer), so without this a player who opened a career
-  // and then pressed SEASON would carry on the career's points here.
-  season = store.get("season", null);
-  if (!season || season.round >= Tracks.SEASON.length) {
-    season = { round: 0, pts: {}, teamPts: {}, driverCodes: {} };
-    store.set("season", season);
-  }
-  trackIdx = Tracks.seasonIndex(season.round);
+  // and then pressed SEASON would carry on the career's points here. resume()
+  // also repairs it: a save left past the last round of a calendar the player has
+  // since SHORTENED would otherwise sit on a round it can never race.
+  season = SeasonCal.resume(store.get("season", null));
+  store.set("season", season);
+  trackIdx = SeasonCal.trackIndex(season.round);
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
@@ -7407,7 +7412,9 @@ function openRaceSettings(from) {
   // and resetting the other three would silently undo choices the guest has
   // already been shown.
   if (!netRoom) {
-    raceLaps = isTimeTrial() ? TT_LAPS : GAME_LAPS;
+    // A season's DISTANCE PRESELECTS the chip rather than overriding it: the
+    // player can still change this weekend's race from here.
+    raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
     raceWeather = "dry";
     raceTimeOfDay = "default";
   }
@@ -7846,55 +7853,32 @@ els.resNext.onclick = () => {
     return;
   }
   if (isChampionship()) {
-    if (season.round >= Tracks.SEASON.length) {
-      if (els.resNext.textContent !== "MAIN MENU") {
-        // First click: build champion panel, stay on results screen
-        const sorted = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
-        const champ = sorted[0];
-        const champColor = cssCol(champ.team.color);
-        els.resultsTitle.textContent = "WORLD CHAMPION";
-        els.resultsTitle.style.color = champColor;
-        els.resultsTable.textContent = "";
-        // Big champion row
-        const banner = document.createElement("div");
-        banner.style.cssText = "text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:" + champColor;
-        banner.textContent = champ.code + "  " + champ.name;
-        const teamBanner = document.createElement("div");
-        teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
-        teamBanner.textContent = champ.team.name.toUpperCase();
-        els.resultsTable.append(banner, teamBanner);
-        // Full standings
-        const head = document.createElement("div");
-        head.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:4px;font-size:0.85em";
-        head.textContent = "FINAL STANDINGS";
-        els.resultsTable.appendChild(head);
-        sorted.forEach((c, i) => {
-          const row = document.createElement("div"); row.className = "res-row";
-          const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-          const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = cssCol(c.team.color);
-          const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
-          const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
-          row.append(pos, sw, nm, pt);
-          els.resultsTable.appendChild(row);
-        });
-        els.resNext.textContent = "MAIN MENU";
-        announce(champ.code + " IS WORLD CHAMPION!", 4);
-        if (soundOn) GameAudio.finish();
-        return;
-      }
+    if (season.round >= SeasonCal.rounds()) {
+      // First click: build the champion panel and STAY on the results screen. The
+      // panel's own DOM lives in js/game/results.js with every other results
+      // builder; "MAIN MENU" on the button is the sentinel that it is already up.
+      if (els.resNext.textContent !== "MAIN MENU") { buildChampion(); return; }
       // Second click: go to menu, reset season
       season = null; store.set("season", null);
       els.resultsTitle.style.color = "";
       quitToMenu();
       return;
     }
-    trackIdx = Tracks.seasonIndex(season.round);
+    // After a SPRINT the round has not advanced, so this re-selects the circuit
+    // the weekend is already at — the Grand Prix is its second half.
+    trackIdx = SeasonCal.trackIndex(season.round);
   }
   els.results.hidden = true;
-  // A championship weekend qualifies — every round, not just the one entered
-  // through race settings. openQuali() also clears the previous round's
-  // classification, which is what stops this grid being last week's.
-  if (isChampionship()) openQuali(); else startRace();
+  // A championship weekend qualifies ONCE, at its start — every round, not just
+  // the one entered through race settings. openQuali() also clears the previous
+  // round's classification, which is what stops this grid being last week's. Two
+  // things skip it: a season with qualifying off, and the GP leg of a sprint
+  // weekend (which grids off the session the sprint already ran) — but NOT if
+  // that classification has since been dropped. quitToMenu() clears it, so a
+  // resumed weekend re-qualifies instead of silently gridding the player P12 out
+  // of gridUp()'s tier fallback.
+  if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
+  else startRace();
 };
 
 function setPaused(p) {
@@ -7903,7 +7887,7 @@ function setPaused(p) {
   if (!p) { closeLightTuner(false); closeCamTuner(false); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
-  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && season && season.round > 0);
+  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
@@ -8116,7 +8100,7 @@ if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx 
 // shortened circuit list would leave it dangling and crash loadTrack on the
 // undefined def. Clamp it the same way teamIdx/driverIdx are clamped above.
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
-{ const hasSeason = season && season.round > 0 && season.round < Tracks.SEASON.length;
+{ const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot
 refreshCareerButton();

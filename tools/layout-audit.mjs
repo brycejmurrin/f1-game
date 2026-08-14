@@ -93,6 +93,13 @@ const SCREENS = [
       await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         (t.find((e) => /ENGINE/i.test(e.textContent)) || t[1] || t[0])?.click(); }); } },
+  // SEASON SETUP is reached through the season select screen, not the title: the
+  // CUSTOMISE button only exists in #select's season branch (js/game/menus.js),
+  // which is what keeps it out of the Grand Prix pixel golden.
+  { id: "season-setup", name: "Season setup", root: "#season-setup", open: async (p) => {
+      await p.click("#mb-season"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await p.click("#sel-customise");
+      await p.waitForSelector("#season-setup:not([hidden])", { timeout: 15000 }); } },
   { id: "career", name: "Career hub", root: "#career", open: async (p) => {
       await p.click("#mb-career"); await p.waitForSelector("#career:not([hidden])", { timeout: 15000 }); } },
   { id: "datahub", name: "F1 data hub", root: "#datahub", open: async (p) => {
