@@ -964,7 +964,32 @@ void main() {
 
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
   // dimmed where clouds pass overhead, casting moving dappled light on the track.
-  float shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
+  //
+  // Gated on NoL, the PER-FRAGMENT twin of the uShadowStr <= 0.0 early-out inside
+  // sampleShadow(). That one covers the frames where the whole pass is dark; this
+  // covers the fragments that FACE AWAY from the sun on a bright frame — every
+  // back-facing wall, every underside, everything on the shadow side of a car —
+  // where the result is multiplied by NoL == 0 and thrown away.
+  //
+  // The local "shadow" has exactly three readers, each provably zero-or-guarded:
+  //   972  litNoL = NoL * shadow * uKeyMul                    — NoL == 0
+  //   1147 ccCol  = ... * NoLg * shadow * ... * clearcoat     — inside clearcoat > 0.001
+  //   1210 envCC += ... * shadow                              — inside envSurface, and
+  //        envSurface (805) is (carPaint || glass) && clearcoat > 0.001, a SUBSET
+  // so "NoL > 0.0 || clearcoat > 0.001" is exactly sufficient and shadow = 1.0 on
+  // the skipped branch is bit-identical: 972 yields 0 either way, and 1147/1210
+  // are unreachable. Note 1147 uses NoLg (the GEOMETRIC normal) — that is why the
+  // clearcoat term must keep the sample alive rather than riding on NoL alone.
+  //
+  // What it skips: 4 PCSS blocker taps + 4-8 Poisson taps + 4 car-map taps, the
+  // ignoise/sin/cos dither rotation, the slope-bias normalize + sqrt, and
+  // cloudShadow's 2 vnoise. The fragments are spatially coherent (whole surfaces
+  // face away together), so warp divergence is low. This is the same argument the
+  // lamp loop already makes at 1077 — the sun path never got it.
+  float shadow = 1.0;
+  if (NoL > 0.0 || clearcoat > 0.001) {
+    shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
+  }
   // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
   // — diffuse, GGX spec, clearcoat glint, car-paint glint — without touching
   // ambient fill, fog in-scatter or the env-sky reflection (those keep the
@@ -992,9 +1017,16 @@ void main() {
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     vec3 LP = uLightPos[i] - vWorldPos;
-    float dist = length(LP);
     float rad = uLightRad[i];
-    if (dist > rad) continue;
+    // Range-reject on the SQUARED distance, before the root. On a 28-32 lamp
+    // night circuit most lamps are out of range for any given fragment, so this
+    // turns up to 32 sqrt per fragment into 32 dot products. Exact, not
+    // approximate: the two tests disagree only when d sits within an ulp of rad,
+    // and at d == rad the window below is 1 - (d/r)^4 == 0, so att == 0 and the
+    // "continue" at the bottom of the block fires anyway.
+    float d2 = dot(LP, LP);
+    if (d2 > rad * rad) continue;
+    float dist = sqrt(d2);
     vec3 Ld = LP / max(dist, 1e-3);
     // Physical 1/d² falloff, eased to exactly 0 at the radius by (1-(d/r)^4)^2.
     float dn = dist / rad;

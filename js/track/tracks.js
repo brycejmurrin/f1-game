@@ -1157,10 +1157,10 @@ const Tracks = (function () {
     // obstacle's real bulk and not just the plane of one face.
     const barSegs = [];
     const SEG = 5;                      // stride of one barSegs record
-    // Widest half-width in the index. barrierClear() sweeps grid cells around
-    // the query point, so it must reach out by this much to find a wide record
-    // whose centre line lies outside the cells the query itself touches.
-    let barMaxHalf = 0;
+    // (The widest-half-width accumulator that used to live here is gone —
+    // barrierClear()'s cell sweep no longer widens by it. See the proof at that
+    // call site: barGridInsert already buckets by inflated bounds, so the
+    // allowance was being counted on both sides of the lookup.)
     // Append, and keep the spatial index LIVE rather than dropping it. Nulling
     // barGrid here made the next barrierClear() re-bucket every segment, and
     // hedge() is a query-then-dirty pair by construction (scenery-nature.js
@@ -1174,7 +1174,6 @@ const Tracks = (function () {
     const pushSeg = (x0, z0, x1, z1, w) => {
       const i = barSegs.length;
       barSegs.push(x0, z0, x1, z1, w);
-      if (w > barMaxHalf) barMaxHalf = w;
       if (barGrid) barGridInsert(i);
     };
     // Tighten the driving boundary along a solid barrier placed from lap-fraction
@@ -1346,10 +1345,29 @@ const Tracks = (function () {
       if (!barGrid.size) return true;
       // Each record carries its own half-width, so the test is against the
       // obstacle's SURFACE: clear iff distance to its centre line exceeds
-      // r + halfW. Widen the cell sweep by the largest half-width in the index,
-      // or a wide record whose centre line sits outside the queried cells is
-      // missed.
-      const reach = r + barMaxHalf;
+      // r + halfW.
+      //
+      // The sweep does NOT need widening by barMaxHalf, because barGridInsert
+      // already buckets every record by its INFLATED bounds (min-w .. max+w on
+      // both axes) — the widening was double-counting the same allowance on
+      // both sides of the lookup. Proof that reach = r misses nothing: suppose
+      // record i is a hit, segDist2(i,p) < (r+w)^2, and let q be the closest
+      // point on its centre line to p, so |q-p| < r+w. q lies within the
+      // segment's axis ranges, so the square [q +/- w] is contained in the
+      // record's inflated AABB and every cell it touches holds record i. Each
+      // axis component of q-p is < r+w, so that square overlaps the query
+      // square [p +/- r] on BOTH axes, hence they share a point, hence a cell —
+      // a cell that is inside the r-sweep and holds the record. The one
+      // precondition is that barGridInsert is the only writer of the grid,
+      // which the note above (and buildBarGrid / pushSeg being its only
+      // callers) already establishes.
+      //
+      // barMaxHalf is 6-10 m on the shipped scenery against BAR_CELL 24 and
+      // r 3-8, so the sweep goes from ~4-9 cells to 1-4 on every query. The
+      // callers are clearTreeDist (up to 9 walk-outs PER TREE) and hedge()'s
+      // per-along-step probe, i.e. the barrier-index path that already has one
+      // recorded second-scale defect against it (see the note at pushSeg).
+      const reach = r;
       const cx0 = Math.floor((x - reach) / BAR_CELL), cx1 = Math.floor((x + reach) / BAR_CELL);
       const cz0 = Math.floor((z - reach) / BAR_CELL), cz1 = Math.floor((z + reach) / BAR_CELL);
       for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {

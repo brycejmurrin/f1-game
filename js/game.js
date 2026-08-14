@@ -5563,7 +5563,27 @@ function render(dt) {
     // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
     // sliders, a time-of-day flip) previously left the map STALE until the next
     // cell crossing — shadows looked dead while dragging, then all jumped at once.
-    if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+    // PRODUCER/CONSUMER GATE. lit.js's sampleShadow opens with
+    // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
+    // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
+    // is the only other reader and it is gated on uStr > 0.0, which is 0 below
+    // the same key. The consumer side of that was already taken; the PRODUCER
+    // was not, so the frame still paid a 2048² depth clear, the full terrain and
+    // road ribbons cast unchunked (44,826 verts on vegas), and shadowEnd's 512²
+    // PCSS blocker downsample — for a texture with zero readers, once per 20 m
+    // snap cell, i.e. 300+ times a lap.
+    //
+    // The predicate is NOT new: it is the identical expression already used
+    // below to gate the props cast and again at the car sun pass. Hoisted here
+    // so all three agree. When it closes, the snap cache is INVALIDATED rather
+    // than left alone — otherwise weather clearing mid-race would re-open the
+    // gate onto a stale map and hold it until the next cell crossing.
+    const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+    if (!_shadowsRead) {
+      _shadowSnapX = _shadowSnapZ = _shadowBox = null;
+      _shadowSunX = _shadowSunY = _shadowSunZ = null;
+    } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
         sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
       _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
       _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
@@ -5594,7 +5614,7 @@ function render(dt) {
       // whole shadow pass has faded to zero strength. The old 0.35 cutoff sat in
       // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
       // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
-      const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      const _shKey = _shKeyG;   // hoisted above; same expression, one source
       // Clear-night moon shadows re-open the gate: props must be in the map for
       // the moonlight floor to have anything to cast (snap-cached, so the night
       // saving only goes when MOON SHADOWS is active and the sky is clear — or,
@@ -5637,7 +5657,26 @@ function render(dt) {
         // originally-tuned bias exactly.
         gfx.carShadowBegin(_mCVP, cBox / 42);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
+        // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
+        // uploads uModel and draws, ~11k verts per car, so a caster outside the
+        // volume costs a full mesh for zero texels — and at night the field pays
+        // it twice, once here and once in the lamp pass.
+        //
+        // The radius is the volume's CORNER distance, not cBox. The ortho above
+        // is ±cBox PERPENDICULAR to the sun, but spans depth 1..320 from an eye
+        // at _shadowCtr + sd*150 — so it reaches ~170 m along the sun axis. A
+        // car far away but nearly aligned with the sun has a small perpendicular
+        // offset, and at a low sun its stretched shadow legitimately lands in
+        // frame; culling at cBox would delete exactly those. hypot(cBox, 170) is
+        // the furthest any point of the box can be from the anchor, so beyond it
+        // a caster is provably outside — no visible change, only skipped draws.
+        const _csR = Math.hypot(cBox, 170) + 8;   // +8: car length + mesh extent
+        const _csR2 = _csR * _csR;
         for (let i = 0; i < _shadowCount; i++) {
+          const _sm2 = _shadowMats[i];
+          const _sdx = _sm2[12] - _shadowCtr[0], _sdz = _sm2[14] - _shadowCtr[2];
+          if (_sdx * _sdx + _sdz * _sdz > _csR2) continue;
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.carShadowEnd();
@@ -5906,7 +5945,25 @@ function render(dt) {
         M4.mulTo(_mFlVP, _mFlProj, _mFlView);
         gfx.lampShadowBegin(_mFlVP, flBest);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        // Distance-cull the casters, the twin of the sun pass's _csR above — the
+        // comment there notes the field pays the caster cost TWICE at night, and
+        // this is the second half. Only 1-3 cars are ever under a lamp, so this
+        // skips ~18-20 full ~11k-vert car meshes per night frame.
+        //
+        // The bound is the LAMP RADIUS, and the argument is not the frustum (a
+        // 149-degree cone's far corners reach ~5x its far plane) but the light
+        // itself: shadow rays travel outward from the lamp, so a caster at
+        // distance D can only occlude receivers at distance > D. Both readers of
+        // this map reject beyond rad — the lit shader's lamp loop
+        // (`if (d2 > rad*rad) continue`) and the god-ray beam march — so a
+        // caster beyond rad occludes only fragments that already receive zero
+        // light from this lamp. +8 covers the car's own half-extent, so a car
+        // whose CENTRE clears the bound has no vertex inside rad.
+        const _lsR = rad + 8, _lsR2 = _lsR * _lsR;
         for (let i = 0; i < _shadowCount; i++) {
+          const _lm = _shadowMats[i];
+          const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];
+          if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
@@ -6611,7 +6668,12 @@ function render(dt) {
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // contact is the SSAO half of exactly that bug, missed when lampVol's was fixed:
+  // haveAO is `aoStr > 0 || contactStr > 0`, so a tier-4 DAYTIME frame (_cs is
+  // non-zero whenever the key is bright) still ran the SSAO pass and both of its
+  // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
+  // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
+  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

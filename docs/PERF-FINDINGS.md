@@ -251,6 +251,78 @@ Apply that discount to everything in §3.
 - **Pooled `_ringOpts`** on the player brake-ring path (the AI path already had
   it).
 
+### 2026-08-14 round: the shape that keeps paying
+
+Every item below is the *same defect* wearing a different hat: **a producer
+whose consumer is gated off, or a value computed and then multiplied by zero.**
+When you go looking for work to remove, this is the shape to grep for. It has
+now produced eleven separate wins across the shader, the render path and the
+build, and not one of them changed a pixel.
+
+- **`sampleShadow` per FRAGMENT, not just per frame.** The entry above took the
+  `uShadowStr <= 0.0` case — the frames where the whole pass is dark. It left
+  the fragments that face AWAY from the sun on a *bright* frame, where the
+  result is multiplied by `NoL == 0`: every back-facing wall, every underside,
+  the shadow side of every car. `shadow` has exactly three readers and each is
+  zero-or-guarded, so `NoL > 0.0 || clearcoat > 0.001` is exactly sufficient.
+  Up to 16 dependent texture fetches, 2 `vnoise`, a `normalize`, a `sqrt` and a
+  `sin`/`cos` pair. **The general lesson: a uniform-level gate does not imply
+  the per-fragment gate has been taken. Check for both.**
+- **The static sun shadow PRODUCER** matched to its consumer. `lit.js` opens
+  `sampleShadow` with `if (uShadowStr <= 0.0) return 1.0;`, so on an overcast /
+  wet / foggy night nothing reads the map — yet the frame still paid a 2048²
+  clear, terrain and road cast unchunked, and a 512² PCSS blocker pass, 300+
+  times a lap. The consumer side had been taken; the producer had not.
+- **`po.contact` had no tier-4 shed** while `po.ssao` did, and `glx/post.js`
+  arms the pass on `aoStr > 0 || contactStr > 0` — so tier 4 kept running SSAO
+  and both blurs after `po.ssao` had gone to zero. This is *verbatim* the
+  `lampVol` / `haveGR` bug recorded one line above it in `game.js`. **When you
+  fix an `||`-armed producer, grep the other operands of that same `||`.**
+- **SSAO's 8 taps** ran and were multiplied by `uStrength` — supported at 0,
+  because contact shadows ride in the same pass.
+- **Lamp-shadow car casters** were unculled while the sun pass's were culled,
+  and the sun pass's own comment says the field pays the cost twice at night.
+  Note the bound is the lamp RADIUS on a shadow-rays-travel-outward argument,
+  NOT the frustum: a 149° cone's far corners reach ~5x its far plane, so a
+  frustum-radius cull would have been wrong.
+- **`uInstanced` uploaded per draw** in both `litMaterial` (150-300/frame) and
+  `castShadow` (up to 46/frame) to clear a flag only the instanced paths set.
+  The depth pass's `castShadowInstanced` already had the right shape — bracket
+  your own draw — so this was a fix that existed in the tree and had not been
+  copied across.
+- **Squared-distance lamp range rejects** before the root, in the lit lamp loop
+  (up to 32 `sqrt`/fragment) and the god-ray beam march, which is NESTED at
+  16 steps x 6 lamps (up to 96 `sqrt`/pixel). Exact, not approximate: the tests
+  disagree only within an ulp of the radius, where the window is already 0.
+- **`barrierClear`'s cell sweep** widened by the index's largest half-width
+  while `barGridInsert` already bucketed by *inflated* bounds — the same
+  allowance counted on both sides of the lookup, 4-9 cells swept where 1-4
+  suffice, on `clearTreeDist`'s up-to-9 walk-outs per tree. `js/track/tracks.js`
+  carries the proof. **This is an equivalence claim, so it was tested as one:**
+  `prop-clipping` + `coplanar-faces` + `scenery-grounding` over the 40-circuit
+  build, *including* their anti-vacuity guards, which assert the baseline caps
+  are tight — i.e. the placement counts are exactly unchanged, not merely
+  under a cap.
+- **`findStableLoop` memoised** on a `WeakMap` keyed by the buffer: it walked
+  ~2.41 M samples on every race start, un-pause and tab return to recompute a
+  pure function of a buffer that cannot have changed.
+- **`rumble()` missing `pollGamepad`'s `padConnected` guard**: `getGamepads()`
+  allocates a fresh `GamepadList` per call, and `game.js` fires `rumble` every
+  0.10-0.16 s while kerb-riding, so the keyboard/touch majority was making
+  ~8-10 discarded allocations a second.
+
+Two corrections worth keeping, because both agent reports got them wrong in
+the same direction — **an isolated bound is not the bound that matters**:
+
+1. The car shadow-caster cull radius is `hypot(cBox, 170)`, not `cBox`. The
+   ortho is ±cBox *perpendicular* to the sun but spans ~170 m *along* it, so a
+   car far away yet nearly sun-aligned has a small perpendicular offset and its
+   stretched low-sun shadow legitimately lands in frame. Culling at `cBox`
+   deletes exactly those.
+2. `LT.moonShadow` reads must survive the registry default. The gate expression
+   was copied verbatim from the two that already shipped rather than rewritten,
+   so all three now agree by construction.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

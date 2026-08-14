@@ -949,6 +949,15 @@ const Input = (function () {
   // Silently no-ops where unsupported (e.g. most iOS controllers) — callers
   // already fire navigator.vibrate alongside, so haptics degrade gracefully.
   function rumble(intensity, ms) {
+    // Same guard pollGamepad() carries, and for the reason it states there:
+    // navigator.getGamepads() allocates a fresh GamepadList on every call, so
+    // reaching activePad() with no pad connected is pure garbage. rumble() is
+    // not occasional — js/game.js fires it every 0.12 s while riding a kerb and
+    // every 0.10-0.16 s past front-axle saturation, so for the keyboard/touch
+    // majority that was ~8-10 discarded GamepadLists per second of kerb-riding
+    // or sliding. activePad() returns null in exactly this state anyway, so
+    // this only moves the exit earlier.
+    if (!padConnected) return;
     const pad = activePad();
     if (!pad) return;
     const a = pad.vibrationActuator;

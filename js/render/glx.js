@@ -1193,10 +1193,13 @@ const GLX = (function () {
   function litMaterial(modelMat, opts) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
-    // Default the instancing gate OFF on every lit draw. drawInstanced() turns it
-    // on for the duration of its own call and back off after, so no ordinary draw
-    // can ever inherit it — the shader falls back to uModel exactly as before.
-    if (litU.uInstanced) gl.uniform1f(litU.uInstanced, opts && opts._instanced ? 1 : 0);
+    // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
+    // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
+    // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
+    // debris) — to clear a flag only drawInstanced ever sets. It now follows the
+    // depth pass's already-correct shape (castShadowInstanced in glx/shadow.js):
+    // drawInstanced brackets its OWN draw with 1/0, so the uniform is 0 outside
+    // that bracket by construction and 0 at link time before the first one.
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1345,18 +1348,26 @@ const GLX = (function () {
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (!batch || !batch.instances) return;
-    const o = opts ? Object.assign({}, opts, { _instanced: 1 }) : { _instanced: 1 };
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
-    const alpha = litMaterial(IDENT4, o);
+    const alpha = litMaterial(IDENT4, opts);
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
-    if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+    // Bracket the gate around THIS draw — the shape castShadowInstanced already
+    // uses — instead of asking every one of the frame's other lit draws to clear
+    // it afterwards. Set inside the n > 0 guard so a zero-instance batch leaves
+    // the uniform exactly as it found it. (This also drops the per-call
+    // Object.assign that existed only to smuggle the _instanced flag through.)
+    if (n > 0) {
+      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 1);
+      gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 0);
+    }
     if (dbl) setCull(true);
   }
 

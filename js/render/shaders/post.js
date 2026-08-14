@@ -186,15 +186,25 @@ void main() {
   float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
   float ca = cos(a), sa = sin(a);
   float occ = 0.0;
-  for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
-    vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
-    vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
-    vec3 V = S - P;
-    float len = length(V);
-    // Occluder must rise above the tangent plane (dot>bias) and be within radius.
-    float ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
-    float range = smoothstep(radius, radius * 0.4, len);
-    occ += ndv * range;
+  // uStrength == 0 is a SUPPORTED combination, not a degenerate one: the pass
+  // also produces contact shadows, and haveAO (js/render/glx/post.js) arms it on
+  // "aoStr > 0 || contactStr > 0" — so with the AO slider at zero and contact
+  // shadows on, these 8 taps ran and were then multiplied by zero on line 199.
+  // Each tap is a DEPENDENT depth fetch (viewPos reconstructs from the sampled
+  // depth), the most expensive kind. uStrength is a uniform, so this is uniform
+  // control flow — no divergence — and occ == 0.0 makes the skipped branch
+  // bit-identical to multiplying by zero.
+  if (uStrength > 0.0) {
+    for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
+      vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
+      vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
+      vec3 V = S - P;
+      float len = length(V);
+      // Occluder must rise above the tangent plane (dot>bias) and be within radius.
+      float ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
+      float range = smoothstep(radius, radius * 0.4, len);
+      occ += ndv * range;
+    }
   }
   float ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * uStrength;
 
@@ -364,9 +374,15 @@ void main() {
       for (int li = 0; li < 6; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
-        float ld = length(LP);
         float rad = uLightRad[li];
-        if (ld > rad) continue;
+        // Squared-distance range reject, same exactness argument as the lit
+        // shader's lamp loop — but this one is NESTED: 16 march steps x 6 lamps,
+        // so it is up to 96 sqrt per half-res pixel, not 32 per fragment. At
+        // ld == rad the window below is 1 - (d/r)^4 == 0, so att == 0 and the
+        // step contributes nothing either way.
+        float ld2 = dot(LP, LP);
+        if (ld2 > rad * rad) continue;
+        float ld = sqrt(ld2);
         vec3 Ld = LP / max(ld, 1e-3);
         float s = ld / rad;
         float win = clamp(1.0 - s*s*s*s, 0.0, 1.0);

@@ -195,6 +195,14 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
+      // Instancing gate off ONCE per pass, not once per caster. castShadow used
+      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
+      // (car pass + lamp pass + the static two) for a value that provably could
+      // not have changed: castShadowInstanced is the only writer of 1 and it
+      // restores 0 on the line after its own draw. Uniform state is per-program
+      // and survives useProg, so setting it at the head of the pass is the same
+      // guarantee at 1/22nd the calls.
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);  // render back faces to avoid peter-panning
       S.depthPassOn = true;
     }
@@ -202,7 +210,6 @@ const GLXShadow = (function () {
     function castShadow(mesh, model) {
       if (!S.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
-      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.uniformMatrix4fv(S.depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     }
@@ -256,6 +263,14 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
+      // Instancing gate off ONCE per pass, not once per caster. castShadow used
+      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
+      // (car pass + lamp pass + the static two) for a value that provably could
+      // not have changed: castShadowInstanced is the only writer of 1 and it
+      // restores 0 on the line after its own draw. Uniform state is per-program
+      // and survives useProg, so setting it at the head of the pass is the same
+      // guarantee at 1/22nd the calls.
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
       S.depthPassOn = true;
       S.carArmed = true;
@@ -285,6 +300,14 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
+      // Instancing gate off ONCE per pass, not once per caster. castShadow used
+      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
+      // (car pass + lamp pass + the static two) for a value that provably could
+      // not have changed: castShadowInstanced is the only writer of 1 and it
+      // restores 0 on the line after its own draw. Uniform state is per-program
+      // and survives useProg, so setting it at the head of the pass is the same
+      // guarantee at 1/22nd the calls.
+      if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
       S.castCullVP = S.lampLightVP;   // chunked casters cull to the lamp cone
       S.depthPassOn = true;
