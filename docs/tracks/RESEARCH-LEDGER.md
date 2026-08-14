@@ -35,7 +35,7 @@ those suites — `tools/coplanar-audit.cjs <id>` and `tools/clip-audit.cjs <id>`
    along-track length in the node SCALE, or measure the real anchor step.**
 2. **Props grown through existing foliage.** Silverstone's tents (prisms) vs
    the authored treeline (cones). Circuit files *cannot* reserve a footprint —
-   `indexSolid` is engine-internal and not on the 109-member api. **Fix: place
+   `indexSolid` is engine-internal and not on the 110-member api. **Fix: place
    beyond the authored planting** (the campsites now sit at gap 192–208, past
    everything). Stripping near-track foliage via `dressingExclusions` would
    have been a much worse trade.

@@ -112,7 +112,7 @@ js/render/              Gfx façade → GLX (WebGL2, default; core + glx/ passes
 js/track/               tracks (shell) spline mesh geom graph space surface
                         markings models themes landmark-kit circuit-kit
                         geo-paths maps + scenery-{data,nature,city,structures,
-                        identity} — the 109-member scenery(api) contract is
+                        identity} — the 110-member scenery(api) contract is
                         frozen by tests/unit/scenery-api-contract.test.mjs
 js/car/                 car3d liveries liverytex parts (12 categories, 600 cr)
                         ghost teams driver-ratings
