@@ -203,7 +203,9 @@ const GLXChunked = (function () {
       // circuit then lights every chunk to its own budget instead of making the
       // whole visible world compete for 32 slots, and per-fragment cost FALLS
       // (a chunk binds only lamps that actually reach it). Off by default.
-      const perChunk = F.perChunkLights && F.allLights;
+      // > 0, not truthiness: the knob is a 0..1 amount now (its value is the
+      // lamp-intensity scale glx.js applies), so any positive value enables it.
+      const perChunk = F.perChunkLights > 0 && F.allLights;
       // One element-buffer bind for the whole pass. The VAO already records it
       // (see createChunkedMesh), so this is belt-and-braces against a stray
       // bind made under this VAO — not a per-draw cost.

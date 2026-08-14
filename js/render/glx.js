@@ -112,6 +112,9 @@ const GLX = (function () {
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
+  // Track-lamp intensity scale applied in uploadLightSet. 1 unless PER-CHUNK
+  // LAMPS is on, in which case it is that knob's value — see begin().
+  let _lampScale = 1;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -323,7 +326,12 @@ const GLX = (function () {
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
-      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
+      // Forward EVERY argument. This was `(L, idx, n) => uploadLightSet(L, idx, n)`,
+      // arity 3, while its only external caller (GLXChunked's per-chunk lamp
+      // upload) passes six — so L2/o2/n2, the car tail-light slice, were dropped
+      // on the floor and every per-chunk lamp set silently lost the field's tail
+      // lights. The bug is invisible from the call site, which looks correct.
+      uploadLightSet: (L, idx, n, L2, o2, n2) => uploadLightSet(L, idx, n, L2, o2, n2),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -943,7 +951,13 @@ const GLX = (function () {
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
     frameAllLights = frame.allLights || null;
-    framePerChunkLights = frame.perChunkLights ? 1 : 0;
+    // 0..1 AMOUNT, not a flag: > 0 enables per-chunk lamp sets and sets how
+    // strongly they light. Kept numeric all the way through — coercing to 1
+    // here is what made it a toggle.
+    framePerChunkLights = +frame.perChunkLights || 0;
+    // Track-lamp intensity scale. 1 when the feature is off, so nothing about
+    // the shipped look changes; the knob's own value once it is on.
+    _lampScale = framePerChunkLights > 0 ? framePerChunkLights : 1;
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
@@ -1189,7 +1203,19 @@ const GLX = (function () {
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
       pos[i * 3] = src[o]; pos[i * 3 + 1] = src[o + 1]; pos[i * 3 + 2] = src[o + 2];
-      col[i * 3] = src[o + 3]; col[i * 3 + 1] = src[o + 4]; col[i * 3 + 2] = src[o + 5];
+      // PER-CHUNK LAMPS intensity. The knob is now a 0..1 amount, not a
+      // toggle: turning it on gives every chunk its OWN nearest-32 lamps
+      // instead of making the whole visible scene share one set, so a fragment
+      // that previously saw a handful of lamps that actually reach it now sees
+      // up to 32 — and the scene reads far brighter at the same LAMP LEVEL.
+      // That is not a bug in the feature, it is more light genuinely arriving;
+      // the knob's value is the dimmer that makes it usable.
+      //
+      // TRACK lamps only. Car tail-lights ride the same uniform arrays (the
+      // tail slice above nStatic) and are not per-chunk, so scaling them would
+      // dim the field's lights for a reason that has nothing to do with them.
+      const s = fromTail ? 1 : _lampScale;
+      col[i * 3] = src[o + 3] * s; col[i * 3 + 1] = src[o + 4] * s; col[i * 3 + 2] = src[o + 5] * s;
       rad[i] = src[o + 6];
       dir[i * 3] = src[o + 7]; dir[i * 3 + 1] = src[o + 8]; dir[i * 3 + 2] = src[o + 9];
       cone[i * 2] = src[o + 10]; cone[i * 2 + 1] = src[o + 11];
