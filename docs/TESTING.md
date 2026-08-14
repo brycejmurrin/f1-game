@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 87 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 88 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -213,7 +213,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 |---|---|
 | `circuit` | walls + autopilot + elevation + the codebase-audit edge cases |
 | `scenery` | props/terrain over road, F1 track accuracy, scenery kits |
-| `sweeps` | the full-fleet geometry audits — prop-clipping, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, and the shared-foundation characterization. Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
+| `sweeps` | the full-fleet geometry audits — prop-clipping, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, and the shared-foundation characterization. Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `map` | minimap polyline + orientation |
 
 ### Render
@@ -703,6 +703,7 @@ what it covers.
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
 | `debris-hazard-hint.test.mjs` | `projectHazard` in `js/game/debrisworld.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
+| `spline-project-height.test.mjs` | `Tracks.project` in `js/track/spline.js` searches in XZ only, so on a circuit that crosses ITSELF it cannot tell the two legs apart even in principle — the information was absent, not mis-weighted. Pins the optional `wy` argument that adds a height term: on suzuka's crossover (~2.6 m apart in XZ, ~8.3 m in Y) a body on the upper deck displaced toward the road beneath projects onto the WRONG leg at every offset tried without it, ~2368 m away in arc, and onto the right one at all of them with it. Carries an anti-vacuity assertion that the flat search must still be wrong somewhere, and checks that away from the crossover the two forms agree exactly, so existing callers are unaffected |
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
