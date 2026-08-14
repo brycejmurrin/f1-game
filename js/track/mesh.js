@@ -344,11 +344,23 @@ const TrackMesh = (function () {
       for (let i = 0; i <= k1 - k0; i++) { const k = (k0 + i + n) % n; if (side > 0) track.kerbR[k] = 1; else track.kerbL[k] = 1; }
     };
     const KW = 0.9, KH = 0.06;
-    const stripeNodes = Math.max(1, Math.round(1.6 / ds));
+    // Real kerb stripes are ~1.6 m. The old `Math.round(1.6/ds)` node count
+    // COLLAPSED to 1 at the ~4 m node grid, so an intended 1.6 m stripe rendered
+    // at one node ≈ 4 m (an 8 m red/white period). Colour is per-vertex, so the
+    // only way below node resolution is finer geometry — SUB sub-rings per node
+    // span, coloured by TRUE ARC LENGTH so the stripe is ~STRIPE_M whatever the
+    // node spacing. The node endpoints are unchanged (each span is subdivided by
+    // lerping its own two rings), so where the ribbon meets terrain is identical
+    // — the coplanar/float audits do not move.
+    const STRIPE_M = 1.6;
+    const SUB = Math.max(1, Math.round(ds / STRIPE_M));   // sub-rings per node span (≈2-3 at 4 m nodes)
     // one ribbon strip over node range, on `side` (-1 left edge, +1 right).
     function ribbon(k0, k1, side) {
       const count = k1 - k0;
-      const base = [];
+      const base = [];         // ring vertex indices, one per emitted ring
+      const arcs = [];         // arc length of each emitted ring, for striping
+      let prev = null;         // [ax,ay,az,bx,by,bz] of the previous NODE ring
+      let prevArc = 0;
       for (let i = 0; i <= count; i++) {
         const k = (k0 + i + n) % n;
         const u = upOf(track, k);
@@ -357,26 +369,32 @@ const TrackMesh = (function () {
         // two rails; push the smaller offset first so winding matches the road
         const oA = side > 0 ? w + 0.05 : -(w + 0.05 + KW);
         const oB = side > 0 ? w + 0.05 + KW : -(w + 0.05);
-        const ai = out.pos.length / 3;
-        for (const o of [oA, oB]) {
-          // Ride the banked road surface, not the unbanked centreline plane.
-          const h = KH + bankOffsetAt(track, k, o);
-          out.pos.push(px[k] + r[0] * o + u[0] * h, py[k] + r[1] * o + u[1] * h + 0.03, pz[k] + r[2] * o + u[2] * h);
-          out.nrm.push(u[0], u[1], u[2]);
+        const hA = KH + bankOffsetAt(track, k, oA), hB = KH + bankOffsetAt(track, k, oB);
+        // this node's two rail vertices, in world space
+        const cur = [px[k] + r[0]*oA + u[0]*hA, py[k] + r[1]*oA + u[1]*hA + 0.03, pz[k] + r[2]*oA + u[2]*hA,
+                     px[k] + r[0]*oB + u[0]*hB, py[k] + r[1]*oB + u[1]*hB + 0.03, pz[k] + r[2]*oB + u[2]*hB];
+        const arc = k0 * ds + i * ds;   // monotone along the strip (ds-spaced nodes)
+        // Emit SUB-1 intermediate rings by lerping the previous node ring to this
+        // one, then this node ring itself. Endpoints (t=1) are byte-identical to
+        // the old per-node vertices, so the terrain-meet geometry is unchanged.
+        const first = i === 0 ? 0 : 1;                 // skip t=0 duplicate after the first node
+        for (let sIdx = first; sIdx <= SUB; sIdx++) {
+          const t = i === 0 ? 1 : sIdx / SUB;          // node 0 emits only its own ring
+          const rA = prev ? [prev[0] + (cur[0]-prev[0])*t, prev[1] + (cur[1]-prev[1])*t, prev[2] + (cur[2]-prev[2])*t] : [cur[0],cur[1],cur[2]];
+          const rB = prev ? [prev[3] + (cur[3]-prev[3])*t, prev[4] + (cur[4]-prev[4])*t, prev[5] + (cur[5]-prev[5])*t] : [cur[3],cur[4],cur[5]];
+          const ai = out.pos.length / 3;
+          out.pos.push(rA[0], rA[1], rA[2]); out.nrm.push(u[0], u[1], u[2]);
+          out.pos.push(rB[0], rB[1], rB[2]); out.nrm.push(u[0], u[1], u[2]);
+          const a = prevArc + (arc - prevArc) * t;
+          const c = (Math.floor(a / STRIPE_M) % 2) === 0 ? ka : kb;
+          out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
+          if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
+          if (out.trk) out.trk.push(a, oA, 0, a, oB, 0);   // hw=0 → roadMarkings() skips the ribbon
+          base.push(ai); arcs.push(a);
         }
-        const c = (Math.floor(i / stripeNodes) % 2) === 0 ? ka : kb;
-        out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
-        // Painted kerb — smooth, like the road markings, so FLAT. Must stay in
-        // lockstep with pos: buildRoad now ships a mat array and this writes
-        // into the same accumulator.
-        if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
-        // hw = 0 so roadMarkings() skips the kerb ribbon — it is not road
-        // surface and must not have edge lines painted across it. Lockstep with
-        // pos (see the trk push in buildRoad).
-        if (out.trk) out.trk.push(k * ds, oA, 0, k * ds, oB, 0);
-        base.push(ai);
+        prev = cur; prevArc = arc;
       }
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < base.length - 1; i++) {
         const a = base[i], b = base[i + 1];
         // match buildRoad winding (top face up under BACK-face culling)
         out.idx.push(a, a + 1, b, a + 1, b + 1, b);
