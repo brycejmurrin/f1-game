@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 91 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 91 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -780,6 +780,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `season.spec.js` | round progression, points, standings visibility |
+| `boot-guard.spec.js` | the shell's recovery when a js/ module fails to LOAD (not to run). A one-off 404 — the shape a brand-new module's first deploy takes while a CDN edge catches up — is repaired by a single reload with caches swept; a permanent 404 pins an overlay naming the file instead of looping. Both halves are the contract: repair enough to fix the transient, bounded enough that an absent file cannot storm the page. Written after build 1238 shipped season-cal.js and a cached 404 left the live game dead on `Can't find variable: SeasonCal` |
 | `season-format.spec.js` | season mode CUSTOMISED — a shortened/reordered calendar (classics included) crowning its champion at ITS last round, qualifying switched off, the classic points table, the lap chips being PRESELECTED rather than overridden, and sprint weekends: a sprint pays 8-7-6… without closing the round, the Grand Prix follows on the same circuit without a second qualifying session, and the stage survives a quit because it is written with the points |
 | `time-trial.spec.js` | ghost recording, ghost delta HUD, sector-split announces |
 | `career.spec.js` | the save and its six slots, the mode axes, the hub, a settled round, ratings, the R&D garage, MY TEAM, objectives/contracts/rollover, reliability, EXTRA FUNDS never raising the fitted cap, the facility, the hire's contract, sponsors — and that career development never reaches a Grand Prix |

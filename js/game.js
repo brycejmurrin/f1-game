@@ -621,6 +621,8 @@ function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { return raceCtl.info(); }
 function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let camAncX = null, camAncZ = 0;      // last frame's car anchor — camera damps in the CAR's frame (see render())
+let camAncNX = null, camAncNZ = 0;    // this frame's, published where renderPosOf() is in scope
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
 let dbgCam = null;   // debug free camera override (set via __apex.view); null = chase
 // ---- Photo mode: a free-fly camera launched from the LIGHTING TUNER so the
@@ -5258,7 +5260,7 @@ function render(dt) {
     Tracks.sample(track, s, smp);
     eyeT = [smp.p[0] + smp.r[0] * 26 , smp.p[1] + 17, smp.p[2] + smp.r[2] * 26];
     tgtT = [smp.p[0] + smp.t[0] * 40, smp.p[1] + 2, smp.p[2] + smp.t[2] * 40];
-    fovT = 58;
+    fovT = 58; camAncNX = null;   // no car anchor on the attract/menu rig — world-frame damping
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -5290,6 +5292,7 @@ function render(dt) {
     // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player, pS, px);
+    camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
       bankDy, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
       // the car's real world pose, so the chase rig can follow the CAR
@@ -5354,10 +5357,22 @@ function render(dt) {
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
   const gentleHead = onboard && (camId === "cockpit" || camId === "hood") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
+  // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
+  // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
+  // breathes with frame time: MEASURED, a 16-38 ms vsync wobble swings it
+  // 28.7 cm at 320 km/h, 4.7 cm at 150 — it scales with SPEED, hence "the car
+  // vibrates, worse the faster I go", and a heavier resolution (longer,
+  // jitterier frames) makes it worse. Damping the OFFSET cancels the velocity
+  // term exactly: 0.0000 cm at every speed, and the chase distance stops
+  // inflating (13.2 m back to the intended 8.0 m at 320). y stays world-frame.
+  const ancX = camAncNX, ancZ = camAncNZ;
+  if (ancX === null || camAncX === null) { camAncX = ancX; camAncZ = ancZ; }   // first frame / no world pose: no jump
+  const aP = [camAncX === null ? 0 : camAncX, 0, camAncZ], aN = [ancX === null ? 0 : ancX, 0, ancZ];
   for (let i = 0; i < 3; i++) {
-    camEye[i] = damp(camEye[i], eyeT[i], lE, dt);
-    camTgt[i] = damp(camTgt[i], tgtT[i], lT, dt);
+    camEye[i] = aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
+    camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
   }
+  camAncX = ancX; camAncZ = ancZ;
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
 
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
@@ -6043,11 +6058,11 @@ function render(dt) {
   // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
   // (Hoisted above the env probe so both world passes share it.)
   const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  const _floodEmit = LT.floodEmitMul * (
+  const _floodEmit = Math.min(1, LT.floodEmitMul * (   // min(1): lit.js mix() EXTRAPOLATES past 1
     (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
       : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
         ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - _sunY * 6, 0, 1)))
-        : 0);
+        : 0));
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
   // ── Live env probe: render ONE 64px cubemap face of the world around the
