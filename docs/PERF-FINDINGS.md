@@ -401,6 +401,23 @@ construction order is the determinism contract and depends only on `track` and
 re-checks and rebuilds if either moved — so priming changes WHEN the same world
 is built, never WHICH.
 
+**VERIFIED AFTER THE FIX, with the instrument that found it.** Re-ran
+`tools/profile-gameloop.mjs vegas physics` on a quiet box and searched the raw
+profile by function name: `buildWorld`, `createCollider` and `trimesh` are
+**completely ABSENT** from the sampled window, against 467 inclusive samples
+before. Total samples for the identical 600-step workload fell **2575 -> 2093**,
+i.e. 482 fewer — which matches buildWorld's 467-sample inclusive cost to within
+noise. `prime` is absent too, and that is the point: it now runs inside
+`startRace()`, before the step loop the profiler samples.
+
+**With its anti-vacuity check, because "the work disappeared" is exactly what a
+silently-broken world also looks like.** The side-world is still running in the
+same profile — `step` (debrisworld.js) at 2.9 % plus `wasm-function[37]` 7.2 %,
+`[184]` 2.2 %, `[64]` 2.0 % and `isSleeping` (rapier.mjs) 0.9 %. So the world
+exists and is being stepped; only its CONSTRUCTION left the frame window. Had
+`prime()` failed, `step()`'s lazy build would have reappeared in the profile
+instead.
+
 **This entry corrects an earlier one in this file.** §0's baseline says of
 `buildWorld`: *"Traced, not a defect … 0.6%"*. That was its **SELF** time. The
 inclusive cost is 30x larger, and inclusive is the number that matters for a
