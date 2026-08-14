@@ -20,7 +20,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 ## Testing — the gates
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
-operational field notes behind every rule below). The suite is 112 Playwright
+operational field notes behind every rule below). The suite is 113 Playwright
 specs plus 90 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
