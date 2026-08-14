@@ -51,6 +51,60 @@ function buildSecRows() {
   }
 }
 
+// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT.
+//
+// `.hud-gaps` sits between the minimap and the CENTRED POS/LAP row, and that slot
+// CLOSES as HUD SIZE grows — the map pushes the widget right while `.hud-top`
+// grows left. Measured at 1000px wide: 266px of slot at 100%, 151 at 150%, 33 at
+// 200%, against a 117px readout in the full spelling.
+//
+// `innerWidth / scale` is the slot's proxy: halving the window and doubling the
+// HUD are the same squeeze, and the whole left cluster is in one `zoom` group so
+// the relationship is linear. Two responses, in order of what they cost:
+//
+//   1. SHORTEN. Drop the driver code and the "s" — the ARROW already says which
+//      side and the number is what a driver reads mid-corner. Full spelling is
+//      ~111px, short is ~70px.
+//   2. DROP. Below `.hud-top`'s bottom edge, still beside the map, where the
+//      strip runs clear to the far side of the screen. Costs the widget its
+//      alignment with the top of the minimap and nothing else.
+//
+// The thresholds are per BREAKPOINT because the >=1200px ladder makes both walls
+// of the slot worse at once: a 140px minimap (vs 96) starts the widget further
+// right, and fatter `.hud-box` padding starts `.hud-top` further left. MEASURED
+// slack, full spelling: 1000@150% (ratio 667) +27, 1000@175% (571) -38 but short
+// fits at +13, 1000@200% (500) short still -50; 1280@150% (853) +25, 1280@175%
+// (731) -64 and short would be -16 too, 1280@200% (640) -105. So narrow gets a
+// shorten band between 550 and 640 and drops below it; wide has no useful
+// shorten band at all and drops straight away at 800.
+//
+// Every read here is cheap and needs no cache. `documentElement.style` is the
+// INLINE declaration this game writes in applyScale() — a string read, not
+// getComputedStyle, so it forces no style or layout pass — and innerWidth is
+// free. That is the whole reason this is a handful of lines and not a
+// measure-and-hysteresis loop: nothing here asks the layout engine anything, so
+// it can simply run every tick and follow a window resize for free.
+const GAP_SHORT_AT = { narrow: 640, wide: 800 };
+const GAP_DROP_AT  = { narrow: 550, wide: 800 };
+function gapForm() {
+  const root = document.documentElement;
+  const s = +root.style.getPropertyValue("--hud-scale") || 1;
+  const ratio = window.innerWidth / s;
+  const k = window.innerWidth >= 1200 ? "wide" : "narrow";
+  const drop = ratio <= GAP_DROP_AT[k];
+  // Compared against the DOM rather than a remembered value: a module-level cache
+  // desyncs the moment anything else touches the attribute (a dev tool, a probe,
+  // a future panel) and then never repairs itself. Reading an attribute is as
+  // cheap as reading a field and cannot go stale.
+  if (drop !== ("gapDrop" in root.dataset)) {
+    if (drop) root.dataset.gapDrop = "1";
+    else delete root.dataset.gapDrop;
+  }
+  return ratio <= GAP_SHORT_AT[k]
+    ? (arrow, code, t) => arrow + " " + t
+    : (arrow, code, t) => arrow + " " + code + " +" + t + "s";
+}
+
 function updateHud(force) {
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
@@ -159,8 +213,9 @@ function updateHud(force) {
     // would then read as "the car right behind you" — the leader.
     const i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
-    hText(els.gapA, a ? "▲ " + a.code + " +" + ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
-    hText(els.gapB, b ? "▼ " + b.code + " +" + ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1) + "s" : "");
+    const gap = gapForm();
+    hText(els.gapA, a ? gap("▲", a.code, ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1)) : "");
+    hText(els.gapB, b ? gap("▼", b.code, ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1)) : "");
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
