@@ -2652,7 +2652,7 @@ const Car3D = (function () {
 
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
-    out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
+    if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
           z0 = Infinity, z1 = -Infinity;
       for (let i = sec.from * 3; i < sec.to * 3; i += 3) {

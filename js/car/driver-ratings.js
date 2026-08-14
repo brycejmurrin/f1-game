@@ -69,8 +69,9 @@ const BASE = {
 // career market generates, must rate the same on every load of the same save.
 function hash32(str) {
   let h = 0x811c9dc5;
-  for (let i = 0; i < String(str).length; i++) {
-    h ^= String(str).charCodeAt(i);
+  const s = String(str);   // hoisted: was re-converting twice per character
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;

@@ -177,6 +177,15 @@ function set(name, v, opts) {
   // effect without a reload — and the JS ones change draw order, which is
   // clearer to judge from a clean frame than mid-lap.
   if (!(opts && opts.noReload) && typeof location !== "undefined") {
+    // DISARM THE CRASH SENTINEL FIRST — the fix js/game/gfx-quality.js already
+    // carries, never copied to this sibling. PerfGov detects a jetsam/OOM kill
+    // by finding the in-race flag still set at the next boot, so a
+    // settings-driven reload with it armed is indistinguishable from the phone
+    // dying. These buttons sit in the PAUSE menu and are NOT hidden on mobile
+    // (unlike RENDERER), so toggling one mid-race cost a phone a free crash
+    // strike — which pins tier floor 2 and pre-drops the render scale at the
+    // next boot, degrading the very thing the experiment is trying to measure.
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) { /* No location to reload (harness): the flag is set; the caller reloads however it can. */ } }, 120);
   }
   return true;
