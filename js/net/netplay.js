@@ -290,6 +290,24 @@ const NetPlay = (function () {
     // payload: a peer saying which peer it is would be a peer that can claim to
     // be another one, and the connection already knows.
     function bindSession(id, s) {
+      // The event-channel twin of onState's AUTHORITY narrowing, for the two
+      // events that name a driver in their payload (QUALI, QLIVE). A peer may
+      // speak about ITSELF and nothing else, so on the host the payload's
+      // driverId is checked against the car filed for the connection the event
+      // arrived on — taking it at its word let a guest post ANOTHER driver's
+      // qualifying time and reshuffle the grid. remoteFor() answers in wireId
+      // and the payload speaks driverId, so the hop goes through the seated
+      // rival's car; a connection we hold no car for speaks for nobody.
+      //
+      // Guest side there is nothing to narrow to: the only connection is the
+      // host's, and the host legitimately speaks for the whole field — that is
+      // not new trust, it already owns the AI and race control.
+      function sendersOwnDriver(d) {
+        if (role !== "host") return true;
+        const wid = remoteFor(id);
+        const r = wid != null ? remotes.get(wid) : null;
+        return !!(r && r.car && d.driverId != null && d.driverId === r.car.driverId);
+      }
       // ADOPT, don't stack. A session outlives the screen that opened it — the
       // lobby creates one before a track exists and NetPlay takes it over once
       // the race is up — and NetSession only ever appended handlers, so the two
@@ -351,9 +369,14 @@ const NetPlay = (function () {
           }
           // A rival's qualifying lap. Handed to the game rather than kept here:
           // the classification is the game's, and it has to be recomputed with
-          // every real time in it the moment another one lands.
-          if (name === EV.QUALI && d && d.t > 0 && G.onPeerQuali) G.onPeerQuali(d);
-          if (name === EV.QLIVE && d && G.onPeerQualiLive) G.onPeerQualiLive(d);
+          // every real time in it the moment another one lands. Bound to the
+          // sender first (sendersOwnDriver, above) — QUALI is an input to the
+          // grid, so a spoofed driverId is a spoofed grid.
+          if (name === EV.QUALI && d && d.t > 0 && sendersOwnDriver(d) && G.onPeerQuali) G.onPeerQuali(d);
+          // QLIVE never reaches the classification, but it is keyed by the
+          // same driverId — unbound, the same spoof paints a lap-in-progress
+          // over another driver's name on the host's waiting screen.
+          if (name === EV.QLIVE && d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d);
           if (name === EV.LAP && d) peerLaps.push(d);
           if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);

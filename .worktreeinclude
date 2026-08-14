@@ -1,0 +1,7 @@
+# Untracked files copied into every new git worktree (gitignore syntax).
+# Keep this SMALL: worktrees share the container's disk allowance.
+# node_modules is NOT listed — it is far too large to copy; the fix-wave
+# driver symlinks it into each worktree instead (ln -s ../../node_modules).
+# No production secrets belong here.
+.env
+.env.local

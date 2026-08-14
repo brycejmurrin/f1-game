@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **109-member `api` surface is a frozen
+primitives, and composite models. The **110-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -111,7 +111,8 @@ rule as every other lamp — no light without something visible emitting it.
 
 - `pos` is a RAW WORLD position, like the `px`/`py`/`pz` arrays, and is *not*
   remapped by the reversed-lap wrapper.
-- `kind` names a `LAMP_KINDS` entry (`led`, `fluor`, `halide`, `sodium`, …) and
+- `kind` names an entry in lighting.js's internal `LAMP_KINDS` table (`led`,
+  `fluor`, `halide`, `sodium`, …) and
   sets colour, cone and volumetric weight, exactly as for a mast.
 - `aim` overrides the default beam direction. The default aims at the centre of
   the near lane, which is right for a lamp standing *beside* the road and wrong
@@ -140,7 +141,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 109-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 110-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -244,7 +245,7 @@ pass draws street-style posts / flood banks (keyed off `fz.lamp`) and fills
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 109-member contract but not detailed in this doc: `MAT` (material
+Also on the 110-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, the grounding helpers `seat` / `foundation` / `cantilever` and
 `recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,

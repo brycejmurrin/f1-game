@@ -653,6 +653,7 @@ const GameAudio = (function () {
   /* ---------------- rain ---------------- */
 
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
+  let rainPending = null;   // gain a start asked for while stopRain's teardown was running
 
   function startRain(gain) {
     // Optional gain for a softer tier (no live caller passes one today — both
@@ -660,7 +661,13 @@ const GameAudio = (function () {
     // running, so a mid-race wet↔rain flip fades the loop instead of sticking.
     const g = gain == null ? 0.065 : gain;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
-    if (!sfxOk() || rainStopping) return;
+    if (!sfxOk()) return;
+    // A start landing inside stopRain's 1.2 s teardown used to be dropped on the
+    // floor — and the callers only fire on discrete weather FLIPS (race start,
+    // setWeatherLive), so a rain→dry→rain inside that window left the loop silent
+    // for the whole wet session with nothing to retry it. Queue it for the
+    // teardown callback instead of returning empty-handed.
+    if (rainStopping) { rainPending = g; return; }
     const dur = 4;
     const buf = noiseBuf(dur);
     rainSrc = ctx.createBufferSource();
@@ -681,6 +688,7 @@ const GameAudio = (function () {
   }
 
   function stopRain() {
+    rainPending = null;   // a newer stop cancels a queued restart, wet or dry
     if (!rainSrc) return;
     rainStopping = true;
     const s = rainSrc, g = rainGain, h = rainHp, l = rainLp;
@@ -691,8 +699,9 @@ const GameAudio = (function () {
         try { s.stop(); } catch (e) {}
         try { s.disconnect(); g.disconnect(); h.disconnect(); l.disconnect(); } catch (e) {}
         rainStopping = false;
+        if (rainPending != null) { const pg = rainPending; rainPending = null; startRain(pg); }
       }, 1200);
-    } catch (e) { rainStopping = false; }
+    } catch (e) { rainStopping = false; rainPending = null; }
   }
 
   // x 0..1; looped bandpass noise follows it

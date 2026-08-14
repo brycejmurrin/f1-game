@@ -165,9 +165,7 @@ const Input = (function () {
       ? performance.now() : Date.now();
   }
 
-  function clamp(v, lo, hi) {
-    return v < lo ? lo : v > hi ? hi : v;
-  }
+  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   // One-Euro filter: smoothing factor for a given cutoff frequency and timestep.
   function oeAlpha(cutoff, dt) {

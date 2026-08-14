@@ -154,13 +154,25 @@
       { frac: 0.0114, angleDeg: 3.0, widthM: 130 },
     ],
     scenery: function (api) {
-      const { out, MAT, n, place, backdrop,
+      const { out, MAT, def, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
+      // KOLD: converts a frac written in the SAME convention circuitKit's specs
+      // use (its `frameAt` is wrapped with a SHIFT-ONLY remap, js/track/tracks.js
+      // ~361 — no mirror) into the raw racing-node index K() needs. Only
+      // required where a raw anchor()/K() call must land on the SAME spot as a
+      // circuitKit-placed structure (the pit-race-control beacon below); every
+      // other raw K() call in this file was independently tuned against the
+      // engine's raw indexing and does not need it. Same formula tracks.js uses
+      // for def._sceneryShift (the KOLD legend in monaco.js is the worked precedent).
+      const _offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
+      const _offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
+      const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
+      const KOLD = (s) => (K(s) + _kShift) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.
       if (circuitKit) {
@@ -345,12 +357,20 @@
         // Span follows leaned tops (outers closer together at the crown)
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
+        // `mid` (tops[1]) IS the centre tower's top surface height (H, base-anchored
+        // addBox above puts its top exactly there). These three slab boxes are
+        // addBox — CENTRE-anchored — but their old +3.5/+6.0/+5.5 offsets left the
+        // main slab's underside 1.75 m above that top surface, more than the
+        // audit's 0.6 m "rests on" slack, so the whole 200 m-tall assembly read
+        // as unsupported. Shifted down by 1.45 m (every offset moves together,
+        // so the slab/rim/pool stack keeps its original relative geometry) to
+        // seat the main slab's underside ~0.3 m above the tower top.
         // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
-        TrackGeom.addBox(stage, vadd(mid, a.u, 3.5), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 2.05), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         // Glowing neon rim — the iconic cyan strip seen from every angle
-        TrackGeom.addBox(stage, vadd(mid, a.u, 6.0), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 4.55), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
         // Rooftop pool and garden strip — warm amber
-        TrackGeom.addBox(stage, vadd(mid, a.u, 5.5), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        TrackGeom.addBox(stage, vadd(mid, a.u, 4.05), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
         }, { required: true });
       }
 
@@ -370,10 +390,12 @@
           const pc    = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
                          a.c[1],
                          a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          // Outer white shell
-          addCone(out, vadd(pc, a.u, PETAL_H * 0.5), 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
+          // Outer white shell — addCone is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js),
+          // so `pc` (already sitting at ground height) IS the base position;
+          // adding a.u*PETAL_H/2 floated the whole cone by half its own height.
+          addCone(out, pc, 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
           // Inner warm-lit face (slightly smaller, glows like up-lit marble)
-          addCone(out, vadd(pc, a.u, PETAL_H * 0.58), 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
+          addCone(out, pc, 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
         }
         // Central podium stem
         addCyl(out, vadd(a.c, a.u, 3), 5, 9, [0.82, 0.82, 0.86], 7, [a.r, a.u, a.t]);
@@ -463,9 +485,18 @@
       }
 
       // Bay water reflection streaks — flat bright strips just above water level.
-      // Placed at dist > 38 m so they sit beyond the barriers.
+      // Placed at dist > 38 m so they sit beyond the barriers. dist was 44,
+      // inside the s=0.20 local water patch's own inner edge (waterBand
+      // gap 52) by 8 m — no water surface reaches that close to shore there,
+      // so the audit's water-as-footing credit never applied and the strips
+      // floated over bare (unrendered) bay. 60 clears every band's inner
+      // edge this loop's s values touch (52/40/58) with margin. Single
+      // anchor(a) also gets walked +/-44 m along the tangent per i (Trap B):
+      // on a curve that chord drifts from the true arc, so the worst i
+      // (i=0/9) needs more clearance than the s-centre alone implies — 74
+      // instead of 60 to clear that drift too.
       for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
-        const a = anchor(K(s), 1, 44);
+        const a = anchor(K(s), 1, 74);
         for (let i = 0; i < 10; i++) {
           const c   = vadd(vadd(a.c, a.t, (i - 4) * 11), a.u, 0.5);
           const hue = (i + Math.round(s * 17)) % 4;
@@ -513,12 +544,18 @@
           for (let j = 0; j < 5; j++) {
             const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
             addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
-            addCyl(out,   vadd(c, a.u, 3.5), 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
+            // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — this is the
+            // pier holding the rib up: base at the deck (c), rising the full
+            // height 7 so its top meets the rib's base flush. The old
+            // `vadd(c, a.u, 3.5)` (h/2) floated the pier's own base 3.5 m off
+            // the deck, so it never touched ground.
+            addCyl(out,   c, 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
           }
           // Decorative bridge-lamp posts on the railing
           for (let j = 0; j < 3; j++) {
             const c = vadd(a.c, a.t, (j - 1) * 18);
-            addCyl(out, vadd(c, a.u, 3), 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
+            // Base-anchored: post rises from the deck, lamp housing sits on top.
+            addCyl(out, c, 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
             addBox(out, vadd(c, a.u, 4.6), [0.6, 0.6, 0.6], WIN_WARM, [a.r, a.u, a.t]);
           }
         }
@@ -733,7 +770,16 @@
           // Main structural tube
           addCyl(out, c, 2.4, 4.4, [0.88, 0.90, 0.95], 6, [a.r, a.u, a.t]);
           // Side lattice bar
-          addBox(out, vadd(c, a.r, Math.sin(t2 * 11) * 5.5), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
+          const barOff = Math.sin(t2 * 11) * 5.5;
+          addBox(out, vadd(c, a.r, barOff), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
+          // Connecting strut back to the main tube (cause: cantilever, docs/
+          // SCENERY-GROUNDING.md §3.4). At the widest swing (|barOff|~5.5) the
+          // bar's inner face sits ~3.1 m clear of the tube's own 2.4 m radius
+          // — past the audit's overlap reach, so it hung with no visible arm
+          // carrying it. Spans from the tube out to the bar with a 0.3 m
+          // overlap margin on each end.
+          addBox(out, vadd(c, a.r, barOff / 2), [Math.abs(barOff) + 0.6, 0.4, 0.4],
+                 [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
           // Helix crossbar
           if (j % 2 === 0)
             addBox(out, vadd(c, a.t, Math.cos(t2 * 7) * 3.5), [0.7, 1.1, 5.2], [0.83, 0.85, 0.90], [a.r, a.u, a.t]);
@@ -779,7 +825,15 @@
       // ===================================================================
       for (const s of [0.20, 0.30, 0.42, 0.82, 0.88]) {
         const a = anchor(K(s), 1, 24);
-        addBox(out, vadd(a.c, a.u, 3.0), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
+        // s=0.30 sits on a locally steeper stretch of the promenade than the
+        // other four anchors — this 28 m-long strip's single-point ground
+        // sample there reads ~1.8 m shy of where the far end of the box
+        // actually needs to sit. Only that one anchor needs the extra drop;
+        // moving all five identically re-seated the other four flush enough
+        // with the terrain to open new same-facing coplanar spots (measured
+        // 9 -> 14 spots), so this stays per-anchor rather than a shared const.
+        const drop = s === 0.30 ? 0.6 : 0;
+        addBox(out, vadd(a.c, a.u, 3.0 - drop), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
 
@@ -844,9 +898,23 @@
         });
         // Beacon light on the race-control roof — a landmark visible from
         // across the venue, echoing the old hand-rolled tower's night glow.
+        // MIXED COORDINATE SPACES: circuitKit.raceControl's `frac` goes through
+        // circuit-kit.js's SHIFT-ONLY frameAt wrapper (js/track/tracks.js ~361),
+        // but this anchor read `K(0.999)` directly — a raw index with no shift
+        // applied — so the beacon landed nowhere near the tower's footprint
+        // (float-audit's gap tracked the beacon's own height offset 1:1 with no
+        // sign of ever resting on anything, even with a base pushed to mid-
+        // tower height, which only makes sense if the two never overlap in
+        // XZ at all). KOLD converts the SAME literal frac into the raw node
+        // index that lands where circuitKit's shift resolves it.
+        // The tower's "lattice" landmark (the `lattice` branch of tower() in js/track/landmark-kit.js)
+        // stacks 6 levels inset 0.86x, so its real roof surface sits a touch
+        // under the nominal size[1]=34 (~33.6 m), not at 34. addCone is
+        // BASE-anchored, so the beacon's base needs to be near that real
+        // roof height, not the nominal one.
         {
-          const a = anchor(K(0.999), -1, 53);
-          addCone(out, vadd(a.c, a.u, 35), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
+          const a = anchor(KOLD(0.999), -1, 53);
+          addCone(out, vadd(a.c, a.u, 33.4), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
 
@@ -1261,8 +1329,13 @@
         addBox(out, vadd(a.c, a.u, 2.4 * sc), [2.6 * sc, 1.8 * sc, 4 * sc], [0.42, 0.30, 0.20], b);  // cabin
         out._mat = 0;
         addBox(out, vadd(a.c, a.u, 2.6 * sc), [2.7 * sc, 0.7 * sc, 4.1 * sc], glow, b);              // lit windows
-        // string of festive lights along the roofline
-        for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 1.4 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
+        // String of festive lights along the roofline. The cabin (above) is
+        // only 4*sc long (half-extent 2*sc along a.t); at the old 1.4*sc
+        // spacing the two end lights (s=-2/+2) sat 2.8*sc out — past the
+        // cabin's own footprint and too high above the hull deck (1.75*sc
+        // clear) to rest on anything, hanging unsupported past the roof's
+        // edge. 0.9*sc keeps the whole 5-light string within the cabin.
+        for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 0.9 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
       };
       for (let i = 0; i < 6; i++) {
         const s = [0.24, 0.33, 0.42, 0.46, 0.83, 0.87][i];

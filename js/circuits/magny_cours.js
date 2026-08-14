@@ -236,7 +236,10 @@
           addBox(stage, vadd(a.c, a.u, 9.4), [13.5, 0.6, 27], SLATE, b);
           addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 8.9), [0.5, 0.7, 27],
             [0.24, 0.38, 0.62], b);
-          addCyl(stage, vadd(vadd(a.c, a.t, 12), a.u, 13), 0.10, 8,
+          // addCyl is BASE-anchored; the roof cap above tops out at 9.4+0.3=
+          // 9.7, so a base of 13 left this mast 3.3 m clear of it (measured
+          // via float-audit). Based at 9.5 (0.2 m into the roof) instead.
+          addCyl(stage, vadd(vadd(a.c, a.t, 12), a.u, 9.5), 0.10, 8,
             [0.80, 0.80, 0.82], 5, b);
           stage._mat = 0;
         }, { required: true });

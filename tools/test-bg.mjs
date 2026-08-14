@@ -54,6 +54,18 @@ const readState = () => {
 };
 const writeState = (s) => fs.writeFileSync(STATEFILE, JSON.stringify(s, null, 2));
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (_) { return false; } };
+// A negative pid signals the whole process GROUP (spawn uses detached:true, so
+// pgid === pid). The single-pid fallback is for a child that never became a
+// group leader — it reaches the npm shim only, which is why the group form is
+// tried first. See the long note above stop().
+const signal = (pid, sig) => {
+  try { process.kill(-pid, sig); return true; } catch (_) {
+    try { process.kill(pid, sig); return true; } catch (_) { return false; }
+  }
+};
+// Synchronous sleep: supersede() below must finish killing BEFORE the
+// replacement is spawned, so it cannot hand control back to the event loop.
+const sleepSync = (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
 
 /* A run's outcome is read out of its own log, so there is no second source of
    truth to keep in sync. Two formats, because two kinds of group exist:
@@ -119,11 +131,6 @@ async function wait() {
 function stop({ graceMs = 4000 } = {}) {
   const s = readState();
   const live = s.runs.filter((r) => alive(r.pid));
-  const signal = (pid, sig) => {
-    try { process.kill(-pid, sig); return true; } catch (_) {
-      try { process.kill(pid, sig); return true; } catch (_) { return false; } // not a group leader
-    }
-  };
   let n = 0;
   for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
   console.log(`sent SIGTERM to ${n} run group(s)`);
@@ -138,6 +145,37 @@ function stop({ graceMs = 4000 } = {}) {
   setTimeout(spin, 250);
 }
 
+// RESTARTING A LIVE GROUP MUST KILL IT, not just forget it. The state entry for
+// a superseded group is replaced (see the note in start()), and for a while that
+// was ALL that happened: the old process kept running with nobody holding its
+// pid, so it was invisible to --status/--wait/--stop, it kept its SwiftShader
+// Chromiums on a box that was now also running the replacement, and it went on
+// writing into the very log file the new run had just truncated — the exact
+// fake-results failure the stop() note above describes, reached by a different
+// door. Same SIGTERM-then-SIGKILL ladder as --stop, but synchronous, because it
+// has to be finished before the replacement is spawned.
+function supersede(groups, { graceMs = 4000 } = {}) {
+  const doomed = readState().runs.filter((r) => alive(r.pid) && groups.includes(r.group));
+  if (!doomed.length) return;
+  for (const r of doomed) {
+    const ok = signal(r.pid, "SIGTERM");
+    console.log(ok
+      ? `superseding test:${r.group} — SIGTERM to pgid ${r.pid}`
+      : `WARNING: could not signal the running test:${r.group} (pid ${r.pid}); it may still be writing to ${path.relative(ROOT, r.log)}`);
+  }
+  const deadline = Date.now() + graceMs;
+  let still = doomed.filter((r) => alive(r.pid));
+  while (still.length && Date.now() < deadline) {
+    sleepSync(250);
+    still = still.filter((r) => alive(r.pid));
+  }
+  for (const r of still) {
+    signal(r.pid, "SIGKILL");
+    console.log(`superseding test:${r.group} — SIGKILL pgid ${r.pid}`);
+  }
+  if (still.length) sleepSync(500);   // let the kernel reap before the log is truncated
+}
+
 function start(groups, force) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
@@ -149,6 +187,12 @@ function start(groups, force) {
   // Count what is ALREADY on the CPU. An earlier batch still running is exactly
   // as expensive as one started now, and is the case most likely to be forgotten
   // — it does not appear on this command line.
+  //
+  // A group being RESTARTED is excluded because supersede() below kills it
+  // before anything is spawned, so it is not on the CPU by the time the new run
+  // is: counting it would refuse the ordinary "re-run the group I am already
+  // running" on a box that has room. The cap check runs FIRST so that a refusal
+  // never kills a live run and then declines to replace it.
   const running = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
   const total = groups.length + running.length;
   if (total > MAX_GROUPS && !force) {
@@ -163,6 +207,9 @@ function start(groups, force) {
     console.error(`\n(--force overrides; WORKERS=1 raises the cap.)`);
     process.exit(3);
   }
+  // Kill any live run of a group being restarted BEFORE its log is truncated
+  // and its replacement spawned.
+  supersede(groups);
   fs.mkdirSync(LOGDIR, { recursive: true });
   const runs = [];
   for (const group of groups) {
@@ -194,8 +241,10 @@ function start(groups, force) {
   // timeouts read as test failures. Observed exactly that: `test-bg physics`
   // then `test-bg tiny` left physics alive and invisible.
   //
-  // A group started again SUPERSEDES its old entry — same log file, and the
-  // old process is about to be writing to a file the new one truncated.
+  // A group started again SUPERSEDES its old entry — same log file. Dropping
+  // the entry is only SAFE because supersede() has already killed that process:
+  // dropping it while it still ran was how a superseded run became invisible
+  // and went on interleaving output into the log the new run truncated.
   const prior = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
   if (prior.length) console.log(`  (still running from an earlier start: ${prior.map((r) => r.group).join(", ")})`);
   writeState({ runs: [...prior, ...runs], started: new Date().toISOString(), workers: WORKERS });

@@ -160,6 +160,7 @@ function audit(id) {
 
   const groundTop = new Map();   // cell -> highest ground vertex y
   const propMin = new Map();     // cell -> {ix, iz, y} lowest prop vertex
+  const waterTop = new Map();    // cell -> water surface y (support only)
 
   const binGround = (pos) => {
     for (let i = 0; i < pos.length; i += 3) {
@@ -181,6 +182,19 @@ function audit(id) {
 
   for (const name of groundMeshes) if (M[name] && M[name].__cap) binGround(M[name].__cap.pos);
   for (const name of propMeshes) if (M[name] && M[name].__cap) binProps(M[name].__cap.pos);
+  // WATER, for the SUPPORT test only. A hull resting on a water surface is
+  // held up by it in exactly the sense this audit measures, but water is not
+  // "ground" — it must not enter groundMeshes, where it would join the terrain
+  // triangle set and let a pool or fountain plane above the verge redraw the
+  // ground for props beside it.
+  if (M.water && M.water.__cap) {
+    const pos = M.water.__cap.pos;
+    for (let i = 0; i < pos.length; i += 3) {
+      const k = ck(Math.floor(pos[i] / CELL), Math.floor(pos[i + 2] / CELL));
+      const y = pos[i + 1], cur = waterTop.get(k);
+      if (cur === undefined || y > cur) waterTop.set(k, y);
+    }
+  }
 
   // Closed-form ground fallback for cells the terrain ribbon doesn't cover —
   // the same surface groundYAt() anchors props to. Nearest-node lookup via a
@@ -339,7 +353,16 @@ function audit(id) {
   // Seed: primitives that touch the ground themselves.
   let pending = [];
   for (const p of sorted) {
-    const g = groundAtXZ((p.minX + p.maxX) / 2, (p.minZ + p.maxZ) / 2);
+    const cx = (p.minX + p.maxX) / 2, cz = (p.minZ + p.maxZ) / 2;
+    // Footing = whichever of ground and water is higher under this primitive.
+    // Without the water term every boat on the fleet was a false positive —
+    // Monaco's yachts and megaYacht, Jeddah's marina dhows — measured instead
+    // against the seabed, or against the `floor` backdrop slab tracks.js lays
+    // at pyMin-5, which covers the sea too. They are not defects and no
+    // circuit-side edit clears them without sinking the boats.
+    const gw = waterTop.get(ck(Math.floor(cx / CELL), Math.floor(cz / CELL)));
+    const gr = groundAtXZ(cx, cz);
+    const g = gw !== undefined && (gr === null || gw > gr) ? gw : gr;
     p._g = g;
     if (g !== null && p.minY <= g + GROUNDED_EPS) addGrounded(p);
     else pending.push(p);

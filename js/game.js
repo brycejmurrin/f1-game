@@ -99,8 +99,10 @@ try {
   // chose "three" yesterday must boot on WebGL2 today without anyone having to
   // find their way back through a menu they cannot read. Desktop keeps both,
   // which is what the migration needs.
-  const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  // GLX owns the ONE mobile-tier detection (js/render/glx.js). This site re-sniffed
+  // navigator and, alone among the four copies, left out apex26.forceMobileTier — so a
+  // desktop with the flag set still loaded the alternate backends: the "phone" under test.
+  const phone = !!(typeof GLX !== "undefined" && GLX.isMobile);
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
   const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
@@ -191,7 +193,7 @@ function initRainDrops() {
 // ---------- settings ----------
 // Persistence lives in js/game/store.js (GameStore): the cached localStorage
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
-const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId, seasonRoster } = GameStore;
+const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
 const { DEFAULT_CUSTOM } = GameTables;
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
@@ -657,13 +659,13 @@ function buildStudioRig() {
     const e = R.intensity * 0.55;   // same physical energy factor as track lamps
     _studioBuf.push(lx, ly, lz,
       R.color[0] * e, R.color[1] * e, R.color[2] * e,
-      R.radius, ax, ay, az, 0.88, 0.60, 0.12, 0);
+      R.radius, ax, ay, az, 0.88, 0.60, 0.12, 0, 1);
   }
   // Overhead key: straight-down softbox above the car.
   const ek = R.intensity * 0.55 * 1.4;
   _studioBuf.push(cx, cy + R.h + 3, cz,
     R.color[0] * ek, R.color[1] * ek, R.color[2] * ek,
-    R.radius, 0, -1, 0, 0.80, 0.45, 0.15, 0);
+    R.radius, 0, -1, 0, 0.80, 0.45, 0.15, 0, 1);
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
@@ -808,8 +810,8 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
+  openQuali();                    // clears the gate FIRST, so arm it after
   qualiNetDone = done || null;
-  openQuali();
   refreshQualiGate();
 }
 
@@ -964,8 +966,7 @@ const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sa
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 
 // ---------- helpers ----------
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = M4.clamp, lerp = M4.lerp;   // shared scalar helpers (js/mat4.js) — ALIASED, not called through M4, so every hot-path site keeps its old call shape
 // Rotate an RGB grade-tint's HUE around the luminance axis by `deg`. Tints sit
 // near [1,1,1]; we rotate the chroma OFFSET from grey so a neutral tint stays
 // neutral. Standard NTSC-luma hue matrix. Used by SHADOW/HIGHLIGHT TINT HUE.
@@ -1024,8 +1025,7 @@ function sectorAt(s) {
 function lerpS(prev, cur, a) {
   if (prev === undefined || a >= 1) return cur;
   const L = track.total;
-  let d = cur - prev;
-  if (d > L * 0.5) d -= L; else if (d < -L * 0.5) d += L;
+  const d = M4.wrapDelta(cur - prev, L);   // shortest way round (js/mat4.js)
   return wrapS(prev + d * a);
 }
 // The PLAYER is drawn where it actually is. Its world position is exact and
@@ -1520,23 +1520,23 @@ function makeCars() {
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
-// Without one the old behaviour stands: sort by tier, then drop the player into
-// P12 for a climb. GP keeps that on purpose; only a session that actually held a
-// qualifying hour has earned the right to say where everyone starts.
+// Without one: sort by tier, player dropped into P12 for a climb. GP keeps that
+// on purpose; only a session that held a qualifying hour sets its own grid.
 function gridUp(preOrder) {
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
-    // grid order: by tier then random-ish; player at P12 for a fun climb
-    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (simRnd() - 0.5));
+    // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
+    // comparator is inconsistent and its draw count engine-defined.
+    const jit = new Map(cars.map((c) => [c, simRnd()]));
+    const o = cars.slice().sort((a, b) => (a.tier - b.tier) || (jit.get(a) - jit.get(b)));
     const pi = o.indexOf(player);
     o.splice(pi, 1);
     o.splice(Math.min(11, o.length), 0, player);
     return o;
   })();
   order.forEach((c, i) => {
-    // Where this car STARTED. The only record of it: `order` is discarded here and
-    // the classification at the flag is built from finishing times. Career's
-    // "out-qualify your team-mate" objective is what reads it, and it is correct
-    // for both branches above — the qualifying grid and the tier-sorted fallback.
+    // Where this car STARTED — the only record: `order` is discarded here and the
+    // flag classification is built from finishing times. Career's "out-qualify
+    // your team-mate" objective reads it; correct for both branches above.
     c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
@@ -1629,14 +1629,14 @@ const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp } = CarMesh;
-const _decalTexCache = {};
+const _decalTexCache = {}, _decalTexFail = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
   Object.keys(_decalTexCache).forEach(function (key) {
     if (key.indexOf(prefix) !== 0) return;
     const tex = _decalTexCache[key];
     if (tex && gfx.freeTexture) gfx.freeTexture(tex);
-    delete _decalTexCache[key];
+    delete _decalTexCache[key]; delete _decalTexFail[key];
   });
 }
 function getCarDecalTexture(team, num, isPlayer) {
@@ -1648,7 +1648,14 @@ function getCarDecalTexture(team, num, isPlayer) {
   if (!(key in _decalTexCache)) {
     let t = null;
     try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num, !!isPlayer)); }
-    catch (e) { t = null; }
+    catch (e) {
+      // Swallowed AND cached as null before: one transient miss stripped that
+      // team's numbers/sponsors for the session, unlogged. Log and retry — but
+      // this runs per drawn car per FRAME, so cache the null after 3 tries.
+      const n = _decalTexFail[key] = (_decalTexFail[key] || 0) + 1;
+      Log.warn("gfx", "decal atlas build failed for " + key + " (attempt " + n + ")", e);
+      if (n < 3) return null;
+    }
     _decalTexCache[key] = t;
   }
   return _decalTexCache[key];
@@ -2215,20 +2222,9 @@ function armReliability(field) {
 // exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
-  // The player's OWN top speed — the identical expression updateCar() uses for a
-  // human car — and NOT quali.capFor(). That is the model's INTEGRATION ceiling:
-  // it carries QUALI_TRIM (0.75, the constant that reconciles a simulated lap
-  // with a driven one) and the AI's tierV/skill/difficulty multipliers, none of
-  // which describe the car the player is about to drive. Launching off it would
-  // start them a quarter down on their own straight-line pace and hand the
-  // simulated field a second or more before the first corner.
-  //
-  // Then capped by what the road at the line will actually take, so a circuit
-  // whose start/finish sits in a corner does not launch the car into a wall.
-  Tracks.sample(track, player.s, smp);
   player.x = 0;                       // on the line, not on the grid slot
   player.xVis = 0;
-  const w = worldFromTrack(player.s, player.x, smp);
+  const w = worldFromTrack(player.s, player.x, smp);   // also fills smp for head, below
   player.px = w.x; player.pz = w.z;
   player.head = Math.atan2(smp.t[0], smp.t[2]);
   player.speed = 0;               // standing start, like the real thing
@@ -2270,14 +2266,14 @@ function dropRaceWake() {
 
 function startRace() {
   // Abort any incident takeover left over from the last race, FIRST — while the
-  // cars it owns and the track they crashed on are both still the current ones.
-  // IncidentSim owns cars by their cars[] INDEX and only releases them via a
-  // hand-back inside the race loop, so quitting to the menu mid-takeover left an
-  // index owned; after makeCars() below that index is a completely different car,
-  // which would then never drive (updateCar early-outs on owns()) and — if the
-  // same track reloaded, leaving DebrisWorld's generation unchanged — could be
-  // posed straight onto the previous race's crash site from the stale body.
+  // cars it owns and the track they crashed on are both still current. IncidentSim
+  // owns cars by their cars[] INDEX and only releases them via a hand-back inside
+  // the race loop, so quitting to the menu mid-takeover left an index owned; after
+  // makeCars() below that index is a completely different car, which would never
+  // drive (updateCar early-outs on owns()) and — if the same track reloaded, with
+  // DebrisWorld's generation unchanged — could be posed onto the stale crash site.
   IncidentSim.reset();
+  raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
   loadTrack(trackIdx);
   makeCars();
   // A qualifying lap is a time trial with the rest of the field simulated: one
@@ -2767,7 +2763,7 @@ const G = {
   // LAT_MAX and BRAKE are absolute in the driving model (cornering grip and
   // braking do not scale with pace — only acceleration and top speed do), so
   // they pass through as constants; acceleration goes through aTop().
-  LAT_MAX, ACCEL, BRAKE,
+  LAT_MAX, BRAKE,   // ACCEL is deliberately NOT here — reading it was the bug aTop() fixed
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
@@ -2928,6 +2924,7 @@ function quitToMenu() {
   setFlow("gp"); session = "race";
   quali.clear();   // last weekend's classification is not this one's grid
   qualiPeers.clear();
+  qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -4361,8 +4358,8 @@ function updateCar(c, dt, ranked) {
   // instead of cheating progress forward.
   const L = track.total;
   let ds = c.s - oldS;
-  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap
-  
+  if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap == M4.wrapDelta(ds, L), kept INLINE: physics inner loop, and the characterization golden is a browser spec
+
   // If ds is huge, the car was teleported (jump/park). Reset to prevent glitches.
   if (Math.abs(ds) > 20) {
     ds = c.speed * dt;
@@ -4653,7 +4650,11 @@ function onTTLap(lapTime) {
 }
 
 function coast(c, dt) {
-  c.speed = Math.max(24, c.speed - 20 * dt);
+  // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
+  // RAISES a car that finished slower than 24 m/s, and 24 sits above vTop() below
+  // pace ~0.55. Pace-scale the floor, and never speed the car up.
+  const floor = 24 * Math.max(PACE, 0.05);
+  c.speed = Math.min(c.speed, Math.max(floor, c.speed - 20 * dt));
   c.s = wrapS(c.s + c.speed * dt);
   c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
@@ -4677,7 +4678,7 @@ function coast(c, dt) {
 // the track light builder live in js/game/lighting.js. LT is a plain object
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
-const { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights } = LightTune;
+const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // The PROFILE STORE — which layer of (default / shipped preset / player edit)
 // wins for the conditions on screen — lives in js/game/light-store.js
 // (LightStore.create(G), assigned with the other modules below). These six are
@@ -5198,7 +5199,12 @@ function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
-  if (!track) { gfx.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); gfx.present(); return; }
+  // No track yet — live only since boot deferred the flyby build (scheduleFlybyTrack(),
+  // end of file). DRAW NOTHING rather than present the old, dead fogColor clear:
+  // alpha:false makes an undrawn canvas composite as opaque BLACK, which is what the
+  // blessed menu baselines already encode — corners read 4-9/255, i.e. #overlay's
+  // 0.55-alpha wash over black, not the tens a lit flyby would push through it.
+  if (!track) return;
   _frameNo++;
 
   // camera
@@ -5946,7 +5952,18 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  gfx.drawSky(frameSky);
+  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
+  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
+  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
+  // for the OPAQUE half). The glow is what makes this non-trivial: it is
+  // additive with depthMask off, so it writes no depth — leaving the background
+  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
+  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
+  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
+  // visually equivalent — a prop in front of a lamp occludes the halo either
+  // way, by overwrite before or by depth test after.
+  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
+  if (!_skyLate) gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -5955,7 +5972,13 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, true);
+  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
+  if (_skyLate) {
+    gfx.drawSky(frameSky);
+    // Same guard drawWorldMeshes applies to its own glow call, kept identical
+    // so the two paths differ ONLY in ordering.
+    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -5964,11 +5987,10 @@ function render(dt) {
   skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
-  const hidePlayerCar = !dbgCam && (state === "race" || state === "count") &&
-    CAM_MODES[camMode].id === "cockpit";   // don't draw the car you're sitting in
-  // Cockpit view still draws a first-person RIG (wheel/halo/mirrors) + the car's
-  // shadow — only the body mesh is skipped.
-  const cockpitRigOnly = hidePlayerCar && CAM_MODES[camMode].id === "cockpit";
+  // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
+  // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
+  // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
+  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
@@ -5981,7 +6003,6 @@ function render(dt) {
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
-    if (c.isPlayer && hidePlayerCar && !cockpitRigOnly) continue;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -6067,7 +6088,7 @@ function render(dt) {
     // never touched. When disabled these all come back 0 (rigid chassis).
     // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
     // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1]);
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
     // Pitch: rotate forward+up around the right axis (positive = nose up). This
     // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
@@ -6547,7 +6568,7 @@ function render(dt) {
   }
   // SPEED BLUR: fold the car's velocity into the tuner amount so the radial
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
-  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp(((player.speed || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
+  const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
   // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
   // bright+mip chain in present() — the single biggest post-chain saving left
@@ -6560,7 +6581,8 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
+  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6784,6 +6806,10 @@ document.addEventListener("pointerdown", () => {
 // headroom to "zoom way out"; 50% is the floor now and the default stays 100%.
 // SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
 // Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
+// (A concurrent branch pinned MAX back to 150 while doing clamp-path fixes;
+// resolved in favour of the wider range on the owner's explicit ask — the
+// clamp fixes themselves are kept, and ui-scale.spec.js now derives its
+// expectations from __apex.uiScale() so either choice tests true.)
 const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
 const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
@@ -6912,27 +6938,9 @@ applyResMode();
   }
 }
 
-// GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
-// defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
-// quality for capable phones. These are decided at renderer INIT, so the toggle
-// persists and reloads. Shown only on mobile — desktop is always full quality.
-if (gfx.isMobile) {
-  const gfxBtn = $("pm-gfx");
-  if (gfxBtn) {
-    gfxBtn.hidden = false;
-    const gfxHigh = () => { try { return localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) { return false; } };
-    gfxBtn.textContent = "GRAPHICS: " + (gfxHigh() ? "HIGH" : "STANDARD");
-    gfxBtn.onclick = () => {
-      const next = !gfxHigh();
-      try { localStorage.setItem("apex26.gfxHigh", next ? "1" : "0"); } catch (_) {}
-      gfxBtn.textContent = "GRAPHICS: " + (next ? "HIGH" : "STANDARD") + " — reloading…";
-      if (soundOn) GameAudio.uiSelect();
-      // Reload so the renderer re-inits at the new tier (context AA, target
-      // formats, atlas sizes are all fixed at startup).
-      setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
-    };
-  }
-}
+// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
+// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 
 $("mb-race").onclick = () => {
@@ -7025,7 +7033,7 @@ function refreshCareerButton() {
   if (label) label.textContent = "CAREER MODES";
   // The second line says WHICH career, because with up to three saved,
   // "CONTINUE" on its own does not answer the only question that matters. Blank
-  // when there is nothing to continue — .mb-sub:empty collapses, so a first-time
+  // when there is nothing to continue — #mb-career-sub:empty collapses, so a first-time
   // title screen is unchanged.
   const sub = $("mb-career-sub");
   if (!sub) return;
@@ -7305,6 +7313,7 @@ function openQuali() {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
+  qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
   quali.simulate(0);              // provisional: everyone simulated, including you
@@ -8013,7 +8022,17 @@ $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
-loadTrack(trackIdx);
+// THE BOOT PATH TAKES THE SAME DEFERRAL EVERY OTHER MENU TRACK CHANGE TAKES.
+// This was `loadTrack(trackIdx)` as the last statement of the IIFE — a
+// synchronous Tracks.build() inside DOMContentLoaded, measured at 938 ms
+// (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, against a measured
+// DCL of 4712 ms. Nothing on the menu needs it (the picker and detail modal
+// draw from Tracks.LIST defs via TrackMaps; startRace()/openQuali() build the
+// real track themselves), so it is only ever the background flyby — which is
+// what scheduleFlybyTrack() exists for. __apex forces the build on first use
+// (lazyTrackEnsure, js/game/apex.js) so the test harness keeps the synchronous
+// world every spec written before this assumed.
+scheduleFlybyTrack();
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);

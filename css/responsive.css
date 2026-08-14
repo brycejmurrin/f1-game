@@ -123,7 +123,7 @@ body.desktop #pm-calib { display: none !important; }
   #menu-buttons { gap: 14px; }
   #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
-  .mb-sub { font-size: clamp(14px, calc(1.1 * var(--vwz)), 15px); }
+  #mb-career-sub { font-size: clamp(14px, calc(1.1 * var(--vwz)), 15px); }
 }
 
 /* Scale up HUD readouts on large screens so they're legible at arm's length. */
@@ -150,10 +150,15 @@ body.desktop #pm-calib { display: none !important; }
 
 /* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
 @media (orientation: landscape) and (max-height: 560px) {
-  /* 60px, not 52: the pause button ends at ~52px (8px + --tap-min); 52 put the
-     sector panel exactly on its lower edge — the pre-existing
-     #hud-sectors+pausebtn collision hud-layout.spec catches on this shape. */
-  #hud-sectors { top: calc(60px + var(--sat) / var(--hud-scale)); font-size: var(--fs-micro); padding: 3px 6px; }
+  /* `top` deliberately NOT re-declared. It used to pull the box UP to 52px to
+     reclaim vertical air, which defeated the stated purpose of this very rule —
+     #pausebtn reaches y=60 on touch, so 52 was an 8px collision, worse than the
+     56px base it overrode. The base is now derived from --tap (css/hud.css) and
+     clears the buttons by construction at every scale, so a second hard-coded
+     constant here can only drift away from it again. The font/padding trim is
+     what this breakpoint actually wants. (--fs-micro is deploy's token swap,
+     kept.) */
+  #hud-sectors { font-size: var(--fs-micro); padding: 3px 6px; }
   /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
      without shrinking thumb targets — tap floors stay on the >700px ladder. */
   #minimap { width: 96px; height: 96px; }

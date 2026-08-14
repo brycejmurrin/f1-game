@@ -194,7 +194,17 @@
         { livery: "sandstone", roof: "truss", pylons: true, h: 11 });
       // Back straight (s≈0.46, L) — the largest sandstone stand: two rakes
       // under a cantilever with a glazed suite band, closed at both ends.
-      grandstandEx(0.46, -1, 12, 70, null, null,
+      // SEGMENTED into two 34 m bays rather than one 70 m block. grandstandEx
+      // builds every stand as a straight CHORD off the tangent at its own node,
+      // and this one sits on the curve out of T11: a 70 m chord there swings its
+      // seating bank's world AABB across the road corridor ~40 m further along
+      // the lap, which is what props-over-road reads (the bank itself stays 17 m
+      // clear — the reading comes from the AABB prefilter, but a chord that
+      // long is wrong on a curve either way). Two short bays follow the curve,
+      // cover the same stretch, and keep every box's footprint beside the road.
+      grandstandEx(0.4566, -1, 12, 34, null, null,
+        { livery: "sandstone", tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 12 });
+      grandstandEx(0.4634, -1, 12, 34, null, null,
         { livery: "sandstone", tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 12 });
       // Turn-12 hairpin braking zone (s≈0.625, R) — deep cantilever carried on
       // pylons over the crowd, the shape you want above a big stop.

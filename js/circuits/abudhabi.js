@@ -607,7 +607,7 @@
             id: `yas-hotel-gridshell-arch-${i + 1}`,
             frac, clearance: shellClearances[i], minimumClearance: 4.8,
             thickness: shellThick, depth: 2.2, span: 56,
-            supportGap: 14.5, supportWidth: 1.2,
+            supportGap: 14.5, supportWidth: 1.2, supports: false,
             color: LED_CYCLE[i % LED_CYCLE.length], required: true,
           });
         }
@@ -627,7 +627,7 @@
             id: bridge.id, frac: bridge.frac, clearance: bridge.clearance,
             minimumClearance: 4.8, thickness: bridge.thickness,
             depth: bridge.depth, span: bridge.span,
-            supportGap: bridge.gap, supportWidth: bridge.pierW,
+            supportGap: bridge.gap, supportWidth: bridge.pierW, supports: false,
             color: bridge.col, required: true,
           });
           for (const side of [-1, 1]) {

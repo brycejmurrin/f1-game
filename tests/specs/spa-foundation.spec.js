@@ -16,8 +16,16 @@ test.describe("Spa track-owned foundation migration", () => {
       const ys = profile.map((p) => p.y);
       return {
         range: Math.max(...ys) - Math.min(...ys),
-        eauRouge: window.__apex.nodeAt(0.075).y,
-        kemmel: window.__apex.nodeAt(0.155).y,
+        // 7a173519 moved the start line (startFrac 0.9875 -> 0.0), rotating
+        // racing fractions by the arc shift (+0.9575); the climb itself did
+        // not move. The old probes (0.075 / 0.155) re-located to the same
+        // physical points in the new frame: 0.0325 (Eau Rouge, y 2.09 —
+        // just past the measured compression bottom at 0.0156) and 0.1125
+        // (top of the Kemmel climb; the crest measures at 0.1214, y 83.99).
+        // Climb across the pair measures 80.1 m (headless VM), so the >75
+        // Raidillon assertion below is unchanged.
+        eauRouge: window.__apex.nodeAt(0.0325).y,
+        kemmel: window.__apex.nodeAt(0.1125).y,
         maxUp: Math.max(...profile.map((p) => p.slope)),
       };
     });

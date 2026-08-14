@@ -265,6 +265,35 @@ window.SheetShape = (function () {
     }
   }
 
+  /* BODY DENSITY IS RESOLVED AT EVAL TIME, NOT ON DOMContentLoaded.
+     `body[data-density]` chooses between the title screen's ONE-column and
+     TWO-column grids (css/menus.css, css/responsive.css). Waiting for
+     DOMContentLoaded means waiting for all ~146 synchronous scripts, so the
+     menu's first paint was laid out in the wrong shape and relaid out later.
+     Nothing here needs that wait: every script tag sits AFTER the whole body
+     markup, so document.body and the stylesheets are already present when this
+     file evaluates. classifyBody() guards a missing body itself, so this stays
+     correct if the tag ever moves into <head>, and init() calling it again is
+     idempotent (the hysteresis reads the value it just wrote).
+
+     THIS IS THE SECOND ANSWER, NOT THE FIRST ONE. The first paint's density is
+     set by a tiny inline script in index.html, because ANY external script —
+     including this file at position #4 of the wall — races the browser's first
+     paint and does not reliably win it. Measured on a quiet box, same build,
+     two consecutive cold loads: frame 1 already `compact` (CLS 0.0824) versus
+     frames 1-2 painted at one 828px column before this file ran at t=227ms
+     (CLS 0.5929). The inline script cannot lose that race; this call is what
+     keeps the answer correct if the shell's copy is ever removed, and it costs
+     one getComputedStyle. Both are idempotent, so running twice is free.
+
+     Do not "simplify" by deleting either one: the inline script alone would
+     drift from this file's thresholds, and this file alone reintroduces the
+     race. Baseline for the numbers above was CLS 0.5241; after the inline
+     script, two runs scored 0.0602 and 0.0824 ("good" is under 0.1).
+
+     A non-default UI SIZE is still corrected later by watchScale(), because
+     --ui-scale is not applied until game.js restores it. */
+  classifyBody();
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();

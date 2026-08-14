@@ -89,6 +89,18 @@ const SceneryStructures = (function () {
       const st = (opts && opts.style) || kitOf("fence", "mesh");
       ctx.noteSpan("fence", s0, s1, side, gap, { h });
       indexBarrier(s0, s1, side, gap);
+      // MODEL KEYS ARE LOOP-INVARIANT — build them once, above the run. Every
+      // input (h, st, both tints) is a parameter of this call, so the template
+      // literal and its join() rebuilt the SAME string for every post: measured
+      // in a title-screen heap snapshot, `fence-post|3.2|panelled|...` and its
+      // mesh twin were the two largest duplicate-string families in the JS heap
+      // at 569 copies each. The tint arrays hoist for the same reason — the
+      // model builder runs once per key, so sharing one array is what the
+      // define-once contract already assumes.
+      const postCol = (opts && opts.postCol) || [0.28, 0.28, 0.30];
+      const meshCol = col || [0.72, 0.74, 0.78];
+      const postKey = `fence-post|${h}|${st}|${postCol.join(",")}`;
+      const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`;
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -98,15 +110,13 @@ const SceneryStructures = (function () {
         // Post is fixed for a given fence height; the mesh panel spans to the
         // next post, so only it takes the along-track scale.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        const postCol = (opts && opts.postCol) || [0.28, 0.28, 0.30];
-        ctx.instance(`fence-post|${h}|${st}|${postCol.join(",")}`, place,       // post, base sunk
+        ctx.instance(postKey, place,                                            // post, base sunk
           (rec) => {
             rec.cyl([0, -0.4, 0], 0.13, h + 0.4, postCol, 5);
           },
           { kind: "fence", k, side });
-        const meshCol = col || [0.72, 0.74, 0.78];
         const span = Object.assign({ s: [1, 1, spacing] }, place);
-        ctx.instance(`fence-mesh|${h}|${st}|${meshCol.join(",")}`, span,
+        ctx.instance(meshKey, span,
           (rec) => {
             if (st === "chainlink") {
               // Posts + top and bottom rail only, NO mesh panel. Deliberately
@@ -144,6 +154,11 @@ const SceneryStructures = (function () {
       const st = (opts && opts.style) || kitOf("rail", "armco");
       ctx.noteSpan("guardrail", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
+      // Keys and tints hoisted for the reason written out over `fence` above.
+      const postCol = (opts && opts.postCol) || [0.5, 0.5, 0.52];
+      const railCol = col || [0.82, 0.82, 0.85];
+      const postKey = `guardrail-post|${st}|${postCol.join(",")}`;
+      const railKey = `guardrail-rail|${st}|${railCol.join(",")}`;
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -157,14 +172,12 @@ const SceneryStructures = (function () {
         // spacing — and a node scale on a combined model would stretch the
         // post's radius with the rail's length (radScale takes max(|sx|,|sz|)).
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        const postCol = (opts && opts.postCol) || [0.5, 0.5, 0.52];
         // A jersey barrier has no posts at all — it is a poured profile.
         if (st !== "jersey")
-          ctx.instance(`guardrail-post|${st}|${postCol.join(",")}`, place,      // post, base sunk
+          ctx.instance(postKey, place,                                          // post, base sunk
             (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : 1.05, postCol, 4),
             { kind: "guardrail", k, side });
-        const railCol = col || [0.82, 0.82, 0.85];
-        ctx.instance(`guardrail-rail|${st}|${railCol.join(",")}`,
+        ctx.instance(railKey,
           Object.assign({ s: [1, 1, spacing] }, place),
           (rec) => {
             if (st === "doubleArmco") {                    // old European two-rail
@@ -205,6 +218,11 @@ const SceneryStructures = (function () {
       const st = (opts && opts.style) || kitOf("tyre", "stack");
       ctx.noteSpan("tyreWall", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
+      // Keys and tints hoisted for the reason written out over `fence` above.
+      const tyre = (opts && opts.tyreCol) || [0.10, 0.10, 0.11];
+      const cap = capCol || [0.9, 0.9, 0.92];
+      const stackKey = `tyre-stack|${st}|${tyre.join(",")}`;
+      const capKey = `tyre-cap|${st}|${cap.join(",")}`;
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -213,9 +231,7 @@ const SceneryStructures = (function () {
         }
         // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        const tyre = (opts && opts.tyreCol) || [0.10, 0.10, 0.11];
-        const cap = capCol || [0.9, 0.9, 0.92];
-        ctx.instance(`tyre-stack|${st}|${tyre.join(",")}`, place,               // base sunk
+        ctx.instance(stackKey, place,                                           // base sunk
           (rec) => {
             if (st === "tecpro") {
               // Rented TecPro: rectangular polyethylene block modules with a
@@ -237,7 +253,7 @@ const SceneryStructures = (function () {
             }
           },
           { kind: "tyreWall", k, side });
-        ctx.instance(`tyre-cap|${st}|${cap.join(",")}`,
+        ctx.instance(capKey,
           Object.assign({ s: [1, 1, spacing] }, place),
           (rec) => {
             if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], tyre);
@@ -443,16 +459,20 @@ const SceneryStructures = (function () {
         addFrustum(out, vadd(p.c, p.u, -0.4), 0.46, 0.24, h + 0.8, col, 8, b);
       } else if (cst === "scaffold") {
         // Tube-and-clamp: two standards per side plus ledgers, temporary look.
+        // addCyl is BASE-anchored (geom.js) like the monopole's addFrustum above:
+        // seat the standards at -0.4 so they span -0.4 → h+0.4. The h/2 - 0.4 that
+        // shipped here was the centre-anchored answer and left every leg hanging
+        // h/2 - 0.4 clear of the ground.
         for (const sr of [-1, 1]) for (const st of [-1, 1])
           addCyl(out, vadd(vadd(vadd(p.c, p.r, sr * legR * 0.7), p.t, st * legR * 0.7),
-            p.u, h / 2 - 0.4), 0.09, h + 0.8, col, 4, b);
+            p.u, -0.4), 0.09, h + 0.8, col, 4, b);
         for (let i = 1; i < Math.max(2, Math.round(h / 2.2)); i++)
           addBox(out, vadd(p.c, p.u, (i / Math.max(2, Math.round(h / 2.2))) * h),
             [legR * 1.5, 0.09, legR * 1.5], col, b);
       } else {
         for (const sr of [-1, 1]) for (const st of [-1, 1]) {
           const foot = vadd(vadd(p.c, p.r, sr * legR), p.t, st * legR);
-          addCyl(out, vadd(foot, p.u, h / 2 - 0.4), 0.13, h + 0.8, col, 4, b);
+          addCyl(out, vadd(foot, p.u, -0.4), 0.13, h + 0.8, col, 4, b);   // base-anchored: -0.4 → h+0.4
         }
         // X-bracing every ~3 m — what makes a lattice read as a lattice.
         const bays = Math.max(1, Math.round(h / 3));
@@ -584,7 +604,16 @@ const SceneryStructures = (function () {
       }
       out._mat = prevMat;
     };
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // Was the one DIVERGENT copy in the tree — `Math.max(lo, Math.min(hi, v))`
+    // against everyone else's comparison ladder. VERDICT: not a bug. The two
+    // forms differ only ABOVE an inverted range (lo > hi: the Math form pins to
+    // lo, the ladder to hi), on -0, and on a non-number argument (Math coerces,
+    // `<`/`>` do not). All eight call sites below pass literal lo < hi and a
+    // finite number — every `rows`/`tiers`/`density` in js/circuits/ is a
+    // numeric literal — so the swap is output-identical, verified by
+    // tools/verify-track.cjs. Migrated rather than left so the divergence
+    // cannot be mistaken for intent later.
+    const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
     // bleacher(): open raked seating on a bolted frame — planks on posts, a back
     // guard rail, and nothing else. No back shell, no roof, no fascia. This is

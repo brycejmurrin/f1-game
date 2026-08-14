@@ -141,7 +141,7 @@ function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
 }
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // ---------- save lifecycle ----------
 // SIX SAVES: three DRIVER-career slots and three MY TEAM slots, kept in separate
@@ -840,7 +840,10 @@ function settleRound(order, player) {
   // later because the cars are live right now and will not be by the time the
   // window closes: `double` is both your cars in the points (MY TEAM only), and
   // `clean` is the same test the round objective uses.
-  const matePts = mate ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  // The mate scores under the SAME retirement rule as `pts` above: position
+  // alone credits a retired car the moment enough DNFs land it inside the top
+  // ten, and a retired team-mate has not completed half of a "double".
+  const matePts = mate && !mate.retired ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,

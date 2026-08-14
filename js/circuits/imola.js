@@ -280,7 +280,24 @@
       }
 
       // ---- Pit building + main grandstand ----
-      building(K(0.00), -1, 1, 16, 11, 130, { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
+      // The pit complex, as SIX blocks behind the pit wall rather than one
+      // 130 m slab at gap 1. The single call emitted NOTHING — verified by
+      // vertex count, which is identical with the line deleted — because it
+      // failed both of building()'s guards at once:
+      //   * gap 1 with w 16 puts the footprint centre at 1 + 16/2 = 9 and its
+      //     padded half-width at 9.2, so the inner face crossed the road and
+      //     rejBox suppressed it;
+      //   * gap 1..17 also runs straight through the pit wall (gap 7) and the
+      //     main grandstand (gap 10) already standing on this side, so
+      //     massBlocked dropped it independently.
+      // Neither guard is wrong — a pit building does not belong in front of
+      // its own pit wall. Re-sited behind both, at a length each block clears.
+      // This is why the roofline wordmark below floated: there was never any
+      // roof under it.
+      for (let i = 0; i < 6; i++) {
+        building(K(0.9825 + i * 0.0070), -1, 20, 16, 11, 20,
+                 { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
+      }
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
       grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
       grandstand(0.02,  1, 22, 80, [0.52, 0.55, 0.60], [0.78, 0.30, 0.22]);
@@ -391,7 +408,10 @@
           t += w + ((i % 7 === 6) ? 2.6 : 0.75);   // wider break = word break
         }
       };
-      wordmark(anchor(K(0.005), -1, 1), 12.6, 88, 2.6, [0.95, 0.94, 0.90]);
+      // On the pit roofline it is named for: the blocks above stand at gap 20
+      // and top out at 11 m, so the field sits at 21 (inside their footprint)
+      // with its base overlapping the roof rather than hovering over it.
+      wordmark(anchor(K(0.005), -1, 21), 11.3, 88, 2.6, [0.95, 0.94, 0.90]);
 
       // Paddock gate portal — two crimson piers carrying the same wordmark, set
       // well behind the pit block so the footprint never reaches the road.

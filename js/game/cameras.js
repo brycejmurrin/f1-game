@@ -11,8 +11,7 @@ const GameCams = (function () {
 let VMAX = 72;              // injected at boot (GameCams.init) — speed normaliser
 function init(opts) { if (opts && opts.vmax) VMAX = opts.vmax; }
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/mat4.js)
 
 // Scratch samples reused every call (no per-frame allocation).
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -468,8 +467,34 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // the handover C1, so the eye settles onto the terrain instead of catching
     // on it. The eye still never ends up below the floor — the blend only ever
     // pushes it UP, so the "never render from inside a hill" guarantee holds.
-    const MIN_CLEAR = 0.8, CLAMP_BLEND = 0.35;
-    eye[1] = softFloor(eye[1], ground + MIN_CLEAR, CLAMP_BLEND);
+    const MIN_CLEAR = 0.8, CLAMP_BLEND = 0.35, FLOOR_LEAD = 0.25;
+    // Over the ROAD the floor reference is the SAME smoothed ride height the
+    // chase rig frames from, not the raw profile. The raw floor undid the whole
+    // RIDE HEIGHT design for any camera parked near it: a CAMERA TUNER height
+    // below ~-1.3 m sits inside the knee on flat road, so the eye stopped
+    // following the smoothed line and rode raw ripple crests through the clamp
+    // — and on a climb the rig's -back*grade pressed it onto that raw floor
+    // just above the car ("lowered the camera and it drops on every hill").
+    // Floored on rideY instead, a clamped eye follows the C1 60 m-smoothed
+    // line: ripple-free on the flat, and on a grade it tracks the CAR's
+    // smoothed height (the clamp samples at the car's s), so the tuned framing
+    // keeps a constant ~MIN_CLEAR above the car instead of sinking below it.
+    // Safety is bounded in STRUCTURE, not by today's data: the smoothed
+    // reference may sit at most FLOOR_LEAD below the raw ground, so the eye
+    // is guaranteed ground + (MIN_CLEAR - FLOOR_LEAD) = 0.55 m of true
+    // clearance even where the smoothed line leads a genuine drop (the -6 m
+    // cliff torture case in tests/unit/camera-ride.test.mjs). On every real
+    // circuit the bound is slack: MEASURED fleet-wide, raw never stands more
+    // than 0.202 m above rideY over the road (suzuka worst), so the smooth
+    // reference governs everywhere and the full 0.8 m holds in practice.
+    // Off the road (beyond > 0: heli/roadside/cinematic) terrain is not
+    // ripple, it is relief — the raw floor stays.
+    let floorY = ground + MIN_CLEAR;
+    if (beyond === 0) {
+      const smoothG = rideY(track, s) + (bank ? bank.dy : 0);
+      floorY = Math.max(smoothG, ground - FLOOR_LEAD) + MIN_CLEAR;
+    }
+    eye[1] = softFloor(eye[1], floorY, CLAMP_BLEND);
   }
   return { eye, tgt, fov };
 }

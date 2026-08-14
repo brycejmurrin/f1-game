@@ -12,6 +12,8 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const ctx = vm.createContext({});
+// js/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
+vm.runInContext(readFileSync("js/mat4.js", "utf8"), ctx, { filename: "mat4.js" });
 vm.runInContext(readFileSync("js/data/telemetry.js", "utf8"), ctx, { filename: "telemetry.js" });
 const T = vm.runInContext("DataTelemetry", ctx);
 

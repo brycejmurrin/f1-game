@@ -620,7 +620,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
        do: --tap-min only floors the axis a thumb needs. */
     padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > #lt-close { grid-column: 1 / -1; }
+  /* BOTH panels' DONE, not just the lighting one: the camera tuner's foot is
+     #ct-reset / #ct-reset-all / #ct-close, so naming only #lt-close left DONE
+     stranded half-width in the camtune rail — the exact 2 + 1 defect the rule
+     above documents. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > :is(#lt-close, #ct-close) { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -628,7 +632,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
     margin: 2px 0 4px; padding: 0;
     background: none; border-bottom: none;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-tabs .lt-tab { white-space: normal; justify-content: center; }
+  /* #ct-modes too — the compact strip above sets nowrap on both chip lists, so
+     resetting only #lt-tabs left the camera-mode chips nowrap inside the rail's
+     ~100px columns. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab { white-space: normal; justify-content: center; }
   /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
      button and costing the rail a whole extra line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }

@@ -267,6 +267,19 @@ const NetHandshake = (function () {
     return { ok: true, code, url: inviteUrl(code) };
   }
 
+  // Hand a decoded SDP to the peer connection, and answer TRUE/FALSE rather
+  // than throwing. Two ways the string can be wrong and both come from outside:
+  // it may not be a string at all (a code whose JSON parsed but carries no `s`),
+  // and it may be a string WebRTC refuses to parse. Neither is exceptional here
+  // — a bad code is the ordinary case this module exists to name.
+  async function setRemote(pc, type, sdp) {
+    if (typeof sdp !== "string" || !sdp) return false;
+    try {
+      await pc.setRemoteDescription({ type, sdp });
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function acceptInvite(transport, code, profile, opts) {
     // Validate the CODE before the connection. Nothing here needs a peer
     // connection, and "that code is incomplete" is a far more actionable thing
@@ -281,7 +294,14 @@ const NetHandshake = (function () {
     const pc = transport && transport.pc;
     if (!pc) return NO_TRANSPORT;
 
-    await pc.setRemoteDescription({ type: "offer", sdp: parsed.payload.s });
+    // THE SDP IS ATTACKER-CONTROLLED and this module's whole job is to turn a
+    // bad code into a typed, actionable message. Unguarded, a payload that
+    // parses but carries a missing or hostile `s` threw out of here into a
+    // caller with no catch (lobby.js makeAnswer/acceptAnswer), which
+    // index.html's unhandledrejection handler turned into a full-screen raw
+    // stack overlay on top of a lobby stuck on "Reading invite…".
+    const took = await setRemote(pc, "offer", parsed.payload.s);
+    if (!took) return CORRUPT;
     await pc.setLocalDescription(await pc.createAnswer());
     const out = await makeCode(pc, "answer", profile, opts);
     return { ok: true, code: out, peer: parsed.payload.p || null };
@@ -307,7 +327,8 @@ const NetHandshake = (function () {
       return { ok: false, error: "already_answered",
                message: "That answer was already used, or arrived too late." };
     }
-    await pc.setRemoteDescription({ type: "answer", sdp: parsed.payload.s });
+    const took = await setRemote(pc, "answer", parsed.payload.s);
+    if (!took) return CORRUPT;                       // same rule as acceptInvite
     return { ok: true, peer: parsed.payload.p || null };
   }
 

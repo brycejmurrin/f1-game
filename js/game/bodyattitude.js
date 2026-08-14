@@ -64,6 +64,18 @@ const HEAVE_GAIN  = 0.55;              // gain on ground-velocity impulses. ζ=1
                                        //   response is |H| = Ω²/(ω²+Ω²): Spa's worst ripple
                                        //   band now lands ~2 cm instead of demanding 9+ cm.
                                        //   Feel knob: 0.4 (calmer) .. 0.7 (livelier).
+const HEAVE_AERO_FLOOR = 0.35;         // gain multiplier at FULL downforce. A real car
+                                       //   gains load with v² and gets stiffer, so it
+                                       //   should heave LESS at speed — this model did
+                                       //   the opposite: replayed against the shipped
+                                       //   road, Spa's peak grew 8.4x from 80 to 259 km/h
+                                       //   (0.27 -> 2.26 cm) because the 30-52 m undulate
+                                       //   harmonic climbs toward HEAVE_OMEGA's 3.2 Hz as
+                                       //   speed rises. Scaling the forcing by downforce
+                                       //   flattens that to 0.25 -> 0.85 cm and leaves the
+                                       //   low-speed kerb/crest response alone (0.27 ->
+                                       //   0.25 at 80 km/h). Feel knob: 0.5 (livelier at
+                                       //   speed) .. 0.25 (calmer).
 const HEAVE_MAX   = 0.05;              // ±5 cm ceiling — a tanh soft knee, not a hard rail
 const TELEPORT_DY = 1.5;               // m ground jump that means "teleport, reseed"
 const MAX_DT      = 0.05;              // ONE dt clamp, matching render()'s Math.min(dt, 1/20)
@@ -71,7 +83,7 @@ const MAX_DT      = 0.05;              // ONE dt clamp, matching render()'s Math
                                        //   inflated dt-sensitive terms 1.5× on slow frames
 
 const ZERO = Object.freeze({ pitch: 0, roll: 0, heave: 0 });
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // Critically-damped (ζ=1) analytic step toward `to`. Exact closed form of
 // x'' = -ω²(x-to) - 2ω x'  — unconditionally stable at any dt. Math.exp is
@@ -99,7 +111,7 @@ function seed(c) {
 // The returned object is a reused module scratch — read it immediately, don't
 // retain it (offsets() builds a fresh object for the debug hooks).
 const _out = { pitch: 0, roll: 0, heave: 0 };
-function update(c, groundY, dt, ygV) {
+function update(c, groundY, dt, ygV, dfFrac) {
   if (!c) return ZERO;
   const s = c._ba || seed(c);
   ygV = ygV || 0;
@@ -133,7 +145,13 @@ function update(c, groundY, dt, ygV) {
   if (s.prevYg == null || Math.abs(groundY - s.prevYg) > TELEPORT_DY) {
     s.z.x = 0; s.z.v = 0; s.ygV0 = ygV;
   }
-  s.z.v -= (ygV - s.ygV0) * HEAVE_GAIN;
+  // Downforce stiffens the (virtual) suspension: the caller passes the same
+  // dimensionless load term the grip model uses, aeroDfMult(c)·(|v|/vTop())²,
+  // so PACE and the flap state stay owned by game.js and no speed literal
+  // reaches this module (tools/vstd-lint.mjs). Null/absent ⇒ unscaled, which
+  // is the pre-existing behaviour for any caller that has not been updated.
+  const df = dfFrac > 0 ? (dfFrac < 1 ? dfFrac : 1) : 0;
+  s.z.v -= (ygV - s.ygV0) * HEAVE_GAIN * (1 - (1 - HEAVE_AERO_FLOOR) * df);
   s.ygV0 = ygV;
   crit(s.z, 0, HEAVE_OMEGA, dt);
   s.prevYg = groundY;

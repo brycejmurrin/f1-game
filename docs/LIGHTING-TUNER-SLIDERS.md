@@ -1,4 +1,4 @@
-# LIGHTING TUNER — the 182 sliders, and what each one drives
+# LIGHTING TUNER — the 183 sliders, and what each one drives
 
 Generated from `TUNE_DEFS` in `js/game/lighting.js`; that registry is the
 source of truth and this table is a view of it. Regenerate rather than hand-edit
@@ -22,9 +22,14 @@ knocked four knobs' own defaults off their grids; the guard caught it.
 ## Every slider is wired — the full audit
 
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
-sampled file list) gives all 182 knobs a consumer on the shipping (GLX) path —
+sampled file list) gives all 183 knobs a consumer on the shipping (GLX) path —
 **zero unwired**. The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):
+
+The audit below was run against the 178 that existed then; the three added
+since — `lampDensity` (LAMPS/POOLS, `rebuild:true`), `lampReach`
+(LAMPS/BEHAVIOUR) and `renderDistMul` (ATMOSPHERE) — are in the tables with
+their consumers and are not part of the class counts in the next table.
 
 | class | count | consumed in | live via | guarded by |
 |---|---|---|---|---|
@@ -55,7 +60,7 @@ these, and they need different fixes:
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
 The third and fourth are the common ones, and the reason a casual "half these do
-nothing" is usually wrong: 69 of the 182 knobs are also set by shipped presets per
+nothing" is usually wrong: 69 of the 183 knobs are also set by shipped presets per
 (track, time-of-day, weather), so what a slider appears to do depends on where
 you are standing when you drag it.
 
@@ -332,7 +337,7 @@ build-only, per-frame lamp) against a single parked, solo chase-cam capture.
 (`starBright`, `lampCull`, `tailLightMul`, `beamCone`) showed none — and every
 one of them turned out to be correctly wired and live; the capture setup itself
 was blind to each, for a different, traceable reason. A blanket runtime sweep
-of all 178 with one fixed capture recipe would score all four "dead" and be
+of every knob with one fixed capture recipe would score all four "dead" and be
 wrong every time:
 
 | knob | why this capture missed it | how it was confirmed live |
@@ -354,7 +359,8 @@ handful of pixels?
 
 ## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
-A later full 178-knob day-dry sweep (`tools/lighting-tuner-sweep.mjs --cond=day-dry`)
+A later day-dry sweep over the 178 knobs that existed then
+(`tools/lighting-tuner-sweep.mjs --cond=day-dry`)
 carried 18 knobs through to a genuinely clean, isolated re-check (own noise
 floor ≈0.12, not the FLOOR=2.0 the sweep uses) that still showed no signal:
 `sunShaftMul`, `sunShaftDecay`, `mieScatter`, `flareStreak2`, `whites`,
@@ -408,7 +414,7 @@ horizon, `cloudCover` nudged to put total cover around 0.5–0.7 (bare default
 gave an almost cloudless frame). The resulting diff between `cloudDef:0` and
 `cloudDef:2` is a clean cloud-shaped blob in the diff map (not scattered
 noise), reading ≈2.6× the frozen-scene noise floor exactly where the visible
-cloud sits, confirming it LIVE — the last of 178.
+cloud sits, confirming it LIVE — the last of the 178 that sweep covered.
 
 ## Reading the table
 
@@ -502,7 +508,7 @@ off-grid.
 | `contactStr` | CONTACT SHADOW | 0 … 4.5 | 1 | — | ✓ | game.js, post.js×4 |
 | `ambContactDark` | AMBIENT CONTACT DARK | 0 … 4.5 | 1 | `uAmbContactDark` |  | glx.js×2 |
 
-## LAMPS  (24)
+## LAMPS  (25)
 
 One tuner tab for every track lamp (street posts and flood banks). Was split as
 FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
@@ -537,6 +543,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampBehindBias` | BEHIND-CAM BIAS | 1 … 15 | 5.25 | — |  | lighting.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 6 | 1 | — |  | lighting.js |
 | `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — |  | game.js, glx.js×2, chunked.js×2 |
+| `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — |  | game.js×3 |
 | `lampCullFade` | LAMP CULL FADE | 0.1 … 0.9 | 0.35 | — |  | lighting.js×2 |
 | `lampGapFill` | DARK-GAP FILL | 0 … 600 | 60 | — |  | lighting.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 1 … 15 | 5.25 | — |  | lighting.js×3 |

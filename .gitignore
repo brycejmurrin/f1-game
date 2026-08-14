@@ -3,6 +3,8 @@
 .claude/*
 !.claude/skills/
 !.claude/workflows/
+!.claude/hooks/
+!.claude/settings.json
 
 # Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/

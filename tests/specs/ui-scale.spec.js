@@ -1,7 +1,7 @@
 // @ts-check
 // UI SCALE — every main screen still fits at every size the player can pick.
 //
-// SETTINGS ▸ DISPLAY runs UI SIZE and HUD SIZE from 50 % to 175 %, which means
+// SETTINGS ▸ DISPLAY runs UI SIZE and HUD SIZE from 50 % to 150 %, which means
 // "does this screen fit?" stopped being one question. A sheet that sits
 // comfortably at the default can push its primary button off the edge two
 // notches up, and nothing in the suite would have noticed: the six pixel
@@ -30,9 +30,8 @@ const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary pl
 // the camera bar by 61px — measured -8 / +61 / +130 / +222 at 100/115/130/150).
 // Players can still dial 115 via SETTINGS ▸ DISPLAY, so the guard must keep
 // seeing it. Touch used to *ship* at 115; that default dropped after the type
-// floor made phones read as "zoomed in". 175 added when SCALE_MAX moved
-// 150 -> 175; 150 stays too since it's still a selectable interior value.
-const SCALES = [50, 100, 115, 130, 150, 175];
+// floor made phones read as "zoomed in".
+const SCALES = [50, 100, 115, 130, 150];
 
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].

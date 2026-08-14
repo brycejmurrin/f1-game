@@ -564,6 +564,54 @@ Do not run this plan if the repo's observed pain shifts to the two frictions Bed
 
 ## Status
 
-Recorded 2026-08. No phase has been implemented yet. Implementation is to be
-reconciled with the audit workflow's FIX-NOW/RESTRUCTURE synthesis before any
-phase lands.
+Recorded 2026-08. Implementation is to be reconciled with the audit workflow's
+FIX-NOW/RESTRUCTURE synthesis before any phase lands.
+
+**Phase 0 landed 2026-08-13** (`679e85c9` + `a2bb2aac`, merged at `0f0c3b84`):
+`tools/scan-globals.mjs` — a ~2.8 s scan of all 159 eagerly-loaded files — plus
+`tests/unit/global-registry.test.mjs`, which pins every global's writer and
+declares its consumers three ways. The evidence it produced is what makes the
+later phases derivable rather than speculative: the manifest's FULL order **is**
+a valid toposort over the 65 eval-time edges; `HARD_EDGES`' 62 pairs decompose
+into 30 eval-time + 29 call-time + 3 underivable-or-stale, with one stale entry
+in `DEFERRED_EDGES` too; `window[expr]` bracket access is **extinct** in `js/`;
+and every undeclared read has an explanation (a future slot, an SDK injection,
+or an inline global in the shell). One deviation from the plan, forced by
+review: `TrackDefs` is registered **growable** — a location rule (`^js/circuits/`)
+with no count cap — because a frozen count would fail on the next circuit added
+while a rogue writer outside `js/circuits/` still fails.
+
+**Phase 1, first half, landed 2026-08-13**: `types/game-ctx.d.ts` (the `GameCtx`
+interface — all **210** members of `const G` at `js/game.js:2562-2812`, plus the
+`GameModuleFactory` roster), `tools/check-gctx.mjs` and
+`tests/unit/game-ctx-surface.test.mjs`. ~5 s, zero runtime bytes, no cache bump.
+Two deviations from the plan as written, both forced by the constraints:
+
+- **No `// @ts-check` tranche, and the modules are not compiled directly.**
+  Binding a module's `create(G)` parameter to `GameCtx` needs a JSDoc line inside
+  that file — a `js/` edit, which drags the `?v=N` ritual into a types-only
+  change. Instead the tool resolves every `G` reference through eslint-scope
+  (scope-accurate, so the minimap's 2D `ctx` cannot masquerade as the façade) and
+  emits a generated shadow typed against the interface: 1,741 reference sites
+  across 24 ctx modules, checked in one `tsc --noEmit`. A member that does not
+  exist and a write to a getter-only member are both compile errors, reported at
+  the real `js/` file:line. What it does NOT check is expression types *inside*
+  the modules; the per-file `@ts-check` opt-in is still the second half.
+- **TypeScript is not a devDependency**, so the tsc leg is skipped-with-a-notice
+  when no `tsc` resolves, and the espree parity leg (`.d.ts` member set ==
+  `const G` member set, `readonly` == getter-with-no-setter) is the
+  unconditional gate that runs in CI today. Making the compile leg mandatory is
+  one `npm i -D typescript` away and is a deliberate decision, not a side effect.
+
+The façade came out **clean**: no undeclared write, no dead member, no readonly
+violation across all 1,741 sites. `RendererBackend` and `SceneryApi` are not
+authored yet — `SceneryApi` stays frozen by `scenery-api-contract.test.mjs`,
+`RendererBackend` belongs with Phase 3's `GfxPort`.
+
+**Phase 2 (`gen-manifest`) is the authorized next step**; the 2026-08-13 structure
+re-decision panel re-affirmed Phase 2 as the gating item for the Q3 renames and
+the Q6 `js/ui/` wave, which are sequenced explicitly behind it. Phase 2 should
+split the scanner's single edge list into `EVAL_EDGES` and `CALL_EDGES` along
+the classification Phase 0 already computes, and ship a `--check` mode that
+fails on drift — byte-identical on its first run, regeneration a no-op, and the
+generator never touching `?v=N`.

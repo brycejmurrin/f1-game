@@ -65,14 +65,16 @@
       { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine
     ],
     scenery: function (api) {
-      const { out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
         indexSolid,
         pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
-        terrainYAt } = api;
+        terrainYAt, groundYAt,
+        groundUnder,
+      } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
@@ -154,7 +156,9 @@
                  hv < 0.5 ? RENDER : RENDER_D, b);
           out._mat = 0;
           // Shallow terracotta pitch with deep eaves — the eaves are the read.
-          addPrism(out, vadd(a.c, a.u, wallH + w * 0.13), [w * 1.14, w * 0.27, d * 1.10],
+          // addPrism anchors at its BASE (geom.js), so it seats ON the wall top:
+          // the extra half-height (+w*0.13) floated all four roofs ~1.6-2.1 m.
+          addPrism(out, vadd(a.c, a.u, wallH), [w * 1.14, w * 0.27, d * 1.10],
                    hv < 0.5 ? TILE : TILE_D, b);
           // Square tower end on the older houses. ABUTS the gable, it does not
           // sink into it — 3 m of overlap is severe interpenetration.
@@ -163,7 +167,7 @@
             out._mat = MAT.STONE;
             addBox(out, vadd(tc, a.u, wallH * 0.72), [7.5, wallH * 1.44, 7.5], RENDER_D, b);
             out._mat = 0;
-            addPrism(out, vadd(tc, a.u, wallH * 1.44 + 1.0), [8.4, 2.0, 8.4], TILE_D, b);
+            addPrism(out, vadd(tc, a.u, wallH * 1.44), [8.4, 2.0, 8.4], TILE_D, b);  // base-anchored: flush on the tower
           }
           // Shuttered windows, sparse and small — Tuscan walls are mostly wall.
           for (let i = -1; i <= 1; i++) {
@@ -175,6 +179,18 @@
           out._mat = MAT.FOLIAGE;
           for (const t of [-w * 0.85, w * 0.85]) {
             const cc = vadd(vadd(a.c, a.t, t), a.r, -w * 0.7);
+            // Single-anchor extrapolation (cause class c): `a.c` is one ground
+            // sample at the farmhouse's own anchor, and the gate is up to
+            // sqrt((w*0.85)^2 + (w*0.7)^2) ~15 m away from it across a Tuscan
+            // hillside that the farmhouse's own straight-line lateral offset
+            // does not track. Re-seat on the ground actually under the gate.
+            // -0.7 sinks the base — the same "sunk base, no slope float" idiom
+            // as pine/tree/palm's trunks (the groundUnder helper in js/track/scenery-nature.js etc): the
+            // bottom cone's own footing (ch*0.10, ~1.2-1.6 m up) sits right at
+            // the audit's 1.0 m grounded-footing radius, so anything short of
+            // that sink reads as its own marginal float and can no longer
+            // anchor the taller cone stacked on top of it.
+            cc[1] = groundUnder(cc[0], cc[2]) - 0.7;
             if (onTrack(cc[0], cc[2], 8)) continue;
             const ch = 12 + hash(kk + t) * 4;
             addCone(out, vadd(cc, a.u, ch * 0.10), 1.5, ch * 0.55, CYP, 6, b);
@@ -230,6 +246,16 @@
       // =====================================================================
       function cypress(k, side, dist, h) {
         const a = anchor(k, side, dist);
+        // Overhang past the supporting body (cause class b) — via a MISSING
+        // guard, not a geometric one: unlike every other placement helper in
+        // this file, cypress() never checked onTrack(). The "cypress drive"
+        // callers below vary `dist` per tree without checking it either, and
+        // at k=661 dist=80/86 the anchor lands ON the tarmac: the engine's
+        // road-safety guard (js/track/tracks.js ~2098) drops the trunk and
+        // the two wider cones WHOLE (their footprint covers the road) but
+        // spares the narrowest top cone, orphaning it 9-16 m up with nothing
+        // left beneath it. Skip the whole tree instead.
+        if (onTrack(a.c[0], a.c[2], 2)) return;
         const b = [a.r, a.u, a.t];
         const col = hash(k * 7 + side) < 0.5 ? CYP : CYP_D;
         out._mat = MAT.WOOD;
@@ -373,9 +399,21 @@
             out._mat = MAT.CONCRETE;
           }
           // Galvanised tube handrail capping the top step.
+          //
+          // Single-anchor extrapolation (cause class c): `a.c` is one ground
+          // sample at the road edge, and on Casanova-Savelli's tight radius
+          // the rail is up to rows*depth (~10 m) further out along `a.r` —
+          // far enough round the corner's fan that reusing a.c's accumulated
+          // step height (0.9 + rows*rise) floated the rail ~8 m above the
+          // actual hillside there. Re-seat on the ground actually under the
+          // rail; terrainYAt is null off the rendered ribbon, where the
+          // accumulated-step estimate remains the best available guess.
           out._mat = MAT.METAL;
           const topBack = 0.9 + rows * depth, topUp = 0.9 + rows * rise;
-          addBox(out, vadd(vadd(a.c, a.r, side * topBack), a.u, topUp + 1.0),
+          const railBase = vadd(a.c, a.r, side * topBack);
+          const railGy = groundUnder(railBase[0], railBase[2]);
+          const railUp = railGy != null ? railGy - a.c[1] + 1.3 : topUp + 1.0;
+          addBox(out, vadd(railBase, a.u, railUp),
             [0.09, 0.09, seg], [0.72, 0.74, 0.76], b);
           out._mat = 0;
         });

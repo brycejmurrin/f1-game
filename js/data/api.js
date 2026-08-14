@@ -389,7 +389,16 @@ const F1API = (function () {
       const out = {};
       for (const k in latest) {
         if (Object.prototype.hasOwnProperty.call(latest, k)) {
-          out[k] = num(latest[k].gap_to_leader);
+          // gap_to_leader IS NOT ALWAYS A NUMBER. OpenF1 sends the string
+          // "+1 LAP" (and "+2 LAPS", …) for a lapped driver, and parseFloat
+          // reads that as the number 1 — so every lapped car in a race was
+          // shown on the LIVE tab as a one-SECOND gap, with a near-zero gap
+          // bar to match. A lap down is not a time gap and must not be
+          // rendered as one: pass the label through as a STRING (null would
+          // be indistinguishable from missing data) and let the renderer
+          // show it without a bar.
+          const raw = latest[k].gap_to_leader;
+          out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
         }
       }
       return out;

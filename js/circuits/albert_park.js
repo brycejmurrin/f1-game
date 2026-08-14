@@ -514,7 +514,7 @@
       grandstandEx(0.66,  1, 16, 45, null, null,               // adjoining spectator bank
         { livery: "alu", roof: "flat" });
       grandstandEx(0.78, -1, 14, 45, null, null,               // chicane complex
-        { livery: "steel", roof: "truss" });
+        { livery: "steel", roof: "cantilever" });
       grandstandEx(0.90,  1, 18, 50, null, null,               // fan-hill grandstand
         { livery: "alu", roof: "cantilever", pylons: true });
       grandstandEx(0.95, -1, 16, 48, null, null,               // pit-approach bank

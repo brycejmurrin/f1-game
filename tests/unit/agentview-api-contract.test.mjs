@@ -42,10 +42,13 @@ const RASTER = ["frame", "plan", "carRender"];
 // These files declare their module with a top-level `const`, which lands in the
 // context's global LEXICAL scope rather than on the global object — so the
 // binding has to be read back by evaluating its name, not off `ctx`.
-function evalGlobals(files) {
-  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number,
-                                 isNaN, isFinite, console });
-  for (const f of files) {
+function evalGlobals(files, extras) {
+  const ctx = vm.createContext(Object.assign(
+    { Math, JSON, Object, Array, String, Number, isNaN, isFinite, console },
+    extras || {}));
+  // js/mat4.js first, always: it is the second <script> tag in the shell and the
+  // home of the shared scalar helpers (M4.clamp), which agentview.js binds at eval.
+  for (const f of ["js/mat4.js", ...files]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return (name) => vm.runInContext(name, ctx);
@@ -94,6 +97,59 @@ test("AgentView.create() still returns the whole documented surface", () => {
   for (const name of CONSTS) {
     assert.equal(typeof view[name], "number", `${name} missing`);
   }
+});
+
+// describe("span:N") and render({what:"circuit"}) read the SAME span records
+// (lap fractions, per noteSpan), and both must agree with the geometry walker
+// along() (js/track/scenery-structures.js): spans WRAP the start line
+// (~20 circuits fence 0.95->0.06), and s0===s1 (mod 1) walks a FULL lap
+// (along()'s `|| n`; monaco/montreal/redbull wall/fence(0.0, 1.0)) — so
+// lengthM is the wrapped difference, and a full-lap span is total, not 0.
+test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => {
+  const TOTAL = 4000;
+  const spans = [
+    { kind: "wall",      s0: 0.94, s1: 0.06, side: 1,  gap: 5 }, // wraps the line
+    { kind: "fence",     s0: 0.2,  s1: 0.5,  side: -1, gap: 4 }, // plain
+    { kind: "guardrail", s0: 0.0,  s1: 1.0,  side: 1,  gap: 3 }, // full lap
+  ];
+  const track = {
+    total: TOTAL, n: 400,
+    def: { id: "stub", name: "Stub" },
+    props: { list: [], spans, count: 0, spanCount: spans.length, dropped: 0 },
+    lampPosts: [],
+  };
+  // Straight-road Tracks stub: a constant tangent means zero curvature
+  // everywhere, so the corner builder finds no peaks and worldModel() runs
+  // without booting a real track build.
+  const TracksStub = {
+    sample: (t, s, out) => {
+      out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
+      out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 6;
+    },
+    curvature: () => 0, project: () => null, wallAt: () => 6,
+    banking: () => null, terrainY: () => 0,
+  };
+  const get = evalGlobals(
+    ["js/game/agentview-raster.js", "js/game/agentview.js"],
+    { Tracks: TracksStub });
+  const view = get("AgentView").create({
+    wrapS: (s) => ((s % TOTAL) + TOTAL) % TOTAL,
+    gripMult: () => 1, LONG_GRIP: 34, update: () => {}, els: {},
+    camVantage: () => {},
+    track, player: { px: 0, pz: 0, s: 0, x: 0, head: 0 },
+    cars: [], state: "race",
+  });
+
+  const want = [480, 1200, 4000];       // 0.12, 0.3 and 1.0 laps of 4000 m
+  spans.forEach((sp, i) => {
+    const d = view.describe("span:" + i);
+    assert.notEqual(d.ok, false, `describe(span:${i}) failed: ${d.message}`);
+    assert.equal(d.lengthM, want[i], `describe(span:${i}).lengthM`);
+  });
+  const wm = view.render({ what: "circuit" });
+  assert.notEqual(wm.ok, false, `render({what:"circuit"}) failed: ${wm.message}`);
+  assert.deepEqual(wm.spans.map((sp) => sp.lengthM), want,
+                   "worldModel span lengths must match describe()'s");
 });
 
 test("the raster band reaches agentview through ctx, not a global grab", () => {

@@ -118,7 +118,37 @@ const CEILINGS = {
   // draw site (nothing else knows the knob state at build time), and the
   // comment records why _keepPositions is mandatory: createChunkedMesh nulls
   // its source arrays and debrisworld.js + __apex.geo() still read roadGeo.
-  "js/game.js": 8035,
+  // 8035 -> 8036: one comment line at the po.lampVol assignment, paying for a
+  // TIER-4 CORRECTNESS FIX rather than a feature. lampVol was shed only by the
+  // hard !gfx.mobileTier gate where _lampVol is derived, so the BOTTOM rung of
+  // the feature ladder did not actually drop the heaviest night pass on a
+  // struggling DESKTOP: haveGR is `sunGR || lampVol > 0`, so a non-zero lampVol
+  // kept the whole half-res god-ray march + 4 blurs alive after po.godray had
+  // already gone to 0.
+  // 8036 -> 8018: LOWERED, not raised. The mobile-only GRAPHICS toggle (22
+  // lines of button wiring + the apex26.gfxHigh boot bit) moved out to
+  // js/game/gfx-quality.js, which owns #pm-gfx for every device now. This is
+  // the direction the ratchet exists to push: a feature landed and game.js got
+  // SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
+  // instead of rewriting the eight PerfGov.tier() gates in the render path.
+  // 8018 -> 8033 to take the synchronous track build OFF the boot path. Boot's
+  // last statement was `loadTrack(trackIdx)` — a Tracks.build() measured at
+  // 938 ms (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, inside a
+  // measured DCL of 4712 ms. It now calls scheduleFlybyTrack(), the deferral
+  // this file already used for every other menu track change, and render()'s
+  // (previously dead) null-track branch returns instead of presenting a clear.
+  // 8033 -> MERGED: PerfTry.skyLate landed on the other branch over the same
+  // period. The reorder is two edited lines; the rest is the comment recording
+  // the GLOW hazard, which is why it could not be a one-line move — drawGlow is
+  // additive with depthMask off, so it writes no depth and leaves the
+  // background at 1.0 where it painted, which a later depth-1.0 sky with blend
+  // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
+  // sky, then the glow. Neither branch's number fits the merged file; this one
+  // is set FROM it, the same way the earlier flap-gate merge above was.
+  // Merged the range-pass branch (SCALE consts + comments) with deploy's
+  // 8050-era work — the file carries both sides' lines, so neither side's
+  // number fits it. Set from the merged file: 8054.
+  "js/game.js": 8054,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -132,7 +162,16 @@ const CEILINGS = {
   // instead of only eyeballing a screenshot (which cost a lot of back-and-forth
   // chasing a black-frame red herring that was actually a broken canvas-readback
   // sampler, not a render bug).
-  "js/game/apex.js": 3080,
+  // 3080 -> 3106 for lazyTrackEnsure: the boot deferral above means window.__apex
+  // can exist with G.track === null, and ~180 hooks (plus 105 of 112 spec files)
+  // assume the synchronous world boot used to guarantee. One wrapper at the API
+  // boundary restores it for the dev API only — the alternative was a guard at
+  // every staging hook, which is the shape that rots. Not a new hook, so nothing
+  // joins docs/DEBUG-HOOKS.md. Nine of the 26 lines are the wrapper; the rest
+  // record the placement constraint, which is real: quoting the api literal's
+  // opening text in that comment moved hooks-documented.test.mjs's slice point
+  // and invented a hook called `for`.
+  "js/game/apex.js": 3106,
   "js/game/agentview.js": 2900,
   "js/car/car3d.js": 2700,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
@@ -151,7 +190,7 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2750,
+  "js/track/tracks.js": 2767, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

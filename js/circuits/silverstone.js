@@ -166,8 +166,17 @@
       // enclosures so the patchwork keeps its depth.
       hedge(0.20, 0.28,  1, 105, 2.4, COPSE);
       hedge(0.18, 0.22, -1, 120, 2.4, COPSE);
-      // Outer farmland hedgerow grid — second ring of field strips
-      hedge(0.02, 0.08, -1, 150, 2.2, COPSE);
+      // Outer farmland hedgerow grid — second ring of field strips.
+      // This run's frac range (0.02-0.08) covers the Copse bank zone
+      // (frac 0.0267, widthM 110) and its old gap of 150 sat beyond
+      // terrainOuter (110) on the low side of that camber. anchor()'s
+      // off-ribbon fallback there adds bankOffsetAt's curvature-camber lift
+      // on top of groundYAt, a term the grounding audit's own closed-form
+      // ground query does not replicate — the two disagree by more than the
+      // float threshold right at this corner. Pulling the gap inside
+      // terrainOuter keeps anchor() on the on-ribbon terrainYAt path, which
+      // reads the same rendered terrain the audit does.
+      hedge(0.02, 0.08, -1, 95, 2.2, COPSE);
       hedge(0.28, 0.32, -1, 165, 2.2, COPSE);
       hedge(0.48, 0.52, -1, 155, 2.2, COPSE);
       hedge(0.66, 0.70, -1, 160, 2.2, COPSE);
@@ -606,7 +615,10 @@
         const a = anchor(k(s), side, d);
         if (!onTrack(a.c[0], a.c[2], 18)) {
           addBox(out, vadd(a.c, a.u, h * 0.4), [w, h * 0.8, ln], [0.56, 0.54, 0.50], [a.r, a.u, a.t]);
-          addPrism(out, vadd(a.c, a.u, h * 0.8 + h * 0.2), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
+          // addPrism is BASE-anchored (see the note at line 521): seat the roof on
+          // the wall top. The extra + h*0.2 was half the prism height, and left a
+          // 1 m air gap on all six sheds.
+          addPrism(out, vadd(a.c, a.u, h * 0.8), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
         }
       }
 
@@ -782,6 +794,20 @@
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
         const beam = vadd([px[kb], api.py[kb], pz[kb]], L.u, H + 0.35);
+        // Crossbar physically bridging the two masts. The five light boxes
+        // below are centred on the centreline (up to ~3.2 m either side)
+        // while the masts stand at anchor()'s hw+2.4 — tens of metres further
+        // out on the National Straight — so nothing ever touched between
+        // them: the lights floated straight up from raw ground with no
+        // support in the chain. Anchored off the SAME centreline point the
+        // light row already uses (not a separately-derived mast midpoint, to
+        // rule out any L.c/R.c drift), tall enough to bracket the masts'
+        // whole height and wide enough to clear either mast regardless of
+        // this straight's actual half-width. TrackGeom.addBox is the same
+        // raw call the lights already use, deliberately bypassing the
+        // road-footprint guard for this overhead cluster.
+        TrackGeom.addBox(out, vadd(beam, L.u, -0.65), [50, 2.0, 1.4],
+                         [0.20, 0.21, 0.24], bL);
         for (let i = 0; i < 5; i++)
           TrackGeom.addBox(out, vadd(vadd(beam, L.u, -1.2), L.r, (i - 2) * 1.6),
                            [0.9, 1.2, 0.9], [0.65, 0.10, 0.10], bL);
@@ -1181,7 +1207,9 @@
                 // Ridge tent — one prism, the whole point of the budget.
                 const w = 2.2 + hv * 1.6, ln = 2.6 + hv * 2.2;
                 out._mat = MAT.FABRIC;
-                addPrism(out, vadd(a.c, a.u, 0.75), [w, 1.5 + hv * 0.7, ln],
+                // Pitched at a.c — addPrism is BASE-anchored, exactly as the
+                // camping-field tents above already are.
+                addPrism(out, a.c, [w, 1.5 + hv * 0.7, ln],
                          TENT[Math.floor(hv * 997) % TENT.length], b);
                 out._mat = 0;
               }
@@ -1206,7 +1234,8 @@
           if (!onTrack(ma.c[0], ma.c[2], 30)) {
             const mb = [ma.r, ma.u, ma.t];
             out._mat = MAT.FABRIC;
-            addPrism(out, vadd(ma.c, ma.u, 2.6), [14, 4.2, 26],
+            // Seated on the skirt top (1.0 m) — base-anchored, not centred.
+            addPrism(out, vadd(ma.c, ma.u, 1.0), [14, 4.2, 26],
                      [0.92, 0.91, 0.87], mb);
             out._mat = 0;
             addBox(out, vadd(ma.c, ma.u, 0.5), [14.4, 1.0, 26.4],

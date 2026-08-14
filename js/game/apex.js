@@ -94,6 +94,31 @@ function simCareerRound() {
   return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
 }
 
+// LAZY TRACK ENSURE — the one place the deferred boot build is forced.
+// js/game.js no longer builds the 3D track synchronously at boot (it schedules
+// the menu flyby build instead), so window.__apex can exist for a beat with
+// G.track === null — while every hook below, and every spec that stages a
+// camera before racing (park/jump/snapCam/probe/world/…), was written against
+// the synchronous world boot used to guarantee. Force the build ONCE here at
+// the API boundary rather than guard ~180 call sites: the first __apex call
+// pays exactly what boot used to pay, and a player who never opens the dev API
+// never pays it at all. Placement is load-bearing in BOTH directions —
+// tests/unit/hooks-documented.test.mjs slices this file at the first occurrence
+// of the api literal's opening text and reads every 2-space-indented name after
+// it as a hook, so the loop must sit above the literal AND this comment must
+// not quote that text (it did, which moved the slice and invented a hook called
+// `for` — measured, the guard went red).
+function lazyTrackEnsure(o) {
+  for (const k of Object.keys(o)) {
+    const fn = o[k];
+    if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
+    // `this` is forwarded so hooks that call each other (this.obs(), this.park(),
+    // …) still resolve; re-entry is free — loadTrack() no-ops once built.
+    o[k] = function (...a) { if (!G.track) loadTrack(G.trackIdx); return fn.apply(this, a); };
+  }
+  return o;
+}
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -387,8 +412,7 @@ const api = {
     const wx = smp.p[0] + smp.r[0] * lat;
     const wz = smp.p[2] + smp.r[2] * lat;
     const p = Tracks.project(G.track, wx, wz, s);
-    let ds = p.s - s; const L = G.track.total;
-    while (ds > L / 2) ds -= L; while (ds < -L / 2) ds += L;
+    const ds = M4.wrapDelta(p.s - s, G.track.total);   // both in [0, L), so the while-loop copy this replaced could never fold twice either
     return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
              err: { s: ds, lat: p.lat - lat } };
   },
@@ -2636,14 +2660,14 @@ const api = {
   // deliberately stays on Math.random() so it cannot perturb the sim.
   seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
 
-  // reset(frac, speed, x, seed?) — fast episode reset reusing the loaded track.
-  // Reinitialises the grid, repositions the player at lap-fraction frac (0..1),
-  // sets state="race" and raceT=0 without reloading assets. Returns initial obs().
-  // Pass `seed` to make the episode reproducible (it is applied BEFORE the grid
-  // is rebuilt, since grid order/lane/skill are drawn from the seeded stream).
-  // Call __apex.race() first to load the desired track.
+  // reset(frac, speed, x, seed?) — fast episode reset reusing the loaded track (call
+  // __apex.race() first). Reinitialises the grid, repositions the player at lap-fraction
+  // frac (0..1), sets state="race" and raceT=0 without reloading assets, returns obs().
+  // Pass `seed` for a reproducible episode — applied BEFORE gridUp (grid order/lane/skill
+  // come off the seeded stream) and AFTER IncidentSim.reset(), whose _tick/_seq feed it.
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
+    IncidentSim.reset();   // else a live takeover re-imposes its crash pose over the teleport below, every tick
     if (seed !== undefined) G.seed = seed;
     gridUp();
     G.state = "race"; G.raceT = 0;
@@ -2850,7 +2874,7 @@ const api = {
 
   // persistState() — is localStorage actually storing anything?
   //
-  //   { ok, broken, keys, rev }
+  //   { ok, broken, keys, rev, foreign }
   //
   // `ok:false` means a read or write has thrown, and `broken` names it
   // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
@@ -2861,7 +2885,8 @@ const api = {
   // Browsing, which is the case that actually loses a player's career.
   persistState() {
     const s = GameStore.store;
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev };
+    // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0 };
   },
 
   // save(data, filename) — hand a file back out of the browser.
@@ -3072,6 +3097,7 @@ const api = {
       }));
   },
 };
+lazyTrackEnsure(api);
 return api;
 }
 

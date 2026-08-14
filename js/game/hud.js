@@ -10,7 +10,7 @@ const GameHud = (function () {
   "use strict";
 
 const { IDLE_RPM, MAX_RPM } = GameTables;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 function create(G) {
 

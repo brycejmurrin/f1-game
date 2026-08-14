@@ -18,7 +18,16 @@ test.describe("Las Vegas track foundation migration", () => {
     await loadVegas(page);
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((track) => track.id === "vegas");
-      const samples = [0.30, 0.35, 0.40, 0.65].map((frac) => {
+      // 7a173519 moved the start line (startFrac 0.8575 -> 0.9899), rotating
+      // racing fractions by the arc shift (+0.8433); the Sphere-sector dip did
+      // not move physically. Measured in the new frame (headless VM, extremum
+      // scan): the dip bottoms at frac 0.1927, y -1.274, with the shoulders
+      // near 0 (y(0.15) -0.016, y(0.24) -0.007). Note vegas.js's own elevation
+      // comment says "racing s≈0.218" — that figure is INDEX-fraction
+      // arithmetic (0.2075 + (1 - 0.9899)); buildCenterline places the bump by
+      // the ARC-length shift (def s 0.35 + 0.8433 -> 0.1933), which is where
+      // the dip actually measures. Trust the measurement, not the comment.
+      const samples = [0.15, 0.193, 0.24, 0.65].map((frac) => {
         const node = window.__apex.nodeAt(frac);
         return { frac, y: node.y };
       });
@@ -40,8 +49,8 @@ test.describe("Las Vegas track foundation migration", () => {
       expect.objectContaining({ kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 }),
     ]));
     const byFrac = Object.fromEntries(result.samples.map((sample) => [sample.frac, sample.y]));
-    expect(byFrac[0.35]).toBeLessThan(byFrac[0.30] - 0.4);
-    expect(byFrac[0.35]).toBeLessThan(byFrac[0.40] - 0.4);
+    expect(byFrac[0.193]).toBeLessThan(byFrac[0.15] - 0.4);
+    expect(byFrac[0.193]).toBeLessThan(byFrac[0.24] - 0.4);
     expect(Math.abs(byFrac[0.65])).toBeLessThan(0.15);
   });
 

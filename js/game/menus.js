@@ -118,17 +118,17 @@ function buildTeamPicker() {
 
 // Panes only measure themselves when something tells them to; opening a sheet
 // is exactly such a moment (see js/game/scrollfade.js).
+// The track-detail map's size observer (openTrackDetail). Module-scoped so a
+// re-open disconnects the previous one instead of stacking a fresh observer —
+// and a stale closure over the PREVIOUS circuit — on every visit.
+let detailRO = null;
+
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
 // Circuit list filter: all / championship calendar / retired classics.
 // Persisted so a player who only races classics does not re-tap every open.
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
-
-// The track-detail map's size observer (openTrackDetail). Module-scoped so a
-// re-open disconnects the previous one instead of stacking a fresh observer —
-// and a stale closure over the PREVIOUS circuit — on every visit.
-let detailRO = null;
 
 function trackFilterBar() {
   const bar = document.createElement("div");
@@ -247,6 +247,54 @@ function buildSelect() {
     });
     updateTrackPreview();
   }
+}
+
+// The elevation profile chart, drawn identically in two places: the select
+// screen's preview card and the TRACK DETAIL modal's sparkline. Both were
+// hand-written canvas blocks that agreed line for line except for which element
+// carries the hidden state and what the x variable was called — the shape where
+// a fix lands in one copy and not the other (docs/ARCHITECTURE-REVIEW.md §8).
+// LOCAL, not a new global: it is one screen's drawing, and Menus already owns it.
+//   cv      the <canvas> to paint
+//   t       the circuit def
+//   showEl  the element whose `hidden` gates visibility (defaults to cv itself)
+// A circuit with no profile, a degenerate one, or under 2 m of range hides the
+// target and paints nothing — a flat sparkline reads as missing data either way.
+function drawElevProfile(cv, t, showEl) {
+  const target = showEl || cv;
+  if (!cv || !target) return false;
+  const py = TrackMaps.elevProfile(t);
+  if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
+  target.hidden = false;
+  const ew = cv.width, eh = cv.height;
+  const eg = cv.getContext("2d");
+  eg.clearRect(0, 0, ew, eh);
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
+  const span = mx - mn || 1;
+  const pad = 3;
+  const yNorm = (v) => eh - pad - ((v - mn) / span) * (eh - 2 * pad);
+  // The trace is walked TWICE on purpose: once closed down to the baseline for
+  // the fill, once open for the stroke, so the stroke does not draw the two
+  // vertical closing edges. `i <= py.length` closes the lap back onto py[0].
+  const trace = () => {
+    eg.beginPath();
+    for (let i = 0; i <= py.length; i++) {
+      const ex = (i / py.length) * ew;
+      i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
+    }
+  };
+  trace();
+  eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
+  eg.fillStyle = "rgba(57,183,240,0.18)"; eg.fill();
+  eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
+  trace();
+  eg.stroke();
+  // Y-axis elevation labels (top = max, bottom = min)
+  eg.font = "8px monospace"; eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
+  eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
+  eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
+  return true;
 }
 
 // large preview of the currently-selected circuit: sector-coloured outline,
@@ -417,45 +465,7 @@ function updateTrackPreview() {
   }
 
   // Elevation profile chart (shown only when there is meaningful elevation data)
-  const elevCv = document.getElementById("sel-preview-elev");
-  if (elevCv) {
-    const py = TrackMaps.elevProfile(t);
-    const elevR = TrackMaps.elevRange(t);
-    if (py && py.length > 2 && elevR > 2) {
-      elevCv.hidden = false;
-      const ew = elevCv.width, eh = elevCv.height;
-      const eg = elevCv.getContext("2d");
-      eg.clearRect(0, 0, ew, eh);
-      let mn = Infinity, mx = -Infinity;
-      for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
-      const span = mx - mn || 1;
-      const pad = 3;
-      function yNorm(v) { return eh - pad - ((v - mn) / span) * (eh - 2 * pad); }
-      eg.beginPath();
-      for (let i = 0; i <= py.length; i++) {
-        const px = (i / py.length) * ew;
-        i === 0 ? eg.moveTo(px, yNorm(py[0])) : eg.lineTo(px, yNorm(py[i % py.length]));
-      }
-      eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
-      eg.fillStyle = "rgba(57,183,240,0.18)";
-      eg.fill();
-      eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
-      eg.beginPath();
-      for (let i = 0; i <= py.length; i++) {
-        const px = (i / py.length) * ew;
-        i === 0 ? eg.moveTo(px, yNorm(py[0])) : eg.lineTo(px, yNorm(py[i % py.length]));
-      }
-      eg.stroke();
-      // Y-axis elevation labels (top = max, bottom = min)
-      eg.font = "8px monospace";
-      eg.fillStyle = "rgba(57,183,240,0.75)";
-      eg.textAlign = "right";
-      eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
-      eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
-    } else {
-      elevCv.hidden = true;
-    }
-  }
+  drawElevProfile(document.getElementById("sel-preview-elev"), t);
 }
 function openTrackDetail() {
   const t = Tracks.LIST[G.trackIdx];
@@ -485,43 +495,11 @@ function openTrackDetail() {
   if (streetEl) streetEl.hidden = !t.street;
   if (bankedEl) bankedEl.hidden = !t.banked;
 
-  // Elevation sparkline
-  var elevWrap = document.getElementById("track-detail-elev-wrap");
-  var elevCv = document.getElementById("track-detail-elev");
-  if (elevWrap && elevCv) {
-    const py = TrackMaps.elevProfile(t);
-    const elevR = TrackMaps.elevRange(t);
-    if (py && py.length > 2 && elevR > 2) {
-      elevWrap.hidden = false;
-      const ew = elevCv.width, eh = elevCv.height;
-      const eg = elevCv.getContext("2d");
-      eg.clearRect(0, 0, ew, eh);
-      let mn = Infinity, mx = -Infinity;
-      for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
-      const span = mx - mn || 1;
-      const pad = 3;
-      function yNorm(v) { return eh - pad - ((v - mn) / span) * (eh - 2 * pad); }
-      eg.beginPath();
-      for (let i = 0; i <= py.length; i++) {
-        const ex = (i / py.length) * ew;
-        i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
-      }
-      eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
-      eg.fillStyle = "rgba(57,183,240,0.18)"; eg.fill();
-      eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
-      eg.beginPath();
-      for (let i = 0; i <= py.length; i++) {
-        const ex = (i / py.length) * ew;
-        i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
-      }
-      eg.stroke();
-      eg.font = "8px monospace"; eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
-      eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
-      eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
-    } else {
-      elevWrap.hidden = true;
-    }
-  }
+  // Elevation sparkline — same painter as the preview chart above; here the
+  // canvas has a WRAPPER that carries the hidden state (the preview canvas
+  // hides itself), which was the only real difference between the two blocks.
+  drawElevProfile(document.getElementById("track-detail-elev"), t,
+                  document.getElementById("track-detail-elev-wrap"));
 
   // DRS zones with metre positions
   var drsWrap = document.getElementById("track-detail-drs-wrap");

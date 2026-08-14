@@ -76,7 +76,7 @@ function hash32(str) {
   return h >>> 0;
 }
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 // Fallback for a code not in BASE. Anchored on the car's tier (a tier-4 seat
 // rarely holds a 90-pace driver) and spread by the code's hash so two unknown

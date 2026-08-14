@@ -181,7 +181,14 @@
             backdrop(K(sFrac), side, dist, [w, h, d], hash(i * 11 + arc0) > 0.5 ? SKY_SIL : SKY_SIL2);
             if (landmark || hash(i * 13 + 1.7) > 0.5) {
               const a = anchor(K(sFrac), side, dist), bv = [a.r, a.u, a.t];
-              addBox(out, vadd(a.c, a.u, h + 2.5), [1.8, 4.0, 1.8], BEACON_WARM, bv);  // aircraft beacon
+              // backdrop()'s own top (parapet incl.) lands near groundYAt(k,dist)
+              // + h - 0.8 (backdrop() in js/track/tracks.js,1548: cy0 sinks 2 m, the
+              // parapet adds 0.6 back). anchor() sinks another 0.3 m off its own
+              // (slightly different) ground read. h + 2.5 put the beacon's base
+              // ~1.0 m above that real top — just past float-audit's 0.6 m
+              // "rests on" bridge, so it read as floating clear to bare desert.
+              // Seat it into the parapet instead of stacking flush above it.
+              addBox(out, vadd(a.c, a.u, h + 0.5), [1.8, 4.0, 1.8], BEACON_WARM, bv);  // aircraft beacon
             }
           }
         }

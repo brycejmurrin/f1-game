@@ -39,7 +39,18 @@ async function episode(page, policy) {
     // overtake decisions, or the comparison measures the deal as much as the
     // driving. Before seeding existed this bench compared runs that were never
     // comparable — see tests/specs/agent-determinism.spec.js.
-    A.reset(0.02, 55, 0, 1234);
+    //
+    // Start at frac 0.4, NOT near the grid. reset() repositions only the
+    // PLAYER; the AI pack launches from the grid boxes at s≈0, so a start of
+    // frac 0.02 put the episode 86 m (Interlagos) / 116 m (Monza) ahead of 21
+    // launching cars and both policies spent the 50 s episode in traffic — the
+    // bench measured the deal as much as the driving, and a change to the
+    // grid's seeded draw pattern re-dealt it. frac 0.4 is near-straight road
+    // on both circuits (|k| < 0.0022 over the next 150 m) with ~1.7-2.3 km of
+    // clear track behind the player: the leaders close at well under that over
+    // 500 steps, so traffic never reaches either policy and the comparison is
+    // purely observation-driven driving.
+    A.reset(0.4, 55, 0, 1234);
     const total = A.world().track.lengthM;
     let dist = 0, steps = 0, prevS = A.world().ego.s;
     for (let i = 0; i < 500; i++) {
@@ -47,26 +58,39 @@ async function episode(page, policy) {
       if (pol === "naive") {
         input = { steer: 0, throttle: true, brake: false };
       } else {
-        const w = A.world({ detail: "drive" });
+        const w = A.world({ detail: "drive", horizonS: 3, points: 6 });
         const he = w.ego.headingErrDeg || 0;
         const nc = w.nextCorner;
         const lat = w.ego.lateralM || 0;
-        // Honest geometry only — no prescribed line. Follow the road (cancel the
-        // heading error against the tangent) and stay roughly centred (pull back
-        // toward the centreline). + steer = right; + headingErrDeg = nose points
-        // right, so subtract it; + lateralM = car is right of centre, so subtract.
-        const steer = clamp(-he / 12 - lat / 14, -1, 1);
-        // Regulate ENTRY SPEED, don't just wait for the BRAKE NOW flag. The flag
-        // is a late, binary hint — on Interlagos it fired 6 times in 78 steps
-        // while the car built to 213 kph and was rescued at 248 m. apexSpeedKph
-        // assumes more grip than the default parts have, so aim well under it,
-        // start braking well before suggestBrakeM, and keep a flat cap for the
-        // straights no corner window covers. Still honest road geometry — an
-        // apex speed is a fact about the corner, not a prescribed line.
         const sp = w.ego.speed || 0;
-        const tgt = nc ? nc.apexSpeedKph / 3.6 * 0.5 : 40;
-        const hot = nc && sp > tgt && nc.distM < (nc.suggestBrakeM || 60) * 6;
-        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || hot || sp > 33;
+        // Honest geometry only — no prescribed line. Follow the road, using
+        // what world() publishes about it. Pure feedback (-he/12 - lat/14 and
+        // a flat speed cap) was the previous policy and it could not track
+        // road curvature at speed: traced on Monza, the car cruised at 55 m/s
+        // for 25 steps then drifted 13.9 m off the gentle curve with steer at
+        // 0.04 — feedback only reacts AFTER the error exists, and at 198 kph
+        // the lag is a road departure (rescued at step 77, dist 251). The old
+        // 33 m/s cap was masking exactly this.
+        //
+        // So steer with FEEDFORWARD from the road's own curvature ~0.6 s
+        // ahead (ahead.pts radiusM/dir — the published road, not a line):
+        // required lateral accel is v^2/R, scaled onto the steer range.
+        // + steer = right; dir "L" bends left, so its sign is negative.
+        const pts = (w.ahead && w.ahead.pts) || [];
+        const look = pts.find((p) => p.t >= 0.6) || pts[0];
+        const R = (look && look.radiusM) || 1e9;
+        const dirS = look ? (look.dir === "L" ? -1 : look.dir === "R" ? 1 : 0) : 0;
+        const ff = dirS * clamp(sp * sp / (R * 30), -0.9, 0.9);
+        const steer = clamp(ff - he / 12 - lat / 14, -1, 1);
+        // Speed from the same geometry: hold v^2/R under ~11 m/s^2 across the
+        // lookahead window, and respect the corner fields' apex target. All
+        // still facts about the road, none of it a prescribed line.
+        // Measured (seed 1234): monza 1543 m, interlagos 1119 m, both to the
+        // step cap with no rescue — against floors of 327 and 300.
+        let vCurve = 70;
+        for (const p of pts) { const v = Math.sqrt(11 * Math.max(15, p.radiusM || 1e9)); if (v < vCurve) vCurve = v; }
+        const tgt = Math.min(vCurve, nc ? nc.apexSpeedKph / 3.6 * 0.72 : 70);
+        const braking = /^BRAKE NOW/.test((nc && nc.status) || "") || sp > tgt + 2;
         input = { steer, throttle: !braking, brake: braking && sp > 3 };
       }
       A.act(input, 1 / 60, 6);
@@ -93,7 +117,8 @@ test.describe("agent drive bench — the fields are actionable", () => {
       await boot(page, track);
       const naive = await episode(page, "naive");
       const relational = await episode(page, "relational");
-      // The blind car leaves the road at the first corner; the one reading the
+      // The blind car leaves the road at the first corner ahead of the start
+      // (~165 m on at Monza, ~215 m on at Interlagos); the one reading the
       // corner table and heading error stays on it far longer. A comfortable
       // margin so ordinary physics tuning noise never trips it.
       expect(relational.dist).toBeGreaterThan(naive.dist * 1.5);

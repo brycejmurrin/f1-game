@@ -514,8 +514,12 @@
           const t = i / 8 * 6.2832;
           const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
           const th = 9 + hash(i * 37 + 3) * 5;
-          addCyl(out, [tx, base + th / 2, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
-          addCyl(out, [tx, base + th + 0.6, tz], 4.8, 1.2, STONE_D, 6);   // corbelled parapet
+          // addCyl is BASE-anchored (geom.js): the shaft starts AT `base` and the
+          // parapet sits on its top. The +th/2 / +th+0.6 that shipped were the
+          // centre-anchored answer — towers stood half their height in the air
+          // and their parapets landed inside the shaft.
+          addCyl(out, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
+          addCyl(out, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);   // corbelled parapet
           // Wall run to the next tower.
           const t2 = (i + 1) / 8 * 6.2832;
           const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
@@ -538,8 +542,8 @@
         }
         // One intact corner turret with a slate cap — the single pointed
         // silhouette that makes the whole thing legible at distance.
-        addCyl(out, [bx + 8.5, base + 16, bz - 8.5], 3.0, 32, STONE, 6);
-        addCone(out, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6);
+        addCyl(out, [bx + 8.5, base, bz - 8.5], 3.0, 32, STONE, 6);        // base-anchored: base → base+32
+        addCone(out, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6); // cap seats on that top
       }
       // Camp-style spectator clusters in the forest clearings.
       for (const [id, s, side] of [
@@ -553,7 +557,12 @@
           for (let i = 0; i < 6; i++) {
             const row = i % 2, off = (Math.floor(i / 2) - 1) * 12;
             const p = vadd(vadd(a.c, a.r, (row ? 1 : -1) * 5), a.t, off);
-            addPrism(stage, vadd(p, a.u, 1.4), [5.2, 2.8, 6.2], cols[i % cols.length], b);
+            // addPrism is BASE-anchored; 1.4 == half of size[1] (2.8) — the
+            // classic centre-anchor mistake (js/track/geom.js addPrism
+            // note), leaving the true base 1.4 m clear of ground (measured
+            // via float-audit as ~1.8 m on 3 of 6 tents). Small embed
+            // instead of a bare 0 so the tents don't show a seam.
+            addPrism(stage, vadd(p, a.u, -0.1), [5.2, 2.8, 6.2], cols[i % cols.length], b);
           }
           const flag = vadd(vadd(a.c, a.r, -7.5), a.t, 15);
           addCyl(stage, flag, 0.10, 8, [0.30, 0.30, 0.31], 6, b);

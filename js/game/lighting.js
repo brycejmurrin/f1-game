@@ -832,7 +832,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   frame.lights = out;
 }
 
-  return { TUNE_DEFS, LT, floodColor, LAMP_KINDS, buildTrackLights,
-           applyLampDensity, lampDensityFactor, lampStrideNodes, lampStrideM,
+  return { TUNE_DEFS, LT, buildTrackLights, lampStrideNodes,
            setFrameLights, appendCarTailLights };
 })();

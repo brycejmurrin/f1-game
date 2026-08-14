@@ -56,6 +56,19 @@ test("explicit paths still win over every other mode", () => {
   assert.deepEqual(r.files, ["js/car/parts.js"]);
 });
 
+test("a path in FIRST argv position survives the --since filter", () => {
+  // `argv.indexOf("--since")` is -1 when the flag is absent, so the original
+  // `n !== since + 1` excluded index 0 UNCONDITIONALLY: the documented
+  // `pick-tests.mjs <paths>` form lost its first path, and a single path lost
+  // all of them and fell through to the git-diff default — a different
+  // question, answered confidently. Every other case in this file hides it,
+  // because run() puts --json at index 0; here the path IS argv[0].
+  const r = JSON.parse(execFileSync(
+    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/game/hud.js", "--json"],
+    { cwd: ROOT, encoding: "utf8" }));
+  assert.deepEqual(r.files, ["js/car/parts.js", "js/game/hud.js"]);
+});
+
 test("the default diff base is the DEPLOY branch, which pages.yml names", () => {
   // main is a stale diverged fork here, so merge-basing against it returns an
   // ancient commit and the changed-file set balloons to most of the repo —
