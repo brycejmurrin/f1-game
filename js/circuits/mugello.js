@@ -72,24 +72,10 @@
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
-        terrainYAt, groundYAt } = api;
+        terrainYAt, groundYAt,
+        groundUnder,
+      } = api;
       const K = (s) => Math.round(s * n) % n;
-      // World-XZ ground query mirroring SceneryNature's groundUnder (js/track/
-      // the groundUnder helper in js/track/scenery-nature.js): terrainYAt first (exact where the rendered
-      // ribbon covers the point), else the SAME nearest-node closed form the
-      // grounding audit itself falls back to — a footing resolved this way
-      // never disagrees with tools/float-audit.cjs's own ground reading,
-      // unlike a raw a.c reuse (single-anchor extrapolation) far off the road.
-      const groundUnder = (x, z) => {
-        const ty = terrainYAt(x, z);
-        if (ty !== null) return ty;
-        let best = 0, bestD = Infinity;
-        for (let i = 0; i < n; i++) {
-          const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
-          if (d < bestD) { bestD = d; best = i; }
-        }
-        return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
-      };
 
       // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
       // Mugello already plants the cypress and the olives, which is two of the

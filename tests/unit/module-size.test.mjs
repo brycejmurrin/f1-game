@@ -164,7 +164,14 @@ const CEILINGS = {
   // the same order. Without that written down the next reader cannot tell an
   // exact reject from a conservative pre-filter, and this sits inside collision
   // resolution where a wrong guess changes racing.
-  "js/game.js": 8079,
+  // Merged the range-pass branch (SCALE consts + comments) with deploy's
+  // 8050-era work — the file carries both sides' lines, so neither side's
+  // number fits it. Set from the merged file: 8054.
+  // MERGED AGAIN: both lineages raised this over the same window (8079 here
+  // for the pairContact proof, 8054 on the deploy side for the range-pass
+  // work). The file carries both sides' lines, so neither number fits it —
+  // set FROM the merged file, the resolution this file already records twice.
+  "js/game.js": 8083,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -206,7 +213,7 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2762, // +4 2026-08-14: place() anchors props to the RENDERED terrain (terrainYAt) instead of groundYAt's closed form, which drifts metres wherever `elevations` bend the ribbon — the last reachable float on madrid and magny_cours, and unfixable from circuit data since the call site is engine-generic
+  "js/track/tracks.js": 2767, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

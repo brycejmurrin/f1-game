@@ -1133,7 +1133,7 @@ const SceneryNature = (function () {
       }
     };
 
-    return { anchor, pine, tree, palm, conifer,
+    return { anchor, groundUnder, pine, tree, palm, conifer,
              cypress, stonePine, broadleafFall, acacia, plane,
              peak, mountain, ridge,
              crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,

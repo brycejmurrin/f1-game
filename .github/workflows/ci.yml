@@ -310,12 +310,28 @@ jobs:
     # TEMP: pages.yml can pass smoke:false to skip this job on deploy (see the
     # workflow_call input). Branch/PR pushes keep the default (true).
     if: ${{ inputs.smoke != false }}
+    # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
+    # below (two concurrent SwiftShader contexts on one shared runner blow the
+    # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
+    # its half of the spec list alone on its own machine. Sharding exists to
+    # shrink WALL-CLOCK, because this job's ~14-18 min serial length is the
+    # window in which a run gets superseded and cancelled by the next push —
+    # measured 2026-08-14: run 1407 was cancelled at 29 min, ONE spec from
+    # green, after two 240 s runner-starvation timeouts stretched the serial
+    # pass. Half the specs per VM ≈ half the window.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
     # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
     # whose per-test cost is the very thing that varies — and the last time a
     # margin here was thin it produced a `cancelled` nobody read as a failure.
     # The serial single-worker run below is slower per pass by design, so the
     # budget has to reflect that rather than the 2-worker figure it replaced.
+    # The cap stays at the whole-suite figure even though a shard runs half the
+    # specs: the starvation tail this job has actually measured (334 s for one
+    # spec) is per-runner luck, not per-spec arithmetic.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -368,12 +384,17 @@ jobs:
       - name: Smoke
         env:
           APEX_WORKERS: 1
-        run: npm run test:smoke -- --timeout=240000
+        # --shard splits the 9 specs across the two matrix VMs; the flag passes
+        # through tools/run-playwright.mjs verbatim (it forwards argv to
+        # `playwright test`).
+        run: npm run test:smoke -- --timeout=240000 --shard=${{ matrix.shard }}/2
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          # Shard-scoped name: same-named artifacts from parallel matrix jobs
+          # collide on upload-artifact@v4 (it hard-fails on duplicates).
+          name: playwright-artifacts-smoke-${{ matrix.shard }}
           path: |
             artifacts/test-results-*/
             artifacts/report-*/

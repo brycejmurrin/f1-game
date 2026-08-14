@@ -408,10 +408,13 @@
           t += w + ((i % 7 === 6) ? 2.6 : 0.75);   // wider break = word break
         }
       };
-      // On the pit roofline it is named for: the blocks above stand at gap 20
-      // and top out at 11 m, so the field sits at 21 (inside their footprint)
-      // with its base overlapping the roof rather than hovering over it.
-      wordmark(anchor(K(0.005), -1, 21), 11.3, 88, 2.6, [0.95, 0.94, 0.90]);
+      // On the pit roofline it is named for. The blocks stand at gap 20 and top
+      // out at 11 m, so the field sits just PROUD of their trackside face at
+      // 19.5 — inside the 0.6 m the grounding audit bridges, so it still reads
+      // as carried by them, but visible. At gap 21 it grounded for the wrong
+      // reason: 1 m inside a 16 m-deep mass, i.e. buried in the building and
+      // invisible from anywhere. Only a render catches that.
+      wordmark(anchor(K(0.005), -1, 19.5), 11.3, 88, 2.6, [0.95, 0.94, 0.90]);
 
       // Paddock gate portal — two crimson piers carrying the same wordmark, set
       // well behind the pit block so the footprint never reaches the road.

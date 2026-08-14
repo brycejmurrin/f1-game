@@ -1607,7 +1607,7 @@ const Tracks = (function () {
     // Deploy-side grounding kit: the foliage guard + deferred treelines live in
     // scenery-nature (created above); the flush pass below and plantTree need them.
     const { canopyR, forestEdgeNow, deferredFoliage } = ctx;
-    const { anchor, pine, tree, palm, conifer, peak, mountain, ridge,
+    const { anchor, groundUnder, pine, tree, palm, conifer, peak, mountain, ridge,
             crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
             cypress, stonePine, broadleafFall, acacia, plane,
             along, wall, fence, guardrail, tyreWall, gantry, marshalPost,
@@ -2099,6 +2099,11 @@ const Tracks = (function () {
         // across tens of metres of slope. Returns null off the rendered
         // ribbon; callers fall back to whatever they were using before.
         terrainYAt,
+        // ...and the same query WITH a fallback, which is what circuits want off
+        // the ribbon (long runs, distant landmarks). mugello and shanghai each
+        // hand-rolled this during the grounding sweep; it falls back to the same
+        // closed form tools/float-audit.cjs does, so engine and audit agree.
+        groundUnder,
         addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
