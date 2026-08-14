@@ -5101,6 +5101,14 @@ let _frameNo = 0;    // render frame counter (env-probe cadence, etc.)
 // the reflection feature can't keep exhausting a memory-constrained GPU.
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
+// Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
+// is the loop-breaker the crash sentinel cannot be: that ledger is mobile-only
+// (js/game/perf.js gates it on gfx.isMobile so the desktop suite never enters
+// safe mode), so on desktop a GPU reset leaves nothing behind and the knob —
+// which IS persisted, in the tuner store — comes straight back on at the next
+// boot into the same configuration that just killed the context.
+let _perChunkOff = false;
+try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* No storage (Safari private mode): the latch is unreadable, so the feature stays governed by the tier gate alone — the same fallback _envProbeOff takes two lines up. */ }
 // Hoisted material-option objects for drawWorldMeshes — the function runs up to
 // 2×/frame (main pass + env probe) and previously allocated ~9 literals each call.
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
@@ -5901,7 +5909,7 @@ function render(dt) {
     // already hit a hard failure comes back at a floored tier, which now has
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
-    frame.perChunkLights = PerfGov.tier() >= 1 ? 0 : (+LT.perChunkLights || 0);
+    frame.perChunkLights = (_perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
