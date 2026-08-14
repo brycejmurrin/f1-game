@@ -1829,13 +1829,13 @@ function cockpitBodyMesh(team) {
         parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
   }, COCKPIT_BODY_CACHE_MAX);
 }
-// Hub transform (translate + slight upscale) and scratch matrices for the
-// steering roll + per-element LCD offsets.
-// Wheel/dash hub at CAR-LOCAL z 0.45, eye at COCKPIT_EYE_FWD 0.06 — the proven
-// ~0.39 m reach, but both back INSIDE the tub. At z 0.71 the wheel sat ahead of
-// the dash coaming (car3d z 0.60) and the halo pillar (0.62) — hands through the
-// bodywork, and an eye that saw no cockpit at all (cameras.js has the measurement).
-const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.54,0.24,1]);
+// Hub transform (translate + upscale) + scratch matrices for the steering roll
+// and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
+// plane is 0.30 m (_nearM below) and the eye sits at car-local z -0.18, so any
+// hub nearer than z ~0.14 puts the whole dash INSIDE it — measured at z 0.10
+// the wheel projected at w 0.276 and EVERY instrument at 0.274: LCD, LED strip,
+// digits and aero lamp all clipped, the wheel a washed-out near-clipped shell.
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.56,0.26,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);

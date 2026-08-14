@@ -1293,7 +1293,16 @@ const Car3D = (function () {
     [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
   ];
 
-  function buildSharedChassis(out, c1, rideDY, noseStations) {
+  // The monocoque span is a CLOSED block, so its rear face at z 0.05 is a solid
+  // wall across the tub — free in chase, but from the driver's eye (car-local
+  // z -0.18) it is a slab 0.23 m from your face over x +-0.30, y 0.155..0.635.
+  // MEASURED with a depth raster: 55% of the steering wheel's pixels, and 100%
+  // of the wheel occlusion. So `ckpt` ends the monocoque AHEAD of the driver
+  // (z 0.45 — cap lands 0.63 m out, BEHIND the wheel, reading as dash) and
+  // drops the cockpit span (z 0.05..-0.55): the tub around/behind the seat,
+  // which the ckpt bolsters and inner walls already model from the inside.
+  const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.379, w: 0.552, h: 0.44, t: 0.752 });
+  function buildSharedChassis(out, c1, rideDY, noseStations, ckpt) {
     const floor = CHASSIS.floor;
     addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
@@ -1302,8 +1311,10 @@ const Car3D = (function () {
     addTopBevel(out, nose[0], nose[1], 0.022, c1);
     addSpan(out, nose[1], nose[2], c1);
     addTopBevel(out, nose[1], nose[2], 0.028, c1);
-    addSpan(out, CHASSIS.monocoque[0], CHASSIS.monocoque[1], c1);
-    addTopBevel(out, CHASSIS.monocoque[0], CHASSIS.monocoque[1], 0.032, c1);
+    const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
+    addSpan(out, CHASSIS.monocoque[0], monoR, c1);
+    addTopBevel(out, CHASSIS.monocoque[0], monoR, 0.032, c1);
+    if (ckpt) return;
     addSpan(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], c1);
     addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);
   }
@@ -1531,11 +1542,12 @@ const Car3D = (function () {
     // silhouette, byte-identical to before.
     const teamStyle = teamStyleOf(opts && opts.teamId);
     const anchors = bodyAnchors(T, opts && opts.teamId);
+    const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
     // --- Shared chassis --- per-OPTION suspension shifts only ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
-    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle));
+    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
     part("hood");
     // --- Hood / vanity deck: a raised central panel over the monocoque, rising
@@ -1545,7 +1557,6 @@ const Car3D = (function () {
     // from the nose bulkhead back to the dash, cresting at the cockpit. ---
     // In cockpit view the hood is remodelled LONGER and TALLER so it reads
     // clearly ahead of the driver (a stubby deck disappears under the dash).
-    const ckpt = opts && opts.cockpit;
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
     // stripe + shark fin below) HDR at the top tier — same ">1 albedo glows
     // at night" convention PANEL already uses; plain team colour otherwise.
@@ -1565,7 +1576,7 @@ const Car3D = (function () {
     // wheel's own half-height ≈ 0.58): it is further away, so an equal height
     // puts it HIGHER on screen and it draws straight over the wheel — measured,
     // that is why the wheel vanished behind a yellow slab.
-    const hR = ckpt ? { z: 0.42, y: 0.42, w: 0.54, h: 0.14, t: 0.58 }
+    const hR = ckpt ? { z: 0.58, y: 0.32, w: 0.54, h: 0.12, t: 0.58 }
                     : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
@@ -1612,9 +1623,9 @@ const Car3D = (function () {
       // Dash heights are set against the eye (0.72): the coaming's accent lip
       // used to top out at 0.715 — five millimetres under the sightline, so the
       // dash rim WAS the horizon. A real coaming sits at about chest height.
-      addBox(out, 0, 0.50, 0.60, 0.66, 0.14, 0.16, c1);
-      addBox(out, 0, 0.575, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
-      addBox(out, 0, 0.485, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
+      addBox(out, 0, 0.42, 0.60, 0.66, 0.13, 0.16, c1);
+      addBox(out, 0, 0.487, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
+      addBox(out, 0, 0.405, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
     } else {
       for (const s of [-1, 1]) {
         addBlock(out, [
@@ -1983,7 +1994,7 @@ const Car3D = (function () {
       addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
              1.55, 0, ns155.top + 0.012, 0.13, 0.016, stripeC);
       addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
-      addBox(out, 0, 0.872, -0.42, 0.08, 0.02, 0.56, stripeC);  // airbox spine band
+      if (!ckpt) addBox(out, 0, 0.872, -0.42, 0.08, 0.02, 0.56, stripeC);  // airbox spine band (reaches z -0.14, past the driver's head)
       if (!ckpt) {
         addLoft(out, -0.94, 0, 0.775, 0.075, 0.02, -0.70, 0, 0.868, 0.08, 0.02, stripeC); // airbox → cover ridge drop
         addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
@@ -2125,7 +2136,12 @@ const Car3D = (function () {
     }
 
     // --- Airbox intake above the roll hoop (dark void) ---
-    addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);
+    // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
+    // 0.805, so against a driver's eye at (0.72, -0.20) its front face is 2.5 cm
+    // from the camera and it straddles the eye line. Measured via the engine's
+    // own occlusion raster: `player` 20.4% of the frame at distM 0.2 — this box
+    // was the dark mass across the view, and the thing "cutting" the wheel.
+    if (!ckpt) addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);
 
     // --- T-cam mast above the airbox (the broadcast camera "T") ---
     // Skipped in the cockpit body: it sits right at the driver's eye height
