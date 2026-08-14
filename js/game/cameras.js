@@ -36,7 +36,7 @@ const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (groun
 // — which is why the "cockpit" rendered as a hovering hood cam with no car in
 // frame however far back it was pulled. 0.72 seats the driver where the tub
 // says the seat is: just over the coaming, inside the halo, between the walls.
-const COCKPIT_EYE_FWD = -0.10, COCKPIT_EYE_UP = 0.72;
+const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.72;
 
 // Chase eye sits BEHIND *and* OFFSET TO ONE SIDE of the car — a 3/4
 // over-the-shoulder framing — instead of dead-centre on the rear wing. The

@@ -1835,7 +1835,7 @@ function cockpitBodyMesh(team) {
 // ~0.39 m reach, but both back INSIDE the tub. At z 0.71 the wheel sat ahead of
 // the dash coaming (car3d z 0.60) and the halo pillar (0.62) — hands through the
 // bodywork, and an eye that saw no cockpit at all (cameras.js has the measurement).
-const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.48,0.30,1]);
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.54,0.24,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);

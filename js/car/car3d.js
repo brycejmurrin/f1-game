@@ -1570,7 +1570,11 @@ const Car3D = (function () {
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour).
-    addBox(out, 0, ckpt ? 0.46 : 0.665, ckpt ? 0.95 : 0.45, 0.10, 0.02, ckpt ? 1.75 : 0.80,
+    // Cockpit: the crown stripe must START AHEAD OF THE WHEEL (game.js _rigT
+    // z 0.24). At centre 0.95 x length 1.75 it began at z 0.075 — behind the
+    // wheel — so the stripe and the cowl lip it rides drew across the wheel
+    // face and clipped its top. Centre 1.10 x length 1.30 starts at 0.45.
+    addBox(out, 0, ckpt ? 0.46 : 0.665, ckpt ? 1.10 : 0.45, 0.10, 0.02, ckpt ? 1.30 : 0.80,
            ersC2, SURFACES.paint);
 
     part("bolsters");
