@@ -303,12 +303,30 @@ body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
   visibility: hidden;
 }
 #photo-controls > * { pointer-events: auto; }
+/* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
+   TUNER, which is a `.sheet` and therefore carries `zoom: var(--ui-scale)`
+   (css/components.css) — so at 150% the panel grew and its sticks, buttons and
+   bar stayed exactly where they were, in a size the rest of the screen had left
+   behind. --ui-scale and not --hud-scale: this is a menu tool, not driving
+   chrome, and it is the panel's scale it has to agree with.
+   The zoom goes on the CLUSTERS, never on #photo-controls: that layer is
+   `position: fixed; inset: 0`, and zooming it would scale the inset and shrink
+   the layer itself — the same reason css/hud.css zooms the HUD's clusters
+   rather than #hud. Each cluster below is separately anchored, so each takes
+   the zoom on its own and stays where it belongs.
+   AND EACH COMPENSATES ITS OWN ANCHOR: inside a zoomed element every length in
+   its top/right/bottom/left scales too, so every `var(--sa*)` term is divided
+   by the scale — a safe-area inset encodes HARDWARE and must not grow with a
+   type setting — while the plain px terms are left to scale, because they
+   encode a margin or a neighbour's size and should grow with what they
+   separate. Identical rule to the HUD group at the top of this file. */
 .pc-stickwrap {
-  position: fixed; bottom: calc(20px + var(--sab));
+  position: fixed; bottom: calc(20px + var(--sab) / var(--ui-scale));
+  zoom: var(--ui-scale);
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.5);
 }
-.pc-move-wrap { left: calc(20px + var(--sal)); }
-.pc-look-wrap { left: calc(168px + var(--sal)); }
+.pc-move-wrap { left: calc(20px + var(--sal) / var(--ui-scale)); }
+.pc-look-wrap { left: calc(168px + var(--sal) / var(--ui-scale)); }
 /* ---------- clear of the docked panel ----------
    MOVE stays under the left thumb; LOOK and the up/down column are anchored to
    the RIGHT of the free strip instead of at fixed left offsets, so they sit
@@ -322,19 +340,27 @@ body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
 body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
 body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
 body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
-body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal)); }
-/* --dock-px, not --dock-w: the PANEL, unlike these controls, IS zoomed — it is a
-   `.sheet`, and css/components.css puts `zoom: var(--ui-scale)` on every sheet —
-   so it paints --dock-w x --ui-scale wide with its safe-area inset scaled along
-   with it. See the comment on --dock-px in css/tuner.css. Both offsets below
-   therefore drop the `+ var(--sar)` they used to carry: --dock-px contains it.
-   Note this is --ui-scale and not --hud-scale, because the thing being cleared
-   is a menu sheet rather than anything in the driving layer. */
+body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal) / var(--ui-scale)); }
+/* --dock-px, not --dock-w: the PANEL is zoomed — it is a `.sheet`, and
+   css/components.css puts `zoom: var(--ui-scale)` on every sheet — so it paints
+   --dock-w x --ui-scale wide with its safe-area inset scaled along with it. See
+   the comment on --dock-px in css/tuner.css. Both offsets therefore drop the
+   `+ var(--sar)` they used to carry: --dock-px contains it. Note this is
+   --ui-scale and not --hud-scale, because the thing being cleared is a menu
+   sheet rather than anything in the driving layer.
+   DIVIDED BY THE SCALE, because these controls are zoomed now too. --dock-px is
+   a SCREEN measurement (it multiplies by --ui-scale precisely so an unzoomed
+   consumer can use it), and inside a zoomed element a length renders at
+   length x scale — so consuming it raw would clear the panel by its own width
+   over again at 150% and throw the sticks off the left of the screen. Dividing
+   converts it back into this element's own space. Kept as `--dock-px / scale`
+   rather than re-spelling `(--dock-w + 8px + --sar)`, so the formula still
+   lives in exactly one place. */
 body.lt-open:not(.pc-nopanel) .pc-altcol {
-  left: auto; right: calc(var(--dock-px) + 14px);
+  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px);
 }
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
-  left: auto; right: calc(var(--dock-px) + 66px);
+  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 66px);
 }
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
@@ -349,7 +375,8 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   will-change: transform;
 }
 .pc-altcol {
-  position: fixed; bottom: calc(20px + var(--sab)); left: calc(300px + var(--sal));
+  position: fixed; bottom: calc(20px + var(--sab) / var(--ui-scale)); left: calc(300px + var(--sal) / var(--ui-scale));
+  zoom: var(--ui-scale);
   display: flex; flex-direction: column; gap: 10px;
 }
 .pc-btn {
@@ -360,11 +387,16 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
 }
 .pc-btn:active { background: rgba(255,255,255,0.2); }
 #pc-bar {
-  position: fixed; top: calc(14px + var(--sat)); left: calc(20px + var(--sal));
+  position: fixed; top: calc(14px + var(--sat) / var(--ui-scale)); left: calc(20px + var(--sal) / var(--ui-scale));
+  zoom: var(--ui-scale);
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 8px 14px; border-radius: var(--r-lg);
   background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.14);
-  max-width: min(70vw, 720px);
+  /* --vwz, not bare vw: this box is zoomed now, and a viewport unit inside a
+     zoomed element still measures the WHOLE viewport, so `70vw` would ask for
+     70% of the screen and then be painted 1.5x larger again. --vwz is
+     `1vw / --ui-scale` — "one vw, as rendered" (css/tokens.css). */
+  max-width: min(calc(70 * var(--vwz)), 720px);
 }
 /* The tuner panel stays docked right while free-cam flies (see enterPhotoMode
    in game.js), so on narrow/landscape screens the 720px-wide fly-cam bar can
@@ -373,7 +405,11 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
    right:8px + min(88vw,380px) sizing) so the two never overlap. Only while the
    panel is actually showing (pc-nopanel tucks it away and frees the width). */
 body.lt-open:not(.pc-nopanel) #pc-bar {
-  max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-px) - 40px - var(--sal))));
+  /* Every term in this element's own space: viewport units through --vwz, and
+     --dock-px (a screen measurement) divided back down — see the note on the
+     .pc-altcol offsets above. --sal is hardware, so it divides too. */
+  max-width: max(160px, min(calc(70 * var(--vwz)), 720px,
+    calc(100 * var(--vwz) - var(--dock-px) / var(--ui-scale) - 40px - var(--sal) / var(--ui-scale))));
   gap: 8px; padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
@@ -405,8 +441,8 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 /* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
    free, so switch to a classic dual-stick layout: LOOK stick under the right
    thumb in the bottom-right corner, up/down column just inboard of it. */
-body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar)); }
-body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar)); }
+body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar) / var(--ui-scale)); }
+body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(--ui-scale)); }
 /* Photo-mode HIDE HUD (body.pc-uihidden): clean unobstructed frame — every
    photo control (bar, sticks, buttons) and the docked tuner panel disappear;
    only the restore eye stays. On a desktop the keys keep flying the camera, so
@@ -417,8 +453,9 @@ body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important;
 body.pc-uihidden #lighting-inner { display: none !important; }
 #pc-restore {
   position: fixed;
-  top: calc(8px + var(--sat));
-  right: calc(10px + var(--sar));
+  zoom: var(--ui-scale);
+  top: calc(8px + var(--sat) / var(--ui-scale));
+  right: calc(10px + var(--sar) / var(--ui-scale));
   width: 36px; height: 36px;
   padding: 0; margin: 0;
   border-radius: var(--r-md);

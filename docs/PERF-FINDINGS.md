@@ -84,9 +84,16 @@ expensive one (see the `perf.js` crash-sentinel header on shipping `vendor/`).
 `pairContact` + `resolveCollisions` is a further ~9.5 %.
 
 *Traced, not a defect:* `buildWorld` also appears at 0.6 %, but
-`js/game/debrisworld.js:714` is `if (!world) buildWorld(track, cars);` — the
+`js/game/debrisworld.js` has `if (!world) buildWorld(track, cars);` — the
 one-time lazy build landing inside the sample window. Recorded so it is not
 re-derived.
+
+> **SUPERSEDED — this call was a defect, and this entry is how it was missed.**
+> 0.6 % is `buildWorld`'s **self** time. Its **inclusive** time is 467 of 2575
+> samples (~216 ms), and it landed entirely inside the LIGHTS-OUT frame. See the
+> second-round entry in §2. **A self-time reading answers "where is steady-state
+> CPU going" and says nothing about a one-shot stall; for a hitch, read
+> inclusive time and ask which frame it lands on.**
 
 **Boot script wall** — every `src=` in index.html, `?v=N` stripped, `stat -c%s`
 summed. **146 script tags, 5,466,108 bytes (5.47 MB) of eager JS:**
@@ -111,6 +118,19 @@ wall for data where a session uses exactly **one of 40** files.
 
 **Boot trace** (chrome-devtools MCP): DCL 4712 ms, 146 scripts, **LCP 2306 ms =
 TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
+
+> **Two corrections to the block above, both from 2026-08-14 — read them before
+> acting on these numbers.** (1) The counts are stale: it is **148 tags /
+> 5,638,215 B** (measured on this commit), `js/circuits` **1,729,016 B / 30.7 %**. (2) More importantly the
+> attribution is wrong. "Render delay tracks uncompressed bytes" does not hold:
+> V8 compile of all 148 files measures **97.3 ms** and executing all 40 circuit
+> IIFEs **2.5 ms**, so parse+execute of the circuit wall is ~1 % of the 2299 ms,
+> not the bulk. "Render delay" is the browser's bucket for everything between
+> TTFB and the paint. Two eager costs that are NOT bytes: `js/track/tracks.js`
+> builds Catmull-Rom control points for **all 40** circuits at boot (**24.0 ms**),
+> and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** no player
+> reaches. Also note DCL 4712 ms predates the flyby deferral (`de5d202`) and has
+> not been re-measured. See §3.
 
 ### COUNT THE WORK AVOIDED, DO NOT TIME IT
 
@@ -185,6 +205,116 @@ Two rules fall out of that:
   not execute on that lineage for hours — which is how a prop-placement change
   reached the live site with nothing red to show for it. **Check the run's
   conclusion after a deploy push; do not treat the push as the deploy.**
+
+### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
+
+§0's table lists the Node VM harness (`tools/verify-track.cjs`,
+`tools/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
+true of **whole-build A/B timing** and false of **attribution**, and the
+difference has already cost two candidate findings.
+
+Both build inside `vm.createContext`, so every bare global read goes through the
+contextified global's interceptor — the ~150-250 ns effect `js/track/models.js`
+documents for `firstNonFinite`. The same vegas build profiled in the VM and in a
+plain realm (identical `TRACK_VM` manifest, loaded by indirect eval):
+
+| self % | VM harness | plain realm |
+|---|---|---|
+| `addBox` (geom.js) | 26.7 % | **41.2 %** |
+| `emit` (geom.js) | 11.3 % | 10.1 % |
+| GC | 9.1 % | 10.4 % |
+| `isVec3` (graph.js) | 2.70 % | **0.88 %** |
+| `finiteVec` (tracks.js) | 1.31 % | **0.50 %** |
+| whole build, quiet box | ~2810 ms | **~1890 ms** |
+
+The harness **inflates exactly the functions that read bare globals**, which is
+the same population you are hunting when you look for hot leaf functions. Two
+candidates that looked like ~4 % of the build in the VM measured ~1.4 %
+combined in a plain realm and were dropped before being written up.
+
+**So: A/B a change in the VM, but rank what to work on from a plain realm.**
+The whole-build number is ~1.5x pessimistic too, so a VM build time is an upper
+bound, not the figure to quote.
+
+A worked negative result from the same pass, kept so it is not re-derived:
+`geom.js`'s `emit()` allocates four arrays per call and is called 86,565 times
+on vegas. A scalar rewrite was verified **bit-identical by MD5 over every mesh
+buffer on four circuits** — and then measured **0-4 % on emit-heavy circuits and
+NEGATIVE on vegas**, which is `addBox`-dominated. The equivalence was proven and
+the win was not there. §1's pattern again: mechanism-by-reading held, the
+operation count did not.
+
+### A worked example of the rule below (2026-08-14)
+
+`tests/specs/lighting-tuner-grade.spec.js` came back **4 failed / 31** in the
+`webgl` group right after a perf change landed. It would have been very easy to
+read that as the change's fault. It was not, and the two steps that established
+that are the whole point of the next section:
+
+1. **`tools/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
+   returned *"FAIL on a quiet box is REAL. It is not the machine. Bisect it."*
+   So it was not contention — three of the four were genuine.
+2. **The same spec was then run at the PREVIOUS DEPLOY SHA**, which had already
+   shipped. Identical three tests, identical errors, identical durations. The
+   failures predated the change entirely.
+
+Two distinct defects were hiding in there, and both are worth knowing:
+
+- **`window.LightTune` is undefined, and always was.** `js/game/lighting.js`
+  declares `const LightTune = (function () {`, and a top-level `const` in a
+  CLASSIC script creates a **script-scoped binding, not a property of `window`**
+  — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
+  `css-zoom.js` and `sheetshape.js` use. The spec's `page.evaluate` reached for
+  `window.LightTune.TUNE_DEFS` and threw. It was the ONLY `window.LightTune` in
+  the tree; every other reader uses the bare identifier, as `js/game/apex.js`
+  does itself. **When a page global is missing under `page.evaluate`, check how
+  it is DECLARED before assuming a load-order break** — `const` and `window.X =`
+  are both "one global per file" and only one of them is on `window`.
+- **Three tests are genuinely over the 120 s budget** (158.4 / 120.4 / 160.7 s
+  solo), not flaky. Each boots the game, races, walks four menu levels and fans a
+  lighting profile across all 40 circuits under SwiftShader. Now `test.slow()`.
+  Note CI already concedes this globally — its Smoke job runs with
+  `--timeout=420000`. **It was four tests, not three**, and the fourth is the
+  instructive one: it had been dying at 66.5 s on the `window.LightTune` error,
+  and 66.5 s was mistaken for its cost. Fixing the error let it run to
+  completion for the first time — 173.7 s. **A failing test's duration is only a
+  LOWER BOUND on the work it does**, so never size a budget from a red run.
+
+**Two more defects that only CI could show, and both are worth the general
+lesson.** The first fix passed 5/5 locally and still came back 3/5 on a CI
+runner, with failures the local box never produced:
+
+- **`test.slow()` cannot cover the fixture phase.** CI failed with
+  `Test timeout of 120000ms exceeded while setting up "context"` at exactly
+  120.0 s — the BASE budget, un-multiplied. `test.slow()` is called inside the
+  test BODY, and context setup runs before the body, so the multiplier is not in
+  effect yet. Replaced with `test.describe.configure({ timeout: 360_000 })`,
+  which is set at collection time, covers setup, and survives CI passing an
+  explicit `--timeout=120000` on the command line (which the change-aware job
+  does). Precedent: `zandvoort-foundation.spec.js`.
+- **A 5 s `expect` default masquerading as a functional bug.**
+  `playwright.config.js` declares no `expect` block, so assertions get 5 s. The
+  COPY ALL chip only flips to `COPIED n ✓` once the fan-out has written a
+  profile for all 39 other circuits — real work, not a render. On a loaded
+  runner that passes 5 s, so the assertion fired while the label still read the
+  ARMED text, and the failure printed
+  `Received string: "COPY TO 39?"` — the exact state the line above had just
+  asserted. That reads like a broken feature and is a budget. **When an assertion
+  reports the previous step's expected value, suspect the expect timeout before
+  the app.** Then grep the rest of the file: the UNDO check below it read
+  localStorage exactly once with no retry, the same race one step later, and is
+  now `expect.poll`.
+
+Verified after all four fixes: **5/5 pass** solo on a quiet box at
+177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
+
+**Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
+`webgl` group correctly, so a local `pick-tests` run would have named it. But no
+browser group GATES in CI — the change-aware job is advisory — so a red
+`lighting-tuner-grade` can sit on the deploy branch indefinitely with every CI
+run green. Same shape as the `test:api` entry above. That is a deliberate
+speed trade-off, not an oversight; the cost is that these suites need a human to
+run them.
 
 ### Before believing ANY red run
 
@@ -323,6 +453,230 @@ the same direction — **an isolated bound is not the bound that matters**:
    was copied verbatim from the two that already shipped rather than rewritten,
    so all three now agree by construction.
 
+### 2026-08-14, second round: the same shape, plus one real hitch
+
+Six taken. Five are the section heading above wearing new hats; the sixth is a
+different animal and is the one worth reading.
+
+**The hitch: the Rapier side-world was built on the LIGHTS-OUT frame.**
+`js/game/debrisworld.js` `step()` builds lazily on first call, and `update()`
+returns at `if (state !== "race") return;` (`js/game.js`) for the whole
+countdown — so "first call" was always the first RACE step. Line-attributed
+from a `profile-gameloop.mjs vegas physics` profile (`positionTicks`):
+`buildWorld` is **467 of 2575 samples INCLUSIVE, ~216 ms**, of which
+`createCollider` is 410 — `ColliderDesc.trimesh` copying the road mesh and
+building its BVH in wasm. That is **~13 dropped frames at the exact instant the
+player is reacting to the lights.** Fixed by `DebrisWorld.prime()`, called from
+`startRace()` where the track build is already being paid for. Sim-identical:
+construction order is the determinism contract and depends only on `track` and
+`cars.length`, both fixed before the countdown, and `step()`'s own prologue
+re-checks and rebuilds if either moved — so priming changes WHEN the same world
+is built, never WHICH.
+
+**VERIFIED AFTER THE FIX, with the instrument that found it.** Re-ran
+`tools/profile-gameloop.mjs vegas physics` on a quiet box and searched the raw
+profile by function name: `buildWorld`, `createCollider` and `trimesh` are
+**completely ABSENT** from the sampled window, against 467 inclusive samples
+before. Total samples for the identical 600-step workload fell **2575 -> 2093**,
+i.e. 482 fewer — which matches buildWorld's 467-sample inclusive cost to within
+noise. `prime` is absent too, and that is the point: it now runs inside
+`startRace()`, before the step loop the profiler samples.
+
+**With its anti-vacuity check, because "the work disappeared" is exactly what a
+silently-broken world also looks like.** The side-world is still running in the
+same profile — `step` (debrisworld.js) at 2.9 % plus `wasm-function[37]` 7.2 %,
+`[184]` 2.2 %, `[64]` 2.0 % and `isSleeping` (rapier.mjs) 0.9 %. So the world
+exists and is being stepped; only its CONSTRUCTION left the frame window. Had
+`prime()` failed, `step()`'s lazy build would have reappeared in the profile
+instead.
+
+**This entry corrects an earlier one in this file.** §0's baseline says of
+`buildWorld`: *"Traced, not a defect … 0.6%"*. That was its **SELF** time. The
+inclusive cost is 30x larger, and inclusive is the number that matters for a
+one-shot call that lands inside a single frame. The general lesson, and it is
+the mirror of the one this document already teaches: **a self-time reading
+answers "where is steady-state CPU going", and says nothing about a one-shot
+stall. For a hitch, read inclusive time and ask which frame it lands on.**
+
+The five multiplied-by-zero ones, all bit-identical, all argued from mechanism
+and counted rather than timed:
+
+- **`sky.js` sun corona + disc** ran on every NIGHT frame. `coronaDamp` is
+  `(1.0 - overcast * 0.92) * (1.0 - nightSky)` and `overcast <= 1` keeps the
+  first factor `>= 0.08`, so `coronaDamp == 0` **exactly when** `nightSky == 1`
+  — and all three `c +=` add nothing. SKY_FS draws BEFORE the opaque world by
+  default (`skyLate` is default-OFF), so there is no early-Z relief: 2 `pow`,
+  2 `sqrt` and ~85 ALU on **100 % of the pixels** of every night frame. Every
+  local in the block is dead after it, so the skip is unobservable.
+- **`sky.js` day gradient band** — an **`atan2`**, one of the costliest GPU
+  transcendentals, feeding a `vnoise`, per pixel, whole frame, multiplied by
+  `daytime`. `daytime` is exactly 0 on every night frame AND every dawn/dusk
+  frame with the sun under ~14.5°. `daytime` itself stays live; two later
+  readers still need it.
+- **`post.js` SSAO tap setup outside its own gate.** The 8 taps were moved
+  inside `if (uStrength > 0.0)` in the previous round; `scr`, `a`, `ca`, `sa`
+  — which exist only to feed them, one consumer each — were left outside. So
+  the *supported* AO-slider-at-zero + contact-shadows-on frame still paid
+  `sin`/`cos`/`sin` + `fract` + `dot` per half-res pixel. **When you gate a
+  loop, gate the loop's setup with it.**
+- **`uSunShaft` uploaded without the bloom gate** (`js/render/glx/post.js`).
+  The shaft pass READS THE BLOOM CHAIN — its loop's only input is
+  `texture(uBloom, suv)` — and with bloom off the 1x1 `blackTex` is bound to
+  `uBloom` 50 lines above. The shader gates only on `uSunShaft > 0.0`, so the
+  producer has to say zero. 8 dependent **full-res** fetches + `ignoise` per
+  pixel, on a daytime tier-4 frame: the frame that has already shed god-rays,
+  SSAO and SSR. Another operand of an armed producer — the third time that
+  exact grep has paid.
+- **`lit.js` lamp-shadow PCF had the uniform gate but not the per-fragment
+  one.** `lampSh` has two readers: one multiplied by `NoLl`, one already inside
+  `if (NoLl > 0.0)`. So a fragment facing AWAY from the mapped floodlight paid
+  4 dependent `sampler2DShadow` fetches, a `mat4` transform, a perspective
+  divide and 5 bounds compares for a result multiplied by zero. This was the
+  **last ungated per-fragment texture fetch in LIT_FS** — every other
+  `texture()` in the file already sits behind a per-fragment reject. It is
+  verbatim the sun map's own fix, never copied across; the GGX block 30 lines
+  below already makes the argument in prose.
+
+Plus one exact reorder, in the same composite gate: `vUV.y < uSsrTopUV` — a
+varying compared against a uniform, free — sat BEHIND a full-res
+`texture(uDepth, vUV)`. GLSL ES 3.00 §5.9 gives `&&` short-circuit semantics,
+so **operand order is cost order**; `uSsrTopUV` is 0.62 chase / 0.82 onboard,
+so 38 % / 18 % of full-res pixels each dropped a discarded fetch. The same gate
+also gained `&& uCarReflect > 0.001` beside `carPx > 0.3`: exactly equivalent,
+because `ssrGate` is `max(roadMask * uReflect, carMask * uCarReflect)` and both
+masks are products of `smoothstep()`s, hence in [0,1].
+
+Two more taken away from the renderer, both "a writer nobody re-checked":
+
+- **`js/game/audio.js` had a SIXTH constant `setTargetAtTime`**, missed by the
+  pass that removed five from the same function. `lfoG.gain` has exactly two
+  writers — `.value = 0` at node creation and this line — so while the car is
+  on-track (the overwhelming majority of frames) it scheduled target 0 onto a
+  value already converged to 0, 60x a second for a whole race: a main-thread
+  call plus a cross-thread timeline insertion each time. Guarded on the TARGET
+  (not on `usingSamples` — `offroad` genuinely flips). The cache lives **on the
+  node**, deliberately: `stopEngine()` nulls `lfo`/`lfoG` and `startEngine()`
+  builds a fresh `GainNode` at `.value = 0`, so a module-level variable would go
+  stale across a restart and silence the wobble; a new node has no cached
+  property, so the first call after any restart always re-issues.
+  **The general lesson: when you sweep a function for a repeated defect, the
+  sweep needs a grep, not a read — the sixth instance was 50 lines below the
+  fifth.**
+- **`js/game/sheetshape.js` watched one attribute that four things write.** Its
+  `MutationObserver` keys on `documentElement`'s `style` attribute to catch
+  `--ui-scale`, but `--hud-scale` and the HUD's own `--hud-z-top`/`--hud-z-bot`
+  zoom caps land on that same inline attribute (`js/game/hud.js`'s `fitHud`),
+  and an observer cannot tell one custom property from another. So every HUD
+  zoom-cap tweak ran a full `reclassify()` — a `getBoundingClientRect` on all 21
+  `.sheet` elements, each followed by `CssZoom.localBox` and two
+  `getComputedStyle` calls — for menus that are all hidden, **mid-race**.
+  Bounded at ~2 Hz by `updateHud`'s throttle plus `_fitWait`, but `capTop`
+  tracks the gap-readout width and changes continuously on a constrained
+  viewport or a high HUD SIZE — i.e. exactly when the frame budget is tightest.
+  Fixed by comparing the inline `--ui-scale` before doing anything, which is
+  free: the `attributeFilter` means only an inline write can fire the observer,
+  so an unchanged inline value implies an unchanged computed one, and no layout
+  is read to decide.
+
+**A process note, recorded because it cost a browser round-trip.** All three
+shader files store GLSL in **backtick template literals**. Comments added
+inside them must not contain backticks — a backtick terminates the literal and
+the rest of the shader is parsed as JavaScript, surfacing as
+`Uncaught SyntaxError: Unexpected token 'if'` and a `GLX shader compile failed:
+ERROR: 0:1: 'undefined' : syntax error` with no hint of the real cause.
+`node --check js/render/shaders/*.js` finds it in under a second and should be
+the first thing run after any shader edit.
+
+### 2026-08-14, third round: two defects that made the governor's ladder DEAD CODE
+
+The biggest finding of the whole exercise, and the one most worth the method
+note: it was found by reading a control loop as arithmetic, and settled in
+thirty seconds by a float trace.
+
+**`js/game/perf.js` — with `_autoRes` on (the shipped default) the governor
+could scale down and then did nothing, forever. No tier was ever shed by
+evidence.** The structure was:
+
+```js
+if (_autoRes && cur > 0.5) { if (_gfx.setRenderScale(cur - 0.1)) {…} }
+else if (…) { /* shed a feature */ }
+```
+
+Step 1.0 down by 0.1 in IEEE doubles and you get
+`1 → 0.9 → 0.8 → 0.7000000000000001 → 0.6000000000000001 → 0.5000000000000001`.
+That last value is **one ULP ABOVE 0.5**, so `cur > 0.5` is true forever. The
+request then clamps to 0.5 and `js/render/glx.js:589` rejects it against its own
+`Math.abs(s - renderScale) < 0.02` dead zone — and because the outer `if` was
+ENTERED, the `else if` that sheds a feature was **never evaluated**. Only the
+GRAPHICS preset's `_userTier` still bit, because that is a separate term in
+`tier()`'s `max()`.
+
+**The same epsilon closed the door from the other side.** Climbing back at
++0.06 reaches `0.9800000000000004`; the next request, `Math.min(1, cur + 0.06)`
+= 1, is a delta of `0.019999999999999574` — just inside the dead zone. The scale
+pinned at 0.98 for the session, and since the tier-restore branch sat under
+`if (_autoRes && cur < 1)`, **a shed feature could never come back either.** That
+is the one-way door the `RESTORE_UNDER = 4.2` post-mortem in this file's own
+header was written to close, reintroduced by a float epsilon.
+
+**Fixes.** Ask the renderer instead of predicting it — `setRenderScale`'s boolean
+already IS the "lever exhausted" signal — and fall through to the ladder when it
+returns false. On the restore side, snap to 1 **a step early**: the last 0.02 of
+range is unreachable by any step starting inside it, so `(1 - cur) < 0.09 ? 1 :
+cur + 0.06` takes it in one 0.08 move that clears the zone.
+
+**A/B, same device, same frames, rungs that genuinely save 3 ms:**
+**before, final tier 0; after, final tier 4.**
+
+**Why the suite did not catch it, which is the transferable part.**
+`tests/unit/perf-governor.test.mjs` faked `setRenderScale` as `if (s === scale)
+return false` — **not the shipped contract**, which rejects any change under
+0.02. Both defect values (0.5000000000000001 and 0.9800000000000004) live inside
+the real dead zone and outside `s === scale`. A second fake pinned the floor at
+exactly `0.5`, a value the real down-chain never produces, so the test written to
+cover "scale floor hit" tested a state that cannot occur. Both fakes now mirror
+`glx.js:587-593` verbatim, and the recovery test fails on the old code.
+**A fake that is easier than the contract will hide exactly the bugs the
+contract's hard edges cause.**
+
+**Related, and fixed in the same pass: `envReady` is a one-way latch.**
+`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx.js`
+sets `envReady = true` on a completed cube and only ever clears it in
+`envProbeReset()` — whose sole caller was the track switch. So `uEnvStr` stayed
+at `carEnvCube` (0.3 on desktop) and every car-paint fragment kept paying a
+4x-anisotropic dependent `textureLod` on a **frozen** cube. Worse than the wasted
+fetch: `js/game/perf.js` documents tier 1 as *"env probe off (car paint falls
+back to the analytic sky mirror)"* and **that fallback never happened** — the
+paint mirrored wherever the car was when the last 6-face cycle completed. One
+line at the gate now resets it, and the dev-API `envProbe` status field reports
+honestly as a side effect.
+
+### A latent bug found while costing the ribbon cull — DO NOT flip these knobs
+
+`docs/PERF-FINDINGS.md` §3 (and an audit pass) described
+`track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
+That is wrong and the correction matters, because the suggested action was to
+reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carries
+`data.trk`** — the fifth attribute `createMesh` builds at `js/render/glx.js:622`
+for road-marking coordinates. Without it the shader reads the generic default,
+`float hw = vTrk.z` is 0, and `lit.js:533`'s `if (hw <= 0.5) return;` fires — its
+own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
+and marking would silently disappear.** It is invisible today only because
+`LT.roadChunkLamps` defaults to 0 and `perChunkLights` is tier-shed. Teaching
+`createChunkedMesh` about `trk` is step 0 of any ribbon-cull work and is a
+standalone bug fix worth landing on its own.
+
+### Stale entry corrected: the env-probe cull already shipped
+
+§3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
+shipped as **`PerfTry.envCull`**, `ENV_CULL_M = 300`, `js/render/glx.js:912-922`,
+default OFF, applied as a `min` and never an override, with the counted
+justification in `js/game/perf-try.js`. What remains true is the sharpener:
+`frame.cullDist` is read in exactly one place, inside the chunked path, so the
+switch **cannot remove a single road or terrain triangle** from the probe — it
+reaches props and glass only. That makes it a synergy argument for chunking the
+ribbons, not an independent item.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
@@ -454,6 +808,157 @@ treatment. Left alone.
 `begin()`, `drawSky()` and the composite. The file already has the pattern to
 fix it (`_frameToken`). Honest arithmetic: ~0.05 ms on a 16.7 ms budget, so
 hygiene rather than a win.
+
+### Added 2026-08-14, second round
+
+Ranked as above. **Provenance note:** the counts below came out of a read-only
+audit pass and were NOT re-derived by hand afterwards, unlike everything in §2.
+Treat them as this document treats operation-count estimates — see §1.
+
+**Road and terrain never get a frustum cull, in any pass.** They are the only
+large world meshes built with `G.createMesh` where their twin (props, glass)
+gets `G.createChunkedMesh(…, 72)` — `js/track/tracks.js` builds both, a few
+lines apart. `js/render/glx/chunked.js` only declines to chunk under 2000
+triangles; road is 51-61 k tris and terrain 25-58 k, so the capability is there
+and simply is not asked for. Counted by binning the ribbons into the same 72 m
+cells `createChunkedMesh` uses and counting triangles within radius R of the
+driver at 12 stations a lap (a frustum with far plane R is a subset of the
+sphere of radius R, so these are **lower** bounds):
+
+| pass | vegas | spa | monza |
+|---|---|---|---|
+| ribbon tris submitted, camera pass | 78,676 | 116,940 | 108,722 |
+| provably outside the 900 m far plane | **53 %** | **43 %** | **45 %** |
+| provably outside the ±80 m shadow ortho | **89 %** | **88 %** | **89 %** |
+
+Three things make this worth writing down rather than doing:
+
+1. **The shadow half is bit-identical; the camera half is not.** The AABB-vs-
+   light-frustum test is exactly the one `castShadowChunked` already applies to
+   props, and a triangle outside the ortho writes no depth. But chunking
+   reorders submission *within* the mesh, so coplanar LEQUAL ties inside the
+   road could flip — the class `perf-try.js`'s unwired `floorLast` note already
+   flags. That needs a rendered lap, not a frame.
+2. **The fix already exists in the tree and is unreachable.** `js/game.js`
+   lazily builds `track.meshes.roadChunked` and draws it via `drawChunked` —
+   but only under `LT.roadChunkLamps && LT.perChunkLights`, a *lamp* feature
+   that is default-off and now tier-shed. Same shape as the `uInstanced` entry
+   in §2: a fix that existed and had not been copied across.
+3. **It sharpens a §3 entry above.** `frameCullDist` is read in exactly one
+   place, inside the chunked path. `draw()` never reads it — so `PerfTry.envCull`,
+   the switch built for the env-probe reach, **cannot remove a single ribbon
+   triangle from the probe.** It only ever touched props and glass.
+
+**Two `Δprog` wraps with no pre-reject, where `pairContact` has one.**
+`pairContact` opens with an exact cheap reject before its two float modulos,
+with a comment saying the modulos "were being spent almost entirely to prove
+'not touching'". The identical wrap idiom, on the same `prog` values, appears
+twice more inside `updateCar` — the traffic-awareness scan and the lateral
+separation scan — with no such guard, so every one of ~20x19 iterations per
+step pays two `Float64Mod` calls to discard. Line-attributed: **129 of 2575
+samples = 5.01 %** of physics CPU, the largest identified JS line-group after
+the collision solver, and a floor (it excludes the inlined executions).
+Bit-identical with a 0.1 m margin on the reject, which sidesteps the one
+unprovable part — the wrap expression can differ from the raw delta by ~1 ulp.
+**This is NOT the "merge the two loops" idea §3 already declined**; it is the
+missing guard on each, independently, and it is ~10x the size that entry
+estimated.
+
+**`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
+and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
+`(uReflect > 0.001 || carPx > 0.3)` and `uCarReflect` keeps its 0.05 default,
+so every car-paint pixel still runs the full march (~36-40 dependent fetches).
+Verbatim the `po.contact` / `lampVol` defect, on the third operand-pair nobody
+grepped. **Not taken because it is not bit-identical** — it removes a visible
+reflection — though it is the same trade tier 2 already makes for the road. The
+strictly-equivalent half of this site WAS taken; see §2.
+
+**The boot script wall, re-measured — and the headline is not what it looks
+like.** Corrected counts: **148 tags, 5,638,215 B** on this commit (§0's
+146 / 5,466,108 B predates two added files, and this commit's own comments);
+`js/circuits` is 1,729,016 B / 40 files / **30.7 %**
+of it, for data where a session uses exactly one file. But V8 compile of all 148
+files measured **97.3 ms total** (25.8 ms for the circuits) and executing all 40
+circuit IIFEs is **2.5 ms** — so parse+execute of the circuit wall is ~1 % of a
+2299 ms render delay, not the bulk of it. "Render delay" is the browser's bucket
+for everything between TTFB and the paint; here that is serial EXECUTION of the
+wall plus eager top-level work.
+
+> **CORRECTION to the sentence above, which first read "148 serialised
+> render-blocking fetches".** That was wrong, and wrong in a way that would send
+> the next person after the request COUNT instead of the execution. Classic
+> parser-blocking scripts are still **downloaded in parallel** — the preload
+> scanner keeps scanning and triggers the fetches ahead of the parser
+> (web.dev, *Deep dive into the murky waters of script loading*), and GitHub
+> Pages serves HTTP/2, so they multiplex on one connection. Only EXECUTION is
+> serial and ordered. This also kills `defer` as a lever from a second
+> direction, on top of the nine `readyState === "loading"` guards below:
+> `defer` cannot fix a serialisation that is not happening.
+
+**The `?v=N` bump throws away Chrome's code cache for all 148 scripts, every
+deploy.** v8.dev's *Code caching for JavaScript developers*: "Code caches are
+(currently) associated with the URL of a script… changing the URL of a script
+(**including any query parameters!**) creates a new resource entry in our
+resource cache, and with it a new cold cache entry." CLAUDE.md mandates bumping
+EVERY `?v=N` after ANY js/css change, so a one-line CSS edit costs every
+returning player a full re-download and a cold compile of the whole wall.
+Per-file content hashing would fix it and is a convention change, not a code
+change — but it touches the index.html/manifest guard and the `version.json`
+shell guard, so it is its own commit.
+
+**And the same article reframes the 97.3 ms figure.** `sw.js` precaches inside
+the `install` event, and V8 treats that path specially: "the code cache is
+immediately created when the resource is put into the service worker cache. In
+addition, we generate a **'full' code cache** — we no longer compile functions
+lazily, but instead compile everything… at the cost of increased memory use."
+Both preconditions hold here (classic scripts, UTF-8). So 97.3 ms is a LAZY
+compile number, and the installed-PWA path eagerly compiles all 5.64 MB —
+including the 346 KB of dev surface no player reaches and all 40 circuit files.
+That is a MEMORY cost on exactly the device class the crash sentinel exists for,
+and it is an argument for trimming the eager wall that has nothing to do with
+parse time. Not measured here — attributed to v8.dev.
+
+Two eager costs found that are
+NOT bytes: `js/track/tracks.js` builds Catmull-Rom control points for **all 40**
+circuits at boot (**24.0 ms**, an order of magnitude more than parsing them),
+and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** that no
+player reaches.
+
+**`defer` is not the one-attribute change it looks like.** Every external tag
+sits at the very end of `<body>` with no markup after it, and deferred classic
+scripts keep document order — so it reads as free. It is not: **nine**
+self-initialising modules guard on
+`if (document.readyState === "loading") …DOMContentLoaded… else init();`
+— enumerate them with `grep -rl 'readyState === "loading"' js/`, which gives
+`js/game/ariastate.js`, `gfx-quality.js`, `menunav.js`, `music-lib.js`,
+`perf-try.js`, `scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
+Parser-blocking,
+`readyState` is `"loading"`, so all nine defer `init()` until after the whole
+wall has run — which `sheetshape.js` states as a deliberate choice. Under
+`defer`, `readyState` is `"interactive"` and all nine take the `else` branch and
+initialise **mid-wall**, so a module at tag 50 can init before one it reads at
+tag 100 exists. The prepared form of the change is
+`readyState !== "complete"`, which is behaviour-preserving today and correct
+under `defer` — do that first, separately, and prove it green before touching a
+single tag.
+
+**And the boot A/B run to settle it was VOID — recorded because the way it
+failed is reusable.** Interleaved base / defer / no-script arms, fresh
+`browser.newContext({serviceWorkers: "block"})` per run, 5 rounds. The
+**no-script control arm** — a page with zero external scripts — returned FCP of
+140, 168, 7660 and 11440 ms across its runs. Variance on a page that does
+nothing exceeded the entire effect being measured, so every number in the run is
+machine contention (five audit agents were running; loadavg 4-11). **The control
+arm is the anti-vacuity guard, and it is what caught this** — without a
+do-nothing arm the base/defer medians would have looked like a clean, damning
+result. Two further traps found the same way: an earlier pass was silently
+served by a registered service worker (`apex26-1225` precache) on every arm
+including the control, and arm ORDER was itself a confound — the first arm in
+each round ran clean while later arms measured the previous arm's teardown.
+Re-run it on a quiet box (`loadavg < 2`, nothing else in flight), rotating arm
+order per round, and report the MINIMUM as well as the median — the fastest a
+run has actually gone is the least contaminated estimate, which is the same
+argument `PerfGov._floorMs` already makes about frame intervals.
 
 ## 4. Recorded negative results
 

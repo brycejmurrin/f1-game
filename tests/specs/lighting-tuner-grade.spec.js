@@ -1,6 +1,24 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 
+// FOUR OF THE FIVE TESTS HERE ARE GENUINELY OVER THE DEFAULT 120 s BUDGET, not
+// flaky. Solo at APEX_WORKERS=1 on a quiet box: 191.3 / 173.7 / 155.6 / 135.5 s;
+// on a CI runner one reached 210.8 s. Only "IMAGE & COLOUR exposes ordered…"
+// (~70 s) fits. The cost is real — each test boots the game, races bahrain,
+// walks pause → SETTINGS → LIGHTING → IMAGE & COLOUR, then fans a lighting
+// profile across all 40 circuits and undoes it, under SwiftShader.
+//
+// WHY A FILE-LEVEL BUDGET AND NOT test.slow(): test.slow() is called INSIDE the
+// test body, so it cannot extend the fixture phase that runs BEFORE the body.
+// With test.slow() this file still failed on CI with
+// "Test timeout of 120000ms exceeded while setting up \"context\"" — at exactly
+// 120.0 s, the base budget, because the multiplier had not been applied yet.
+// test.describe.configure({ timeout }) is set at collection time and covers
+// setup as well (same form as zandvoort-foundation.spec.js). It also survives
+// CI passing an explicit `--timeout=120000` on the command line, which is what
+// the change-aware job does.
+test.describe.configure({ timeout: 360_000 });
+
 async function openImageTuner(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
@@ -54,7 +72,14 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
   expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
 
   await edits.click();                                   // second click fires
-  await expect(edits).toHaveText(/^COPIED \d+ ✓$/);
+  // 30 s, NOT the 5 s expect default (playwright.config.js declares no `expect`
+  // block). The chip only flips to COPIED once the fan-out has actually written
+  // a profile for all 39 other circuits, so this assertion is waiting on real
+  // work, not on a render. On a loaded CI runner that fan-out passes 5 s and the
+  // assertion fired while the label was still the armed one — the observed
+  // failure was literally `Received string: "COPY TO 39?"`, i.e. the state the
+  // line above just asserted. It reads like a functional bug and is a budget.
+  await expect(edits).toHaveText(/^COPIED \d+ ✓$/, { timeout: 30_000 });
   const after = await stored(page);
   const targets = Object.keys(after).filter((k) => k !== "bahrain|dusk|wet");
   expect(targets.length).toBeGreaterThan(20);            // every other circuit on the LIST
@@ -66,7 +91,14 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
   expect(Object.keys(after["monza|dusk|wet"])).toEqual(["gainB"]);
 
   await page.locator("#lt-spread-undo").click();
-  expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
+  // expect.poll, not a bare expect: UNDO deletes 39 profiles, and a plain
+  // `expect(await stored(page))` reads localStorage exactly ONCE with no retry,
+  // so on a slow runner it can sample mid-undo. Same defect class as the COPIED
+  // assertion above — that one merely happened to fail first. Found by grepping
+  // the rest of the file after fixing it, which is the habit this repo's
+  // findings doc argues for.
+  await expect.poll(() => stored(page).then(Object.keys), { timeout: 30_000 })
+    .toEqual(["bahrain|dusk|wet"]);
 });
 
 test("switching the previewed condition disarms a pending COPY ALL", async ({ page }) => {
@@ -125,7 +157,16 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // silent about a range the tuner is free to change. Same rule the mcp-probe
   // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
   const bounds = await page.evaluate(() => {
-    const pick = (id) => (window.LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
+    // BARE `LightTune`, not `window.LightTune`. js/game/lighting.js declares it
+    // as `const LightTune = (function () {`, and a top-level `const` in a
+    // CLASSIC script creates a script-scoped binding — it is NOT a property of
+    // window, unlike `var` or the explicit `window.X =` form that ariastate.js,
+    // css-zoom.js and sheetshape.js use. So `window.LightTune` was undefined and
+    // this line threw `Cannot read properties of undefined (reading
+    // 'TUNE_DEFS')`. The bare identifier resolves through the same global scope
+    // the page's own modules use, which is how every other LightTune reader in
+    // tests/ already does it. This was the only `window.LightTune` in the tree.
+    const pick = (id) => (LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
     return { shadowsMax: pick("shadows").max, gammaGMin: pick("gammaG").min };
   });
   expect(bounds.shadowsMax, "SHADOWS has no max in TUNE_DEFS — the clamp test would be vacuous").toBeGreaterThan(0);

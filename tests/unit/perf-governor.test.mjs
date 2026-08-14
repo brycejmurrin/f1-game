@@ -34,9 +34,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/game/perf.js"), "utf8");
 
-// A fake renderer: setRenderScale clamps to [0.5, 1] and reports whether the
-// scale actually changed (the real gfx contract PerfGov.tick() relies on to
-// decide whether it spent a cooldown for nothing).
+// A fake renderer mirroring GLX.setRenderScale (js/render/glx.js) EXACTLY,
+// dead zone and all.
+// It used to test `s === scale`, which is NOT the shipped contract: the real
+// setRenderScale rejects any change smaller than 0.02. That gap hid two live
+// defects for as long as this file has existed, because the governor's float
+// step chain lands on 0.5000000000000001 going down and 0.9800000000000004
+// coming back up — both inside the real dead zone, neither inside `s === scale`.
+// With the exact contract in place these tests fail on the old code, which is
+// how they should have caught it. Do not simplify this back.
+const SCALE_EPS = 0.02;
 function makeGov() {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
   globalThis.window = { __APEX_BUILD: 1 };
@@ -47,7 +54,7 @@ function makeGov() {
     getRenderScale: () => scale,
     setRenderScale: (s) => {
       s = Math.max(0.5, Math.min(1, s));
-      if (s === scale) return false;
+      if (Math.abs(s - scale) < SCALE_EPS) return false;   // GLX.setRenderScale, verbatim
       scale = s; return true;
     },
   };
@@ -117,7 +124,10 @@ function makeGovAtFloor() {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
   globalThis.window = { __APEX_BUILD: 1 };
   const PerfGov = eval(SRC + ";PerfGov");
-  const gfx = { isMobile: true, getRenderScale: () => 0.5, setRenderScale: () => false };
+  // 0.5000000000000001, NOT 0.5 — the value the real down-chain actually reaches
+  // (1 -0.1-> ... -> 0.5000000000000001). Pinning an exact 0.5 here made the
+  // "scale floor" case unreachable in the very test written to cover it.
+  const gfx = { isMobile: true, getRenderScale: () => 0.5000000000000001, setRenderScale: () => false };
   PerfGov.init(gfx);
   return PerfGov;
 }
