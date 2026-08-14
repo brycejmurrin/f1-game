@@ -174,9 +174,8 @@ function buildSelect() {
   if (G.seasonMode) {
     // Non-interactive preview of the upcoming season circuit
     els.selTracks.textContent = "";
-    updateTrackPreview();
+    updateTrackPreview();       // …which also writes the "Round n of N" caption
     const rnd = (G.season && G.season.round || 0) + 1;
-    els.selPreviewRec.textContent = "Round " + rnd + " of " + SeasonCal.rounds();
     // The way in to SEASON SETUP. Built here rather than put in index.html so it
     // exists ONLY in the season branch — #select's pixel golden is captured
     // through GRAND PRIX (tests/specs/menu-baseline.spec.js), and a button in the
@@ -453,10 +452,19 @@ function updateTrackPreview() {
     t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
     turns ? turns + " turns" : ""
   ].filter(Boolean).join("  ·  ");
+  // THE CAPTION IS THIS FUNCTION'S, in every mode. The season branch used to write
+  // "Round n of N" in buildSelect() AFTER calling us — which held only until the
+  // next preview refresh, and there is always a next one: the card re-measures on
+  // resize and again when the deferred flyby build lands. So the season select
+  // screen blanked its own round counter a beat after showing it. Rendering it
+  // here, where the `else` that wiped it lives, is the fix.
   if (G.timeTrial) {
     const board = ttBoard(t.id);
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
+  } else if (G.seasonMode) {
+    els.selPreviewRec.textContent = "Round " + ((G.season && G.season.round || 0) + 1)
+      + " of " + SeasonCal.rounds();
   } else {
     els.selPreviewRec.textContent = "";
   }

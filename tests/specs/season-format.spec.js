@@ -13,11 +13,20 @@ import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-/** Seed the season config + a clean season, then boot to the title screen. */
+/** Seed the season config, then boot to the title screen.
+ *
+ *  EVERY STATEMENT IN HERE MUST BE IDEMPOTENT. addInitScript runs before EVERY
+ *  navigation in the page, reloads included — so a `removeItem("apex26.season")`
+ *  here (which this had, to defend against nothing: Playwright hands each test a
+ *  fresh context with empty storage) fires again on `page.reload()` and deletes
+ *  the very save the reload was meant to prove had survived. Seeding is safe;
+ *  clearing is not. */
 async function boot(page, cfg) {
   await page.addInitScript((c) => {
     localStorage.setItem("apex26.seasonCfg", JSON.stringify(c));
-    localStorage.removeItem("apex26.season");
+    // Retirements off: these tests are about who SCORES what, and a gearbox
+    // failure on the way to a scripted win is noise with a 1-in-N chance of
+    // reading as a points bug.
     localStorage.setItem("apex26.reliability", JSON.stringify("off"));
   }, cfg);
   await page.goto("/");
@@ -50,10 +59,19 @@ async function toTheGrid(page, { quali = true } = {}) {
 }
 
 /** Win the race outright and land on #results. park(0.9) is the furthest-along
- *  car, and finishRace() classifies by progress. */
+ *  car, and finishRace() classifies by progress.
+ *
+ *  WAIT ON park()'s OWN RETURN, not on the game state. `info().state` turns
+ *  "count" the moment startRace() is entered, but park() answers falsy until the
+ *  track is built and the player has a world pose — and the Grand Prix leg of a
+ *  sprint weekend re-enters startRace() straight off the results screen, where
+ *  that build is deferred. Parking on the state alone passed alone and failed
+ *  under parallel load, which is the signature of exactly this race. */
 async function winAndFinish(page) {
-  await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
-  await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+  await page.waitForFunction(() => !!window.__apex.park(0.9), undefined,
+    { timeout: 20_000, polling: 100 });
+  await page.evaluate(() => window.__apex.finishRace());
+  await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
 }
 
 const saved = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.season")));
@@ -89,18 +107,23 @@ test.describe("Season — a custom calendar", () => {
   });
 
   test("a shortened calendar crowns its champion at ITS last round", async ({ page }) => {
-    await boot(page, { trackIds: ["monza", "monaco"] });
-    for (const round of [1, 2]) {
-      await toRaceSettings(page);
-      await toTheGrid(page);
-      await winAndFinish(page);
-      const s = await saved(page);
-      expect(s.round, `after round ${round}`).toBe(round);
-      await page.locator("#res-next").click();
-      await page.waitForTimeout(300);
-    }
-    // Round 2 of 2 is the end of the season: the FIRST res-next click builds the
-    // champion panel in place rather than starting a third round.
+    // ONE round, deliberately. The claim under test is that the season ends at the
+    // calendar's OWN length instead of at Tracks.SEASON's 24, and one round proves
+    // that as sharply as two — while a second full weekend (menu → garage → quali
+    // → race again) is another ~60 s and put this case at the 120 s test ceiling.
+    // Round-to-round advancement is covered by the sprint cases below, which race
+    // twice on one round, and by season.spec.js.
+    await boot(page, { trackIds: ["monza"] });
+    await toRaceSettings(page);
+    await toTheGrid(page);
+    await winAndFinish(page);
+    expect((await saved(page)).round).toBe(1);
+    // The last round is run, so the button offers to END the season rather than
+    // to start round 2 of a calendar that has none.
+    await expect(page.locator("#res-next")).toHaveText("FINISH SEASON");
+    await page.locator("#res-next").click();
+    // …and the FIRST click builds the champion panel in place rather than leaving
+    // the results screen.
     await expect(page.locator("#results-title")).toHaveText("WORLD CHAMPION");
   });
 });
