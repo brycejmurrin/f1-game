@@ -38,7 +38,8 @@ numbers below transfer 1:1 with no conversion.
 
 ## 3. What the table found wrong
 
-Three defects, each one a spec violation rather than an opinion:
+Four defects, each one a spec violation or a plain modelling error rather than
+an opinion:
 
 **Mirrors were inboard of the legal volume and above its ceiling.** They sat at
 `x 0.44, y 0.735`. `RV-MIRROR-BODY` is `Y 470…680`, `Z 640…720` — so they were
@@ -49,6 +50,14 @@ correct read, and the regulations say exactly how far.
 2 cm wide and 13.5 cm tall. C14.2.2 b specifies **200 mm wide × 50 mm high**.
 The mirror was rotated 90° from its real proportions and roughly 4× out in both
 axes, which is most of why it read as a floating slab rather than a mirror.
+
+**The reflective surface was on the wrong side of the housing.** The glass sat
+at `mz + 0.066` while the housing's own back face is at `mz + 0.0575` — 8 mm
+*beyond* it, on the side facing away from the viewer. The driver (at `z −0.18`,
+looking forward at a mirror at `z 0.92`) and the chase camera (behind the car)
+both see the **−z** face, so both were looking at the dark carbon shell and the
+reflective surface was unreachable from any camera in the game. After moving it
+to `mz − 0.038`, 97% of visible mirror pixels land on the glass face.
 
 **The stays did not reach the car.** The stalk rooted at `y 0.68, x 0.36`, while
 the tub crown at that station (`z 0.92`) is at `y 0.508`, outer edge `x 0.535` —
