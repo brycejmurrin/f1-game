@@ -72,3 +72,33 @@ test("every token defined in css/tokens.css is read somewhere", () => {
     "a token in css/tokens.css has no consumer. Delete it — an unread token is an invitation to " +
     "use a value nobody has been maintaining. If it is genuinely a public hook, say so here.");
 });
+
+// A SHEET THAT DECLARES `.pane-pair` MUST DECLARE `--pair-at`.
+//
+// js/game/sheetshape.js:classifyPair reads that property to decide `data-pair`,
+// and its miss branch is silent by design: no value means DELETE the attribute
+// and return. So a pair sheet that forgets it does not fail loudly — it renders
+// as a plain vertical stack, and because `data-pair="on"` is what puts the panes
+// in a `minmax(0, 1fr)` row with `min-height: 0`, the panes never get a bounded
+// height and `.pane`'s own `overflow-y: auto` has nothing to scroll against.
+//
+// That is not hypothetical. #season-setup shipped without it: measured at
+// 844x390 the calendar pane stood at its full 1417px, ADD A CIRCUIT began
+// 1063px below the fold, and the sheet became one 2526px scroll with BACK and
+// APPLY at the bottom of it. The layout looked deliberate enough that only a
+// measurement found it, which is exactly the kind of miss a cheap structural
+// guard should own rather than a browser spec per screen.
+test("every .pane-pair sheet declares the --pair-at that switches it on", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const css = walk(path.join(ROOT, "css"))
+    .map((f) => stripComments(fs.readFileSync(f, "utf8"))).join("\n");
+
+  const pairs = [...html.matchAll(/<div id="([\w-]+)"[^>]*class="[^"]*\bpane-pair\b/g)].map((m) => m[1]);
+  assert.ok(pairs.length >= 3, `only found ${pairs.length} pane-pair sheets — the scan broke, not the shell`);
+
+  const missing = pairs.filter((id) => !new RegExp("#" + id + "\\b[^{}]*\\{[^{}]*--pair-at\\s*:").test(css));
+  assert.deepEqual(missing, [],
+    "a .pane-pair sheet has no --pair-at, so js/game/sheetshape.js will delete its data-pair and " +
+    "the two panes will stack at full height instead of becoming bounded scroll regions. " +
+    "Declare it beside the sheet's --sheet-w (620px matches #sel-inner / #cr-inner / #ss-inner).");
+});
