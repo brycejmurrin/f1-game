@@ -154,7 +154,17 @@ const CEILINGS = {
   // declaration plus the comment recording why sharing one object is safe (the
   // callee is read-only and spawnMarble retains nothing) -- the ratchet-tolerated
   // kind, since the alternative is a reader re-deriving that safety argument.
-  "js/game.js": 8064,
+  // 8064 -> 8079: an EXACT cheap reject in pairContact before the wrap. The
+  // wrap-normalise ran for every ordered pair on every relaxation pass (20 cars
+  // = 190 pairs x 5 passes = ~950 calls per physics step) and a 3M-pair
+  // equivalence sweep put acceptance at 0.18%, so ~99.8% of those two float
+  // modulos existed only to prove "not touching". The growth is the comment
+  // carrying the proof -- that |wrapped| <= LCAR iff |dProg| <= LCAR or
+  // |dProg| >= L - LCAR, hence the new test discards exactly the same pairs in
+  // the same order. Without that written down the next reader cannot tell an
+  // exact reject from a conservative pre-filter, and this sits inside collision
+  // resolution where a wrong guess changes racing.
+  "js/game.js": 8079,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

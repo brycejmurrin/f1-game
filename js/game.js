@@ -3231,6 +3231,21 @@ function resolveCollisions(ranked, dt) {
     let dProg = a.prog - b.prog;
     if (!Number.isFinite(dProg)) return null;   // never let a corrupt car spread NaN
     const L = track.total;
+    // Cheap reject BEFORE the wrap. This runs for every ordered pair on every
+    // relaxation pass — 20 cars is 190 pairs x 5 passes = ~950 calls per physics
+    // step — and in the overwhelmingly common frame NONE of them are in contact,
+    // so the two float modulos below were being spent almost entirely to prove
+    // "not touching".
+    //
+    // The test is EXACT, not a conservative pre-filter. Both prog values live in
+    // [0, L), so dProg is in (-L, L) and the wrap maps it into [-L/2, L/2).
+    // Working through both signs, |wrapped| <= LCAR holds iff |dProg| <= LCAR
+    // (near side) or |dProg| >= L - LCAR (wrapped across the start line). So
+    // rejecting strictly between those two bounds discards exactly the pairs the
+    // old `Math.abs(dProg) > LCAR` check discarded after wrapping — same pairs,
+    // same order, no behaviour change, and the surviving few still wrap below.
+    const adProg = dProg < 0 ? -dProg : dProg;
+    if (adProg > LCAR && adProg < L - LCAR) return null;
     dProg = ((dProg + L / 2) % L + L) % L - L / 2;
     if (Math.abs(dProg) > LCAR) return null;
     const dX = a.x - b.x;
