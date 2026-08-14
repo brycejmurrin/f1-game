@@ -298,7 +298,25 @@ const GLX = (function () {
       // (document.hidden), a benign transient loss that shouldn't permanently
       // disable the env probe. Persisting the opt-out otherwise stops a
       // lose→reload→lose loop on genuinely memory-tight devices.
-      if (!document.hidden) { try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) {} }
+      // PER-CHUNK LAMPS goes off with it, and for a stronger reason than the
+      // probe's. The crash sentinel that would otherwise pre-degrade a device
+      // that died last session is MOBILE ONLY by design (js/game/perf.js gates
+      // its whole strike ledger on gfx.isMobile so the desktop test suite never
+      // enters safe mode) — so on desktop a context loss leaves NO persistent
+      // trace at all. The tier gate on this feature only fires once PerfGov has
+      // WATCHED frames run slow; a driver watchdog reset can arrive in a single
+      // bad frame, long before the governor reacts. Without this line the cycle
+      // is: reset -> reload -> knob still on (it is persisted in the tuner
+      // store) -> same configuration -> reset again, which is a player reporting
+      // that the game crashes every time they try to play rather than once.
+      //
+      // Same visibility condition as the probe: iOS drops the context on
+      // backgrounding, and that benign transient must not disable a feature the
+      // player deliberately turned on.
+      if (!document.hidden) {
+        try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* No storage (Safari private mode) or quota full: the probe simply stays on next boot, which is the pre-existing behaviour — a failed latch must not also break the loss handler. */ }
+        try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* Same: without storage the knob stays as the player left it and the tier gate is the only defence left. Nothing here may throw — this runs inside webglcontextlost. */ }
+      }
     }, false);
     canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
 
