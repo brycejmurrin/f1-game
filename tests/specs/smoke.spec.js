@@ -10,10 +10,46 @@ async function waitForTrack(page, timeout = 10_000) {
   );
 }
 
+// Helper: stop the render loop, for a phase that does not look at the canvas.
+//
+// THE MENUS ARE THE EXPENSIVE PART OF THIS FILE, not the rendering they sit in
+// front of. playwright.config.js already records half of why: Playwright's
+// actionability poll ticks on rAF, so every .click() waits on the page's frame
+// clock, and under SwiftShader that clock is driven by a full 3D redraw running
+// behind the menu. Its conclusion was "CPU headroom is the lever" — this is the
+// other way to get headroom: stop the redraw instead of rationing workers.
+//
+// MEASURED 2026-08-14 (scratch/corner-approach-phases.mjs, one browser, idle box)
+// on "corner approach renders a non-blank frame", 44.2 s end to end:
+//     menu clicks                     29.3 s   66 %
+//     canvas screenshot               11.1 s   25 %
+//     page load                        2.3 s    5 %
+//     waitForTrack (track build)      0.02 s    0 %
+//     corners() + park()              0.009 s   0 %   <- the part it is named for
+// Quieting the renderer across the clicks took the same run to 29.6 s (-33 %),
+// and the whole-variant benchmark (scratch/smoke-speedup-bench.mjs, 2 reps) put
+// it at 30.9 s best / 35.5 s mean against 43.8 s / 53.1 s for the current path.
+//
+// CI is where this matters: run 1415 needed 357.7 s for "the select screen is a
+// circuit picker", a spec that is ~pure menu navigation and asserts nothing about
+// the canvas — the single most expensive test in the suite, spending all of it on
+// clicks waiting for frames nobody looks at.
+async function quietRenderer(page) {
+  await page.waitForFunction(() => !!window.__apex, { timeout: 60_000 });
+  await page.evaluate(() => window.__apex.headless(true));
+}
+
 // Helper: navigate to the page, click RACE, then click START.
 // Returns after startRace() completes (state === "count").
+//
+// The renderer is quiet for the CLICKS ONLY and is switched back on before this
+// returns, so every caller sees exactly the state it saw before — the screenshot
+// specs still get a live scene to park in, and the minimap/HUD specs still get a
+// drawn canvas. Leaving it off would be faster still and would silently blank
+// the three specs that actually read pixels.
 async function goToRace(page) {
   await page.goto("/");
+  await quietRenderer(page);
   // Dismiss any overlay — the RACE button lives in the main menu
   await page.locator("#mb-race").click();
   // Leave the circuit at its default; START opens the GARAGE...
@@ -21,6 +57,8 @@ async function goToRace(page) {
   // ...and DONE carries on to the race settings, which we accept as they are.
   await page.locator("#cs-done").click();
   await page.locator("#rs-go").click();
+  // Renderer back on BEFORE the track wait, so callers get the live scene.
+  await page.evaluate(() => window.__apex.headless(false));
   await waitForTrack(page);
 }
 
@@ -90,6 +128,11 @@ test.describe("Apex 26 — smoke", () => {
 
   test("the select screen is a circuit picker, and START opens the garage", async ({ page }) => {
     await page.goto("/");
+    // Every assertion below is DOM — visibility, counts, which sheet is open.
+    // Nothing here reads the canvas, so the 3D redraw behind these menus is pure
+    // cost: this spec took 357.7 s in CI run 1415, the slowest in the suite, and
+    // it is the one test in it that never looks at a rendered pixel.
+    await quietRenderer(page);
     await page.locator("#mb-race").click();
 
     await expect(page.locator("#select")).toBeVisible();
