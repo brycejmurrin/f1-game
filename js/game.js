@@ -1628,7 +1628,7 @@ Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp } = CarMesh;
+        getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 const _decalTexCache = {}, _decalTexFail = {};
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
@@ -1831,11 +1831,11 @@ function cockpitBodyMesh(team) {
 }
 // Hub transform (translate + slight upscale) and scratch matrices for the
 // steering roll + per-element LCD offsets.
-// Wheel/dash hub at z 0.71: the cockpit eye moved fwd 0.02 → 0.32 (past the
-// shoulder fairing), so the rig moves with it to keep the proven eye-to-wheel
-// distance of 0.39 m — at the old z 0.41 the fascia sat 9 cm from the eye and
-// filled the frame as an unfocused black mass.
-const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.83,0.71,1]);
+// Wheel/dash hub at CAR-LOCAL z 0.45, eye at COCKPIT_EYE_FWD 0.06 — the proven
+// ~0.39 m reach, but both back INSIDE the tub. At z 0.71 the wheel sat ahead of
+// the dash coaming (car3d z 0.60) and the halo pillar (0.62) — hands through the
+// bodywork, and an eye that saw no cockpit at all (cameras.js has the measurement).
+const _rigT = new Float32Array([0.80,0,0,0, 0,0.80,0,0, 0,0,0.80,0, 0,0.48,0.30,1]);
 const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -1882,7 +1882,8 @@ function drawCockpitRig(c, base, dt, paint) {
   const fx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
   gfx.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
   const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  gfx.draw(getLedStrip(Math.round(rpmF * 8)), _rigB, fx);
+  gfx.draw(getLedStrip(rpmF > 0.965 ? (raceT * 14 % 1 < 0.5 ? 9 : 0) : Math.round(rpmF * 8)), _rigB, fx);
+  drawWheelExtras(_rigB, c, raceT);   // ACTIVE AERO lamp + flap-travel bar (carmesh.js)
   // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
   // reversing glitch) would otherwise stringify with a "-" character that
   // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).
@@ -2168,7 +2169,7 @@ function snapGameCam() {
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
-    bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0,
+    bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
     // Same car pose the live rig uses. Without it snapCam() silently fell back to
     // the road-frame framing, so the snapped view disagreed with the live one —
     // which the comment above says they must not do.
@@ -5220,7 +5221,7 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player, pS, px);
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
-      bankDy, deploy: player.deploying, slipLat: player.vLat || 0,
+      bankDy, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
       // the car's real world pose, so the chase rig can follow the CAR
       carPos: rpCam.world ? [rpCam.x, rpCam.z] : null,
       carHead: headInterp(player),
@@ -5303,7 +5304,7 @@ function render(dt) {
     // 30 and 120 Hz devices converge at the same real-time rate.
     const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    camRoll = damp(camRoll, roadCamRoll + camSlipSm * 0.07, 7, dt);
+    camRoll = damp(camRoll, roadCamRoll + camSlipSm * 0.07 + (onboard && player ? (player.baRoll || 0) * 0.85 : 0), 7, dt);   // + chassis roll: a bolted-on camera leans with the car (cameras.js onboardAttitude)
   }
 
   // Debug free camera (set via __apex.view) overrides the chase cam — instant

@@ -437,12 +437,17 @@ function getCockpitWheel() {
 // RPM like the real wheel: greens, ambers, reds, then the blue "shift now"
 // pair. One cached mesh per lit-count (9 tiny meshes, wheel-local coords).
 const _ledMeshes = {};
+// `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
+// wheel does not just fill the strip and stop — at the shift point the whole
+// row strobes blue, which is the cue a driver actually upshifts on, and it is
+// the one state the fill-only ramp could never express (8 lit and 8 lit-plus-
+// past-it looked identical). The caller alternates 9 and 0 to strobe it.
 function getLedStrip(lit) {
   if (_ledMeshes[lit]) return _ledMeshes[lit];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const COLS = [[0.2,1.8,0.4],[0.2,1.8,0.4],[0.2,1.8,0.4],[1.8,0.9,0.15],[1.8,0.9,0.15],[1.9,0.2,0.15],[1.9,0.2,0.15],[0.9,0.4,2.2]];
   for (let i = 0; i < 8; i++) {
-    const col = i < lit ? COLS[i] : [0.05, 0.05, 0.06];
+    const col = lit === 9 ? [0.85, 0.45, 2.4] : i < lit ? COLS[i] : [0.05, 0.05, 0.06];
     _rigBox(out, -0.070 + i * 0.020, 0.082, -0.026, 0.013, 0.013, 0.010, col);
   }
   _ledMeshes[lit] = _gfx.createMesh(out);
@@ -497,6 +502,67 @@ function getErsBar() {
   _ersBarMesh = _gfx.createMesh(out);
   return _ersBarMesh;
 }
+// ACTIVE AERO readout, wheel-mounted. In cockpit view the HUD's whole aero chip
+// is hidden (css/track-detail.css `body.cockpit-cam #hud-aero`), so without this
+// the driver has NO aero information at all — the same gap the OVERTAKE lamp
+// fills for its own button, and the reason this mirrors that lamp across the
+// wheel rather than inventing a second idiom.
+//
+// Both parts key off `aeroX` — the FLAP TRAVEL — not the switch, the same
+// choice js/game/hud.js documents ("the readout follows the wing rather than
+// the button"): a flap caught part-open reads as part-open instead of lying in
+// either direction. The lamp answers "what mode am I in", the bar answers "how
+// far has the wing actually moved", which is the question a driver watching the
+// X-mode transition on a straight actually has.
+const _aeroLamps = {};
+function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2 open
+  if (_aeroLamps[state]) return _aeroLamps[state];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const COL = state === 2 ? [0.30, 1.75, 2.20]      // X-MODE: the cyan the HUD chip uses
+            : state === 1 ? [1.70, 1.05, 0.20]      // armed: amber, "press it"
+            : [0.10, 0.10, 0.13];                   // dark: no zone here, or nothing to do
+  _rigBox(out, 0.082, 0.024, -0.031, 0.019, 0.019, 0.003, COL);
+  _aeroLamps[state] = _gfx.createMesh(out);
+  return _aeroLamps[state];
+}
+// Travel bar under the lamp. Anchored at x=0 (box spans 0..w) so the caller
+// scales the matrix X column by the travel — the same trick getErsBar uses on Y.
+let _aeroBarBg = null, _aeroBarFill = null;
+function getAeroBar(fill) {
+  if (fill ? _aeroBarFill : _aeroBarBg) return fill ? _aeroBarFill : _aeroBarBg;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const W = 0.030;
+  _rigBox(out, W / 2, 0, 0, W, 0.005, 0.003, fill ? [0.30, 1.75, 2.20] : [0.05, 0.06, 0.08]);
+  const m = _gfx.createMesh(out);
+  if (fill) _aeroBarFill = m; else _aeroBarBg = m;
+  return m;
+}
+// The per-frame wheel extras — anything that needs live car state and would
+// otherwise cost the caller a draw call per part. Kept here rather than in
+// game.js because that file sits AT its module-size ratchet (CLAUDE.md), and
+// because the geometry it draws is defined three functions up.
+const _axT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+const _axM = new Float32Array(16);
+const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
+function drawWheelExtras(mat, c, t) {
+  const ax = Math.max(0, Math.min(1, c.aeroX || 0));
+  const open = ax > 0.05;
+  _gfx.draw(getAeroLamp(open ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
+  // The bar only appears once there is travel to report. A permanently visible
+  // empty gauge on a circuit with no aero zones (Monaco) is clutter that says
+  // nothing — the dark lamp already carries "not a thing that exists here".
+  if (ax <= 0.02) return;
+  _axT[12] = 0.067; _axT[13] = 0.004; _axT[14] = -0.0315;
+  M4.mulTo(_axM, mat, _axT);
+  _gfx.draw(getAeroBar(false), _axM, _AX_FX);
+  _axM[0] *= ax; _axM[1] *= ax; _axM[2] *= ax;
+  _gfx.draw(getAeroBar(true), _axM, ax < 0.999
+    // Mid-travel pulses: the flap takes ~0.385 s to open and ~0.125 s to shut
+    // (X_OPEN_RATE / X_CLOSE_RATE in physics-consts.js), and a moving wing is
+    // exactly when the driver wants to know it is moving.
+    ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 + 0.35 * Math.sin(t * 20) }
+    : _AX_FX);
+}
 let _otArmedMesh = null, _otActiveMesh = null;
 function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
@@ -507,5 +573,5 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras };
 })();

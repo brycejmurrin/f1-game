@@ -22,7 +22,21 @@ const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (groun
 // Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
 // the rig origin is derived by SUBTRACTING these from the live camEye, so the
 // two must stay identical or the driver's eye drifts out of the cockpit.
-const COCKPIT_EYE_FWD = 0.32, COCKPIT_EYE_UP = 0.99;
+// 0.06, not 0.32: the rig origin IS the car origin (game.js derives it as
+// camEye − fwd·FWD − up·UP), so FWD is literally where the driver's head sits in
+// CAR-LOCAL z — and the tub is built around z 0. At 0.32 the eye sat forward of
+// the dash coaming (car3d.js builds it at z 0.60) with the survival-cell walls,
+// the halo pillar and the mirrors all BEHIND the camera: measured on Monza, the
+// "cockpit" view rendered no cockpit at all, just the nose from above, which is
+// a hood cam by another name. 0.06 puts the head back between the tub shoulders
+// where it belongs, with the coaming, halo and mirrors ahead of it in frame.
+// UP is metres above the ROAD, and car3d.js builds the tub around it: dash
+// coaming y 0.62, halo hoop 0.74-0.81, survival-cell walls topping out at 0.88.
+// At 0.99 the eye floated ABOVE all of it — above the halo, above the shoulders
+// — which is why the "cockpit" rendered as a hovering hood cam with no car in
+// frame however far back it was pulled. 0.72 seats the driver where the tub
+// says the seat is: just over the coaming, inside the halo, between the walls.
+const COCKPIT_EYE_FWD = -0.10, COCKPIT_EYE_UP = 0.72;
 
 // Chase eye sits BEHIND *and* OFFSET TO ONE SIDE of the car — a 3/4
 // over-the-shoulder framing — instead of dead-centre on the rear wing. The
@@ -145,9 +159,42 @@ function rideGrade(track, s) {
   return (rideY(track, s + RIDE_GRADE) - rideY(track, s - RIDE_GRADE)) / (2 * RIDE_GRADE);
 }
 
+// AN ONBOARD CAMERA IS BOLTED TO THE CHASSIS, so it inherits what the chassis
+// does. js/game/bodyattitude.js already pitches, rolls and heaves the car BODY
+// under braking, power and cornering — visibly, on the mesh — but the onboard
+// eye was built purely from the road, so the one view where you sit IN the car
+// was the one view that could not feel it: brake from 300 and the world stayed
+// dead level while the car it is bolted to dived.
+//
+// These offsets are render-only and read state bodyattitude already published
+// (baPitch/baRoll/baHeave, all small and clamped there). Applied ONLY to
+// cockpit/hood — a broadcast camera is on a tripod and must stay level.
+//
+// KERB RUMBLE IS SPATIAL, not temporal: a rumble strip is a row of physical
+// ribs, so the shake is driven off arc position `s`, not a clock. That makes it
+// deterministic (no Date.now — the same rule bodyattitude.js keeps), and it
+// scales itself with speed for free, because s advances faster when you do.
+const KERB_RIB_M = 3.4;      // metres per rumble cycle as the view feels it
+const KERB_AMP = 0.011;      // m of eye travel at full scaling — a shiver, not a bounce
+function onboardAttitude(mode, eye, tgt, extra, s, spN) {
+  const a = extra.att;
+  if (!a) return;
+  // Heave TRANSLATES the eye (the camera goes up and down with the tub); pitch
+  // ROTATES the aim (the horizon lifts and drops). Both signs follow the body:
+  // baPitch > 0 is nose-down dive, which raises what you see of the road.
+  const heave = a.baHeave || 0, pitch = a.baPitch || 0;
+  const kerb = a.onKerb ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
+  eye[1] += heave + kerb;
+  // The aim sits ~30 m out in both onboard branches, so a small angle is a
+  // metres-scale lift there. 24 keeps the horizon movement readable without
+  // turning a dab of brake into a camera swing.
+  tgt[1] += heave + pitch * 24;
+}
+
 // vantage(track, mode, s, x, spd, now, extra) → { eye, tgt, fov }
 // extra — { bankDy (banking lift), deploy (ERS FOV kick), slipLat (lateral
-// slip m/s, for the drift cam) } — all optional and treated as 0 when absent.
+// slip m/s, for the drift cam), att (the player car, for the onboard chassis
+// attitude above) } — all optional and treated as 0/absent when missing.
 function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
   const wrapS = (v) => { const L = track.total; v %= L; return v < 0 ? v + L : v; };
@@ -470,6 +517,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const MIN_CLEAR = 0.8, CLAMP_BLEND = 0.35;
     eye[1] = softFloor(eye[1], ground + MIN_CLEAR, CLAMP_BLEND);
   }
+  // LAST, deliberately: the chassis wobble rides on top of the finished framing,
+  // including the CAMERA TUNER offsets, so a tuned onboard shakes the same way
+  // an untuned one does instead of having its wobble scaled by a user slider.
+  // tcam joins cockpit/hood here — it is bolted to the roll hoop, so it rides
+  // the chassis too. It is NOT in `onboard` above, which is about which
+  // ELEVATION CURVE a mode samples, a different question with a different answer.
+  if (onboard || mode === "tcam") onboardAttitude(mode, eye, tgt, extra, s, spN);
   return { eye, tgt, fov };
 }
 
