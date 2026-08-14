@@ -42,6 +42,14 @@ test("IMAGE & COLOUR exposes ordered professional grading sections", async ({ pa
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.lightTune") || "{}"));
 
 test("COPY ALL arms, spreads the condition to every other track, and undoes", async ({ page }) => {
+  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
+  // spreads a condition across all 40 circuits and then undoes it. Measured
+  // 133-158 s in a two-worker group run against the 120 s default, while
+  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
+  // ceiling, not the code, is what fails. Adding a circuit makes it slower
+  // again, so the budget is set from what the test actually does. Same remedy
+  // and reason as tests/specs/bahrain-foundation.spec.js:5.
+  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.locator("#lt-wx-wet").click();
@@ -70,6 +78,14 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
 });
 
 test("switching the previewed condition disarms a pending COPY ALL", async ({ page }) => {
+  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
+  // spreads a condition across all 40 circuits and then undoes it. Measured
+  // 133-158 s in a two-worker group run against the 120 s default, while
+  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
+  // ceiling, not the code, is what fails. Adding a circuit makes it slower
+  // again, so the budget is set from what the test actually does. Same remedy
+  // and reason as tests/specs/bahrain-foundation.spec.js:5.
+  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.evaluate(() => window.__apex.lightTune({ gainB: 1.2 }));
@@ -90,6 +106,14 @@ test("switching the previewed condition disarms a pending COPY ALL", async ({ pa
 });
 
 test("__apex.lightCopy('look') levels every track at that condition, and undoes", async ({ page }) => {
+  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
+  // spreads a condition across all 40 circuits and then undoes it. Measured
+  // 133-158 s in a two-worker group run against the 120 s default, while
+  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
+  // ceiling, not the code, is what fails. Adding a circuit makes it slower
+  // again, so the budget is set from what the test actually does. Same remedy
+  // and reason as tests/specs/bahrain-foundation.spec.js:5.
+  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.evaluate(() => { window.__apex.setTimeOfDay("night"); window.__apex.weather("wet"); });
   const r = await page.evaluate(() => window.__apex.lightCopy("look"));
