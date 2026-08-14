@@ -337,7 +337,8 @@ constant, and game.js already calls this pass "the biggest per-frame load
 multiplier" — the mitigation that shipped halved its *rate*, not its *reach*.
 
 **NO LONGER AN ESTIMATE (2026-08-14).** "Potentially hundreds of chunk draws"
-was a guess; the reach is now COUNTED, by the method this document argues for —
+was a guess; the reach is now COUNTED by `tools/chunk-reach.cjs`, which is the
+method this document argues for made repeatable —
 replicate `createChunkedMesh`'s 72 m centroid binning in the Node VM build
 harness (`tools/track-build-vm.cjs`) and count what survives, at 12 stations a
 lap. Over a full 6-face cube the probe sees every direction, so its coverage is
