@@ -383,23 +383,11 @@
         addBox(out, vadd(a.c, a.u, y), [0.5, blockH, len], CRIMSON, b);
         out._mat = 0;
         // Two words of unequal length, gapped — the shape of the real name.
-        // Letter blocks were 0.18 m deep (r), nested well inside the 0.5 m
-        // panel behind them at the SAME r-centre — a real, non-marginal
-        // overlap. Measured via float-audit: 9 of them still floated
-        // ~11.5 m clear regardless (embedding them deeper, growing height,
-        // or duplicating the panel's own footprint at each letter's
-        // position all left some subset floating; only growing r-depth
-        // past ~1 m consistently cleared it, in the same direction as
-        // every other "should-touch-but-doesn't" case in this pass —
-        // measured, not fully explained). At sign-reading distance ("reads
-        // as a wordmark... at 250 km/h") 4 m of depth reads the same as
-        // 0.18 m, so kept it the simple fix rather than chasing the cause
-        // further into js/track/ (out of scope for a circuit-data pass).
         let t = -len / 2 + 2.5;
         for (let i = 0; t < len / 2 - 2.5; i++) {
           const w = 0.9 + (i % 4) * 0.55;
           addBox(out, vadd(vadd(a.c, a.t, t + w / 2), a.u, y),
-                 [4.0, blockH * 0.52, w], cols, b);
+                 [0.18, blockH * 0.52, w], cols, b);
           t += w + ((i % 7 === 6) ? 2.6 : 0.75);   // wider break = word break
         }
       };

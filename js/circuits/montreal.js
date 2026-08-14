@@ -589,17 +589,7 @@
             // share, so the fight cannot occur. At this distance (gap 210,
             // across the water) the silhouette is what carries the sculpture,
             // and the splay reads the same.
-            // dt was [-1,-1,1,1] (all four T-quadrants). Measured via
-            // float-audit: the two +dt legs' feet came up 2-4 m short of
-            // support no matter how far down or how deep into a footing
-            // their own geometry reached (tried both) — moving ONLY the
-            // sign of dt (nothing else) took the cluster to zero, so the
-            // asymmetry is directional, not a real vertical/footprint gap.
-            // terrainYAt/groundYAt both return null this far off the ribbon
-            // (210 m out), so per-leg re-sampling wasn't available either.
-            // Kept on -dt only: still 4 legs at 4 different radii (dr, sc
-            // still vary), just both T-quadrants on the -t side.
-            const LEGS = [[-1, -1, 1.00], [1, -1, 1.07], [-1, -1, 1.14], [1, -1, 1.21]];
+            const LEGS = [[-1, -1, 1.00], [1, -1, 1.07], [-1, 1, 1.14], [1, 1, 1.21]];
             for (const [dr, dt, sc] of LEGS) {
               for (let i = 0; i < 6; i++) {
                 const f = i / 5, f2 = (i + 1) / 5;
