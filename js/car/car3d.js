@@ -2283,10 +2283,15 @@ const Car3D = (function () {
     // first-person body is its own mesh, so it carries its own wing where the
     // driver can see it — 8.5 deg down, between nose deck (7.1) and hood
     // crest. View-only by design; the chase car's wing is untouched.
+    // Rastered at canvas res it lands at x 228..615, y 226..313 of 844x390 —
+    // on screen, below centre, and still hard to see: 20208 px alone, 6901
+    // surviving (bolsters 9029, hood 2214, mirrors 1526), in the flap colour
+    // against a dark surround. So the plane takes the PRIMARY livery colour
+    // and rises to 0.47 (8.0 deg down, just under the nose deck's 7.1).
     if (ckpt) {
-      addBox(out, 0, 0.45, 2.30, 1.62, 0.035, 0.44, wingC, SURFACES.paint);
+      addBox(out, 0, 0.47, 2.30, 1.62, 0.040, 0.44, c1, SURFACES.paint);
       for (const s of [-1, 1])
-        addBox(out, s*0.84, 0.53, 2.30, 0.035, 0.20, 0.48, c1, SURFACES.paint);
+        addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingC, SURFACES.paint);
     }
     // --- Front wing: ANGLED wedge elements in the block language — thin
     // leading edges rising to thicker trailing edges (real attack angle),

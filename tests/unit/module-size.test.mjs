@@ -251,7 +251,9 @@ const CEILINGS = {
   // from a seated eye (12.9 deg down, under the hood crest at 9.8 — 0.01% of
   // frame), and the first-person body is its own mesh, so it carries its own
   // wing at a height the driver can actually see. Raised deliberately.
-  "js/car/car3d.js": 2734,
+  // 2734 -> 2739: the cockpit wing's placement is now a recorded measurement
+  // (screen rect at canvas res + what ate the other 13k px), not a guess.
+  "js/car/car3d.js": 2739,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
