@@ -3,10 +3,14 @@ import { test, expect } from "../helpers/fixtures.js";
 
 // Helper: wait for the game's __apex hook to report a non-null track,
 // meaning loadTrack() has finished and the renderer is up.
+// `polling: 100` for the same reason quietRenderer needs it (see below): this
+// waits on a page that is actively building and drawing a circuit, which is
+// exactly when rAF — waitForFunction's default clock — starves under SwiftShader
+// and stops bounding the declared timeout.
 async function waitForTrack(page, timeout = 10_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    { timeout }
+    { polling: 100, timeout }
   );
 }
 
@@ -74,6 +78,37 @@ async function park(page, frac = 0) {
   await page.evaluate((f) => window.__apex.park(f), frac);
   // Let the renderer flush at least two frames (~32 ms at 60 fps)
   await page.waitForTimeout(100);
+}
+
+// Helper: boot STRAIGHT INTO a race, skipping the menus entirely.
+//
+// For a spec whose subject is the rendered scene, the menu walk is pure setup
+// cost — and the measurements say it is most of the cost. __apex.race() exists
+// for precisely this ("Skips menus so a harness can render any track", see
+// js/game/apex.js), and the menu path it bypasses is not lost coverage: three
+// specs above still reach a race by clicking, and "the select screen is a circuit
+// picker" asserts that flow in detail on purpose.
+//
+// MEASURED 2026-08-14, four variants end to end, 2 reps each, every one required
+// to still produce a non-blank canvas (scratch/smoke-speedup-bench.mjs):
+//     current path (menus + quiet shot)      43.8 s best / 53.1 s mean
+//     menus quieted                          30.9 s      / 35.5 s
+//     no menus, WITHOUT the quiet shot       33.6 s      / 33.7 s   -> 0 bytes, FAILS
+//     no menus + quiet shot                  19.0 s      / 24.7 s   -> -57 %
+// The third row is why the pairing matters: skipping the menus makes everything
+// up to the screenshot fast, and then the screenshot times out, because it is
+// left racing the render loop with no headless() to quiet it. Fast and blank is
+// not a speedup — the two halves only work together.
+//
+// bahrain is the picker's own default, so these specs render the same circuit
+// they rendered when they clicked through the menus to get here.
+async function bootRace(page, trackId = "bahrain") {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__apex, { polling: 100, timeout: 60_000 });
+  await page.evaluate((t) => window.__apex.race(t), trackId);
+  // Generous: the menu walk used to absorb the circuit build, and this does not.
+  // CI has been measured taking 94 s just to boot a race on a starved runner.
+  await waitForTrack(page, 180_000);
 }
 
 // Helper: like park(), but for a test that is about to SCREENSHOT the canvas.
@@ -204,7 +239,7 @@ test.describe("Apex 26 — rendering", () => {
   test("grid start renders a non-blank frame", async ({ page }) => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-    await goToRace(page);
+    await bootRace(page);
     await parkForScreenshot(page, 0);
 
     const buf = await page.locator("canvas#game").screenshot();
@@ -213,7 +248,7 @@ test.describe("Apex 26 — rendering", () => {
   });
 
   test("corner approach renders a non-blank frame", async ({ page }) => {
-    await goToRace(page);
+    await bootRace(page);
 
     // Find the first corner on the track and park there
     const corners = await page.evaluate(() => window.__apex.corners());
@@ -225,7 +260,7 @@ test.describe("Apex 26 — rendering", () => {
   });
 
   test("jump() sets player speed and lateral offset", async ({ page }) => {
-    await goToRace(page);
+    await bootRace(page);
     // Enter race state first
     await park(page, 0);
     // Then jump to mid-lap at 60 m/s, 2 m right of centre
@@ -254,7 +289,7 @@ test.describe("Apex 26 — HUD", () => {
     // simply left behind, so it failed as a "flake" that was really a too-tight
     // clock. test.slow() triples the budget rather than loosening the assertion.
     test.slow();
-    await goToRace(page);
+    await bootRace(page);
     await park(page, 0);
     await page.evaluate(() => window.__apex.jump(0, 80, 0));
     // Wait for the HUD tick to flush the new speed value into the DOM.
@@ -284,7 +319,7 @@ test.describe("Apex 26 — HUD", () => {
     // seconds here. goToRace + park alone is most of the budget before this
     // test asserts anything.
     test.slow();
-    await goToRace(page);
+    await bootRace(page);
     await park(page, 0);
 
     // The HUD tick (~10 Hz) blits the pre-rendered track outline onto the 2D
