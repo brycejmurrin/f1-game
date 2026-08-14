@@ -125,7 +125,7 @@
       every(46, (k) => {
         const s = k / n;
         if (openArea(s)) return;
-        const h = hash(k * 67 + 17);
+        const h = hash(k * 67 + 19);
         if (h < 0.58) return;
         tree(k, h < 0.5 ? -1 : 1, 44 + h * 24, 8 + h * 4, [0.29, 0.34, 0.20]);
       });
@@ -190,7 +190,18 @@
           // External stair — a leaning slab, which is how it reads at speed.
           seat.box(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 0), [1.6, 19, 1.6], LIME_D, b);
           stage._mat = MAT.ROOF;
-          addFrustum(stage, vadd(a.c, a.u, 22.4), 6.4, 1.0, 3.6, TILE, 4, b);
+          // Base was 22.4, flush with the four corner posts' own top (base
+          // 19.4 + height 3.0 = 22.4) — measured via float-audit as still
+          // unsupported at that exact touch. 0.2 m overlap into the posts.
+          // Base was flush with the four corner posts' own top (22.4) —
+          // measured via float-audit as still unsupported there even at
+          // 0.2 m overlap into the posts. The posts (thin, 0.16 r) aren't a
+          // reliable support in the audit's own accounting; based on the
+          // main tower shaft's top (19, `seat.box(stage, a.c, [8, 19, 8]...`
+          // above) instead — the one primitive here with real footprint and
+          // direct ground contact. Widens through the deck/railing zone (a
+          // stone roof genuinely oversails its walls), unchanged top (26).
+          addFrustum(stage, vadd(a.c, a.u, 18.8), 6.4, 1.0, 7.2, TILE, 4, b);
         }, { required: true });
       }
       gantry(0.0, 8, [0.15, 0.15, 0.18]);

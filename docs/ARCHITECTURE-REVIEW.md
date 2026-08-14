@@ -367,11 +367,15 @@ most-load-bearing first.
   clamp rather than the takeover. The product question is untouched: should
   `wallAt` remain an outer bound during an R2 takeover, or is passing through
   the barrier the intended cost of a launch?
-- **Red Bull Ring's barrier dressing coverage has collapsed.**
-  `tests/specs/redbull-foundation.spec.js` asserts `walls.tightFrac > 0.99` and
-  measures **0.225** — 16 tight nodes out of 1,071. Confirmed pre-existing: a
-  headless recompute is byte-identical between the session-start commit and the
-  fixed tree. This wants a dressing pass over the circuit, not a tolerance edit.
+- **Red Bull Ring's barrier coverage — FIXED (2026-08-13), and the mechanism
+  was general.** tightFrac 0.225 was not missing dressing: sceneryRange()
+  collapsed every authored full-lap span to zero width (wrap01(1) === 0)
+  before the full-lap guard could see it, so lap-round barriers tightened
+  ONE node per side on shifted circuits. Fixed in js/track/space.js by
+  short-circuiting width >= 1 to {0, 1} — a whole lap is frame-invariant.
+  Verified: fleet A/B shows redbull only (0.225 -> 1.000), characterization
+  + redbull-foundation + tiny + guards all green.
+
 - **`__apex.scene()` disagrees with its own spec about corners behind the
   camera.** `tests/specs/agent-view.spec.js` asserts `|bearingDeg| > 120` for a
   corner flagged `behindCamera`; Monza measures **108.1°**, and the value is
@@ -405,15 +409,13 @@ most-load-bearing first.
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
   exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
   These are renderer-parity work, not GLX defects.
-- **The relational agent policy under-drives, and the bench can finally say so.**
-  `tests/specs/agent-drive-bench.spec.js` › "relational policy out-drives the
-  blind baseline" was red on a premise nobody trusted: the episode started at
-  lap fraction 0.02, where traffic cannot arrive, so the result was deal-luck
-  and the spec's own comment said as much. With the start moved to a measured
-  near-straight (0.4) the bench is honest and **still red** — `relational.dist`
-  245 against a `> 327` / `naive×1.5` floor. That is now a real
-  agent-policy/physics-tuning finding rather than a harness artifact.
-  `test:agent` is not in the CI smoke job, which is why it sat unseen.
+- **The relational agent policy — FIXED (2026-08-13).** The under-drive was
+  never the speed caps: pure feedback steering cannot track road curvature
+  at speed (traced: 13.9 m road departure at 55 m/s with steer 0.04). The
+  bench policy now feeds forward from the road's published curvature
+  (`ahead.pts` v^2/R) with a matching speed bound — Monza 251 -> 1543 m,
+  Interlagos 1119 m, spec 5/5 green, floors untouched.
+
 - **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
   `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
   `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
@@ -425,20 +427,15 @@ most-load-bearing first.
   `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
   drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
   regexes.
-- **`js/circuits/indianapolis.js` infield planting has two dead branches.** The
-  loop guards `if (h < 0.55) return;` and then selects on `h < 0.5` twice —
-  `tree(k, h < 0.5 ? -1 : 1, …, h < 0.5 ? LEAF_D : LEAF)`. After the guard `h`
-  is always ≥ 0.55, so the side is always `1` and `LEAF_D` is unreachable: the
-  ornamental trees only ever plant on one side of the infield and the
-  dark-leaf variant never renders. Cosmetic, and NOT the cause of that
-  circuit's `props-over-road` reading (those trees sit 34–54 m out) — found
-  while looking for it.
-- **A lapped driver's LIVE row now says nothing at all.** `F1API.positions()`
-  used to turn OpenF1's `"+1 LAP"` string into the number 1 via `parseFloat`,
-  so a lapped car was drawn as a one-second gap; it now reports `null` instead,
-  which is correct — but `js/data/live.js` only renders the gap wrapper when
-  `p.timeDiff` is truthy, so the row lost its "+1 LAP" label along with the
-  false bar. The fix belongs on the render side: no bar, but say *lapped*.
+- **A lapped driver's LIVE row — FIXED (2026-08-13).** `intervals()` now passes
+  "+1 LAP"/"+2 LAPS" through as a string (null was indistinguishable from
+  missing data) and `live.js` renders a string `timeDiff` as a bar-less
+  label. A lap down is not a time gap and is no longer drawn as one.
+
+- **`js/circuits/indianapolis.js` infield planting — FIXED (2026-08-13).** The
+  dead `h < 0.5` selectors (unreachable after the `h < 0.55` guard) moved to
+  0.775, the live range's midpoint: clumps plant on both sides and the
+  dark-leaf variant renders. verify-track OK, float-audit unchanged.
 - **The 2026-08 whole-tree audit's deferred list is the standing backlog for
   this section.** 143 verified findings, of which the fix-now batches took 30;
   the rest are recorded by area with file/line evidence in the dated audit

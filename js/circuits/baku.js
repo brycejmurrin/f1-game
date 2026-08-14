@@ -55,7 +55,7 @@
     elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
     scenery: function (api) {
       const {
-        out, MAT, n, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
+        out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
         gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
@@ -168,6 +168,10 @@
         const a = anchor(k, side, 6);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.16, 10, [0.22, 0.22, 0.25], 5, b);
+        // Bracket bridging the 0.16m-radius pole to the lamp head 1.6m out —
+        // without it the head/bulb boxes sit past the pole with no overlapping
+        // geometry beneath them (float-audit found nothing to rest them on).
+        addBox(out, vadd(vadd(a.c, a.u, 9.7), a.r, side * 0.8), [1.6, 0.2, 0.4], [0.24, 0.24, 0.28], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.6), a.r, side * 1.6), [1.2, 0.4, 1.2], [0.26, 0.26, 0.30], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.4), a.r, side * 1.6), [1.0, 0.2, 1.0], LAMP_WARM, b);
       }
@@ -446,15 +450,31 @@
 
       // Crenellations — placed at y = wall height (9m top), so they sit
       // ON TOP of the wall, never through it. Each segment has its own anchor.
+      // The wall this rests on only covers [0.36, 0.537) — clamp merlon nodes
+      // to that same span so a wide tangential spread near either end can't
+      // overshoot into the grandstand gap / off the wall's start with nothing
+      // underneath (float-audit found exactly that at both ends). Also skip
+      // the 0.42-0.50 castle squeeze: the narrowed hwZone there can suppress
+      // the outer rampart wall segment (wall() drops a node whose anchor
+      // reads onTrack when hw shrinks), leaving an unsupported gap under the
+      // merlon even though its own position is otherwise fine.
+      const wallLoK = K(0.36), wallHiK = K(0.537);
+      const squeezeLoK = K(0.42), squeezeHiK = K(0.50);
       for (let p = 0; p < 10; p++) {
         if (p === 9) continue;  // s=0.54 — inside the grandstand gap, no wall there to sit on
         const k = K(0.36 + p * 0.020);
-        const a = anchor(k, 1, 20);
-        // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h)
+        // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h).
+        // Each merlon re-anchors at its own node (k + a node offset derived from
+        // ds) instead of extrapolating along ONE anchor's straight tangent —
+        // the old single-anchor version drifted off the curved wall over the
+        // ~49m spread and floated wherever the rampart bent under it.
         for (let j = 0; j < 14; j++) {
           if (j % 2 === 0) {
-            const mc = vadd(vadd(a.c, a.t, (j - 6.5) * 3.8), a.u, 9.9);
-            addBox(out, mc, [2.4, 1.8, 2.2], SAND, [a.r, a.u, a.t]);
+            const kj = k + Math.round(((j - 6.5) * 3.8) / ds);
+            if (kj < wallLoK || kj > wallHiK) continue;
+            if (kj >= squeezeLoK && kj <= squeezeHiK) continue;
+            const aj = anchor(kj, 1, 20);
+            addBox(out, vadd(aj.c, aj.u, 9.9), [2.4, 1.8, 2.2], SAND, [aj.r, aj.u, aj.t]);
           }
         }
       }
@@ -541,6 +561,15 @@
       along(0.42, 0.50, 7.2, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 2.0);
+          // Measured (float-audit): this merlon cap sat flush on the wall
+          // top (y=11, from wall()'s own h=11) with zero gap, but the wall
+          // itself is emitted through instance()/along() on its OWN node
+          // spacing (6 m) — different from this loop's (7.2 m) — and
+          // extending the cap's own reach down by up to a full wall height
+          // made no difference, so whatever is beneath it there isn't the
+          // wall either. A slim buttress pier from grade up to the cap
+          // gives it its own real support instead of chasing the wall.
+          addBox(out, vadd(a.c, a.u, 5.5), [1.0, 11.4, 1.0], SAND, [a.r, a.u, a.t]);
           addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, [a.r, a.u, a.t]);
         }
       });
@@ -943,7 +972,10 @@
       for (let i = 0; i < 5; i++) {
         if (i === 1) continue;  // s=0.705 — National Flag Square (below) takes this spot instead
         const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
-        addCyl(out, vadd(a.c, a.u, 6), 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
+        // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — the old `a.u, 6`
+        // offset floated the mast 6m above the water, treating the base arg as
+        // if it were the centroid. Base sits directly on the anchor.
+        addCyl(out, a.c, 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
       }
 
       // ===================================================================
@@ -959,21 +991,32 @@
         if (!onTrack(aFlag.c[0], aFlag.c[2], 2)) {
           const bFlag = [aFlag.r, aFlag.u, aFlag.t];
           const poleH = 150;
-          // Plaza plinth
-          addBox(out, vadd(aFlag.c, aFlag.u, 0.3), [16, 0.6, 16], [0.30, 0.30, 0.32], bFlag);
-          // Tapered shaft (two stages — slightly narrower toward the top)
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.42), 1.1, poleH * 0.84, [0.72, 0.73, 0.76], 8, bFlag);
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH * 0.84 + poleH * 0.08), 0.65, poleH * 0.16, [0.76, 0.77, 0.80], 8, bFlag);
+          // Plaza plinth (addBox centres its arg — 0.3 is plinthH/2, correct)
+          const plinthH = 0.6;
+          addBox(out, vadd(aFlag.c, aFlag.u, plinthH / 2), [16, plinthH, 16], [0.30, 0.30, 0.32], bFlag);
+          // Tapered shaft (two stages — slightly narrower toward the top).
+          // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js), not centroid —
+          // the old `poleH*0.42`/`poleH*0.84+poleH*0.08` args treated it as
+          // centroid-anchored (half the stage height), floating each stage by
+          // exactly half its own height. Stack bases instead, starting at the
+          // plinth top.
+          const stage1H = poleH * 0.84, stage2H = poleH * 0.16;
+          const stage1Base = plinthH, stage2Base = stage1Base + stage1H;
+          const poleTop = stage2Base + stage2H;
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage1Base), 1.1, stage1H, [0.72, 0.73, 0.76], 8, bFlag);
+          addCyl(out, vadd(aFlag.c, aFlag.u, stage2Base), 0.65, stage2H, [0.76, 0.77, 0.80], 8, bFlag);
           // Huge tricolour flag panel near the top — three horizontal stripes
           // (blue / red / green, per the real Azerbaijan flag) hung off the shaft.
-          const flagY = poleH * 0.86;
+          const flagY = plinthH + poleH * 0.86;
           const flagW = 22, flagH = 14;
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY + flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], AZ_BLUE, bFlag);
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.80, 0.16, 0.16], bFlag);
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY - flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], [0.14, 0.55, 0.28], bFlag);
-          // Finial ball + aircraft-warning beacon at the very tip
-          addCyl(out, vadd(aFlag.c, aFlag.u, poleH), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
-          addBox(out, vadd(aFlag.c, aFlag.u, poleH + 1.6), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
+          // Finial ball + aircraft-warning beacon at the very tip — ball base
+          // sits on the pole top (addCyl, base-anchored); beacon (addBox,
+          // centred) sits on the ball top.
+          addCyl(out, vadd(aFlag.c, aFlag.u, poleTop), 0.9, 1.4, [0.85, 0.72, 0.30], 8, bFlag);
+          addBox(out, vadd(aFlag.c, aFlag.u, poleTop + 1.4 + 0.25), [0.5, 0.5, 0.5], [1.6, 0.2, 0.15], bFlag);
         }
       }
 

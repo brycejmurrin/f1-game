@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 85 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 87 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -213,7 +213,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 |---|---|
 | `circuit` | walls + autopilot + elevation + the codebase-audit edge cases |
 | `scenery` | props/terrain over road, F1 track accuracy, scenery kits |
-| `sweeps` | the full-fleet geometry audits — prop-clipping, scenery-grounding, road-under-floor, coplanar-faces, and the shared-foundation characterization. Each rebuilds all 40 circuits; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
+| `sweeps` | the full-fleet geometry audits — prop-clipping, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, and the shared-foundation characterization. Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `map` | minimap polyline + orientation |
 
 ### Render
@@ -702,6 +702,7 @@ what it covers.
 | `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
+| `debris-hazard-hint.test.mjs` | `projectHazard` in `js/game/debrisworld.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
@@ -813,6 +814,7 @@ what it covers.
 |---|---|
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
 | `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines |
+| `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |

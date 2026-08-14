@@ -141,6 +141,14 @@ const TrackSpace = (function () {
   // resolve()'s hwZones remap genuinely is source-space by convention, and that
   // call has nothing to do with what a def says about its scenery.
   function sceneryRange(def, s0, s1) {
+    // THE ENTIRE LAP IS THE ENTIRE LAP IN EVERY FRAME — mirror, reverse and
+    // origin shift all map it onto itself. Short-circuit BEFORE range(): its
+    // endpoint map wraps (wrap01(1) === 0), which collapses an authored 0→1
+    // to a zero-width span, and no downstream guard can recover the intent.
+    // Measured on Red Bull Ring: the full-lap guardrail (and its recordBarrier
+    // tightening) built at ONE node per side — tightFrac 0.225 where the spec
+    // wants > 0.99 — because 0→1 arrived here as 0.295→0.295.
+    if (Math.abs(s1 - s0) >= 1 - 1e-9) return { s0: 0, s1: 1 };
     const r = range(def, s0, s1, scenerySpace(def));
     // The origin shift goes HERE and not inside range(), because range() also
     // serves resolve()'s hwZones remap, which is source-authored and already

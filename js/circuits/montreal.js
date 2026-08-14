@@ -126,9 +126,12 @@
             addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -2.36),
               [0.22, 1.55, 5.2], [0.30, 0.46, 0.56], b);
           }
-          addBox(stage, vadd(a.c, a.u, h + 0.2),
+          // Main box top is h*0.96 (centred at h*0.48, height h*0.96), not h --
+          // the roof cap referenced raw h, leaving a 0.63-0.71m gap (h=17..19)
+          // just over the rests-on tolerance. Seat both on the true top.
+          addBox(stage, vadd(a.c, a.u, h * 0.96 + 0.2),
             [7.2, 0.5, 8.0], [0.90, 0.91, 0.92], b);
-          addCyl(stage, vadd(a.c, a.u, h + 0.45),
+          addCyl(stage, vadd(a.c, a.u, h * 0.96 + 0.45),
             0.10, 2.8, [0.36, 0.37, 0.39], 5, b);
         });
       };
@@ -495,18 +498,35 @@
           { H: 11, W: 28, D: 20, nfin: 5 },   // crown
         ];
         out._mat = MAT.CONCRETE;
-        let yBase = 1.2 + 2.4;   // top of the podium plinth
+        // Top of the podium plinth: the plinth below is addBox-centred at
+        // y=1.2 with full height 2.4 (see "Low podium plinth" below), so its
+        // top is 1.2 + 2.4/2 = 2.4, not 1.2+2.4=3.6. The old sum floated the
+        // whole tier stack 1.2 m clear of the plinth it was meant to sit on.
+        const PLINTH_TOP = 1.2 + 2.4 / 2;
+        let yBase = PLINTH_TOP;
         for (const tier of TIERS) {
           const cy = yBase + tier.H / 2;
           addBox(out, vadd(a.c, a.u, cy), [tier.W, tier.H, tier.D], PALE, b);
           // Recessed glass ribbon mid-façade (Expo curtain wall between fins)
           addBox(out, vadd(vadd(a.c, a.u, yBase + tier.H * 0.42), a.r, -tier.W / 2 - 0.15),
                  [0.4, tier.H * 0.55, tier.D * 0.88], WIN, b);
-          // Vertical aluminium fins wrapping the track-facing façade of this tier
+          // Vertical aluminium fins wrapping the track-facing façade of this
+          // tier. Measured (float-audit): fins keyed to THIS tier's own box
+          // lose the support test on the +t half of the spread (only the
+          // -t half of every tier above the ground floor ever grounds, no
+          // matter how deep the fin is embedded in its tier box — isolated
+          // by forcing every ot negative, which alone took montreal's casino
+          // cluster to zero). Rather than chase that inside a tier that isn't
+          // the reliable reference, run every fin the full height from the
+          // PLINTH (proven grounded — direct terrain touch) up to its tier's
+          // usual top: same visual band per tier, but anchored on the one
+          // primitive the support chain never lost.
+          const finTop = yBase + tier.H * 0.98;
+          const finH = finTop - PLINTH_TOP;
           for (let i = 0; i < tier.nfin; i++) {
             const ot = tier.nfin > 1 ? ((i / (tier.nfin - 1)) - 0.5) * (tier.D - 4) : 0;
-            addBox(out, vadd(vadd(vadd(a.c, a.u, yBase + tier.H * 0.52), a.r, -tier.W / 2 - 1.2), a.t, ot),
-                   [2.4, tier.H * 0.92, 1.1], PALE2, b);
+            addBox(out, vadd(vadd(vadd(a.c, a.u, PLINTH_TOP + finH / 2), a.r, -tier.W / 2 - 1.2), a.t, ot),
+                   [2.4, finH, 1.1], PALE2, b);
           }
           yBase += tier.H;
         }
@@ -575,11 +595,18 @@
                 const f = i / 5, f2 = (i + 1) / 5;
                 const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
                 const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
-                const mid = [(s1 + s2) / 2, (y1 + y2) / 2];
+                const mid0 = (s1 + s2) / 2;
+                // addFrustum is BASE-anchored (see the addPrism note in
+                // js/track/geom.js) — y2 is the descending leg's true base
+                // (y1 > y2 always, since f2 > f). Positioning at the segment
+                // midpoint floated every segment by ~half its own height.
+                // Base at y2 - 0.2 with radii swapped to match (rBase is now
+                // the y2-end radius, rTop the y1-end radius) keeps the
+                // intended 0.2 m overlap at both ends of [y2-0.2, y1+0.2].
                 addFrustum(stage,
-                  vadd(vadd(vadd(a.c, a.r, dr * mid[0]), a.t, dt * mid[0]),
-                       a.u, mid[1]),
-                  0.85 - f * 0.22, 0.85 - f2 * 0.22, Math.abs(y1 - y2) + 0.4,
+                  vadd(vadd(vadd(a.c, a.r, dr * mid0), a.t, dt * mid0),
+                       a.u, y2 - 0.2),
+                  0.85 - f2 * 0.22, 0.85 - f * 0.22, Math.abs(y1 - y2) + 0.4,
                   i % 2 ? STEEL : STEEL_D, 7, b);
               }
             }
@@ -594,7 +621,11 @@
             // to stop exactly this kind of drift, and a decorative landmark is
             // not worth spending the budget it protects.
             addFrustum(stage, vadd(a.c, a.u, 11.0), 1.5, 1.1, 2.4, STEEL, 9, b);
-            addFrustum(stage, vadd(a.c, a.u, 14.6), 1.1, 0.7, 5.6, STEEL, 9, b);
+            // Base was 14.6 vs the first segment's top at 11.0+2.4=13.4 — a
+            // 1.2 m gap, over the 0.6 m support slack. Based 0.2 m into the
+            // first segment (13.2) and extended to keep the SAME top (20.2,
+            // where the disc below already sits comfortably inside it).
+            addFrustum(stage, vadd(a.c, a.u, 13.2), 1.1, 0.7, 7.0, STEEL, 9, b);
             const disc = [a.u, a.r, a.t];
             addCyl(stage, vadd(a.c, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
             stage._mat = 0;

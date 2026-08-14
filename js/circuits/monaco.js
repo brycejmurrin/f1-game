@@ -128,8 +128,27 @@
       // ── Continuous Armco lining both sides — tight street feel ───────────
       // 1.2 m leaves the collision limit just outside the authored 5 m road,
       // instead of narrowing the usable tarmac while remaining Monaco-tight.
-      wall(0.0, 1.0, -1, 1.2, 0.8, ARMCO, 0.22);
-      wall(0.0, 1.0, 1, 1.2, 0.8, ARMCO, 0.22);
+      // FULL_LAP stops one node short of 1.0, not 1.0 itself. This circuit is
+      // `sceneryCoordinates: "source"` + `reverse: true`; TrackSpace.range()
+      // maps a SOURCE frac through toRacingFrac(def, s) = wrap01(phi - s), and
+      // wrap01(1.0) === wrap01(0.0), so an exact [0.0, 1.0] source range maps
+      // BOTH ends to the identical racing frac (phi) before sceneryRange()'s
+      // own "whole lap" guard (`|s1-s0| >= 1-1e-9`) ever sees it — the guard
+      // checks the racing-space span, which is already zero by then, not the
+      // 1.0 the caller wrote. along()'s k0===k1 wraparound then duplicates
+      // exactly one node's wall geometry, and because this circuit's origin
+      // is shifted, that node lands mid-lap (k=156, the Casino/Massenet
+      // climb) instead of the harmless start/finish it would be on a
+      // straight source-space circuit — a same-facing, zero-gap coplanar
+      // pair (17.3 m2, 0.0 mm) at that exact spot. Measured: reverting only
+      // the Casino block's KOLD+raw-frame fix (which is unrelated and
+      // correct) does not change this pair; disabling each wall() call in
+      // isolation does, one node-fraction short of a full lap is enough to
+      // break the alias without leaving a visible gap (along()'s own station
+      // spacing here is ~8 m, four times this shim).
+      const FULL_LAP = 1 - 1 / n;
+      wall(0.0, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
+      wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
       // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
@@ -219,8 +238,22 @@
       }
 
       // ── CASINO DE MONTE-CARLO (s=0.20, L) ───────────────────────────────
+      // KOLD + raw frame, same disease as the pool/terrace/Rock: the authored
+      // 0.20 is OLD-RACING, but the wrapped anchor() read it as SOURCE and
+      // slid the whole mass onto a different, sloped stretch of the climb —
+      // the flanking corner towers' fixed vertical offsets (a single a.c
+      // sample under a 44 m-wide, +/-13 m mass) floated off the real local
+      // ground there. float-audit flagged the two dome caps at ~40 m up.
       {
-        const k = K(0.20), a = anchor(k, -1, 36);   // dist clears the 44-wide mass off the track (inner face ~14m back)
+        const k = KOLD(0.20);
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const tt = [track.tx[k], track.ty[k], track.tz[k]];
+        const dist = 36;   // dist clears the 44-wide mass off the track (inner face ~14m back)
+        const oo = -1 * (hw[k] + dist);
+        const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
@@ -703,7 +736,17 @@
         minH: 12, maxH: 20, depth: 8, step: 20,
         window: WIN, windowCol: WINLIT, lit: true,
       });
-      broadcastCompound(K(0.615), 1, 24, { vans: 3, dishes: 2, mastH: 12 });
+      // gap was 24: broadcastCompound's mast reads terrain height once, at its
+      // own anchor point, then walks its mast/lamp offset out from there
+      // (js/track/scenery-identity.js) — at gap=24 that anchor lands right on
+      // the drop where the inland shoulder falls away toward the harbour, so
+      // the mast (offset further out and along the compound) sampled ground
+      // that wasn't under it and floated ~3.5-16 m depending on which piece
+      // (float-audit). vans=1 alone (a much shorter compound, so a smaller
+      // walk) barely moved the gap, which means the anchor point itself, not
+      // the walk distance, was the problem — gap=16 sits it back from the
+      // drop entirely (float-audit: clean).
+      broadcastCompound(K(0.615), 1, 16, { vans: 3, dishes: 2, mastH: 12 });
       cameraTower(K(0.625), -1, 26, { h: 16, boom: 1.4 });   // clear of the quay scaffold stand (9-19 m)
 
       // Distant landmark towers behind harbour apartments.
@@ -764,6 +807,13 @@
 
       // ── YACHT BUILDER ─────────────────────────────────────────────────────
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
+        // Seat the hull on the ACTUAL water surface, not the quay terrain
+        // anchor() resolved: waterSurface()/waterField() lay their sheet at
+        // pyMin - 0.8 (js/track/tracks.js), well below the marina promenade
+        // anchor() samples. X/Z stay the caller's berth position — only Y
+        // moves off the ground and into the harbour, with ~0.25*sc of hull
+        // draught below the waterline so it reads as floating IN the water.
+        yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
         out._mat = MAT.METAL;
@@ -777,8 +827,16 @@
         out._mat = MAT.METAL;
         addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
         addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
-        addBox(out, vadd(sup, u, 11.6 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
-        addCyl(out, vadd(sup, u, 12 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
+        // Flagpole box (addBox, centre-anchored) sat at 11.6*sc while the deck
+        // below it (previous addBox) only reaches 9.0*sc + 1.8*sc/2 = 9.9*sc —
+        // a 1.45*sc gap (1.1-2.3 m over this yacht's sc range), stacked but not
+        // touching (float-audit: EPS is a flat 0.6 m, not scaled by sc). Pulled
+        // down to overlap the deck top by 0.2*sc. The mast (addCyl, base-
+        // anchored) chased the old box position at 12*sc, leaving the same gap
+        // above the deck even after the box moved — pulled down in step to
+        // overlap the box's new top by 0.2*sc (mast top now 15*sc, was 17*sc).
+        addBox(out, vadd(sup, u, 9.95 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
+        addCyl(out, vadd(sup, u, 10.0 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
         out._mat = 0;
         // lit cabin windows
@@ -798,10 +856,18 @@
         const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
-      // Far mast cluster + breakwater
+      // Far mast cluster + breakwater. anchor()'s `a.c` is quay/terrain
+      // height, but at 90+ m out these masts are past the breakwater, over
+      // open harbour water — the fixed `+u*5` base offset floated them
+      // ~5 m above the anchor with nothing under them (float-audit: gap
+      // ~4.7 m, no support within its 6 m search radius). Base them on the
+      // water surface instead (pyMin - 0.8, same datum yacht()/megaYacht()
+      // use) — the mast base sits right at the waterline, as if rising from
+      // a small unmodelled hull.
       for (let i = 0; i < 6; i++) {
         const k = K(0.62 + i * 0.05), a = anchor(k, -1, 90 + hash(k) * 22);
-        addCyl(out, vadd(a.c, a.u, 5), 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
+        const mastBase = [a.c[0], pyMin - 0.8, a.c[2]];
+        addCyl(out, mastBase, 0.25, 12 + hash(k * 3) * 6, [0.86, 0.86, 0.9], 4, [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 4; i++) {
         const k = K(0.66 + i * 0.05), a = anchor(k, -1, 125);
@@ -943,8 +1009,21 @@
       // toward the water, topped by an undulating overhang of tilted slabs.
       // Placed just beyond Rascasse toward Anthony Noghès, clear of the
       // marina yacht ranks and the corner-apex clubhouse above.
+      // KOLD + raw frame, same disease as the pool/Rock/Casino: the authored
+      // 0.955 is OLD-RACING (just beyond Rascasse, racing ~0.88), but the
+      // wrapped anchor() read it as SOURCE and slid the clubhouse onto a
+      // different stretch — the five wave-roof slabs, offset up to +/-12.8 m
+      // off the single a.c sample, floated clear of the real local ground.
       {
-        const k = K(0.955), a = anchor(k, -1, 34);
+        const k = KOLD(0.955);
+        const rr = [track.rx[k], track.ry[k], track.rz[k]];
+        const uu = upOf(track, k);
+        const tt = [track.tx[k], track.ty[k], track.tz[k]];
+        const dist = 34;
+        const oo = -1 * (hw[k] + dist);
+        const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
+        const gy = groundYAt(cxw, czw);
+        const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const b = [a.r, a.u, a.t];
           const YWHITE = [0.94, 0.95, 0.97], YDECK = [0.86, 0.88, 0.90], YNAVY = [0.10, 0.22, 0.34];
@@ -1117,8 +1196,23 @@
         tubeCol: [0.74, 0.76, 0.78], deckCol: [0.72, 0.68, 0.60],
         bench: [CREAM, [0.28, 0.34, 0.50], TERRA], density: 0.62,
       });
-      grandstandEx(0.76, -1, 9, 180, null, null,
-        { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
+      // Grandstand K, split into twelve 15 m stands instead of one 180 m run.
+      // grandstandEx's "truss" roof lays braces by walking ±len/2 off ONE
+      // anchor's straight tangent (js/track/scenery-nature.js) — over 180 m
+      // of this curving harbourfront the far bays drift off the actual
+      // ground and float (float-audit: 6 clusters, up to 30 m gap; three
+      // 60 m stands still left 4 floating at ~19 m, six 30 m stands left 1
+      // at ~19 m). Each 15 m stand re-anchors at its own node, so no brace
+      // walks more than 7.5 m off a tangent that tracks the curve closely.
+      // The twelve still cover the same overall span, edge to edge — the
+      // end walls this introduces at the eleven internal seams face each
+      // other (anti-parallel), so they do not register as new coplanar
+      // pairs (checked: coplanar-audit unchanged at 5 after this split).
+      const gsLen = 15, gsHalf = gsLen / track.total;
+      for (let i = -5.5; i <= 5.5; i++) {
+        grandstandEx(0.76 + i * gsHalf, -1, 9, gsLen, null, null,
+          { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
+      }
       grandstandEx(0.25,  1, 7, 40, null, null, { livery: "alu", tiers: 1, roof: "flat" });
       grandstandEx(0.72,  1, 9, 36, null, null, { livery: "pastel", tiers: 1, roof: "cantilever", suites: true });
 
@@ -1174,6 +1268,11 @@
       // Hull prism bow + stacked white superstructure decks + wrap-around
       // railings + radar arch + mast + helipad disc + tender on the aft deck.
       const megaYacht = (a, sc, hullCol) => {
+        // Same fix as `yacht()` above: anchor() gives quay-terrain height,
+        // but the hull needs to sit on the harbour water surface
+        // (pyMin - 0.8), draught below the waterline. X/Z keep the berth
+        // position already validated by the onTrack() check at the call site.
+        a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];
@@ -1198,16 +1297,22 @@
         for (const [y, ln] of [[5.4, 0.5], [8.4, 0.4], [11.2, 0.28]]) {
           addBox(out, vadd(sup, a.u, (y + 0.2) * sc), [W * 0.92, 0.9 * sc, L * ln * 1.01], [0.18, 0.28, 0.40], b);
         }
-        // Radar arch (two legs + crossbar) above the bridge deck
+        // Radar arch (two legs + crossbar) above the bridge deck. The legs
+        // (addCyl, base-anchored) sat at 13.4*sc while the top deck below
+        // (previous addBox) only reaches 11.2*sc + 2.6*sc/2 = 12.5*sc — a
+        // 0.9*sc gap (0.7-0.9 m over this yacht's sc range), stacked but not
+        // touching. Whole arch/mast/flag assembly shifted down 1.1*sc so the
+        // legs overlap the deck top by 0.2*sc; crossbar, mast and flag keep
+        // their original spacing relative to the legs (unchanged internally).
         out._mat = MAT.METAL;
         for (const o of [-W * 0.28, W * 0.28]) {
-          addCyl(out, vadd(vadd(sup, a.r, o), a.u, 13.4 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
+          addCyl(out, vadd(vadd(sup, a.r, o), a.u, 12.3 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
         }
-        addBox(out, vadd(sup, a.u, 14.6 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
+        addBox(out, vadd(sup, a.u, 13.5 * sc), [W * 0.62, 0.4 * sc, 0.6 * sc], [0.85, 0.86, 0.90], b);
         // Mast + navigation lights
-        addCyl(out, vadd(sup, a.u, 14.8 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
+        addCyl(out, vadd(sup, a.u, 13.7 * sc), 0.14 * sc, 5.5 * sc, [0.86, 0.86, 0.90], 4, b);
         out._mat = 0;
-        addBox(out, vadd(sup, a.u, 20.0 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
+        addBox(out, vadd(sup, a.u, 18.9 * sc), [0.5 * sc, 0.5 * sc, 0.5 * sc], [0.95, 0.30, 0.25], b);
         out._mat = MAT.METAL;
         // Foredeck helipad — pale disc with an "H" bar
         const heli = vadd(vadd(a.c, a.t, L * 0.34), a.u, 4.0 * sc);
@@ -1351,7 +1456,11 @@
           center: vadd(a.c, a.u, 6), size: [11, 12, 11], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 3.4), [10, 6.8, 10], STONE, b);
-          addFrustum(stage, vadd(a.c, a.u, 8.2), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
+          // addFrustum is BASE-anchored (geom.js), but 8.2 was written as if it
+          // centred the roof: the pavilion block below tops out at 3.4+6.8/2=6.8,
+          // so the frustum's base floated 1.4 m clear of it. Based at 6.6 so the
+          // roof overlaps the block's top by 0.2 m instead.
+          addFrustum(stage, vadd(a.c, a.u, 6.6), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [4.8, 1.0, 4.8], [0.34, 0.36, 0.36], b);
         });
       }
