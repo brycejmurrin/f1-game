@@ -250,7 +250,18 @@ const CEILINGS = {
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the
   // monocoque at z 0.45 and drops the seat-surround span. Raised deliberately.
-  "js/car/car3d.js": 2711,
+  // 2711 -> 2723: the OPT-IN cockpit halo (SETTINGS > COCKPIT, default OFF).
+  // It could not reuse the chase hoop — that geometry sits below a seated eye
+  // — so the ckpt branch carries its own ring + pillar built against the eye,
+  // plus the comment recording why the two cannot share. A real feature behind
+  // a real switch, raised deliberately.
+  // 2723 -> 2734: a cockpit-only front wing. The shared cascade is invisible
+  // from a seated eye (12.9 deg down, under the hood crest at 9.8 — 0.01% of
+  // frame), and the first-person body is its own mesh, so it carries its own
+  // wing at a height the driver can actually see. Raised deliberately.
+  // 2734 -> 2739: the cockpit wing's placement is now a recorded measurement
+  // (screen rect at canvas res + what ate the other 13k px), not a guess.
+  "js/car/car3d.js": 2739,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

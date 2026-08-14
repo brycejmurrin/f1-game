@@ -129,7 +129,11 @@ js/game/                one Module.create(G) per file; modules never reach into
                         max(), so the render path has no per-preset branch)
                         perf-try.js (default-OFF renderer A/B switches +
                         the SETTINGS panel; GLSL ones are #defines injected
-                        in GLX.compile). apex.js = the __apex dev API.
+                        in GLX.compile) cockpit-opts.js (first-person view
+                        options — today the opt-in HALO; its SETTINGS button is
+                        injected at runtime, and game.js keys the cockpit body
+                        cache on it so a toggle needs no reload).
+                        apex.js = the __apex dev API.
                         The full module roster lives in tools/manifest.cjs —
                         the load-order truth; read it, not this file, to
                         enumerate what exists

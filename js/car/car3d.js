@@ -1563,14 +1563,14 @@ const Car3D = (function () {
     // is dead geometry: at top 0.48 it rasterised 2631 px and lost every one,
     // sandwiched between coaming and nose — ZERO visible pixels
     // (docs/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
-    const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.36, h: 0.10, t: 0.66 }
+    const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // Cockpit: the REAR station stops AHEAD of the wheel (game.js _rigT z 0.26)
     // — eye, wheel, cowl, nose is the order the real parts sit in. It must also
     // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
     // further away, so equal height puts it HIGHER on screen and it draws over
     // the wheel — measured, that is why the wheel once vanished. Top 0.54 here.
-    const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.54, h: 0.12, t: 0.58 }
+    const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.66, h: 0.12, t: 0.58 }
                     : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
@@ -2050,6 +2050,19 @@ const Car3D = (function () {
       }
       addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
       addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
+    } else if (opts && opts.halo) {
+      // OPT-IN halo for the first-person build (SETTINGS > COCKPIT, default OFF
+      // — js/game/cockpit-opts.js). It cannot reuse the chase hoop above: that
+      // sits at y 0.70..0.74, 8.5 deg BELOW an eye at 0.82, so from inside it
+      // would cross the floor of the frame, not arc over the head. Rebuilt
+      // against the seated eye: ring 11 deg up at the front, 73 deg at the
+      // sides, pillar crossing the sightline as a real one does — which is
+      // precisely why this is a setting and not a default.
+      for (const s of [-1, 1]) {
+        addLoft(out, -0.15, s*0.30, 0.92, 0.05, 0.05,
+                 0.62,     0,       0.98, 0.05, 0.05, HALO, SURFACES.metal);
+      }
+      addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
     // COCKPIT recipe. haloBlade fairs the hoop into an aero section, haloWing
     // adds the upper flap, camPods sets the T-cam count, screen adds the
@@ -2264,6 +2277,22 @@ const Car3D = (function () {
     }
 
     part("frontWing");
+    // COCKPIT-ONLY front wing. The real cascade below is correct and, from a
+    // seated eye, invisible: MEASURED 12.9 deg below the sightline, which is
+    // UNDER the hood crest (9.8), so it rasterised 0.01% of frame. The
+    // first-person body is its own mesh, so it carries its own wing where the
+    // driver can see it — 8.5 deg down, between nose deck (7.1) and hood
+    // crest. View-only by design; the chase car's wing is untouched.
+    // Rastered at canvas res it lands at x 228..615, y 226..313 of 844x390 —
+    // on screen, below centre, and still hard to see: 20208 px alone, 6901
+    // surviving (bolsters 9029, hood 2214, mirrors 1526), in the flap colour
+    // against a dark surround. So the plane takes the PRIMARY livery colour
+    // and rises to 0.47 (8.0 deg down, just under the nose deck's 7.1).
+    if (ckpt) {
+      addBox(out, 0, 0.47, 2.30, 1.62, 0.040, 0.44, c1, SURFACES.paint);
+      for (const s of [-1, 1])
+        addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingC, SURFACES.paint);
+    }
     // --- Front wing: ANGLED wedge elements in the block language — thin
     // leading edges rising to thicker trailing edges (real attack angle),
     // swept endplates that grow rearward, and nose pylons so the wing hangs
