@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 88 `node --test` unit suites
+111 root Playwright spec files (`tests/specs/*.spec.js`) + 89 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -730,6 +730,7 @@ what it covers.
 | `lighting-tuner-grade.spec.js` | the LIGHTING TUNER's image-grade panel |
 | `image-grade-visual.spec.js` | image-grade output, pixel-side |
 | `image-grade-shaders.test.mjs` | image-grade shader maths, unit-side |
+| `chunked-index-ranges.test.mjs` | the equivalence proof behind the concatenated chunk index buffer: `createChunkedMesh` gives each spatial chunk a `(byteOffset, count)` RANGE into one shared IBO instead of a buffer of its own, so `drawChunked`/`castShadowChunked` can merge adjacent visible chunks into a single `drawElements` (measured ~76-87% fewer scenery draws). "Same triangles, same order, fewer calls" is an equivalence claim, so it is tested as one — against a stub GL context that records the real uploads: the ranges tile the buffer with no gap, overlap or misaligned offset, the buffer holds exactly the source indices with the same multiplicities, and merging ANY run of consecutive chunks reproduces the per-chunk index sequence byte for byte. Carries its own anti-vacuity assertions, because a single-chunk fixture — or one under the 2000-triangle chunking floor — would satisfy every other assertion while proving nothing |
 | `material-shimmer.spec.js` | does baked tarmac CRAWL when the car moves |
 | `tlx-probes.spec.js` | the three.js/TSL backend behind `apex26.gfxBackend="three"` |
 | `webgpu-lifecycle.test.mjs` | WGX resource lifecycle |
