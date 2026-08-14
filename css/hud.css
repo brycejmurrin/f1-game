@@ -103,6 +103,13 @@
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
 }
+/* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
+   smaller than any spelling of the readout — see the threshold table there. The
+   widget keeps its column (still beside the minimap, still top-left) and moves
+   below `.hud-top`'s bottom edge, where the strip is empty to the far side of
+   the screen. 62px is that edge — a constant 58 in this element's own zoomed
+   units, because `.hud-top` rides the same `zoom` group — plus 4px of air. */
+:root[data-gap-drop] .hud-gaps { top: calc(62px + var(--sat) / var(--hud-scale)); }
 .hud-bottom {
   position: absolute;
   bottom: calc(12px + var(--sab) / var(--hud-scale));

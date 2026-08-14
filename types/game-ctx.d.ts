@@ -427,10 +427,6 @@ interface GameCtx {
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: () => void;
-  // UNREAD: published here and destructured at js/game.js:2828, but setup-ui.js
-  // only ever calls its own local copy — no consumer takes it off G. Baselined in
-  // tests/unit/game-ctx-surface.test.mjs; removing it is a js/ edit + cache bump.
-  readonly renderStatBars: (container: HTMLElement, team: TeamDef) => void;
   readonly buildSetup: () => void;
   readonly setTeamPicker: (open: boolean, host?: HTMLElement) => void;
   readonly teamSwatch: (t: TeamDef) => HTMLElement;

@@ -280,6 +280,36 @@ as the sky/cloud guidance above; it held perfectly static (six samples, zero
 drift, ~3 s span) in the same session where chase cam cut twice in the same
 window.
 
+## An ELEVENTH trap: a screenshot cannot tell you WHICH mesh is hiding another
+
+If the question is "what is cutting through the wheel / covering the dash /
+poking into frame", the screenshot is the symptom, not the evidence — and the
+part you would bet on is usually innocent. Do not move geometry to fix an
+occlusion you have not attributed. Three ways this went wrong in one session
+(2026-08-14), all fixed by the same instrument:
+
+- **A near-clipped mesh does not look clipped, it looks washed out.** The
+  cockpit rig was moved to `w 0.276` against a 0.30 near plane; every instrument
+  (LCD, LED strip, digits, ERS bar, aero lamp) silently vanished and the wheel
+  drew as a flat slab. Two rounds went into materials and lighting before the
+  projected `w` was ever read.
+- **`render({what:"view"})`'s `player` entry is the car's BOUNDING BOX**, always
+  ~0.2 m from an in-car camera by construction. It is not occlusion evidence.
+- **Hand-rolled projection is wrong on the cockpit rig**, which rides the
+  smoothed ROAD basis, not the camera basis — off by ~0.3 NDC, enough to "prove"
+  zero cutters while 55% of the wheel was covered.
+
+The instrument: patch `GLX.createMesh` (keep `data.pos`/`idx`/`parts` — the
+upload throws them away), `GLX.begin` (grab `frame.viewProj`; it is not on the
+exported surface) and `GLX.draw` (grab the real model matrices), all from a
+`navigate_page` `initScript`. Then rasterise both meshes into a 256×144 JS depth
+buffer and count pixels where one beats the other, mapping each loss back to a
+`part()` name via the cumulative `out.parts[].vertices` sum. Full code, and the
+NDC-bbox shortcut that produces false positives, in
+[`docs/OCCLUSION-PROBE.md`](../../../docs/OCCLUSION-PROBE.md). It costs one
+`evaluate_script` and returns a number you can put in a commit message —
+`2722 px → 0 px` beats "looks better now".
+
 ## An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render
 
 `numLights` is the per-frame ACTIVE (culled) light count, produced inside the

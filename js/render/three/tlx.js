@@ -804,7 +804,7 @@ const TLX = (function () {
           shadowSys.castShadowChunked(mesh, model);
         },
         shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
-        carShadowBegin(vp) { if (shadowSys) shadowSys.carShadowBegin(vp); },
+        carShadowBegin(vp, boxScale) { if (shadowSys) shadowSys.carShadowBegin(vp, boxScale); },
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
