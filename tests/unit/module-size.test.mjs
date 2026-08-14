@@ -221,7 +221,12 @@ const CEILINGS = {
   // straight back into the configuration that just killed the context. The
   // comment records why the tier gate alone is insufficient: it needs PerfGov
   // to have WATCHED slow frames, and a watchdog reset can land in one.
-  "js/game.js": 8186,
+  // 8186 -> 8199: the chase-camera fore/aft jitter fix. Exponential damping
+  // toward a moving target lags v/lambda - v*dt/2, so the car-to-camera
+  // distance breathed with frame time (28.7 cm at 320 km/h under a 16-38 ms
+  // wobble). Damping the OFFSET in the car's frame cancels it to 0.0000 cm.
+  // Bug-explaining growth at the site of the bug — the one kind this tolerates.
+  "js/game.js": 8201,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
