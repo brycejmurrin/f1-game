@@ -16,8 +16,16 @@ const exitPhotoMode = (...a) => G.exitPhotoMode(...a);
 
 function fmtTune(d, v) {
   if (d.fmt === "auto" && v < 0) return "AUTO";
+  // SHOW AS MANY DECIMALS AS THE STEP CAN MOVE. The cap used to be 3, which
+  // silently lied on every knob with a finer step: shadowBias steps 0.00001 and
+  // bounceK 0.00025, so pressing arrow-right printed the SAME number for two,
+  // four, a hundred notches running — the readout said the control was dead
+  // when it was working perfectly. 16 knobs are finer than 3 dp today (4 of them
+  // were before the range pass ever ran). 5 is the floor that covers every
+  // shipped step; beyond that a step cannot exist without failing the grid
+  // invariant in tests/unit/light-grid.test.mjs.
   const dec = (String(d.step).split(".")[1] || "").length;
-  const s = v.toFixed(Math.min(dec, 3));
+  const s = v.toFixed(Math.min(dec, 5));
   return d.fmt === "signed" && v > 0 ? "+" + s : s;
 }
 // PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
