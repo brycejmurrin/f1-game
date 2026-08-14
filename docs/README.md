@@ -29,6 +29,7 @@ Three kinds of docs live here.
 | [AGENT-WORLD-API.md](AGENT-WORLD-API.md) | The agent-facing JSON world view (`world`/`field`/`scene`/`rollout`/…). |
 | [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md) | How props seat on the terrain ribbon, and the float/clip audits. |
 | [RENDER-CLIPPING.md](RENDER-CLIPPING.md) | Near/far planes, depth precision, and the clipping rules. |
+| [OCCLUSION-PROBE.md](OCCLUSION-PROBE.md) | Proving which mesh hides which, mechanically: patch `GLX.createMesh`/`begin`/`draw` to keep the raw geometry and the renderer's own view-projection, rasterise both meshes into a JS depth buffer, and attribute every lost pixel to a `part()` name. Written after four rounds of moving cockpit geometry by eye made it worse; the first probe run found the cause (the tub's own rear cap, 55% of the wheel) in one call. |
 | [PERF-FINDINGS.md](PERF-FINDINGS.md) | A four-way performance audit: what was measured, what was taken, what was reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement — mechanism-provable ones held up, operation-count estimates came in at a fraction. |
 | [TRACK-MIGRATION-CHECKLIST.md](TRACK-MIGRATION-CHECKLIST.md) | Steps for moving a circuit onto the shared track foundation. |
 | [TESTING.md](TESTING.md) | How to run tests (background + tail, picking groups), every `test:*` group, the fixtures, the full spec coverage table, the philosophy. |
