@@ -633,11 +633,20 @@ void main() {
   // shimmers.
   vec2 hazeUV = vUV;
   if (uHazeStr > 0.002) {
-    float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
-    if (carHere < 0.25) {
-      vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
-      float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
-      if (hm > 0.003) {
+    // SCREEN-SPACE TEST FIRST, TEXTURE FETCH SECOND. The two conditions are
+    // independent and ANDed, so the order is free to choose — and the plume
+    // test is a varying against a uniform while carHere is a full-res dependent
+    // fetch of uScene. The Gaussian is tight: at uHazeStr ~ 1 it needs
+    // dot(hd,hd) < ln(333)/70 = 0.083, an ellipse of UV semi-axes 0.09 x 0.288,
+    // about 8% of the frame. So 92% of pixels were paying a dependent fetch to
+    // learn they are nowhere near the exhaust. exp + dot is far cheaper.
+    // Bit-identical by construction, and verbatim the vUV.y < uSsrTopUV reorder
+    // already taken one gate over in this same file — never copied across.
+    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
+    float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
+    if (hm > 0.003) {
+      float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+      if (carHere < 0.25) {
         float hp = vUV.y * 90.0 - uHazeTime * 11.0;
         hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
       }
