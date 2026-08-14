@@ -8,6 +8,15 @@
 const TrackGeom = (function () {
   "use strict";
 
+  // Contextified-global aliases — the mechanism and the honest scope are written
+  // out once, in js/track/models.js above firstNonFinite. Short version: under
+  // vm.createContext (verify-track, graph-parity, the headless audits, the VM
+  // unit suites) a bare `Math.`/`Number.` read goes through the contextified
+  // global's C++ interceptor at ~140-220 ns instead of ~3.3 ns; in a browser it
+  // is already ~3.3 ns, so this buys developer iteration time, not framerate.
+  // Used only in the per-vertex / per-primitive emitters below.
+  const __M = Math, __isFinite = Number.isFinite;
+
   // Procedural surface-material ids — stamped per-vertex (out._mat) and textured
   // in the lit shader's applyMaterial() (js/render/glx.js). 0 = FLAT (untextured, the
   // original look). Exposed to per-track scenery() via api.MAT.
@@ -34,7 +43,7 @@ const TrackGeom = (function () {
     return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   }
   function norm(a) {
-    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+    const l = __M.hypot(a[0], a[1], a[2]) || 1;
     return [a[0] / l, a[1] / l, a[2] / l];
   }
 
@@ -132,7 +141,7 @@ const TrackGeom = (function () {
     // Dropping one triangle is always better than losing the buffer.
     for (let i = 0; i < verts.length; i++) {
       const v = verts[i];
-      if (!v || !Number.isFinite(v[0]) || !Number.isFinite(v[1]) || !Number.isFinite(v[2])) return false;
+      if (!v || !__isFinite(v[0]) || !__isFinite(v[1]) || !__isFinite(v[2])) return false;
     }
     let nv = norm(cross(
       [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
@@ -188,7 +197,7 @@ const TrackGeom = (function () {
     seg = seg || 8;
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
-    const ring = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    const ring = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
     for (let i = 0; i < seg; i++) emit(out, [ring(i / seg * 6.2832), ring((i + 1) / seg * 6.2832), ap], col, ref);
   }
 
@@ -197,7 +206,7 @@ const TrackGeom = (function () {
     seg = seg || 8;
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
-    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rad), f, Math.sin(a) * rad);
+    const lo = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
     for (let i = 0; i < seg; i++) {
       const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
       emit(out, [lo(a0), lo(a1), vadd(lo(a1), u, h), vadd(lo(a0), u, h)], col, ref);
@@ -211,8 +220,8 @@ const TrackGeom = (function () {
     seg = seg || 8;
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ref = vadd(c, u, h * 0.5);
-    const lo = (a) => vadd(vadd(c, r, Math.cos(a) * rBase), f, Math.sin(a) * rBase);
-    const hi = (a) => vadd(vadd(vadd(c, u, h), r, Math.cos(a) * rTop), f, Math.sin(a) * rTop);
+    const lo = (a) => vadd(vadd(c, r, __M.cos(a) * rBase), f, __M.sin(a) * rBase);
+    const hi = (a) => vadd(vadd(vadd(c, u, h), r, __M.cos(a) * rTop), f, __M.sin(a) * rTop);
     for (let i = 0; i < seg; i++) {
       const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
       emit(out, [lo(a0), lo(a1), hi(a1), hi(a0)], col, ref);
@@ -232,7 +241,7 @@ const TrackGeom = (function () {
     const snow = opts.snow || [0.93, 0.95, 0.99];
     const snowline = opts.snowline != null ? opts.snowline : 0.62;
     const rx = opts.right || [1, 0, 0], fz = opts.fwd || [0, 0, 1];
-    const h2 = (a, b) => { const x = Math.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - Math.floor(x); };
+    const h2 = (a, b) => { const x = __M.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - __M.floor(x); };
     const ridgeOff = [];
     for (let i = 0; i < seg; i++) ridgeOff.push(h2(i, 7) - 0.5);            // shared down each ridge
     const rings = [[0, 1], [0.38, 0.64], [0.70, 0.34]];                    // [heightFrac, radiusFrac]
@@ -240,7 +249,7 @@ const TrackGeom = (function () {
       const a = i / seg * 6.2832;
       const rad = baseR * rf * (1 + ridgeOff[i] * rough * 1.4) * (1 + (h2(i, hf * 97 + 3) - 0.5) * rough * 0.7);
       const y = h * (hf + (h2(i, hf * 97 + 9) - 0.5) * rough * 0.12);
-      return [c[0] + rx[0] * Math.cos(a) * rad + fz[0] * Math.sin(a) * rad, c[1] + y, c[2] + rx[2] * Math.cos(a) * rad + fz[2] * Math.sin(a) * rad];
+      return [c[0] + rx[0] * __M.cos(a) * rad + fz[0] * __M.sin(a) * rad, c[1] + y, c[2] + rx[2] * __M.cos(a) * rad + fz[2] * __M.sin(a) * rad];
     };
     const ref = [c[0], c[1] + h * 0.4, c[2]];
     // zoneAt(): the SAME height-fraction test as colAt, returning a procedural

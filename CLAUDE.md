@@ -21,9 +21,13 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 111 Playwright
-specs plus 83 `node --test` unit suites; the browser half runs on SwiftShader
+specs plus 88 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
+- **`npm install` FIRST on a fresh container** — a missing `node_modules`
+  reads as ~18 scattered `Cannot find module` suites inside an otherwise
+  green run (measured 344/18 -> 439/0, no source change).
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps it to seconds.
 - **ONE Playwright process at a time, ONE browser group per batch.** Two
   processes share one HTTP server and oversubscribe the 4 cores; killing
   either strands the other, and browser+browser pairing is the measured
@@ -108,7 +112,7 @@ js/render/              Gfx façade → GLX (WebGL2, default; core + glx/ passes
 js/track/               tracks (shell) spline mesh geom graph space surface
                         markings models themes landmark-kit circuit-kit
                         geo-paths maps + scenery-{data,nature,city,structures,
-                        identity} — the 109-member scenery(api) contract is
+                        identity} — the 110-member scenery(api) contract is
                         frozen by tests/unit/scenery-api-contract.test.mjs
 js/car/                 car3d liveries liverytex parts (12 categories, 600 cr)
                         ghost teams driver-ratings
@@ -120,7 +124,12 @@ js/game/                one Module.create(G) per file; modules never reach into
                         light-store=persistence, light-presets=shipped values.
                         Self-init (no create(G)): scrollfade.js sheetshape.js
                         topmodal.js menunav.js ariastate.js uilayers.js (THE
-                        layer stack) css-zoom.js. apex.js = the __apex dev API.
+                        layer stack) css-zoom.js gfx-quality.js (GRAPHICS
+                        presets; the preset's tier floor enters PerfGov.tier()'s
+                        max(), so the render path has no per-preset branch)
+                        perf-try.js (default-OFF renderer A/B switches +
+                        the SETTINGS panel; GLSL ones are #defines injected
+                        in GLX.compile). apex.js = the __apex dev API.
                         The full module roster lives in tools/manifest.cjs —
                         the load-order truth; read it, not this file, to
                         enumerate what exists

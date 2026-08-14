@@ -104,7 +104,11 @@ export const RULES = [
   [/^js\/game\/audio-panel\.js/, ["audio", "ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/game\/(agentview|agentview-raster)\.js/, ["agent", "agent-contract"], ""],
   [/^js\/game\/apex\.js/, ["api", "hooks", "agent-contract"], "the __apex contract"],
-  [/^js\/game\/(debrisworld|incidentsim)\.js/, ["debris", "collision"], ""],
+  // `sweeps` because debrisworld's hazard query projects bodies back onto the
+  // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
+  // that checks that projection — it lives with the other track-build-vm suites,
+  // so a debrisworld edit would otherwise never run its own Node gate.
+  [/^js\/game\/(debrisworld|incidentsim)\.js/, ["debris", "collision", "sweeps"], ""],
   [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js/, ["ui"], "visual-only layers"],
   [/^js\/game\/(store|perf|tables)\.js/, ["api", "modes"], ""],
   [/^js\/log\.js/, ["api", "tooling-fast"], "every module logs through it"],

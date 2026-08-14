@@ -186,15 +186,25 @@ void main() {
   float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
   float ca = cos(a), sa = sin(a);
   float occ = 0.0;
-  for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
-    vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
-    vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
-    vec3 V = S - P;
-    float len = length(V);
-    // Occluder must rise above the tangent plane (dot>bias) and be within radius.
-    float ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
-    float range = smoothstep(radius, radius * 0.4, len);
-    occ += ndv * range;
+  // uStrength == 0 is a SUPPORTED combination, not a degenerate one: the pass
+  // also produces contact shadows, and haveAO (js/render/glx/post.js) arms it on
+  // "aoStr > 0 || contactStr > 0" — so with the AO slider at zero and contact
+  // shadows on, these 8 taps ran and were then multiplied by zero on line 199.
+  // Each tap is a DEPENDENT depth fetch (viewPos reconstructs from the sampled
+  // depth), the most expensive kind. uStrength is a uniform, so this is uniform
+  // control flow — no divergence — and occ == 0.0 makes the skipped branch
+  // bit-identical to multiplying by zero.
+  if (uStrength > 0.0) {
+    for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
+      vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
+      vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
+      vec3 V = S - P;
+      float len = length(V);
+      // Occluder must rise above the tangent plane (dot>bias) and be within radius.
+      float ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
+      float range = smoothstep(radius, radius * 0.4, len);
+      occ += ndv * range;
+    }
   }
   float ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * uStrength;
 
@@ -326,7 +336,6 @@ void main() {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
     trans *= exp(-stepLen * 0.010);
-    float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)
     // The SUN half of the march, gated the way the lamp half below already is.
     // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
     // end — so at uStr == 0 every shadow tap and gCloud() call here is
@@ -352,12 +361,28 @@ void main() {
     // weighted per lamp type (uLightVolW). Range-limited: beams read near the
     // camera; distant cone-crossings were the source of sky-streak noise.
     if (uLampStr > 0.0 && td < 200.0) {
+      // Lamp haze hugs the road (taller beams). Computed HERE, not beside
+      // trans above: hLamp has exactly one consumer — the lampAccum line at
+      // the bottom of this loop — so outside the branch it was 16 exp() per
+      // half-res pixel thrown away on every frame with the lamp beams off,
+      // which is every daytime god-ray frame (lampVol is forced to 0 unless
+      // sunLumGR < 0.45, js/game.js). This is the same zero-gate the SUN half
+      // above already got; the lamp half's hoisted term was left behind it.
+      // Bit-identical: p, groundY and the value are unchanged, and the branch
+      // it moved into already existed, so no new divergence.
+      float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);
       for (int li = 0; li < 6; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
-        float ld = length(LP);
         float rad = uLightRad[li];
-        if (ld > rad) continue;
+        // Squared-distance range reject, same exactness argument as the lit
+        // shader's lamp loop — but this one is NESTED: 16 march steps x 6 lamps,
+        // so it is up to 96 sqrt per half-res pixel, not 32 per fragment. At
+        // ld == rad the window below is 1 - (d/r)^4 == 0, so att == 0 and the
+        // step contributes nothing either way.
+        float ld2 = dot(LP, LP);
+        if (ld2 > rad * rad) continue;
+        float ld = sqrt(ld2);
         vec3 Ld = LP / max(ld, 1e-3);
         float s = ld / rad;
         float win = clamp(1.0 - s*s*s*s, 0.0, 1.0);
@@ -1094,7 +1119,18 @@ void main() {
   // so sample it at uSunUV and fade the flare when the sun is hidden. (The
   // god-ray shaft above self-occludes: it samples the dark-behind-geometry
   // bright-pass.) uDepth is bound to the scene depth every frame (SSR inputs).
+#ifdef OPT_FLAREGATE
+  // PerfTry.flareGate: sunVis's only consumers are the test below and the
+  // multiply inside it, so on any frame with the flare off (uFlareStr is
+  // multiplied by a sun gate that is 0 at night) or the sun off-screen
+  // (uSunUV is (-2,-2) behind the camera) this depth fetch is thrown away on
+  // every full-res composite pixel. Testing the uniform and the bounds FIRST
+  // is exactly equivalent — sunVis > 0.0 still guards the body.
+  float sunVis = (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 && uSunUV.y >= 0.0 && uSunUV.y <= 1.0)
+               ? smoothstep(0.9990, 0.9999, texture(uDepth, uSunUV).r) : 0.0;
+#else
   float sunVis = smoothstep(0.9990, 0.9999, texture(uDepth, uSunUV).r);
+#endif
   if (uFlareStr > 0.0 && sunVis > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
       uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
     // Anamorphic horizontal streak — warm and wide, the iconic "sun bleeding

@@ -25,6 +25,7 @@
       // The bespoke slim-LED-head rhythm (22 m, both sides) is the circuit's
       // lighting identity — the light tunnel. Generic street lamps crowd the
       // wall, clip the fastest curved sweeps, and break the rhythm.
+      { kind: "lamps", s0: 0, s1: 1 },
       // The Red Sea, marina, and lagoon stay open on the seaward side. Bespoke
       // palms below supply the intentional waterfront planting.
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
@@ -257,8 +258,13 @@
         modelGroup("jeddah-fountain", {
           center: [a.c[0], pyMin + 154, a.c[2]], size: [16, 312, 16], basis: b,
         }, (stage) => {
+          // Cone base must sit at the jet cylinder's top (base -0.8 + height 255
+          // = 254.2), not at a bare +255 — that 0.8m gap read as unsupported and
+          // the cone floated the full 256m down to the sea (float-audit cause:
+          // mis-derived height, not base/centroid — both prims are already
+          // correctly base-anchored). Small overlap avoids an exact flush seam.
           addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
-          addCone(stage, [a.c[0], pyMin + 255, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
+          addCone(stage, [a.c[0], pyMin + 254.1, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
           addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
         }, { required: true });
       }
@@ -555,9 +561,16 @@
           stage._mat = MAT.CONCRETE;
           addFrustum(stage, a.c, 26, 9, 250, [0.40, 0.41, 0.45], 8, b);       // tapered unfinished shaft
           stage._mat = 0;
-          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab
-          addBox(stage, vadd(a.c, a.u, 262), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
-          addBox(stage, vadd(vadd(a.c, a.u, 258), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
+          addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab (top at 258, flush on the 250 frustum top)
+          // Jib was set to height 262 — 3.55m clear of the cab roof (top 258) and
+          // therefore unsupported all the way down to the sea (float-audit: 261m
+          // gap). Seat it on the cab roof instead (half-height 0.45, small overlap).
+          addBox(stage, vadd(a.c, a.u, 258.4), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
+          // Beacon height was derived independently (258, off the cab roof) instead
+          // of from the jib it is meant to sit on, so it hung 3.25m below the jib
+          // with nothing underneath. Rest it on the jib's top face instead — the
+          // tangent offset (-14) already sits inside the jib's ±17m footprint.
+          addBox(stage, vadd(vadd(a.c, a.u, 259.1), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
         }, { required: false });
       }
 
@@ -565,7 +578,13 @@
       const dhow = (k, gap, sc) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 6)) return;
-        const hull = [a.c[0], pyMin + 0.4 * sc, a.c[2]];
+        // Datum is the WATER surface, which waterSurface/waterBand lay at
+        // pyMin - 0.8, not pyMin itself. Sitting at pyMin + 0.4*sc left every
+        // hull ~1.55 m clear of its own sea — above the 1.0 m footing the
+        // grounding audit allows, so the whole fleet (hull, mast, sail) read as
+        // unsupported. A moored dhow sits DOWN in the water; 0.15 m of draught
+        // keeps the waterline convincing and the footing unambiguous.
+        const hull = [a.c[0], pyMin - 0.95 + 0.05 * sc, a.c[2]];
         out._mat = MAT.WOOD;
         addBox(out, vadd(hull, a.u, 0.8 * sc), [2.6 * sc, 1.7 * sc, 9 * sc], [0.30, 0.20, 0.11], b);   // dark wood hull
         addBox(out, vadd(hull, a.u, 1.8 * sc), [2.2 * sc, 0.5 * sc, 8 * sc], [0.42, 0.29, 0.16], b);   // gunwale

@@ -43,7 +43,7 @@
   /* Team-skinned accent stripe (--accent falls back to --red when no team set;
      set on <html> by the HUD). */
   border-left: 3px solid var(--accent);
-  padding: 4px 12px;
+  padding: 4px var(--gap);
   border-radius: var(--r-sm);
   text-align: center;
   /* no backdrop-filter: this panel sits over the live 3D canvas, and a blur
@@ -51,18 +51,65 @@
      racing (top mobile compositing cost). The tinted bg carries the look. */
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
-.hud-label { font-size: 9px; letter-spacing: 0.16em; color: var(--dim); }
+.hud-label { font-size: var(--fs-micro); letter-spacing: 0.16em; color: var(--dim); }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hud-gaps {
   position: absolute;
-  top: calc(64px + var(--sat) / var(--hud-scale));
-  left: 50%; transform: translateX(-50%);
-  text-align: center; font-size: 12px; color: #ddd;
+  /* BESIDE the minimap, top-left cluster, the two readouts STACKED — ahead over
+     behind, which is the order they sit in on the road.
+     The horizontal anchor is the map: 130px is minimap left (10) + width (112) +
+     an 8px gap, and both responsive overrides below re-derive it wherever the
+     minimap resizes. Because this element rides `zoom: var(--hud-scale)` (see
+     the group rule above) that constant tracks the map at every HUD SIZE for
+     free — the map is in the same zoom group.
+     Vertically it is TOP-ALIGNED WITH THE MAP (the same 8px), so the pair reads
+     as one top-left cluster.
+     THE LIMIT OF THAT PLACEMENT, measured, because it is not obvious: `.hud-top`
+     is centred, so it grows leftward toward this widget as HUD SIZE goes up
+     while the map pushes the widget rightward, and the slot between them closes.
+     The adaptive font cap below holds the widget to 84px wide at 100% and 121 at
+     200%, and it clears everything through 150% (27px of slack at 1000x450,
+     19px at 1280x800). Past that the slot is gone — but so is the corner: at
+     1280x800 @200% `#minimap`'s right edge is 21px PAST `.hud-top`'s left edge,
+     i.e. the map and the POS row overlap each other with this widget removed
+     from the comparison entirely (same at 852x393). Nothing legible fits in the
+     61px left at 175%, so there is no CSS fix at that end and no point pursuing
+     one; docking below `.hud-top` does clear at every scale, and was tried, but
+     it breaks up the top-left cluster. */
+  top: calc(8px + var(--sat) / var(--hud-scale));
+  left: calc(130px + var(--sal) / var(--hud-scale));
+  /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
+     floor) and deliberately so: that scale is calibrated for menu chrome a
+     stopped player reads, while this is a peripheral glance during a lap, in
+     the same class as #hud-speed's raw 34px. Sized by its role in the frame,
+     not by the type ramp.
+     The `min()` is the adaptive half: it caps the ON-SCREEN size at 16px no
+     matter how far HUD SIZE is pushed. Left to grow with the zoom the pair
+     rendered as a slab about as wide as the minimap — a banner, not telemetry.
+     Now it grows 12 -> 16px screen across 100 -> 150% and then holds. */
+  text-align: left; font-size: min(12px, calc(16px / var(--hud-scale)));
+  font-weight: 700; letter-spacing: 0.02em; color: #ddd;
+  line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
-  background: rgba(8,8,14,0.62); padding: 2px 10px; border-radius: var(--r-sm);
+  /* The background and padding stay on the CONTAINER rather than moving to the
+     two child readouts as separate chips: tests/specs/hud-layout.spec.js
+     collides `.hud-gaps` as a container precisely so the case where nobody is
+     ahead or behind — both children empty — still has a box to measure. Chips
+     would leave a 0x0 container there and the spec would silently skip it.
+     (The dotted child-class name is spelled out nowhere in this file on purpose:
+     tests/unit/css-class-ratchet.test.mjs counts class tokens by regex and does
+     not skip comments, so writing it here alone pushed the count over.) */
+  background: rgba(8,8,14,0.55); padding: 1px 7px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
 }
+/* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
+   smaller than any spelling of the readout — see the threshold table there. The
+   widget keeps its column (still beside the minimap, still top-left) and moves
+   below `.hud-top`'s bottom edge, where the strip is empty to the far side of
+   the screen. 62px is that edge — a constant 58 in this element's own zoomed
+   units, because `.hud-top` rides the same `zoom` group — plus 4px of air. */
+:root[data-gap-drop] .hud-gaps { top: calc(62px + var(--sat) / var(--hud-scale)); }
 .hud-bottom {
   position: absolute;
   bottom: calc(12px + var(--sab) / var(--hud-scale));
@@ -71,7 +118,7 @@
   display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 #hud-speed { font-family: var(--font-hud); font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
-.hud-unit { font-size: 12px; color: var(--dim); margin-left: 4px; }
+.hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: 4px; }
 #hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {
   font-family: var(--font-hud);
@@ -102,11 +149,11 @@
   margin-bottom: 8px;
 }
 #hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
-.hud-energy-label { position: absolute; inset: 0; font-size: 8px; letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
+.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
 #hud-ot {
-  font-size: 13px; font-weight: 800; font-style: italic;
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
-  margin-bottom: 6px;
+  margin-bottom: calc(var(--gap) * 0.5);
 }
 /* The chip is the READOUT for the button of the same name, so it carries the
    button's hue — OT yellow, AERO green — and darkens with it. A cyan readout
@@ -119,7 +166,7 @@
 #hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
 /* Same chip metrics as #hud-ot so the pair stacks evenly in the cluster. */
 #hud-aero {
-  font-size: 13px; font-weight: 800; font-style: italic;
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
 }
 #hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
@@ -141,7 +188,7 @@
 }
 #hud-flag {
   position: absolute; top: calc(100px + var(--sat) / var(--hud-scale)); left: 50%; transform: translateX(-50%);
-  padding: 6px 16px; border-radius: var(--r-sm); font-weight: 800;
+  padding: calc(var(--gap) * 0.5) 16px; border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
@@ -155,20 +202,32 @@
 @media (prefers-reduced-motion: reduce) { #hud-flag.flag-vsc { animation: none; } }
 #hud-sectors {
   position: fixed;
-  top: calc(56px + var(--sat) / var(--hud-scale));
+  /* DERIVED FROM --tap, not the old hard-coded 56 — the same fix, on the other
+     axis, that css/overlays.css already made for #btn-cam ("DERIVED, not 58").
+     56 was calibrated against --tap's 44px DESKTOP value (8 + 44 + 4 = 56) and
+     silently stopped holding on touch, where --tap is 52px: #pausebtn is
+     `height: var(--tap)` at `top: 8px`, so it reaches y=60 and this box started
+     at 56. tests/specs/hud-layout.spec.js caught it as
+     hudClash ["#hud-sectors+pausebtn"] on notched-landscape.
+     THE WHOLE OFFSET is divided by --hud-scale, not just the inset: #hud-sectors
+     rides `zoom: var(--hud-scale)` (see the group rule above) while #pausebtn
+     does NOT, so clearing an unscaled box means converting the unscaled sum into
+     this element's own units. Dividing only --sat left the two drifting apart at
+     any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-scale));
   right: calc(10px + var(--sar) / var(--hud-scale));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
   padding: 5px 9px;
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   font-family: var(--font-hud);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   line-height: 1.6;
   border-left: 3px solid var(--accent-dim);
 }
-.sec-row { display: flex; gap: 6px; align-items: baseline; }
-.sec-lbl { font-weight: 800; font-size: 10px; letter-spacing: 0.1em; min-width: 16px; }
+.sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; }
+.sec-lbl { font-weight: 800; font-size: var(--fs-micro); letter-spacing: 0.1em; min-width: 16px; }
 .sec-val { color: #e8e8ee; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 
 /* ---------- start lights ---------- */
@@ -176,9 +235,9 @@
   position: fixed;
   top: calc((18svh + var(--sat)) / var(--hud-scale));
   left: 50%; transform: translateX(-50%);
-  display: flex; gap: 12px;
+  display: flex; gap: var(--gap);
   background: rgba(8, 8, 12, 0.85);
-  padding: 14px 18px;
+  padding: 14px calc(var(--gap) * 1.5);
   border-radius: var(--r-md);
   z-index: 15;
 }
@@ -228,7 +287,7 @@ body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
 #photo-controls > * { pointer-events: auto; }
 .pc-stickwrap {
   position: fixed; bottom: calc(20px + var(--sab));
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.5);
 }
 .pc-move-wrap { left: calc(20px + var(--sal)); }
 .pc-look-wrap { left: calc(168px + var(--sal)); }
@@ -259,7 +318,7 @@ body.lt-open:not(.pc-nopanel) .pc-altcol {
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   left: auto; right: calc(var(--dock-px) + 66px);
 }
-.pc-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
+.pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
   position: relative; width: 118px; height: 118px; border-radius: 50%;
   background: rgba(18,18,26,0.42); border: 1px solid rgba(255,255,255,0.28);
@@ -297,32 +356,32 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
    panel is actually showing (pc-nopanel tucks it away and frees the width). */
 body.lt-open:not(.pc-nopanel) #pc-bar {
   max-width: max(160px, min(70vw, 720px, calc(100vw - var(--dock-px) - 40px - var(--sal))));
-  gap: 8px; padding: 6px 10px;
+  gap: 8px; padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
    drop the keyboard hint and shrink the FOV slider/buttons — a compact bar
    reads cleaner next to the panel than the full touch-sized controls. */
 body.lt-open:not(.pc-nopanel) .pc-hint { display: none; }
-body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: 10px; }
+body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: var(--fs-micro); }
 body.lt-open:not(.pc-nopanel) .pc-fovlab input[type="range"] { width: 70px; }
 body.lt-open:not(.pc-nopanel) #pc-exit,
 body.lt-open:not(.pc-nopanel) #pc-panel,
 body.lt-open:not(.pc-nopanel) #pc-hud {
-  padding: 5px 10px; font-size: 10.5px;
+  padding: 5px 10px; font-size: var(--fs-micro);
 }
-.pc-hint { font-size: 11px; color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
-.pc-fovlab { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); }
-.pc-fovlab input[type="range"] { width: 110px; margin-left: 6px; }
+.pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
+.pc-fovlab { display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; color: var(--dim); }
+.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); }
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
-  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
 /* the FREE CAMERA launch button in the tuner actions */
 #pc-toggle {
   width: auto; margin: 0; padding: 9px 14px; border-radius: var(--r-md);
-  font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
   background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
 }
 /* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is

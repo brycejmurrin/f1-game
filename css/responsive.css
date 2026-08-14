@@ -102,7 +102,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: clamp(320px, calc(24 * var(--vwz)), 420px); gap: 10px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { width: 100%; }
-  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: 12px; padding: 9px 8px; }
+  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: var(--fs-micro); padding: 9px 8px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
   :where(body:not([data-density="compact"])) #subtitle { font-size: clamp(14px, calc(1.05 * var(--vwz)), 18px); }
@@ -130,8 +130,14 @@ body.desktop #pm-calib { display: none !important; }
 @media (min-width: 1200px) {
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
-  .hud-label { font-size: 10px; }
-  .hud-gaps { font-size: 14px; top: calc(72px + var(--sat) / var(--hud-scale)); }
+  .hud-label { font-size: var(--fs-micro); }
+  /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
+     by the base rule. */
+  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-scale)); }
+  /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
+     bottom sits at 68 in the widget's own zoomed units against 58 on the base
+     ladder, so the dropped state clears by the same 4px. */
+  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-scale)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -149,11 +155,24 @@ body.desktop #pm-calib { display: none !important; }
 
 /* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
 @media (orientation: landscape) and (max-height: 560px) {
-  #hud-sectors { top: calc(52px + var(--sat) / var(--hud-scale)); font-size: 10px; padding: 3px 6px; }
+  /* `top` deliberately NOT re-declared. It used to pull the box UP to 52px to
+     reclaim vertical air, which defeated the stated purpose of this very rule —
+     #pausebtn reaches y=60 on touch, so 52 was an 8px collision, worse than the
+     56px base it overrode. The base is now derived from --tap (css/hud.css) and
+     clears the buttons by construction at every scale, so a second hard-coded
+     constant here can only drift away from it again. The font/padding trim is
+     what this breakpoint actually wants. (--fs-micro is deploy's token swap,
+     kept.) */
+  #hud-sectors { font-size: var(--fs-micro); padding: 3px 6px; }
   /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
      without shrinking thumb targets — tap floors stay on the >700px ladder. */
   #minimap { width: 96px; height: 96px; }
-  .hud-gaps { top: calc(56px + var(--sat) / var(--hud-scale)); font-size: 11px; gap: 4px; }
+  /* minimap is 96px here — gaps dock beside it (10+96+8), top-aligned with it by
+     the base rule. Nothing about the 200% end of the HUD SIZE range fits a
+     393px-tall phone and no placement here can fix that: at 852x393 @200%
+     `#minimap` already overlaps `.hud-top` with `.hud-gaps` removed from the
+     comparison entirely. */
+  .hud-gaps { left: calc(114px + var(--sal) / var(--hud-scale)); }
   .hud-top { gap: 6px; }
   .hud-box { padding: 4px 7px; }
 }

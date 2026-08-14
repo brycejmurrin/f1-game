@@ -1763,6 +1763,10 @@ function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
 // longer allocates a fresh object ~23×/frame.
 const _bankScratch = { dy: 0, roll: 0 };
 const _bankScratchP = { dy: 0, roll: 0 };
+// Argument scratch for DebrisWorld.tyreMarble — called per car per physics step
+// from both the player and AI paths. Read-only at the callee (and spawnMarble
+// retains nothing), so one shared object is safe.
+const _marbleArg = { lock: 0, slip: 0, speed: 0 };
 // ...and a third for the camera, which asks once per frame from render() and
 // was the one call site still letting banking() allocate.
 const _bankScratchCam = { dy: 0, roll: 0 };
@@ -3227,6 +3231,21 @@ function resolveCollisions(ranked, dt) {
     let dProg = a.prog - b.prog;
     if (!Number.isFinite(dProg)) return null;   // never let a corrupt car spread NaN
     const L = track.total;
+    // Cheap reject BEFORE the wrap. This runs for every ordered pair on every
+    // relaxation pass — 20 cars is 190 pairs x 5 passes = ~950 calls per physics
+    // step — and in the overwhelmingly common frame NONE of them are in contact,
+    // so the two float modulos below were being spent almost entirely to prove
+    // "not touching".
+    //
+    // The test is EXACT, not a conservative pre-filter. Both prog values live in
+    // [0, L), so dProg is in (-L, L) and the wrap maps it into [-L/2, L/2).
+    // Working through both signs, |wrapped| <= LCAR holds iff |dProg| <= LCAR
+    // (near side) or |dProg| >= L - LCAR (wrapped across the start line). So
+    // rejecting strictly between those two bounds discards exactly the pairs the
+    // old `Math.abs(dProg) > LCAR` check discarded after wrapping — same pairs,
+    // same order, no behaviour change, and the surviving few still wrap below.
+    const adProg = dProg < 0 ? -dProg : dProg;
+    if (adProg > LCAR && adProg < L - LCAR) return null;
     dProg = ((dProg + L / 2) % L + L) % L - L / 2;
     if (Math.abs(dProg) > LCAR) return null;
     const dX = a.x - b.x;
@@ -4059,8 +4078,18 @@ function updateCar(c, dt, ranked) {
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
-    if (DebrisWorld.active())
-      DebrisWorld.tyreMarble(c, { lock: axFrac, slip: Math.max(Math.abs(slipF), Math.abs(slipR)), speed: c.speed });
+    // Pooled scratch, not a literal: this ran per car per physics step (20 cars
+    // x 60 Hz = ~1200 short-lived objects/s) and tyreMarble discards it on the
+    // speed gate, the hot gate, or the 0.25 rate limit -- so nearly all of them
+    // at cruising speed. It is read-only inside tyreMarble/spawnMarble (which
+    // reads m.speed and retains nothing), so pooling is provably safe. Same
+    // idiom as _ringOpts/_bankScratch/_decalOpts above.
+    if (DebrisWorld.active()) {
+      _marbleArg.lock = axFrac;
+      _marbleArg.slip = Math.max(Math.abs(slipF), Math.abs(slipR));
+      _marbleArg.speed = c.speed;
+      DebrisWorld.tyreMarble(c, _marbleArg);
+    }
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
@@ -4154,10 +4183,10 @@ function updateCar(c, dt, ranked) {
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
     if (DebrisWorld.active()) {
       const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
-      DebrisWorld.tyreMarble(c, {
-        lock: (braking && vStd(c.speed) > 30) ? 0.95 : 0,   // vStd: a threshold, not a force
-        slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
-        speed: c.speed });
+      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : 0;   // vStd: a threshold, not a force
+      _marbleArg.slip = Math.max(0, Math.min(1, latG - 1.6)) * 0.14;   // → ~slip-angle rad at the limit
+      _marbleArg.speed = c.speed;
+      DebrisWorld.tyreMarble(c, _marbleArg);
     }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
@@ -5119,7 +5148,29 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     let m;
     if (wet) { m = night ? _wmRoadWetN : _wmRoadWetD; m.detail = 0.06 * _sd; }
     else { m = night ? _wmRoadDryN : _wmRoadDryD; m.detail = 0.22 * _sd; m.roughness = clamp(0.85 * _rr, 0.04, 1); }
-    gfx.draw(track.meshes.road, MAT_IDENT, m);
+    // PER-CHUNK ROAD: the road is one mesh, so it can only ever carry the single
+    // global set of 32 lamps — which the cull picks nearest the CAMERA, covering
+    // the tarmac around the car and starving the road AHEAD (the original
+    // "lamps switch on right in front of me"). Drawing it chunked gives each
+    // stretch its own lamps via the same GLXChunked path as the props, and
+    // frustum-culls the ribbon as a bonus. Built lazily on first use so the
+    // second copy of the geometry costs nothing while the knob is off.
+    // _keepPositions is REQUIRED: createChunkedMesh nulls its source arrays, and
+    // debrisworld.js + __apex.geo() both still read track.roadGeo.
+    let _roadMesh = track.meshes.road, _roadChunked = false;
+    if (LT.roadChunkLamps && LT.perChunkLights) {
+      if (track.meshes.roadChunked === undefined) {
+        track.meshes.roadChunked = null;
+        if (track.roadGeo && gfx.createChunkedMesh) {
+          track.roadGeo._keepPositions = true;
+          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+        }
+      }
+      const _rc = track.meshes.roadChunked;
+      if (_rc && _rc.chunks) { _roadMesh = _rc; _roadChunked = true; }
+    }
+    if (_roadChunked) gfx.drawChunked(_roadMesh, MAT_IDENT, m);
+    else gfx.draw(_roadMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.startline && track.meshes.startline) gfx.draw(track.meshes.startline, MAT_IDENT,
     wet ? _wmStartWet : (night ? _wmStartN : _wmStartD));
@@ -5177,7 +5228,12 @@ function render(dt) {
   if (headlessMode) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
-  if (!track) { gfx.begin({ viewProj: M4.ident(), eye: [0,0,0], sunDir: [0,1,0], sunColor: [1,1,1], ambientGround: [0.2,0.2,0.2], ambientSky: [0.4,0.4,0.5], fogColor: [0.04,0.04,0.06], fogDensity: 0.002 }); gfx.present(); return; }
+  // No track yet — live only since boot deferred the flyby build (scheduleFlybyTrack(),
+  // end of file). DRAW NOTHING rather than present the old, dead fogColor clear:
+  // alpha:false makes an undrawn canvas composite as opaque BLACK, which is what the
+  // blessed menu baselines already encode — corners read 4-9/255, i.e. #overlay's
+  // 0.55-alpha wash over black, not the tens a lit flyby would push through it.
+  if (!track) return;
   _frameNo++;
 
   // camera
@@ -5507,7 +5563,27 @@ function render(dt) {
     // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
     // sliders, a time-of-day flip) previously left the map STALE until the next
     // cell crossing — shadows looked dead while dragging, then all jumped at once.
-    if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+    // PRODUCER/CONSUMER GATE. lit.js's sampleShadow opens with
+    // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
+    // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
+    // is the only other reader and it is gated on uStr > 0.0, which is 0 below
+    // the same key. The consumer side of that was already taken; the PRODUCER
+    // was not, so the frame still paid a 2048² depth clear, the full terrain and
+    // road ribbons cast unchunked (44,826 verts on vegas), and shadowEnd's 512²
+    // PCSS blocker downsample — for a texture with zero readers, once per 20 m
+    // snap cell, i.e. 300+ times a lap.
+    //
+    // The predicate is NOT new: it is the identical expression already used
+    // below to gate the props cast and again at the car sun pass. Hoisted here
+    // so all three agree. When it closes, the snap cache is INVALIDATED rather
+    // than left alone — otherwise weather clearing mid-race would re-open the
+    // gate onto a stale map and hold it until the next cell crossing.
+    const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+    const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+    if (!_shadowsRead) {
+      _shadowSnapX = _shadowSnapZ = _shadowBox = null;
+      _shadowSunX = _shadowSunY = _shadowSunZ = null;
+    } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
         sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
       _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
       _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
@@ -5538,7 +5614,7 @@ function render(dt) {
       // whole shadow pass has faded to zero strength. The old 0.35 cutoff sat in
       // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
       // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
-      const _shKey = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+      const _shKey = _shKeyG;   // hoisted above; same expression, one source
       // Clear-night moon shadows re-open the gate: props must be in the map for
       // the moonlight floor to have anything to cast (snap-cached, so the night
       // saving only goes when MOON SHADOWS is active and the sky is clear — or,
@@ -5581,7 +5657,26 @@ function render(dt) {
         // originally-tuned bias exactly.
         gfx.carShadowBegin(_mCVP, cBox / 42);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
+        // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
+        // uploads uModel and draws, ~11k verts per car, so a caster outside the
+        // volume costs a full mesh for zero texels — and at night the field pays
+        // it twice, once here and once in the lamp pass.
+        //
+        // The radius is the volume's CORNER distance, not cBox. The ortho above
+        // is ±cBox PERPENDICULAR to the sun, but spans depth 1..320 from an eye
+        // at _shadowCtr + sd*150 — so it reaches ~170 m along the sun axis. A
+        // car far away but nearly aligned with the sun has a small perpendicular
+        // offset, and at a low sun its stretched shadow legitimately lands in
+        // frame; culling at cBox would delete exactly those. hypot(cBox, 170) is
+        // the furthest any point of the box can be from the anchor, so beyond it
+        // a caster is provably outside — no visible change, only skipped draws.
+        const _csR = Math.hypot(cBox, 170) + 8;   // +8: car length + mesh extent
+        const _csR2 = _csR * _csR;
         for (let i = 0; i < _shadowCount; i++) {
+          const _sm2 = _shadowMats[i];
+          const _sdx = _sm2[12] - _shadowCtr[0], _sdz = _sm2[14] - _shadowCtr[2];
+          if (_sdx * _sdx + _sdz * _sdz > _csR2) continue;
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.carShadowEnd();
@@ -5768,7 +5863,17 @@ function render(dt) {
     // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
     setFrameLights(camEye, floodScale, _lightFwd);
+    // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
+    // alongside the globally-culled frame.lights, so GLXChunked can bind each
+    // chunk its own nearest-32 instead of every chunk sharing this one set.
+    // frame.lights stays authoritative for the car and everything non-chunked.
+    frame.allLights = track._lights || null;
+    frame.perChunkLights = LT.perChunkLights ? 1 : 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
+    // They are appended to frame.lights AFTER the static cull, so they sit
+    // outside track._lights and a per-chunk set built from allLights would drop
+    // them. Record the appended range so GLXChunked can add them to every chunk.
+    frame.tailStart = 0; frame.tailCount = 0;   // appendCarTailLights sets the real range
     if (_floodActive) appendCarTailLights();
   } else if (track.hasAlwaysLamps) {
     // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
@@ -5840,7 +5945,25 @@ function render(dt) {
         M4.mulTo(_mFlVP, _mFlProj, _mFlView);
         gfx.lampShadowBegin(_mFlVP, flBest);
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        // Distance-cull the casters, the twin of the sun pass's _csR above — the
+        // comment there notes the field pays the caster cost TWICE at night, and
+        // this is the second half. Only 1-3 cars are ever under a lamp, so this
+        // skips ~18-20 full ~11k-vert car meshes per night frame.
+        //
+        // The bound is the LAMP RADIUS, and the argument is not the frustum (a
+        // 149-degree cone's far corners reach ~5x its far plane) but the light
+        // itself: shadow rays travel outward from the lamp, so a caster at
+        // distance D can only occlude receivers at distance > D. Both readers of
+        // this map reject beyond rad — the lit shader's lamp loop
+        // (`if (d2 > rad*rad) continue`) and the god-ray beam march — so a
+        // caster beyond rad occludes only fragments that already receive zero
+        // light from this lamp. +8 covers the car's own half-extent, so a car
+        // whose CENTRE clears the bound has no vertex inside rad.
+        const _lsR = rad + 8, _lsR2 = _lsR * _lsR;
         for (let i = 0; i < _shadowCount; i++) {
+          const _lm = _shadowMats[i];
+          const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];
+          if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
@@ -5915,7 +6038,18 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  gfx.drawSky(frameSky);
+  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
+  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
+  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
+  // for the OPAQUE half). The glow is what makes this non-trivial: it is
+  // additive with depthMask off, so it writes no depth — leaving the background
+  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
+  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
+  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
+  // visually equivalent — a prop in front of a lamp occludes the halo either
+  // way, by overwrite before or by depth test after.
+  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
+  if (!_skyLate) gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -5924,7 +6058,13 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, true);
+  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
+  if (_skyLate) {
+    gfx.drawSky(frameSky);
+    // Same guard drawWorldMeshes applies to its own glow call, kept identical
+    // so the two paths differ ONLY in ordering.
+    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -6034,7 +6174,7 @@ function render(dt) {
     // never touched. When disabled these all come back 0 (rigid chassis).
     // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
     // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1]);
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
     // Pitch: rotate forward+up around the right axis (positive = nose up). This
     // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
@@ -6527,7 +6667,13 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
+  // contact is the SSAO half of exactly that bug, missed when lampVol's was fixed:
+  // haveAO is `aoStr > 0 || contactStr > 0`, so a tier-4 DAYTIME frame (_cs is
+  // non-zero whenever the key is bright) still ran the SSAO pass and both of its
+  // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
+  // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
+  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6748,10 +6894,14 @@ document.addEventListener("pointerdown", () => {
 // than from whenever this module runs.
 //
 // SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-// headroom to "zoom way out" on SETTINGS/garage. 50% is the new floor so the
-// slider can shrink menus substantially; default stays 100%. Tap floors still
-// divide by --ui-scale (--tap-min), so WCAG 24px holds in CSS before zoom.
-const SCALE_MIN = 50, SCALE_MAX = 150, SCALE_STEP = 0.5;
+// headroom to "zoom way out"; 50% is the floor now and the default stays 100%.
+// SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
+// Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
+// (A concurrent branch pinned MAX back to 150 while doing clamp-path fixes;
+// resolved in favour of the wider range on the owner's explicit ask — the
+// clamp fixes themselves are kept, and ui-scale.spec.js now derives its
+// expectations from __apex.uiScale() so either choice tests true.)
+const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
 const scaleDefault = () => 100;
 // Snap to the slider's step so stored values stay on the same lattice the
 // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
@@ -6879,27 +7029,9 @@ applyResMode();
   }
 }
 
-// GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
-// defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
-// quality for capable phones. These are decided at renderer INIT, so the toggle
-// persists and reloads. Shown only on mobile — desktop is always full quality.
-if (gfx.isMobile) {
-  const gfxBtn = $("pm-gfx");
-  if (gfxBtn) {
-    gfxBtn.hidden = false;
-    const gfxHigh = () => { try { return localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) { return false; } };
-    gfxBtn.textContent = "GRAPHICS: " + (gfxHigh() ? "HIGH" : "STANDARD");
-    gfxBtn.onclick = () => {
-      const next = !gfxHigh();
-      try { localStorage.setItem("apex26.gfxHigh", next ? "1" : "0"); } catch (_) {}
-      gfxBtn.textContent = "GRAPHICS: " + (next ? "HIGH" : "STANDARD") + " — reloading…";
-      if (soundOn) GameAudio.uiSelect();
-      // Reload so the renderer re-inits at the new tier (context AA, target
-      // formats, atlas sizes are all fixed at startup).
-      setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
-    };
-  }
-}
+// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
+// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 
 $("mb-race").onclick = () => {
@@ -7981,7 +8113,17 @@ $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
-loadTrack(trackIdx);
+// THE BOOT PATH TAKES THE SAME DEFERRAL EVERY OTHER MENU TRACK CHANGE TAKES.
+// This was `loadTrack(trackIdx)` as the last statement of the IIFE — a
+// synchronous Tracks.build() inside DOMContentLoaded, measured at 938 ms
+// (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, against a measured
+// DCL of 4712 ms. Nothing on the menu needs it (the picker and detail modal
+// draw from Tracks.LIST defs via TrackMaps; startRace()/openQuali() build the
+// real track themselves), so it is only ever the background flyby — which is
+// what scheduleFlybyTrack() exists for. __apex forces the build on first use
+// (lazyTrackEnsure, js/game/apex.js) so the test harness keeps the synchronous
+// world every spec written before this assumed.
+scheduleFlybyTrack();
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);

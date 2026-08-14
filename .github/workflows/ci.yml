@@ -27,14 +27,25 @@ name: CI
 #                                  no assertion, i.e. NOT as a test failure).
 #                                  Serialising them was NOT enough on its own —
 #                                  see the NODE_OPTIONS note on the job.
-#   smoke    15 min, Chromium    — the page actually boots and __apex answers.
+#   smoke    ~5 min, Chromium    — the page actually boots and __apex answers.
 #                                  If this is red nothing else is worth running.
-#                                  Nine specs, run SERIALLY (one worker), which
-#                                  is why it costs the same as the sweeps: two
+#                                  Nine specs, ONE WORKER PER MACHINE (two
 #                                  concurrent SwiftShader contexts exceed the
-#                                  per-test timeout on a shared runner. The
-#                                  per-test price sets this budget, not the
-#                                  spec count.
+#                                  per-test timeout on a shared runner) but
+#                                  FOUR MACHINES via the shard matrix, so the
+#                                  parallelism is across VMs rather than inside
+#                                  one. RE-TIMED 2026-08-14, as the note below
+#                                  demands: it was 14m24s serial, then measured
+#                                  17m58s / 18m56s at two shards on a degraded
+#                                  runner pool (run 1415), and the specs
+#                                  themselves then got ~70 % cheaper — 14 min ->
+#                                  4m17s locally — by quieting the render loop
+#                                  across the menus and booting the rendering
+#                                  specs straight into a race. The four-way
+#                                  split puts the modelled pole at ~190 s of
+#                                  test work; CI adds its own multiple on top.
+#                                  It is also SKIPPED ENTIRELY when the diff
+#                                  cannot reach _site/ (see the job's filter).
 #   driving-  ~1 min, Chromium   — the characterization traces. ONE spec, and
 #   model                          its own job rather than a step in smoke,
 #                                  because a step inherits its job's fate: it
@@ -309,24 +320,166 @@ jobs:
     runs-on: ubuntu-latest
     # TEMP: pages.yml can pass smoke:false to skip this job on deploy (see the
     # workflow_call input). Branch/PR pushes keep the default (true).
-    if: ${{ inputs.smoke != false }}
+    #
+    # `inputs.smoke != false` did NOT deliver that second sentence, and it was
+    # silently skipping this job on EVERY branch and PR push. A workflow's
+    # `inputs` defaults are applied only for workflow_call / workflow_dispatch;
+    # on a plain push the `inputs` context is empty, so `inputs.smoke` is null,
+    # and GitHub coerces null and false to the same value — making
+    # `null != false` FALSE and the job skip. Measured 2026-08-14 on two
+    # consecutive pushes to a branch (runs 31765883905 and 31766287790): smoke
+    # and advisory both `skipped`, each with completed_at BEFORE started_at,
+    # which is the signature of a job-level `if` resolving false rather than of
+    # a step-level filter deciding nothing shipped. The deploy path was
+    # unaffected — pages.yml reaches this through workflow_call, where the
+    # default DOES apply — so the whole CI run still reported green and the
+    # hole stayed invisible.
+    #
+    # Test the EVENT, then the input: on push/pull_request the first operand is
+    # already true and `inputs` is never consulted; under workflow_call it falls
+    # through to the input, so pages.yml keeps its ability to pass smoke:false.
+    if: ${{ github.event_name != 'workflow_call' || inputs.smoke }}
+    # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
+    # below (two concurrent SwiftShader contexts on one shared runner blow the
+    # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
+    # its half of the spec list alone on its own machine. Sharding exists to
+    # shrink WALL-CLOCK, because this job's ~14-18 min serial length is the
+    # window in which a run gets superseded and cancelled by the next push —
+    # measured 2026-08-14: run 1407 was cancelled at 29 min, ONE spec from
+    # green, after two 240 s runner-starvation timeouts stretched the serial
+    # pass. Half the specs per VM ≈ half the window.
+    # FOUR shards, not two. MEASURED per-spec on 2026-08-14 after the render-loop
+    # and direct-boot changes (509.5 s of serial work across the 9 specs), against
+    # how `--shard` actually divides them — contiguous chunks in declaration order:
+    #     2 shards   232 / 277 s          pole 277 s
+    #     3 shards   123 / 165 / 222 s    pole 222 s
+    #     4 shards   123 / 110 / 87 / 190 pole 190 s
+    # Beyond four the pole stops moving, because `--shard` balances COUNT and the
+    # cost is lumpy: the two HUD specs at the end (speed readout 109 s, minimap
+    # 81 s) are the pole on their own, and no count-based split separates them
+    # from each other without reordering the file. Runners are free on a public
+    # repo and the per-job overhead is ~38 s (less now that Chromium is cached),
+    # so four is where this stops paying.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
     # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
     # whose per-test cost is the very thing that varies — and the last time a
     # margin here was thin it produced a `cancelled` nobody read as a failure.
     # The serial single-worker run below is slower per pass by design, so the
     # budget has to reflect that rather than the 2-worker figure it replaced.
+    # The cap stays at the whole-suite figure even though a shard runs half the
+    # specs: the starvation tail this job has actually measured (334 s for one
+    # spec) is per-runner luck, not per-spec arithmetic.
     timeout-minutes: 30
     steps:
+      # fetch-depth: 0 — the filter below diffs against the SHA that is currently
+      # live on Pages, which is arbitrarily far back. Same reason the sweeps job
+      # takes the full history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
+      #
+      # pages.yml stages a fixed list of runtime paths into _site/. A commit that
+      # touches none of them deploys BYTE-IDENTICAL content to what is already
+      # live, so a browser gate on it re-proves a page that has not changed.
+      # MEASURED 2026-08-14: runs 1416 and 1417 were both `tests/specs/*` only and
+      # each spent ~13 minutes of smoke to ship an artifact identical to the one
+      # already serving — 26 minutes, twice, for no information.
+      #
+      # DIFFED AGAINST WHAT IS LIVE, NOT AGAINST `before`. The obvious base is the
+      # push's before-SHA, and it is wrong here in a way that fails OPEN: this
+      # branch takes rapid pushes from several concurrent sessions and their runs
+      # cancel each other constantly (eight cancellations on 2026-08-14 alone,
+      # one of them a run that died a single spec from green). So a js/ push whose
+      # run was cancelled, followed by a tests-only push, would diff clean against
+      # `before` and deploy the UNVERIFIED js/ change with the gate skipped. The
+      # github-pages deployment SHA is what is genuinely proven, so that is the
+      # base — cancelled runs in between simply mean more of the diff is visible,
+      # which is the safe direction.
+      #
+      # EVERY uncertainty runs the gate: no token, API error, unparseable reply,
+      # no deployment yet, a SHA git cannot reach (force push), or a diff that
+      # fails. Same fail-safe discipline as the sweeps filter above, for the same
+      # reason — a filter that guesses "nothing changed" when it cannot tell is
+      # how a gate stops gating without anyone noticing.
+      - name: Does this diff change anything that ships?
+        id: shipfilter
+        env:
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          run_all() { echo "ships=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SMOKE: $1"; exit 0; }
+          case "$EVENT" in
+            push|workflow_call) ;;
+            *) run_all "event is '$EVENT', not a push/workflow_call" ;;
+          esac
+          # The staged list is DERIVED from pages.yml's own `Stage site` step, not
+          # retyped — the two drifting apart is what would silently let a shipped
+          # path escape the filter. (tests/unit/deploy-staging.test.mjs already
+          # guards that this list covers everything the shell can fetch.)
+          PATHS_FILE="${RUNNER_TEMP:-.}/staged-paths.txt"
+          node -e '
+            const fs = require("fs");
+            const y = fs.readFileSync(".github/workflows/pages.yml", "utf8");
+            const names = new Set();
+            for (const m of y.matchAll(/^\s*cp\s+(?:-r\s+)?(.+?)\s+_site\/\s*$/gm)) {
+              for (const t of m[1].trim().split(/\s+/)) names.add(t);
+            }
+            if (!names.size) process.exit(1);
+            process.stdout.write([...names].join("\n") + "\n");
+          ' > "$PATHS_FILE" || run_all "could not read the staged path list out of pages.yml"
+          echo "--- staged paths ---"; cat "$PATHS_FILE"; echo "--------------------"
+          API="${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=1"
+          RESP=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                       -H "Accept: application/vnd.github+json" "$API") \
+            || run_all "could not reach the deployments API"
+          LIVE=$(printf '%s' "$RESP" | node -e '
+            let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+              try { const j = JSON.parse(s); if (Array.isArray(j) && j[0] && j[0].sha) process.stdout.write(j[0].sha); }
+              catch (_) {}
+            });') || run_all "could not parse the deployments API reply"
+          case "${LIVE:-}" in "") run_all "no github-pages deployment recorded yet" ;; esac
+          git cat-file -e "${LIVE}^{commit}" 2>/dev/null || run_all "live SHA $LIVE unreachable in this checkout"
+          CHANGED=$(git diff --name-only "$LIVE" "$GITHUB_SHA") || run_all "git diff against $LIVE failed"
+          echo "--- changed since live ($LIVE) ---"; echo "$CHANGED"; echo "----------------------------------"
+          # A staged entry is either a file (index.html) or a directory (js) — match
+          # the whole name or anything under it, anchored so `jsfoo/x` cannot pass
+          # as `js`.
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            if printf '%s\n' "$CHANGED" | grep -qE "^${p}(/|$)"; then
+              run_all "the diff touches a shipped path ($p)"
+            fi
+          done < "$PATHS_FILE"
+          echo "ships=false" >> "$GITHUB_OUTPUT"
+          echo "SKIPPING SMOKE: nothing in this diff reaches _site/ — the deployed bytes are unchanged since $LIVE"
       # Chromium only — the suite never targets firefox/webkit, and installing
       # all three triples the step for nothing.
-      - run: npx playwright install --with-deps chromium
+      #
+      # CACHED across runs: the download is ~25 s on every browser job, every run,
+      # for a binary pinned by the @playwright/test version in package-lock.json.
+      # Keyed on that lock file so a Playwright bump misses the cache and refetches.
+      - name: Cache Chromium
+        if: steps.shipfilter.outputs.ships != 'false'
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # --with-deps still runs on a cache hit: the browser binary is cached, the
+      # apt-level shared libraries it links against are not.
+      - if: steps.shipfilter.outputs.ships != 'false'
+        run: npx playwright install --with-deps chromium
       # test:smoke, NOT test:tiny. This step said `test:tiny` against a
       # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
       # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
@@ -365,15 +518,43 @@ jobs:
       #
       # Serial and slower per pass is still far cheaper than the retries and the
       # false red: 9 specs, no contention, well inside the 20-minute cap.
+      #
+      # 240 -> 420 s, SAME ARGUMENT AS THE 120 -> 240 RAISE ABOVE, RE-MEASURED.
+      # The reasoning that set 240 ("even uncontended the runner needed 110.6 s
+      # against a 120 s limit") held until the runner pool got slower than the
+      # pool it was measured on. MEASURED 2026-08-14, three separate runs, one
+      # worker, no contention from our side:
+      #   run 1407  grid start renders a non-blank frame   334 s (retry passed)
+      #   run 1407  the select screen is a circuit picker  240 s (retry passed)
+      #   run 1412  corner approach renders a non-blank    309 s, RETRY ALSO
+      #             timed out -> terminal FAIL, deploy blocked
+      # The third one is the reason this is not "just flakiness to retry past":
+      # both attempts exceeded the cap, so the gate reported failure for a suite
+      # that passes 9/9 locally on the same commit.
+      #
+      # The cap is now measured against the RUNNER, not the test: the same log
+      # records `race bahrain` taking 94.3 s to boot where a dev box takes ~4 s,
+      # so the spec was doing correct work ~20x slower than it costs anywhere
+      # else. 420 s clears tonight's worst observed pass (334 s) with the same
+      # ~25 % margin the 240 s figure was chosen to give over its own 110.6 s
+      # worst case. If a spec ever genuinely hangs, the job's own
+      # `timeout-minutes: 30` is the real backstop — a per-test cap set below
+      # the machine's noise floor only converts slow into red.
       - name: Smoke
+        if: steps.shipfilter.outputs.ships != 'false'
         env:
           APEX_WORKERS: 1
-        run: npm run test:smoke -- --timeout=240000
+        # --shard splits the 9 specs across the two matrix VMs; the flag passes
+        # through tools/run-playwright.mjs verbatim (it forwards argv to
+        # `playwright test`).
+        run: npm run test:smoke -- --timeout=420000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          # Shard-scoped name: same-named artifacts from parallel matrix jobs
+          # collide on upload-artifact@v4 (it hard-fails on duplicates).
+          name: playwright-artifacts-smoke-${{ matrix.shard }}
           path: |
             artifacts/test-results-*/
             artifacts/report-*/
@@ -452,7 +633,14 @@ jobs:
     # SKIP ON Pages deploy. pages.yml passes advisory:false. Do not key this off
     # github.event_name alone — under workflow_call the advisory job still ran
     # and occupied a runner while deploy gates waited.
-    if: ${{ inputs.advisory != false }}
+    #
+    # Same null-coercion defect the smoke job carried (see the long note there):
+    # `inputs.advisory != false` is false on a plain push, because `inputs` is
+    # empty and null == false, so this job never ran on a branch or PR either.
+    # The form below still keys off the input under workflow_call — which is the
+    # requirement the paragraph above states — and only stops treating a MISSING
+    # input as an explicit false.
+    if: ${{ github.event_name != 'workflow_call' || inputs.advisory }}
     #
     # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).

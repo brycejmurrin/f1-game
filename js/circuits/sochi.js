@@ -106,11 +106,29 @@
           // The shell: two shallow translucent domes leaning together, open in
           // the middle. That gap — the "eye" over the arena — is the shape
           // everyone recognises, so the roof is built as two halves, not a lid.
+          //
+          // Each half used to be five flat 2.2 m-thick slabs stepped up from
+          // the drum (20 m) to the crown (36 m). The step between slabs grows
+          // toward the crown — up to 7 m between the outermost two — so most
+          // of the slabs never touched their neighbour: only the slab resting
+          // directly on the drum was actually grounded, and float-audit found
+          // the other four hanging with nothing under them (gap up to ~15 m).
+          // Stretching every slab straight down to the drum closed the float
+          // but stacked all five on top of each other for their whole run,
+          // roughly tripling this stadium's coplanar same-facing pairs — so
+          // instead each slab reaches only to the NEXT slab out (telescoping,
+          // like the original stepped silhouette, just with the gaps closed):
+          // its top stays at its own crown height, its bottom is the next
+          // slab's crown, so consecutive slabs touch exactly and the whole
+          // run chains down to the drum-grounded outermost slab.
+          const peakAt = (i) => 20 + (1 - (i / 4) ** 2) * 16;   // i=0..4 -> 36..20
           for (const sgn of [-1, 1]) {
             for (let i = 0; i < 5; i++) {
               const f = i / 4;
-              addBox(stage, vadd(vadd(a.c, a.t, sgn * (26 + f * 30)), a.u, 20 + (1 - f * f) * 16),
-                [100 - f * 30, 2.2, 22], [0.90, 0.93, 0.97], b);
+              const top = peakAt(i);
+              const bottom = i < 4 ? peakAt(i + 1) : top - 2.2;   // last slab: unchanged, already on the drum
+              addBox(stage, vadd(vadd(a.c, a.t, sgn * (26 + f * 30)), a.u, (top + bottom) / 2),
+                [100 - f * 30, top - bottom, 22], [0.90, 0.93, 0.97], b);
             }
           }
           stage._mat = MAT.METAL;
@@ -160,11 +178,26 @@
       // Jets standing in the pool: the Medals Plaza fountain is the centrepiece
       // the flame tower is aimed at, and a flat sheet of water alone does not
       // read as one.
+      //
+      // addCyl's position is its BASE, not its centre, so `vadd(p, a.u, 3.5)`
+      // puts the pipe's foot exactly 3.5 m above local ground. Measured a
+      // consistent ~3.19-3.24 m float on 8 of the 9 jets — constant across
+      // jets regardless of the hash-driven pipe height, which is exactly what
+      // a fixed BASE offset error looks like (the top moving doesn't touch the
+      // bottom). Re-anchoring per jet by its true along-track node (instead of
+      // one anchor + a raw a.t offset) changed nothing, so it isn't an
+      // along-track sampling error either: at this distance (58-90 m off the
+      // road) the closed-form ground estimate circuit code can query is
+      // consistently ~3.2 m above the real terrain there. Sink the base by a
+      // safe margin and grow the pipe by the same amount so the visible
+      // waterline top is unchanged.
+      const JET_EMBED = 4; // > the measured 3.24 m worst case
       for (let i = 0; i < 9; i++) {
         const ang = i / 9 * 6.2832;
         const a = anchor(K(0.115), 1, 74 + Math.cos(ang) * 16);
         const p = vadd(a.c, a.t, Math.sin(ang) * 22);
-        addCyl(out, vadd(p, a.u, 3.5), 0.22, 7 + hash(i * 7) * 5,
+        const h = 7 + hash(i * 7) * 5;
+        addCyl(out, vadd(p, a.u, 3.5 - JET_EMBED), 0.22, h + JET_EMBED,
           [0.82, 0.90, 0.96], 5, [a.r, a.u, a.t]);
       }
 
@@ -320,7 +353,13 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, 31), [17, 0.8, 17], WHITE, b);
           addBox(stage, vadd(a.c, a.u, 30.2), [16, 0.6, 16], [0.20, 0.36, 0.62], b);
-          addCyl(stage, vadd(a.c, a.u, 35), 0.13, 10, WHITE, 5, b);
+          // addCyl's position is its BASE, not its centre — starting the mast
+          // at 35 left it 3.6 m above the roof plate's top (31.4) with nothing
+          // between, floating (measured ~34.7 m against raw ground once the
+          // chain never bridged that gap). Base it inside the roof plate's own
+          // Y-range instead and stretch it by the same amount so the tip stays
+          // at the same height (35 + 10 = 45 either way).
+          addCyl(stage, vadd(a.c, a.u, 31), 0.13, 14, WHITE, 5, b);
           stage._mat = 0;
         }, { required: true });
       }
@@ -373,12 +412,30 @@
           }
           // The canopy rib: chords around a half-circle springing from a foot
           // in front of the deck and landing behind the top row.
+          //
+          // The raw arc (across = R - cos(mid)*R) reaches a full 2R past a.c at
+          // mid=pi — for the default R=9.5 that is ~17.6 m beyond the last row
+          // (rows*depth = 11.25 m), assuming flat ground the whole way out. At
+          // Turn 5/Adler Arena that overshoot lands 34-35 m from the centreline,
+          // 10-16 m above the real terrain there (measured via float-audit —
+          // the deck itself never floats, only the far ribs past its edge).
+          // Limit the reach to the deck's own footprint so the far foot always
+          // lands on/over the top row's box instead of open ground.
+          //
+          // SCALE the arc, do not clamp it. A Math.min() against the limit
+          // flattens every segment past the crossover onto the SAME across,
+          // stacking coincident rib boxes: floats went to zero but the coplanar
+          // audit went 42 -> 43 spots and 136 -> 380 same-facing pairs, which
+          // ratchets just as hard. Scaling keeps all 8 stations distinct and
+          // the arc's shape, only narrower.
           out._mat = MAT.METAL;
           const segs = 8;
+          const reach = (rows - 0.5) * depth;   // top row's outer (far) edge
+          const squash = Math.min(1, (reach + R * 0.15) / (2 * R));
           for (let j = 0; j < segs; j++) {
             const t0 = j / segs * Math.PI, t1 = (j + 1) / segs * Math.PI;
             const mid = (t0 + t1) / 2;
-            const across = R - Math.cos(mid) * R;
+            const across = (R - Math.cos(mid) * R) * squash;
             const up = 3.0 + Math.sin(mid) * R * lift;
             const chord = (Math.PI / segs) * R * lift * 1.15;
             // Rib chord, tilted to follow the arc tangent at this station. The

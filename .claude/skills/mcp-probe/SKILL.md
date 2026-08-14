@@ -13,8 +13,13 @@ thing the suite never checks — the **deployed artifact**.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*`) — a real `HeadlessChrome`
   with **WebGL2 via SwiftShader** (the same renderer the suite uses; measured:
-  `ANGLE (…SwiftShader…)`). It reaches **both** `http://127.0.0.1:<port>` (your
-  working tree) **and** the deployed site. This is the canvas-**visible** probe:
+  `ANGLE (…SwiftShader…)`). It reaches `http://127.0.0.1:<port>` (your working
+  tree) — but **NOT the deployed site from this container**: MEASURED
+  2026-08-13, `navigate_page` to `https://brycejmurrin.github.io/f1-game/` dies
+  `net::ERR_TUNNEL_CONNECTION_FAILED`, the same egress proxy that gives `curl`
+  a 403 CONNECT on that host. (This file previously claimed it reached both;
+  it does not here.) For anything on the DEPLOYED artifact use tinyfish, which
+  fetches server-side from its own network. This is the canvas-**visible** probe:
   render a track/car, drive `__apex`, screenshot, take a heap snapshot, read the
   console. The interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`.
 - **tinyfish MCP** (`mcp__tinyfish__*`) — `fetch_content` / `search` over the
@@ -251,7 +256,7 @@ as the sky/cloud guidance above; it held perfectly static (six samples, zero
 drift, ~3 s span) in the same session where chase cam cut twice in the same
 window.
 
-## An EIGHTH trap: a screenshot cannot tell you WHICH mesh is hiding another
+## An ELEVENTH trap: a screenshot cannot tell you WHICH mesh is hiding another
 
 If the question is "what is cutting through the wheel / covering the dash /
 poking into frame", the screenshot is the symptom, not the evidence — and the
@@ -280,6 +285,85 @@ NDC-bbox shortcut that produces false positives, in
 [`docs/OCCLUSION-PROBE.md`](../../../docs/OCCLUSION-PROBE.md). It costs one
 `evaluate_script` and returns a number you can put in a commit message —
 `2722 px → 0 px` beats "looks better now".
+
+## An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render
+
+`numLights` is the per-frame ACTIVE (culled) light count, produced inside the
+render loop — so it needs several *rendered frames*, not elapsed wall-clock,
+before it means anything. Read it too early after `race()` or
+`setTimeOfDay()` and you get **0**, which reads exactly like "the floodlights
+aren't firing" — one of the symptoms in `lighting-tuner`'s own table.
+
+MEASURED 2026-08-13 (Monza, polling every 100 ms after `setTimeOfDay("dusk")`
+on a parked car): 0 at every sample through 2611 ms, then 28 at **2711 ms**.
+`bakedLights` stayed 292 the whole time — the baked set was never lost, only
+the active count was not yet computed. The settle time is NOT a constant: in
+a quieter moment the same sequence read 28 after ~1.1 s, and a fixed 1500 ms
+wait landed inside the dead window and produced a false `numLights: 0` that
+briefly looked like a real dusk-vs-dawn lighting bug. Under SwiftShader the
+frame rate — and therefore this window — moves with whatever else is loading
+the box.
+
+So never sample it on a timer. Poll until it settles:
+
+```js
+// RIGHT — wait for frames, not for the clock
+let n = 0;
+for (let i = 0; i < 40 && n === 0; i++) {
+  await new Promise(r => requestAnimationFrame(r));
+  n = __apex.lightState().numLights;
+}
+```
+
+Cross-check with `bakedLights` before believing any `numLights` reading:
+`bakedLights > 0 && numLights === 0` means "not settled yet," whereas
+`bakedLights === 0` is the genuine "this circuit baked no lights" case. Same
+shape as the SIXTH/SEVENTH traps — a real render state that is simply not
+ready yet, misread as a defect because the probe outran the renderer.
+
+## A NINTH trap: `scene()` lists what the circuit ASKED for, not what got drawn
+
+`scene().props` is built from `ctx.note(...)`, and several model helpers note
+themselves BEFORE deciding whether to emit — `building()` notes after its two
+footprint guards but before the `opts.kind` massing branch. A prop that draws
+**nothing at all** therefore still appears, at a plausible `sizeM` and `at`.
+
+MEASURED 2026-08-14: Imola's pit building
+(`building(K(0.00), -1, 1, 16, 11, 130, {kind:"slab"})`) was listed by `scene()`
+throughout a session in which it emitted ZERO vertices — it failed rejBox (its
+padded half-width crossed the road at gap 1) *and* massBlocked (it ran through
+the pit wall and grandstand). The listing is what kept the search pointed at
+camera framing instead of at emission.
+
+The vertex count is the honest instrument, and it is a shell call, not a browser
+one: `node tools/verify-track.cjs <id>`, then comment the call out and run it
+again. Identical `props N` = nothing was emitted. **Run a control first** — add
+a throwaway `for (let i=0;i<50;i++) addBox(out, [0,500+i,0], [10,10,10], [1,0,0]);`
+and confirm the number moves (+1200) — because two equal readings look identical
+whether the geometry is absent or your edit simply isn't being read. Note also
+that MOVING a prop never changes the count, so relocation tests prove nothing
+about emission; only add/remove does.
+
+## A TENTH trap: camera `lat` and circuit `gap` are different spaces
+
+`eyeAt(f, lat, …)` measures `lat` from the **centreline**. A circuit places
+scenery with `anchor(k, side, gap)` / `building(k, side, gap, w, …)`, where
+`gap` is **beyond the road edge**, and `building()` centres its mass half a
+width further out again. Nothing converts between them:
+
+```js
+const lat = side * (hw + gap);            // anchor()-placed prop  (hw ≈ baseHW, ~7)
+const lat = side * (hw + gap + w / 2);    // building() mass centre
+```
+
+MEASURED 2026-08-14: hunting Imola's pit complex at `building(…, -1, 20, 16, …)`
+— really `lat ≈ -35` — was attempted at `lat ±75` and burned a dozen
+screenshots of grass and treetops before the arithmetic was done. When the frame
+already exists, skip the conversion entirely: read `scene().props[].at` for
+world coords and aim with `view({eye, yaw, pitch})`, which takes world space
+directly. (`orbit(f, az, el, dist, h, opts)` always targets the point on the
+CENTRELINE at `f`, so it cannot centre on off-track scenery at all — it can only
+put it somewhere in frame.)
 
 ---
 
@@ -392,6 +476,21 @@ while the repo was 1089 — a real lag the local suite could never have caught).
 Fetch `index.html` too and grep the `?v=` tags if you suspect a partial deploy.
 `run_web_automation` can go further — boot the deployed page and assert `__apex`
 responds — but for a smoke check the static fetch is enough and far cheaper.
+
+**Go further than `version.json`: fetch the shipped JS and grep it for your
+change.** A matching build number only proves Pages published *a* build with
+that number, not that your edit is inside it. `fetch_content` on
+`…/js/<path>.js?v=<N>` returns the real deployed source, so a marker unique to
+your change settles it. MEASURED 2026-08-13, confirming a per-chunk-lamp
+feature shipped: `_pickChunkLamps`, `uploadLightSet`, `perChunkLights` and
+`uCarBiasScale` all found in the live artifact.
+
+**Gotcha that will hand you a FALSE negative: `format: "markdown"` escapes
+`*`.** Grepping the fetched text for `d /= k * k` reported ABSENT while the
+code was demonstrably deployed — the fetcher had rendered it `d /= k \\* k`.
+Any pattern containing `*`, `_` or backticks needs the raw text checked
+(`python3 -c "print(repr(t[i-200:i+200]))"` around a nearby unescaped anchor)
+before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
 
 tinyfish `search` is for external grounding (research), not testing.
 

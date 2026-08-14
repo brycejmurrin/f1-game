@@ -42,7 +42,7 @@ than behaviour:
 | Guard | What it holds |
 |---|---|
 | `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
-| `tests/unit/scenery-api-contract.test.mjs` | the 109-member `scenery(api)` surface every circuit file was written against |
+| `tests/unit/scenery-api-contract.test.mjs` | the 110-member `scenery(api)` surface every circuit file was written against |
 | `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
@@ -190,6 +190,115 @@ journal; this is what remains.
   2026-08 hidden behind a stale count assertion in the same spec that failed
   first; with the count re-pinned, the pier assertion is visible again and the
   product question it asks is still unanswered.
+- **`hud-layout` `notched-landscape` — FIXED, validated 25/25 across all four
+  viewports.** `#hud-sectors`' top offset is now derived from `var(--tap)`
+  (`css/hud.css`) instead of a hard-coded 56, and the short-landscape override
+  that pulled it UP to 52 is gone (`css/responsive.css`). Kept below for the
+  diagnosis, which is the reusable part. All six variants
+  (tilt/buttons/touch × auto/manual gears) fail with three layout problems where
+  the spec expects none; the other viewport rows pass, so it is the VIEWPORT —
+  852×393 with real safe-area insets (`sal 59, sar 59, sab 21`) — not the input
+  mode. Confirmed PRE-EXISTING at `d7a1158` by an A/B on a quiet box, both sides
+  via `tools/test-solo.mjs` (which refuses to start above its load gate):
+  `HEAD` 6/6 fail at 20.3–22.1 s, base worktree 6/6 fail at 21.7–22.8 s. No
+  timeouts on either side — these are assertion failures, not contention. Repro:
+  `node tools/test-solo.mjs tests/specs/hud-layout.spec.js -g notched-landscape`.
+
+  **Diagnosed — one collision, and it IS player-visible.** A `--reporter=list`
+  run gives the actual payload: `hudClash: ["#hud-sectors+pausebtn"]` (a single
+  pair; the "Received +3" in the live reporter is diff LINES, not items). The
+  arithmetic: `#pausebtn` is `width/height: var(--tap)` at `top: calc(8px + …)`
+  (`css/overlays.css:477`), so on touch — where `--tap: 52px`
+  (`css/tokens.css:405`) — it spans y 8→60. `#hud-sectors` is pinned at
+  `top: calc(56px + …)` (`css/hud.css:156`). **A 4 px overlap.** The 56px
+  constant works against the 44px desktop `--tap` (44+8 = 52 < 56) and stops
+  holding at 52. `css/overlays.css:492` records a sibling of the same bug class
+  ("on touch (--tap: 52px) CHASE overlapped…"), so this is a known trap, not a
+  novel one.
+
+  Why it matters more than the portrait case the spec already dismissed: that
+  one (`.hud-top`+`#pausebtn`, a measured 8.7px collision) is unreachable
+  behind the full-screen `z-index: 9000` `#rotate-device` block, which is why
+  `HUD_LANDSCAPE_ONLY` exists and why the spec author correctly refused to move
+  CSS nobody could see move. In LANDSCAPE `#rotate-device` is not up, so this
+  collision is on screen: the sector splits sit on the pause button on a
+  notched phone. The fix is to derive the sectors' offset from the button's
+  real box (`8px + var(--tap) + gap`) instead of the hard-coded 56 — which
+  leaves desktop unchanged (44+8+4 = 56) and moves touch down 8px. Note also
+  that the two elements scale the safe-area inset differently (`#hud-sectors`
+  divides `--sar`/`--sat` by `--hud-scale`, `#pausebtn` does not), so they
+  additionally drift apart at non-default HUD SIZE — worth settling in the same
+  pass.
+- **`menu-keyboard` › "left/right move along a chip row without leaving it" is
+  red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
+  block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
+  `tools/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
+  base fails in 18.4 s. No timeout on either side, so it is an assertion, not
+  contention. This is the SECOND red test in this file — the `#track-detail`
+  dialog regression above owns "Tab cannot escape the track-detail dialog" — so
+  the file is worth one pass rather than two separate fixes. It is the only
+  failure in `test:ui`, which otherwise runs 100/100.
+- **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
+  `indianapolis` 4.74 m over the road against a 0.2 m cap
+  (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
+  spec's own header calls "fully clean (max=0)", so this is a regression, not a
+  residual.
+
+  **Both offenders are located and are the same class: a big bespoke
+  `structure`, not foliage, barriers or lighting.** Measured with
+  `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs`, then matched to
+  a prop by footprint via `a.scene({radius})` (`props[].at` / `sizeM`):
+  - **COTA** max **4.79** at frac 0.877, world (709.1, 41.6). The intruding
+    triangles stack vertically at one XZ point (`triY` 1.36 / 2.76 / 4.16), so
+    it is a standing structure, not a canopy. Footprint match: `prop:274`,
+    55.1 × 4.1 × 27.9 at (730.5, 0.8, 44.3) — the **Austin360 Amphitheater**
+    `modelGroup("cota-amphitheater", …)` at `js/circuits/cota.js:83`, built from
+    raw `addBox` calls (stage deck, PA towers, LED wall).
+  - **Indianapolis** max **4.91** across fracs 0.323–0.336, world (183.8–185,
+    453), `triY` 4.14–5.87. Footprint match: `prop:911`, 43.3 × 2.3 × 50.4 at
+    (184.4, 0.8, 429.5). The XZ match is solid; its declared height does not
+    span the offending `triY`, so the exact triangles likely belong to a taller
+    sibling inside the same group — confirm before editing geometry.
+
+  **A hypothesis that looked strong and is WRONG, recorded so it is not
+  retried:** `a43691c` ("Combine track lamps and floodlights into one fixture
+  system") postdates the spec baseline and stripped `"lamps"` from BOTH
+  circuits' `dressingExclusions`, which reads like the cause. It is not — those
+  exclusions are foliage/lighting-scoped and neither offender is foliage or a
+  lamp. The remaining suspect is `7a17351` ("decouple scenery/road from the
+  line"), which changed how authored scenery maps onto the racing line and
+  would move the road under a structure authored beside it; `dressingExcluded()`
+  shifts its windows by `TrackSpace.sceneryOriginDelta` (`js/track/tracks.js`
+  ~:1450). Not confirmed — bisect it rather than believe this paragraph.
+
+  **ROOT CAUSE, COTA — confirmed and measured.** An earlier note here said the
+  footprint preflight "does not apply" to `modelGroup`/RAW emissions. That was
+  WRONG: `js/track/models.js` does preflight every group. It just checks the
+  wrong thing — it tests the bounds the author DECLARED and never looks at what
+  was actually emitted, so a group can pass the guard and then put its geometry
+  somewhere else. `cota-amphitheater` declares
+  `center = vadd(vadd(a.c, a.r, 8), a.u, 13)` and emits its stage deck at the
+  anchor, so the tested box sits 8 m further from the circuit than the geometry.
+  `modelGroup` now measures this (`diagnostics.escaped`, read via
+  `__apex.modelDiagnostics()`): the amphitheater escapes its declared box by
+  **9.0 m along the RIGHT axis** — laterally, toward the track — which is the
+  4.79 m of geometry over the racing line. Reported, not rejected: enforcing
+  would delete authored scenery across 40 circuits on an unmeasured rule.
+
+  **Indianapolis is NOT this bug.** Same instrument: 15 of its 21 groups escape
+  their declared bounds, but every one is vertical (≤0.44 m aprons/greens) and
+  **zero escape laterally**, so the declared-bounds gap cannot be what puts
+  geometry over its road. Its offender still needs a cause. (COTA: 4 of 12
+  escape; only the amphitheater does so sideways.) The vertical population is
+  large enough on both circuits that any future promotion to a hard rejection
+  must be lateral-only, or it will fail 40 circuits on harmless apron slack.
+  Confirmed PRE-EXISTING at
+  `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
+  tools/graph-parity.cjs cota indianapolis` returns exact parity
+  (max |Δpos| 0.0e+0 m), and a geometry test over identical geometry returns an
+  identical verdict. Unseen because `test:scenery` is not in the CI smoke job —
+  the same gap that let `agent-drive-bench` sit red, and the standing argument
+  for why "a guard nobody runs is prose with extra steps" (§9).
 - **Per-circuit vertex budgets are ad hoc; the repo-wide gate is missing.**
   Qatar itself is resolved — cut 340,858 → 299,386 (a redundant street-lamp
   dressing pass and an over-tripled flood run) with the budget re-set to
@@ -274,6 +383,27 @@ most-load-bearing first.
   flake — it is a genuine disagreement between the bearing convention the spec
   encodes and the one the code computes. Neither side should move before the
   convention is settled.
+- **Title-screen CLS — FIXED, and the method is the point.** The title screen
+  used to paint in the wrong shape and relay out: `body[data-density]` picks
+  `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
+  `DOMContentLoaded`, behind all ~146 synchronous scripts. Measured on a quiet
+  box at 852×393 over a gzip server: **CLS 0.5241** at `d7a1158`, now **0.0602
+  and 0.0824** on two cold loads ("good" is under 0.1), via a tiny inline script
+  at the top of `<body>` that reads both thresholds back out of CSS.
+  Two wrong answers were measured and discarded on the way, both recorded in
+  the code comments so they are not retried: (1) preloading the webfonts —
+  `CLSCulprits` names `titillium-web-latin-600-normal.woff2`, but with the fonts
+  landing at ~126 ms the shift was unchanged; (2) moving `sheetshape.js` to
+  script #4 — that only makes it a RACE, and the same build on the same box
+  scored 0.0824 and 0.5929 on consecutive loads depending on whether the script
+  beat the first paint. Only something with no network dependency wins reliably.
+  Three measurement traps cost most of the time here and are worth knowing: the
+  service worker serves the previous build's precache, so a fresh ORIGIN (new
+  port) is required per cold load; a loaded box reports incoherent timelines
+  (a shift stamped before its own FCP); and `setTimeout` polling cannot observe
+  anything during the synchronous script wall — sample in `requestAnimationFrame`,
+  which runs before each paint, and read the computed values rather than a
+  timestamp.
 - **Cross-backend shading divergences the parity test cannot see**: TLX ports the
   pre-fix wet-surface model (soaked grass mirrors the sky on three.js; the wet
   mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
@@ -302,6 +432,10 @@ most-load-bearing first.
   missing data) and `live.js` renders a string `timeDiff` as a bar-less
   label. A lap down is not a time gap and is no longer drawn as one.
 
+- **`js/circuits/indianapolis.js` infield planting — FIXED (2026-08-13).** The
+  dead `h < 0.5` selectors (unreachable after the `h < 0.55` guard) moved to
+  0.775, the live range's midpoint: clumps plant on both sides and the
+  dark-leaf variant renders. verify-track OK, float-audit unchanged.
 - **The 2026-08 whole-tree audit's deferred list is the standing backlog for
   this section.** 143 verified findings, of which the fix-now batches took 30;
   the rest are recorded by area with file/line evidence in the dated audit

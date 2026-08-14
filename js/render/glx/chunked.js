@@ -164,13 +164,51 @@ const GLXChunked = (function () {
       const eye = F.eye;
       const cd = F.cullDist, cd2 = cd * cd,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
+      // PER-CHUNK LAMPS: bind each chunk's OWN nearest-32 instead of the frame's
+      // single global 32. The 32-lamp ceiling is a fragment-shader uniform-array
+      // size (MAX_LIGHTS), so it bounds lights per DRAW, not per scene — and the
+      // track's lamps are baked and static while chunks have fixed AABBs, so the
+      // per-chunk set is computed once and cached on the chunk. A dense night
+      // circuit then lights every chunk to its own budget instead of making the
+      // whole visible world compete for 32 slots, and per-fragment cost FALLS
+      // (a chunk binds only lamps that actually reach it). Off by default.
+      const perChunk = F.perChunkLights && F.allLights;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
         if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
+        if (perChunk) {
+          if (ch._lampIdx === undefined || ch._lampSrc !== F.allLights) {
+            ch._lampIdx = _pickChunkLamps(F.allLights, ch.min, ch.max);
+            ch._lampSrc = F.allLights;
+          }
+          core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
+                              F.lights, F.tailStart, F.tailCount);
+        }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo);
         gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, 0);
       }
+      // Restore the frame-global set so later non-chunked draws (car, road
+      // furniture) are unaffected by whatever the last chunk happened to bind.
+      if (perChunk) core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
+    }
+
+    // Nearest lamps whose radius actually reaches a chunk's AABB, closest first,
+    // capped at the shader's 32. Runs ONCE per chunk (cached): lamps are baked
+    // per track and chunk bounds never move, so this is build-time work paid
+    // lazily on first draw, not a per-frame cull.
+    function _pickChunkLamps(L, mn, mx) {
+      const n = (L.length / 15) | 0, hits = [];
+      for (let i = 0; i < n; i++) {
+        const o = i * 15, rad = L[o + 6];
+        if (!(rad > 0)) continue;
+        const d2 = _aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]);
+        if (d2 <= rad * rad) hits.push({ i, d2 });
+      }
+      hits.sort((a, b) => a.d2 - b.d2);
+      const out = new Int32Array(Math.min(32, hits.length));
+      for (let k = 0; k < out.length; k++) out[k] = hits[k].i;
+      return out;
     }
 
     // Shadow cast for a chunked mesh, culled against the shadow light frustum (an

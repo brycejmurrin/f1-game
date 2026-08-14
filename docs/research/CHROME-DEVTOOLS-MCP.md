@@ -20,6 +20,41 @@ Interactive twin of Playwright — not a CI gate. Skills:
 4. **`resize_page` is unreliable** on this shell — use `emulate` with the full
    viewport descriptor (`852x393x3,mobile,touch,landscape`).
 5. **Park `about:blank`** before starting Playwright groups.
+6. **DO NOT JUDGE LAYOUT FROM AN MCP SCREENSHOT ON THIS SHELL.** `take_screenshot`
+   here produces images that disagree with the DOM, in both directions, and it
+   misled this project three times in one session:
+   - At `deviceScaleFactor: 3`, the title screen captured with **duplicated,
+     offset copies** of real elements — ghost `TIME TRIAL` and `RACE A FRIEND`
+     ~131px below their true positions — surviving a 1.5 s settle,
+     `display: none` on the WebGL canvas, and a forced repaint.
+   - At `deviceScaleFactor: 1`, the same screen captured with the entire brand
+     column (`#menu-brand`, `APEX 26`) **missing**, plus a phantom
+     `F1 DATA HUB / GARAGE` row above the fold — with every animation on the
+     subtree awaited to completion and `getAnimations()` reporting none running.
+   In every case `getBoundingClientRect` was right and the picture was wrong:
+   the brand measured x=86 w=348 h=325 at `opacity: 1` while the PNG showed
+   empty space, and `take_snapshot` listed 20 painted elements with no
+   duplicates. A Playwright capture of the identical page
+   (`node tools/layout-audit.mjs --screens=title --viewports=… --shots`)
+   rendered correctly both times.
+   **So: measure with `evaluate_script`, and if you need a picture, take it with
+   Playwright.** An MCP screenshot is fine for "is the app up, roughly", never
+   for "does this element overlap that one". This is `docs/LAYOUT-AUDIT.md`'s "a
+   finding is a claim about the probe" inverted — here the MEASUREMENT is the
+   reliable half and the PICTURE is the claim, which is the opposite of the
+   usual assumption and the reason it costs so much time.
+7. **`emulate` may or may not reset page state — always check which screen is
+   actually open.** Observed both ways in one session: one `emulate` call left
+   the app back on the title screen (a measurement of `#select` then silently
+   described the title), and a later one left five screens open from earlier
+   navigation. Neither is announced. Before measuring, assert the screen you
+   think you are on (`document.querySelectorAll(".screen")` filtered by
+   `hidden`), or reload and re-navigate through the app's own controls. A probe
+   that measures the wrong screen returns clean numbers, which is the failure
+   mode hardest to notice.
+8. **Reloading does not pick up edited `js/`/`css/`** — the shell's `?v=N` URLs
+   are cached. Use `navigate_page` with `ignoreCache: true` after any source
+   edit, or you will verify a fix that is not loaded and conclude it failed.
 
 ---
 

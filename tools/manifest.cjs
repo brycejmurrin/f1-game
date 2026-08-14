@@ -139,6 +139,8 @@ const FULL = [
   "js/game/cam-tuner.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
+  "js/game/gfx-quality.js",
+  "js/game/perf-try.js",
   "js/game/cameras.js",
   "js/game/cam-modes.js",
   "js/game/hud.js",

@@ -3,20 +3,47 @@
 const TrackModels = (function () {
   "use strict";
 
+  // ---- contextified-global aliases (see firstNonFinite below for the measurement)
+  // Under vm.createContext — tools/verify-track.cjs, tools/graph-parity.cjs, the
+  // float/clip/coplanar audits and the VM unit suites — every BARE global read
+  // (`Math`, `Number`) goes through the contextified global's C++ interceptor at
+  // ~140-220 ns, against ~3.3 ns for a scope-slot read. These aliases turn the
+  // per-vertex reads below into ordinary scope loads.
+  //
+  // HONEST SCOPE: this is a DEV-LOOP fix. In a browser there is no contextified
+  // global, so the same reads already cost ~3.3 ns and hoisting them is worth
+  // ~1-3 % of build time at most — it does not change anyone's framerate. Applied
+  // only where the read sits in a per-vertex or per-primitive loop; one-shot
+  // setup code keeps the plain `Math.`/`Number.` spelling on purpose.
+  //
+  // The ns figures above are inherited from the firstNonFinite finding, not
+  // re-timed for this pass — a shared 4-core box cannot produce a trustworthy
+  // wall time. What WAS verified here is EQUIVALENCE: all 40 circuits build
+  // bit-identical geometry before and after (tools/graph-parity.cjs --all).
+  const __M = Math, __isFinite = Number.isFinite, __isInteger = Number.isInteger;
+
   const finiteArray = (v, length) =>
-    Array.isArray(v) && (!length || v.length === length) && v.every(Number.isFinite);
+    Array.isArray(v) && (!length || v.length === length) && v.every(__isFinite);
   const validSize = (v) => finiteArray(v, 3) && v.every((n) => n > 0);
   const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
 
-  function appendBuffer(target, source) {
+  function appendBuffer(target, source, id) {
     const base = target.pos.length / 3;
     // Record where this staged block landed in the target. modelGroup emits
     // into a scratch buffer and copies it out, so a primitive recorded against
     // the STAGE carries vertex indices that mean nothing in the shipped mesh —
     // headless audits (float/clip) could not attribute any modelGroup geometry
     // at all and silently skipped it. One entry per copy is enough to remap.
+    // `id` is what makes the remap ANSWERABLE rather than merely possible. A
+    // block used to say "vertices 1200..1450 came from some staged buffer",
+    // which is enough to skip them and not enough to name them — so a headless
+    // audit could report "4.79 m of prop over the racing line" and nothing
+    // could say WHICH emitter put it there. Every attribution attempt then went
+    // through prop AABBs, which is the wrong question: the audits test whether
+    // a TRIANGLE covers a track point, and one large triangle's centroid can
+    // sit 24 m from the point it covers.
     (target.__blocks || (target.__blocks = []))
-      .push({ base, from: source, count: source.pos.length / 3 });
+      .push({ base, from: source, count: source.pos.length / 3, id: id || null });
     // Indexed loops, not push(...source): spread-apply passes every element as a
     // separate ARGUMENT, so a staged model group large enough (tens of thousands
     // of vertices) blows the engine's argument limit and throws RangeError from
@@ -31,6 +58,35 @@ const TrackModels = (function () {
 
   function appendAll(target, source) {
     for (let i = 0; i < source.length; i++) target.push(source[i]);
+  }
+
+  // How far the emitted geometry escapes the box the group DECLARED, per axis,
+  // measured in that box's own basis. Null when everything fits.
+  //
+  // Hand-rolled dot products and an indexed loop for the same reason the
+  // occupancy scans below are written that way: this runs over every vertex of
+  // every model group on every build, including day<->night rebuilds.
+  function boundsEscape(stage, bounds) {
+    const c = bounds.center, sz = bounds.size, b = bounds.basis;
+    if (!c || !sz) return null;
+    const r = b ? b[0] : [1, 0, 0], u = b ? b[1] : [0, 1, 0], f = b ? b[2] : [0, 0, 1];
+    const hr = sz[0] / 2, hu = sz[1] / 2, hf = sz[2] / 2;
+    const p = stage.pos;
+    let or_ = 0, ou = 0, of = 0;
+    for (let i = 0; i < p.length; i += 3) {
+      const dx = p[i] - c[0], dy = p[i + 1] - c[1], dz = p[i + 2] - c[2];
+      const er = __M.abs(dx * r[0] + dy * r[1] + dz * r[2]) - hr;
+      const eu = __M.abs(dx * u[0] + dy * u[1] + dz * u[2]) - hu;
+      const ef = __M.abs(dx * f[0] + dy * f[1] + dz * f[2]) - hf;
+      if (er > or_) or_ = er;
+      if (eu > ou) ou = eu;
+      if (ef > of) of = ef;
+    }
+    // Authoring slack. Below this a box is "right" and the excess is rounding
+    // or a deliberate hairline; above it the declared shape is not the shape.
+    const TOL = 0.05;
+    if (or_ <= TOL && ou <= TOL && of <= TOL) return null;
+    return { overRight: +or_.toFixed(2), overUp: +ou.toFixed(2), overFwd: +of.toFixed(2) };
   }
 
   // Hand-rolled loops rather than Array.prototype.some(fn). These run over the
@@ -78,7 +134,7 @@ const TrackModels = (function () {
     if (!Array.isArray(geo.idx)) return { ok: false, reason: "invalid index" };
     for (let i = 0; i < geo.idx.length; i++) {
       const v = geo.idx[i];
-      if (!Number.isInteger(v) || v < 0 || v >= count)
+      if (!__isInteger(v) || v < 0 || v >= count)
         return { ok: false, reason: "invalid index" };
     }
     return { ok: true, vertices: count, indices: geo.idx.length };
@@ -114,9 +170,9 @@ const TrackModels = (function () {
       const stage = emptyBuffer();
       try {
         const result = emit(stage);
-        if (result === false || !stage.pos.length || stage.pos.some((v) => !Number.isFinite(v)) ||
-            stage.nrm.some((v) => !Number.isFinite(v)) ||
-            stage.idx.some((v) => !Number.isInteger(v) || v < 0 || v >= stage.pos.length / 3)) {
+        if (result === false || !stage.pos.length || stage.pos.some((v) => !__isFinite(v)) ||
+            stage.nrm.some((v) => !__isFinite(v)) ||
+            stage.idx.some((v) => !__isInteger(v) || v < 0 || v >= stage.pos.length / 3)) {
           diagnostics.invalid.push({ id, required, reason: "invalid or empty emission" });
           return false;
         }
@@ -140,7 +196,29 @@ const TrackModels = (function () {
           return false;
         }
       }
-      appendBuffer(out, stage);
+      // THE DECLARED BOUNDS ARE A PROMISE, AND NOTHING CHECKED IT.
+      // preflight() above tested `bounds` — the box the author DECLARED — and
+      // never looked again, so a group may pass the footprint guard and then
+      // emit its primitives somewhere else entirely. Measured on
+      // `cota-amphitheater`: it declares its centre 8 m off the anchor
+      // (`vadd(vadd(a.c, a.r, 8), a.u, 13)`) and emits its stage deck AT the
+      // anchor, so ~55 x 28 m of geometry lands where the tested box never was
+      // — 4.79 m over the racing line, with the guard reporting success. That
+      // is what tests/specs/props-over-road.spec.js has been failing on for
+      // COTA and Indianapolis.
+      //
+      // REPORTED, NOT REJECTED, and deliberately so: rejecting here would
+      // silently delete authored scenery across 40 circuits on a rule whose
+      // blast radius nobody has measured. The count this produces is the input
+      // to that decision — read it with __apex.modelDiagnostics(). Promote to a
+      // suppression (or re-run preflight on the real AABB) once the population
+      // is known and the offenders' bounds are corrected.
+      const escaped = boundsEscape(stage, bounds);
+      if (escaped) {
+        (diagnostics.escaped || (diagnostics.escaped = []))
+          .push(Object.assign({ id, required, kind, vertices }, escaped));
+      }
+      appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required, vertices, kind });
       return true;
     }
@@ -185,7 +263,41 @@ const TrackModels = (function () {
       // its safety contract is explicit underside clearance.
       const stage = emptyBuffer();
       if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
-      appendBuffer(out, stage);
+      // The legs. supportClear() above already reserved and validated this
+      // exact footprint, and `supportGap`/`supportWidth` were part of the spec
+      // from the start — but nothing ever EMITTED them, so a span was a deck
+      // and nothing else. Circuits that wanted visible supports drew their own
+      // (cota, abudhabi); every span whose circuit did not was a slab hanging
+      // over the road on nothing, which is what the grounding audit reported
+      // across 7 circuits. Pass `supports: false` to keep the bare deck — the
+      // same opt-out supportClear() already honours — for spans that hang off
+      // a building or a tunnel mouth rather than standing on their own legs.
+      if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
+        // Inset and narrowed a touch. Several circuits already draw their own
+        // piers at exactly supportGap + supportWidth/2 (that is what the spec
+        // reserves), so a leg emitted flush with one shares its faces: madrid
+        // 65 -> 66 and suzuka 8 -> 9 coplanar spots. Sitting 0.12 m inboard at
+        // 90% width keeps the leg inside the reserved footprint, still under
+        // the deck and still on the ground, without ever landing on a plane a
+        // circuit pier already occupies.
+        const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
+        const lat = supportGap + sw / 2 + 0.12;
+        const under = clearance;           // deck underside above the road datum
+        for (const side of [-1, 1]) {
+          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
+          if (!finiteArray(foot, 3)) continue;
+          // Base-anchored box would be wrong here: box() centres its `c`. Span
+          // foot -> deck underside, with 0.3 m of embed at the bottom and a
+          // 0.2 m overlap into the deck so the support chain never sees a seam.
+          const top = frame.c[1] + under;
+          const h = top - foot[1] + 0.5;
+          if (!(h > 0.5)) continue;
+          box(stage, [foot[0], foot[1] - 0.3 + h / 2, foot[2]],
+              [sw, h, spec.depth != null ? spec.depth : 1.4],
+              spec.supportColor || spec.color, [frame.r, frame.u, frame.t]);
+        }
+      }
+      appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance });
       return true;
     }
@@ -199,7 +311,7 @@ const TrackModels = (function () {
       }
       const stage = emptyBuffer();
       if (!box(stage, spec.center, spec.size, spec.color || [0.12, 0.34, 0.48], spec.basis)) return false;
-      appendBuffer(water, stage);
+      appendBuffer(water, stage, id);
       diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, water: true });
       return true;
     }

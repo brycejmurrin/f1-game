@@ -358,11 +358,17 @@
       for (let i = 0; i < 6; i++) {
         const s = (0.98 + i * 0.018) % 1;
         const hf = hash(i * 11 + 7);
-        building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, 6 + hf * 3, 18 + hf * 8,
+        const hallH = 6 + hf * 3;
+        building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
           { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
-        // Soft white roof canopy ledge
+        // Soft white roof canopy ledge, seated on the hall's actual ridge.
+        // building()'s "hall" kind caps its own mass at hallH * 0.5 (low
+        // body to 0.35*hallH + gable roof to 0.5*hallH), not at hallH — the
+        // ledge guessed the full hallH as the roofline and floated several
+        // metres above the real ridge.
+        const roofTop = hallH * 0.5;
         const a = anchor(K(s), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 8 + hf * 3), [14, 0.55, 16], WHITE, b);
+        addBox(out, vadd(a.c, a.u, roofTop - 0.05), [14, 0.55, 16], WHITE, b);
       }
 
       // Dress-pass addition 2: illuminated paddock media/operations centre.
@@ -425,11 +431,21 @@
       // North-grandstand rear concourse. Two lit volumes and a light bar only —
       // the third and fourth blocks that used to stand here started to read as
       // a small town behind T1, which is the one thing Lusail has none of.
-      building(K(0.060), 1, 54, 16, 7, 34,
-        { kind: "hall", wall: WHITE, window: WIN_WARM, floor: 3.0 });
       {
-        const a = anchor(K(0.068), 1, 63), b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 8.2), [20, 0.30, 42], FLOOD, b);
+        const hallH = 7;
+        building(K(0.060), 1, 54, 16, hallH, 34,
+          { kind: "hall", wall: WHITE, window: WIN_WARM, floor: 3.0 });
+        // Light bar over the concourse roof. Two bugs stacked here:
+        // building()'s "hall" kind caps its own mass at hallH * 0.5, not
+        // hallH, so the bar's fixed 8.2 m guessed the full hallH as the
+        // roofline (real ridge is 3.5 m); and the bar was anchored at a
+        // different k (0.068) than the hall it sits on (0.060) — 0.008 frac
+        // is ~43 m of arc on this 5.4 km lap, so the bar's footprint never
+        // overlapped the roof it was meant to rest on. Sharing the hall's
+        // own k fixes the XZ overlap; roofTop fixes the Y gap.
+        const roofTop = hallH * 0.5;
+        const a = anchor(K(0.060), 1, 63), b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, roofTop - 0.05), [20, 0.30, 42], FLOOD, b);
       }
       // Arabic entrance signage over the North concourse gate.
       arabicSign(K(0.064), 1, 44, 16, 3.4, [0.98, 0.92, 0.60], [0.13, 0.14, 0.18]);

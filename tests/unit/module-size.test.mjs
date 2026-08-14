@@ -101,7 +101,102 @@ const CEILINGS = {
   // bias wasn't scaling with it, which produced visible self-shadow acne on
   // the car above the default SHADOW DISTANCE (confirmed via MCP screenshot,
   // not caught by the numeric-only apex-eval.mjs check from the prior pass).
-  "js/game.js": 8003,
+  // 8003 -> 8009: PER-CHUNK LAMPS hands the renderer frame.allLights (the full
+  // baked lamp list) beside the globally-culled frame.lights, so GLXChunked can
+  // bind each chunk its own nearest-32. Six lines at the existing setFrameLights
+  // call site, which is where the frame's light state is already assembled.
+  // 8009 -> 8015: recording frame.tailStart/tailCount around the
+  // appendCarTailLights call, so PER-CHUNK LAMPS can add the per-frame car
+  // tail-lights to each chunk's set. They are appended to frame.lights AFTER
+  // the static cull, so a set built from track._lights alone silently dropped
+  // them — a regression the knob introduced. Sits at the call site that already
+  // assembles the frame's light state.
+  // 8013 -> 8035: PER-CHUNK ROAD. The road is a single mesh, so it can only
+  // carry the one global set of 32 lamps — the reason the far road stays dark
+  // while the buildings beside it light up. Drawing it chunked routes it
+  // through the same GLXChunked per-chunk path. Lazy-built at the existing road
+  // draw site (nothing else knows the knob state at build time), and the
+  // comment records why _keepPositions is mandatory: createChunkedMesh nulls
+  // its source arrays and debrisworld.js + __apex.geo() still read roadGeo.
+  // 8035 -> 8036: one comment line at the po.lampVol assignment, paying for a
+  // TIER-4 CORRECTNESS FIX rather than a feature. lampVol was shed only by the
+  // hard !gfx.mobileTier gate where _lampVol is derived, so the BOTTOM rung of
+  // the feature ladder did not actually drop the heaviest night pass on a
+  // struggling DESKTOP: haveGR is `sunGR || lampVol > 0`, so a non-zero lampVol
+  // kept the whole half-res god-ray march + 4 blurs alive after po.godray had
+  // already gone to 0.
+  // 8036 -> 8018: LOWERED, not raised. The mobile-only GRAPHICS toggle (22
+  // lines of button wiring + the apex26.gfxHigh boot bit) moved out to
+  // js/game/gfx-quality.js, which owns #pm-gfx for every device now. This is
+  // the direction the ratchet exists to push: a feature landed and game.js got
+  // SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
+  // instead of rewriting the eight PerfGov.tier() gates in the render path.
+  // 8018 -> 8033 to take the synchronous track build OFF the boot path. Boot's
+  // last statement was `loadTrack(trackIdx)` — a Tracks.build() measured at
+  // 938 ms (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, inside a
+  // measured DCL of 4712 ms. It now calls scheduleFlybyTrack(), the deferral
+  // this file already used for every other menu track change, and render()'s
+  // (previously dead) null-track branch returns instead of presenting a clear.
+  // 8033 -> MERGED: PerfTry.skyLate landed on the other branch over the same
+  // period. The reorder is two edited lines; the rest is the comment recording
+  // the GLOW hazard, which is why it could not be a one-line move — drawGlow is
+  // additive with depthMask off, so it writes no depth and leaves the
+  // background at 1.0 where it painted, which a later depth-1.0 sky with blend
+  // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
+  // sky, then the glow. Neither branch's number fits the merged file; this one
+  // is set FROM it, the same way the earlier flap-gate merge above was.
+  // 8050 -> 8064: pooling the DebrisWorld.tyreMarble argument. The literal was
+  // built per car per physics step on BOTH the player and AI paths -- 20 cars x
+  // 60 Hz, ~1200 short-lived objects/s -- and tyreMarble discards it on the
+  // speed gate, the hot gate, or the 0.25 rate limit, so nearly all of them at
+  // cruising speed. A measured CPU profile put the collector at 2.8% of physics
+  // time; this is one of the sites paying into it. The growth is the pooled
+  // declaration plus the comment recording why sharing one object is safe (the
+  // callee is read-only and spawnMarble retains nothing) -- the ratchet-tolerated
+  // kind, since the alternative is a reader re-deriving that safety argument.
+  // 8064 -> 8079: an EXACT cheap reject in pairContact before the wrap. The
+  // wrap-normalise ran for every ordered pair on every relaxation pass (20 cars
+  // = 190 pairs x 5 passes = ~950 calls per physics step) and a 3M-pair
+  // equivalence sweep put acceptance at 0.18%, so ~99.8% of those two float
+  // modulos existed only to prove "not touching". The growth is the comment
+  // carrying the proof -- that |wrapped| <= LCAR iff |dProg| <= LCAR or
+  // |dProg| >= L - LCAR, hence the new test discards exactly the same pairs in
+  // the same order. Without that written down the next reader cannot tell an
+  // exact reject from a conservative pre-filter, and this sits inside collision
+  // resolution where a wrong guess changes racing.
+  // Merged the range-pass branch (SCALE consts + comments) with deploy's
+  // 8050-era work — the file carries both sides' lines, so neither side's
+  // number fits it. Set from the merged file: 8054.
+  // MERGED AGAIN: both lineages raised this over the same window (8079 here
+  // for the pairContact proof, 8054 on the deploy side for the range-pass
+  // work). The file carries both sides' lines, so neither number fits it —
+  // set FROM the merged file, the resolution this file already records twice.
+  // -> 8122: two render-path gates from the 2026-08-14 hunt, both of the
+  // "work multiplied by zero" kind this ratchet's header calls the tolerated
+  // growth. (a) The STATIC SUN SHADOW producer now matches its consumer:
+  // lit.js opens sampleShadow with `if (uShadowStr <= 0.0) return 1.0;`, so on
+  // an overcast/wet/foggy night nothing reads the map, yet the frame still paid
+  // a 2048² clear + the full terrain and road ribbons cast unchunked (44,826
+  // verts on vegas) + a 512² PCSS blocker pass, 300+ times a lap. (b) Car
+  // shadow CASTERS are now distance-culled against the volume's corner radius.
+  // Both comments carry the reasoning that makes the gate reviewable — the
+  // shadow one records WHY the snap cache must be invalidated when the gate
+  // closes, and the caster one records why the radius is hypot(cBox, 170) and
+  // not cBox, which is the difference between a correct cull and deleting long
+  // low-sun shadows.
+  // -> 8145: two more of the same "work multiplied by zero" kind. (a) po.contact
+  // now sheds at tier 4 alongside po.ssao — glx/post.js arms the SSAO pass on
+  // `aoStr > 0 || contactStr > 0`, so a tier-4 daytime frame kept running the
+  // pass and both its blurs after po.ssao had already gone to zero. This is
+  // literally the bug the line above it records being fixed for lampVol against
+  // haveGR's identical `||`; the SSAO half was missed. (b) The LAMP shadow pass
+  // now distance-culls its car casters, the twin of (and cross-referenced from)
+  // the sun pass's _csR — the sun comment already says the field pays the caster
+  // cost twice at night, and this was the untouched half. The comment there
+  // carries the load-bearing part: the bound is the lamp RADIUS on a
+  // shadow-rays-travel-outward argument, NOT the frustum, whose 149-degree far
+  // corners reach ~5x its far plane and would make a frustum-radius cull wrong.
+  "js/game.js": 8145,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -115,7 +210,16 @@ const CEILINGS = {
   // instead of only eyeballing a screenshot (which cost a lot of back-and-forth
   // chasing a black-frame red herring that was actually a broken canvas-readback
   // sampler, not a render bug).
-  "js/game/apex.js": 3080,
+  // 3080 -> 3106 for lazyTrackEnsure: the boot deferral above means window.__apex
+  // can exist with G.track === null, and ~180 hooks (plus 105 of 112 spec files)
+  // assume the synchronous world boot used to guarantee. One wrapper at the API
+  // boundary restores it for the dev API only — the alternative was a guard at
+  // every staging hook, which is the shape that rots. Not a new hook, so nothing
+  // joins docs/DEBUG-HOOKS.md. Nine of the 26 lines are the wrapper; the rest
+  // record the placement constraint, which is real: quoting the api literal's
+  // opening text in that comment moved hooks-documented.test.mjs's slice point
+  // and invented a hook called `for`.
+  "js/game/apex.js": 3106,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -138,7 +242,17 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2750,
+  // -> 2785 (+18, net of a deleted accumulator): barrierClear()'s grid sweep no
+  // longer widens by the index's largest half-width. barGridInsert already
+  // buckets every record by its INFLATED bounds, so the allowance was counted on
+  // both sides of the lookup and the sweep ran 4-9 cells where 1-4 suffice — on
+  // clearTreeDist's up-to-9 walk-outs per tree and hedge()'s per-step probe. All
+  // 18 lines are the proof that reach = r misses nothing; it is an equivalence
+  // claim, so it is the kind that has to be written down and tested as one.
+  // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
+  // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
+  // baseline caps are tight — i.e. the placement counts are exactly unchanged.
+  "js/track/tracks.js": 2785, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

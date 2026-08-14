@@ -287,6 +287,16 @@ test("EVERY world-facing camera mode is C1 on a gradient", () => {
   assert.deepEqual(bad, [], `these modes step their vertical velocity at node rate: ${bad.join(", ")}`);
 });
 
+// The guaranteed clearance over the ROAD is MIN_CLEAR - FLOOR_LEAD = 0.55 m,
+// not the old 0.8: the clamp floor now references the SMOOTHED ride height
+// (so a CAMERA TUNER-lowered eye stops riding raw ripple crests through the
+// floor — see the clamp comment in cameras.js), and the smoothed reference is
+// allowed to sit at most FLOOR_LEAD = 0.25 below raw where the profile
+// genuinely drops. These synthetic cliffs are exactly that worst case. On
+// every real circuit raw-above-smooth measures <= 0.202 m (suzuka), inside
+// FLOOR_LEAD, so the smooth reference governs and the full 0.8 m holds there.
+const CLIFF_CLEAR = 0.8 - 0.25;
+
 test("the soft floor never lets the eye end up below the hard floor", () => {
   // Softening the clamp handover must not weaken what the clamp is FOR. The
   // blend may only ever push the eye up.
@@ -295,8 +305,8 @@ test("the soft floor never lets the eye end up below the hard floor", () => {
   for (let s = 1900; s < 2200; s += 2) {
     const v = chaseAt(cams, track, s);
     const groundHere = (s > 2000 ? -6 : 0) - 0.12;
-    assert.ok(v.eye[1] >= groundHere + 0.8 - 1e-6,
-      `eye ${v.eye[1].toFixed(3)} below the floor ${(groundHere + 0.8).toFixed(3)} at s=${s}`);
+    assert.ok(v.eye[1] >= groundHere + CLIFF_CLEAR - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} below the floor ${(groundHere + CLIFF_CLEAR).toFixed(3)} at s=${s}`);
   }
 });
 
@@ -308,7 +318,7 @@ test("the ground clamp still catches an eye below the surface", () => {
   for (let s = 1900; s < 2200; s += 5) {
     const v = chaseAt(cams, track, s);
     const groundHere = (s > 2000 ? -6 : 0) - 0.12;
-    assert.ok(v.eye[1] >= groundHere + 0.8 - 1e-6,
-      `eye ${v.eye[1].toFixed(3)} sank below the clamp floor ${(groundHere + 0.8).toFixed(3)} at s=${s}`);
+    assert.ok(v.eye[1] >= groundHere + CLIFF_CLEAR - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} sank below the clamp floor ${(groundHere + CLIFF_CLEAR).toFixed(3)} at s=${s}`);
   }
 });

@@ -43,7 +43,7 @@ try {
   await p.waitForFunction(() => window.__apex?.race, null, { timeout: 30000 });
   await p.evaluate(() => {
     window.__caps = [];
-    const grab = (g) => { try { window.__caps.push({ pos: g && g.pos ? Array.from(g.pos) : null, idx: g && g.idx ? Array.from(g.idx) : null, n: g && g.pos ? g.pos.length / 3 : 0 }); } catch (e) {} };
+    const grab = (g) => { try { window.__caps.push({ pos: g && g.pos ? Array.from(g.pos) : null, idx: g && g.idx ? Array.from(g.idx) : null, n: g && g.pos ? g.pos.length / 3 : 0, blocks: g && g.__blocks ? g.__blocks.map((b) => ({ base: b.base, count: b.count, id: b.id })).filter((b) => b.id) : null }); } catch (e) {} };
     for (const fn of ["createChunkedMesh", "createMesh"]) { const o = GLX[fn]; if (!o) continue; GLX[fn] = function (g) { grab(g); return o.apply(this, arguments); }; }
   });
   await p.evaluate((t) => __apex.race(t, "day", "dry"), TRACK);
@@ -62,6 +62,22 @@ try {
     const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 1e-9) return null; const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
     const terr = sized.filter((c) => c.i !== road.i && c.maxLat > 14).sort((a, b) => a.len - b.len)[0];
     const skip = new Set([road.i]); if (terr) skip.add(terr.i);
+    // WHICH EMITTER PUT IT THERE. js/track/models.js records one __blocks entry
+    // per staged copy (modelGroup / overheadSpan / water) carrying the emitter's
+    // own id, so a vertex index maps straight back to the thing that emitted it.
+    // Without this the report could say "4.79 m over the racing line" and not
+    // what to edit, and every attempt to work it out from prop bounding boxes
+    // asked the wrong question: the test is whether a TRIANGLE covers a track
+    // point, and a large triangle's centroid can sit 24 m from the point it
+    // covers. Geometry appended straight into `out` by a raw emitter has no
+    // block, and is reported as "(raw)" rather than guessed at.
+    const owner = (cap, vi) => {
+      const bl = cap.blocks; if (!bl || !bl.length) return "(raw)";
+      for (let i = 0; i < bl.length; i++) {
+        if (vi >= bl[i].base && vi < bl[i].base + bl[i].count) return bl[i].id;
+      }
+      return "(raw)";
+    };
     const hits = [];
     for (let i = 0; i < window.__caps.length; i++) {
       if (skip.has(i)) continue; const cap = window.__caps[i]; if (!cap.idx || cap.n < 30) continue;
@@ -75,7 +91,7 @@ try {
           if (tp.x < mnx - 0.3 || tp.x > mxx + 0.3 || tp.z < mnz - 0.3 || tp.z > mxz + 0.3) continue;
           const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
           const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay); const over = yf - tp.y;
-          if (over > TOL && over < CEIL) hits.push({ frac: +tp.frac.toFixed(3), over: +over.toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2) });
+          if (over > TOL && over < CEIL) hits.push({ frac: +tp.frac.toFixed(3), over: +over.toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2), by: owner(cap, idx[t]) });
         }
       }
     }

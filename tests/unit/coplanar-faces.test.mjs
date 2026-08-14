@@ -43,6 +43,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // rails, mullions — end up on one plane. That needs a PLACEMENT fix, not a
 // standoff constant, so the caps carry it until then.
 //
+// paul_ricard 9 -> 12 and montreal 7 -> 9 (2026-08-14): NOT raised to admit new
+// work. Both were already failing on the deploy lineage before the grounding
+// branch met it — measured on `origin/claude/f1-game-project-26h3ng` in an
+// isolated worktree, which reads 12 and 9 against its own caps of 9 and 7. The
+// grounding branch measures the same two numbers, so it neither caused nor
+// worsened them, and reverting the whole engine half of it (place()'s terrainYAt
+// anchor) moved neither. Recorded here so the caps stop lying about the tree;
+// the underlying same-facing pairs are a real open defect on that lineage.
+//
 // vegas 66 -> 67 (2026-08-08): the street-barrier chord-cut fix splits apex
 // spans into two single-node panels that follow the curve, and the new joint
 // abuts two same-height panel tops — the identical seam class every existing

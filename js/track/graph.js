@@ -43,6 +43,13 @@
 const TrackGraph = (function () {
   "use strict";
 
+  // Contextified-global aliases — mechanism and honest scope documented once in
+  // js/track/models.js above firstNonFinite. Under vm.createContext a bare
+  // `Math.`/`Number.` read costs ~140-220 ns against ~3.3 ns from a scope slot;
+  // in a browser it is already ~3.3 ns, so this is developer-iteration time, not
+  // framerate. Used in the per-placement / per-op paths below only.
+  const __M = Math, __isFinite = Number.isFinite;
+
   // Op kinds mirror the guarded emitter surface in buildProps. Each carries its
   // centre in LOCAL space; sizes are local too and scale with the node.
   //   box/prism/pyramid : { c, sz }
@@ -50,7 +57,7 @@ const TrackGraph = (function () {
   //   frustum           : { c, rB, rT, h, seg }
   // `mat` is the MAT id in force for that op (out._mat at emission time).
 
-  const isVec3 = (v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+  const isVec3 = (v) => Array.isArray(v) && v.length === 3 && v.every(__isFinite);
 
   // Sentinel colour: "take this vertex colour from the NODE, not the model".
   // Emitters that vary only by tint — a city's window panes, each with its own
@@ -81,8 +88,8 @@ const TrackGraph = (function () {
   // non-uniform XZ scale would make them elliptical — which the primitive
   // emitters cannot express. Take the larger of the two so the guard footprint
   // is never UNDER-estimated (an under-estimate would let a prop reach tarmac).
-  const radScale = (s) => (s ? Math.max(Math.abs(s[0]), Math.abs(s[2])) : 1);
-  const upScale = (s) => (s ? Math.abs(s[1]) : 1);
+  const radScale = (s) => (s ? __M.max(__M.abs(s[0]), __M.abs(s[2])) : 1);
+  const upScale = (s) => (s ? __M.abs(s[1]) : 1);
 
   function create(ctx) {
     ctx = ctx || {};
@@ -206,7 +213,7 @@ const TrackGraph = (function () {
           case "box":
           case "prism":
           case "pyramid": {
-            const sz = s ? [op.sz[0] * Math.abs(s[0]), op.sz[1] * Math.abs(s[1]), op.sz[2] * Math.abs(s[2])] : op.sz;
+            const sz = s ? [op.sz[0] * __M.abs(s[0]), op.sz[1] * __M.abs(s[1]), op.sz[2] * __M.abs(s[2])] : op.sz;
             ok = op.op === "box" ? emit.addBox(out, c, sz, col, basis)
               : op.op === "prism" ? emit.addPrism(out, c, sz, col, basis)
                 : emit.addPyramid(out, c, sz, col, basis);
@@ -287,7 +294,7 @@ const TrackGraph = (function () {
         const m = models.get(node.model);
         if (!m) continue;
         const s = node.s;
-        const nonUniformXZ = !!s && Math.abs(Math.abs(s[0]) - Math.abs(s[2])) > 1e-9;
+        const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
         if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
         let list = byModel.get(node.model);
         if (!list) byModel.set(node.model, (list = []));

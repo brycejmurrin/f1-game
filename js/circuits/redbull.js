@@ -343,7 +343,12 @@
           { len: 95,  gap: 9.5, h: 11, tiers: 1, roof: "cantilever", shell: rbRed,  crowd: rbRed },
           { len: 110, gap: 9.0, h: 12, tiers: 2, roof: "cantilever", suites: true, livery: "crimson" },
           { len: 115, gap: 8.5, h: 13, tiers: 2, roof: "truss",      suites: true, pylons: true, shell: rbNavy, crowd: rbNavy },
-          { len: 120, gap: 8.0, h: 14, tiers: 2, roof: "truss",      suites: true, pylons: true, livery: "crimson" }, // Remus crest — tallest point
+          // Remus crest — tallest point. Was roof:"truss": measured via
+          // float-audit, one bay of the truss's per-bay cross-braces lost
+          // the support chain to the roof deck (same class as
+          // albert_park's chicane-complex stand); switched to the solid
+          // cantilever slab used by five of the other seven stands here.
+          { len: 120, gap: 8.0, h: 14, tiers: 2, roof: "cantilever", suites: true, pylons: true, livery: "crimson" },
           { len: 110, gap: 8.5, h: 12, tiers: 2, roof: "cantilever", suites: true, shell: rbNavy, crowd: rbNavy },
           { len: 80,  gap: 9.5, h: 11, tiers: 1, roof: "cantilever", livery: "crimson" },
         ];
@@ -590,16 +595,24 @@
         if (onTrack(a.c[0], a.c[2], 22)) return;
         const b = [a.r, a.u, a.t];
         for (let i = 0; i < count; i++) {
-          const base = vadd(a.c, a.t, (i - (count - 1) / 2) * 7);
+          // Single-anchor extrapolation: walking `a.t` up to +/-21 m (this
+          // hillside campground, per the comment above) assumed flat ground
+          // — float-audit measured RVs/tents at the row's ends 1-4 m off the
+          // slope. Re-anchor per item on a nearby node instead of reusing
+          // `a`'s one ground sample.
+          const dk = Math.round((i - (count - 1) / 2) * 7 / ds);
+          const ai = dk ? anchor(k + dk, side, dist) : a;
+          const bi = dk ? [ai.r, ai.u, ai.t] : b;
+          const base = ai.c;
           if (hash(k * 17 + i) < 0.5) {
             out._mat = MAT.METAL;
-            addBox(out, vadd(base, a.u, 1.7), [2.8, 2.4, 5.6], [0.84, 0.85, 0.86], b);
-            addBox(out, vadd(base, a.u, 3.0), [2.9, 0.4, 5.6], [0.68, 0.68, 0.70], b);
+            addBox(out, vadd(base, ai.u, 1.7), [2.8, 2.4, 5.6], [0.84, 0.85, 0.86], bi);
+            addBox(out, vadd(base, ai.u, 3.0), [2.9, 0.4, 5.6], [0.68, 0.68, 0.70], bi);
             out._mat = 0;
           } else {
             out._mat = MAT.FABRIC;
-            addPrism(out, vadd(base, a.u, 0.2), [3.2, 1.7, 3.8],
-                     hash(k * 19 + i) < 0.5 ? [0.80, 0.14, 0.16] : [0.10, 0.14, 0.40], b);
+            addPrism(out, vadd(base, ai.u, 0.2), [3.2, 1.7, 3.8],
+                     hash(k * 19 + i) < 0.5 ? [0.80, 0.14, 0.16] : [0.10, 0.14, 0.40], bi);
             out._mat = 0;
           }
         }

@@ -103,6 +103,9 @@ const GLX = (function () {
   let frameEye = null;
   let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
   let frameLights = null;
+  // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
+  // both to bind a per-chunk light subset instead of this frame's global 32.
+  let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -164,9 +167,55 @@ const GLX = (function () {
   function setDepthMask(on) {
     if (on !== _depthWrite) { gl.depthMask(on); _depthWrite = on; }
   }
+  // The same idea extended to the three states draw() currently toggles on
+  // EVERY call. MEASURED and found to save NOTHING: those four calls total 63.5
+  // per frame on vegas and the cache collapses zero of them, because the toggles
+  // strictly ALTERNATE (cars are doubleSided, their neighbours are not). The
+  // PerfTry switch was removed; _stateCache() is now permanently false, so these
+  // behave exactly as the direct gl calls they replaced. Kept because the routing
+  // is tidier and because resetDrawState() is a real invariant.
+  // GL defaults: culling ON, all four colour channels writable,
+  // polygon offset disabled. resetDrawState() re-syncs to those, and is called
+  // from begin()/present() alongside the blend/depth pair so a cached value can
+  // never outlive the frame that set it.
+  let _cullOn = true, _colorMaskA = true, _polyOffOn = false;
+  const _stateCache = () => false;   // see the measured note above
+  function setCull(on) {
+    if (!_stateCache()) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); return; }
+    if (on !== _cullOn) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); _cullOn = on; }
+  }
+  function setAlphaWrite(on) {
+    if (!_stateCache()) { gl.colorMask(true, true, true, on); return; }
+    if (on !== _colorMaskA) { gl.colorMask(true, true, true, on); _colorMaskA = on; }
+  }
+  function setPolyOffset(bias) {
+    if (!_stateCache()) {
+      if (bias) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(bias[0], bias[1]); }
+      else { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
+      return;
+    }
+    if (bias) {
+      if (!_polyOffOn) { gl.enable(gl.POLYGON_OFFSET_FILL); _polyOffOn = true; }
+      gl.polygonOffset(bias[0], bias[1]);   // always re-set: the VALUE varies per decal
+    } else if (_polyOffOn) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false; }
+  }
+  function resetDrawState() {
+    gl.enable(gl.CULL_FACE); _cullOn = true;
+    gl.colorMask(true, true, true, true); _colorMaskA = true;
+    gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false;
+  }
 
   function compile(type, src) {
     const sh = gl.createShader(type);
+    // PerfTry #defines (js/game/perf-try.js) — default-off switches for the
+    // GLSL-side optimisations. Injected AFTER the #version line, because GLSL
+    // requires #version to be the first non-comment token; prepending would
+    // fail every compile. This is the single chokepoint for all GLX shaders,
+    // so one insertion covers lit/sky/post/shadow/decal/glow/particle.
+    try {
+      const defs = typeof PerfTry !== "undefined" ? PerfTry.defines() : "";
+      if (defs) src = src.replace(/^(\s*#version[^\n]*\n)/, "$1" + defs);
+    } catch (_) { /* PerfTry absent (standalone shader harness) or storage refused: compile the shader exactly as authored, with no #defines. */ }
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
@@ -268,6 +317,7 @@ const GLX = (function () {
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
+      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -287,6 +337,10 @@ const GLX = (function () {
         get skyHi() { return frameSkyHi; },
         get skyLo() { return frameSkyLo; },
         get lights() { return frameLights; },
+        get allLights() { return frameAllLights; },
+        get perChunkLights() { return framePerChunkLights; },
+        get tailStart() { return frameTailStart; },
+        get tailCount() { return frameTailCount; },
         get time() { return frameTime; },
         get cloud() { return frameCloud; },
         get cloudSpeed() { return frameCloudSpeed; },
@@ -381,7 +435,7 @@ const GLX = (function () {
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
     gl.cullFace(gl.BACK);
     gl.frontFace(gl.CCW);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -703,12 +757,12 @@ const GLX = (function () {
     setBlend(true);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);                 // decals are single quads — draw both faces
-    gl.colorMask(true, true, true, false);    // keep the SSR alpha tag underneath
+    setCull(false);                 // decals are single quads — draw both faces
+    setAlphaWrite(false);    // keep the SSR alpha tag underneath
     bindVAO(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    gl.colorMask(true, true, true, true);
-    gl.enable(gl.CULL_FACE);
+    setAlphaWrite(true);
+    setCull(true);
     setDepthMask(true);
   }
 
@@ -870,6 +924,10 @@ const GLX = (function () {
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
+    frameAllLights = frame.allLights || null;
+    framePerChunkLights = frame.perChunkLights ? 1 : 0;
+    frameTailStart = frame.tailStart | 0;
+    frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -885,6 +943,11 @@ const GLX = (function () {
     // depth buffer to clear, and blend off is the opaque-pass default.
     gl.disable(gl.BLEND); _blendOn = false;
     gl.depthMask(true); _depthWrite = true;
+    // Same resync for the three states the setters above route. This is
+    // what keeps a cached value from outliving the frame that set it — and it
+    // runs unconditionally, so the cached and uncached paths start each frame
+    // from identical GL state.
+    resetDrawState();
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -1073,29 +1136,53 @@ const GLX = (function () {
       // Flat stride-15: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
       // bleed, volW, glareW]. volW is consumed by the godray pass only; glareW
       // (lens-glare halo weight) by drawGlow only.
-      const nL = L ? Math.min(32, (L.length / 15) | 0) : 0;
-      gl.uniform1i(litU.uNumLights, nL);
-      if (nL > 0) {
-        const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
-              cone = _luCone, bleed = _luBleed;
-        for (let i = 0; i < nL; i++) {
-          const o = i * 15;
-          pos[i * 3] = L[o]; pos[i * 3 + 1] = L[o + 1]; pos[i * 3 + 2] = L[o + 2];
-          col[i * 3] = L[o + 3]; col[i * 3 + 1] = L[o + 4]; col[i * 3 + 2] = L[o + 5];
-          rad[i] = L[o + 6];
-          dir[i * 3] = L[o + 7]; dir[i * 3 + 1] = L[o + 8]; dir[i * 3 + 2] = L[o + 9];
-          cone[i * 2] = L[o + 10]; cone[i * 2 + 1] = L[o + 11];
-          bleed[i] = L[o + 12];
-        }
-        gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
-        gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
-        gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
-        gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
-        gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
-        gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
-      }
+      uploadLightSet(L, null, L ? (L.length / 15) | 0 : 0);
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
+  }
+
+  // Upload a set of point lights into the lit program's MAX_LIGHTS uniform
+  // arrays. Two callers: begin() sends this frame's globally-culled
+  // frame.lights (idx = null, entries read in order), and GLXChunked sends a
+  // PER-CHUNK subset via an index array into the track's full baked light list
+  // (PER-CHUNK LAMPS knob). The per-chunk path is why this is factored out: the
+  // shader still only ever sees <= 32 lights, so MAX_LIGHTS and the fragment
+  // loop are untouched — only WHICH 32 are bound changes, per draw. That lifts
+  // the 32-lamp limit for the SCENE as a whole (each chunk gets its own budget)
+  // without costing a uniform slot or a per-fragment iteration.
+  // L2/o2/n2 (optional): a SECOND source appended after the idx-selected ones —
+  // the per-frame dynamic lights (car tail-lights), which appendCarTailLights
+  // pushes onto frame.lights AFTER the static cull and therefore live outside
+  // track._lights. Without this a per-chunk set would silently drop them and
+  // scenery would stop catching tail-light spill the moment the knob went on.
+  // Tail lights are reserved FIRST (there are at most 5, and a car beside you
+  // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
+  function uploadLightSet(L, idx, n, L2, o2, n2) {
+    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, 32) : 0;
+    const nStatic = L ? Math.max(0, Math.min(32 - nTail, n | 0)) : 0;
+    const nL = nStatic + nTail;
+    gl.uniform1i(litU.uNumLights, nL);
+    if (nL <= 0) return;
+    const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
+          cone = _luCone, bleed = _luBleed;
+    for (let i = 0; i < nL; i++) {
+      const fromTail = i >= nStatic;
+      const src = fromTail ? L2 : L;
+      const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
+                         : ((idx ? idx[i] : i) * 15);
+      pos[i * 3] = src[o]; pos[i * 3 + 1] = src[o + 1]; pos[i * 3 + 2] = src[o + 2];
+      col[i * 3] = src[o + 3]; col[i * 3 + 1] = src[o + 4]; col[i * 3 + 2] = src[o + 5];
+      rad[i] = src[o + 6];
+      dir[i * 3] = src[o + 7]; dir[i * 3 + 1] = src[o + 8]; dir[i * 3 + 2] = src[o + 9];
+      cone[i * 2] = src[o + 10]; cone[i * 2 + 1] = src[o + 11];
+      bleed[i] = src[o + 12];
+    }
+    gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
+    gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
+    gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
+    gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
+    gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
+    gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
   }
 
   // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked
@@ -1106,10 +1193,13 @@ const GLX = (function () {
   function litMaterial(modelMat, opts) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
-    // Default the instancing gate OFF on every lit draw. drawInstanced() turns it
-    // on for the duration of its own call and back off after, so no ordinary draw
-    // can ever inherit it — the shader falls back to uModel exactly as before.
-    if (litU.uInstanced) gl.uniform1f(litU.uInstanced, opts && opts._instanced ? 1 : 0);
+    // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
+    // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
+    // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
+    // debris) — to clear a flag only drawInstanced ever sets. It now follows the
+    // depth pass's already-correct shape (castShadowInstanced in glx/shadow.js):
+    // drawInstanced brackets its OWN draw with 1/0, so the uniform is 0 outside
+    // that bracket by construction and 0 at link time before the first one.
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1258,19 +1348,27 @@ const GLX = (function () {
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (!batch || !batch.instances) return;
-    const o = opts ? Object.assign({}, opts, { _instanced: 1 }) : { _instanced: 1 };
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
-    const alpha = litMaterial(IDENT4, o);
+    const alpha = litMaterial(IDENT4, opts);
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
-    if (dbl) gl.disable(gl.CULL_FACE);
+    if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
-    if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
-    if (dbl) gl.enable(gl.CULL_FACE);
+    // Bracket the gate around THIS draw — the shape castShadowInstanced already
+    // uses — instead of asking every one of the frame's other lit draws to clear
+    // it afterwards. Set inside the n > 0 guard so a zero-instance batch leaves
+    // the uniform exactly as it found it. (This also drops the per-call
+    // Object.assign that existed only to smuggle the _instanced flag through.)
+    if (n > 0) {
+      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 1);
+      gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 0);
+    }
+    if (dbl) setCull(true);
   }
 
   function freeInstancedBatch(batch) {
@@ -1297,12 +1395,12 @@ const GLX = (function () {
     // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
     // an explicit opt-out for opaque FX quads.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
-    if (noAW) gl.colorMask(true, true, true, false);
+    if (noAW) setAlphaWrite(false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
     // whose single-winding tyre walls must show from every angle without any
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
-    if (dbl) gl.disable(gl.CULL_FACE);
+    if (dbl) setCull(false);
     // Depth bias for DECAL geometry (start line, road markings): nudge the
     // fragment's depth toward the camera instead of lifting the mesh in Y.
     // A geometric lift is resolution-dependent — it holds up close and
@@ -1310,11 +1408,11 @@ const GLX = (function () {
     // near plane. polygonOffset scales with the local depth slope, so a
     // decal wins at every distance and grazing angle without moving it.
     const _db = opts && opts.depthBias;
-    if (_db) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(_db[0], _db[1]); }
+    if (_db) { setPolyOffset([_db[0], _db[1]]); }
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    if (_db) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
-    if (dbl) gl.enable(gl.CULL_FACE);
-    if (noAW) gl.colorMask(true, true, true, true);
+    if (_db) { setPolyOffset(null); }
+    if (dbl) setCull(true);
+    if (noAW) setAlphaWrite(true);
   }
 
   function drawSky(sky) {
@@ -1365,10 +1463,10 @@ const GLX = (function () {
     setDepthMask(false);
     // Pull the flat quad toward the camera in depth so it can't z-fight the
     // coplanar road underneath (the "shadow flickering under the car").
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
+    setPolyOffset([-4.0, -8.0]);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
   }
 
   function drawMark(modelMat, w, l) {
@@ -1381,10 +1479,10 @@ const GLX = (function () {
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);
+    setPolyOffset([-4.0, -8.0]);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
@@ -1398,14 +1496,14 @@ const GLX = (function () {
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
     setBlend(true);
     setDepthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4.0, -8.0);   // sit on the road, no z-fight
+    setPolyOffset([-4.0, -8.0]);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
     }
     gl.drawArrays(gl.TRIANGLES, 0, vertCount);
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setPolyOffset(null);
     return true;
   }
 
@@ -1469,11 +1567,11 @@ const GLX = (function () {
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);
+    setCull(false);
     gl.drawArrays(gl.TRIANGLES, 0, nDraw * 6);
     // Restore the default alpha-blend + culling for subsequent passes.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
   }
 
   // Transient FX particle batch (tyre smoke / sparks / kickup / rain spray).
@@ -1497,12 +1595,12 @@ const GLX = (function () {
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
-    gl.disable(gl.CULL_FACE);
-    gl.colorMask(true, true, true, false);
+    setCull(false);
+    setAlphaWrite(false);
     gl.drawArrays(gl.TRIANGLES, 0, (floatCount / 10) | 0);
-    gl.colorMask(true, true, true, true);
+    setAlphaWrite(true);
     if (additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.enable(gl.CULL_FACE);
+    setCull(true);
   }
 
   function freeMesh(mesh) {

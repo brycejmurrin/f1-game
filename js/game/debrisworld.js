@@ -378,8 +378,11 @@ function buildWorld(track, cars) {
         .setMass(0.4 + r() * 1.6).setFriction(0.7).setRestitution(0.3),
       body);
     body.setEnabled(false);
-    // scale maps the shared ~0.2 m shard mesh onto this slot's collider size
-    _slots.push({ body, live: false, scale: (hx + hz) * 5.0, restT: 0, spawnTick: 0 });
+    // scale maps the shared ~0.2 m shard mesh onto this slot's collider size.
+    // `s` is the arc the shard was thrown from, stamped on spawn — the hazard
+    // query's projection hint (see projectHazard). Nothing else reads it, so it
+    // is safe to be approximate; it is a search seed, never a position.
+    _slots.push({ body, live: false, scale: (hx + hz) * 5.0, restT: 0, spawnTick: 0, s: 0 });
   }
   // A2: marble sub-pool — created AFTER the debris pool (fixed insertion order →
   // determinism). Tiny high-friction, low-restitution cuboids: they settle and
@@ -681,6 +684,7 @@ function spawnImpact(imp, track) {
     _q.x = 0; _q.y = 0; _q.z = 0; _q.w = 1;
     b.setRotation(_q, true);
     slot.live = true; slot.restT = 0; slot.spawnTick = _tick;
+    slot.s = imp.s;              // hazard-projection hint only (see projectHazard)
     _seq++; _spawnedTotal++;
   }
   _lastImpact = { kind: imp.kind, carIdx: imp.carIdx, sev: +imp.sev.toFixed(2), tick: _tick, spawned: n };
@@ -725,6 +729,22 @@ function step(dt) {
   // BELOW this gate: without it a promoted panel freezes mid-scatter, keeps being
   // drawn and counted as a hazard forever, and _panels fills to PANEL_CAP — the
   // exact permanent leak PANEL_IDLE_DESPAWN_S was added to close.
+  //
+  // LIVE, NOT AWAKE — and that is deliberate, so don't "fix" it. Marbles spawn
+  // above MARBLE_SLIP_GATE, i.e. out of every corner, and hold `live` for
+  // MARBLE_REST_DESPAWN_S after settling, so this gate rarely fires mid-race and
+  // the tempting change is to skip whenever every body is merely ASLEEP. It is
+  // not safe: skipping the step also freezes the kinematic mirrors, and a car
+  // driving over a settled marble is exactly what wakes it. The mirror box spans
+  // road+0.05..road+0.85 (MIRROR_HY about y=road+0.45) and 7 of the 24 pooled
+  // marbles stand taller than 0.05 m, so a sleeping-only gate leaves those seven
+  // asleep under the racing line instead of punted clear — and `isSleeping()` is
+  // the exact predicate marbleGrip() counts. That moves a REAL grip input under
+  // the driver, which outranks the saving. (Panels have their own version of the
+  // same trap: p.force is re-zeroed per tick in drainForces, so an unbroken panel
+  // aged on a tick that never stepped reads a stale non-zero force, resets restT
+  // forever, and never reaches PANEL_IDLE_DESPAWN_S.) Any future attempt has to
+  // hoist the despawn bookkeeping below AND keep both of those honest.
   if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
       && !_anyLive(_slots) && !_anyLive(_marbles) && !_carNearFurn(track, cars)) {
     return;
@@ -895,6 +915,71 @@ function updatePanels(dt, px, pz) {
   }
 }
 
+// Project ONE hazard candidate back to (s, lat), seeded by the arc the body was
+// placed at — falling back to the full scan the moment that seed is not
+// trustworthy. Leaves _smp holding the sample at the returned s, which
+// consider() reads back for hw and road height.
+//
+// WHY A HINT. Tracks.project with no hint evaluates EVERY centreline segment,
+// and n = round(total/4) (js/track/tracks.js): 824 segments on monaco, 1444 on
+// monza, 1543 on vegas, 1737 on spa. With a hint it evaluates ±16 nodes = 33
+// (js/track/spline.js). This ran unhinted for every live shard (cap 48), every
+// disturbed cone and every broken panel at the caution machine's 4 Hz
+// (QUERY_EVERY in js/game/racecontrol.js) — while every one of those records
+// already carries the arc it was placed at.
+//
+// WHY A FALLBACK. The hint RESTRICTS the search to ±64 m of arc rather than
+// seeding it, so a stale hint mis-projects SILENTLY instead of erroring, and a
+// shard can outrun 64 m: spawnImpact throws it at up to 0.55x the car's speed
+// along the track for the ~1 s it is airborne, before it starts sliding.
+//
+// WHY THIS TRUST TEST. It is consider()'s OWN pair of tests, applied to the
+// hinted answer: within the road half-width, and at this road's height. Trusting
+// less is always safe — the fallback IS the old code path — so the guard only has
+// to be strict enough, never exact. Both halves are load-bearing:
+//   · `dist`, not `lat`: `lat` is only the component along the local `right`, so
+//     a body far past the window still reports a near-zero `lat` when the window
+//     edge happens to point at it. Trusting `lat <= hw` flips the accept/reject
+//     verdict on 131-309 of ~45k sampled placements per circuit and misplaces
+//     accepted ones by up to 1931 m of arc. `dist` is the real perpendicular.
+//   · the height test, because Tracks.project is XZ-ONLY and suzuka is a
+//     figure-of-eight: at the crossover the two legs are 1.43 m apart in XZ and
+//     8.07 m apart in Y (s=2529 over s=4893). Without it, a hint on one leg is
+//     trusted for a body on the other and mis-attributes by 2364 m of arc.
+//
+// WHAT IT COSTS. Swept over all 40 circuits (1.75M placements, every staleness
+// up to a 2 km wrong hint): on 39 of them, ZERO accept/reject verdicts change,
+// and accepted answers land within 13 m of the unhinted arc. That drift is
+// spline.js's CONT term dragging a hinted answer toward its hint by ~7% of the
+// arc gap; 13 m is 0.2% of a lap, and only the per-sector SPLIT of hazards()
+// reads it — `total`, which drives VSC_MIN, cannot move at all.
+// tests/unit/debris-hazard-hint.test.mjs pins monza/monaco/spa/miami and suzuka.
+//
+// SUZUKA IS DELIBERATELY DIFFERENT, and it is the hint that is right. Under the
+// bridge the unhinted XZ scan snaps a body resting on the upper deck onto the
+// lower road, 8 m below, and consider() then discards it as airborne. The hint
+// keeps it on the deck it is actually on. That is a behaviour change, on one
+// circuit, at one place, in the direction of correctness — and hazards() is not
+// a replicated surface (js/game/racecontrol.js: debris "is NOT replicated, so
+// two peers genuinely see different hazards"; the guest adopts the host's flag).
+function projectHazard(track, x, y, z, hint) {
+  if (hint != null) {
+    const pr = Tracks.project(track, x, z, hint);
+    Tracks.sample(track, pr.s, _smp);
+    if (pr.dist <= (_smp.hw || 6) && Math.abs(y - _smp.p[1]) <= HAZARD_Y_TOL) return pr;
+  }
+  // The fallback now passes the body's HEIGHT. Without it this search is purely
+  // XZ, so on the one circuit that crosses itself it was a coin toss between the
+  // legs — exactly the case the hint above exists to avoid, reappearing on the
+  // path taken when the hint is NOT trusted. Measured on suzuka: a body on the
+  // upper deck, displaced toward the lower road, projected onto the wrong leg at
+  // every offset tried (5/5), landing ~2368 m away in arc; with the height it is
+  // right at all of them.
+  const pr = Tracks.project(track, x, z, null, y);
+  Tracks.sample(track, pr.s, _smp);
+  return pr;
+}
+
 // ── B1: hazard query — settled bodies resting ON the racing surface ─────────
 // Deterministic read of the side-world consumed by the caution state machine
 // (js/game/racecontrol.js). A body counts when it is (a) asleep (isSleeping), (b) roughly at road
@@ -910,11 +995,13 @@ function hazards() {
   const sec = track.def && track.def.sectors;
   const splits = (sec && sec.length === 2) ? [sec[0], sec[1]] : [1 / 3, 2 / 3];
   const secFrac = [0, 0, 0];
-  const consider = (body) => {
+  // `hint` is the record's OWN placed arc — a slot's spawn s, a cone's placed s,
+  // a panel's promoted s. Never the player's, never a shared value: the window is
+  // only ±64 m wide, so one record's arc is meaningless for another's.
+  const consider = (body, hint) => {
     if (!body || !body.isSleeping()) return;
     const t = body.translation();
-    const pr = Tracks.project(track, t.x, t.z);
-    Tracks.sample(track, pr.s, _smp);
+    const pr = projectHazard(track, t.x, t.y, t.z, hint);
     const hw = _smp.hw || 6;
     if (Math.abs(t.y - _smp.p[1]) > HAZARD_Y_TOL) return;   // airborne / sunk
     if (Math.abs(pr.lat) > hw) return;                      // off the racing surface
@@ -923,14 +1010,14 @@ function hazards() {
     if (out.sectors[si] === 0) secFrac[si] = +frac.toFixed(4);
     out.sectors[si]++; out.total++;
   };
-  for (const s of _slots) if (s.live) consider(s.body);
+  for (const s of _slots) if (s.live) consider(s.body, s.s);
   for (const f of _furn) {
     const t = f.body.translation();
     const dx = t.x - f.home.x, dz = t.z - f.home.z;
     if (dx * dx + dz * dz < FURN_DISTURB_M * FURN_DISTURB_M) continue;   // undisturbed cone
-    consider(f.body);
+    consider(f.body, f.s);
   }
-  for (const p of _panels) if (p.live && p.broken) consider(p.body);
+  for (const p of _panels) if (p.live && p.broken) consider(p.body, p.s);
   for (let i = 0; i < 3; i++)
     if (out.sectors[i] > out.worst.count)
       out.worst = { sector: i, count: out.sectors[i], frac: secFrac[i] };

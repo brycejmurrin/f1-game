@@ -135,6 +135,26 @@ let _crashStrikes = 0;
 // heavy post stack too (tier 4).
 let _perfTierFloor = 0;
 let _perfTier = 0;
+// The USER's floor, from the GRAPHICS preset (js/game/gfx-quality.js). It is a
+// third term in tier()'s max(), and that is the whole interaction rule:
+//
+//   a manual choice sets the FLOOR of degradation, never the ceiling.
+//
+// The player may always ask for LESS than the governor would run, and never for
+// MORE than the device has measurably earned. `_perfTier` is evidence about
+// THIS device THIS session (the derived _floorMs budget); `_userTier` is a
+// prior, and a prior may narrow the search downward but may not assert the
+// device is faster than it measured — GRAPHICS: ULTRA on a thermally throttled
+// laptop must not re-enable the god-ray march the governor just proved
+// unaffordable. Folding it in HERE rather than at the eight PerfGov.tier() call
+// sites in js/game.js means the render path needs no edit at all, and it makes
+// the crash-sentinel floor undefeatable by CONSTRUCTION — it is a term in the
+// same max(), so no caller can forget to check it.
+let _userTier = 0;
+// The combined floor nothing may restore below. Both terms are "shed AT LEAST
+// this much": one because the device has been crashing, one because the player
+// asked for it.
+function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 
 function init(gfx) {
   _gfx = gfx;
@@ -178,7 +198,22 @@ function cleanRace() {
 }
 
 function tick(dtMs) {
-  if (!_autoRes) return;
+  // `_autoRes` gates the RESOLUTION stage ONLY — it must not return early here.
+  // It used to, and that made a user-facing control silently disable a safety
+  // system: RESOLUTION: LOW/MED/HIGH (js/game.js, applyResMode) calls
+  // setAutoRes(false) to stop the governor fighting the pinned scale, and this
+  // early return then took stage 2 down with it. A player who pinned the
+  // resolution — a control shown to EVERYONE, desktop included, not just the
+  // phones this file's crash sentinel is written for — got no feature shedding
+  // at all for the session: `_perfTier` froze at whatever init() left it, and
+  // on a device with crash strikes the pre-degraded floor could never be paid
+  // back down either, because cleanRace() alone does not move `_perfTier`.
+  // Pinning the resolution is a statement about SHARPNESS, not a request to
+  // stop adapting; it makes stage 2 MORE important, not less, because the
+  // cheaper lever is now unavailable. So the EMA and the derived floor are
+  // tracked unconditionally (stage 2 judges against the same budget and needs
+  // the data), and `_autoRes` is consulted only at the two places that actually
+  // move the scale.
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
   if (dtMs < 100) {
     _frameEMA += (dtMs - _frameEMA) * 0.1;
@@ -210,14 +245,25 @@ function tick(dtMs) {
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
-    if (cur > 0.5) {
+    // With the scale PINNED (_autoRes false) the ladder is the only lever left,
+    // so fall straight through to shedding instead of skipping the evaluation.
+    if (_autoRes && cur > 0.5) {
       if (_gfx.setRenderScale(cur - 0.1)) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
         _govCool = 30; _downHold = 600;
       }
-    } else if (_perfTier < 4) {                // scale floor hit — shed a feature
+    } else if (Math.max(_perfTier, _floorTier()) < 4) {   // scale floor hit — shed a feature
+      // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
+      // below the floor (crash sentinel, or the player's GRAPHICS preset) is
+      // already shed, so incrementing onto it changes nothing the EMA can see:
+      // the causal check would read "this step bought nothing", revert it, and
+      // re-try the same dead rung every cycle while frames keep missing —
+      // _pendingVerify's own failure mode, reached from a direction it cannot
+      // distinguish, because the step genuinely did not help and the reason
+      // (redundant, not mis-targeted) is invisible to a frame-time delta.
+      // Skipping to floor+1 guarantees every step is one that can be felt.
       _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
-      _perfTier++; _govCool = 90; _downHold = 600;
+      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _govCool = 90; _downHold = 600;
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
@@ -226,7 +272,7 @@ function tick(dtMs) {
     // it, a governor that can finally go up could climb straight back into the
     // frame misses it just escaped, which is the oscillation the header warns
     // about arriving from the other side.
-    if (cur < 1) {
+    if (_autoRes && cur < 1) {
       const next = Math.min(1, cur + 0.06);
       if (_gfx.setRenderScale(next)) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
@@ -234,8 +280,9 @@ function tick(dtMs) {
       }
     }
     // Features come back only at full res under the same sustained headroom,
-    // one per ~4 s — and never below the crash-sentinel floor.
-    else if (_perfTier > _perfTierFloor) {
+    // one per ~4 s — and never below the crash-sentinel floor OR the user's
+    // GRAPHICS preset floor (_floorTier folds both).
+    else if (_perfTier > _floorTier()) {
       _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA, up: true };
       _perfTier--; _govCool = 240;
     }
@@ -253,12 +300,46 @@ function clearStrikes() {
 
 return {
   init, tick, sentinelArm, cleanRace, clearStrikes,
-  tier: () => _perfTier,
+  tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   tierFloor: () => _perfTierFloor,
+  userTier: () => _userTier,
+  // Clamped to the ladder's own range so a bad preset id can't invent a tier 7
+  // that every `tier() >= N` gate would satisfy. Drops a pending TIER verify for
+  // the same reason setAutoRes drops a pending SCALE one: _pendingVerify
+  // attributes the next EMA delta to the governor's own last provisional step,
+  // so a user changing quality one evaluation later would make the governor
+  // revert a step that was actually working.
+  setUserTier: (n) => {
+    const t = Math.max(0, Math.min(4, n | 0));
+    if (t === _userTier) return;
+    _userTier = t;
+    // _perfTier is deliberately NOT touched here. It is the governor's OWN
+    // evidence-based tier; the floors are applied at READ time in tier(). An
+    // earlier draft pulled _perfTier up to the new floor, which conflated "shed
+    // because the device struggled" with "shed because the player asked" — and
+    // then lowering the preset could not release what the preset itself had
+    // caused, because the governor had adopted it as its own finding. The
+    // redundant-step problem that motivated the pull-up is solved where it
+    // actually lives, in the degrade branch, which skips rungs the floor
+    // already covers.
+    if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
+    _govCool = Math.max(_govCool, VERIFY_COOL);
+  },
   strikes: () => _crashStrikes,
   fpsEMA: () => _frameEMA,
   floorMs: () => _floorMs,
   autoRes: () => _autoRes,
-  setAutoRes: (on) => { _autoRes = !!on; },
+  // Drop any unverified SCALE step on the way in or out of manual resolution.
+  // _pendingVerify holds {kind:"scale", prev} and the next evaluation would
+  // "revert" it by calling setRenderScale(prev) — writing over the scale the
+  // user just pinned, one evaluation after they pinned it. The tier half of a
+  // pending verify is still valid (the ladder keeps running either way), so
+  // only the scale kind is dropped. The cooldown gives the EMA time to settle
+  // at the new scale before stage 2 judges anything against it.
+  setAutoRes: (on) => {
+    _autoRes = !!on;
+    if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
+    _govCool = Math.max(_govCool, VERIFY_COOL);
+  },
 };
 })();
