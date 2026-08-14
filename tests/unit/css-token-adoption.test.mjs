@@ -78,7 +78,15 @@ const CEILING = {
   // track-detail 8, responsive 4, carsetup 3, career 2) — all migrated onto
   // var(--fs-micro) in the same pass that added this guard. Now ZERO, which is
   // the one number that needs no justification.
-  subFloorFontSize: 0,
+  // 2026-08-14: 0 -> 3, and the count is only 3 because the check was widened in
+  // the same pass to read px literals inside min()/clamp() (see below). Two of
+  // the three predate this: the `clamp(11px, …)` / `clamp(12px, …)` viewport
+  // ramps in css/responsive.css, whose lower bound is a floor for a phone, not a
+  // chosen size. The third is `.hud-gaps` in css/hud.css: the ahead/behind gap
+  // readout is a peripheral glance during a lap rather than menu chrome a
+  // stopped player reads, and at --fs-micro it rendered as a banner beside the
+  // minimap. Same class of exception as #hud-speed's raw 34px.
+  subFloorFontSize: 3,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
   // (data, hud, overlays, track-detail) were migrated in the same pass — but
@@ -86,7 +94,9 @@ const CEILING = {
   // 6/3 -> --gap). The remainder are 2/4/5/8/10px hairline nudges, and turning
   // those into calc(var(--gap) * 0.41) noise would be worse than leaving them:
   // a hairline should stay a hairline when the density ladder tightens.
-  rawSpacing: 475,
+  // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
+  // a flex container) when the widget was resized in the HUD SIZE pass.
+  rawSpacing: 474,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
@@ -97,8 +107,15 @@ test("no new font-size below the --fs-micro floor", () => {
 
   const offenders = [];
   for (const { name, src } of all) {
-    for (const m of src.matchAll(/font-size:\s*([0-9.]+)px/g)) {
-      if (parseFloat(m[1]) < floor) offenders.push(`${name}: ${m[1]}px`);
+    // Every px literal in the VALUE, not just a bare `font-size: 12px`. The
+    // narrow form let `min()`/`clamp()` walk straight past the floor: widening
+    // it here turned up two sub-floor values in css/responsive.css that had been
+    // sitting inside clamp() unseen (11px and 12px), plus the one this pass
+    // added. A gate that only reads the simplest spelling is not a gate.
+    for (const decl of src.matchAll(/font-size:([^;}]*)/g)) {
+      for (const m of decl[1].matchAll(/([0-9.]+)px/g)) {
+        if (parseFloat(m[1]) < floor) offenders.push(`${name}: ${m[1]}px`);
+      }
     }
   }
 
