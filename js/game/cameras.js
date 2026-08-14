@@ -36,7 +36,14 @@ const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (groun
 // — which is why the "cockpit" rendered as a hovering hood cam with no car in
 // frame however far back it was pulled. 0.72 seats the driver where the tub
 // says the seat is: just over the coaming, inside the halo, between the walls.
-const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.72;
+// Eye height is set by how far the driver sits ABOVE THE DECK, not by taste:
+// at 0.72 the monocoque crest (y 0.545 at z 1.05) was only 0.17 m below the
+// sightline, so the car's own nose occupied 0.7% of the frame and an onboard
+// looked like a floating dash. A real F1 eye sits ~0.30 m over the chassis top.
+// 0.82 gives 0.27 m and the nose reads as a nose. Anything moved here must be
+// re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
+// ckpt monocoque cap and the coaming are all positioned against this number.
+const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 
 // Chase eye sits BEHIND *and* OFFSET TO ONE SIDE of the car — a 3/4
 // over-the-shoulder framing — instead of dead-centre on the rear wing. The

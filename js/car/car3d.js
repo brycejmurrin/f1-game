@@ -1293,15 +1293,13 @@ const Car3D = (function () {
     [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
   ];
 
-  // The monocoque span is a CLOSED block, so its rear face at z 0.05 is a solid
-  // wall across the tub — free in chase, but from the driver's eye (car-local
-  // z -0.18) it is a slab 0.23 m from your face over x +-0.30, y 0.155..0.635.
-  // MEASURED with a depth raster: 55% of the steering wheel's pixels, and 100%
-  // of the wheel occlusion. So `ckpt` ends the monocoque AHEAD of the driver
-  // (z 0.45 — cap lands 0.63 m out, BEHIND the wheel, reading as dash) and
-  // drops the cockpit span (z 0.05..-0.55): the tub around/behind the seat,
-  // which the ckpt bolsters and inner walls already model from the inside.
-  const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.379, w: 0.552, h: 0.44, t: 0.752 });
+  // The monocoque span is a CLOSED block, so its rear face is a solid wall the
+  // driver's eye (car-local z -0.18) looks straight into. BOTH its z and its
+  // top edge are depth-raster measurements, not styling — the shared z 0.05 ate
+  // the steering wheel, and a too-tall cap at z 0.45 then ate the nose. Numbers
+  // and method: docs/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
+  // dropped: the tub around/behind the seat, already modelled by the bolsters.
+  const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
   function buildSharedChassis(out, c1, rideDY, noseStations, ckpt) {
     const floor = CHASSIS.floor;
     addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
@@ -1560,23 +1558,22 @@ const Car3D = (function () {
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
     // stripe + shark fin below) HDR at the top tier — same ">1 albedo glows
     // at night" convention PANEL already uses; plain team colour otherwise.
-    // Cockpit view: the hood is a LOW dash cowl that stops BEHIND the nose
-    // number deck (z~1.1) — so the driver looks over the cowl and sees the long
-    // nose stretching out ahead past the steering wheel (with the number on it),
-    // and the raised cockpit shoulders sit either side. A tall/long bulge would
-    // bury the wheel and hide the nose; keep it low and short. Non-ckpt stays sleek.
-    const hF = ckpt ? { z: 1.10, y: 0.38, w: 0.36, h: 0.10, t: 0.66 }
+    // Cockpit view: the hood is the VANITY PANEL the driver looks along — the
+    // crest that reads as "there is a car under me" in an onboard. It must rise
+    // ABOVE the chassis deck (monocoque tops out at y 0.545 at z 1.05) or it is
+    // dead geometry: measured at top 0.48 it rasterised 2631 px and lost every
+    // one of them, sandwiched between the coaming behind and the nose in front,
+    // so the part reported ZERO visible pixels (docs/OCCLUSION-PROBE.md §4).
+    // Narrow (w 0.36) so it is a spine, not a wall.
+    const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.36, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
-    // Cockpit: the cowl's REAR station stops at z 0.42 — AHEAD of the steering
-    // wheel (game.js _rigT z 0.28), because that is the order the real parts sit
-    // in: eye, wheel, cowl, nose. At z 0.06 it started level with the driver's
-    // own head and its top (0.69) came within 3 cm of the eye line, so the whole
-    // lower frame was bodywork and the wheel was buried inside it.
-    // The cowl must also sit BELOW THE WHEEL'S TOP (game.js _rigT y 0.42 + the
-    // wheel's own half-height ≈ 0.58): it is further away, so an equal height
-    // puts it HIGHER on screen and it draws straight over the wheel — measured,
-    // that is why the wheel vanished behind a yellow slab.
-    const hR = ckpt ? { z: 0.58, y: 0.32, w: 0.54, h: 0.12, t: 0.58 }
+    // Cockpit: the REAR station stops AHEAD of the steering wheel (game.js
+    // _rigT z 0.26) — eye, wheel, cowl, nose is the order the real parts sit in.
+    // It must also stay BELOW THE WHEEL'S TOP (rig y 0.56 + the wheel's own
+    // half-height x 0.80 = 0.69): it is further away, so an equal height puts it
+    // HIGHER on screen and draws straight over the wheel — measured, that is why
+    // the wheel once vanished behind a yellow slab. Top 0.54 here.
+    const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.54, h: 0.12, t: 0.58 }
                     : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
@@ -1585,7 +1582,7 @@ const Car3D = (function () {
     // z 0.24). At centre 0.95 x length 1.75 it began at z 0.075 — behind the
     // wheel — so the stripe and the cowl lip it rides drew across the wheel
     // face and clipped its top. Centre 1.10 x length 1.30 starts at 0.45.
-    addBox(out, 0, ckpt ? 0.46 : 0.665, ckpt ? 1.10 : 0.45, 0.10, 0.02, ckpt ? 1.30 : 0.80,
+    addBox(out, 0, ckpt ? 0.585 : 0.665, ckpt ? 1.10 : 0.45, 0.10, 0.02, ckpt ? 1.30 : 0.80,
            ersC2, SURFACES.paint);
 
     part("bolsters");
@@ -1620,12 +1617,14 @@ const Car3D = (function () {
       }
       // Dash coaming: the padded rim across the FRONT of the cockpit opening, just
       // under the wheel, tying the two side walls together into a tub.
-      // Dash heights are set against the eye (0.72): the coaming's accent lip
-      // used to top out at 0.715 — five millimetres under the sightline, so the
-      // dash rim WAS the horizon. A real coaming sits at about chest height.
-      addBox(out, 0, 0.42, 0.60, 0.66, 0.13, 0.16, c1);
-      addBox(out, 0, 0.487, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
-      addBox(out, 0, 0.405, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
+      // Heights are set against the eye (0.72), and the binding constraint is
+      // what lies BEYOND the coaming: the driver must look over it onto the deck
+      // and nose running out ahead. At top 0.485 it was the tallest thing in the
+      // lower-centre and took 1780 of the deck's 2631 px (OCCLUSION-PROBE.md);
+      // 0.425 clears the eye-to-deck-crest sightline, which passes y 0.62 here.
+      addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, c1);
+      addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
+      addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
     } else {
       for (const s of [-1, 1]) {
         addBlock(out, [
