@@ -130,7 +130,23 @@ const GameAudio = (function () {
   // sits on a steady-RPM stretch instead of a dynamic (revving/shifting) part.
   // Uses zero-crossing rate per 0.1s as a cheap pitch proxy and picks the window
   // with the lowest coefficient of variation. Returns { start, end } in seconds.
+  // Memoised on the buffer. The scan below walks EVERY sample counting zero
+  // crossings, and its result is a pure function of the buffer — but
+  // startEngine() called it fresh for both engine buffers on every race start,
+  // every UN-PAUSE (js/game.js) and every return from a hidden tab. At a 48 kHz
+  // context that is ~2.41 M float reads and sign comparisons, synchronously on
+  // the main thread, to recompute a value that cannot have changed: the buffers
+  // are only replaced when the audio context is rebuilt, and a new context means
+  // new buffer objects, so a WeakMap keyed on the buffer self-invalidates.
+  const _loopMemo = new WeakMap();
   function findStableLoop(buf) {
+    const memo = _loopMemo.get(buf);
+    if (memo) return memo;
+    const r = _findStableLoopUncached(buf);
+    _loopMemo.set(buf, r);
+    return r;
+  }
+  function _findStableLoopUncached(buf) {
     const d = buf.getChannelData(0), sr = buf.sampleRate, N = d.length;
     const hopN = Math.max(1, Math.floor(sr * 0.1));
     const zc = [];

@@ -171,7 +171,32 @@ const CEILINGS = {
   // for the pairContact proof, 8054 on the deploy side for the range-pass
   // work). The file carries both sides' lines, so neither number fits it —
   // set FROM the merged file, the resolution this file already records twice.
-  "js/game.js": 8083,
+  // -> 8122: two render-path gates from the 2026-08-14 hunt, both of the
+  // "work multiplied by zero" kind this ratchet's header calls the tolerated
+  // growth. (a) The STATIC SUN SHADOW producer now matches its consumer:
+  // lit.js opens sampleShadow with `if (uShadowStr <= 0.0) return 1.0;`, so on
+  // an overcast/wet/foggy night nothing reads the map, yet the frame still paid
+  // a 2048² clear + the full terrain and road ribbons cast unchunked (44,826
+  // verts on vegas) + a 512² PCSS blocker pass, 300+ times a lap. (b) Car
+  // shadow CASTERS are now distance-culled against the volume's corner radius.
+  // Both comments carry the reasoning that makes the gate reviewable — the
+  // shadow one records WHY the snap cache must be invalidated when the gate
+  // closes, and the caster one records why the radius is hypot(cBox, 170) and
+  // not cBox, which is the difference between a correct cull and deleting long
+  // low-sun shadows.
+  // -> 8145: two more of the same "work multiplied by zero" kind. (a) po.contact
+  // now sheds at tier 4 alongside po.ssao — glx/post.js arms the SSAO pass on
+  // `aoStr > 0 || contactStr > 0`, so a tier-4 daytime frame kept running the
+  // pass and both its blurs after po.ssao had already gone to zero. This is
+  // literally the bug the line above it records being fixed for lampVol against
+  // haveGR's identical `||`; the SSAO half was missed. (b) The LAMP shadow pass
+  // now distance-culls its car casters, the twin of (and cross-referenced from)
+  // the sun pass's _csR — the sun comment already says the field pays the caster
+  // cost twice at night, and this was the untouched half. The comment there
+  // carries the load-bearing part: the bound is the lamp RADIUS on a
+  // shadow-rays-travel-outward argument, NOT the frustum, whose 149-degree far
+  // corners reach ~5x its far plane and would make a frustum-radius cull wrong.
+  "js/game.js": 8145,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -213,7 +238,17 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2767, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  // -> 2785 (+18, net of a deleted accumulator): barrierClear()'s grid sweep no
+  // longer widens by the index's largest half-width. barGridInsert already
+  // buckets every record by its INFLATED bounds, so the allowance was counted on
+  // both sides of the lookup and the sweep ran 4-9 cells where 1-4 suffice — on
+  // clearTreeDist's up-to-9 walk-outs per tree and hedge()'s per-step probe. All
+  // 18 lines are the proof that reach = r misses nothing; it is an equivalence
+  // claim, so it is the kind that has to be written down and tested as one.
+  // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
+  // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
+  // baseline caps are tight — i.e. the placement counts are exactly unchanged.
+  "js/track/tracks.js": 2785, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {
