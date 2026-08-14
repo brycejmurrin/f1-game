@@ -89,9 +89,19 @@ const CLASS_CEILING = 537;
 // that error band, so this ceiling is where the ruling's premise is kept true.
 // Growth points named by STRUCTURE-REDECISION §Q1: #advanced (106 nodes),
 // #vsfriend (95).
-const NODE_CEILING = 1139; // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the shell in the deploy merge
+const NODE_CEILING = 1151; // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the shell in the deploy merge
 // +1 2026-08-13: the <script> tag for js/game/perf-try.js (default-off renderer
 // A/B switches, measurable only on real hardware — see the file header).
+// +1 2026-08-14: the <script> tag for js/game/season-cal.js (the SEASON calendar
+// and weekend format — rules only, no DOM, so the rendered tree Lighthouse's band
+// is about grew by zero).
+// +10 2026-08-14: #season-setup and its <script> tag — 9 markup nodes for a whole
+// screen, because both of its panes are EMPTY and js/game/season-ui.js fills them
+// (the shape #career established at index.html:438). It is also a <dialog>, so
+// nothing but the head/foot is in the tree until it is opened. The CLASS count
+// did not move at all: every selector on the screen is an id scoping a class that
+// already existed. Total 1140 -> 1151, still far under the ~1,400 error band the
+// keep-the-monolith ruling rests on.
 // +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden

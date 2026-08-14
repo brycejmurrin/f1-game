@@ -6,7 +6,8 @@
    as well, and won at neither job.
    Also owns the shared team-picker sheet (#teampicker) that the garage opens.
    Pure DOM; live selection state comes through the ctx façade G handed to
-   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps.
+   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps, SeasonCal (the
+   season's calendar is the PLAYER's now — length, circuits and order).
    Must load BEFORE js/game.js (see index.html). */
 const Menus = (function () {
   "use strict";
@@ -175,11 +176,23 @@ function buildSelect() {
     els.selTracks.textContent = "";
     updateTrackPreview();
     const rnd = (G.season && G.season.round || 0) + 1;
-    els.selPreviewRec.textContent = "Round " + rnd + " of " + Tracks.SEASON.length;
+    els.selPreviewRec.textContent = "Round " + rnd + " of " + SeasonCal.rounds();
+    // The way in to SEASON SETUP. Built here rather than put in index.html so it
+    // exists ONLY in the season branch — #select's pixel golden is captured
+    // through GRAND PRIX (tests/specs/menu-baseline.spec.js), and a button in the
+    // shell would have moved it. The title screen's SEASON button is unchanged
+    // too: a player who just wants to race should not have to dismiss an editor.
+    const custom = document.createElement("button");
+    custom.id = "sel-customise";
+    custom.className = "sel-chip";
+    custom.type = "button";
+    custom.textContent = "CUSTOMISE SEASON";
+    custom.onclick = (e) => { e.stopPropagation(); G.openSeasonSetup(); };
+    els.selTracks.appendChild(custom);
     // Upcoming rounds list (next 5 circuits after current). Indexes SEASON, not
     // LIST — classics are playable but never a championship round.
     const upcoming = [];
-    for (let i = rnd; i < Math.min(rnd + 5, Tracks.SEASON.length); i++) upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
+    for (let i = rnd; i < Math.min(rnd + 5, SeasonCal.rounds()); i++) upcoming.push({ n: i + 1, t: SeasonCal.track(i) });
     if (upcoming.length) {
       const upHead = document.createElement("div");
       upHead.className = "season-upcoming-head";
