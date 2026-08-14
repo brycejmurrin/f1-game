@@ -381,13 +381,35 @@ jobs:
       #
       # Serial and slower per pass is still far cheaper than the retries and the
       # false red: 9 specs, no contention, well inside the 20-minute cap.
+      #
+      # 240 -> 420 s, SAME ARGUMENT AS THE 120 -> 240 RAISE ABOVE, RE-MEASURED.
+      # The reasoning that set 240 ("even uncontended the runner needed 110.6 s
+      # against a 120 s limit") held until the runner pool got slower than the
+      # pool it was measured on. MEASURED 2026-08-14, three separate runs, one
+      # worker, no contention from our side:
+      #   run 1407  grid start renders a non-blank frame   334 s (retry passed)
+      #   run 1407  the select screen is a circuit picker  240 s (retry passed)
+      #   run 1412  corner approach renders a non-blank    309 s, RETRY ALSO
+      #             timed out -> terminal FAIL, deploy blocked
+      # The third one is the reason this is not "just flakiness to retry past":
+      # both attempts exceeded the cap, so the gate reported failure for a suite
+      # that passes 9/9 locally on the same commit.
+      #
+      # The cap is now measured against the RUNNER, not the test: the same log
+      # records `race bahrain` taking 94.3 s to boot where a dev box takes ~4 s,
+      # so the spec was doing correct work ~20x slower than it costs anywhere
+      # else. 420 s clears tonight's worst observed pass (334 s) with the same
+      # ~25 % margin the 240 s figure was chosen to give over its own 110.6 s
+      # worst case. If a spec ever genuinely hangs, the job's own
+      # `timeout-minutes: 30` is the real backstop — a per-test cap set below
+      # the machine's noise floor only converts slow into red.
       - name: Smoke
         env:
           APEX_WORKERS: 1
         # --shard splits the 9 specs across the two matrix VMs; the flag passes
         # through tools/run-playwright.mjs verbatim (it forwards argv to
         # `playwright test`).
-        run: npm run test:smoke -- --timeout=240000 --shard=${{ matrix.shard }}/2
+        run: npm run test:smoke -- --timeout=420000 --shard=${{ matrix.shard }}/2
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
