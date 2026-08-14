@@ -1074,7 +1074,17 @@ void main() {
     // Direct terms only (diffuse pool + GGX/clearcoat specular below): the
     // bounce fill and fog in-scatter stay unshadowed — they are indirect.
     float lampSh = 1.0;
-    if (uLampShadowOn > 0.5 && i == uLampShadowIdx) {
+    // NoLl GATE, same argument as the GGX block 30 lines below (which already
+    // makes it in prose): lampSh has exactly two readers — line 1096, where the
+    // term is multiplied by NoLl, and the specular block, which is already
+    // inside 'if (NoLl > 0.0)'. A fragment facing AWAY from this lamp therefore
+    // paid 4 dependent sampler2DShadow fetches, a mat4 transform, a perspective
+    // divide and 5 bounds compares for a result multiplied by zero. This was the
+    // last ungated per-fragment texture fetch in LIT_FS. Exactly the sun map's
+    // fix at the top of the file ('NoL > 0.0 || clearcoat > 0.001') — the lamp
+    // map never got it copied across. No new divergence class: 'NoLl > 0.0' is
+    // already branched on in this same loop body.
+    if (uLampShadowOn > 0.5 && i == uLampShadowIdx && NoLl > 0.0) {
       vec4 lpc = uLampShadowVP * vec4(vWorldPos, 1.0);
       if (lpc.w > 0.0) {
         vec3 lps = lpc.xyz / lpc.w * 0.5 + 0.5;

@@ -653,7 +653,18 @@ const GLXPost = (function () {
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
       gl.uniform1f(compU.uExposure, exposure);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
-      gl.uniform1f(compU.uSunShaft, sunShaft * (opts && opts.tune && opts.tune.sunShaftMul != null ? opts.tune.sunShaftMul : 1));
+      // GATED ON doBloom, because the shaft pass READS THE BLOOM CHAIN. Its loop's
+      // only input is texture(uBloom, suv) (js/render/shaders/post.js), and when
+      // bloom is off we bind the 1x1 blackTex to uBloom 50 lines above — so the
+      // 8 dependent full-res fetches, the ignoise and the 8 length()/clamp pairs
+      // accumulated exactly vec3(0) and were then scaled by uSunShaft. The shader
+      // gates only on `uSunShaft > 0.0`, so the producer has to say zero here.
+      // Bites on a DAYTIME TIER-4 frame: js/game.js zeroes po.bloom at tier >= 4
+      // while sunShaft needs the sun up and bright — i.e. the frame that has
+      // already shed god-rays, SSAO and SSR still paid for this one.
+      // Bit-identical: 0.0 * finite == 0.0. Same shape as the po.contact/lampVol
+      // sheds in docs/PERF-FINDINGS.md §2 — another operand of an armed producer.
+      gl.uniform1f(compU.uSunShaft, doBloom ? sunShaft * (opts && opts.tune && opts.tune.sunShaftMul != null ? opts.tune.sunShaftMul : 1) : 0);
       // Cinematic split-tone grade (neutral by default → existing look unchanged).
       const grade = opts && opts.grade;
       gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);

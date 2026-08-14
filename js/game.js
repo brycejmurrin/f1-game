@@ -2374,7 +2374,7 @@ function startRace() {
   Input.calibrate();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
-  updateHud(true);
+  DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
 
 function showTouchControls(show) {
