@@ -147,6 +147,7 @@
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
+      carBiasScale:   uniform(1.0),   // car map box/texel ratio (lit.js uCarBiasScale parity)
       lampShadowVP:   uniform(new THREE.Matrix4()),
       lampShadowOn:   uniform(0.0),
       lampShadowIdx:  uniform(-1.0),  // float compare vs the loop index (small ints are exact)
@@ -238,6 +239,7 @@
         if (carShadowOn) {
           U.carLightVP.value.fromArray(SHD.S.carLightVP);
           U.carShadowOn.value = SHD.S.carArmed ? 1 : 0;
+          U.carBiasScale.value = SHD.S.carBoxScale || 1;
         }
         if (lampShadowOn) {
           U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
@@ -377,7 +379,7 @@
               If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
                 .and(cs.y.greaterThan(0.0)).and(cs.y.lessThan(1.0))
                 .and(cs.z.lessThan(1.0)), () => {
-                const cz = cs.z.sub(biasTerm).toVar();
+                const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
                 const ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
                 const ctap = (px, py) =>
                   texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);

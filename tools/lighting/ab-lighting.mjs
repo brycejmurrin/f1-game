@@ -121,8 +121,16 @@ const KNOBS = [
     expect: { region: "fogwall", metric: "mean", dir: "-", minRel: 0.01 },
     note: "how far along the ray lamps volumetrically in-scatter (B kills all but the nearest to force a visible delta)" },
   { id: "vol.beamHeight", file: "js/render/shaders/post.js", scene: "bahFog",
-    find: "exp(-max(p.y - groundY, 0.0) * 0.07);   // lamp haze hugs the road (taller beams)",
-    b:    "exp(-max(p.y - groundY, 0.0) * 0.25);   // lamp haze hugs the road (taller beams)",
+    // The trailing "// lamp haze hugs the road (taller beams)" comment this
+    // used to anchor on was moved ABOVE the line by 78814e3d (2026-08-13,
+    // hoisting hLamp into the uLampStr>0 branch), so the patch string matched
+    // 0x and the catalog guard went red. Anchor on the expression alone —
+    // verified unique in post.js — so a future comment edit cannot break it
+    // again. The guard is doing its job here: an unmatched find means the A/B
+    // run silently does NOTHING, which is why it is pinned rather than left to
+    // fail at use time.
+    find: "exp(-max(p.y - groundY, 0.0) * 0.07);",
+    b:    "exp(-max(p.y - groundY, 0.0) * 0.25);",
     expect: { region: "sky", metric: "mean", dir: "-", minRel: 0.0 },
     note: "beam height falloff — larger constant = shorter cones above the road" },
   { id: "vol.lampStrength", file: "js/game/lighting.js", scene: "bahFog",

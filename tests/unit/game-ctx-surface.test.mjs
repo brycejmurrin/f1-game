@@ -38,13 +38,11 @@ import {
  * the one a type checker cannot see (an unused declaration is not an error). Frozen
  * as a baseline rather than swept, because deleting one is a js/ edit with a cache
  * bump behind it and Bedrock Phase 1 changes zero runtime bytes.
- *   renderStatBars  js/game.js:2708 (accessor) + :2828 (the destructure that feeds
- *                   it). setup-ui.js calls its own local at :302/:303/:392 and
  *                   returns it at :764; no consumer ever reads it off G. Recorded
  *                   independently in docs/archive/research/raw/w4-audit.json.
  * Shrink this set when one is removed. NEVER add to it to make a run green — a new
  * entry means a member was published for a consumer that does not exist. */
-const KNOWN_UNREAD = new Set(["renderStatBars"]);
+const KNOWN_UNREAD = new Set();  // renderStatBars was deleted 2026-08-14 — the set is empty until the next drift
 
 test("types/game-ctx.d.ts declares exactly the members of `const G` in game.js", () => {
   const { problems, memberCount } = checkParity();

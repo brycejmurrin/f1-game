@@ -221,7 +221,11 @@ const CEILINGS = {
   // and invented a hook called `for`.
   "js/game/apex.js": 3106,
   "js/game/agentview.js": 2900,
-  "js/car/car3d.js": 2700,
+  // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
+  // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
+  // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the
+  // monocoque at z 0.45 and drops the seat-surround span. Raised deliberately.
+  "js/car/car3d.js": 2711,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

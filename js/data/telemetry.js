@@ -47,7 +47,11 @@ const DataTelemetry = (function () {
   function sessionShort(meta) {
     if (!meta) return "";
     const name = String(meta.name || meta.type || "");
-    const type = String(meta.type || meta.name || "").toLowerCase();
+    // Test NAME and TYPE together, sprint before race: OpenF1 gives a Sprint
+    // session_type "Race" with session_name "Sprint", so a type-first check
+    // badged the Sprint lane "R" — identical to the Race lane it exists to
+    // disambiguate.
+    const type = (name + " " + String(meta.type || "")).toLowerCase();
     if (type.indexOf("sprint") !== -1) return type.indexOf("qual") !== -1 ? "SQ" : "SPR";
     if (type.indexOf("qual") !== -1) return "Q";
     if (type.indexOf("race") !== -1) return "R";

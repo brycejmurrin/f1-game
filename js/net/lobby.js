@@ -1622,6 +1622,10 @@ const NetLobby = (function () {
     function cancel() {
       stopScan();
       stopCodeWait();
+      // stopCodeWait() stops the LIVE room but not the queued intent: without
+      // this, a codeReopen left by onJoiner silently reopens a stale room-code
+      // room on some later, unrelated connection (W4 finding on codeReopen).
+      codeReopen = null;
       teardown();
       role = null;
       _peers.clear(); _ready.clear();

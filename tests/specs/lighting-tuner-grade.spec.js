@@ -115,8 +115,23 @@ test("__apex.lightCopy('look') levels every track at that condition, and undoes"
 test("new grading controls clamp, persist, reset, and export", async ({ page }) => {
   await openImageTuner(page);
   await page.evaluate(() => window.__apex.lightTune({ shadows: 9, gammaG: 0.1, gainB: 1.25 }));
-  expect(await page.evaluate(() => window.__apex.lightTune().shadows)).toBe(1);
-  expect(await page.evaluate(() => window.__apex.lightTune().gammaG)).toBe(0.5);
+  // Read the clamp bounds from the REGISTRY, not from memory. This assertion was
+  // written as toBe(1) when SHADOWS shipped at min/max -1..1, and 7eaf012e
+  // ("widen + refine every tuner slider") deliberately widened it to -1.5..1.5
+  // without updating the spec — so the test asserted an old design and went red
+  // on a change that was correct. Hard-coding a bound here re-arms that trap
+  // every time a slider is retuned; deriving it means the test checks what it
+  // actually cares about (clamping HAPPENS, and to the declared edge) and is
+  // silent about a range the tuner is free to change. Same rule the mcp-probe
+  // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
+  const bounds = await page.evaluate(() => {
+    const pick = (id) => (window.LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
+    return { shadowsMax: pick("shadows").max, gammaGMin: pick("gammaG").min };
+  });
+  expect(bounds.shadowsMax, "SHADOWS has no max in TUNE_DEFS — the clamp test would be vacuous").toBeGreaterThan(0);
+  expect(bounds.gammaGMin, "GAMMA·GREEN has no min in TUNE_DEFS — the clamp test would be vacuous").toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__apex.lightTune().shadows)).toBe(bounds.shadowsMax);
+  expect(await page.evaluate(() => window.__apex.lightTune().gammaG)).toBe(bounds.gammaGMin);
   await page.reload();
   await page.waitForFunction(() => window.__apex?.race);
   await page.evaluate(() => window.__apex.race("bahrain"));
