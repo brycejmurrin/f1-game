@@ -663,7 +663,23 @@ const GameAudio = (function () {
     }
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
-    lfoG.gain.setTargetAtTime(offroad ? 45 : 0, t, 0.05);
+    // THE SIXTH CONSTANT setTargetAtTime, missed by the pass that removed five
+    // from this same function. lfoG.gain has exactly two writers — `.value = 0`
+    // where the node is created, and this line — so while the car is on-track
+    // (the overwhelming majority of frames) this scheduled target 0 onto a value
+    // already converged to 0: one main-thread call plus a cross-thread timeline
+    // insertion, 60x a second for the whole race. Guarded on the TARGET, not on
+    // usingSamples, because `offroad` really does flip.
+    // The cache lives ON THE NODE deliberately: stopEngine() nulls lfo/lfoG and
+    // startEngine() builds a fresh GainNode at `.value = 0`, so a module-level
+    // variable would go stale across a restart and silence the wobble. A new
+    // node has no _apexLfoTgt, which never equals a number, so the first call
+    // after any restart always re-issues — matching the node's own initial 0.
+    const lfoTgt = offroad ? 45 : 0;
+    if (lfoG._apexLfoTgt !== lfoTgt) {
+      lfoG.gain.setTargetAtTime(lfoTgt, t, 0.05);
+      lfoG._apexLfoTgt = lfoTgt;
+    }
   }
 
   /* ---------------- rain ---------------- */

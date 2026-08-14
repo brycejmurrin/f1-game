@@ -304,6 +304,34 @@ function groupBFlags(o) {
 // module costs exactly this when disabled.
 function active() { return _active; }
 
+// Build the side-world at race SETUP instead of on the lights-out frame.
+// step() below builds lazily on its first call, and game.js's update() returns
+// at `if (state !== "race") return;` all through the countdown — so that first
+// call has always landed on the very first RACE step, i.e. the lights-out
+// frame. Measured with tools/profile-gameloop.mjs (vegas, physics), reading the
+// profile's positionTicks so this is line-attributed rather than estimated:
+// buildWorld is 467 of 2575 samples INCLUSIVE — ~216 ms on this box, of which
+// createCollider is 410 —
+// almost all of it ColliderDesc.trimesh copying the road mesh and building its
+// BVH in wasm. That is ~13 dropped frames at 60 fps, at the one instant the
+// player is reacting to. (docs/PERF-FINDINGS.md recorded buildWorld at 0.6%
+// and called it "traced, not a defect" — that was its SELF time; the inclusive
+// cost is 30x larger.)
+// SIM-IDENTICAL, not merely equivalent-looking: construction order is the
+// determinism contract and depends only on `track` and `cars.length`, both
+// fixed before the countdown starts. step()'s own prologue re-checks both and
+// rebuilds if either moved, so priming can only ever move WHEN the same world
+// is built, never WHICH. If the wasm has not landed yet (_active false) this
+// is a no-op and step() lazy-builds exactly as before — a pure optimisation
+// with the old path intact as its fallback.
+function prime() {
+  const track = G.track, cars = G.cars;
+  if (!_active || !track || !cars || !cars.length) return false;
+  if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
+  if (!world) buildWorld(track, cars);
+  return !!world;
+}
+
 // ── world lifecycle ─────────────────────────────────────────────────────────
 function destroyWorld() {
   if (_events) { try { _events.free(); } catch (e) {} }
@@ -1240,7 +1268,7 @@ function status() {
 }
 function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; return n; }
 
-return { create, active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
+return { create, active, prime, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
          registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
          rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
 })();

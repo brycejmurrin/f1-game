@@ -213,9 +213,32 @@ window.SheetShape = (function () {
     classifyBody();
   }
 
+  /* THE OBSERVER WATCHES ONE ATTRIBUTE THAT FOUR THINGS WRITE. Its trigger is
+     --ui-scale, but --hud-scale and the HUD's own --hud-z-top/--hud-z-bot zoom
+     caps land on the SAME inline style attribute on documentElement
+     (js/game/hud.js's fitHud), and a MutationObserver cannot tell one custom
+     property from another. So every HUD zoom-cap adjustment ran a full
+     reclassify() — a getBoundingClientRect on all 21 .sheet elements, each
+     followed by CssZoom.localBox and two getComputedStyle calls, plus
+     classifyBody()'s own — for menus that are all hidden, MID-RACE. fitHud is
+     throttled (updateHud ~10 Hz, then _fitWait = 5) so it is bounded at ~2 Hz,
+     but capTop tracks the gap-readout width and changes continuously on a
+     constrained viewport or a high HUD SIZE, which is exactly when the frame
+     budget is tightest.
+     Comparing the INLINE value is the right test and is free: the attributeFilter
+     means only an inline write can fire this, so if the inline --ui-scale is
+     unchanged the computed one is too. No layout is read to decide. Outcome is
+     unchanged for a real --ui-scale change, and the ResizeObserver below still
+     covers any box that genuinely moved. */
   function watchScale() {
     if (typeof MutationObserver !== "function") return;
-    new MutationObserver(reclassify).observe(document.documentElement,
+    let lastScale = document.documentElement.style.getPropertyValue("--ui-scale");
+    new MutationObserver(() => {
+      const s = document.documentElement.style.getPropertyValue("--ui-scale");
+      if (s === lastScale) return;
+      lastScale = s;
+      reclassify();
+    }).observe(document.documentElement,
       { attributes: true, attributeFilter: ["style"] });
   }
 

@@ -181,10 +181,6 @@ void main() {
   // Screen-space sample radius shrinks with distance so the world radius (~0.6 m)
   // stays roughly constant; clamp so near/far stay sane.
   float radius = uRadius;
-  float scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
-  // Per-pixel rotation to turn banding into noise.
-  float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
-  float ca = cos(a), sa = sin(a);
   float occ = 0.0;
   // uStrength == 0 is a SUPPORTED combination, not a degenerate one: the pass
   // also produces contact shadows, and haveAO (js/render/glx/post.js) arms it on
@@ -195,6 +191,17 @@ void main() {
   // control flow — no divergence — and occ == 0.0 makes the skipped branch
   // bit-identical to multiplying by zero.
   if (uStrength > 0.0) {
+    // THE TAP SETUP BELONGS INSIDE THE GATE TOO. The 8 taps were moved in here
+    // (comment above); the three values that exist only to feed them were left
+    // outside, so the "supported" AO-slider-at-zero + contact-shadows-on frame
+    // still paid sin/cos/sin + fract + dot per half-res pixel — ~1.55 M
+    // transcendentals a frame at 1080p — to build a rotation nothing then read.
+    // scr, ca and sa have exactly one consumer each, both inside this block, so
+    // the move is bit-identical by construction.
+    float scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
+    // Per-pixel rotation to turn banding into noise.
+    float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+    float ca = cos(a), sa = sin(a);
     for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
       vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
       vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
@@ -626,11 +633,20 @@ void main() {
   // shimmers.
   vec2 hazeUV = vUV;
   if (uHazeStr > 0.002) {
-    float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
-    if (carHere < 0.25) {
-      vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
-      float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
-      if (hm > 0.003) {
+    // SCREEN-SPACE TEST FIRST, TEXTURE FETCH SECOND. The two conditions are
+    // independent and ANDed, so the order is free to choose — and the plume
+    // test is a varying against a uniform while carHere is a full-res dependent
+    // fetch of uScene. The Gaussian is tight: at uHazeStr ~ 1 it needs
+    // dot(hd,hd) < ln(333)/70 = 0.083, an ellipse of UV semi-axes 0.09 x 0.288,
+    // about 8% of the frame. So 92% of pixels were paying a dependent fetch to
+    // learn they are nowhere near the exhaust. exp + dot is far cheaper.
+    // Bit-identical by construction, and verbatim the vUV.y < uSsrTopUV reorder
+    // already taken one gate over in this same file — never copied across.
+    vec2 hd = (vUV - uHazeUV - vec2(0.0, 0.08)) * vec2(3.2, 1.0);   // tall plume, centred above the pipe
+    float hm = exp(-dot(hd, hd) * 70.0) * uHazeStr;
+    if (hm > 0.003) {
+      float carHere = 1.0 - smoothstep(0.42, 0.55, texture(uScene, vUV).a);
+      if (carHere < 0.25) {
         float hp = vUV.y * 90.0 - uHazeTime * 11.0;
         hazeUV += vec2(sin(hp + vUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
       }
@@ -723,7 +739,27 @@ void main() {
   // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
   // dry or wet — through the same march as the wet road.
   float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
-  if (uSsrOk > 0.5 && (uReflect > 0.001 || carPx > 0.3) && texture(uDepth, vUV).r < 0.9999 && vUV.y < uSsrTopUV) {
+  // TWO EXACT CHANGES TO THIS GATE, both about paying before rejecting.
+  //
+  // 1. 'carPx > 0.3' gained '&& uCarReflect > 0.001'. The outer gate never
+  //    consulted uCarReflect, so with the CAR reflection slider at zero every
+  //    car-paint pixel still reconstructed P, ran 3 ssrViewPos, a cross, a
+  //    normalize and both masks before 'ssrGate > 0.001' (line 825) threw it
+  //    away. Exactly equivalent: ssrGate is max(roadMask*uReflect,
+  //    carMask*uCarReflect), and both masks are products of smoothstep()s and
+  //    carPx so both lie in [0,1] — hence if uReflect <= 0.001 (the only way
+  //    this operand is reached) and uCarReflect <= 0.001, ssrGate <= 0.001 and
+  //    the inner block was already skipped.
+  //
+  // 2. The free varying compare now precedes the depth fetch. GLSL ES 3.00 §5.9
+  //    gives && short-circuit semantics, so operand order IS cost order, and
+  //    'vUV.y < uSsrTopUV' (a varying against a uniform) was sitting behind a
+  //    full-res dependent texture(uDepth). uSsrTopUV is 0.62 chase / 0.82
+  //    onboard, so that is 38% / 18% of full-res pixels each dropping one
+  //    discarded fetch on a wet frame. Both operands are pure and side-effect
+  //    free, so the swap is exact.
+  if (uSsrOk > 0.5 && (uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001))
+      && vUV.y < uSsrTopUV && texture(uDepth, vUV).r < 0.9999) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).

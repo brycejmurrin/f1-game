@@ -995,7 +995,10 @@ const LiveryTex = (function () {
     canvas.width = SIZE;
     canvas.height = SIZE;
     const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, SIZE, SIZE); // transparent background
+    // No clearRect: a freshly created canvas bitmap is already transparent
+    // black per spec, and setting width/height above re-initialises it. The
+    // clear was a semantic no-op over the full SIZE^2 surface, once per
+    // (team, livery, number, isPlayer) atlas — ~22 of them at a race start.
     ctx.imageSmoothingEnabled = true;
 
     colors = colors || {};

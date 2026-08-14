@@ -1,6 +1,6 @@
 # Testing reference
 
-111 root Playwright spec files (`tests/specs/*.spec.js`) + 89 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 90 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -780,6 +780,8 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `season.spec.js` | round progression, points, standings visibility |
+| `boot-guard.spec.js` | the shell's recovery when a js/ module fails to LOAD (not to run). A one-off 404 — the shape a brand-new module's first deploy takes while a CDN edge catches up — is repaired by a single reload with caches swept; a permanent 404 pins an overlay naming the file instead of looping. Both halves are the contract: repair enough to fix the transient, bounded enough that an absent file cannot storm the page. Written after build 1238 shipped season-cal.js and a cached 404 left the live game dead on `Can't find variable: SeasonCal` |
+| `season-format.spec.js` | season mode CUSTOMISED — a shortened/reordered calendar (classics included) crowning its champion at ITS last round, qualifying switched off, the classic points table, the lap chips being PRESELECTED rather than overridden, and sprint weekends: a sprint pays 8-7-6… without closing the round, the Grand Prix follows on the same circuit without a second qualifying session, and the stage survives a quit because it is written with the points |
 | `time-trial.spec.js` | ghost recording, ghost delta HUD, sector-split announces |
 | `career.spec.js` | the save and its six slots, the mode axes, the hub, a settled round, ratings, the R&D garage, MY TEAM, objectives/contracts/rollover, reliability, EXTRA FUNDS never raising the fitted cap, the facility, the hire's contract, sponsors — and that career development never reaches a Grand Prix |
 | `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, the grid being the qualifying order car-for-car, every round qualifying, and no classification leaking into the race |
@@ -832,6 +834,7 @@ what it covers.
 | `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
+| `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys |
 | `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
 | `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
 | `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |

@@ -247,12 +247,29 @@ function tick(dtMs) {
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     // With the scale PINNED (_autoRes false) the ladder is the only lever left,
     // so fall straight through to shedding instead of skipping the evaluation.
-    if (_autoRes && cur > 0.5) {
-      if (_gfx.setRenderScale(cur - 0.1)) {
-        _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
-        _govCool = 30; _downHold = 600;
-      }
-    } else if (Math.max(_perfTier, _floorTier()) < 4) {   // scale floor hit — shed a feature
+    // THE RENDERER'S BOOLEAN IS THE "SCALE LEVER EXHAUSTED" SIGNAL — ask it,
+    // don't predict it from `cur > 0.5`. This was `if (_autoRes && cur > 0.5) {
+    // if (setRenderScale(...)) {...} } else if (shed)`, and that structure made
+    // the WHOLE LADDER DEAD CODE in the shipped default. Traced in floats:
+    // stepping 1.0 by -0.1 gives 1 -> 0.9 -> 0.8 -> 0.7000000000000001 ->
+    // 0.6000000000000001 -> 0.5000000000000001. That last value is one ULP
+    // ABOVE 0.5, so `cur > 0.5` is true forever; setRenderScale then clamps the
+    // request to 0.5 and rejects it as a 1.1e-16 change against its own
+    // `Math.abs(s - renderScale) < 0.02` dead zone in GLX.setRenderScale; and
+    // because the outer `if` was ENTERED, the `else if` that sheds a feature was
+    // never evaluated. Net effect: with _autoRes on (the default) the governor
+    // could scale down and then did nothing at all, forever — no tier was ever
+    // shed by evidence. Only the GRAPHICS preset's _userTier still bit, because
+    // that is a separate term in tier()'s max().
+    // Using the return value removes the epsilon dependency entirely rather than
+    // chasing the constant, and tests/unit/perf-governor.test.mjs:38 already
+    // calls that boolean "the real gfx contract PerfGov.tick() relies on".
+    let stepped = false;
+    if (_autoRes && cur > 0.5) stepped = !!_gfx.setRenderScale(cur - 0.1);
+    if (stepped) {
+      _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
+      _govCool = 30; _downHold = 600;
+    } else if (Math.max(_perfTier, _floorTier()) < 4) {   // scale lever exhausted — shed a feature
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
       // already shed, so incrementing onto it changes nothing the EMA can see:
@@ -272,9 +289,30 @@ function tick(dtMs) {
     // it, a governor that can finally go up could climb straight back into the
     // frame misses it just escaped, which is the oscillation the header warns
     // about arriving from the other side.
+    // SAME SHAPE AS THE DEGRADE BRANCH, and for the same reason. Climbing from
+    // the floor at +0.06 reaches 0.9800000000000004, and the next request —
+    // Math.min(1, cur + 0.06) === 1 — is a delta of 0.019999999999999574, just
+    // under setRenderScale's 0.02 dead zone, so it is rejected and the scale
+    // pins at 0.98 for the session. That is a 4% pixel deficit nobody asked for,
+    // but the real damage was structural: `cur < 1` then stays true forever, so
+    // the tier-restore `else if` below was unreachable and a shed feature could
+    // never come back. That is the same one-way door the RESTORE_UNDER = 4.2
+    // post-mortem in this header was written to close, reintroduced by a float
+    // epsilon. Falling through on a rejected step lets the ladder restore.
+    // THE SNAP HAS TO HAPPEN A STEP EARLY, not at the end. Going to 1 only once
+    // cur + 0.06 exceeds 1 does not work: from 0.9800000000000004 the request IS
+    // exactly 1, and |1 - 0.98000000000000043| = 0.019999999999999574, still
+    // inside the 0.02 dead zone. The last 0.02 of the range is unreachable by
+    // any step that starts inside it. So snap when the remaining gap is under
+    // one and a half steps and take it in one 0.08 move, which clears the zone:
+    // 0.5 -> ... -> 0.9200000000000004 -> 1. (Verified by float trace; the
+    // recovery test in tests/unit/perf-governor.test.mjs asserts it lands on
+    // exactly 1.)
+    let stepped = false;
     if (_autoRes && cur < 1) {
-      const next = Math.min(1, cur + 0.06);
-      if (_gfx.setRenderScale(next)) {
+      const next = (1 - cur) < 0.09 ? 1 : cur + 0.06;
+      stepped = !!_gfx.setRenderScale(next);
+      if (stepped) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
         _govCool = 240;
       }
@@ -282,7 +320,7 @@ function tick(dtMs) {
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s — and never below the crash-sentinel floor OR the user's
     // GRAPHICS preset floor (_floorTier folds both).
-    else if (_perfTier > _floorTier()) {
+    if (!stepped && _perfTier > _floorTier()) {
       _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA, up: true };
       _perfTier--; _govCool = 240;
     }

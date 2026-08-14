@@ -1132,8 +1132,19 @@ const AgentView = (function () {
       // absent from the payload rather than a null the caller must filter.
       let geom = null, parts = null, render, meshRef = null;
       try {
+        // measure: true asks Car3D.build for out.parts — the per-section bounding
+        // boxes partGeometry reports. It is OPT-IN because computing it walks
+        // every vertex of all 19 sections a SECOND time after the mesh is
+        // already complete, allocating 19 objects each holding three fresh
+        // arrays, for a field nothing on the render path reads: car3d.js's own
+        // header documents the return shape as {pos,nrm,col,mat,idx} and parts
+        // is not in it. This call site is its only consumer in the tree.
+        // Measured in a plain realm on a real 11,028-vert car: 0.109 ms of a
+        // 3.915 ms build (2.8%), and ~12-14 builds happen at a race start, so
+        // gating it takes ~1.4 ms off the race-start hitch — the same beat
+        // DebrisWorld.prime() was moved out of.
         const mesh = Car3D.build(team.color, team.color2,
-                                 { parts: res.visual, teamId: team.id });
+                                 { parts: res.visual, teamId: team.id, measure: true });
         meshRef = mesh;
         const pos = mesh.pos;
         let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,

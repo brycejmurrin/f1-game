@@ -100,7 +100,17 @@ void main() {
     // (so the gameplay sky strip isn't a flat pale wash) plus a faint azimuthal
     // variation that breaks the perfectly-smooth gradient. Day-only and faded
     // under overcast, so dusk/dawn/night and grey days are untouched.
-    {
+    // GATED ON daytime, which is what both lines below multiply by. daytime is
+    // smoothstep(0.35, 0.60, sunE) * (1.0 - nightSky) and sunE is a pure
+    // function of uSunDir.y — so it is exactly 0 on EVERY night frame and on
+    // every dawn/dusk frame with the sun under ~14.5°, and on those frames
+    // line 108 is mix(c, X, 0.0) == c and line 110 is c *= 1.0. Both exact.
+    // The expensive part is line 109: an atan2 — one of the costliest
+    // transcendentals on a GPU — feeding a vnoise (4 hash2 + 3 mix), per pixel,
+    // over the whole frame, thrown away. Uniform control flow (uSunDir, uStars
+    // are uniforms), so no divergence. daytime itself stays live: 159 and 206
+    // still read it.
+    if (daytime > 0.0) {
       float bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
       vec3 deepBlue = vec3(0.10, 0.30, 0.72);
       // DAY SKY BLUE knob (def 1.0 = as-shipped) scales the band strength; clamp
@@ -265,25 +275,37 @@ void main() {
   // coronaDamp folds in the NIGHT gate: the sun disc + corona + inner ring all
   // multiply by this, so a night session (sunDir high as the moon key) can never
   // paint a daytime sun disc up among the stars. The moon disc is drawn separately.
-  float coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);
-  float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
-  vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
-  // Wide aureole: broader (lower exponent) and stronger at golden hour.
-  // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
-  c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
-  // SUN CORONA RING knob (def 1.0 = as-shipped) scales the tight inner ring.
-  c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp;   // tight inner ring
-  // Flatten the disc near the horizon (atmospheric refraction squashes it).
-  // SUN HORIZON SQUASH knob (def 1.0 = as-shipped): scales the golden-hour vertical
-  // squash of the disc (1.0 = round, higher = more oval near the horizon).
-  vec3 dd = dir - uSunDir * sd;
-  float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), uSunSquash)));
-  // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
-  // widening the smoothstep edge. Larger = a bigger, brighter sun.
-  float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
-  // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
-  vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
-  c += discCore * disc;
+  // SKIP THE WHOLE BLOCK ON A NIGHT FRAME, don't damp it to zero. coronaDamp's
+  // second factor is (1.0 - nightSky), and overcast <= 1 keeps the first factor
+  // >= 0.08 — so coronaDamp == 0.0 EXACTLY when nightSky == 1.0, and on a night
+  // frame all three 'c +=' below add exactly nothing. Every local here
+  // (coronaDamp, golden, sunWarm, dd, perp, disc, discCore) is dead after this
+  // block, so nothing downstream can observe the skip.
+  // What it was costing: SKY_FS runs BEFORE the opaque world by default
+  // (skyLate is a default-OFF PerfTry switch), so there is no early-Z relief and
+  // this is 2 pow + 2 sqrt + ~85 ALU on 100% of the pixels of every night frame.
+  // uStars is a uniform, so the branch is uniform control flow — no divergence.
+  if (nightSky < 0.5) {
+    float coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);
+    float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
+    vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
+    // Wide aureole: broader (lower exponent) and stronger at golden hour.
+    // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
+    c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
+    // SUN CORONA RING knob (def 1.0 = as-shipped) scales the tight inner ring.
+    c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp;   // tight inner ring
+    // Flatten the disc near the horizon (atmospheric refraction squashes it).
+    // SUN HORIZON SQUASH knob (def 1.0 = as-shipped): scales the golden-hour vertical
+    // squash of the disc (1.0 = round, higher = more oval near the horizon).
+    vec3 dd = dir - uSunDir * sd;
+    float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), uSunSquash)));
+    // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
+    // widening the smoothstep edge. Larger = a bigger, brighter sun.
+    float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
+    // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
+    vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
+    c += discCore * disc;
+  }
 
   // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {

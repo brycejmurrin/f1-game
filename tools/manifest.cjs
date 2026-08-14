@@ -119,10 +119,12 @@ const FULL = [
   "js/game/atmosphere.js",
   "js/game/store.js",
   "js/game/career.js",
+  "js/game/season-cal.js",
   "js/game/reliability.js",
   "js/game/cam-tune.js",
   "js/game/setup-ui.js",
   "js/game/career-ui.js",
+  "js/game/season-ui.js",
   "js/game/menus.js",
   "js/game/scrollfade.js",
   "js/game/css-zoom.js",
@@ -140,6 +142,7 @@ const FULL = [
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/gfx-quality.js",
+  "js/game/cockpit-opts.js",
   "js/game/perf-try.js",
   "js/game/cameras.js",
   "js/game/cam-modes.js",
@@ -315,6 +318,9 @@ const HARD_EDGES = [
   ["js/car/teams.js", "js/car/liverytex.js"],
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
+  ["js/game/store.js", "js/game/season-cal.js"], // season-cal destructures GameStore at eval
+  ["js/game/season-cal.js", "js/game/season-ui.js"], // the screen reads the season rules
+  ["js/game/season-ui.js", "js/game.js"],      // game.js calls SeasonUI.create(G) at eval
   ["js/car/parts.js", "js/game/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/game/career.js", "js/game/quali.js"],    // quali reads Career.rnd/devFor for its spread

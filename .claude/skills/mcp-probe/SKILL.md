@@ -310,6 +310,40 @@ NDC-bbox shortcut that produces false positives, in
 `evaluate_script` and returns a number you can put in a commit message —
 `2722 px → 0 px` beats "looks better now".
 
+## A TWELFTH trap: the CAMERA only advances on real rAF frames — not on step()
+
+`act()` and `step()` advance PHYSICS. They do not run the camera smoothing in
+js/game.js (`camEye`/`camTgt` damp toward the solved vantage), so a loop of
+`act(); read viewState()` reads a camera frozen at the last RENDERED frame while
+the car's heading marches on. Anything you compute from that pair — aim-vs-
+heading, lag, framing — is measuring frame starvation, not the code.
+
+MEASURED 2026-08-14 while proving out a cockpit aim fix: per call, heading moved
+1.7 deg and the aim moved EXACTLY 0.000 — on `act()` AND on `step()`. Three
+successive attempts to measure camera lag this way produced 170-180 deg, 33 deg
+and 21 deg "results", all of them pure staleness, before the null test above was
+run. Run that null test FIRST: if `dAim` is 0 while `dHead` is not, stop.
+
+The instrument that works: sample INSIDE the frame the camera updates in, and
+drive with real input so rAF keeps running (a tight JS `act()` loop starves it).
+
+```js
+const rec = []; let stop = false;
+const tick = () => { if (stop) return;
+  const v = __apex.viewState(), p = __apex.physState();
+  rec.push({ yaw: Math.atan2(v.tgt[0]-v.eye[0], v.tgt[2]-v.eye[2])*180/Math.PI,
+             head: (p.head||0)*180/Math.PI, yawRate: (p.yawRate||0)*180/Math.PI });
+  requestAnimationFrame(tick); };
+requestAnimationFrame(tick);
+window.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowLeft', code:'ArrowLeft'}));
+await new Promise(r => setTimeout(r, 4000));      // WALL CLOCK, so real frames land
+```
+
+Under SwiftShader that yields only 2-3 frames in 4 s, so filter to frames that
+are actually rotating (`yawRate > 5`) and report a median, not a mean. It is a
+small sample by construction — enough to separate 0.55 deg from 3.34 deg, not
+enough to quote three significant figures.
+
 ## An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render
 
 `numLights` is the per-frame ACTIVE (culled) light count, produced inside the

@@ -1,20 +1,30 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 
+// FOUR OF THE FIVE TESTS HERE ARE GENUINELY OVER THE DEFAULT 120 s BUDGET, not
+// flaky. Solo at APEX_WORKERS=1 on a quiet box: 191.3 / 173.7 / 155.6 / 135.5 s;
+// on a CI runner one reached 210.8 s. Only "IMAGE & COLOUR exposes ordered…"
+// (~70 s) fits. The cost is real — each test boots the game, races bahrain,
+// walks pause → SETTINGS → LIGHTING → IMAGE & COLOUR, then fans a lighting
+// profile across all 40 circuits and undoes it, under SwiftShader.
+//
+// WHY A FILE-LEVEL BUDGET AND NOT test.slow(): test.slow() is called INSIDE the
+// test body, so it cannot extend the fixture phase that runs BEFORE the body.
+// With test.slow() this file still failed on CI with
+// "Test timeout of 120000ms exceeded while setting up \"context\"" — at exactly
+// 120.0 s, the base budget, because the multiplier had not been applied yet.
+// test.describe.configure({ timeout }) is set at collection time and covers
+// setup as well (same form as zandvoort-foundation.spec.js). It also survives
+// CI passing an explicit `--timeout=120000` on the command line, which is what
+// the change-aware job does.
+test.describe.configure({ timeout: 360_000 });
+
 async function openImageTuner(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
-  // STOP THE RENDER LOOP. Nothing in this file looks at the 3D scene — it drives
-  // the tuner panel and reads localStorage — but the loop costs ~1-2 s per frame
-  // on SwiftShader and every page.evaluate queues behind it. That is not merely
-  // slow, it is a CORRECTNESS problem here: js/game/tuner.js:131 disarms COPY ALL
-  // after 20 s, so when the assertion and the localStorage read between the two
-  // clicks outran that timer the second click RE-ARMED instead of firing, and the
-  // chip read "COPY TO 39?" where the test wanted "COPIED 39 ✓". Freeing the main
-  // thread removes the race and the timeouts in one move.
-  await page.evaluate(() => { window.__apex.headless(true); window.__apex.park(0.1); });
+  await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
@@ -23,15 +33,7 @@ async function openImageTuner(page) {
 }
 
 async function reopenImageTuner(page) {
-  // STOP THE RENDER LOOP. Nothing in this file looks at the 3D scene — it drives
-  // the tuner panel and reads localStorage — but the loop costs ~1-2 s per frame
-  // on SwiftShader and every page.evaluate queues behind it. That is not merely
-  // slow, it is a CORRECTNESS problem here: js/game/tuner.js:131 disarms COPY ALL
-  // after 20 s, so when the assertion and the localStorage read between the two
-  // clicks outran that timer the second click RE-ARMED instead of firing, and the
-  // chip read "COPY TO 39?" where the test wanted "COPIED 39 ✓". Freeing the main
-  // thread removes the race and the timeouts in one move.
-  await page.evaluate(() => { window.__apex.headless(true); window.__apex.park(0.1); });
+  await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
@@ -58,14 +60,6 @@ test("IMAGE & COLOUR exposes ordered professional grading sections", async ({ pa
 const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.lightTune") || "{}"));
 
 test("COPY ALL arms, spreads the condition to every other track, and undoes", async ({ page }) => {
-  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
-  // spreads a condition across all 40 circuits and then undoes it. Measured
-  // 133-158 s in a two-worker group run against the 120 s default, while
-  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
-  // ceiling, not the code, is what fails. Adding a circuit makes it slower
-  // again, so the budget is set from what the test actually does. Same remedy
-  // and reason as tests/specs/bahrain-foundation.spec.js:5.
-  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.locator("#lt-wx-wet").click();
@@ -78,7 +72,14 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
   expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
 
   await edits.click();                                   // second click fires
-  await expect(edits).toHaveText(/^COPIED \d+ ✓$/);
+  // 30 s, NOT the 5 s expect default (playwright.config.js declares no `expect`
+  // block). The chip only flips to COPIED once the fan-out has actually written
+  // a profile for all 39 other circuits, so this assertion is waiting on real
+  // work, not on a render. On a loaded CI runner that fan-out passes 5 s and the
+  // assertion fired while the label was still the armed one — the observed
+  // failure was literally `Received string: "COPY TO 39?"`, i.e. the state the
+  // line above just asserted. It reads like a functional bug and is a budget.
+  await expect(edits).toHaveText(/^COPIED \d+ ✓$/, { timeout: 30_000 });
   const after = await stored(page);
   const targets = Object.keys(after).filter((k) => k !== "bahrain|dusk|wet");
   expect(targets.length).toBeGreaterThan(20);            // every other circuit on the LIST
@@ -90,18 +91,17 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
   expect(Object.keys(after["monza|dusk|wet"])).toEqual(["gainB"]);
 
   await page.locator("#lt-spread-undo").click();
-  expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
+  // expect.poll, not a bare expect: UNDO deletes 39 profiles, and a plain
+  // `expect(await stored(page))` reads localStorage exactly ONCE with no retry,
+  // so on a slow runner it can sample mid-undo. Same defect class as the COPIED
+  // assertion above — that one merely happened to fail first. Found by grepping
+  // the rest of the file after fixing it, which is the habit this repo's
+  // findings doc argues for.
+  await expect.poll(() => stored(page).then(Object.keys), { timeout: 30_000 })
+    .toEqual(["bahrain|dusk|wet"]);
 });
 
 test("switching the previewed condition disarms a pending COPY ALL", async ({ page }) => {
-  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
-  // spreads a condition across all 40 circuits and then undoes it. Measured
-  // 133-158 s in a two-worker group run against the 120 s default, while
-  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
-  // ceiling, not the code, is what fails. Adding a circuit makes it slower
-  // again, so the budget is set from what the test actually does. Same remedy
-  // and reason as tests/specs/bahrain-foundation.spec.js:5.
-  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.locator("#lt-tod-dusk").click();
   await page.evaluate(() => window.__apex.lightTune({ gainB: 1.2 }));
@@ -122,14 +122,6 @@ test("switching the previewed condition disarms a pending COPY ALL", async ({ pa
 });
 
 test("__apex.lightCopy('look') levels every track at that condition, and undoes", async ({ page }) => {
-  // Cost is proportional to the CIRCUIT LIST, not to the assertions: this
-  // spreads a condition across all 40 circuits and then undoes it. Measured
-  // 133-158 s in a two-worker group run against the 120 s default, while
-  // passing alone on both this tree and the pre-audit one (~108 s) — i.e. the
-  // ceiling, not the code, is what fails. Adding a circuit makes it slower
-  // again, so the budget is set from what the test actually does. Same remedy
-  // and reason as tests/specs/bahrain-foundation.spec.js:5.
-  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.evaluate(() => { window.__apex.setTimeOfDay("night"); window.__apex.weather("wet"); });
   const r = await page.evaluate(() => window.__apex.lightCopy("look"));
@@ -153,14 +145,6 @@ test("__apex.lightCopy('look') levels every track at that condition, and undoes"
 });
 
 test("new grading controls clamp, persist, reset, and export", async ({ page }) => {
-  // TWO Bahrain builds in one test — openImageTuner, then a page.reload() and
-  // reopenImageTuner to prove the values PERSIST across a reload. On SwiftShader
-  // a build is 40-60 s, so this cannot fit the 120 s default however fast the
-  // assertions are. It never surfaced because the test threw at ~64 s on
-  // `window.LightTune` (a lexical global, never a window property) before it
-  // reached the second build. Same remedy, same reason, as
-  // tests/specs/bahrain-foundation.spec.js:5.
-  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.evaluate(() => window.__apex.lightTune({ shadows: 9, gammaG: 0.1, gainB: 1.25 }));
   // Read the clamp bounds from the REGISTRY, not from memory. This assertion was
@@ -173,12 +157,15 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // silent about a range the tuner is free to change. Same rule the mcp-probe
   // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
   const bounds = await page.evaluate(() => {
-    // `LightTune`, NOT `window.LightTune`. js/game/lighting.js:10 declares it as
-    // a top-level `const` in a classic script, which binds in the global LEXICAL
-    // environment — that is not the same object as `window`, so the property
-    // form is permanently undefined and this whole block threw before the two
-    // expects below could run. Every other global in this project is assigned
-    // (`window.MenuNav = …`), which is why the property form looks right here.
+    // BARE `LightTune`, not `window.LightTune`. js/game/lighting.js declares it
+    // as `const LightTune = (function () {`, and a top-level `const` in a
+    // CLASSIC script creates a script-scoped binding — it is NOT a property of
+    // window, unlike `var` or the explicit `window.X =` form that ariastate.js,
+    // css-zoom.js and sheetshape.js use. So `window.LightTune` was undefined and
+    // this line threw `Cannot read properties of undefined (reading
+    // 'TUNE_DEFS')`. The bare identifier resolves through the same global scope
+    // the page's own modules use, which is how every other LightTune reader in
+    // tests/ already does it. This was the only `window.LightTune` in the tree.
     const pick = (id) => (LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
     return { shadowsMax: pick("shadows").max, gammaGMin: pick("gammaG").min };
   });
@@ -188,9 +175,6 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   expect(await page.evaluate(() => window.__apex.lightTune().gammaG)).toBe(bounds.gammaGMin);
   await page.reload();
   await page.waitForFunction(() => window.__apex?.race);
-  // headless() does not survive the reload — set it again before the SECOND
-  // build, or that one renders at full cost and undoes half the saving.
-  await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null);
   expect(await page.evaluate(() => window.__apex.lightTune().gainB)).toBeCloseTo(1.25);
