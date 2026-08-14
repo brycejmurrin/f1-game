@@ -72,23 +72,10 @@
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
         waterSurface, groundPatch, sailCanopy, terrainYAt,
-        cameraTower, broadcastCompound, sponsorHoarding } = api;
+        cameraTower, broadcastCompound, sponsorHoarding,
+        groundUnder,
+      } = api;
       const K = (s) => Math.round(s * n) % n;
-      // World-XZ ground query mirroring SceneryNature's groundUnder: terrainYAt
-      // first (exact where the rendered ribbon covers the point), else the same
-      // nearest-node closed form tools/float-audit.cjs itself falls back to — a
-      // footing resolved this way never disagrees with the grounding audit,
-      // unlike reusing one anchor's height across tens of metres of tangent walk.
-      const groundUnder = (x, z) => {
-        const ty = terrainYAt(x, z);
-        if (ty !== null) return ty;
-        let best = 0, bestD = Infinity;
-        for (let i = 0; i < n; i++) {
-          const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
-          if (d < bestD) { bestD = d; best = i; }
-        }
-        return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
-      };
 
       // ── JIADING RICE PADDIES AND REED MARSH ──────────────────────────────
       // The circuit's origin story is its landscape: this was SWAMPLAND used

@@ -6,7 +6,7 @@ description: Use when the user asks to add/edit track scenery, dress a circuit, 
 # Dress a circuit's scenery
 
 `buildProps` (the `js/track/scenery-*.js` modules — nature/city/structures/identity,
-orchestrated by `js/track/tracks.js`; the 109-member `api` surface is frozen by
+orchestrated by `js/track/tracks.js`; the 110-member `api` surface is frozen by
 `tests/unit/scenery-api-contract.test.mjs`) calls each track's `def.scenery(api)` to lay down
 3D props, then merges everything into one mesh. The full reference is
 `docs/SCENERY-API.md` — **read it before non-trivial work**. This skill is the

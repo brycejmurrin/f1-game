@@ -145,7 +145,10 @@ const CEILINGS = {
   // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
   // sky, then the glow. Neither branch's number fits the merged file; this one
   // is set FROM it, the same way the earlier flap-gate merge above was.
-  "js/game.js": 8050,
+  // Merged the range-pass branch (SCALE consts + comments) with deploy's
+  // 8050-era work — the file carries both sides' lines, so neither side's
+  // number fits it. Set from the merged file: 8054.
+  "js/game.js": 8054,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -187,7 +190,7 @@ const CEILINGS = {
   // (Singapore, Bahrain) fell back to synthetic lights with no matching mast.
   // registerMastLamp() gives those masts their own 512-cap budget, separate
   // from the 96-cap tunnel/soffit customLamps list.
-  "js/track/tracks.js": 2762, // +4 2026-08-14: place() anchors props to the RENDERED terrain (terrainYAt) instead of groundYAt's closed form, which drifts metres wherever `elevations` bend the ribbon — the last reachable float on madrid and magny_cours, and unfixable from circuit data since the call site is engine-generic
+  "js/track/tracks.js": 2767, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

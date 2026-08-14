@@ -711,7 +711,7 @@ what it covers.
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
-| `scenery-api-contract.test.mjs` | freezes the 109-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `scenery-api-contract.test.mjs` | freezes the 110-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
