@@ -168,13 +168,18 @@ const GLX = (function () {
     if (on !== _depthWrite) { gl.depthMask(on); _depthWrite = on; }
   }
   // The same idea extended to the three states draw() currently toggles on
-  // EVERY call — behind PerfTry.glStateCache until someone measures it on real
-  // hardware. GL defaults: culling ON, all four colour channels writable,
+  // EVERY call. MEASURED and found to save NOTHING: those four calls total 63.5
+  // per frame on vegas and the cache collapses zero of them, because the toggles
+  // strictly ALTERNATE (cars are doubleSided, their neighbours are not). The
+  // PerfTry switch was removed; _stateCache() is now permanently false, so these
+  // behave exactly as the direct gl calls they replaced. Kept because the routing
+  // is tidier and because resetDrawState() is a real invariant.
+  // GL defaults: culling ON, all four colour channels writable,
   // polygon offset disabled. resetDrawState() re-syncs to those, and is called
   // from begin()/present() alongside the blend/depth pair so a cached value can
   // never outlive the frame that set it.
   let _cullOn = true, _colorMaskA = true, _polyOffOn = false;
-  const _stateCache = () => { try { return typeof PerfTry !== "undefined" && PerfTry.on("glStateCache"); } catch (_) { return false; } };
+  const _stateCache = () => false;   // see the measured note above
   function setCull(on) {
     if (!_stateCache()) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); return; }
     if (on !== _cullOn) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); _cullOn = on; }
@@ -938,7 +943,7 @@ const GLX = (function () {
     // depth buffer to clear, and blend off is the opaque-pass default.
     gl.disable(gl.BLEND); _blendOn = false;
     gl.depthMask(true); _depthWrite = true;
-    // Same resync for the three states PerfTry.glStateCache collapses. This is
+    // Same resync for the three states the setters above route. This is
     // what keeps a cached value from outliving the frame that set it — and it
     // runs unconditionally, so the cached and uncached paths start each frame
     // from identical GL state.

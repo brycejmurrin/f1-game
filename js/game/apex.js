@@ -94,6 +94,31 @@ function simCareerRound() {
   return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
 }
 
+// LAZY TRACK ENSURE — the one place the deferred boot build is forced.
+// js/game.js no longer builds the 3D track synchronously at boot (it schedules
+// the menu flyby build instead), so window.__apex can exist for a beat with
+// G.track === null — while every hook below, and every spec that stages a
+// camera before racing (park/jump/snapCam/probe/world/…), was written against
+// the synchronous world boot used to guarantee. Force the build ONCE here at
+// the API boundary rather than guard ~180 call sites: the first __apex call
+// pays exactly what boot used to pay, and a player who never opens the dev API
+// never pays it at all. Placement is load-bearing in BOTH directions —
+// tests/unit/hooks-documented.test.mjs slices this file at the first occurrence
+// of the api literal's opening text and reads every 2-space-indented name after
+// it as a hook, so the loop must sit above the literal AND this comment must
+// not quote that text (it did, which moved the slice and invented a hook called
+// `for` — measured, the guard went red).
+function lazyTrackEnsure(o) {
+  for (const k of Object.keys(o)) {
+    const fn = o[k];
+    if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
+    // `this` is forwarded so hooks that call each other (this.obs(), this.park(),
+    // …) still resolve; re-entry is free — loadTrack() no-ops once built.
+    o[k] = function (...a) { if (!G.track) loadTrack(G.trackIdx); return fn.apply(this, a); };
+  }
+  return o;
+}
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -3072,6 +3097,7 @@ const api = {
       }));
   },
 };
+lazyTrackEnsure(api);
 return api;
 }
 

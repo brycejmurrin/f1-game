@@ -456,8 +456,17 @@ body { --compact-at: 600px; }
    resolving WIDER than the list it is meant to be narrower than. */
 /* The columns, the spans and the foot placement come from `.pane-pair`
    (css/components.css) — the shared list-detail primitive #carsetup and #career
-   also use. These happen to be its defaults, so only the threshold is set. */
-#sel-inner { --pair-at: 620px; }
+   also use. Only the threshold and the split are set here.
+   THE SPLIT IS 50%, NOT THE PRIMITIVE'S 42%. The side column here holds the
+   circuit MAP, which is the thing being chosen between; the main column holds
+   a name, a country and a distance per row and was measurably slack — at a
+   1020px sheet the list ran 573px wide with most of that a gap between the
+   name on the left and "Bahrain · 5.4 km" on the right, while the preview
+   column had to fit a map AND its caption into 428px. An even split spends
+   ~80px of that slack on the map: a tall circuit's outline goes from 206px
+   wide to ~255px with its caption still on one line. The list keeps ~510px,
+   which is well clear of where its rows start wrapping. */
+#sel-inner { --pair-at: 620px; --pair-split: minmax(0, 50%); }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -769,6 +778,31 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(0, 0, 0, 0.25);
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
+/* MAP BESIDE THE CAPTION, WHEN THE CIRCUIT IS TALL.
+   js/game/menus.js:updateTrackPreview sets data-map-shape="beside" after
+   measuring that stacking would strand more than a third of the card's width
+   as dead space — which is what a portrait circuit (Jeddah, aspect 0.5) does
+   to a full-width slot. Attribute + ID is (1,1,0), so this beats the plain
+   `#sel-track-preview` (1,0,0) declarations inside the @container blocks below
+   whatever the source order — the same specificity trap --sel-map-w was
+   introduced to dodge. JS pins the canvas box, so no width knob is needed
+   here; this rule only chooses the axis. */
+#sel-track-preview[data-map-shape="beside"] {
+  flex-direction: row;
+  align-items: stretch;
+}
+/* `flex: 1 1 auto; min-width: 0` is the base rule, but the pair/container
+   branches re-declare this element and it computed to `0 0 auto` here — so the
+   caption kept its content width, ran past the card's right edge and had its
+   last fact chip clipped by the card's own `overflow: hidden`. Restate the
+   shrink explicitly on the arrangement that needs it. */
+#sel-track-preview[data-map-shape="beside"] #sel-preview-info {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
+}
 
 /* PORTRAIT: THE MAP IS THE SUBJECT, THE FACTS ARE A CAPTION.
    A phone held upright gives the card width and almost no height, and half of
