@@ -306,6 +306,24 @@ __apex.eyeAt(0.116, 0, 2.5);              // driver's-eye look ahead
 __apex.eyeAt(0.116, 0, 2.5, 0.116, 30, 2); // stand on the road, look out at the right barrier
 ```
 
+**`lat` is measured from the CENTRELINE; a circuit places scenery by `gap`
+BEYOND THE ROAD EDGE.** The two spaces differ by the half-width, and nothing
+converts for you — so aiming at something you can see in the source needs the
+conversion done by hand:
+
+```js
+// a prop the circuit placed with anchor(k, side, gap):
+const lat = side * (hw + gap);            // hw ≈ def.baseHW, ~7 m on most circuits
+// building(k, side, gap, w, …) puts its CENTRE half a width further out again:
+const lat = side * (hw + gap + w / 2);
+```
+
+Skipping this is how a search for Imola's pit complex — `building(…, -1, 20,
+16, …)`, i.e. `lat ≈ -(7 + 20 + 8) = -35` — got hunted for at `lat ±75` across
+a dozen screenshots that each showed grass or treetops. `scene().props[].at`
+gives world coords for the same thing and is the faster way to aim when the
+frame is already built: read `at`, then `view({eye, yaw, pitch})` at it.
+
 ### `orbit(f, az?, el?, dist?, h?) → {eye, target}`
 Orbit the free-cam around a track point at lap-fraction `f`: `az` degrees around
 (0 = from ahead/+s), `el` elevation, `dist` m out, aimed `h` m up. Sweep `az` to
@@ -1973,6 +1991,23 @@ __apex.scene({ radius: 120, limit: 5 })
 Egocentric: `distM` / `bearingDeg` are from the **player** (or the camera when
 there is no player — `origin.from` says which), `+bearing` = to its right,
 0 = straight ahead. Sorted by distance.
+
+**This is the INTENT registry, not the geometry.** Entries come from the
+`ctx.note(...)` calls the model helpers make, and several of those fire BEFORE
+the helper decides whether to emit anything — `building()` notes itself after
+its two footprint guards but before the `opts.kind` massing branch runs. So a
+prop that draws nothing at all can still be listed here, at a plausible size and
+position. MEASURED 2026-08-14: Imola's pit building appeared in `scene()` the
+whole time it was emitting ZERO vertices, which is most of a debugging session
+spent trusting a list instead of the picture.
+
+`scene()` answers "what did this circuit ASK for". To ask "what is actually in
+the buffers", diff the vertex count with the call removed:
+`node tools/verify-track.cjs <id>` before and after commenting the line out —
+identical `props N` means nothing was emitted. Run a control first (add a loop
+of throwaway `addBox` calls and confirm the number moves), because two equal
+readings look the same whether the instrument works or is simply not seeing
+your edit.
 
 Kinds: `tree` · `pine` · `palm` · `bush` · `building` · `house` · `motorhome` ·
 `tower` · `grandstand` · `billboard` · `signBoard` · `marshalPost` · `gantry` ·

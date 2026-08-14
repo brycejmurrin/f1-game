@@ -131,8 +131,9 @@ body.desktop #pm-calib { display: none !important; }
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
   .hud-label { font-size: var(--fs-micro); }
-  /* minimap is 140px here — gaps dock beside it (10+140+8) */
-  .hud-gaps { font-size: 14px; top: calc(8px + var(--sat) / var(--hud-scale)); left: calc(158px + var(--sal) / var(--hud-scale)); }
+  /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
+     by the base rule. */
+  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-scale)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -162,8 +163,12 @@ body.desktop #pm-calib { display: none !important; }
   /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
      without shrinking thumb targets — tap floors stay on the >700px ladder. */
   #minimap { width: 96px; height: 96px; }
-  /* minimap is 96px here — gaps dock beside it (10+96+8) */
-  .hud-gaps { top: calc(8px + var(--sat) / var(--hud-scale)); left: calc(114px + var(--sal) / var(--hud-scale)); font-size: var(--fs-micro); gap: 4px; }
+  /* minimap is 96px here — gaps dock beside it (10+96+8), top-aligned with it by
+     the base rule. Nothing about the 200% end of the HUD SIZE range fits a
+     393px-tall phone and no placement here can fix that: at 852x393 @200%
+     `#minimap` already overlaps `.hud-top` with `.hud-gaps` removed from the
+     comparison entirely. */
+  .hud-gaps { left: calc(114px + var(--sal) / var(--hud-scale)); }
   .hud-top { gap: 6px; }
   .hud-box { padding: 4px 7px; }
 }
