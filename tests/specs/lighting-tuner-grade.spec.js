@@ -113,6 +113,14 @@ test("__apex.lightCopy('look') levels every track at that condition, and undoes"
 });
 
 test("new grading controls clamp, persist, reset, and export", async ({ page }) => {
+  // TWO Bahrain builds in one test — openImageTuner, then a page.reload() and
+  // reopenImageTuner to prove the values PERSIST across a reload. On SwiftShader
+  // a build is 40-60 s, so this cannot fit the 120 s default however fast the
+  // assertions are. It never surfaced because the test threw at ~64 s on
+  // `window.LightTune` (a lexical global, never a window property) before it
+  // reached the second build. Same remedy, same reason, as
+  // tests/specs/bahrain-foundation.spec.js:5.
+  test.setTimeout(300_000);
   await openImageTuner(page);
   await page.evaluate(() => window.__apex.lightTune({ shadows: 9, gammaG: 0.1, gainB: 1.25 }));
   // Read the clamp bounds from the REGISTRY, not from memory. This assertion was
@@ -125,7 +133,13 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // silent about a range the tuner is free to change. Same rule the mcp-probe
   // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
   const bounds = await page.evaluate(() => {
-    const pick = (id) => (window.LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
+    // `LightTune`, NOT `window.LightTune`. js/game/lighting.js:10 declares it as
+    // a top-level `const` in a classic script, which binds in the global LEXICAL
+    // environment — that is not the same object as `window`, so the property
+    // form is permanently undefined and this whole block threw before the two
+    // expects below could run. Every other global in this project is assigned
+    // (`window.MenuNav = …`), which is why the property form looks right here.
+    const pick = (id) => (LightTune.TUNE_DEFS.find((d) => d.id === id) || {});
     return { shadowsMax: pick("shadows").max, gammaGMin: pick("gammaG").min };
   });
   expect(bounds.shadowsMax, "SHADOWS has no max in TUNE_DEFS — the clamp test would be vacuous").toBeGreaterThan(0);
