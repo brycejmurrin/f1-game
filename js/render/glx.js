@@ -87,6 +87,12 @@ const GLX = (function () {
   // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
+  // Probe draw-distance cull, metres — used ONLY when PerfTry.envCull is on
+  // (default OFF; see the switch's entry in js/game/perf-try.js for the counted
+  // reach at each radius and the sub-pixel argument for this value). A face is
+  // 90 deg across ENV_SIZE pixels = 1.41 deg/px, so a 20 m building subtends
+  // ~2.7 px here and 0.9 px at the 900 m far plane.
+  const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
   const _envView = new Float32Array(16), _envProj = new Float32Array(16),
@@ -828,10 +834,22 @@ const GLX = (function () {
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
-    const svVP = frame.viewProj, svEye = frame.eye;
+    const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
+    // PerfTry.envCull (default OFF): the probe inherits the MAIN camera's
+    // cullDist, which game.js sets to 0 — no radial cull at all — below PerfGov
+    // tier 3. So a 64x64 reflection target re-draws the city through the 900 m
+    // frustum above. Counted with tools/chunk-reach.cjs: 238.3 chunks /
+    // 1,256,344 indices per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
+    //
+    // MIN, never an override: where the main camera is already culling tighter
+    // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
+    // 0 means "no cull", so it is treated as unbounded rather than as zero.
+    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
+      frame.cullDist = svCull > 0 ? Math.min(svCull, ENV_CULL_M) : ENV_CULL_M;
+    }
     begin(frame);
-    frame.viewProj = svVP; frame.eye = svEye;
+    frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
     return _envInvVP;
   }
   function envFaceEnd(face) {

@@ -99,6 +99,36 @@ const FLAGS = {
          "uniform so the texture cache absorbs most of it.",
     watch: "Bit-identical by construction. If the flare changes at all, the reorder is wrong.",
   },
+  envCull: {
+    glsl: false,
+    what: "Give the car-paint reflection probe its OWN 300 m draw-distance cull, "
+        + "instead of letting it inherit the main camera's (which is 0 — no cull — "
+        + "below PerfGov tier 3).",
+    why: "envFaceBegin swaps viewProj and eye for the probe face but not cullDist, so a "
+       + "64x64 reflection target re-draws the whole city through a 900 m frustum. "
+       + "COUNTED, not estimated (tools/chunk-reach.cjs; over a full 6-face cube the "
+       + "probe looks in every direction, so its coverage is exactly a SPHERE of the far "
+       + "radius and the count needs no view matrix): at 900 m it reaches 238.3 chunks / "
+       + "1,256,344 indices per cube on vegas, 373.6 / 344,888 on spa, 195.1 / 516,647 on "
+       + "monza. At 300 m that is 68-72% fewer indices and 78-83% fewer chunks, and the "
+       + "three circuits agree closely despite completely different scenery (spa is 1594 "
+       + "small tree chunks over 207k tris, vegas 914 large building chunks over 885k) — "
+       + "so it is a property of the radius, not of a circuit. Why 300 m is defensible "
+       + "rather than arbitrary: a face is 90 deg across 64 pixels = 1.41 deg/px, so a "
+       + "20 m building subtends ~2.7 px at 300 m and 0.9 px at 900 m — UNDER ONE PIXEL, "
+       + "in a target that is then mipmapped and blurred. The whole 300-900 m band pays "
+       + "full vertex cost to move less than a pixel. game.js already calls this pass "
+       + "'the biggest per-frame load multiplier'; the mitigation that shipped halved its "
+       + "RATE (one face every other frame), not its REACH.",
+    watch: "This is the ONE switch here that is not bit-identical — it removes distant "
+         + "geometry from the reflection, so judge it by LOOKING, not by assuming. Watch "
+         + "a car's bodywork reflection on a street circuit with tall buildings (vegas, "
+         + "singapore, baku): distant skyline should still read as skyline in the paint. "
+         + "If the reflection visibly loses a landmark, or the horizon band in the "
+         + "reflection changes colour, 300 m is too tight — raise it before rejecting "
+         + "the idea, since 400 m still removes ~59%. Never takes effect where the main "
+         + "camera is already culling tighter (it is a min, not an override).",
+  },
   lampFogGate: {
     glsl: true,
     what: "Accumulate per-lamp fog only when uLampFog > 0.",
