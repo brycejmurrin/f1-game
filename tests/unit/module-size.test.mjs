@@ -204,7 +204,16 @@ const CEILINGS = {
   // live game as "all the lamps are way too powerful". Five lines are the
   // comment recording why the value must not be coerced here, which is exactly
   // the mistake the old line made.
-  "js/game.js": 8150,
+  // -> 8178: PER-CHUNK LAMPS joins the PerfGov shed ladder at tier 1. It was
+  // the ONE discretionary renderer feature with no tier gate at all, and its
+  // cost is per-fragment and unbounded rather than a fixed pass, so it needs
+  // the earliest rung rather than the latest. The comment carries the measured
+  // evidence — cockpit + night + perChunk held 380% CPU for 22 minutes on 40
+  // frames where every other camera mode did 20 frames in seconds — and the
+  // reason a GPU watchdog reset presents to a player as a crash rather than as
+  // slowness. That is the bug-explaining growth this ratchet tolerates: the
+  // gate is one line, the rest is why it is at tier 1 and not tier 4.
+  "js/game.js": 8178,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
