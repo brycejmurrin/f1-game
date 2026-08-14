@@ -120,6 +120,7 @@ export const RULES = [
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
   [/^assets\//, ["api"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],
+  [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
 ];
 

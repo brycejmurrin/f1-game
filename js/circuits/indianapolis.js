@@ -371,7 +371,10 @@
         if (s < 0.28 || s > 0.72) return;
         const h = hash(k * 31);
         if (h < 0.55) return;
-        tree(k, h < 0.5 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.5 ? LEAF_D : LEAF);
+        // After the sparseness guard h is in [0.55, 1), so the old h<0.5
+        // selectors were dead: every clump planted right, always LEAF, and
+        // LEAF_D never rendered. 0.775 is the live range's midpoint.
+        tree(k, h < 0.775 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.775 ? LEAF_D : LEAF);
       });
 
       // =====================================================================
