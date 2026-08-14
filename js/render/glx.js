@@ -326,12 +326,33 @@ const GLX = (function () {
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
-      // Forward EVERY argument. This was `(L, idx, n) => uploadLightSet(L, idx, n)`,
-      // arity 3, while its only external caller (GLXChunked's per-chunk lamp
-      // upload) passes six — so L2/o2/n2, the car tail-light slice, were dropped
-      // on the floor and every per-chunk lamp set silently lost the field's tail
-      // lights. The bug is invisible from the call site, which looks correct.
-      uploadLightSet: (L, idx, n, L2, o2, n2) => uploadLightSet(L, idx, n, L2, o2, n2),
+      // ARITY 3 ON PURPOSE, and this is a REVERT, not the original oversight.
+      //
+      // The bug is real: GLXChunked's per-chunk lamp upload passes SIX
+      // arguments, so L2/o2/n2 — the car tail-light slice — were dropped here
+      // and every per-chunk lamp set silently lost the field's tail lights.
+      // Forwarding them (2026-08-14) fixed that. It also turned a code path
+      // that had been inert since PER-CHUNK LAMPS shipped into a live one for
+      // the first time, and the very next build drew a crash report from a
+      // player running with the knob on.
+      //
+      // That crash is NOT reproducible here: boot, build, race, night,
+      // perChunkLights at 1 / 0.3, roadChunkLamps, and four track changes
+      // including a free+rebuild of vegas all run clean under SwiftShader, and
+      // test:tiny is 71/71. But with the knob at 1 the other three changes in
+      // that build are provably no-ops (_lampScale computes to exactly 1, so
+      // col*1 is bit-identical; the knob ranges change no runtime behaviour;
+      // envCull is default-off), which leaves this as the only live behavioural
+      // delta reaching that player.
+      //
+      // Suspect by elimination, not by a fault anyone has pointed at — so it
+      // goes back to the shipped-for-months behaviour while the crash is
+      // diagnosed, rather than staying in on the strength of my own reasoning.
+      // The cost of reverting is one cosmetic loss (scenery does not catch
+      // tail-light spill under per-chunk lamps) that nobody had until this
+      // week. Re-land it WITH a repro of the crash it may or may not have
+      // caused, not before.
+      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
