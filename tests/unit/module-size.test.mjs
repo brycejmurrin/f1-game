@@ -145,10 +145,33 @@ const CEILINGS = {
   // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
   // sky, then the glow. Neither branch's number fits the merged file; this one
   // is set FROM it, the same way the earlier flap-gate merge above was.
+  // 8050 -> 8064: pooling the DebrisWorld.tyreMarble argument. The literal was
+  // built per car per physics step on BOTH the player and AI paths -- 20 cars x
+  // 60 Hz, ~1200 short-lived objects/s -- and tyreMarble discards it on the
+  // speed gate, the hot gate, or the 0.25 rate limit, so nearly all of them at
+  // cruising speed. A measured CPU profile put the collector at 2.8% of physics
+  // time; this is one of the sites paying into it. The growth is the pooled
+  // declaration plus the comment recording why sharing one object is safe (the
+  // callee is read-only and spawnMarble retains nothing) -- the ratchet-tolerated
+  // kind, since the alternative is a reader re-deriving that safety argument.
+  // 8064 -> 8079: an EXACT cheap reject in pairContact before the wrap. The
+  // wrap-normalise ran for every ordered pair on every relaxation pass (20 cars
+  // = 190 pairs x 5 passes = ~950 calls per physics step) and a 3M-pair
+  // equivalence sweep put acceptance at 0.18%, so ~99.8% of those two float
+  // modulos existed only to prove "not touching". The growth is the comment
+  // carrying the proof -- that |wrapped| <= LCAR iff |dProg| <= LCAR or
+  // |dProg| >= L - LCAR, hence the new test discards exactly the same pairs in
+  // the same order. Without that written down the next reader cannot tell an
+  // exact reject from a conservative pre-filter, and this sits inside collision
+  // resolution where a wrong guess changes racing.
   // Merged the range-pass branch (SCALE consts + comments) with deploy's
   // 8050-era work — the file carries both sides' lines, so neither side's
   // number fits it. Set from the merged file: 8054.
-  "js/game.js": 8054,
+  // MERGED AGAIN: both lineages raised this over the same window (8079 here
+  // for the pairContact proof, 8054 on the deploy side for the range-pass
+  // work). The file carries both sides' lines, so neither number fits it —
+  // set FROM the merged file, the resolution this file already records twice.
+  "js/game.js": 8083,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
