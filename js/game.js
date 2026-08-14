@@ -4722,7 +4722,21 @@ const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // thin passes through to it, kept so every call site here reads unchanged.
 function ltKey() { return ltStore.key(); }
 function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
-function setLightTune(id, v) { return ltStore.set(id, v); }
+function setLightTune(id, v) {
+  // A deliberate re-enable of PER-CHUNK LAMPS clears the crash latch. It is set
+  // on a real context loss (js/render/glx.js) and persisted so a reboot into the
+  // same config cannot crash-loop — but nothing else cleared it, so one transient
+  // display reset disabled the feature forever and the slider silently did
+  // nothing. Here at the EDIT (not in the render loop, which only runs the
+  // per-chunk path at night) a RISING EDGE from 0 to a positive value is the
+  // player choosing to switch it back on — informed, one gesture at a time — so
+  // it is the honest reset. The tier gate still protects a governed device.
+  if (id === "perChunkLights" && +v > 0 && !(+LT[id] > 0) && _perChunkOff) {
+    _perChunkOff = false;
+    try { localStorage.removeItem("apex26.perChunkOff"); } catch (_) { /* no storage: the in-memory clear stands for this session */ }
+  }
+  return ltStore.set(id, v);
+}
 function persistLightTune() { ltStore.persist(); }
 // Spread the on-screen condition to every other track at the same time+weather
 // ("edits" = this profile's overrides only, "look" = every live value), and the
