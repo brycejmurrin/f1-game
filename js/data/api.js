@@ -394,9 +394,11 @@ const F1API = (function () {
           // reads that as the number 1 — so every lapped car in a race was
           // shown on the LIVE tab as a one-SECOND gap, with a near-zero gap
           // bar to match. A lap down is not a time gap and must not be
-          // rendered as one: report "no timed gap" instead.
+          // rendered as one: pass the label through as a STRING (null would
+          // be indistinguishable from missing data) and let the renderer
+          // show it without a bar.
           const raw = latest[k].gap_to_leader;
-          out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? null : num(raw);
+          out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
         }
       }
       return out;

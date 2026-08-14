@@ -137,8 +137,13 @@
           if (onTrack(bx, bz, 40)) continue;
           // Rows climbing the slope: each row further back also sits higher,
           // which is what makes a favela read as built on a hill rather than
-          // as a housing estate on a flat.
-          for (let row = 0; row < 7; row++) {
+          // as a housing estate on a flat. `climb`/`back` are a hand-authored
+          // ramp, not a real terrain sample (there is no height query for the
+          // freeform mountain mesh out here) — capped at 6 rows because the
+          // 7th row's extrapolation walked one specific (c=5,row=6) box past
+          // the massif's actual surface and left it floating 58 m above
+          // anything solid.
+          for (let row = 0; row < 6; row++) {
             const climb = row * 9.5;
             const back = row * 13;
             for (let i = 0; i < 9; i++) {
@@ -152,12 +157,15 @@
               const w = 7 + h * 4, d = 7 + (1 - h) * 4;
               addBox(out, [wx, y, wz], [w, hh, d], SKIN[(c * 5 + row * 3 + i) % SKIN.length]);
               // Flat roof slab, water tank, and a whip antenna. At this range
-              // the roof clutter is most of the visible texture.
+              // the roof clutter is most of the visible texture. addCyl's
+              // position argument is its BASE, not its centroid (see the
+              // addCyl note in js/track/geom.js) — seat these on the roof
+              // top rather than centring them on it.
               addBox(out, [wx, y + hh / 2 + 0.3, wz], [w + 0.8, 0.5, d + 0.8], ROOF);
               if (h > 0.42)
-                addCyl(out, [wx + 1.6, y + hh / 2 + 1.6, wz - 1.2], 1.1, 2.0, TANK, 6);
+                addCyl(out, [wx + 1.6, y + hh / 2 + 0.6, wz - 1.2], 1.1, 2.0, TANK, 6);
               if (h > 0.72)
-                addCyl(out, [wx - 1.8, y + hh / 2 + 2.4, wz + 1.4], 0.12, 4.0,
+                addCyl(out, [wx - 1.8, y + hh / 2 + 0.4, wz + 1.4], 0.12, 4.0,
                   [0.72, 0.72, 0.74], 4);
             }
           }

@@ -166,8 +166,14 @@
         modelGroup("suzuka-motopia-arrival-gate", {
           center: gc, size: [14, 10.5, 4], basis: gb,
         }, (stage) => {
-          addBox(stage, vadd(g.c, g.r, -5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
-          addBox(stage, vadd(g.c, g.r,  5.5), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          // addBox is centre-anchored; these two passed g.c directly as the
+          // centre with no height/2 lift, so each pillar's centre sat AT
+          // grade — half its 8.5 m height buried, the standing half topping
+          // out at 4.25 (measured via float-audit as floating 7-9 m clear
+          // of ground, and disconnected from the crossbeam at 8.2 anyway).
+          // Lifted to stand base-on-grade: centre = g.c + half-height.
+          addBox(stage, vadd(vadd(g.c, g.r, -5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
+          addBox(stage, vadd(vadd(g.c, g.r,  5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
           addBox(stage, vadd(g.c, g.u, 8.2), [13.2, 1.5, 2.2], neonRed, gb);
           addBox(stage, vadd(g.c, g.u, 9.5), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
         }, { required: true });
@@ -800,7 +806,13 @@
               addCyl(stage, vadd(vadd(hc, a.t, t), a.u, -1.7), 0.22, 3.4, TIMB, 5, b);
             }
             stage._mat = 0;
-            addPrism(stage, vadd(hc, a.u, 2.7), [8.6, 2.6, 10.4], ROOF, b);
+            // addPrism is BASE-anchored (js/track/geom.js addPrism note);
+            // the wall box (hc, height 3.4) tops out at hc+1.7, so the old
+            // hc+2.7 base left the roof 1.0 m clear of the wall it should
+            // cap (measured via float-audit). Based at hc+1.5 — a 0.2 m
+            // overlap into the wall/fascia, matching the fascia board
+            // immediately below.
+            addPrism(stage, vadd(hc, a.u, 1.5), [8.6, 2.6, 10.4], ROOF, b);
             addBox(stage, vadd(hc, a.u, 1.5), [8.8, 0.34, 10.6], TIMB, b);
           });
         }

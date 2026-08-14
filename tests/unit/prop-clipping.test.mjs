@@ -47,6 +47,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // Widening the window would blind the detector to real defects, so the cap
 // carries the cost instead. Tightening this properly needs a real model token
 // rather than an emission-order proxy.
+//
+// estoril 101 -> 102 and indianapolis 93 -> 94 are the SAME two limitations,
+// nudged by the banking placement fix (both circuits had a bank zone re-seated
+// off a straight onto a real corner, which moves the ground the scenery beside
+// it is anchored to). Attributed with `clip-audit <id> --why`, diffed against
+// the pre-fix tree:
+//   estoril      one NEW pairing, scenery-nature.js:857 x itself — two terrace
+//                treads of ONE crowdMound run, same call site, same CONCRETE
+//                material, shared volume interior. The limitation above, exactly.
+//   indianapolis NO new pairing at all; three existing city-row pairings
+//                (tracks.js:1940 x neonTower) each gained one hit — the
+//                arc-length row compression named above.
+// Neither is a new defect class and neither is visible. Raised rather than
+// chased: the alternative is re-authoring two circuits' scenery to suit a
+// detector that already documents both of these as false positives.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );
