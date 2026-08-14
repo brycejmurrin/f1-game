@@ -6,7 +6,15 @@ async function openImageTuner(page) {
   await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
-  await page.evaluate(() => window.__apex.park(0.1));
+  // STOP THE RENDER LOOP. Nothing in this file looks at the 3D scene — it drives
+  // the tuner panel and reads localStorage — but the loop costs ~1-2 s per frame
+  // on SwiftShader and every page.evaluate queues behind it. That is not merely
+  // slow, it is a CORRECTNESS problem here: js/game/tuner.js:131 disarms COPY ALL
+  // after 20 s, so when the assertion and the localStorage read between the two
+  // clicks outran that timer the second click RE-ARMED instead of firing, and the
+  // chip read "COPY TO 39?" where the test wanted "COPIED 39 ✓". Freeing the main
+  // thread removes the race and the timeouts in one move.
+  await page.evaluate(() => { window.__apex.headless(true); window.__apex.park(0.1); });
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
@@ -15,7 +23,15 @@ async function openImageTuner(page) {
 }
 
 async function reopenImageTuner(page) {
-  await page.evaluate(() => window.__apex.park(0.1));
+  // STOP THE RENDER LOOP. Nothing in this file looks at the 3D scene — it drives
+  // the tuner panel and reads localStorage — but the loop costs ~1-2 s per frame
+  // on SwiftShader and every page.evaluate queues behind it. That is not merely
+  // slow, it is a CORRECTNESS problem here: js/game/tuner.js:131 disarms COPY ALL
+  // after 20 s, so when the assertion and the localStorage read between the two
+  // clicks outran that timer the second click RE-ARMED instead of firing, and the
+  // chip read "COPY TO 39?" where the test wanted "COPIED 39 ✓". Freeing the main
+  // thread removes the race and the timeouts in one move.
+  await page.evaluate(() => { window.__apex.headless(true); window.__apex.park(0.1); });
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
@@ -172,6 +188,9 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   expect(await page.evaluate(() => window.__apex.lightTune().gammaG)).toBe(bounds.gammaGMin);
   await page.reload();
   await page.waitForFunction(() => window.__apex?.race);
+  // headless() does not survive the reload — set it again before the SECOND
+  // build, or that one renders at full cost and undoes half the saving.
+  await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null);
   expect(await page.evaluate(() => window.__apex.lightTune().gainB)).toBeCloseTo(1.25);
