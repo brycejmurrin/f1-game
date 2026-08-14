@@ -587,6 +587,96 @@ ERROR: 0:1: 'undefined' : syntax error` with no hint of the real cause.
 `node --check js/render/shaders/*.js` finds it in under a second and should be
 the first thing run after any shader edit.
 
+### 2026-08-14, third round: two defects that made the governor's ladder DEAD CODE
+
+The biggest finding of the whole exercise, and the one most worth the method
+note: it was found by reading a control loop as arithmetic, and settled in
+thirty seconds by a float trace.
+
+**`js/game/perf.js` — with `_autoRes` on (the shipped default) the governor
+could scale down and then did nothing, forever. No tier was ever shed by
+evidence.** The structure was:
+
+```js
+if (_autoRes && cur > 0.5) { if (_gfx.setRenderScale(cur - 0.1)) {…} }
+else if (…) { /* shed a feature */ }
+```
+
+Step 1.0 down by 0.1 in IEEE doubles and you get
+`1 → 0.9 → 0.8 → 0.7000000000000001 → 0.6000000000000001 → 0.5000000000000001`.
+That last value is **one ULP ABOVE 0.5**, so `cur > 0.5` is true forever. The
+request then clamps to 0.5 and `js/render/glx.js:589` rejects it against its own
+`Math.abs(s - renderScale) < 0.02` dead zone — and because the outer `if` was
+ENTERED, the `else if` that sheds a feature was **never evaluated**. Only the
+GRAPHICS preset's `_userTier` still bit, because that is a separate term in
+`tier()`'s `max()`.
+
+**The same epsilon closed the door from the other side.** Climbing back at
++0.06 reaches `0.9800000000000004`; the next request, `Math.min(1, cur + 0.06)`
+= 1, is a delta of `0.019999999999999574` — just inside the dead zone. The scale
+pinned at 0.98 for the session, and since the tier-restore branch sat under
+`if (_autoRes && cur < 1)`, **a shed feature could never come back either.** That
+is the one-way door the `RESTORE_UNDER = 4.2` post-mortem in this file's own
+header was written to close, reintroduced by a float epsilon.
+
+**Fixes.** Ask the renderer instead of predicting it — `setRenderScale`'s boolean
+already IS the "lever exhausted" signal — and fall through to the ladder when it
+returns false. On the restore side, snap to 1 **a step early**: the last 0.02 of
+range is unreachable by any step starting inside it, so `(1 - cur) < 0.09 ? 1 :
+cur + 0.06` takes it in one 0.08 move that clears the zone.
+
+**A/B, same device, same frames, rungs that genuinely save 3 ms:**
+**before, final tier 0; after, final tier 4.**
+
+**Why the suite did not catch it, which is the transferable part.**
+`tests/unit/perf-governor.test.mjs` faked `setRenderScale` as `if (s === scale)
+return false` — **not the shipped contract**, which rejects any change under
+0.02. Both defect values (0.5000000000000001 and 0.9800000000000004) live inside
+the real dead zone and outside `s === scale`. A second fake pinned the floor at
+exactly `0.5`, a value the real down-chain never produces, so the test written to
+cover "scale floor hit" tested a state that cannot occur. Both fakes now mirror
+`glx.js:587-593` verbatim, and the recovery test fails on the old code.
+**A fake that is easier than the contract will hide exactly the bugs the
+contract's hard edges cause.**
+
+**Related, and fixed in the same pass: `envReady` is a one-way latch.**
+`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx.js`
+sets `envReady = true` on a completed cube and only ever clears it in
+`envProbeReset()` — whose sole caller was the track switch. So `uEnvStr` stayed
+at `carEnvCube` (0.3 on desktop) and every car-paint fragment kept paying a
+4x-anisotropic dependent `textureLod` on a **frozen** cube. Worse than the wasted
+fetch: `js/game/perf.js` documents tier 1 as *"env probe off (car paint falls
+back to the analytic sky mirror)"* and **that fallback never happened** — the
+paint mirrored wherever the car was when the last 6-face cycle completed. One
+line at the gate now resets it, and the dev-API `envProbe` status field reports
+honestly as a side effect.
+
+### A latent bug found while costing the ribbon cull — DO NOT flip these knobs
+
+`docs/PERF-FINDINGS.md` §3 (and an audit pass) described
+`track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
+That is wrong and the correction matters, because the suggested action was to
+reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carries
+`data.trk`** — the fifth attribute `createMesh` builds at `js/render/glx.js:622`
+for road-marking coordinates. Without it the shader reads the generic default,
+`float hw = vTrk.z` is 0, and `lit.js:533`'s `if (hw <= 0.5) return;` fires — its
+own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
+and marking would silently disappear.** It is invisible today only because
+`LT.roadChunkLamps` defaults to 0 and `perChunkLights` is tier-shed. Teaching
+`createChunkedMesh` about `trk` is step 0 of any ribbon-cull work and is a
+standalone bug fix worth landing on its own.
+
+### Stale entry corrected: the env-probe cull already shipped
+
+§3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
+shipped as **`PerfTry.envCull`**, `ENV_CULL_M = 300`, `js/render/glx.js:912-922`,
+default OFF, applied as a `min` and never an override, with the counted
+justification in `js/game/perf-try.js`. What remains true is the sharpener:
+`frame.cullDist` is read in exactly one place, inside the chunked path, so the
+switch **cannot remove a single road or terrain triangle** from the probe — it
+reaches props and glass only. That makes it a synergy argument for chunking the
+ribbons, not an independent item.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

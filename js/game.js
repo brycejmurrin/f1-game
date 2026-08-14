@@ -6068,7 +6068,7 @@ function render(dt) {
       drawWorldMeshes(frame, night, wet, _floodEmit, false);
       gfx.envFaceEnd(_envFace);
     }
-  }
+  } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
