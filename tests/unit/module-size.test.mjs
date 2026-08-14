@@ -247,7 +247,11 @@ const CEILINGS = {
   // — so the ckpt branch carries its own ring + pillar built against the eye,
   // plus the comment recording why the two cannot share. A real feature behind
   // a real switch, raised deliberately.
-  "js/car/car3d.js": 2723,
+  // 2723 -> 2734: a cockpit-only front wing. The shared cascade is invisible
+  // from a seated eye (12.9 deg down, under the hood crest at 9.8 — 0.01% of
+  // frame), and the first-person body is its own mesh, so it carries its own
+  // wing at a height the driver can actually see. Raised deliberately.
+  "js/car/car3d.js": 2734,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
