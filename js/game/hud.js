@@ -146,6 +146,19 @@ function fitHud() {
     if (!r.width) return 0;
     return r.width / (el.currentCSSZoom || 1);
   };
+  // The CONTENT extent of a container, for the ones that can be compressed below
+  // it. Union of the children's rects, in the container's own unzoomed units.
+  const span = (el) => {
+    if (!el) return 0;
+    let lo = Infinity, hi = -Infinity;
+    for (const c of el.children) {
+      const r = c.getBoundingClientRect();
+      if (!r.width) continue;
+      if (r.left < lo) lo = r.left;
+      if (r.right > hi) hi = r.right;
+    }
+    return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
+  };
   const top = wide(document.querySelector(".hud-top"));
   if (!top) { _fitKey = ""; return; }   // menu layer: nothing laid out, measure again next tick
   const half = window.innerWidth / 2;
@@ -155,7 +168,14 @@ function fitHud() {
   const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
   const capTop = half / Math.max(left + top / 2, right + top / 2, 1);
-  const bottom = wide(document.querySelector(".hud-bottom"));
+  // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
+  // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
+  // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
+  // children overflow it. Measuring the container read ~200px narrower than the
+  // content and the cap came out permissive enough to leave #hud-gearbox and
+  // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
+  // reported anywhere, which is how a wrong measurement hides.
+  const bottom = span(document.querySelector(".hud-bottom"));
   const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
   const set = (prop, cap) => {
     if (cap >= scale) root.style.removeProperty(prop);   // fits: the player's number, untouched
