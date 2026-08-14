@@ -55,9 +55,18 @@
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hud-gaps {
   position: absolute;
-  top: calc(64px + var(--sat) / var(--hud-scale));
-  left: 50%; transform: translateX(-50%);
-  text-align: center; font-size: var(--fs-micro); color: #ddd;
+  /* Docked beside the MINIMAP (top-left), not centre-screen: the centre slot
+     under the POS/LAP row put the one readout a racing eye checks most in the
+     middle of the windscreen. Anchored to the minimap's right edge — the 130px
+     is minimap left (10px) + width (112px) + 8px gap, and the two responsive
+     overrides below re-derive it whenever the minimap changes size. Verified
+     against hud-layout.spec's full notched/small landscape matrix: the widget
+     clears .hud-top with the 59px notch inset applied. (A first reading of
+     that spec's diff blamed this placement for a collision; the real pair was
+     the pre-existing #hud-sectors+pausebtn overlap fixed below.) */
+  top: calc(8px + var(--sat) / var(--hud-scale));
+  left: calc(130px + var(--sal) / var(--hud-scale));
+  text-align: left; font-size: var(--fs-micro); color: #ddd;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   background: rgba(8,8,14,0.62); padding: 2px 10px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
@@ -155,7 +164,12 @@
 @media (prefers-reduced-motion: reduce) { #hud-flag.flag-vsc { animation: none; } }
 #hud-sectors {
   position: fixed;
-  top: calc(56px + var(--sat) / var(--hud-scale));
+  /* 62px, not 56: the pause button above ends at 8px + --tap-min (~44px) = 52,
+     and the fs-micro token pass grew its box to exactly that line — measured
+     touching at y=52 and overlapping under touch tap sizing, which is the
+     #hud-sectors+pausebtn pair hud-layout.spec flags on every landscape shape.
+     62 leaves ~10px of air under the button at every scale. */
+  top: calc(62px + var(--sat) / var(--hud-scale));
   right: calc(10px + var(--sar) / var(--hud-scale));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);

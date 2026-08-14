@@ -34,17 +34,17 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // zero MUST mean "the framing js/game/cameras.js shipped", so RESET is exact
 // and a value only ever needs storing when the player actually moved it.
 const CAM_TUNE_DEFS = [
-  { id: "height", label: "HEIGHT",   min: -3,  max: 5,  step: 0.05, def: 0, unit: "m",
+  { id: "height", label: "HEIGHT",   min: -6,  max: 10, step: 0.025, def: 0, unit: "m",
     help: "Raise or lower the camera eye. The aim stays on the car, so raising it looks further down over the nose." },
-  { id: "dist",   label: "DISTANCE", min: -6,  max: 12, step: 0.05, def: 0, unit: "m",
+  { id: "dist",   label: "DISTANCE", min: -12, max: 24, step: 0.025, def: 0, unit: "m",
     help: "Pull the eye back (+) or push it in (−) along the view direction. On the onboard cams this slides the seat fore/aft." },
-  { id: "side",   label: "SIDE",     min: -6,  max: 6,  step: 0.05, def: 0, unit: "m",
+  { id: "side",   label: "SIDE",     min: -12, max: 12, step: 0.025, def: 0, unit: "m",
     help: "Offset the eye right (+) or left (−) of the view axis for a three-quarter angle on the car." },
-  { id: "pitch",  label: "PITCH",    min: -25, max: 25, step: 0.5,  def: 0, unit: "°",
+  { id: "pitch",  label: "PITCH",    min: -45, max: 45, step: 0.25, def: 0, unit: "°",
     help: "Tilt the aim up (+) or down (−). Positive shows more sky and horizon, negative more road." },
-  { id: "yaw",    label: "YAW",      min: -45, max: 45, step: 0.5,  def: 0, unit: "°",
+  { id: "yaw",    label: "YAW",      min: -90, max: 90, step: 0.25, def: 0, unit: "°",
     help: "Pan the aim right (+) or left (−) without moving the eye." },
-  { id: "fov",    label: "FOV",      min: -25, max: 25, step: 0.5,  def: 0, unit: "°",
+  { id: "fov",    label: "FOV",      min: -35, max: 35, step: 0.25, def: 0, unit: "°",
     help: "Widen (+) or tighten (−) the field of view on top of the mode's own speed-scaled FOV." },
   // CORNER LEAD is not a geometric offset like the six above — CamTune.apply()
   // never touches it. js/game/cameras.js reads it directly in the chase/far
@@ -53,7 +53,7 @@ const CAM_TUNE_DEFS = [
   // and swings INTO turns. 0 = locked to the car (the shipped free-world rig);
   // 1 = the old corner-following chase. Only chase/far read it — `modes` gates
   // which cameras show the slider.
-  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.05, def: 0, unit: "", modes: ["chase", "far"],
+  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0, unit: "", modes: ["chase", "far"],
     help: "Let the chase camera lead and swing INTO corners like the classic chase. 0 stays locked behind the car; higher follows the bend. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
