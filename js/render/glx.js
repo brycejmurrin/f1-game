@@ -317,6 +317,32 @@ const GLX = (function () {
         try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* No storage (Safari private mode) or quota full: the probe simply stays on next boot, which is the pre-existing behaviour — a failed latch must not also break the loss handler. */ }
         try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* Same: without storage the knob stays as the player left it and the tier gate is the only defence left. Nothing here may throw — this runs inside webglcontextlost. */ }
       }
+      // SELF-HEAL. The restore path below reloads on "webglcontextrestored" —
+      // but that event is NOT guaranteed to fire. The browser only restores a
+      // context it decides to restore, and on a driver reset or a GPU-process
+      // kill it frequently never comes. In that case every frame after this one
+      // is a no-op (every entry point tests _ctxLost), so the game sits on a
+      // dead black canvas, silently, forever. That is a player reporting the
+      // game "crashes when I try to play" with NOTHING in the console — no
+      // exception, so index.html's error overlay never paints either.
+      //
+      // So reload on a timer instead of waiting for a promise the browser never
+      // made. The delay lets a restore land first if one is coming (the handler
+      // below wins the race and reloads immediately); 1.2 s is long enough for
+      // that and short enough that the player reads it as a hitch.
+      //
+      // Bounded, because a device that dies on EVERY boot must not be trapped in
+      // a reload loop: two automatic recoveries per tab session, then stop and
+      // leave the dead canvas rather than cycling forever. The latches above
+      // make each retry lighter than the last, which is what gives the retry a
+      // reason to succeed. sessionStorage (not local) so a genuinely new visit
+      // always gets its two attempts back.
+      try {
+        var _rk = "apex26.ctxLostReloads";
+        var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
+        sessionStorage.setItem(_rk, String(_n));
+        if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
+      } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
     }, false);
     canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
 
