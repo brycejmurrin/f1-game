@@ -968,7 +968,14 @@ function projectHazard(track, x, y, z, hint) {
     Tracks.sample(track, pr.s, _smp);
     if (pr.dist <= (_smp.hw || 6) && Math.abs(y - _smp.p[1]) <= HAZARD_Y_TOL) return pr;
   }
-  const pr = Tracks.project(track, x, z);
+  // The fallback now passes the body's HEIGHT. Without it this search is purely
+  // XZ, so on the one circuit that crosses itself it was a coin toss between the
+  // legs — exactly the case the hint above exists to avoid, reappearing on the
+  // path taken when the hint is NOT trusted. Measured on suzuka: a body on the
+  // upper deck, displaced toward the lower road, projected onto the wrong leg at
+  // every offset tried (5/5), landing ~2368 m away in arc; with the height it is
+  // right at all of them.
+  const pr = Tracks.project(track, x, z, null, y);
   Tracks.sample(track, pr.s, _smp);
   return pr;
 }
