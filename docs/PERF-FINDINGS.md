@@ -791,8 +791,44 @@ of it, for data where a session uses exactly one file. But V8 compile of all 148
 files measured **97.3 ms total** (25.8 ms for the circuits) and executing all 40
 circuit IIFEs is **2.5 ms** — so parse+execute of the circuit wall is ~1 % of a
 2299 ms render delay, not the bulk of it. "Render delay" is the browser's bucket
-for everything between TTFB and the paint; here that is 148 serialised
-render-blocking fetches and eager top-level work. Two eager costs found that are
+for everything between TTFB and the paint; here that is serial EXECUTION of the
+wall plus eager top-level work.
+
+> **CORRECTION to the sentence above, which first read "148 serialised
+> render-blocking fetches".** That was wrong, and wrong in a way that would send
+> the next person after the request COUNT instead of the execution. Classic
+> parser-blocking scripts are still **downloaded in parallel** — the preload
+> scanner keeps scanning and triggers the fetches ahead of the parser
+> (web.dev, *Deep dive into the murky waters of script loading*), and GitHub
+> Pages serves HTTP/2, so they multiplex on one connection. Only EXECUTION is
+> serial and ordered. This also kills `defer` as a lever from a second
+> direction, on top of the nine `readyState === "loading"` guards below:
+> `defer` cannot fix a serialisation that is not happening.
+
+**The `?v=N` bump throws away Chrome's code cache for all 148 scripts, every
+deploy.** v8.dev's *Code caching for JavaScript developers*: "Code caches are
+(currently) associated with the URL of a script… changing the URL of a script
+(**including any query parameters!**) creates a new resource entry in our
+resource cache, and with it a new cold cache entry." CLAUDE.md mandates bumping
+EVERY `?v=N` after ANY js/css change, so a one-line CSS edit costs every
+returning player a full re-download and a cold compile of the whole wall.
+Per-file content hashing would fix it and is a convention change, not a code
+change — but it touches the index.html/manifest guard and the `version.json`
+shell guard, so it is its own commit.
+
+**And the same article reframes the 97.3 ms figure.** `sw.js` precaches inside
+the `install` event, and V8 treats that path specially: "the code cache is
+immediately created when the resource is put into the service worker cache. In
+addition, we generate a **'full' code cache** — we no longer compile functions
+lazily, but instead compile everything… at the cost of increased memory use."
+Both preconditions hold here (classic scripts, UTF-8). So 97.3 ms is a LAZY
+compile number, and the installed-PWA path eagerly compiles all 5.64 MB —
+including the 346 KB of dev surface no player reaches and all 40 circuit files.
+That is a MEMORY cost on exactly the device class the crash sentinel exists for,
+and it is an argument for trimming the eager wall that has nothing to do with
+parse time. Not measured here — attributed to v8.dev.
+
+Two eager costs found that are
 NOT bytes: `js/track/tracks.js` builds Catmull-Rom control points for **all 40**
 circuits at boot (**24.0 ms**, an order of magnitude more than parsing them),
 and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** that no
