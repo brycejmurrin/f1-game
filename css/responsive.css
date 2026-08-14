@@ -133,11 +133,11 @@ body.desktop #pm-calib { display: none !important; }
   .hud-label { font-size: var(--fs-micro); }
   /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
      by the base rule. */
-  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-scale)); }
+  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-z)); }
   /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
      bottom sits at 68 in the widget's own zoomed units against 58 on the base
      ladder, so the dropped state clears by the same 4px. */
-  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-scale)); }
+  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-z)); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -172,7 +172,7 @@ body.desktop #pm-calib { display: none !important; }
      393px-tall phone and no placement here can fix that: at 852x393 @200%
      `#minimap` already overlaps `.hud-top` with `.hud-gaps` removed from the
      comparison entirely. */
-  .hud-gaps { left: calc(114px + var(--sal) / var(--hud-scale)); }
+  .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
   .hud-top { gap: 6px; }
   .hud-box { padding: 4px 7px; }
 }

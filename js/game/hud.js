@@ -105,6 +105,86 @@ function gapForm() {
     : (arrow, code, t) => arrow + " " + code + " +" + t + "s";
 }
 
+// THE HUD FITS ITSELF TO THE VIEWPORT.
+//
+// Every cluster is anchored in its own corner and multiplied by HUD SIZE, and
+// nothing in the CSS relates a cluster's size to the SCREEN's — so past ~150% on
+// a small screen the clusters simply exceed it. Surveyed across 5 shapes x 5
+// sizes: `#minimap` runs into `.hud-top` on 667x375 from 150% and on 1280x800 at
+// 200%; `#hud-gearbox`/`#hud-aero` run OFF-SCREEN on 1280x800 from 175%. 1920x1080
+// is clean at every size — which is the tell. The defect is a RATIO, not a size.
+//
+// So each band renders at min(player's HUD SIZE, what fits). Two bands, because
+// they run out of room at different points; the top band caps as ONE unit so the
+// map, the gap readout and the centred POS row keep their relationship.
+//
+//   top band   the map and the sector box grow from the edges while the centred
+//              POS row grows from the middle, so the binding constraint is
+//              half the screen against (corner cluster + half the POS row).
+//   bottom     one centred row; it just has to fit the width.
+//
+// INTRINSIC WIDTHS ARE MEASURED, NOT GUESSED: `rect.width / currentCSSZoom` is
+// the cluster's width at zoom 1, which is invariant under the cap. That is what
+// makes this stable rather than a feedback loop — capping changes the rect and
+// the zoom by the same factor, so the next measurement returns the same number.
+const FIT_AIR = 10;              // px of daylight required between two clusters
+let _fitKey = "", _fitWait = 0;
+function fitHud() {
+  const root = document.documentElement;
+  const scale = +root.style.getPropertyValue("--hud-scale") || 1;
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale;
+  // Resize and HUD SIZE are the obvious inputs and get an immediate re-measure.
+  // The slow poll on top of them is for the ones a fingerprint cannot see: the
+  // gap readout is EMPTY at the green light and ~110px wide once it has rivals
+  // to report, and the POS row widens from "1/22" to "12/22". Four rect reads at
+  // 2Hz — updateHud itself runs at ~10Hz — is nothing next to the frame.
+  if (key === _fitKey && --_fitWait > 0) return;
+  _fitKey = key; _fitWait = 5;
+  const wide = (el) => {
+    if (!el) return 0;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return 0;
+    return r.width / (el.currentCSSZoom || 1);
+  };
+  // The CONTENT extent of a container, for the ones that can be compressed below
+  // it. Union of the children's rects, in the container's own unzoomed units.
+  const span = (el) => {
+    if (!el) return 0;
+    let lo = Infinity, hi = -Infinity;
+    for (const c of el.children) {
+      const r = c.getBoundingClientRect();
+      if (!r.width) continue;
+      if (r.left < lo) lo = r.left;
+      if (r.right > hi) hi = r.right;
+    }
+    return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
+  };
+  const top = wide(document.querySelector(".hud-top"));
+  if (!top) { _fitKey = ""; return; }   // menu layer: nothing laid out, measure again next tick
+  const half = window.innerWidth / 2;
+  // The left corner is the map plus the gap readout beside it, and the right is
+  // the sector box; each competes with half the POS row for half the screen.
+  const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
+  const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
+  const right = wide(els.hudSectors) + 10 + FIT_AIR;
+  const capTop = half / Math.max(left + top / 2, right + top / 2, 1);
+  // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
+  // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
+  // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
+  // children overflow it. Measuring the container read ~200px narrower than the
+  // content and the cap came out permissive enough to leave #hud-gearbox and
+  // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
+  // reported anywhere, which is how a wrong measurement hides.
+  const bottom = span(document.querySelector(".hud-bottom"));
+  const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  const set = (prop, cap) => {
+    if (cap >= scale) root.style.removeProperty(prop);   // fits: the player's number, untouched
+    else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));
+  };
+  set("--hud-z-top", capTop);
+  set("--hud-z-bot", capBot);
+}
+
 function updateHud(force) {
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
@@ -119,6 +199,7 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
+  fitHud();                    // below the throttle: this reads layout, per TICK not per frame
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
