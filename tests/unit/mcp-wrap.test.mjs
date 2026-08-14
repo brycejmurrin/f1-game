@@ -31,11 +31,17 @@ test("tools/requirements-mcp.txt pins the official SDK", () => {
   assert.match(req, /^mcp>=/m);
 });
 
-test(".mcp.json registers apex-probes via mcp-wrap.py serve", () => {
+test(".mcp.json keeps chrome-devtools + tinyfish and adds apex-wrap", () => {
   const cfg = JSON.parse(readFileSync(MCP_JSON, "utf8"));
-  assert.ok(cfg.mcpServers["apex-probes"], "expected apex-probes server entry");
-  assert.match(cfg.mcpServers["apex-probes"].command, /python/);
-  assert.deepEqual(cfg.mcpServers["apex-probes"].args, [
+  assert.deepEqual(cfg.mcpServers.tinyfish, {
+    url: "http://127.0.0.1:3711/mcp",
+  });
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"], {
+    command: "tools/chrome-devtools-mcp.sh",
+    args: ["run"],
+  });
+  assert.match(cfg.mcpServers["apex-wrap"].command, /python/);
+  assert.deepEqual(cfg.mcpServers["apex-wrap"].args, [
     "tools/mcp-wrap.py",
     "serve",
   ]);

@@ -8,7 +8,7 @@ Python SDK. Every upstream tool is exposed unchanged under a prefix:
   tinyfish_<tool>  tinyfish HTTP proxy (http://127.0.0.1:3711/mcp)
 
 Transports:
-  python3 tools/mcp-wrap.py serve            # stdio (Cursor / .mcp.json)
+  python3 tools/mcp-wrap.py serve            # stdio (.mcp.json → apex-wrap)
   python3 tools/mcp-wrap.py serve --http 3720  # Streamable HTTP at /mcp
 
 Shell helpers (no host required):
