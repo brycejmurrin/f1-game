@@ -608,6 +608,23 @@ body.hud-hidden #hud-restore { display: block; }
    scroll container, and multicol inside a height-constrained scroller lays its
    overflow columns out SIDEWAYS — it fragmented the help into seven columns
    2371px wide instead of two. A grid keeps the flow vertical. */
+/* TOO NARROW FOR TWO COLUMNS AT ALL — stack each term above its description.
+   A `max-content` term column plus a description column has a minimum width the
+   sheet cannot always give it, and `.sheet-body` scrolls on Y only
+   (`overflow-x: hidden`), so the surplus is not reachable: it is cut. Measured
+   at 393x852 with UI SIZE at 150%, where the sheet is 246 CSS px — the pair
+   wanted 367px inside a 235px scroller and took 31 `.key` chips off the right
+   edge with it, the worst by 38px. Floors on the tracks cannot help once the
+   content's own minimum exceeds the box; the SHAPE has to change.
+   300px, not 400: the same sheet at 100% is 369px and fits two columns with
+   nothing clipped (measured), so the threshold sits between the shape that
+   works and the one that does not, and costs the working case nothing. */
+@container sheet (max-width: 300px) {
+  #howtoplay dl { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked, a rule on BOTH halves draws a line through the middle of an entry;
+     the divider belongs to the term that starts it. */
+  #howtoplay dd { border-top: none; padding-top: 0; }
+}
 @container sheet (min-width: 620px) {
   #howtoplay dl {
     grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
