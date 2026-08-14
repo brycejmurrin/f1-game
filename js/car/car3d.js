@@ -1558,21 +1558,18 @@ const Car3D = (function () {
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
     // stripe + shark fin below) HDR at the top tier — same ">1 albedo glows
     // at night" convention PANEL already uses; plain team colour otherwise.
-    // Cockpit view: the hood is the VANITY PANEL the driver looks along — the
-    // crest that reads as "there is a car under me" in an onboard. It must rise
-    // ABOVE the chassis deck (monocoque tops out at y 0.545 at z 1.05) or it is
-    // dead geometry: measured at top 0.48 it rasterised 2631 px and lost every
-    // one of them, sandwiched between the coaming behind and the nose in front,
-    // so the part reported ZERO visible pixels (docs/OCCLUSION-PROBE.md §4).
-    // Narrow (w 0.36) so it is a spine, not a wall.
+    // Cockpit view: the hood is the VANITY PANEL the driver looks along. It must
+    // rise ABOVE the chassis deck (monocoque tops out at 0.545 at z 1.05) or it
+    // is dead geometry: at top 0.48 it rasterised 2631 px and lost every one,
+    // sandwiched between coaming and nose — ZERO visible pixels
+    // (docs/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.36, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
-    // Cockpit: the REAR station stops AHEAD of the steering wheel (game.js
-    // _rigT z 0.26) — eye, wheel, cowl, nose is the order the real parts sit in.
-    // It must also stay BELOW THE WHEEL'S TOP (rig y 0.56 + the wheel's own
-    // half-height x 0.80 = 0.69): it is further away, so an equal height puts it
-    // HIGHER on screen and draws straight over the wheel — measured, that is why
-    // the wheel once vanished behind a yellow slab. Top 0.54 here.
+    // Cockpit: the REAR station stops AHEAD of the wheel (game.js _rigT z 0.26)
+    // — eye, wheel, cowl, nose is the order the real parts sit in. It must also
+    // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
+    // further away, so equal height puts it HIGHER on screen and it draws over
+    // the wheel — measured, that is why the wheel once vanished. Top 0.54 here.
     const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.54, h: 0.12, t: 0.58 }
                     : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
@@ -1593,20 +1590,21 @@ const Car3D = (function () {
         // beside the eye and tapering down/outward toward the nose. The rear
         // headrest portion sits behind the camera and never renders, so the
         // visible span is the dash side that wraps the wheel.
-        // Crown heights beside the driver are REGULATION, not framing: the
-        // survival cell's upper edge runs Z 610 (headrest fixing, C12.6) to
-        // Z 695 (halo rear faces, C12.4.2) — docs/COCKPIT-DATUMS.md. At
-        // 0.56/0.58 the tub sat below that whole band and the driver read as
-        // perched ON the car. Above ~0.70 it starts eating the mirrors.
+        // Crown heights beside the driver are REGULATION: the survival cell's
+        // upper edge runs Z 610 (headrest fixing, C12.6) to Z 695 (halo rear
+        // faces, C12.4.2) — docs/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
+        // band entirely; 0.66/0.68 sat high in it and swallowed the front wing
+        // (0.62% -> 0.01% of frame). 0.62/0.64 is the band's lower end: still
+        // compliant, still enclosing, wing tips back. Above ~0.70 eats mirrors.
         addBlock(out, [
-          [s*0.30, 0.34, 1.50], [s*0.56, 0.26, 1.50], [s*0.54, 0.52, 1.46], [s*0.30, 0.56, 1.46],  // front (nose end, low)
-          [s*0.32, 0.40, 0.40], [s*0.55, 0.32, 0.40], [s*0.53, 0.66, 0.34], [s*0.32, 0.68, 0.34],  // rear (beside the driver, SHOULDER height)
+          [s*0.30, 0.34, 1.50], [s*0.56, 0.26, 1.50], [s*0.54, 0.50, 1.46], [s*0.30, 0.54, 1.46],  // front (nose end, low)
+          [s*0.32, 0.40, 0.40], [s*0.55, 0.32, 0.40], [s*0.53, 0.62, 0.34], [s*0.32, 0.64, 0.34],  // rear (beside the driver, SHOULDER height)
         ], c1);
         // Crown accent stripe: spans the wall's own z range at the mid-height of
         // its taper, so it rides the crown instead of hanging off the end.
-        addBox(out, s*0.45, 0.63, 0.85, 0.03, 0.03, 1.0, c2);
+        addBox(out, s*0.45, 0.59, 0.85, 0.03, 0.03, 1.0, c2);
         // Inner tub wall (dark carbon) facing the driver. Follows the crown up.
-        addBox(out, s*0.315, 0.52, 0.52, 0.02, 0.28, 0.60, INTAKE);
+        addBox(out, s*0.315, 0.49, 0.52, 0.02, 0.28, 0.60, INTAKE);
       }
       // Dash coaming: the padded rim across the FRONT of the cockpit opening, just
       // under the wheel, tying the two side walls together into a tub.
@@ -2094,7 +2092,7 @@ const Car3D = (function () {
     const mz = ckpt ? 0.92 : 0.24;
     const mx = (ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0);
     const msx = ckpt ? 0.54 : 0.30;
-    const mY = (ckpt ? 0.66 : 0.735) + (mSty === 2 ? -0.032 : 0);
+    const mY = (ckpt ? 0.678 : 0.735) + (mSty === 2 ? -0.032 : 0);
     // C14.2.2b: the reflective surface is 200mm WIDE x 50mm HIGH. The housing
     // was 32mm wide x 155mm tall — portrait, rotated 90 degrees from real.
     const mW = mSty === 1 ? 0.235 : 0.215;   // swept style: wider housing
@@ -2102,15 +2100,16 @@ const Car3D = (function () {
     for (const s of [-1, 1]) {
       // Tapered aero arm (wide at the tub, narrow at the housing) instead of a
       // flat box — real F1 mirror stalks are swept aero elements, not a plain post.
-      // C3.7.5: the Inner Stay "must intersect Mirror Body and Mid Chassis".
-      // The ckpt root is BURIED in the tub crown (0.5875 at z 0.92); it used to
-      // start at 0.68 — 17 cm above the crown, attached to nothing.
+      // C3.7.5: the Inner Stay "must intersect Mirror Body and Mid Chassis". The
+      // ckpt root is BURIED in the crown; it used to start at 0.68 — 17 cm above
+      // it, attached to nothing. Move the crown and this must move with it.
       const xi = s * (msx - 0.04), xo = s * mx;
-      const sB = ckpt ? 0.585 : 0.68;
-      const aY = mY - (ckpt ? 0.66 : 0.735);   // style drop carries into the stalk too
+      const sB = ckpt ? 0.53 : 0.68;    // root, BURIED in the crown (0.558 at z 0.92)
+      const sR = ckpt ? 0.10 : 0.04;    // rise: must span crown -> housing underside
+      const aY = mY - (ckpt ? 0.678 : 0.735);   // style drop carries into the stalk too
       addBlock(out, [
-        [xi, sB + aY, mz - 0.045], [xi, sB + aY, mz + 0.045], [xi, sB + 0.04 + aY, mz + 0.045], [xi, sB + 0.04 + aY, mz - 0.045],
-        [xo, sB + 0.03 + aY, mz - 0.02],  [xo, sB + 0.03 + aY, mz + 0.02],  [xo, sB + 0.06 + aY, mz + 0.02],  [xo, sB + 0.06 + aY, mz - 0.02],
+        [xi, sB + aY, mz - 0.045], [xi, sB + aY, mz + 0.045], [xi, sB + sR + aY, mz + 0.045], [xi, sB + sR + aY, mz - 0.045],
+        [xo, sB + sR*0.75 + aY, mz - 0.02],  [xo, sB + sR*0.75 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz - 0.02],
       ], DARK);
       // Glass goes on the face TOWARD the viewer (-z). It used to sit at
       // mz+0.066 — 8mm BEYOND the housing's own back face, so the driver AND

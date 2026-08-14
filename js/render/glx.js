@@ -298,7 +298,51 @@ const GLX = (function () {
       // (document.hidden), a benign transient loss that shouldn't permanently
       // disable the env probe. Persisting the opt-out otherwise stops a
       // lose→reload→lose loop on genuinely memory-tight devices.
-      if (!document.hidden) { try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) {} }
+      // PER-CHUNK LAMPS goes off with it, and for a stronger reason than the
+      // probe's. The crash sentinel that would otherwise pre-degrade a device
+      // that died last session is MOBILE ONLY by design (js/game/perf.js gates
+      // its whole strike ledger on gfx.isMobile so the desktop test suite never
+      // enters safe mode) — so on desktop a context loss leaves NO persistent
+      // trace at all. The tier gate on this feature only fires once PerfGov has
+      // WATCHED frames run slow; a driver watchdog reset can arrive in a single
+      // bad frame, long before the governor reacts. Without this line the cycle
+      // is: reset -> reload -> knob still on (it is persisted in the tuner
+      // store) -> same configuration -> reset again, which is a player reporting
+      // that the game crashes every time they try to play rather than once.
+      //
+      // Same visibility condition as the probe: iOS drops the context on
+      // backgrounding, and that benign transient must not disable a feature the
+      // player deliberately turned on.
+      if (!document.hidden) {
+        try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* No storage (Safari private mode) or quota full: the probe simply stays on next boot, which is the pre-existing behaviour — a failed latch must not also break the loss handler. */ }
+        try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* Same: without storage the knob stays as the player left it and the tier gate is the only defence left. Nothing here may throw — this runs inside webglcontextlost. */ }
+      }
+      // SELF-HEAL. The restore path below reloads on "webglcontextrestored" —
+      // but that event is NOT guaranteed to fire. The browser only restores a
+      // context it decides to restore, and on a driver reset or a GPU-process
+      // kill it frequently never comes. In that case every frame after this one
+      // is a no-op (every entry point tests _ctxLost), so the game sits on a
+      // dead black canvas, silently, forever. That is a player reporting the
+      // game "crashes when I try to play" with NOTHING in the console — no
+      // exception, so index.html's error overlay never paints either.
+      //
+      // So reload on a timer instead of waiting for a promise the browser never
+      // made. The delay lets a restore land first if one is coming (the handler
+      // below wins the race and reloads immediately); 1.2 s is long enough for
+      // that and short enough that the player reads it as a hitch.
+      //
+      // Bounded, because a device that dies on EVERY boot must not be trapped in
+      // a reload loop: two automatic recoveries per tab session, then stop and
+      // leave the dead canvas rather than cycling forever. The latches above
+      // make each retry lighter than the last, which is what gives the retry a
+      // reason to succeed. sessionStorage (not local) so a genuinely new visit
+      // always gets its two attempts back.
+      try {
+        var _rk = "apex26.ctxLostReloads";
+        var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
+        sessionStorage.setItem(_rk, String(_n));
+        if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
+      } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
     }, false);
     canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
 
@@ -326,12 +370,33 @@ const GLX = (function () {
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
-      // Forward EVERY argument. This was `(L, idx, n) => uploadLightSet(L, idx, n)`,
-      // arity 3, while its only external caller (GLXChunked's per-chunk lamp
-      // upload) passes six — so L2/o2/n2, the car tail-light slice, were dropped
-      // on the floor and every per-chunk lamp set silently lost the field's tail
-      // lights. The bug is invisible from the call site, which looks correct.
-      uploadLightSet: (L, idx, n, L2, o2, n2) => uploadLightSet(L, idx, n, L2, o2, n2),
+      // ARITY 3 ON PURPOSE, and this is a REVERT, not the original oversight.
+      //
+      // The bug is real: GLXChunked's per-chunk lamp upload passes SIX
+      // arguments, so L2/o2/n2 — the car tail-light slice — were dropped here
+      // and every per-chunk lamp set silently lost the field's tail lights.
+      // Forwarding them (2026-08-14) fixed that. It also turned a code path
+      // that had been inert since PER-CHUNK LAMPS shipped into a live one for
+      // the first time, and the very next build drew a crash report from a
+      // player running with the knob on.
+      //
+      // That crash is NOT reproducible here: boot, build, race, night,
+      // perChunkLights at 1 / 0.3, roadChunkLamps, and four track changes
+      // including a free+rebuild of vegas all run clean under SwiftShader, and
+      // test:tiny is 71/71. But with the knob at 1 the other three changes in
+      // that build are provably no-ops (_lampScale computes to exactly 1, so
+      // col*1 is bit-identical; the knob ranges change no runtime behaviour;
+      // envCull is default-off), which leaves this as the only live behavioural
+      // delta reaching that player.
+      //
+      // Suspect by elimination, not by a fault anyone has pointed at — so it
+      // goes back to the shipped-for-months behaviour while the crash is
+      // diagnosed, rather than staying in on the strength of my own reasoning.
+      // The cost of reverting is one cosmetic loss (scenery does not catch
+      // tail-light spill under per-chunk lamps) that nobody had until this
+      // week. Re-land it WITH a repro of the crash it may or may not have
+      // caused, not before.
+      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },

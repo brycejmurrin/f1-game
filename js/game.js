@@ -5101,6 +5101,14 @@ let _frameNo = 0;    // render frame counter (env-probe cadence, etc.)
 // the reflection feature can't keep exhausting a memory-constrained GPU.
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
+// Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
+// is the loop-breaker the crash sentinel cannot be: that ledger is mobile-only
+// (js/game/perf.js gates it on gfx.isMobile so the desktop suite never enters
+// safe mode), so on desktop a GPU reset leaves nothing behind and the knob —
+// which IS persisted, in the tuner store — comes straight back on at the next
+// boot into the same configuration that just killed the context.
+let _perChunkOff = false;
+try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* No storage (Safari private mode): the latch is unreadable, so the feature stays governed by the tier gate alone — the same fallback _envProbeOff takes two lines up. */ }
 // Hoisted material-option objects for drawWorldMeshes — the function runs up to
 // 2×/frame (main pass + env probe) and previously allocated ~9 literals each call.
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
@@ -5873,7 +5881,35 @@ function render(dt) {
     // scale, because the feature genuinely delivers more light per fragment
     // (each chunk gets 32 lamps that actually reach it instead of sharing one
     // global 32) and needs a dimmer to be usable at the shipped LAMP LEVEL.
-    frame.perChunkLights = +LT.perChunkLights || 0;
+    // SHEDS AT TIER 1 — the ladder every other expensive feature is already on
+    // (SSR at 2, car shadows at 3, SSAO/god-rays/bloom/lampVol at 4). PER-CHUNK
+    // LAMPS was the one discretionary renderer feature with NO tier gate at
+    // all, so a device that could not afford it had no way out except the
+    // player noticing.
+    //
+    // It needs the EARLIEST rung, not the latest, because its cost is
+    // per-fragment and unbounded rather than a fixed pass. The lit shader loops
+    // 32 lamp slots per fragment; without per-chunk most slots hold lamps
+    // nowhere near it, so the range reject fires at once and they cost almost
+    // nothing. Per-chunk deliberately fills those slots with lamps that DO
+    // reach — the whole point of the feature — so far more iterations run the
+    // full lighting path. Cockpit view compounds it: the camera sits against
+    // near geometry and now carries reflective mirror surfaces.
+    //
+    // MEASURED, by accident, 2026-08-14: every camera mode rendered 20 frames
+    // in seconds, then cockpit + night + perChunkLights=1 held 380% CPU for 22
+    // MINUTES on 40 frames in the same harness. On real hardware a frame that
+    // cannot finish inside the driver's watchdog is a GPU reset — context lost,
+    // page dead, which a player reports as a crash rather than as slowness.
+    // (Distinct from the merged-draw watchdog theory considered and dismissed
+    // earlier: that was ONE large draw, single-digit ms. This is sustained
+    // per-fragment cost across the whole frame.)
+    //
+    // Composes with the crash sentinel in js/game/perf.js: a player who has
+    // already hit a hard failure comes back at a floored tier, which now has
+    // the feature off, so the sentinel can actually rescue this case instead of
+    // watching it repeat.
+    frame.perChunkLights = (_perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
