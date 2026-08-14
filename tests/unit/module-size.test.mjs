@@ -221,7 +221,20 @@ const CEILINGS = {
   // straight back into the configuration that just killed the context. The
   // comment records why the tier gate alone is insufficient: it needs PerfGov
   // to have WATCHED slow frames, and a watchdog reset can land in one.
-  "js/game.js": 8186,
+  // -> 8230: three DEFECT fixes, all of them mostly the comment explaining the
+  // rule they restore. (1) MY TEAM's second car now runs the career build —
+  // `mate` in makeCars plus buildPace(), which folds the four parts axes into
+  // the one scalar tierV already carries, so no AI gains a parts branch on the
+  // physics path. The guide has claimed "Both cars run your build" the whole
+  // time. (2) Track limits are three warnings, one penalty, RESET: the old rule
+  // charged +5s for every cut from the fourth on and stopped announcing the
+  // count past three, and it feeds the career `clean` objective. The new
+  // `cutWarn` sits beside `cuts` rather than replacing it precisely because
+  // `cuts` is the lifetime total the objective and the archive read. (3) FULL
+  // race distance is the circuit's own gpLaps, not a flat 57 offered on all
+  // forty, plus the clamp that keeps a chip lit when FULL moves with the track.
+  // This is bug-explaining growth, not a feature landing in the wrong file.
+  "js/game.js": 8231,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -277,7 +290,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2785, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  "js/track/tracks.js": 2794, // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

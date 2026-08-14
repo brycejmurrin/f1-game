@@ -927,7 +927,10 @@ const AgentView = (function () {
         // on, every cut costs +5 s (js/game.js ~3655).
         penalties: {
           cuts: p.cuts || 0,
-          freeCutsLeft: Math.max(0, 3 - (p.cuts || 0)),
+          // Off the RESETTING warning counter, not the lifetime `cuts` total —
+          // after a penalty the ladder starts again, so a report derived from
+          // `cuts` went to 0 and stayed there for the rest of the race.
+          freeCutsLeft: Math.max(0, 3 - (p.cutWarn || 0)),
           timePenaltyS: p.penalty || 0,
           note: "cuts 1-3 warn; each cut from the 4th adds +5 s to your race time",
         },
