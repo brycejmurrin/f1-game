@@ -263,7 +263,7 @@ const DataLive = (function () {
         let maxGap = 0;
         if (liveOpts.sort === "pos" && list.length > 0) {
           list.forEach(p => {
-            if (p.timeDiff && p.timeDiff > maxGap) maxGap = p.timeDiff;
+            if (typeof p.timeDiff === "number" && p.timeDiff > maxGap) maxGap = p.timeDiff;
           });
         }
 
@@ -290,7 +290,7 @@ const DataLive = (function () {
           mainInfo.appendChild(el("span", "dh-td-team dh-live-team", d.team || ""));
           row.appendChild(mainInfo);
 
-          if (liveOpts.sort === "pos" && p.pos !== 1 && p.timeDiff && maxGap > 0) {
+          if (liveOpts.sort === "pos" && p.pos !== 1 && typeof p.timeDiff === "number" && maxGap > 0) {
             const gapWrap = el("div", "dh-live-gapwrap");
             const gapBar = el("div", "dh-live-gapbar");
             gapBar.style.width = Math.min(100, (p.timeDiff / maxGap) * 100) + "%";
@@ -298,6 +298,12 @@ const DataLive = (function () {
             gapWrap.appendChild(gapBar);
             const gapLbl = el("span", "dh-live-gaplbl", "+" + p.timeDiff.toFixed(3));
             gapWrap.appendChild(gapLbl);
+            row.appendChild(gapWrap);
+          } else if (liveOpts.sort === "pos" && typeof p.timeDiff === "string") {
+            // A lapped driver: api.js passes "+1 LAP"/"+2 LAPS" through as a
+            // string. A lap down is not a time gap — label it, draw no bar.
+            const gapWrap = el("div", "dh-live-gapwrap");
+            gapWrap.appendChild(el("span", "dh-live-gaplbl", p.timeDiff));
             row.appendChild(gapWrap);
           }
 

@@ -31,17 +31,24 @@
       { kinds: ["foliage", "lighting"], s0: 0.25, s1: 0.80, side: 1 },
     ],
     // Hugenholtz + Arie Luyendyk: the two steeply banked corners get a raised
-    // outer edge. Authored as explicit fraction windows so the bank lands on the
-    // real corners (banked:true auto-pick kept as a fallback for other tracks).
+    // outer edge. Anchored to CURATED TURN APEXES, not lap fractions: the
+    // fractions these were authored at predate the 7a173519 start-line
+    // rotation, and compensating them by `_sceneryShift` landed both bowls on
+    // the wrong corners — 19° on Scheivlak and 18° on Hunserug, both fast
+    // sweeps, while Hugenholtz (28 m left hairpin) and Luyendyk (the final
+    // corner) ran dead flat. Turn indices re-resolve through any future remap.
+    // Real angles per circuitzandvoort.nl: Hugenholtz is T3 ("after two turns
+    // that go right, the third corner goes left"), max 18°; Arie Luyendyk is
+    // T14, the last corner, 15-18° / 32% max gradient.
     banked: true,
     bankZones: [
-      { frac: 0.1575, angleDeg: 18, widthM: 140 },  // Hugenholtz banked hairpin
-      { frac: 0.9687, angleDeg: 19, widthM: 140 },  // Arie Luyendyk banked final turn
+      { turn: 3,  angleDeg: 18, widthM: 140 },  // Hugenholtz banked LEFT hairpin
+      { turn: 14, angleDeg: 19, widthM: 140 },  // Arie Luyendyk banked final RIGHT
       // The rest of the lap is not a bowl, but the dune circuit still carries
       // ordinary 3-4° camber — Tarzan most of all.
-      { frac: 0.0683, angleDeg: 4.0, widthM: 200 },  // Tarzan
-      { frac: 0.5047, angleDeg: 3.0, widthM: 110 },  // Hugenholtz-side sweep
-      { frac: 0.7590, angleDeg: 3.5, widthM: 140 },  // Hans Ernst
+      { turn: 1,  angleDeg: 4.0, widthM: 200 },  // Tarzan
+      { turn: 7,  angleDeg: 3.0, widthM: 110 },  // Hunserug-side sweep
+      { turn: 11, angleDeg: 3.5, widthM: 140 },  // Hans Ernst chicane
     ],
     // Zandvoort is one of the narrowest circuits on the calendar and the infield
     // is tighter than the banked corners. s0/s1 are CONTROL-POINT index fractions

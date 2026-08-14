@@ -5947,7 +5947,18 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  gfx.drawSky(frameSky);
+  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
+  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
+  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
+  // for the OPAQUE half). The glow is what makes this non-trivial: it is
+  // additive with depthMask off, so it writes no depth — leaving the background
+  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
+  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
+  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
+  // visually equivalent — a prop in front of a lamp occludes the halo either
+  // way, by overwrite before or by depth test after.
+  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
+  if (!_skyLate) gfx.drawSky(frameSky);
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -5956,7 +5967,13 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, true);
+  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
+  if (_skyLate) {
+    gfx.drawSky(frameSky);
+    // Same guard drawWorldMeshes applies to its own glow call, kept identical
+    // so the two paths differ ONLY in ordering.
+    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -6066,7 +6083,7 @@ function render(dt) {
     // never touched. When disabled these all come back 0 (rigid chassis).
     // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
     // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1]);
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
     // Pitch: rotate forward+up around the right axis (positive = nose up). This
     // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
@@ -6559,7 +6576,8 @@ function render(dt) {
   // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
-  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = _lampVol; po.mist = _mist;
+  // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
+  po.contact = _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6911,27 +6929,9 @@ applyResMode();
   }
 }
 
-// GRAPHICS quality tier (mobile only). STANDARD keeps the memory-safe mobile
-// defaults (half-res liveries, no MSAA, capped DPR); HIGH restores desktop-grade
-// quality for capable phones. These are decided at renderer INIT, so the toggle
-// persists and reloads. Shown only on mobile — desktop is always full quality.
-if (gfx.isMobile) {
-  const gfxBtn = $("pm-gfx");
-  if (gfxBtn) {
-    gfxBtn.hidden = false;
-    const gfxHigh = () => { try { return localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) { return false; } };
-    gfxBtn.textContent = "GRAPHICS: " + (gfxHigh() ? "HIGH" : "STANDARD");
-    gfxBtn.onclick = () => {
-      const next = !gfxHigh();
-      try { localStorage.setItem("apex26.gfxHigh", next ? "1" : "0"); } catch (_) {}
-      gfxBtn.textContent = "GRAPHICS: " + (next ? "HIGH" : "STANDARD") + " — reloading…";
-      if (soundOn) GameAudio.uiSelect();
-      // Reload so the renderer re-inits at the new tier (context AA, target
-      // formats, atlas sizes are all fixed at startup).
-      setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
-    };
-  }
-}
+// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
+// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 
 $("mb-race").onclick = () => {

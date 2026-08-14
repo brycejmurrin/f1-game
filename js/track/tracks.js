@@ -25,7 +25,7 @@ const Tracks = (function () {
   // destructured here at eval).
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
 
   // ---------- build ----------
   // Cheap centreline-only build: runs just the spline engine (positions,
@@ -449,11 +449,11 @@ const Tracks = (function () {
       _grid = new Map(); const pos = _tg.pos, idx = _tg.idx;
       for (let t = 0; t < idx.length; t += 3) {
         const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-        const mnx = Math.min(pos[a], pos[b], pos[c]), mxx = Math.max(pos[a], pos[b], pos[c]);
-        const mnz = Math.min(pos[a + 2], pos[b + 2], pos[c + 2]), mxz = Math.max(pos[a + 2], pos[b + 2], pos[c + 2]);
+        const mnx = __M.min(pos[a], pos[b], pos[c]), mxx = __M.max(pos[a], pos[b], pos[c]);
+        const mnz = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]), mxz = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
         if (mxx - mnx > 30 || mxz - mnz > 30) continue;
-        for (let cx = Math.floor(mnx / _CELL); cx <= Math.floor(mxx / _CELL); cx++)
-          for (let cz = Math.floor(mnz / _CELL); cz <= Math.floor(mxz / _CELL); cz++) {
+        for (let cx = __M.floor(mnx / _CELL); cx <= __M.floor(mxx / _CELL); cx++)
+          for (let cz = __M.floor(mnz / _CELL); cz <= __M.floor(mxz / _CELL); cz++) {
             const key = _gkey(cx, cz); let arr = _grid.get(key); if (!arr) { arr = []; _grid.set(key, arr); } arr.push(t);
           }
       }
@@ -461,7 +461,7 @@ const Tracks = (function () {
     const terrainYAt = (x, z) => {
       if (!_tg || !_tg.idx) return null;
       if (!_grid) _buildGrid();
-      const arr = _grid.get(_gkey(Math.floor(x / _CELL), Math.floor(z / _CELL)));
+      const arr = _grid.get(_gkey(__M.floor(x / _CELL), __M.floor(z / _CELL)));
       if (!arr) return null;
       const pos = _tg.pos; let best = null;
       for (const t of arr) {
@@ -469,7 +469,7 @@ const Tracks = (function () {
         const ax = pos[ia], az = pos[ia + 2], bx = pos[ib], bz = pos[ib + 2], cx = pos[ic], cz = pos[ic + 2];
         const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
         const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
-        const den = d00 * d11 - d01 * d01; if (Math.abs(den) < 1e-9) continue;
+        const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) continue;
         const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
         if (u < -0.01 || vv < -0.01 || u + vv > 1.01) continue;
         const y = pos[ia + 1] + u * (pos[ic + 1] - pos[ia + 1]) + vv * (pos[ib + 1] - pos[ia + 1]);
@@ -590,11 +590,11 @@ const Tracks = (function () {
     // big stands here", and computing the true oriented hull per primitive would
     // cost more than the answer is worth.
     const absorb = (x0, y0, z0, x1, y1, z1) => {
-      if (!(x0 <= x1) || !Number.isFinite(x0) || !Number.isFinite(y1)) return;
+      if (!(x0 <= x1) || !__isFinite(x0) || !__isFinite(y1)) return;
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       // Attribute to the named placement that is still in range.
-      if (curRec && Math.abs(cx - curAnchor[0]) <= OWN_R
-                 && Math.abs(cz - curAnchor[2]) <= OWN_R) {
+      if (curRec && __M.abs(cx - curAnchor[0]) <= OWN_R
+                 && __M.abs(cz - curAnchor[2]) <= OWN_R) {
         const m = curRec._m || (curRec._m = { x0, y0, z0, x1, y1, z1 });
         if (x0 < m.x0) m.x0 = x0; if (x1 > m.x1) m.x1 = x1;
         if (y0 < m.y0) m.y0 = y0; if (y1 > m.y1) m.y1 = y1;
@@ -602,17 +602,17 @@ const Tracks = (function () {
         return;
       }
       curRec = null;
-      if (asm && (Math.abs(cx - asm.cx) > ASSEMBLY_R
-                  || Math.abs(cz - asm.cz) > ASSEMBLY_R
+      if (asm && (__M.abs(cx - asm.cx) > ASSEMBLY_R
+                  || __M.abs(cz - asm.cz) > ASSEMBLY_R
                   || asm.count >= ASSEMBLY_MAX
-                  || Math.max(x1, asm.x1) - Math.min(x0, asm.x0) > ASSEMBLY_EXTENT
-                  || Math.max(z1, asm.z1) - Math.min(z0, asm.z0) > ASSEMBLY_EXTENT)) flushAsm();
+                  || __M.max(x1, asm.x1) - __M.min(x0, asm.x0) > ASSEMBLY_EXTENT
+                  || __M.max(z1, asm.z1) - __M.min(z0, asm.z0) > ASSEMBLY_EXTENT)) flushAsm();
       if (!asm) { asm = { x0, y0, z0, x1, y1, z1, cx, cz, count: 0, vol: 0 }; }
       // Summed primitive volume vs the hull's. A real building fills its box; a
       // scatter of lamp bases and fence posts spread over 30 m fills almost none
       // of it. Consumers that treat the box as solid — frame()'s occlusion
       // raster above all — need to know which they are holding.
-      asm.vol += Math.max(x1 - x0, 0.05) * Math.max(y1 - y0, 0.05) * Math.max(z1 - z0, 0.05);
+      asm.vol += __M.max(x1 - x0, 0.05) * __M.max(y1 - y0, 0.05) * __M.max(z1 - z0, 0.05);
       if (x0 < asm.x0) asm.x0 = x0; if (x1 > asm.x1) asm.x1 = x1;
       if (y0 < asm.y0) asm.y0 = y0; if (y1 > asm.y1) asm.y1 = y1;
       if (z0 < asm.z0) asm.z0 = z0; if (z1 > asm.z1) asm.z1 = z1;
@@ -633,7 +633,7 @@ const Tracks = (function () {
                     get spanCount() { return spanList.length; },
                     get dropped() { return propDropped; } };
     const finiteVec = (v, len, positive) =>
-      Array.isArray(v) && v.length === len && v.every((x) => Number.isFinite(x) && (!positive || x > 0));
+      Array.isArray(v) && v.length === len && v.every((x) => __isFinite(x) && (!positive || x > 0));
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
     // True if a footprint covers the tarmac at any node it rises above. A
@@ -645,7 +645,7 @@ const Tracks = (function () {
       // the O(prims·n) hot path (one call per emitted city pane). OR semantics,
       // so candidate order is irrelevant; the per-node test below is unchanged.
       const mh = grid.maxHw;
-      const R = (rad > 0 ? rad + mh : Math.hypot(hx + mh, hz + mh)) + 2;
+      const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
       const _cn = grid.query(cx, cz, R, _hitCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const k = _hitCand[_ci];
@@ -658,7 +658,7 @@ const Tracks = (function () {
         // Far reject: the Minkowski test below expands the footprint by w on each
         // axis, so the prefilter reach must use the EXPANDED half-extents (a thin
         // box's hit corner can sit at hypot(hx+w, hz+w) from centre).
-        const reach = (rad > 0 ? rad + w : Math.hypot(hx + w, hz + w)) + 2;
+        const reach = (rad > 0 ? rad + w : __M.hypot(hx + w, hz + w)) + 2;
         if (dxc * dxc + dzc * dzc > reach * reach) continue;   // cheap far reject
         // Minkowski test: expand the footprint by the road half-width `w` and ask
         // whether the road CENTRE-line node falls inside it. This catches a prop
@@ -677,7 +677,7 @@ const Tracks = (function () {
           if (ex * ex + ez * ez <= rr * rr) return true;
         } else {
           // oriented rectangle expanded by w on each axis
-          const a = Math.abs(ex * arx + ez * arz), b = Math.abs(ex * afx + ez * afz);
+          const a = __M.abs(ex * arx + ez * arz), b = __M.abs(ex * afx + ez * afz);
           if (a <= hx + w && b <= hz + w) return true;
         }
       }
@@ -685,12 +685,12 @@ const Tracks = (function () {
     };
     const rejBox = (c, sz, basis) => {
       const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-      const topY = c[1] + Math.abs(sz[0] / 2 * r[1]) + Math.abs(sz[1] / 2 * u[1]) + Math.abs(sz[2] / 2 * f[1]);
+      const topY = c[1] + __M.abs(sz[0] / 2 * r[1]) + __M.abs(sz[1] / 2 * u[1]) + __M.abs(sz[2] / 2 * f[1]);
       return onRoadHit(c[0], c[2], topY, 0, r[0], r[2], f[0], f[2], sz[0] / 2, sz[2] / 2);
     };
     const rejRad = (c, rad, h, basis) => {
       const u = basis ? basis[1] : [0, 1, 0];
-      const topY = c[1] + Math.max(0, h * u[1]) + rad;     // generous top estimate
+      const topY = c[1] + __M.max(0, h * u[1]) + rad;     // generous top estimate
       return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
     };
     // Guarded wrappers shadow the raw emitter names for the whole of buildProps
@@ -706,20 +706,20 @@ const Tracks = (function () {
       RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
+      if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
       if (rejRad(c, rad, h, basis)) { _culled++; return false; }
       RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !Number.isFinite(rad) || rad <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
+      if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
       if (rejRad(c, rad, h, basis)) { _culled++; return false; }
       RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !Number.isFinite(rB) || rB <= 0 || !Number.isFinite(rT) || rT <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
-      if (rejRad(c, Math.max(rB, rT), h, basis)) { _culled++; return false; }
+      if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
+      if (rejRad(c, __M.max(rB, rT), h, basis)) { _culled++; return false; }
       RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
-      absorbUp(c, Math.max(rB, rT), h); return true;
+      absorbUp(c, __M.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
@@ -732,7 +732,7 @@ const Tracks = (function () {
       RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
-      if (!finiteVec(c, 3, false) || !Number.isFinite(baseR) || baseR <= 0 || !Number.isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
+      if (!finiteVec(c, 3, false) || !__isFinite(baseR) || baseR <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
       if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
       RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
@@ -2695,13 +2695,13 @@ const Tracks = (function () {
     const cells = new Array(nx * nz);
     for (let t = 0; t < idx.length; t += 3) {
       const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-      const x0 = Math.min(pos[a], pos[b], pos[c]), x1 = Math.max(pos[a], pos[b], pos[c]);
-      const z0 = Math.min(pos[a + 2], pos[b + 2], pos[c + 2]);
-      const z1 = Math.max(pos[a + 2], pos[b + 2], pos[c + 2]);
-      const i0 = Math.max(0, Math.floor((x0 - mnx) / CELL));
-      const i1 = Math.min(nx - 1, Math.floor((x1 - mnx) / CELL));
-      const j0 = Math.max(0, Math.floor((z0 - mnz) / CELL));
-      const j1 = Math.min(nz - 1, Math.floor((z1 - mnz) / CELL));
+      const x0 = __M.min(pos[a], pos[b], pos[c]), x1 = __M.max(pos[a], pos[b], pos[c]);
+      const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]);
+      const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
+      const i0 = __M.max(0, __M.floor((x0 - mnx) / CELL));
+      const i1 = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
+      const j0 = __M.max(0, __M.floor((z0 - mnz) / CELL));
+      const j1 = __M.min(nz - 1, __M.floor((z1 - mnz) / CELL));
       for (let i = i0; i <= i1; i++) {
         for (let j = j0; j <= j1; j++) {
           const k = j * nx + i;
@@ -2722,7 +2722,7 @@ const Tracks = (function () {
     const pos = g.pos, idx = g.idx; let best = null;
     const G = terrainGrid(track);
     if (G) {
-      const i = Math.floor((x - G.mnx) / G.cell), j = Math.floor((z - G.mnz) / G.cell);
+      const i = __M.floor((x - G.mnx) / G.cell), j = __M.floor((z - G.mnz) / G.cell);
       if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) return null;
       const list = G.cells[j * G.nx + i];
       if (!list) return null;
@@ -2745,7 +2745,7 @@ const Tracks = (function () {
     const ax = pos[a], az = pos[a + 2], bx = pos[b], bz = pos[b + 2], cx = pos[c], cz = pos[c + 2];
     const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
     const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
-    const den = d00 * d11 - d01 * d01; if (Math.abs(den) < 1e-9) return best;
+    const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) return best;
     const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
     if (u < -0.01 || vv < -0.01 || u + vv > 1.01) return best;
     const y = pos[a + 1] + u * (pos[c + 1] - pos[a + 1]) + vv * (pos[b + 1] - pos[a + 1]);

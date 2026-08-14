@@ -118,6 +118,27 @@ const CEILINGS = {
   // draw site (nothing else knows the knob state at build time), and the
   // comment records why _keepPositions is mandatory: createChunkedMesh nulls
   // its source arrays and debrisworld.js + __apex.geo() still read roadGeo.
+  // 8035 -> 8036: one comment line at the po.lampVol assignment, paying for a
+  // TIER-4 CORRECTNESS FIX rather than a feature. lampVol was shed only by the
+  // hard !gfx.mobileTier gate where _lampVol is derived, so the BOTTOM rung of
+  // the feature ladder did not actually drop the heaviest night pass on a
+  // struggling DESKTOP: haveGR is `sunGR || lampVol > 0`, so a non-zero lampVol
+  // kept the whole half-res god-ray march + 4 blurs alive after po.godray had
+  // already gone to 0.
+  // 8036 -> 8018: LOWERED, not raised. The mobile-only GRAPHICS toggle (22
+  // lines of button wiring + the apex26.gfxHigh boot bit) moved out to
+  // js/game/gfx-quality.js, which owns #pm-gfx for every device now. This is
+  // the direction the ratchet exists to push: a feature landed and game.js got
+  // SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
+  // instead of rewriting the eight PerfGov.tier() gates in the render path.
+  // 8018 -> 8035: PerfTry.skyLate. The reorder itself is two edited lines; the
+  // rest is the comment explaining the GLOW hazard, which is the whole reason
+  // this could not be a one-line move. drawGlow is additive with depthMask off,
+  // so it writes no depth and leaves the background at 1.0 where it painted —
+  // which a later depth-1.0 sky with blend OFF would erase. The sky-late path
+  // therefore draws the world WITHOUT glow, then the sky, then the glow. That
+  // ordering constraint is invisible at the call site and expensive to
+  // rediscover, so it is written down where the switch lives.
   "js/game.js": 8035,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.

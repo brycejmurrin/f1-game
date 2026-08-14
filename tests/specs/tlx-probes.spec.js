@@ -144,7 +144,7 @@ test.describe("TLX — boot", () => {
     // Singapore night: lampVol > 0 opens the volumetric pass, and the lamp
     // spot map arms per frame — present() snapshots the armed flag for the
     // godray lamp-index mapping before clearArmed() retires it.
-    await page.waitForFunction(() => GLX.__tlx.postState().blocks.shafts === true, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.postState().blocks.shafts === true, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => ({
       post: GLX.__tlx.postState(),
       lamp: GLX.lampShadowState(),
@@ -174,7 +174,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // The day->night flip rebuilds scenery before the next sky frame lands —
     // wait on the uniform, not a fixed sleep (SwiftShader rebuilds are slow).
-    await page.waitForFunction(() => GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
     const night = await page.evaluate(() => GLX.__tlx.skyState());
     expect(night.on).toBe(true);
     expect(night.stars).toBe(1);
@@ -191,7 +191,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.park(0.1));
     // Singapore is a night race: floodlights populate frame.lights and the
     // glare-halo pass runs. Wait for a presented frame that carried FX.
-    await page.waitForFunction(() => GLX.__tlx.fxState().glow > 0, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().glow > 0, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.on).toBe(true);
     expect(st.glow).toBeGreaterThan(0);        // near-field lamp halos in view
@@ -218,7 +218,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.freeze(true));
     // Two presented frames, and a TLX frame on a built Monza under SwiftShader
     // is seconds, not milliseconds — so this bound is generous on purpose.
-    await page.waitForFunction(() => GLX.__tlx.fxState().skidVerts > 0, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.skidVerts).toBeGreaterThan(0);
     expect(st.skidVerts % 6).toBe(0);          // 6 verts per mark
@@ -234,7 +234,7 @@ test.describe("TLX — boot", () => {
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
     // Wait for a presented frame that carried chunked records (props + glass).
-    await page.waitForFunction(() => GLX.__tlx.chunkState().total > 0, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.chunkState().total > 0, { polling: 100, timeout: 60_000 });
     const st = await page.evaluate(() => {
       const geo = window.__apex.trackGeometry();
       return {
@@ -316,7 +316,7 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForFunction(() => GLX.carShadowState().arms > 0, { polling: 100, timeout: 30_000 });
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, { polling: 100, timeout: 30_000 });
     const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
     expect(st.car.enabled).toBe(true);
     expect(st.car.arms).toBeGreaterThan(0);
