@@ -145,7 +145,16 @@ const CEILINGS = {
   // OFF would erase. The sky-late path draws the world WITHOUT glow, then the
   // sky, then the glow. Neither branch's number fits the merged file; this one
   // is set FROM it, the same way the earlier flap-gate merge above was.
-  "js/game.js": 8050,
+  // 8050 -> 8064: pooling the DebrisWorld.tyreMarble argument. The literal was
+  // built per car per physics step on BOTH the player and AI paths -- 20 cars x
+  // 60 Hz, ~1200 short-lived objects/s -- and tyreMarble discards it on the
+  // speed gate, the hot gate, or the 0.25 rate limit, so nearly all of them at
+  // cruising speed. A measured CPU profile put the collector at 2.8% of physics
+  // time; this is one of the sites paying into it. The growth is the pooled
+  // declaration plus the comment recording why sharing one object is safe (the
+  // callee is read-only and spawnMarble retains nothing) -- the ratchet-tolerated
+  // kind, since the alternative is a reader re-deriving that safety argument.
+  "js/game.js": 8064,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

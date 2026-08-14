@@ -1344,7 +1344,7 @@ const AgentView = (function () {
           const judgeable = p.kind !== "gantry"
                             && ((p.measured && p.kind !== "structure")
                                 || (p.fill != null && p.fill > 0.3));
-          const pr = judgeable ? Tracks.project(track, p.x, p.z) : null;
+          const pr = judgeable ? Tracks.project(track, p.x, p.z, null, p.y) : null;   // p.y: pick the right deck where the track crosses itself
           if (pr) {
             Tracks.sample(track, pr.s, scr);
             const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
@@ -1482,7 +1482,7 @@ const AgentView = (function () {
         const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
         return { s: k / G.track.n * G.track.total, lat: null, sideSel: p.side != null ? p.side : null };
       }
-      const pr = Tracks.project(G.track, p.x, p.z);
+      const pr = Tracks.project(G.track, p.x, p.z, null, p.y);   // p.y: see js/track/spline.js on self-crossing circuits
       return pr ? { s: pr.s, lat: pr.lat } : { s: 0, lat: null };
     }
     function propS(p) { return propPos(p).s; }
@@ -2563,7 +2563,7 @@ const AgentView = (function () {
         const dx = l.x - ox, dz = l.z - oz;
         if (dx * dx + dz * dz > radius * radius) continue;
         const rr = rel(l.x, l.z);
-        const lp = Tracks.project(G.track, l.x, l.z);   // centreline side, like props
+        const lp = Tracks.project(G.track, l.x, l.z, null, l.y);   // centreline side, like props; l.y disambiguates a crossover
         lamps.push({ kind: l.kind, distM: rr.distM, bearingDeg: rr.bearingDeg,
                      side: rr.bearingDeg > 0 ? "right" : "left",
                      trackSide: lp ? (lp.lat > 0 ? "right" : "left") : "off-course" });

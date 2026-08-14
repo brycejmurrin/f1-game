@@ -1763,6 +1763,10 @@ function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
 // longer allocates a fresh object ~23×/frame.
 const _bankScratch = { dy: 0, roll: 0 };
 const _bankScratchP = { dy: 0, roll: 0 };
+// Argument scratch for DebrisWorld.tyreMarble — called per car per physics step
+// from both the player and AI paths. Read-only at the callee (and spawnMarble
+// retains nothing), so one shared object is safe.
+const _marbleArg = { lock: 0, slip: 0, speed: 0 };
 // ...and a third for the camera, which asks once per frame from render() and
 // was the one call site still letting banking() allocate.
 const _bankScratchCam = { dy: 0, roll: 0 };
@@ -4059,8 +4063,18 @@ function updateCar(c, dt, ranked) {
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
-    if (DebrisWorld.active())
-      DebrisWorld.tyreMarble(c, { lock: axFrac, slip: Math.max(Math.abs(slipF), Math.abs(slipR)), speed: c.speed });
+    // Pooled scratch, not a literal: this ran per car per physics step (20 cars
+    // x 60 Hz = ~1200 short-lived objects/s) and tyreMarble discards it on the
+    // speed gate, the hot gate, or the 0.25 rate limit -- so nearly all of them
+    // at cruising speed. It is read-only inside tyreMarble/spawnMarble (which
+    // reads m.speed and retains nothing), so pooling is provably safe. Same
+    // idiom as _ringOpts/_bankScratch/_decalOpts above.
+    if (DebrisWorld.active()) {
+      _marbleArg.lock = axFrac;
+      _marbleArg.slip = Math.max(Math.abs(slipF), Math.abs(slipR));
+      _marbleArg.speed = c.speed;
+      DebrisWorld.tyreMarble(c, _marbleArg);
+    }
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
@@ -4154,10 +4168,10 @@ function updateCar(c, dt, ranked) {
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
     if (DebrisWorld.active()) {
       const latG = Math.abs(k) * c.speed * c.speed / 9.8;   // ~lateral g demand
-      DebrisWorld.tyreMarble(c, {
-        lock: (braking && vStd(c.speed) > 30) ? 0.95 : 0,   // vStd: a threshold, not a force
-        slip: Math.max(0, Math.min(1, latG - 1.6)) * 0.14,   // → ~slip-angle rad at the limit
-        speed: c.speed });
+      _marbleArg.lock = (braking && vStd(c.speed) > 30) ? 0.95 : 0;   // vStd: a threshold, not a force
+      _marbleArg.slip = Math.max(0, Math.min(1, latG - 1.6)) * 0.14;   // → ~slip-angle rad at the limit
+      _marbleArg.speed = c.speed;
+      DebrisWorld.tyreMarble(c, _marbleArg);
     }
   }
   // set skid intensity once per frame (used by audio and by visual marks)
