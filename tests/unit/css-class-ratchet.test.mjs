@@ -89,17 +89,32 @@ const CLASS_CEILING = 537;
 // that error band, so this ceiling is where the ruling's premise is kept true.
 // Growth points named by STRUCTURE-REDECISION §Q1: #advanced (106 nodes),
 // #vsfriend (95).
-const NODE_CEILING = 1140; // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the shell in the deploy merge
+// 1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
+// the deploy branch and the season branch each raised this in parallel and both
+// numbers are stale the moment they meet.
+const NODE_CEILING = 1152;
+// +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
+// shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for js/game/perf-try.js (default-off renderer
 // A/B switches, measurable only on real hardware — see the file header).
 // +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
-// +1 2026-08-14: the <script> tag for js/game/cockpit-opts.js (the opt-in
-// cockpit HALO). Its SETTINGS button is injected at runtime and costs no shell
-// node, exactly like PerfTry's — the tag itself is the whole +1.
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden
 // #pm-gfx button rather than minting new controls, so the visible UI grew by zero
 // nodes and css/ by zero classes.
+// +1 2026-08-14: the <script> tag for js/game/cockpit-opts.js (the opt-in
+// cockpit HALO). Its SETTINGS button is injected at runtime and costs no shell
+// node, exactly like PerfTry's — the tag itself is the whole +1.
+// +12 2026-08-14: the SEASON calendar/format feature — two <script> tags
+// (js/game/season-cal.js, js/game/season-ui.js) and 10 markup nodes for the whole
+// #season-setup screen, because both of its panes are EMPTY and season-ui.js
+// fills them (the shape #career established at index.html:438). It is also a
+// <dialog>, so nothing but the head/foot is in the tree until it is opened, and
+// its CUSTOMISE button is created in js/game/menus.js rather than sitting in the
+// shell. The CLASS count did not move at all: every selector on the screen is an
+// id scoping a class that already existed.
+// 1140 (deploy) + 12 = 1152, still far under the ~1,400 error band the
+// keep-the-monolith ruling rests on.
 
 test("the distinct CSS class count is not growing unnoticed", () => {
   const n = classTokens().size;

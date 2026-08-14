@@ -3,7 +3,10 @@
    renderer. Live game state comes through the ctx façade handed to
    GameResults.create(ctx) at boot (see the `G` object in game.js): els, $,
    track, cars, player, season, seasonMode, TT session fields, fmtTime,
-   ttBoard, teamById, cssCol. Consumes globals Teams, Tracks, Ghost.
+   ttBoard, teamById, cssCol, announce, soundOn. Consumes globals Teams, Tracks,
+   Ghost, GameAudio, and SeasonCal — the calendar LENGTH and the points table are
+   the season's to choose now, and a sprint is scored on a round that has not
+   closed yet.
    Must load BEFORE js/game.js (see index.html). */
 const GameResults = (function () {
   "use strict";
@@ -13,8 +16,12 @@ function create(G) {
 function buildResults(order) {
   const els = G.els, season = G.season, track = G.track, cars = G.cars;
   els.resultsTable.textContent = "";
-  els.resultsTitle.textContent = G.seasonMode
-    ? "ROUND " + season.round + " — " + track.def.name
+  // A SPRINT is scored on a round that has not closed yet, so `season.round` is
+  // still the round BEFORE it — naming it "ROUND n" would print last weekend's
+  // number over this weekend's result. Name the session instead.
+  const sprint = G.seasonMode && SeasonCal.scored() === "sprint";
+  els.resultsTitle.textContent = sprint ? "SPRINT — " + track.def.name
+    : G.seasonMode ? "ROUND " + season.round + " — " + track.def.name
     : track.def.name + " RESULT";
   order.forEach((c, i) => {
     const row = document.createElement("div");
@@ -43,8 +50,13 @@ function buildResults(order) {
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
     // Classified last and scoring nothing — the same rule endRace awards on, said
-    // in the one word the sport uses for it.
-    pt.textContent = c.retired ? "DNF" : (Teams.POINTS[i] || 0) + " pts";
+    // in the one word the sport uses for it. The TABLE has to be the one that was
+    // actually paid: a sprint pays 8-7-6…, and a season may have chosen the
+    // classic 10-6-4… table, so reading Teams.POINTS here printed a number the
+    // standings underneath it disagreed with.
+    const table = sprint ? SeasonCal.SPRINT_POINTS
+      : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
+    pt.textContent = c.retired ? "DNF" : (table[i] || 0) + " pts";
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });
@@ -113,7 +125,7 @@ function buildResults(order) {
     // Driver championship (top 10)
     const head = document.createElement("div");
     head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
-    head.textContent = "DRIVERS — AFTER ROUND " + season.round;
+    head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
     const all = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0)).slice(0, 10);
     all.forEach((c, i) => {
@@ -143,7 +155,10 @@ function buildResults(order) {
       row.append(pos, sw, nm, pt);
       els.resultsTable.appendChild(row);
     });
-    els.resNext.textContent = season.round >= Tracks.SEASON.length ? "FINISH SEASON" : "NEXT ROUND";
+    // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
+    // uses that exact string as its first-click sentinel (js/game.js resNext).
+    els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
+      : season.round >= SeasonCal.rounds() ? "FINISH SEASON" : "NEXT ROUND";
   } else {
     els.resNext.textContent = "RACE AGAIN";
   }
@@ -232,8 +247,8 @@ function buildStandings() {
   body.textContent = "";
   if (!season) return;
   const round = season.round;
-  G.$("standings-title").textContent = round >= Tracks.SEASON.length
-    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + Tracks.SEASON.length;
+  G.$("standings-title").textContent = round >= SeasonCal.rounds()
+    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + SeasonCal.rounds();
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
@@ -280,8 +295,8 @@ function buildStandings() {
   });
 
   // Next round info
-  if (round < Tracks.SEASON.length) {
-    const nextTrack = Tracks.SEASON[round];
+  if (round < SeasonCal.rounds()) {
+    const nextTrack = SeasonCal.track(round);
     const info = document.createElement("div");
     info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
     info.textContent = "NEXT: ROUND " + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";
@@ -289,7 +304,45 @@ function buildStandings() {
   }
 }
 
-return { buildResults, buildTTResults, buildStandings };
+// THE END OF A SEASON. Replaces the round result already on screen with the
+// champion and the final table, in place — the player is still on #results and
+// the button under them becomes MAIN MENU. Lived inline in js/game.js's resNext
+// handler until the season-format work; it is results DOM and belongs with the
+// rest of it (the handler kept the two-click flow, which is flow, not markup).
+function buildChampion() {
+  const els = G.els, season = G.season;
+  const sorted = G.cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
+  const champ = sorted[0];
+  const champColor = G.cssCol(champ.team.color);
+  els.resultsTitle.textContent = "WORLD CHAMPION";
+  els.resultsTitle.style.color = champColor;
+  els.resultsTable.textContent = "";
+  const banner = document.createElement("div");
+  banner.style.cssText = "text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:" + champColor;
+  banner.textContent = champ.code + "  " + champ.name;
+  const teamBanner = document.createElement("div");
+  teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
+  teamBanner.textContent = champ.team.name.toUpperCase();
+  els.resultsTable.append(banner, teamBanner);
+  const head = document.createElement("div");
+  head.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:4px;font-size:0.85em";
+  head.textContent = "FINAL STANDINGS";
+  els.resultsTable.appendChild(head);
+  sorted.forEach((c, i) => {
+    const row = document.createElement("div"); row.className = "res-row";
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = G.cssCol(c.team.color);
+    const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
+    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
+    row.append(pos, sw, nm, pt);
+    els.resultsTable.appendChild(row);
+  });
+  els.resNext.textContent = "MAIN MENU";
+  G.announce(champ.code + " IS WORLD CHAMPION!", 4);
+  if (G.soundOn) GameAudio.finish();
+}
+
+return { buildResults, buildTTResults, buildStandings, buildChampion };
 }
 
 return { create };

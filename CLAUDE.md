@@ -20,8 +20,8 @@ tools/README.md                       # test-asserted index of all 60+ tools
 ## Testing — the gates
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
-operational field notes behind every rule below). The suite is 111 Playwright
-specs plus 89 `node --test` unit suites; the browser half runs on SwiftShader
+operational field notes behind every rule below). The suite is 112 Playwright
+specs plus 90 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **`npm install` FIRST on a fresh container** — a missing `node_modules`
@@ -121,7 +121,10 @@ js/net/                 2-4 player WebRTC, no backend — docs/MULTIPLAYER.md
 js/game/                one Module.create(G) per file; modules never reach into
                         game.js. Look-alikes: cam-tune=data, cam-tuner=its
                         panel, tuner=LIGHTING panel; lighting=registry,
-                        light-store=persistence, light-presets=shipped values.
+                        light-store=persistence, light-presets=shipped values;
+                        season-cal=the SEASON calendar+format RULES (no DOM,
+                        no create(G)), season-ui=its SETUP screen. Career is
+                        NOT customisable and stays on Tracks.SEASON.
                         Self-init (no create(G)): scrollfade.js sheetshape.js
                         topmodal.js menunav.js ariastate.js uilayers.js (THE
                         layer stack) css-zoom.js gfx-quality.js (GRAPHICS
