@@ -954,7 +954,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    (shared with #race-settings), and the panes are .pane-pair from
    css/components.css. Only the two behavioural deltas are written here. */
 #season-setup { z-index: 26; }              /* over #select, which is 25 */
-#ss-inner { --sheet-w: 1020px; }
+/* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
+   not. js/game/sheetshape.js reads this property to decide `data-pair`, and
+   with no value it deletes the attribute and returns — so .pane-pair never
+   turned on, the two panes stacked at their FULL natural height, and .pane's
+   own `overflow-y: auto` had nothing to scroll against because nothing ever
+   capped them. Measured at 844x390 before this line: the calendar pane was
+   1417px tall, ADD A CIRCUIT started 1063px below the fold, and the whole sheet
+   was one 2526px scroll with the foot buried at the bottom of it.
+   620px matches #sel-inner and #cr-inner — the same list-detail shape, so the
+   same threshold. `data-pair="on"` is what puts both panes in a
+   `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
+   scroll region needs. */
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
 /* Both columns are .pane, so the scrolling, the overscroll containment and the
    reserved gutter come with the primitive — nothing to restate here.
    The move/remove controls: .sel-chip is sized for a thumb on a chip ROW, and
