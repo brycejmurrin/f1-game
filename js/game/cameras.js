@@ -282,7 +282,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
       eye = [extra.carPos[0] + hx * eyeFwd, p[1] + eyeUp, extra.carPos[1] + hz * eyeFwd];
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
-      tgt = [extra.carPos[0] + hx * 30, p[1] + aimUp + t[1] * 30, extra.carPos[1] + hz * 30];
+      // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/game/cockpit-opts.js).
+      // At 0 the aim is the car's heading and NOTHING else, which is the state
+      // CLAUDE.md's "the arc must not reach the driver" rule asks for: no read of
+      // curvature or the racing line reaches the player unless they switch it on.
+      const tcL = mode === "cockpit" && typeof CockpitOpts !== "undefined"
+        ? CockpitOpts.turnChaseLead() : 0;
+      let aimX = extra.carPos[0] + hx * 30, aimZ = extra.carPos[1] + hz * 30;
+      if (tcL > 0) {
+        const lp = aheadPt(30, aimUp, x * 0.4);
+        aimX = aimX * (1 - tcL) + lp[0] * tcL;
+        aimZ = aimZ * (1 - tcL) + lp[2] * tcL;
+      }
+      tgt = [aimX, p[1] + aimUp + t[1] * 30, aimZ];
       fov = lerp(64, 78, spN) + dep * 3;
       // Falls through to the CAMERA TUNER offsets below (it used to return here);
       // cockpit/hood skip the ground clamp either way — see its guard.
@@ -298,11 +310,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
         // the slope (+uphill / −downhill), so the look point rises on a climb and
         // drops on a descent; the cockpit pitches with the road like a camera
         // bolted to the chassis. Flat road (t[1]=0) is unchanged.
+        // This branch only runs with no car pose (preview/snapped views), so the
+        // road tangent is the closest thing to "the car's nose" available. The
+        // curved look-ahead is now weighted by TURN CHASING like the live path
+        // above, instead of a hardcoded 0.15: the two used to disagree, so a
+        // snapped view led into the corner while the live one did not.
         const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15 + t[1] * 30, p[2] + t[2] * 30];
-        const lead = aheadPt(30, eyeUp - 0.15, x * 0.4);
-        tgt = [straight[0] * 0.85 + lead[0] * 0.15,
-               straight[1] * 0.85 + lead[1] * 0.15,
-               straight[2] * 0.85 + lead[2] * 0.15];
+        const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0;
+        const lead = w > 0 ? aheadPt(30, eyeUp - 0.15, x * 0.4) : straight;
+        tgt = [straight[0] * (1 - w) + lead[0] * w,
+               straight[1] * (1 - w) + lead[1] * w,
+               straight[2] * (1 - w) + lead[2] * w];
       } else {
         tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
       }

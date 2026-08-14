@@ -29,23 +29,28 @@ const CockpitOpts = (function () {
   "use strict";
 
 const KEY = "apex26.cockpitHalo";
+const KEY_TC = "apex26.cockpitTurnChase";
 
-let _halo = null;   // resolved lazily: localStorage may be unavailable at eval
+// TURN CHASING lead, as a fraction of the way from "down the car's nose" to
+// "at the point 30 m up the racing line". 0.35 is enough to read as the driver
+// glancing into the corner without the nose sliding across the frame.
+const TURN_CHASE = 0.35;
 
-function halo() {
-  if (_halo === null) {
-    let v = null;
-    try { v = localStorage.getItem(KEY); } catch (_) { /* private mode / no storage */ }
-    // URL form wins for the session without touching saved state, so a link can
-    // demo the halo on someone else's machine and leave their setting alone.
-    try {
-      const q = /[?&]halo=(1|0|on|off|true|false)/i.exec(location.search);
-      if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
-    } catch (_) { /* no location (node/test) */ }
-    _halo = v === "1";
-  }
-  return _halo;
+let _halo = null, _tc = null;   // resolved lazily: localStorage may be absent at eval
+
+function read(key, urlName) {
+  let v = null;
+  try { v = localStorage.getItem(key); } catch (_) { /* private mode / no storage */ }
+  // URL form wins for the session without touching saved state, so a link can
+  // demo a switch on someone else's machine and leave their setting alone.
+  try {
+    const q = new RegExp("[?&]" + urlName + "=(1|0|on|off|true|false)", "i").exec(location.search);
+    if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
+  } catch (_) { /* no location (node/test) */ }
+  return v === "1";
 }
+
+function halo() { if (_halo === null) _halo = read(KEY, "halo"); return _halo; }
 
 function setHalo(on) {
   _halo = !!on;
@@ -53,14 +58,44 @@ function setHalo(on) {
   return _halo;
 }
 
+/* TURN CHASING — does the view glance into the corner, or stay bolted to the
+   car's nose? DEFAULT OFF, and that default is the load-bearing part: CLAUDE.md
+   states that nothing derived from track curvature or the racing line may reach
+   the player, and the cockpit camera is the most immersive surface in the game
+   to leak it through. Off, the aim is the car's own heading and nothing else —
+   what the driver's helmet points at. On, it is the player asking for it. */
+function turnChase() { if (_tc === null) _tc = read(KEY_TC, "turnchase"); return _tc; }
+
+function setTurnChase(on) {
+  _tc = !!on;
+  try { localStorage.setItem(KEY_TC, _tc ? "1" : "0"); } catch (_) { /* nothing to persist to */ }
+  return _tc;
+}
+
+// The blend weight js/game/cameras.js actually consumes — 0 when off, so an
+// untuned install aims exactly down the nose.
+function turnChaseLead() { return turnChase() ? TURN_CHASE : 0; }
+
 /* SETTINGS > COCKPIT. Injected at runtime rather than written into
    index.html, for the same two reasons PerfTry documents: the DOM-node ratchet
    (tests/unit/css-class-ratchet.test.mjs) counts index.html's nodes, and this
    button mints NO new CSS class — it carries none, exactly like its neighbours
    #pm-res / #pm-renderer / #pm-gfx. */
-function paint(btn) {
-  btn.textContent = "HALO: " + (halo() ? "ON" : "OFF");
-  btn.setAttribute("aria-pressed", halo() ? "true" : "false");
+const SWITCHES = [
+  { id: "pm-halo", label: "HALO", get: halo, set: setHalo,
+    title: "Draw the halo (secondary roll structure) in the cockpit view. Real cars " +
+           "and real onboards have one; it also puts a pillar in the middle of your " +
+           "sightline, which is what makes it a preference." },
+  { id: "pm-turnchase", label: "TURN CHASING", get: turnChase, set: setTurnChase,
+    title: "Let the view glance into the corner ahead instead of staying locked to " +
+           "the car's nose. OFF (default) is what the driver's helmet actually points " +
+           "at; ON reads the racing line for you, which is easier but is the track " +
+           "telling you where to go." },
+];
+
+function paint(btn, sw) {
+  btn.textContent = sw.label + ": " + (sw.get() ? "ON" : "OFF");
+  btn.setAttribute("aria-pressed", sw.get() ? "true" : "false");
 }
 
 function initUI() {
@@ -76,20 +111,21 @@ function initUI() {
   head.textContent = "COCKPIT";
   host.appendChild(head);
 
-  const b = document.createElement("button");
-  b.id = "pm-halo";
-  b.title = "Draw the halo (secondary roll structure) in the cockpit view. " +
-            "Real cars and real onboards have one; it also puts a pillar in the " +
-            "middle of your sightline, which is what makes it a preference.";
-  paint(b);
-  b.onclick = () => {
-    setHalo(!halo());
-    paint(b);
-    // The cockpit body cache is keyed on halo(), so the next frame rebuilds
-    // the mesh on its own — nothing to invalidate and no reload.
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio not up yet; the toggle still applies */ }
-  };
-  host.appendChild(b);
+  for (const sw of SWITCHES) {
+    const b = document.createElement("button");
+    b.id = sw.id;
+    b.title = sw.title;
+    paint(b, sw);
+    b.onclick = () => {
+      sw.set(!sw.get());
+      paint(b, sw);
+      // Nothing to invalidate: the cockpit body cache is keyed on halo(), so a
+      // halo flip rebuilds itself next frame, and turnChase is read per frame
+      // by js/game/cameras.js. No reload for either.
+      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio not up yet; the toggle still applies */ }
+    };
+    host.appendChild(b);
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -97,5 +133,5 @@ if (typeof document !== "undefined") {
   else initUI();
 }
 
-return { KEY, halo, setHalo };
+return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
 })();
