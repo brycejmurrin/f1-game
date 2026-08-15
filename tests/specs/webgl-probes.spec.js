@@ -146,7 +146,7 @@ test.describe("WebGL renderer probes", () => {
   // Titled for what it actually checks. It used to say "UBO light count matches
   // lightState", but it never read the UBO — and its first assertion was
   // `numLights >= 0` on a count, which cannot fail. The real content is the cap.
-  test("night raises lights and the shader never receives more than 32", async ({ page }) => {
+  test("night raises lights and the shader never receives more than 48", async ({ page }) => {
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // Wait until night lights are up
