@@ -312,12 +312,19 @@ const TLX = (function () {
         Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
       } catch (_) { /* non-fatal: debug convenience only */ }
 
-      // Fallback material: unlit vertex colour (the M2 look). Kept as the
-      // never-fail path — if the lit factory is missing or throws, the
-      // backend still boots and renders geometry.
+      // Fallback materials: unlit vertex colour (the M2 look). Node unlit is
+      // the never-fail path when the lit *factory* throws at create time.
+      // Classic MeshBasicMaterial is the last canvas paint if TSL *codegen*
+      // itself throws on the first renderer.render() — that compile is lazy,
+      // so a factory that returned is not a compiled program.
       const unlitMat = new THREE.MeshBasicNodeMaterial();
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
+      const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+      rawUnlitMat.side = THREE.FrontSide;
+      // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
+      // first present() throw so later frames do not recompile the dead graph.
+      let _drawMatMode = 0;
 
       // Debug viz mode (?viz=… or localStorage apex26.tlxViz), read BEFORE
       // the factories: lit viz modes replace the scene material, post viz
@@ -506,8 +513,9 @@ const TLX = (function () {
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
       const matCache = new Map();
       const MAT_CACHE_CAP = 64;
+      function fallbackMat() { return _drawMatMode >= 2 ? rawUnlitMat : unlitMat; }
       function materialFor(opts, chunked) {
-        if (!lit) return unlitMat;
+        if (_drawMatMode || !lit) return fallbackMat();
         if (vizMat) return vizMat;
         if (!opts) return chunked ? defaultMatChunked : defaultMat;
         const o = opts;
@@ -685,7 +693,7 @@ const TLX = (function () {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
         m.geometry = geo;
-        m.material = material || unlitMat;
+        m.material = material || fallbackMat();
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
         m.visible = true;
         poolUsed++;
@@ -1263,26 +1271,63 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
-          // M8: with the post chain up, the world (opaques, sky background
-          // node, transparent FX — glow/particles feed bloom) renders into
-          // the HDR scene target; the chain resolves it to the canvas. The
-          // chain reads the lamp shadow map + its armed flag BEFORE
-          // clearArmed() below retires them (godrays sample the spot map).
-          if (post) {
-            try {
+          // First renderer.render() is when three compiles TSL → GLSL. A
+          // factory that returned is not a compiled program — Safari WebGL2
+          // often throws here. tick() reports any escape as the full-screen
+          // overlay ("Caught @ tick") and rethrows. The 1269 post catch then
+          // retried the SAME render unwrapped, so a compile error became the
+          // crash. Every paint below stays inside try; the pick is never
+          // written to webgl2 (session skip + reload if even classic dies).
+          const persistFail = (e) => {
+            const reason = (e && e.message) || String(e);
+            _lastFailure = { reason, at: Date.now() };
+            try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
+            try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
+          };
+          const paintCanvas = () => {
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+          };
+          const dropTo = (mode, mat) => {
+            _drawMatMode = mode;
+            post = null;
+            sky = null;
+            try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
+            lit = null;
+            fx = null;
+            for (let i = 0; i < poolUsed; i++) {
+              if (meshPool[i]) meshPool[i].material = mat;
+            }
+          };
+          const refuseTab = () => {
+            try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
+            try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
+            try { location.reload(); } catch (_) { /* harness: GLX attaches next real boot */ }
+          };
+          let painted = false;
+          try {
+            if (post) {
               renderer.setRenderTarget(post.sceneTarget());
               renderer.render(scene, camera);
               post.present(opts, _postF);
-            } catch (e) {
-              // One bad HDR/post frame must not leave a black canvas forever.
-              try { Log.warn("gfx", "TLX: post present failed, direct to canvas —", e); } catch (_) {}
-              post = null;
-              renderer.setRenderTarget(null);
-              renderer.render(scene, camera);
+            } else {
+              paintCanvas();
             }
-          } else {
-            renderer.setRenderTarget(null);
-            renderer.render(scene, camera);
+            painted = true;
+          } catch (e) { persistFail(e); }
+          // Post-only death: same materials, canvas (the 1269 intent).
+          if (!painted && post) {
+            post = null;
+            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+          }
+          if (!painted) {
+            dropTo(1, unlitMat);
+            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+          }
+          if (!painted) {
+            dropTo(2, rawUnlitMat);
+            try { paintCanvas(); painted = true; }
+            catch (e) { persistFail(e); refuseTab(); }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // M7 staged release, final stage: the render above created the GPU

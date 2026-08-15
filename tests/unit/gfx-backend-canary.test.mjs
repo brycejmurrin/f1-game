@@ -75,7 +75,15 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /apex26\.gfxTlxFail/);
   assert.match(tlx, /isMobile && !post\.hdrOk\(\)/);
-  assert.match(tlx, /post present failed, direct to canvas/);
+  assert.match(tlx, /TLX: present failed/);
+  assert.match(tlx, /MeshBasicMaterial/);
+  assert.match(tlx, /apex26\.gfxClaimFail/);
+  const present = tlx.indexOf("present(opts) {");
+  const presentEnd = tlx.indexOf("// debug — the __tlx tooling", present);
+  const body = tlx.slice(present, presentEnd);
+  assert.ok(present > 0 && presentEnd > present, "present() body found");
+  assert.doesNotMatch(body, /post = null;\s*renderer\.setRenderTarget\(null\);\s*renderer\.render/);
+  assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
 });
 
 test("nextBackend is webgl2 → three → webgpu → webgl2", () => {

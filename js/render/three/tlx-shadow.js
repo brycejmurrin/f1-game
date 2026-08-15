@@ -183,9 +183,16 @@
       if (!target) return;
       for (let i = used; i < pool.length; i++) pool[i].visible = false;
       const prev = renderer.getRenderTarget();
-      renderer.setRenderTarget(target);
-      renderer.render(castScene, shadowCam);   // autoClear: depth cleared per pass, like GLX's clear(DEPTH_BUFFER_BIT)
-      renderer.setRenderTarget(prev);
+      try {
+        renderer.setRenderTarget(target);
+        renderer.render(castScene, shadowCam);   // autoClear: depth cleared per pass, like GLX's clear(DEPTH_BUFFER_BIT)
+      } catch (e) {
+        // Depth TSL compile must not escape into tick() (full-screen overlay).
+        try { Log.warn("gfx", "TLX: shadow pass failed —", e); } catch (_) { /* Log absent */ }
+        S.enabled = false;
+        S.depthPassOn = false;
+      }
+      try { renderer.setRenderTarget(prev); } catch (_) { /* target already unbound */ }
       target = null;
       // TODO M4-PCSS: this is where GLX refreshes the 512² blocker map from
       // the just-rendered sun depth (js/render/glx/shadow.js shadowEnd) — see header.
