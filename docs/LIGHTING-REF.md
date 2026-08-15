@@ -14,7 +14,7 @@ The lit shader combines three sources:
 |---|---|---|
 | Directional sun | `uSunDir`, `uSunColor` | With shadow map |
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
-| Point lights (up to 32) | uniform arrays — see below | Floodlights, emissives |
+| Point lights (up to 32) | uniform arrays — see below | Track lamps, emissives |
 
 The composite pass combines AO, shafts, exposure and bloom in HDR, applies the
 live HDR image grade described below, then runs ACES → display-domain colour
@@ -99,15 +99,23 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-GLX uploads plain uniform arrays per frame — `uLightPos[i]` (xyz + radius),
-`uLightCol[i]`, `uNumLights`, plus per-lamp aim/cone/bleed/volumetric/glare
-arrays consumed by the lit shader and the god-ray pass. Every
+GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
+`uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
+plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
 exactly 15 values.
 
-`setFrameLights()` re-uploads every frame: it sorts active floodlights by
+`setFrameLights()` re-uploads every frame: it sorts active lamps by
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
-`LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
+`LT.lampCull` (def 40) when there is traffic, otherwise 48 (`MAX_LIGHTS`).
+
+**48 is an engine cap, not a WebGL one.** WebGL has no lights API and no
+`MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2
+minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
+UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
+rows — the same budget the old six vertical arrays used at 32. God-rays stay
+at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
+uniforms.
 
 ### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
 
@@ -142,9 +150,10 @@ the fix: 11 on Bahrain, 13 on Qatar, against a CAP of 24-32.
 ### Dark-gap fill (`LT.lampGapFill`, def 60 m)
 
 Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that
-suppresses the generic flood masts over a stretch — a `dressingExclusions` rule
-of kind `"floodlights"`, usually because a bespoke structure owns that ground —
-also deleted the *light* there. An audit of all 40 circuits found **nine with a
+suppresses the generic mast pass over a stretch — a `dressingExclusions` rule
+of kind `"lamps"` (`"floodlights"` / `"lighting"` are aliases for the same
+family), usually because a bespoke structure owns that ground — also deleted
+the *light* there. An audit of all 40 circuits found **nine with a
 genuinely unlit stretch at night** — worst of all baku (1.2 km, a fifth of the
 lap) and redbull (784 m spanning its own start/finish straight), plus madrid,
 mexico, silverstone, suzuka, monaco, abudhabi, montreal.
@@ -170,7 +179,7 @@ Called on race load and again whenever `setTimeOfDay()` fires.
 
 ### `raceTimeOfDay === "default"`
 Uses the track file's own palette verbatim. If the track's `night` flag is set
-(`def.night`), the scene sun is dimmed to moonlight and floodlights are
+(`def.night`), the scene sun is dimmed to moonlight and track lamps are
 activated. Palette luminance is not a second night detector — a `night: false`
 circuit stays a day session even if its colours are dark.
 
@@ -182,11 +191,11 @@ circuit stays a day session even if its colours are dark.
 - `frame.sunColor` is dimmed to moonlight (the palette may ship a near-overhead
   bright sun for sky glow; this prevents it lighting the road like day).
 - `frameSky.sunColor` is left warm so dusk sky tints survive.
-- Floodlights activated.
+- Track lamps activated.
 
 **`"dawn"` / `"dusk"`**
 - Rich split-tone skies with a low sun angle.
-- Floodlights activated (scene is dark enough).
+- Track lamps activated (scene is dark enough).
 
 **`"day"`**
 - Driven by `_trackAtmoBias(def)` which returns a value from −clear to +overcast:
@@ -195,16 +204,17 @@ circuit stays a day session even if its colours are dark.
     low haze.
   - **Humid/overcast circuits**: paled-out sky, more haze.
 - Bloom ≈ 0.60 (threshold 0.82), grade strength ≈ 0.34 (set just before `GLX.present()`).
-- Floodlights are suppressed in the render loop (`frame.lights = null`), not
-  inside `applyRaceSettings`. `LT.floodDay` can keep a dim day fill.
+- Track lamps are suppressed in the render loop (`frame.lights = null`), not
+  inside `applyRaceSettings`. `LT.floodDay` (DAYTIME LAMPS) can keep a dim day fill.
 
 ---
 
-## Floodlights / track lamps
+## Track lamps
 
-`buildTrackLights()` in `js/game/lighting.js` places one point light per entry
-in `track.lampPosts` (generic mast pass ~22 m both edges, plus `floodMast` /
-`lampPost` registrations). Activated whenever the scene is dark:
+Street posts and flood banks are **one system**. There is no second floodlight
+pipeline: `buildTrackLights()` in `js/game/lighting.js` places one point light
+per entry in `track.lampPosts` (generic mast pass ~22 m both edges, plus
+`floodMast` / `lampPost` registrations). Activated whenever the scene is dark:
 
 - Any explicit night/dusk/dawn time-of-day, on any track.
 - Default mode on a track whose `_night` flag is set.
@@ -228,7 +238,7 @@ reads as physically cast by a real structure. Street themes use slim posts
 keyed off the furniture `fz.lamp` style; open circuits get tall flood banks.
 
 `setFrameLights()` culls the full list to the nearest CAP lamps each frame
-(`lampCull` / 32 solo) and uploads the light uniforms. When the sun dominates
+(`lampCull` / 48 solo) and uploads the light uniforms. When the sun dominates
 (bright day) it sets `numLights = 0` and skips the upload.
 
 ---

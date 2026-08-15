@@ -110,3 +110,16 @@ test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
   assert.match(src, /LIGHTING_KINDS\s*=\s*\{\s*lamps:\s*1,\s*floodlights:\s*1,\s*lighting:\s*1/);
   assert.match(src, /kinds\.some\(\(knd\)\s*=>\s*LIGHTING_KINDS\[knd\]\)/);
 });
+
+test("street posts and flood banks share one lampPosts bake, one LAMPS tab", () => {
+  const lighting = read("js/game/lighting.js");
+  assert.match(lighting, /function buildTrackLights/);
+  assert.doesNotMatch(lighting, /function buildFloodLights/);
+  assert.doesNotMatch(lighting, /group:\s*"FLOODLIGHTS"/);
+  const api = loadLightTune();
+  const lamps = api.TUNE_DEFS.filter((d) => d.group === "LAMPS");
+  assert.ok(lamps.length >= 20, `expected a full LAMPS tab, got ${lamps.length}`);
+  assert.ok(lamps.some((d) => d.id === "floodDay" && d.label === "DAYTIME LAMPS"));
+  assert.ok(lamps.some((d) => d.id === "lampLevel"));
+  assert.equal(api.TUNE_DEFS.filter((d) => d.group === "FLOODLIGHTS").length, 0);
+});

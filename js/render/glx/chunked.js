@@ -277,7 +277,7 @@ const GLXChunked = (function () {
         if (d2 <= rad * rad) hits.push({ i, d2 });
       }
       hits.sort((a, b) => a.d2 - b.d2);
-      const out = new Int32Array(Math.min(32, hits.length));
+      const out = new Int32Array(Math.min(48, hits.length));
       for (let k = 0; k < out.length; k++) out[k] = hits[k].i;
       return out;
     }

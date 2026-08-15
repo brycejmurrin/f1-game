@@ -393,7 +393,10 @@ check density is a false no-op — with a full grid it sticks near `lampCull`
 Lamp-slider probes (for Chromium MCP / `tools/cdmcp-lamps-tune.py`):
 - `meanLampRGB` — mean RGB of the **culled** `frame.lights` set this frame
   (after `lampTemp` / twilight / `lampLevel` scaling). Warm `lampTemp` raises R/B.
-- `bakedLights` — count of the cached `track._lights` records (pre-cull).
+- `bakedLights` — pre-cull bake: `track._lights` when that set is non-empty,
+  else `track._alwaysLights` (daytime always-on fixtures — Monaco tunnel).
+  Reading only `_lights` reports 0 on a day session that is still lighting
+  the tunnel.
 - `lampPosts` — mast/lens registry length (`track.lampPosts`).
 ```js
 __apex.race("singapore"); __apex.lightState();
@@ -1131,7 +1134,7 @@ without reloading the track.
 ### `setTimeOfDay(tod?) → "default" | "dawn" | "day" | "dusk" | "night"`
 Get or set the session time of day live, **without reloading track assets**.
 Called with no argument returns the current value. Setting it re-applies lighting
-(sky, sun, floodlights) immediately; geometry is rebuilt only when the night/day
+(sky, sun, lamps) immediately; geometry is rebuilt only when the night/day
 state flips (`dawn`/`dusk`/`night` share one dark build, `day` is the light
 build), so switching among the three dark times is near-instant and buildings
 correctly swap between day-glass and night-neon. Fast path for time-of-day

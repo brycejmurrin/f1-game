@@ -395,9 +395,9 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //        group0 @binding 4/5 env cube+sampler ; mirrors GLX uCarReflect)
   //      * [Block 8]    wet-road SSR consumption (ssrStrength = params4.w ;
   //        group0 @binding 6 SSR-result texture from wgsl-post.js)
-  //    STILL DEFERRED: analytic sky mirror + rim/AO (Phase 3 probe);
-  //    per-material applyMaterial* bump/tint (brick/glass/metal/wood — the "14
-  //    procedural materials").
+  //    applyMaterial* / applyMaterialNormal are ported (14 procedural MAT ids).
+  //    STILL DEFERRED vs GLX: uAmbContactDark / uLampWallSpill / uWindowSunFlash
+  //    / uSkyRimGlow tuner knobs (no FrameU lanes).
   //
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
@@ -444,7 +444,7 @@ struct DrawU {
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
-@group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
+@group(0) @binding(1) var<storage, read> lights : array<Light, 48>;
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
 @group(0) @binding(3) var shadowSamp : sampler_comparison;
 // ── Phase-4 deferred bindings (wgx.js binds real resources; placeholders are safe) ──
@@ -719,23 +719,21 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // 80% of the shadow range, pcssPen > 0) runs a REAL blocker search: a 4-tap
   // min-depth read of blockerTex (findBlocker above) scales the PCF step with
   // the receiver-blocker gap, so contact edges stay crisp while the body
-  // softens. Outside that band the kernel falls back to a fixed widening
-  // (step * (1 + pcssPen)). pcssPen=0 keeps the exact Phase-3 1-texel 3×3
-  // kernel (byte-for-byte no-op).
+  // softens. Far field drops to 4-tap. pcssPen=0 skips the blocker search.
   var shadow = 1.0;
   if (F.params2.x > 0.5) {
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     // Distance + border fade (GLX sampleShadow parity, js/render/shaders/lit.js).
-    // Dissolve shadows by receiver distance from the UNSNAPPED box anchor
-    // (F.shadowCtr.xyz, glides with the camera) instead of hard-cutting at the
-    // box border: the box recentres in sBox/4 = 16 m snaps (game.js shadow pass),
-    // so an unfaded border made the whole shadow field's edge JUMP 16 m at a time
-    // while driving. The UV border fade stays as a safety clamp for worst-case
-    // box alignments. shadowCtr.w = shadowRange (box half-size, m).
+    // Fade from eye XZ + look-target Y (yaw-invariant). The box still recentres
+    // in sBox/4 = 16 m snaps; an unfaded BOX-anchored border jumped 16 m while
+    // driving, and a look-biased fade origin swept on yaw. UV border fade stays
+    // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
     let shRange = max(F.shadowCtr.w, 1.0);
-    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, F.shadowCtr.xyz));
+    // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
+    let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
+    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
     let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
            * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
     edgeFade = edgeFade * ef.x * ef.y;
@@ -749,7 +747,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
       let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
       // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
-      let aDist = distance(in.wpos, F.shadowCtr.xyz);
+      let aDist = distance(in.wpos, fadeCtr);
       let near = aDist < shRange * 0.80;
       let boxK = min(1.0, 80.0 / shRange);
       var R = 3.0;
@@ -891,7 +889,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
   // math from GLX LIT_FS (js/render/shaders/lit.js): windowed 1/d² falloff, aimed spot
   // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
-  // the light. (Bounce-fill + per-lamp clearcoat glint deferred to Phase 4.)
+  // the light. The nearest floodlight also 4-tap-PCF-samples lampShadowTex.
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
   let nL = i32(F.params0.w);
   for (var i = 0; i < nL; i = i + 1) {
@@ -1407,7 +1405,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
-    MAX_LIGHTS: 32,
+    MAX_LIGHTS: 48,
     DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
     DEPTH_RESOLVE: `
