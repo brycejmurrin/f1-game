@@ -33,9 +33,25 @@ const GRADE_MAX = {
 async function waitForTune(page, values) {
   await page.waitForFunction((expected) => {
     const tune = window.__apex?.lightTune?.();
-    return tune && Object.entries(expected).every(([id, value]) =>
-      Math.abs(tune[id] - value) < 0.0001);
-  }, values, { timeout: 15_000 });
+    if (!tune) return false;
+    // Wait for what the STORE will actually resolve to, not the raw ask.
+    // js/game/light-store.js clamps every write to the knob's declared
+    // [min, max], so a test driving past a bound waits forever on a value that
+    // can never appear — the helper just sits here for the whole 15 s and the
+    // rest of the serial block skips. That is exactly what happened when BLACKS
+    // was re-cut from ±1.5 to ±0.6 (it goes non-monotonic above +0.635) while
+    // this file still asked for ±1. Clamping the expectation the same way the
+    // store does keeps a test aimed at "the extreme" whatever the registry says
+    // that is today, instead of at a number somebody typed once.
+    // BARE `LightTune`: lighting.js declares it as a top-level `const` in a
+    // CLASSIC script, which is script-scoped and NOT a property of window.
+    const defs = (typeof LightTune !== "undefined" && LightTune.TUNE_DEFS) || [];
+    return Object.entries(expected).every(([id, value]) => {
+      const d = defs.find((x) => x.id === id);
+      const want = d ? Math.min(d.max, Math.max(d.min, value)) : value;
+      return Math.abs(tune[id] - want) < 0.0001;
+    });
+  }, values, { timeout: 15_000, polling: 100 });
   await page.waitForTimeout(250);
 }
 
@@ -172,9 +188,20 @@ test.describe("rendered image grade", () => {
     await boot(page);
     await pixels(page);
     const baseline = await pixels(page);
-    await setTune(page, { blacks: 1 });
+    // Drive to the REGISTRY's own extremes rather than a literal ±1. What this
+    // test cares about is that the knob's ENDS move the deepest detail, not that
+    // any particular number does — and a literal goes stale the moment the bound
+    // is retuned, which is the trap tests/specs/lighting-tuner-grade.spec.js
+    // already documents from the widening direction.
+    const b = await page.evaluate(() => {
+      const d = LightTune.TUNE_DEFS.find((x) => x.id === "blacks");
+      return { min: d.min, max: d.max };
+    });
+    expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
+    expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
+    await setTune(page, { blacks: b.max });
     const raised = rangeChanges(baseline, await pixels(page), 2, 30);
-    await setTune(page, { blacks: -1 });
+    await setTune(page, { blacks: b.min });
     const crushed = rangeChanges(baseline, await pixels(page), 2, 30);
     expect(raised.count).toBeGreaterThan(1000);
     expect(raised.signed).toBeGreaterThan(1);
