@@ -9,7 +9,7 @@ maxima were widened ×1.5 — except the categories where wider is broken, not
 generous: toggles; 0..1 gates/fractions; **any knob whose max is below 1**
 (sub-unit maxima are fractions of something — `godrayAniso` is a
 Henyey-Greenstein `g` that must stay < 1, `lampWarmupDim` > 1 would go
-negative-light); hue knobs (±180 is the full circle); `lampCull` (32 is
+negative-light); hue knobs (±180 is the full circle); `lampCull` (48 is
 `MAX_LIGHTS`, the shader array size); `lampFogBase` (its consumer clamps at
 0.9 — the top of a wider slider would be dead, the exact bug class recorded
 below); and `wetness` (-0.05 is the weather-driven sentinel). The measured
@@ -539,7 +539,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampWarmup` | LAMP WARM-UP | 0 … 6 | 1 | — |  | lighting.js×2 |
 | `lampWarmupDim` | WARM-UP DIP | 0 … 0.9 | 0.3 | — |  | lighting.js×2 |
 | `lampWarmupWarm` | WARM-UP WARMTH | 0 … 4.5 | 1 | — |  | lighting.js×2 |
-| `lampCull` | LAMP COUNT | 16 … 32 | 28 | — |  | lighting.js×4 |
+| `lampCull` | LAMP COUNT | 16 … 48 | 40 | — |  | lighting.js×4 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 1 … 15 | 5.25 | — |  | lighting.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 6 | 1 | — |  | lighting.js |
 | `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — |  | game.js, glx.js×2, chunked.js×2 |

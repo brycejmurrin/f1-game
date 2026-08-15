@@ -50,7 +50,7 @@
 "use strict";
 
 (function () {
-  const MAX_LIGHTS = 32;
+  const MAX_LIGHTS = 48;
 
   function lit(THREE, TSL, ctx) {
     const {

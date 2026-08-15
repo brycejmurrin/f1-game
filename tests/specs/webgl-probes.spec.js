@@ -3,7 +3,7 @@
 //   - GLX.hdrMode() boolean
 //   - __apex.lightState() shape
 //   - setTimeOfDay() night/day floodlight transitions
-//   - engine 32-light cap (MAX_LIGHTS uniform arrays — not a WebGL / UBO limit)
+//   - engine 48-light cap (MAX_LIGHTS packed vec4 arrays — not a WebGL / UBO limit)
 import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -140,7 +140,7 @@ test.describe("WebGL renderer probes", () => {
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights).toBeGreaterThan(0);
     expect(ls.bakedLights).toBeGreaterThan(0);
-    expect(ls.numLights).toBeLessThanOrEqual(32);
+    expect(ls.numLights).toBeLessThanOrEqual(48);
   });
 
   // Titled for what it actually checks. It used to say "UBO light count matches
@@ -157,7 +157,7 @@ test.describe("WebGL renderer probes", () => {
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights, "night must actually raise floodlights").toBeGreaterThan(0);
     // The uniform arrays are sized for 32; the shader must never receive more.
-    expect(ls.numLights).toBeLessThanOrEqual(32);
+    expect(ls.numLights).toBeLessThanOrEqual(48);
   });
 });
 
