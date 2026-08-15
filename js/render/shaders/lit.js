@@ -631,7 +631,17 @@ float sampleShadow(vec3 wpos) {
   // harness (tools/lighting/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
   // site, so keep the bias term factored here rather than repeating the clamp.
   float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
-  float z = sc.z - biasTerm;
+  // BIAS MUST TRACK THE BOX, like the kernel below already does. slopeBias is
+  // built from t = 1/SHADOW_SIZE, a UV quantity, so it is blind to the world
+  // size of a texel — but that sweeps 12.5x across SHADOW DISTANCE (0.0156 m at
+  // 16, 0.195 m at 200). Unscaled it was ~25x more offset than needed at 16 and
+  // only ~2x at 200, i.e. a fixed 0.393 m of depth push at every setting (about
+  // 1.08 m of ground detachment under a 20-degree sun) with the acne margin
+  // nearly gone at the far end. Scaling here holds that margin roughly constant.
+  // Applied to the STATIC map ONLY: the car map below multiplies the same
+  // biasTerm by uCarBiasScale (= max(1, box/80) from game.js), so scaling the
+  // shared term would square the correction on cars.
+  float z = sc.z - biasTerm * (uShadowRange / 80.0);
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin

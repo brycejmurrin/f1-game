@@ -999,10 +999,14 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
-          const absorb = mix(
-            clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0),
-            clamp(U.wetDark.mul(0.42).oneMinus(), 0.0, 1.0),
-            porous);
+          // Porous as a FRACTION of the road result — mirrors js/render/shaders/lit.js.
+          // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
+          // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed
+          // 58% while soaked grass absorbed only 42%, leaving verges BRIGHTER than
+          // the ribbon they border. As a fraction the two saturate together and
+          // porous stays strictly darker across the whole wetDark range.
+          const absorbRoad = clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0);
+          const absorb = mix(absorbRoad, absorbRoad.mul(0.66), porous);
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.50), puddle));
           wetSheen.assign(wet.mul(porous.oneMinus()));
