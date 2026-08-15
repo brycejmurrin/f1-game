@@ -3265,10 +3265,10 @@ const WGX = (function () {
       drawInstanced,
       freeInstancedBatch,
       castShadowInstanced,
-      // Car shadows key on the DEVICE (IS_MOBILE), matching GLX — GRAPHICS: HIGH
-      // must not buy a per-frame extra map on a phone.
-      carShadowState: () => ({ enabled: !!carShadowView && !IS_MOBILE, arms: _carArms }),
-      lampShadowState: () => ({ enabled: !!lampShadowView && !MOBILE_TIER, arms: _lampArms, idx: _lampIdx }),
+      // Car/lamp maps key on WGX_LITE (phone OR WebKit), matching GLX's
+      // IS_MOBILE gate — GRAPHICS: HIGH must not buy a per-frame extra map.
+      carShadowState: () => ({ enabled: !!carShadowView && !WGX_LITE, arms: _carArms }),
+      lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

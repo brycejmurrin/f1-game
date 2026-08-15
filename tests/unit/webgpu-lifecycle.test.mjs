@@ -12,7 +12,7 @@ const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, WGX_SOURCE] = await Promise.all([
   readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
-function makeGpuHarness() {
+function makeGpuHarness(opts = {}) {
   const textures = [];
   const buffers = [];
   const writes = [];
@@ -114,8 +114,9 @@ function makeGpuHarness() {
     window: { devicePixelRatio: 1 },
     localStorage: { getItem: () => null, setItem() {} },
     location: { reload() {} },
+    GLX: opts.glx || undefined,
     navigator: {
-      userAgent: "",
+      userAgent: opts.ua || "",
       maxTouchPoints: 0,
       gpu: {
         requestAdapter: async () => ({
@@ -579,7 +580,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(FX_SOURCE, /fn vs_main[\s\S]*aCorner/, "particle shader");
 });
 
-test("Safari/compat: depth is textureLoad, adapter retries, phones skip timestamp", () => {
+test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips timestamp", () => {
   // texture_depth_2d + a non-comparison sampler is a pipeline-create reject on
   // Safari 26 / compatibility mode. That used to fail the whole WGX.create().
   assert.match(CHUNKS_SOURCE, /fn loadDepth[\s\S]{0,200}textureLoad\(depthTex/);
@@ -587,8 +588,48 @@ test("Safari/compat: depth is textureLoad, adapter retries, phones skip timestam
   assert.match(POST_SOURCE, /fn ssaoDepth[\s\S]{0,200}textureLoad\(depthTex/);
   assert.match(POST_SOURCE, /fn ssrDepth[\s\S]{0,200}textureLoad\(depthTex/);
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
-  assert.match(WGX_SOURCE, /IS_MOBILE \? "low-power" : "high-performance"/);
+  // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
+  // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
+  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // painted one frame then lost the device. Phone ULTRA also matches GLX
+  // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
+  assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
-  assert.match(WGX_SOURCE, /!IS_MOBILE && !!\(adapter\.features/);
+  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
+});
+
+test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
+  assert.equal(gfx.carShadowState().enabled, true);
+  assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+  });
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 1);
+  assert.equal(gfx.gpuTimer().supported, false);
+  assert.equal(gfx.carShadowState().enabled, false);
+  assert.equal(gfx.lampShadowState().enabled, false);
+});
+
+test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
+  // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
+  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took MSAA 2×
+  // rgba16float and lost the device after one frame.
+  const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
+  const gfx = await h.create();
+  assert.equal(gfx.isMobile, true);
+  assert.equal(gfx.mobileTier, false);
+  assert.equal(gfx.msaa(), 1);
+  assert.equal(gfx.gpuTimer().supported, false);
+  assert.equal(gfx.carShadowState().enabled, false);
 });
