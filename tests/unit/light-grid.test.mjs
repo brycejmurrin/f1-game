@@ -52,7 +52,8 @@ function defs() {
       const m = chunk.match(new RegExp(`\\b${k}:\\s*(-?[\\d.]+)`));
       return m ? Number(m[1]) : undefined;
     };
-    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def") };
+    const help = (chunk.match(/help:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def"), help };
     if (d.min === undefined || d.step === undefined) continue;
     out.push(d);
   }
@@ -101,6 +102,54 @@ test("every TUNE_DEFS default sits on its own slider's step grid", () => {
     "neighbouring notch while the readout prints the true value. Refine the knob's step so " +
     "the default lands on grid (a step that DIVIDES the old one keeps every existing value " +
     "reachable); do not round the default to fit the widget.");
+});
+
+test("every slider maximum sits on its own min+step grid", () => {
+  // The thumb can only emit min+k*step. A max off that grid is a labelled
+  // extreme the player can never reach — the same class as an off-grid default.
+  const bad = defs()
+    .filter((d) => d.max !== undefined && !onGrid(d.max, d.min, d.step))
+    .map((d) => `${d.id}: max ${d.max} is off the ${d.step} grid from ${d.min}`);
+  assert.deepEqual(bad, [],
+    "a slider's own maximum cannot be selected — the last notch is short of the labelled extreme.");
+});
+
+test("slider maxima stop where the consumer saturates, not past it", () => {
+  // Each assertion is a measured saturate in the shipping consumer. A max
+  // above the saturate is dead travel; a help string that cites a different
+  // ceiling is the same bug in prose.
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  const get = (id) => {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    return d;
+  };
+  // post.js: carSoft = clamp((1.4 - uCarGloss) * 0.5, 0, 1) — sharpest at 1.4.
+  assert.ok(get("carGloss").max <= 1.4 + 1e-9,
+    `carGloss max ${get("carGloss").max} is past the SSR-streak saturate at 1.4`);
+  // post.js: dz > uSsrThick && dz < max(5, stepLen*1.5) — at 5 the window is empty.
+  assert.ok(get("ssrThick").max < 5,
+    `ssrThick max ${get("ssrThick").max} reaches the far-window reject`);
+  assert.doesNotMatch(get("ssrThick").help || "", /[Cc]eiling raised to 5/,
+    "ssrThick help must not call the far-window reject the slider ceiling");
+  // post.js: smoothstep(0.95, min(uVigSoft, 0.94), vr) — 0.94 is the last live notch.
+  assert.equal(get("vignetteSoft").max, 0.94,
+    "VIGNETTE REACH must end at the shader clamp, not an unexplained 0.68");
+  // lit.js fogCol: warm blue hits 0 at +4; cool red hits 0 at -1/0.12 ≈ 8.33.
+  assert.ok(get("fogTint").max <= 4 + 1e-9, "fogTint warm side past blue=0");
+  assert.ok(get("fogTint").min >= -1 / 0.12 - 0.05, "fogTint cool side past red=0");
+  // lit.js: mix(1 - 0.12*k, 1, ao) hits black at k = 1/0.12.
+  assert.ok(get("ambContactDark").max <= 1 / 0.12 + 0.05, "ambContactDark past black creases");
+  // game.js: Math.min(0.9, lampFogBase + …)
+  assert.equal(get("lampFogBase").max, 0.9);
+  // post.js: clamp(uHgAniso, 0, 0.95)
+  assert.equal(get("godrayAniso").max, 0.95);
+  // game.js: clamp(0.85 * roadRough, 0.04, 1)
+  assert.ok(get("roadRough").max <= 1 / 0.85 + 0.01, "roadRough past roughness=1");
+  // lit.js wet absorb: 1 - 0.42*uWetDark hits 0 at 1/0.42 (porous, the last term).
+  assert.ok(get("wetDark").max <= 1 / 0.42 + 0.05, "wetDark past full absorb");
+  // lit.js: 0.30 * spill > 1 inverts the wet pool.
+  assert.ok(get("lampWallSpill").max <= 1 / 0.30 + 0.01, "lampWallSpill past wet invert");
 });
 
 test("every shipped preset value sits on its knob's step grid", () => {

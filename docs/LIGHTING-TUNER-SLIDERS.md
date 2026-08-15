@@ -598,7 +598,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `roadRough` | TARMAC ROUGHNESS | 0.05 … 1.8 | 1 | — | ✓ | game.js×2 |
 | `surfDetail` | SURFACE DETAIL | 0 … 5.25 | 1 | — | ✓ | game.js×2 |
 | `matTexMix` | BAKED MATERIALS | 0 … 1 | 1 | `uMatTexMix` |  | apex.js×5, game.js, assets.js×2, glx.js×4 |
-| `ssrThick` | SSR THICKNESS | 0.02 … 7.5 | 0.2 | `uSsrThick` |  | post.js×2 |
+| `ssrThick` | SSR THICKNESS | 0.05 … 1 | 0.2 | `uSsrThick` |  | post.js×2 |
 | `wetDark` | WET ROAD DARKEN | 0 … 3 | 1 | `uWetDark` | ✓ | glx.js×2 |
 | `windowSunFlash` | WINDOW SUN FLASH | 0 … 4.5 | 1 | `uWindowSunFlash` |  | glx.js×2 |
 | `skyRimGlow` | SKY RIM GLOW | 0 … 4.5 | 1 | `uSkyRimGlow` |  | glx.js×2 |
@@ -609,7 +609,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 |---|---|---|---|---|---|---|
 | `carReflect` | CAR REFLECTION | 0 … 3.75 | 0.05 | `uCarReflect` |  | post.js×2, post.js |
 | `carEnvCube` | ENV REFLECTION | 0 … 1 | 0.3 | — |  | game.js×2, glx.js×3 |
-| `carGloss` | PAINT GLOSS | 0 … 2.4 | 1 | `uCarGloss` | ✓ | game.js, post.js×2 |
+| `carGloss` | PAINT GLOSS | 0.15 … 1.4 | 1 | `uCarGloss` | ✓ | game.js, post.js×2 |
 | `carSpecular` | PAINT SPECULAR | 0 … 5.25 | 1 | — |  | game.js |
 | `carClearcoat` | CLEARCOAT | 0 … 5.25 | 0.05 | — |  | game.js |
 | `carMetal` | PAINT METALNESS | 0 … 7.5 | 1 | — |  | game.js |
@@ -690,7 +690,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |  | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |  | game.js×2 |
 | `vignette` | VIGNETTE | 0 … 1 | 0.8 | `uVignette` | ✓ | game.js, post.js×4, post.js×4 |
-| `vignetteSoft` | VIGNETTE REACH | 0.1 … 0.92 | 0.35 | `uVigSoft` |  | post.js×2 |
+| `vignetteSoft` | VIGNETTE REACH | 0.1 … 0.94 | 0.35 | `uVigSoft` |  | post.js×2 |
 | `blackLift` | BLACK FLOOR | 0 … 0.2 | 0.005 | `uBlackLift` |  | post.js×2 |
 | `whitePoint` | ACES WHITE SCALE | 0.4 … 6 | 1 | `uWhitePoint` |  | post.js×2 |
 | `acesA` | TONE CURVE SHOULDER | 1 … 6 | 2.51 | `uAcesA` |  | post.js×2 |
