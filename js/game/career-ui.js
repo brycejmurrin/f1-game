@@ -318,10 +318,13 @@ function create(G) {
       + "price; buy it once and it is yours for good, free to fit and unfit from "
       + "then on.",
       ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
-      ["You may FIT", "your team's own works car"],
+      ["You may FIT", "your team's own works car, at level 0"],
+      ["Cap upgrades", "three, from the hub"],
       "Two limits, on purpose. Your BALANCE is what you can spend; the FITTED CAP "
       + "is what you may run at once. You will own more than you can fit, so "
-      + "every weekend is a choice about which car to bring.",
+      + "every weekend is a choice about which car to bring. RAISE THE CAP three "
+      + "times to widen that choice — it is the only way a fully researched "
+      + "garage turns into lap time.",
     ]));
     out.push(guideSection("THE FACTORY", [
       "The one upgrade that never runs out. Each level permanently cuts what "
@@ -433,10 +436,11 @@ function create(G) {
       "You start with a startup team's car, not a works one: slower than the "
       + "grid, and entirely yours to fix.",
       ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
-      ["Your fitted cap", "your team's own works car"],
+      ["Your fitted cap", "your team's own works car, at level 0"],
+      ["Cap upgrades", "three, from the hub"],
       "Buy a part once and it is yours for good. You will own more than you can "
       + "fit at one time, which is the point: the car you bring to a circuit is a "
-      + "decision, not an inventory.",
+      + "decision, not an inventory. RAISE THE CAP three times to widen it.",
       "Both cars run your build.",
     ]));
     out.push(guideSection("THE FACTORY", [
@@ -801,6 +805,27 @@ function create(G) {
       left.appendChild(fac);
     }
 
+    // RAISE THE CAP sits directly under the factory because the two are the
+    // career's only permanent sinks and they compete: the factory cuts what
+    // every future part costs, this raises how much of what you already own may
+    // be on the car at once. Same card shape, same hide-at-the-ceiling rule —
+    // three rungs and then there is nothing left to say.
+    if (st.budgetCost != null) {
+      const cap = el("button", "cr-card cr-record");
+      cap.id = "cr-budget";
+      cap.disabled = !(Career.freeMoney() || st.money >= st.budgetCost);
+      cap.append(
+        el("span", "cr-record-line", "Raise the fitted cap · " + st.budgetCost.toLocaleString() + " cr"),
+        el("span", "cr-record-cta", "LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
+          + "  ·  CAP " + st.budget.toLocaleString() + " cr"));
+      cap.onclick = () => {
+        if (!Career.upgradeBudget()) return;
+        if (G.soundOn) GameAudio.uiSelect();
+        build();
+      };
+      left.appendChild(cap);
+    }
+
     // WHO WOULD SIGN YOU. Reputation is a number on the header and means nothing
     // on its own; offerBar() is already a visible ladder in the rules, so show
     // it. A tier you clear is a seat that will talk to you at the end of the
@@ -1007,6 +1032,22 @@ function create(G) {
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
       body.appendChild(card);
+    }
+
+    // HOW THE CONTRACT WAS SETTLED. The season goal is written into the deal and
+    // shown on the hub all year; this is where it is answered. Absent on a save
+    // that rolled over before the goal was resolved, and the block just does not
+    // draw — which is why it owes no CAREER_V rung.
+    if (c.goalResult) {
+      body.appendChild(head("YOUR CONTRACT"));
+      const g = el("div", "cr-card");
+      g.appendChild(row("The team asked for", "P" + c.goalResult.value + " or better"));
+      g.appendChild(row("You finished", "P" + c.goalResult.pos));
+      g.appendChild(el("div", "cg-p", c.goalResult.met
+        ? "Target met. Your reputation is up, and the paddock noticed."
+        : "Target missed. Your reputation is down, and the seats that will talk "
+          + "to you this winter sit further down the grid."));
+      body.appendChild(g);
     }
 
     // WHAT THE WINTER DID. The market has always moved 0-2 seats and the player

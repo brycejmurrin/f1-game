@@ -226,6 +226,29 @@ const CEILINGS = {
   // distance breathed with frame time (28.7 cm at 320 km/h under a 16-38 ms
   // wobble). Damping the OFFSET in the car's frame cancels it to 0.0000 cm.
   // Bug-explaining growth at the site of the bug — the one kind this tolerates.
+  // -> 8231 on the career/race branch: three DEFECT fixes, mostly the comment
+  // explaining the rule each restores. (1) MY TEAM's second car now runs the
+  // career build — `mate` in makeCars plus buildPace(), folding the four parts
+  // axes into the one scalar tierV already carries, so no AI gains a parts
+  // branch on the physics path (the guide claimed "Both cars run your build"
+  // all along). (2) Track limits are three warnings, one penalty, RESET: the
+  // old rule charged +5s for every cut from the fourth on and stopped
+  // announcing past three, and it feeds the career `clean` objective — `cutWarn`
+  // sits beside `cuts` because `cuts` is the lifetime total the objective reads.
+  // (3) FULL race distance is the circuit's own gpLaps, not a flat 57 on all
+  // forty, plus the clamp that keeps a chip lit when FULL moves with the track.
+  // -> 8243 on the deploy merge: BOTH lineages' additions land in one file — the
+  // chase-camera OFFSET damping and the three career/race fixes — so neither
+  // side's number fits the union. Set from the merged file: 8244 (split-newline count, the ceiling test's own measure). Both sides are
+  // bug-explaining growth, not a feature in the wrong file.
+  // -> 8246 for the frame.exposure initialiser and the two comment lines saying
+  // why: loadTrack()'s frame literal had no `exposure`, applyRaceSettings() is its
+  // ONLY writer and runs at startRace(), so the MENU FLYBY uploaded
+  // `undefined * exposureMul` = NaN and the composite's `c *= uExposure` rendered
+  // the attract screen BLACK. Measured either side of the one-word fix by wrapping
+  // GLX.present() and reading the framebuffer: centre-64px mean luminance
+  // 1.06/255 -> 84.39. Exactly the "bug-explaining comment at its site" growth the
+  // header above says this ratchet tolerates; the fix itself is a single field.
   // 8201 -> 8210: three lighting/graphics fixes from the mechanism-sliced survey,
   // three lines of "why" each. (1) The god-ray horizon cutoff was a STEP off
   // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
@@ -237,7 +260,12 @@ const CEILINGS = {
   // state, building a second GPU copy of the road ribbon on every device where
   // per-chunk lamps are held off. Same category as the two entries above: growth
   // at the site of the bug, explaining the bug. No extraction is worth 9 lines.
-  "js/game.js": 8210,
+  // -> 8257 on this merge: the deploy lineage (frame.exposure/menu-flyby) and the
+  // lighting-survey lineage (god-ray fade, fog cull, per-chunk road) both grew the
+  // file, so neither 8246 nor 8210 fits their union. Measured on the merged tree
+  // with the ceiling test's own metric (split-newline count), per the deploy-merge
+  // rule that baselines are re-measured on the union and never inherited.
+  "js/game.js": 8257,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -304,7 +332,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2785, // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  "js/track/tracks.js": 2794, // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

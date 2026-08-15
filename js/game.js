@@ -1451,6 +1451,24 @@ function driverSkill(team, d, di) {
   return { skill: DriverRatings.skill(r, roll), craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100 };
 }
 
+// The pace an AI car gets from running a DEVELOPED build instead of its team's
+// works car — MY TEAM's hire, and nothing else on the grid (every other AI runs
+// its works car, which is exactly what `tier` already says).
+//
+// It rides in `tierV`, the number the tier has always contributed, so the
+// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no AI
+// gains a parts branch on the physics path. The mean of the four axes because a
+// human car spends its mods across four channels (speed, accel, cornering,
+// braking) and an AI has exactly one scalar — one axis alone would rate a
+// cornering upgrade as no upgrade at all. Pure: consumes no RNG, so the
+// stream-position contract makeCars() lives under is untouched.
+function buildPace(built, works) {
+  const b = built.mods, w = works.mods;
+  let sum = 0;
+  for (const k of ["speed", "accel", "cornering", "braking"]) sum += (b[k] || 1) / (w[k] || 1);
+  return sum / 4;
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
@@ -1468,7 +1486,14 @@ function makeCars() {
     // other case, so free play and driver careers are untouched.
     Career.gridDrivers(team).forEach((dSeat, di) => {
       const isP = ti === teamIdx && di === driverIdx;
-      const resolvedParts = isP ? savedParts : factoryParts;
+      // MY TEAM's second car is YOUR car. `team.custom` plus a seat that is not
+      // yours is the hire by construction: the custom team fields one entry
+      // everywhere except a MY TEAM career (see gridDrivers), so free play and
+      // driver careers cannot reach this. It fixes a guide that was lying —
+      // js/game/career-ui.js says "Both cars run your build" — and a
+      // constructors' championship your R&D only ever contested with one car.
+      const mate = !isP && ti === teamIdx && !!team.custom;
+      const resolvedParts = isP || mate ? savedParts : factoryParts;
       // In a driver career YOU take one of the team's two real seats; the driver
       // you replaced steps aside and your team-mate stays put as the benchmark
       // every objective is measured against. Null outside career.
@@ -1497,7 +1522,7 @@ function makeCars() {
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
-        tierV: TIER_V[team.tier] * Career.paceMult(team.id),
+        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -1548,7 +1573,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.penalty = 0; c.offT = 0;
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
     c.rPrevHead = 0;
@@ -2095,7 +2120,9 @@ function loadTrack(idx) {
     fogColor: pal.fog, fogDensity: pal.fogDensity,
     skyZenith:  pal.zenith,
     skyHorizon: pal.horizon,
-    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
+    // exposure: applyRaceSettings() is its ONLY writer and runs at startRace(), so the
+    // MENU FLYBY had none — po.exposure went NaN, blacking it out (meanLum 1.06/255).
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018, exposure: 1,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
@@ -3746,11 +3773,20 @@ function updateCar(c, dt, ranked) {
       c.cuts++;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
-      if (c.cuts >= 4) {
+      // THREE WARNINGS, ONE PENALTY, RESET — the real ladder. This used to add
+      // +5s for EVERY cut from the fourth on and stop announcing the count past
+      // three, so a driver who cut eight times paid 25s having been told nothing
+      // since the third. `cutWarn` is the counter that resets; `cuts` stays the
+      // LIFETIME total because the career `clean` objective and the archive read
+      // it (js/game/career.js) and "no cuts at all" must not become satisfiable
+      // by cutting four more times.
+      c.cutWarn = (c.cutWarn | 0) + 1;
+      if (c.cutWarn >= 4) {
+        c.cutWarn = 0;
         c.penalty += 5;
         if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2); if (soundOn) GameAudio.penalty(); }
       } else if (c.isPlayer) {
-        announce("TRACK LIMITS " + c.cuts + "/4", 1.2);
+        announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2);
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -5590,16 +5626,16 @@ function render(dt) {
     const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
     // only on the position snap), so the slider responds without driving.
-    const sBox = LT.shadowRange || 64;
+    const sBox = LT.shadowRange != null ? LT.shadowRange : 80;
     const step = sBox / 4;
     // Forward-biased CAMERA anchor, not the raw player position: the box budget
     // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
     // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
-    // to dissolve shadows by 0.72·range (≈46 m at the default 64) to stay inside
-    // the worst-case border — the "shadow horizon" ~46 m ahead. Anchoring at
+    // to dissolve shadows by 0.72·range (≈58 m at the default 80) to stay inside
+    // the worst-case border — the "shadow horizon" ~58 m ahead. Anchoring at
     // camera + a forward bias makes the safe radius symmetric around the view
     // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
-    // hold ~74 m ahead of the camera at the same texel density. Height comes from
+    // hold ~67 m ahead of the camera at the same texel density. Height comes from
     // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
     // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
     // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
@@ -6750,8 +6786,8 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
-  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  // slow at the scale floor sheds those instead. Tier 2 drops the SSR march
+  // (road + car-paint), tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
@@ -6760,7 +6796,7 @@ function render(dt) {
   // non-zero whenever the key is bright) still ran the SSAO pass and both of its
   // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -7301,13 +7337,24 @@ function buildRaceSettings() {
   $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
   // TT list includes 4 because TT_LAPS = 4 is the openRaceSettings default —
   // without it the screen opened with no LAPS chip highlighted.
-  const lapOpts = isTimeTrial() ? [3, 4, 5, 8] : [3, 5, 10, 25, 57];
+  // FULL is this CIRCUIT's grand prix distance (def.gpLaps — the real
+  // regulation, derived in js/track/tracks.js), not a flat 57 offered on all
+  // forty. Monaco is 78 laps and Spa is 44; one number could only ever be right
+  // for one of them, and 57 was not right for either. Filtered so the ladder
+  // stays strictly increasing on a short circuit-free layout.
+  const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
+  const lapOpts = isTimeTrial() ? [3, 4, 5, 8]
+                                : [3, 5, 10, 25].filter((n) => n < full).concat(full);
+  // FULL now MOVES with the circuit, so a selection made at Monaco (78) is off
+  // the ladder at Spa (44) and would leave no chip lit — the same defect the
+  // TT comment above records. Clamp instead of silently deselecting.
+  if (!isTimeTrial() && raceLaps > full) raceLaps = full;
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";
   for (const n of lapOpts) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceLaps === n ? " active" : "");
-    b.textContent = n === 57 ? "57 (FULL)" : String(n);
+    b.textContent = !isTimeTrial() && n === full ? full + " (FULL)" : String(n);
     b.onclick = () => { raceLaps = n; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     lapsEl.appendChild(b);
   }

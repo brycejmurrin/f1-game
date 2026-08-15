@@ -206,6 +206,73 @@ Two rules fall out of that:
   reached the live site with nothing red to show for it. **Check the run's
   conclusion after a deploy push; do not treat the push as the deploy.**
 
+### Wrap the FUNCTION, don't read the PIXELS (2026-08-14)
+
+A player reported "the road section in front of me gets darker, and the lighting
+depends on where I'm looking/turning" (at night). Two instruments were tried:
+
+1. **Pixel readback.** Force `preserveDrawingBuffer` in an init script, pin the
+   eye with `__apex.view({eye, yaw, pitch})`, sweep yaw, and read a window that
+   TRACKS one world patch (`ndcX = tan(t0 - d)/tanHalfX`, ndcY unchanged — a pure
+   yaw leaves points on the optical axis' horizontal plane on it). Two traps
+   cost a run each: **`M4.perspectiveTo` takes a VERTICAL fov**, so `tanHalfX`
+   needs `* aspect` — get it wrong and the window slides onto different content
+   and the run is noise; and **a dense night circuit under SwiftShader can miss
+   every frame in a 2 s sleep**, which reports as "no lamps" rather than as slow.
+   Wait on a signal (`waitForFunction` on a generation counter), never a timer.
+2. **Wrapping the producer.** `game.js` calls `LightTune.setFrameLights(...)` as
+   a LIVE property read, so replacing that property from the page captures the
+   exact lamp set the shader will get — identity, position and final intensity —
+   with no rendering, no noise, and no SwiftShader in the loop. It found the bug
+   in one run and graded the fix in one more.
+
+**Prefer (2).** The engine's per-frame data structures are reachable by name;
+pixels are a lossy re-derivation of them. (1) is only needed when the question is
+about the SHADER, not about what the shader was handed.
+
+The bug itself: the night lamp cull ranks lamps by a camera-forward-BIASED
+distance, then faded their brightness against that same biased set's edge — so a
+stationary lamp changed brightness when the player only turned. Measured with the
+eye pinned and the aim swept ±60°: lamps swinging 5.01×, 2.99×, 2.86×, 2.77×,
+2.55×. Fixed in `js/game/lighting.js` (fade on the lamp's own geometric distance
+against a direction-free radius; the biased edge survives only as a narrow
+continuity guard) — the same five lamps then measured 2.07×, 1.07×, 1.01×, 1.00×,
+1.00×. **A "control" run is only a control if it varied the thing you think it
+varied**: the first baseline here snapshotted before the free camera took effect,
+so the camera never yawed and every lamp read a flat 1.00× — a clean bill of
+health from an experiment that did nothing.
+
+### OPEN, MEASURED: the sun shadow fade is camera-ORIENTATION dependent (2026-08-15)
+
+The daytime sibling of the night lamp bug, found by the same method and **not yet
+fixed**. `js/game.js` anchors the shadow box at `camEye + 20 m` along the camera's
+horizontal look direction, and `js/render/shaders/lit.js` fades shadows by distance
+from that same anchor (`edgeFade = 1 - smoothstep(range*0.62, range*0.84, aDist)`).
+A pure yaw with the eye pinned therefore sweeps the fade front around a 40 m circle.
+Measured (bahrain, day, eye pinned, aim swept ±40°, `shadowRange` 80):
+
+| distance ahead | edgeFade range | note |
+|---|---|---|
+| 40 m | 1.000 – 1.000 | unaffected |
+| 60 m | 1.000 – 1.000 | unaffected |
+| **70 m** | **0.625 – 0.986** | 58% of shadow strength, from camera yaw alone |
+| 80 m | 0.004 – 0.308 | faint either way |
+
+So it is real but confined to a 65–85 m band, and much milder than the lamp version
+(which reached 5×). MJP's *A Sampling of Shadow Techniques* states the standard
+requirement plainly — a stabilised cascade "won't change as the camera rotates";
+extent should follow camera POSITION, not orientation.
+
+**Why it was not fixed in the same pass.** The obvious repair — keep the BOX
+forward-biased (that only allocates texels, which is invisible) and anchor the FADE
+at the yaw-invariant look target — changes the coverage arithmetic: the box
+guarantees `0.875·range = 70 m` from the BOX anchor, and moving the fade anchor ~10 m
+away drops guaranteed coverage to ~60 m while the fade still completes at
+`0.84·range = 67 m`. Points in that 60–67 m gap fall outside the box and hit the UV
+border feather, i.e. shadows go missing by a different route. Fixing it properly
+means re-deriving the fade completion against the new anchor and re-measuring, which
+is a shadow-path change worth doing deliberately rather than at the end of a session.
+
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 
 §0's table lists the Node VM harness (`tools/verify-track.cjs`,

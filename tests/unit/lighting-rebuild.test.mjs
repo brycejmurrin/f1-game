@@ -54,7 +54,7 @@ const LIGHTING = read("js/game/lighting.js");
 // The build path: buildTrackLights and its helper floodColor (called only from
 // the build). The per-frame path: functions render() calls each frame.
 const BUILD_FNS = ["buildTrackLights", "floodColor", "applyLampDensity", "lampDensityFactor", "lampStrideNodes", "lampStrideM"];
-const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap"];
+const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap", "capRadius2"];
 
 test("the light functions this test models still exist", () => {
   for (const n of [...BUILD_FNS, ...FRAME_FNS])

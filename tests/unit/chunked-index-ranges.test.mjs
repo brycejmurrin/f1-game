@@ -41,11 +41,21 @@ function makeGL() {
     ARRAY_BUFFER: 0x8892, ELEMENT_ARRAY_BUFFER: 0x8893, STATIC_DRAW: 0x88e4,
     FLOAT: 0x1406, TRIANGLES: 4, UNSIGNED_INT: 0x1405, UNSIGNED_SHORT: 0x1403,
     _elem: null,            // the bound element buffer's record
+    _array: null,           // the bound ARRAY_BUFFER record (VBO)
+    _attribs: [],
+    _enabled: new Set(),
     _buffers: [],
     createVertexArray: () => ({}), bindVertexArray: () => {},
-    createBuffer() { const b = { id: this._buffers.length, bytes: null }; this._buffers.push(b); return b; },
-    bindBuffer(target, buf) { if (target === this.ELEMENT_ARRAY_BUFFER) this._elem = buf; },
+    createBuffer() { const b = { id: this._buffers.length, bytes: null, f32: null }; this._buffers.push(b); return b; },
+    bindBuffer(target, buf) {
+      if (target === this.ELEMENT_ARRAY_BUFFER) this._elem = buf;
+      if (target === this.ARRAY_BUFFER) this._array = buf;
+    },
     bufferData(target, src) {
+      if (target === this.ARRAY_BUFFER && this._array && src && src.length != null) {
+        this._array.f32 = Float32Array.from(src);
+        return;
+      }
       if (target !== this.ELEMENT_ARRAY_BUFFER) return;
       // Size-only allocation is the path createChunkedMesh takes.
       this._elem.bytes = typeof src === "number"
@@ -56,7 +66,10 @@ function makeGL() {
       if (target !== this.ELEMENT_ARRAY_BUFFER) return;
       this._elem.bytes.set(new Uint8Array(src.buffer, src.byteOffset, src.byteLength), byteOffset);
     },
-    enableVertexAttribArray: () => {}, vertexAttribPointer: () => {},
+    enableVertexAttribArray(i) { this._enabled.add(i); },
+    vertexAttribPointer(idx, size, type, norm, stride, offset) {
+      this._attribs.push({ idx, size, stride, offset });
+    },
     deleteBuffer: () => {}, deleteVertexArray: () => {},
   };
   return gl;
@@ -205,4 +218,67 @@ test("a mesh too small to chunk still comes back as a plain mesh", () => {
   // and the draw path's `!mesh.chunks` branch must stay reachable.
   const m = C.createChunkedMesh(makeGrid(2, 2, 20), 72);   // 320 tris
   assert.equal(m.chunks, null, "a sub-2000-triangle mesh must not be chunked");
+});
+
+test("createChunkedMesh without trk keeps the 9-float layout and leaves attrib 4 off", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const mesh = C.createChunkedMesh(makeGrid(6, 6, 30), 72);
+  assert.ok(mesh.chunks, "fixture must chunk so the interleaved path runs");
+  assert.equal(gl._enabled.has(4), false, "no data.trk → attrib 4 stays generic (0,0,0)");
+  assert.equal(gl._attribs.some((a) => a.idx === 4), false);
+  const vbo = gl._buffers.find((b) => b.f32);
+  assert.ok(vbo && vbo.f32, "VBO upload must be recorded");
+  assert.equal(vbo.f32.length, 6 * 6 * 30 * 4 * 9, "pos+nrm+col only");
+});
+
+test("createChunkedMesh interleaves data.trk onto attrib 4 (road markings)", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeGrid(6, 6, 30);
+  const vCount = src.pos.length / 3;
+  const trk = new Float32Array(vCount * 3);
+  for (let i = 0; i < vCount; i++) {
+    trk[i * 3] = 10 + i;
+    trk[i * 3 + 1] = 0.5;
+    trk[i * 3 + 2] = 6;
+  }
+  src.trk = trk;
+  const mesh = C.createChunkedMesh(src, 72);
+  assert.ok(mesh.chunks, "fixture must chunk");
+  assert.ok(gl._enabled.has(4), "attrib 4 (vTrk) must be enabled when data.trk is present");
+  const a4 = gl._attribs.find((a) => a.idx === 4);
+  assert.ok(a4, "attrib 4 pointer must be set");
+  assert.equal(a4.size, 3);
+  assert.equal(a4.stride, 12 * 4, "pos+nrm+col+trk = 12 floats when there is no mat");
+  assert.equal(a4.offset, 9 * 4);
+  const vbo = gl._buffers.find((b) => b.f32);
+  assert.ok(vbo && vbo.f32, "VBO upload must be recorded");
+  assert.equal(vbo.f32.length, vCount * 12);
+  assert.equal(vbo.f32[9], 10);
+  assert.equal(vbo.f32[10], 0.5);
+  assert.equal(vbo.f32[11], 6);
+  assert.equal(vbo.f32[12 + 9], 11);
+});
+
+test("createChunkedMesh places trk after mat when both are present", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeGrid(6, 6, 30);
+  const vCount = src.pos.length / 3;
+  src.mat = new Float32Array(vCount);
+  src.mat[0] = 3;
+  const trk = new Float32Array(vCount * 3);
+  trk[0] = 100; trk[1] = -2; trk[2] = 7.5;
+  src.trk = trk;
+  C.createChunkedMesh(src, 72);
+  const a4 = gl._attribs.find((a) => a.idx === 4);
+  assert.ok(a4);
+  assert.equal(a4.stride, 13 * 4, "pos+nrm+col+mat+trk = 13 floats");
+  assert.equal(a4.offset, 10 * 4, "trk follows the optional mat float");
+  const vbo = gl._buffers.find((b) => b.f32);
+  assert.equal(vbo.f32[9], 3, "mat occupies float 9");
+  assert.equal(vbo.f32[10], 100);
+  assert.equal(vbo.f32[11], -2);
+  assert.equal(vbo.f32[12], 7.5);
 });
