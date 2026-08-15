@@ -115,12 +115,15 @@ commentary about it is stale.
 
 **What this does NOT imply.** It is not an argument to unfreeze WGX. §6 of
 `docs/ARCHITECTURE-REVIEW.md` makes the real point: the cost is *one look in
-three shading languages*, and WGX still lacks volumetrics, PCSS, MSAA and the
-baked material arrays (`docs/ARCHITECTURE.md`, renderer section). Broader
-platform support does not reduce that cost — if anything it raises the stakes of
-having two incomplete backends rather than one good one. The honest options are
-still "invest in one of TLX/WGX" or "keep GLX and let the seam be insurance",
-and this finding only changes the input to that decision, not the answer.
+three shading languages*, and WGX still lacks volumetrics, PCSS quality, MSAA
+and the baked material arrays (`docs/ARCHITECTURE.md`, renderer section).
+Broader platform support does not reduce that cost — if anything it raises the
+stakes of having two incomplete backends rather than one good one. The honest
+options are still "invest in one of TLX/WGX" or "keep GLX and let the seam be
+insurance", and this finding only changes the input to that decision, not the
+answer. If that investment *is* WGX, the API recipes and slice order live in
+[WEBGPU-PARITY.md](WEBGPU-PARITY.md) — every listed gap is implementable in
+core WebGPU; the freeze was a cost call, not an API wall.
 
 ---
 
