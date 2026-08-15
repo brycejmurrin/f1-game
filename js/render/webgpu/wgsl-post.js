@@ -55,8 +55,9 @@
  *                             — unused here), sceneDepth (depth24plus/depth32f).
  *
  *   0. SSAO      : half-res R8/rgba8. reads sceneDepth.            -> ssaoTex
- *   1. GODRAY    : half-res rgba16float. reads a bright source     -> godrayTex
- *                  (bloomMip0 after its bright-pass, OR sceneHDR).
+ *   0b SSAO denoise / god-ray blur: separable 5-tap gaussian (BLUR)
+ *   1. GODRAY    : half-res rgba16float. world-space march through
+ *                  depth + sun/lamp shadow maps.                   -> godrayTex
  *   2. BLOOM_DOWN: mip0 = bright-pass+downsample of sceneHDR at HALF res
  *                  (threshold > 0); mips 1..N-1 = plain downsample of the
  *                  previous mip (threshold = 0). Each mip is rgba16float, each
@@ -92,9 +93,9 @@
  *     COMPOSITE (GLX COMPOSITE_FS, js/render/shaders/post.js COMPOSITE_FS), each gated by a scalar
  *     so 0 = the shipped no-op look.
  *   - Film grain is KEPT (cheap, one hash); dither is KEPT (8-bit banding fix).
- * GODRAY here is the CHEAPER screen-space radial variant (GLX COMPOSITE_FS sun-
- * shaft block, js/render/shaders/post.js COMPOSITE_FS) rather than the world-space shadow-map march
- * (GLX GODRAY_FS) — no depth/shadow-map dependency, matches the "reduced" brief.
+ * GODRAY is the GLX world-space march (depth + sun/lamp shadows + HG phase);
+ * BLUR is the shared 5-tap separable gaussian used to denoise SSAO and soften
+ * the shaft slices (GLX BLUR_FS, js/render/shaders/post.js).
  */
 "use strict";
 
@@ -338,62 +339,180 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
-  // 4. GODRAY — screen-space radial light-shaft accumulation toward the sun.
-  //    Port of the sun-shaft block in GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS): 8 taps
-  //    marching from the pixel toward the sun's screen position, reading a
-  //    bright source (bloom bright-pass mip0, or scene HDR), weighted by decay
-  //    and proximity-to-sun so isolated hotspots can't smear into comet dashes.
-  //    Output is the ADDITIVE shaft (composite adds it to the scene). Gate on
-  //    the CPU: only dispatch when the sun is on-screen + above the horizon.
+  // 3b. BLUR — separable 5-tap gaussian (GLX BLUR_FS).
+  //    SSAO: one H then V pass. God-ray: H+V twice with growing radius so the
+  //    world-march slices soften into volumes instead of thin stripes.
   //
   //    BIND GROUP 0:
-  //      @binding(0) brightTex : texture_2d<f32>   bright source (bloom mip0 / scene)
-  //      @binding(1) brightSamp: sampler           linear clamp
-  //      @binding(2) U         : uniform  GodrayU
-  //    UNIFORM GodrayU (32 B):
-  //      p0       : vec4<f32>  off  0   (sunUV.x, sunUV.y, strength, radialScale)
-  //      sunColor : vec4<f32>  off 16   (xyz sun tint, w = per-step decay e.g. 0.82)
+  //      @binding(0) srcTex  : texture_2d<f32>
+  //      @binding(1) srcSamp : sampler           linear clamp
+  //      @binding(2) U       : uniform  BlurU
+  //    UNIFORM BlurU (16 B):
+  //      dir : vec2<f32>  off 0   (texel * axis, e.g. (1/w, 0) or (0, 1/h))
+  //      _pad: vec2<f32>  off 8
+  // ════════════════════════════════════════════════════════════════════════
+  const BLUR = `
+struct BlurU { dir : vec4<f32> };
+@group(0) @binding(0) var srcTex  : texture_2d<f32>;
+@group(0) @binding(1) var srcSamp : sampler;
+@group(0) @binding(2) var<uniform> U : BlurU;
+${fullscreenTri}
+${POST_VS}
+
+@fragment
+fn fs_main(in : VOut) -> @location(0) vec4<f32> {
+  let d = U.dir.xy;
+  let o1 = d * 1.3846153846;
+  let o2 = d * 3.2307692308;
+  var s = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).rgb * 0.2270270270;
+  s = s + textureSampleLevel(srcTex, srcSamp, in.uv + o1, 0.0).rgb * 0.3162162162;
+  s = s + textureSampleLevel(srcTex, srcSamp, in.uv - o1, 0.0).rgb * 0.3162162162;
+  s = s + textureSampleLevel(srcTex, srcSamp, in.uv + o2, 0.0).rgb * 0.0702702703;
+  s = s + textureSampleLevel(srcTex, srcSamp, in.uv - o2, 0.0).rgb * 0.0702702703;
+  return vec4<f32>(s, 1.0);
+}`;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 4. GODRAY — world-space 16-step march through scene depth + sun/lamp
+  //    shadow maps (GLX GODRAY_FS). Composite adds the result. CPU gates on
+  //    sun-on-screen or lampVol > 0. A separable BLUR follows the march.
   // ════════════════════════════════════════════════════════════════════════
   const GODRAY = `
 struct GodrayU {
-  p0       : vec4<f32>,
-  sunColor : vec4<f32>,
+  invVP    : mat4x4<f32>,   // off   0
+  lightVP  : mat4x4<f32>,   // off  64
+  lampVP   : mat4x4<f32>,   // off 128
+  eye      : vec4<f32>,     // off 192
+  sunDir   : vec4<f32>,     // off 208
+  sunColor : vec4<f32>,     // off 224
+  p0       : vec4<f32>,     // off 240  (str, lampStr, mist, time)
+  p1       : vec4<f32>,     // off 256  (cloudCover, cloudSpeed, hgAniso, hgFloor)
+  p2       : vec4<f32>,     // off 272  (numLights, lampShadowIdx, 0, 0)
 };
-@group(0) @binding(0) var brightTex  : texture_2d<f32>;
-@group(0) @binding(1) var brightSamp : sampler;
-@group(0) @binding(2) var<uniform> U : GodrayU;
+struct GRLight {
+  posRad   : vec4<f32>,
+  colBleed : vec4<f32>,
+  dirVol   : vec4<f32>,
+  cone     : vec4<f32>,
+};
+@group(0) @binding(0) var depthTex : texture_depth_2d;
+@group(0) @binding(1) var depthSamp : sampler;
+@group(0) @binding(2) var shadowTex : texture_depth_2d;
+@group(0) @binding(3) var shadowSamp : sampler_comparison;
+@group(0) @binding(4) var lampShadowTex : texture_depth_2d;
+@group(0) @binding(5) var<uniform> U : GodrayU;
+@group(0) @binding(6) var<storage, read> lights : array<GRLight, 32>;
 ${fullscreenTri}
 ${POST_VS}
+fn grHash21(p_in: vec2<f32>) -> f32 {
+  var p = fract(p_in * vec2<f32>(123.34, 456.21));
+  p = p + dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+fn grNoise(p_in: vec2<f32>) -> f32 {
+  let i = floor(p_in);
+  var f = fract(p_in);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(grHash21(i), grHash21(i + vec2<f32>(1.0, 0.0)), f.x),
+             mix(grHash21(i + vec2<f32>(0.0, 1.0)), grHash21(i + vec2<f32>(1.0, 1.0)), f.x), f.y);
+}
+fn grCloudFBM(p_in: vec2<f32>) -> f32 {
+  var p = p_in; var s = 0.0; var a = 0.5;
+  for (var i = 0; i < 3; i = i + 1) { s = s + a * grNoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
+  return s;
+}
+fn grCloud(wp: vec3<f32>) -> f32 {
+  if (U.p1.x <= 0.001 || U.sunDir.y <= 0.06) { return 0.0; }
+  let t = (360.0 - wp.y) / max(U.sunDir.y, 0.15);
+  let cT = U.p0.w * U.p1.y;
+  let cp = (wp.xz + U.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
+  return smoothstep(0.54 - U.p1.x * 0.40, 0.92, grCloudFBM(cp)) * U.p1.x;
+}
+fn worldPos(uv: vec2<f32>, d: f32) -> vec3<f32> {
+  let c = vec4<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
+  let w = U.invVP * c;
+  return w.xyz / w.w;
+}
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let sunUV    = U.p0.xy;
-  let strength = U.p0.z;
-  let radialK  = U.p0.w;
-  let decayK   = U.sunColor.w;
-
-  let toSun = sunUV - in.uv;
-  let dist  = length(toSun);
-  if (dist <= 0.005 || strength <= 0.0) { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
-
-  let stepV = toSun / dist * min(dist, 0.40) / 8.0;
-  // Interleaved-gradient-noise start jitter hides the 8-tap quantisation.
+  let d = textureSampleLevel(depthTex, depthSamp, in.uv, 0.0);
+  let viewDir = normalize(worldPos(in.uv, 0.5) - U.eye.xyz);
+  let endP = select(worldPos(in.uv, d), U.eye.xyz + viewDir * 400.0, d >= 0.99999);
+  let ro = U.eye.xyz;
+  var rd = endP - ro;
+  let dist = length(rd);
+  rd = rd / max(dist, 1e-4);
+  let march = min(dist, 260.0);
+  let N = 16;
+  let stepLen = march / 16.0;
   let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
-  var uv = in.uv + stepV * ign;
-  var shaft = vec3<f32>(0.0);
-  var decay = 1.0;
-  for (var i = 0; i < 8; i = i + 1) {
-    uv = uv + stepV;
-    let suv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
-    // Weight by proximity to the sun so only the sun's glare casts shafts.
-    let sw = 1.0 - clamp(length(suv - sunUV) / 0.32, 0.0, 1.0);
-    shaft = shaft + textureSampleLevel(brightTex, brightSamp, suv, 0.0).rgb * (decay * sw * sw);
-    decay = decay * decayK;
+  let t0 = stepLen * ign;
+  var accum = 0.0;
+  var lampAccum = vec3<f32>(0.0);
+  var trans = 1.0;
+  let groundY = U.eye.y - 4.0;
+  let uStr = U.p0.x;
+  let uLampStr = U.p0.y;
+  let nL = i32(U.p2.x);
+  let lampIdx = i32(U.p2.y);
+  for (var i = 0; i < N; i = i + 1) {
+    let td = t0 + stepLen * f32(i);
+    let p = ro + rd * td;
+    trans = trans * exp(-stepLen * 0.010);
+    if (uStr > 0.0) {
+      let hSun = exp(-max(p.y - groundY, 0.0) * 0.03);
+      let lc = U.lightVP * vec4<f32>(p, 1.0);
+      let sc = lc.xyz / lc.w;
+      let suv = vec2<f32>(sc.x * 0.5 + 0.5, 0.5 - sc.y * 0.5);
+      var lit = 1.0;
+      if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z < 1.0) {
+        lit = textureSampleCompareLevel(shadowTex, shadowSamp, suv, sc.z - 0.002);
+      }
+      lit = lit * (1.0 - grCloud(p) * 0.62);
+      accum = accum + lit * hSun * trans;
+    }
+    if (uLampStr > 0.0 && td < 200.0) {
+      let hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);
+      for (var li = 0; li < 6; li = li + 1) {
+        if (li >= nL) { break; }
+        let LP = lights[li].posRad.xyz - p;
+        let rad = lights[li].posRad.w;
+        let ld2 = dot(LP, LP);
+        if (ld2 > rad * rad) { continue; }
+        let ld = sqrt(ld2);
+        let Ld = LP / max(ld, 1e-3);
+        let sn = ld / rad;
+        let win = clamp(1.0 - sn * sn * sn * sn, 0.0, 1.0);
+        let att = win * win / (ld * ld + 1.0);
+        let cd = dot(-Ld, lights[li].dirVol.xyz);
+        let spot = smoothstep(lights[li].cone.y, lights[li].cone.x, cd);
+        let cosL = max(dot(rd, Ld), 0.0);
+        let hgLd = 1.36 - 1.2 * cosL;
+        let hgL = 0.64 / (hgLd * sqrt(hgLd));
+        var lampLit = 1.0;
+        if (li == lampIdx) {
+          let lq = U.lampVP * vec4<f32>(p, 1.0);
+          if (lq.w > 0.0) {
+            let lqs = lq.xyz / lq.w;
+            let luv = vec2<f32>(lqs.x * 0.5 + 0.5, 0.5 - lqs.y * 0.5);
+            if (luv.x > 0.002 && luv.x < 0.998 && luv.y > 0.002 && luv.y < 0.998 && lqs.z < 1.0) {
+              lampLit = textureSampleCompareLevel(lampShadowTex, shadowSamp, luv, lqs.z - 0.004);
+            }
+          }
+        }
+        lampAccum = lampAccum + lights[li].colBleed.xyz * (att * spot * (0.12 + hgL * 0.14) * lampLit)
+                    * lights[li].dirVol.w * hLamp * trans;
+      }
+    }
   }
-  shaft = shaft / 8.0;
-  // Radial falloff: strongest at the sun, zero toward the frame edge.
-  let radial = 1.0 - clamp(dist * radialK, 0.0, 1.0);
-  let outc = shaft * U.sunColor.xyz * strength * radial * radial * 0.60;
-  return vec4<f32>(outc, 1.0);
+  accum = accum / 16.0;
+  lampAccum = lampAccum * U.p0.z * uLampStr * 2.0 / 16.0;
+  let cosT = max(dot(rd, U.sunDir.xyz), 0.0);
+  let g = clamp(U.p1.z, 0.0, 0.95);
+  let hgD = 1.0 + g * g - 2.0 * g * cosT;
+  let hg = (1.0 - g * g) / (hgD * sqrt(hgD));
+  let phase = hg * 0.16 + U.p1.w;
+  return vec4<f32>(U.sunColor.xyz * accum * phase * uStr + lampAccum, 1.0);
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
@@ -459,7 +578,7 @@ struct CompositeU {
   gamma       : vec4<f32>,
   gain        : vec4<f32>,
   aces        : vec4<f32>,
-  dirtFx      : vec4<f32>,     // off 240   (lensDirt, _pad, _pad, _pad) — LENS DIRT knob
+  dirtFx      : vec4<f32>,     // off 240   (lensDirt, hazeUV.x, hazeUV.y, hazeStr)
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var bloomTex  : texture_2d<f32>;
@@ -587,9 +706,22 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // bright energy into a smudgy veil + breaks the clean flare into blotches. Read
   // directly — 0 is a valid "clean lens", so the uploader always packs the value.
   let lensDirt = U.dirtFx.x;
+  let hazeStr  = U.dirtFx.w;
   let texel      = U.texel.xy;
 
-  var c = textureSampleLevel(sceneTex, samp, in.uv, 0.0).rgb;
+  var sceneUV = in.uv;
+  if (hazeStr > 0.002) {
+    let hd = (in.uv - U.dirtFx.yz - vec2<f32>(0.0, 0.08)) * vec2<f32>(3.2, 1.0);
+    let hm = exp(-dot(hd, hd) * 70.0) * hazeStr;
+    if (hm > 0.003) {
+      let carHere = 1.0 - smoothstep(0.42, 0.55, textureSampleLevel(sceneTex, samp, in.uv, 0.0).a);
+      if (carHere < 0.25) {
+        let hp = in.uv.y * 90.0 - U.fx.z * 11.0;
+        sceneUV = in.uv + vec2<f32>(sin(hp + in.uv.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+      }
+    }
+  }
+  var c = textureSampleLevel(sceneTex, samp, sceneUV, 0.0).rgb;
   let caDir = in.uv - vec2<f32>(0.5);
 
   // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
@@ -974,7 +1106,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Human-readable pass order for the wgx.js render-target allocator.
   const PASS_ORDER = [
     "SSAO",        // half-res  <- sceneDepth
-    "GODRAY",      // half-res  <- bright source (bloom mip0 / scene)
+    "BLUR",        // half-res  SSAO denoise + god-ray soften (separable 5-tap)
+    "GODRAY",      // half-res  <- depth + sun/lamp shadows
     "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mips 1..N plain) <- sceneHDR
     "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
     "SSR",         // full-res  <- sceneHDR + sceneDepth  -> ssrTex (rgba, .a=mix)
@@ -987,6 +1120,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_DOWN,
     BLOOM_UP,
     SSAO,
+    BLUR,
     GODRAY,
     COMPOSITE,
     FXAA,
@@ -997,7 +1131,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     BLOOM_DOWN_UNIFORM_BYTES: 16,   // BloomDownU
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
-    GODRAY_UNIFORM_BYTES: 32,       // GodrayU (2×vec4)
+    BLUR_UNIFORM_BYTES: 16,         // BlurU  (dir.xy + pad)
+    GODRAY_UNIFORM_BYTES: 288,      // GodrayU (world-space march + lamp vol)
     COMPOSITE_UNIFORM_BYTES: 256,   // CompositeU (16×vec4) — +HDR grading + ACES tone curve + LENS DIRT
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)

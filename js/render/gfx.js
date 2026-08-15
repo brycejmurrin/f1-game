@@ -4,10 +4,11 @@
  * THREE backends stand behind this seam:
  *   GLX  (WebGL2)          the DEFAULT — everyone gets it, no opt-in.
  *   TLX  (three.js/TSL)    opt-in via localStorage apex26.gfxBackend="three".
- *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu"; FROZEN and
- *                          not at GLX parity (no volumetrics/MSAA/gpuTimer/
- *                          createTextureArray). It DOES ship a PCSS-lite
- *                          blocker search — pcss() returns true.
+ *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu". Ships the
+ *                          GLX draw-API surface (gpuTimer, texture arrays,
+ *                          lamp shadows, instancing, particles, MSAA 2×).
+ *                          pcss() returns true (Poisson-8 + blocker search).
+ *                          GLX stays the default.
  *
  * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
  * injects their files at boot (see DEFERRED/BACKEND_FILES in game.js) only when
@@ -55,13 +56,12 @@
  *     (TrackGraph.batches() consumer); cullInstances(batch, planes) narrows
  *     batch.visible to the frustum; drawInstanced(batch, opts);
  *     castShadowInstanced(batch, count); freeInstancedBatch(batch).
- *     GLX only today — TLX and WGX export the whole family as undefined.
+ *     GLX + WGX implement the family; TLX exports it as undefined.
  *   createTextureArray(size, images, layers)     TEXTURE_2D_ARRAY whose layer
  *     index IS the MAT id; setMaterialMaps(maps|null) adopts/clears the baked
- *     arrays. assets.js supported() detects BOTH (GLX + TLX; WGX: undefined,
- *     the baked pack stays off there).
+ *     arrays. assets.js supported() detects the pair (GLX + WGX + TLX).
  *   drawParticles(data, floatCount, additive)    transient FX vertex batch —
- *     js/game/particles.js feature-detects it (GLX + TLX; WGX: undefined).
+ *     js/game/particles.js feature-detects it (GLX + WGX + TLX).
  *
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)
