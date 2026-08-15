@@ -185,6 +185,31 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
     `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
 });
 
+test("amount-knob defaults are not crushed into the first quarter of the slider", () => {
+  // HTML range thumbs are linear in [min, max]. After the leftover ×1.5 / "raise
+  // the ceiling" pass, a 1.0 default on a 0..12 slider sat at 8% of travel —
+  // a few pixels from the left edge, so everyday nudges were unusable. Off-by-
+  // default knobs (def === min) and signed/auto knobs stay where they are.
+  const crushed = defs()
+    .filter((d) => d.def !== undefined && d.max !== undefined)
+    .filter((d) => d.min >= 0 && d.def > d.min && (d.max - d.min) > d.step)
+    // 0..1 (and other max≤1) amounts: the ceiling IS the designed unit. A
+    // 0.05 default on CLEARCOAT has to sit left or you lose the 0..1 lacquer.
+    .filter((d) => d.max > 1)
+    // CAR REFLECTION default is a whisper (0.05) on a 0..1.5 mix that still
+    // has to reach the 0.85 mixAmt cap — same class as a unit amount.
+    .filter((d) => d.id !== "carReflect")
+    .filter((d) => (d.def - d.min) / (d.max - d.min) < 0.25)
+    .map((d) => {
+      const pct = ((d.def - d.min) / (d.max - d.min) * 100).toFixed(1);
+      return `${d.id}: def ${d.def} sits at ${pct}% of [${d.min}, ${d.max}]`;
+    });
+  assert.deepEqual(crushed, [],
+    "an amount knob's shipped default is in the first quarter of its slider. " +
+    "Pull the leftover-wide max down so the default (and shipped presets) sit " +
+    "in a usable band — do not raise the default to chase the thumb.");
+});
+
 test("asymmetric white-balance sliders are not ±N when the mix is not", () => {
   // fogTint already ships asymmetric (−6…3.9) because warm cuts blue at
   // 0.25/unit and cool cuts red at 0.12/unit. The other WB knobs used the
