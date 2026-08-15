@@ -6013,8 +6013,8 @@ function render(dt) {
   // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
   // per-light shadow cost). Casters: last frame's pooled car matrices (same
   // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
-  // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
-  // has no lampShadowBegin, the mobile tier never creates the map.
+  // the lamp frustum (barriers, grandstands, buildings). Desktop only — all
+  // three backends expose lampShadowBegin; the mobile tier never creates the map.
   if (gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !_studioRig &&
       player && state !== "menu") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the
