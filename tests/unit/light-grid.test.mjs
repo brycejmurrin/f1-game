@@ -132,9 +132,14 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
     `ssrThick max ${get("ssrThick").max} reaches the far-window reject`);
   assert.doesNotMatch(get("ssrThick").help || "", /[Cc]eiling raised to 5/,
     "ssrThick help must not call the far-window reject the slider ceiling");
-  // post.js: smoothstep(0.95, min(uVigSoft, 0.94), vr) — 0.94 is the last live notch.
-  assert.equal(get("vignetteSoft").max, 0.94,
-    "VIGNETTE REACH must end at the shader clamp, not an unexplained 0.68");
+  // post.js: 1.0 - smoothstep(min(uVigSoft, 0.69), 0.70710678, vr) — 0.69 is the
+  // last live notch. This assertion previously read 0.94 against the OLD form,
+  // smoothstep(0.95, min(uVigSoft, 0.94), vr), whose edges were ill-ordered
+  // (edge0 > edge1) and whose ramp the frame could never finish walking. When the
+  // shader was rewritten the clamp moved to 0.69 and this number did not, so the
+  // guard actively held 29.8% of the slider in a region that is now bit-identical.
+  assert.equal(get("vignetteSoft").max, 0.69,
+    "VIGNETTE REACH must end at the shader clamp min(uVigSoft, 0.69)");
   // lit.js fogCol: warm blue hits 0 at +4; cool red hits 0 at -1/0.12 ≈ 8.33.
   assert.ok(get("fogTint").max <= 4 + 1e-9, "fogTint warm side past blue=0");
   assert.ok(get("fogTint").min >= -1 / 0.12 - 0.05, "fogTint cool side past red=0");
@@ -146,8 +151,11 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   assert.equal(get("godrayAniso").max, 0.95);
   // game.js: clamp(0.85 * roadRough, 0.04, 1)
   assert.ok(get("roadRough").max <= 1 / 0.85 + 0.01, "roadRough past roughness=1");
-  // lit.js wet absorb: 1 - 0.42*uWetDark hits 0 at 1/0.42 (porous, the last term).
-  assert.ok(get("wetDark").max <= 1 / 0.42 + 0.05, "wetDark past full absorb");
+  // lit.js wet absorb: absorbRoad = 1 - 0.58*uWetDark hits 0 at 1/0.58 = 1.7241,
+  // and porous is now a FRACTION of it (absorbRoad * 0.66), so both saturate at
+  // the same point. The old form here cited 0.42 — the pre-fix porous coefficient,
+  // which no longer exists — and so permitted a max of 2.43, i.e. 28% dead travel.
+  assert.ok(get("wetDark").max <= 1 / 0.58 + 0.01, "wetDark past full absorb");
   // lit.js: 0.30 * spill > 1 inverts the wet pool.
   assert.ok(get("lampWallSpill").max <= 1 / 0.30 + 0.01, "lampWallSpill past wet invert");
   // lit.js: mix(1, vec3(0.90,0.96,1.12), amt) — amt>1 extrapolates past the
@@ -266,6 +274,15 @@ test("amount-knob defaults are not crushed into the first quarter of the slider"
     // CAR REFLECTION default is a whisper (0.05) on a 0..1.5 mix that still
     // has to reach the 0.85 mixAmt cap — same class as a unit amount.
     .filter((d) => d.id !== "carReflect")
+    // VIBRANCE is the same class, measured: post.js weights it by
+    // (1 - clamp(sat*1.5,0,1)), which is an exact identity on achromatic pixels
+    // and shrinks as a pixel gets colourful, so the knob has very little
+    // authority per unit. The ENTIRE old 0..0.5 range moved the worst-affected
+    // pixel by 16/255 and mid-greys by under 2/255. The headroom to 1.5 is real
+    // travel that the consumer honours; the 0.20 default is deliberately gentle
+    // and pulling the max back down to flatter the thumb would delete the only
+    // part of the slider that does anything visible.
+    .filter((d) => d.id !== "vibrance")
     .filter((d) => (d.def - d.min) / (d.max - d.min) < 0.25)
     .map((d) => {
       const pct = ((d.def - d.min) / (d.max - d.min) * 100).toFixed(1);
