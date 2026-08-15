@@ -1516,7 +1516,6 @@ const api = {
       }
       if (n) meanLampRGB = [r / n, g / n, b / n];
     }
-    const bake = G.track && ((G.track._lights && G.track._lights.length) ? G.track._lights : G.track._alwaysLights);
     return {
       ambientSky: G.frame.ambientSky && G.frame.ambientSky.slice(),
       ambientGround: G.frame.ambientGround && G.frame.ambientGround.slice(),
@@ -1524,7 +1523,7 @@ const api = {
       exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       numLights: L ? L.length / 15 : 0,
       meanLampRGB,
-      bakedLights: bake ? bake.length / 15 : 0,
+      bakedLights: ((G.track && (G.track._lights && G.track._lights.length ? G.track._lights : G.track._alwaysLights)) || []).length / 15,
       lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
       sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
       builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,

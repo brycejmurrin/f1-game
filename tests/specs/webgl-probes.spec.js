@@ -124,6 +124,25 @@ test.describe("WebGL renderer probes", () => {
     expect(ls.sunColor).toBeDefined();
   });
 
+  test("monaco day reports always-on tunnel bake", async ({ page }) => {
+    // Day floods are off, but Monaco's tunnel lamps are always-on. The probe
+    // used to read only track._lights (empty by day) and report bakedLights=0
+    // while 28 tunnel slots were live.
+    await loadRace(page, "monaco");
+    await page.evaluate(() => window.__apex.setTimeOfDay("day"));
+    await page.waitForFunction(
+      () => {
+        const ls = window.__apex.lightState();
+        return ls.numLights > 0 && ls.bakedLights > 0;
+      },
+      { timeout: 8000, polling: 100 }
+    );
+    const ls = await page.evaluate(() => window.__apex.lightState());
+    expect(ls.numLights).toBeGreaterThan(0);
+    expect(ls.bakedLights).toBeGreaterThan(0);
+    expect(ls.numLights).toBeLessThanOrEqual(32);
+  });
+
   // Titled for what it actually checks. It used to say "UBO light count matches
   // lightState", but it never read the UBO — and its first assertion was
   // `numLights >= 0` on a count, which cannot fail. The real content is the cap.
