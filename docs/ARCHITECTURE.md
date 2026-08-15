@@ -223,7 +223,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
 | `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; frozen (no new work) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
@@ -245,23 +245,25 @@ button also disarms the probe, so switching from the menu before any world frame
 does not revert the choice just made.
 
 Note that iOS 26+ and Android 12+ (Qualcomm/ARM) expose `navigator.gpu`, so the
-**WEBGPU** stop is reachable on phones — on a backend that is frozen, not at
-parity, and has no baked asset pack. The canary is what makes that survivable,
-not a claim that it looks right.
+**WEBGPU** stop is reachable on phones. The canary is what makes a bad boot
+survivable, not a claim that every phone looks right.
 
-**WGX is not at parity with GLX, and never reached it.** Four things are still
-reduced or absent on the WebGPU path, so do not assume a GLX feature exists
-there:
+**WGX is opt-in and aims at the GLX draw-API surface.** Do not assume a GLX
+feature exists there until you have read the backend object — a missing name
+must stay an explicit `undefined` so game.js does not inherit a dead GLX
+function. The 2026-08 parity pass (recipes in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)) landed:
 
-- lamp-fog / ground-mist **volumetrics**
-- **PCSS** soft-shadow quality
-- **MSAA stays at 1**
-- **no `gpuTimer`** (`__apex.gpuTimer()` reports unsupported)
+- `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
+- baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
+- lamp shadows, instancing family, `drawParticles`
+- Poisson-8 PCSS + far 4-tap, tunable lamp-fog, world-space god-ray + lamp vol
+- MSAA 2× (color `resolveTarget` + manual MS-depth resolve for SSAO)
+- env-probe / 2d / array mip chains (blit; WebGPU has no `generateMipmap`)
+- `applyMaterial*` / `roadMarkings` / heat haze / car-paint SSR scene-alpha tag
+- SSAO denoise + god-ray separable 5-tap blur (GLX `BLUR_FS`)
 
-WGX also does not implement the baked material arrays (`createTextureArray`),
-so `matTexMix` does nothing there and the look falls back to procedural. This
-list was previously buried in a phase-notes build log; it is a live caveat about
-shipped code, so it lives here now.
+GLX stays the default. Nothing here flips that.
 
 **TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
