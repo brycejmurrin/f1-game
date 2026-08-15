@@ -109,6 +109,16 @@ exactly 15 values.
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
 `LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
 
+**32 is an engine cap, not a WebGL one.** WebGL has no lights API and no
+`MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2
+minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
+UBO block **64 KB**). Six default-block arrays of 32 (`pos/col/rad/dir/cone/bleed`)
+pack vertically to 192 rows before the rest of `lit.js` — that is why 32 was
+picked, and why raising it without packing those arrays into `vec4`s can fail
+to compile on a spec-min phone even though 48/64/128-light dummy shaders link
+here. God-rays stay at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for
+fragment cost, not uniforms.
+
 ### Dark-gap fill (`LT.lampGapFill`, def 60 m)
 
 Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that

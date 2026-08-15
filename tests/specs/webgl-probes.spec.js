@@ -3,7 +3,7 @@
 //   - GLX.hdrMode() boolean
 //   - __apex.lightState() shape
 //   - setTimeOfDay() night/day floodlight transitions
-//   - UBO 32-light cap
+//   - engine 32-light cap (MAX_LIGHTS uniform arrays — not a WebGL / UBO limit)
 import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
