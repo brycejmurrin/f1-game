@@ -945,6 +945,46 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: #e0e0e0; flex: 1; font-style: italic; letter-spacing: 0.02em; }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
 
+/* ---------- season setup (#season-setup) ----------
+   ZERO NEW CLASSES, deliberately: tests/unit/css-class-ratchet.test.mjs sits at
+   its ceiling and its failure message asks for "a custom property on a context
+   selector instead of a new class". Everything below is an ID scoping a class
+   that already exists — the calendar rows are .season-upcoming-row (above), the
+   circuit shelf is .track-row (below), the format groups are .chip-row/.sel-chip
+   (shared with #race-settings), and the panes are .pane-pair from
+   css/components.css. Only the two behavioural deltas are written here. */
+#season-setup { z-index: 26; }              /* over #select, which is 25 */
+/* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
+   not. js/game/sheetshape.js reads this property to decide `data-pair`, and
+   with no value it deletes the attribute and returns — so .pane-pair never
+   turned on, the two panes stacked at their FULL natural height, and .pane's
+   own `overflow-y: auto` had nothing to scroll against because nothing ever
+   capped them. Measured at 844x390 before this line: the calendar pane was
+   1417px tall, ADD A CIRCUIT started 1063px below the fold, and the whole sheet
+   was one 2526px scroll with the foot buried at the bottom of it.
+   620px matches #sel-inner and #cr-inner — the same list-detail shape, so the
+   same threshold. `data-pair="on"` is what puts both panes in a
+   `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
+   scroll region needs. */
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+/* Both columns are .pane, so the scrolling, the overscroll containment and the
+   reserved gutter come with the primitive — nothing to restate here.
+   The move/remove controls: .sel-chip is sized for a thumb on a chip ROW, and
+   three of them inside a list row need to be square and quiet. Height stays on
+   the ladder (min-height: var(--chip-h) from .sel-chip); only the horizontal
+   padding comes in, off --gap so it still answers the density ladder. */
+#ss-cal .sel-chip {
+  padding-inline: calc(var(--gap) * 0.6);
+  min-width: var(--chip-h);
+  justify-content: center;
+}
+#ss-cal .sel-chip:disabled { opacity: 0.3; cursor: default; }
+/* The calendar rows are not tappable (their CONTROLS are), so they keep
+   .season-upcoming-row's default cursor — but they need centred alignment so a
+   chip and a baseline-aligned label sit on the same line. */
+#ss-cal .season-upcoming-row { align-items: center; gap: calc(var(--gap) * 0.5); }
+#ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
+
 /* ---------- track picker rows ---------- */
 #sel-tracks {
   border: 1px solid rgba(255, 255, 255, 0.1);

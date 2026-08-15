@@ -51,6 +51,13 @@ const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 // offset eye reads the car at an angle rather than face-on. Fraction of
 // `back` so near/far chase scale together. Flip the sign to switch sides.
 const CHASE_SIDE_FRAC = 0.3;
+// CHASE g-response: the camera leans with longitudinal weight transfer even
+// though it is bolted to nothing. Driven by the SMOOTHED body pitch
+// (js/game/bodyattitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
+// accel — so it cannot reintroduce the fore/aft jitter the car-frame camera
+// damping just removed. baPitch > 0 = nose-down = braking.
+const CHASE_G_DOLLY = 14;    // m of nose-IN per rad of dive (≈0.34 m at full braking)
+const CHASE_G_AIM   = 5;     // m the aim drops per rad of dive, so you watch the car dive
 
 // ---- chase RIDE HEIGHT / GRADE ---------------------------------------------
 // How the chase rigs decide their vertical framing. They used to take it from
@@ -458,6 +465,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
         eye = [lerp(eye[0], eyeR0, lead2), lerp(eye[1], eyeR1, lead2), lerp(eye[2], eyeR2, lead2)];
         tgt = [lerp(tgt[0], tgtR[0], lead2), lerp(tgt[1], tgtR[1], lead2), lerp(tgt[2], tgtR[2], lead2)];
       }
+      // g-response, stacked on the resolved framing: nose IN + dip the aim under
+      // braking, ease back + lift under power. baPitch is already spring-smoothed
+      // and clamped, so this adds no jitter and cannot swing the view.
+      const gP = (extra.att && extra.att.baPitch) || 0;
+      eye[0] += hx * gP * CHASE_G_DOLLY; eye[2] += hz * gP * CHASE_G_DOLLY;   // +heading = toward the car
+      tgt[1] -= gP * CHASE_G_AIM;
     } else {
       eye = [cvB.p[0] + cvB.r[0] * cx, rideEye + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
       tgt = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one

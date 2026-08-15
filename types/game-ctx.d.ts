@@ -433,6 +433,10 @@ interface GameCtx {
   readonly openGarage: (from?: string) => void;
   readonly openCustomize: () => void;
   readonly openRaceSettings: (from?: string) => void;
+  /** Open #season-setup (the calendar + weekend format editor). */
+  readonly openSeasonSetup: () => void;
+  /** Rebuild #select — season-ui.js calls it after APPLY changes the calendar. */
+  readonly buildSelect: () => void;
   /** The read-only qualifying model for the CURRENT track (__apex.qualiSim). */
   readonly qualiSim: (playerTime?: number) => QualiRow[] | null;
   readonly refreshCareerButton: () => void;
@@ -585,6 +589,7 @@ declare const BodyAttitude: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;
+declare const SeasonUI: GameModuleFactory;
 declare const DebrisWorld: GameModuleFactory;
 declare const GameHud: GameModuleFactory;
 declare const GameResults: GameModuleFactory;
