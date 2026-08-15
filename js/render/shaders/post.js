@@ -257,7 +257,13 @@ void main() {
   // steps accumulate in-scattered sunlight, shadowed steps don't. The shafts are
   // therefore occluded by REAL geometry (grandstands, trees, cars), unlike a flat
   // screen-space radial blur. Forward Mie phase brightens them toward the sun.
-  // Half-res; the result is added to the scene before tonemap so it blooms.
+  // Half-res, added to the scene before TONEMAP — but NOT before BLOOM, which this
+  // line used to claim. present() runs the bright pass off sceneTex (glx/post.js,
+  // "bindTexture(gl.TEXTURE_2D, sceneTex)" under useProg(brightProg)) and only then
+  // runs the composite, where the god-ray buffer is added. The bright pass therefore
+  // never sees these shafts, so they cannot halo — the shaft term is flat additive
+  // haze. Same for the SSR substitution and the uExposure multiply, both of which
+  // also land in the composite; see the SSR note further down.
   const GODRAY_FS = `#version 300 es
 precision highp float;
 precision highp sampler2DShadow;
@@ -1034,8 +1040,12 @@ void main() {
       // coherent. Car paint's Nr IS Nv, so car behaviour is unchanged.
       float fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
       // Car SSR reflects the on-screen HDR scene — sharp, bright light sources
-      // (neon, lit windows, floodlights) that punch through and bloom like the
-      // wet road mirrors them. Strong face-on (the env cube owns the off-screen/
+      // (neon, lit windows, floodlights) that punch through. They do NOT bloom,
+      // which this line used to claim: the substitution below happens in the
+      // COMPOSITE, and the bright pass has already sampled sceneTex by then. It is
+      // doubly unreachable anyway — reflCol is soft-clipped to ~2.86 and mixAmt caps
+      // at 0.80, so the result could not pass the bright threshold even if the order
+      // allowed it. Strong face-on (the env cube owns the off-screen/
       // sky read; SSR owns the crisp on-screen lights + nearby geometry).
       float strength = ssrGate * (carDom ? (0.50 + 0.45 * fres)
                                          : (0.55 + 0.42 * fres));
