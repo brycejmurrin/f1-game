@@ -2095,7 +2095,9 @@ function loadTrack(idx) {
     fogColor: pal.fog, fogDensity: pal.fogDensity,
     skyZenith:  pal.zenith,
     skyHorizon: pal.horizon,
-    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
+    // exposure: applyRaceSettings() is its ONLY writer and runs at startRace(), so the
+    // MENU FLYBY had none — po.exposure went NaN, blacking it out (meanLum 1.06/255).
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018, exposure: 1,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,

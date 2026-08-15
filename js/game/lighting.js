@@ -865,9 +865,21 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   //
   // edgeGuard keeps the one property the old form did have — a lamp must be at
   // zero by the time it is dropped, or membership churn pops. It still measures
-  // against the true boundary, but over a NARROW shell (the last 8% of the ranked
-  // distance) instead of the old 35%, so the residual yaw dependence is confined
-  // to lamps that are about to leave the set anyway.
+  // against the true boundary, but over a NARROWER shell than the old 35%, so the
+  // residual yaw dependence is confined to lamps near the set boundary.
+  //
+  // THIS WIDTH IS THE YAW-COUPLING DIAL — DO NOT WIDEN IT. dEdge is the one term
+  // left that moves with the camera, so every lamp inside the shell inherits that
+  // movement. Measured on bahrain/night, eye pinned, aim swept ±60°, worst
+  // stationary-lamp brightness swing (scratch harness, wrapping setFrameLights):
+  //   old 0.35 form  5.01x / 2.99x / 2.86x / 2.77x / 2.55x
+  //   0.20           5.01x / 2.67x / 2.52x / 2.39x / 2.13x   <- gives the fix back
+  //   0.08           2.07x / 1.07x / 1.01x / 1.00x / 1.00x
+  // 0.20 was tried specifically to give appendCarTailLights' eviction more cover
+  // (it drops the last nT records by ARRAY POSITION, not by brightness, whenever a
+  // rival comes inside tailRange) and it cost almost the whole decoupling. That
+  // eviction is worth fixing at its source — the CAP reserve, lampCap() — not by
+  // widening a band whose width IS the artifact.
   const fade = LT.lampCullFade != null ? LT.lampCullFade : 0.35;   // LAMP CULL FADE knob
   const gRef = truncated
     ? capRadius2(buf, count, CAP) * (1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25)) * (reach * reach)
