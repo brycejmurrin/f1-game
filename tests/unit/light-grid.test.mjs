@@ -189,6 +189,47 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
     `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);
 });
 
+test("GRAPHICS: LOW must not zero look-defining post (bloom/SSAO/god-rays)", () => {
+  // GRAPHICS: LOW sets userTier 4, and present() used to hard-zero po.bloom
+  // (and the rest of the last post stack) on PerfGov.tier() >= 4. That made
+  // BLOOM AMOUNT and every sibling look slider a no-op on LOW even on a
+  // healthy desktop. Look post reads autoTier() (crash + measured only);
+  // cost rungs (env/SSR/shadows) still read tier() so LOW stays cheaper.
+  const game = read("js/game.js");
+  const gfx = read("js/game/gfx-quality.js");
+  assert.match(gfx, /id:\s*"low"[\s\S]*?tier:\s*4/,
+    "LOW must stay a cost-floor of 4 (env/SSR/shadows still shed)");
+  for (const id of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
+    assert.match(game, new RegExp(`po\\.${id} = PerfGov\\.autoTier\\(\\) >= 4`),
+      `po.${id} must shed on autoTier (governor/crash), not the GRAPHICS user floor`);
+    assert.doesNotMatch(game, new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`),
+      `po.${id} must not hard-zero on GRAPHICS: LOW`);
+  }
+  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/,
+    "SSR stays on the user cost floor (MEDIUM/LOW)");
+  assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/,
+    "car-paint SSR stays on the user cost floor");
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  for (const id of ["bloomMul", "bloomSpread", "threshOff", "bloomKnee",
+                    "grMul", "aoStr", "contactStr"]) {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    assert.match(d.help || "", /GRAPHICS: LOW/,
+      `${id} help must say the slider stays live on GRAPHICS: LOW`);
+  }
+  for (const id of ["ssrWetMul", "ssrDryNight", "ssrDryDay", "ssrThick",
+                    "carReflect", "lampShadow"]) {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    assert.match(d.help || "", /GRAPHICS/,
+      `${id} help must name the GRAPHICS cost shed so a dead LOW/MEDIUM slider is not a mystery`);
+  }
+  const carSh = byId.get("carShadow");
+  assert.ok(carSh, "carShadow missing from TUNE_DEFS");
+  assert.match(carSh.help || "", /GRAPHICS: LOW/,
+    "carShadow help must name GRAPHICS: LOW (tier-3 cost shed)");
+});
+
 test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
   // GLX uploads GT.godrayAniso / GT.godrayFloor; TLX maps gk("godrayAniso").
   // WGX used to pack T.hgAniso / T.hgFloor — ids that do not exist on LT — so

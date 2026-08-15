@@ -31,10 +31,13 @@ function gstore() {
   return (typeof GameStore !== "undefined" && GameStore.store) || null;
 }
 
-// userTier is a FLOOR on the shedding ladder documented in js/game/perf.js:
+// userTier is a FLOOR on the COST shedding ladder in js/game/perf.js:
 //   0 nothing pinned off · 1 env probe · 2 +lamp shadow/SSR · 3 +car shadow
-//   4 +SSAO/god rays/bloom
-// so a bigger number means "shed at least this much, permanently".
+// Look-defining post (bloom / SSAO / god rays / contact / lamp volumetrics)
+// reads PerfGov.autoTier() instead — GRAPHICS: LOW must not mute the lighting
+// tuner. The governor and crash-sentinel floor can still shed that stack
+// when the device proves it cannot afford it.
+// so a bigger number means "shed at least this much cost, permanently".
 //
 // ULTRA and HIGH share tier 0 deliberately: both mean "do not pin anything
 // off, let the governor decide". They differ only in the MOBILE boot tier

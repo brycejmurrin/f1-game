@@ -6806,24 +6806,24 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
-  // bright+mip chain in present() — the single biggest post-chain saving left
-  // on a device that has already shed everything else.
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.tier() >= 4 ? 0 : _bloom * LT.bloomMul;
+  // Bloom joins the last MEASURED shed (autoTier, not GRAPHICS: LOW): bloomAmt
+  // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
+  // after env/SSR/shadows. Look post stays live for the lighting tuner.
+  po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.autoTier() >= 4 ? 0 : _bloom * LT.bloomMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 drops the SSR march
-  // (road + car-paint), tier 4 the SSAO (+2 blurs) and god-ray passes.
-  po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
-  po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
+  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops SSR;
+  // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
+  po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
+  po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
   // contact is the SSAO half of exactly that bug, missed when lampVol's was fixed:
   // haveAO is `aoStr > 0 || contactStr > 0`, so a tier-4 DAYTIME frame (_cs is
   // non-zero whenever the key is bright) still ran the SSAO pass and both of its
   // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
