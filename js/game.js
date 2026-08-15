@@ -5532,10 +5532,8 @@ function render(dt) {
   // passes don't touch, and by tier 3 the device has proven it can't afford
   // the full vista (the fog wall hides most of the cut).
   // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
-  // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled chunked
-  // scenery at 250 m on a night-fog preset with no fog drawn at all. (FOG BOOST
-  // is a different knob and was never affected: atmosphere.js bakes it straight
-  // into frame.fogDensity, so the old expression already saw it.)
+  // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
+  // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)

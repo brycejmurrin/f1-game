@@ -96,8 +96,6 @@ void main() {
     // 4.7x too bright, a flat pale-grey lid over a scene whose exposure is
     // raised, not lowered. That is the same "night that looks like dim day"
     // failure atmosphere.js and _nightAmbientBand guard against everywhere else.
-    // At night the cloud lid still LIFTS — to 3x the authored sky, keeping the
-    // circuit's own night hue — rather than jumping to a daytime grey.
     // ONE target for both bands at night, so this stays a FLATTEN. Scaling each
     // band separately (zenith*3, horizon*3) lifted them by different absolute
     // amounts and WIDENED the zenith-to-horizon spread under cloud — the exact
