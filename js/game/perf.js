@@ -181,9 +181,14 @@ function init(gfx) {
       }
     } catch (_) {}
   }
-  _perfTierFloor = _crashStrikes >= 2 ? 4 : (_crashStrikes >= 1 ? 2 : 0);
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
 }
+
+// ONE owner for the strikes -> floor mapping. It used to be spelled out at init
+// and simply missing from cleanRace(), so paying a strike down moved the counter
+// and left the floor where boot had put it. See cleanRace() for what that cost.
+function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 function sentinelArm(on) {
   if (!_gfx || !_gfx.isMobile) return;
@@ -194,6 +199,20 @@ function cleanRace() {
   if (_crashStrikes > 0) {
     _crashStrikes--;
     try { localStorage.setItem(SENT_STRIKES, String(_crashStrikes)); } catch (_) {}
+    // RECOMPUTE THE FLOOR. Paying a strike down used to move the counter and
+    // nothing else, so _perfTierFloor stayed at whatever init() derived for the
+    // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
+    // the gate that sheds SSR (WET MIRROR / the dry sheens) and lamp shadows,
+    // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe. So a single
+    // crash — or one sentinel trip that was never a crash — silently pinned
+    // those features off until the page happened to reload, no matter what the
+    // player set GRAPHICS to. On mobile the one preset switch that DOES force a
+    // reload is ULTRA (it flips the mobileHigh bit, see js/game/gfx-quality.js
+    // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
+    // only work on ULTRA" rather than as a stuck floor.
+    // clearStrikes() has always done this; this path was missed, and the two
+    // now share _floorFromStrikes so they cannot drift apart again.
+    _perfTierFloor = _floorFromStrikes(_crashStrikes);
   }
 }
 
@@ -332,7 +351,7 @@ function tick(dtMs) {
 // __apex.safeMode(false).
 function clearStrikes() {
   _crashStrikes = 0;
-  _perfTierFloor = 0;
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
 
