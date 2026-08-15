@@ -1328,7 +1328,7 @@ const WGX = (function () {
           }
         }
         device.queue.submit([enc.finish()]);
-      } catch (_) {}
+      } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
     // Interleave [pos3, nrm3, col3, mat1] -> stride-40 Float32Array + index array.
@@ -2041,7 +2041,7 @@ const WGX = (function () {
           dr.setBindGroup(0, depthResolveBG);
           dr.draw(3);
           dr.end();
-        } catch (_) {}
+        } catch (_) { /* SSAO then samples uncleared resolved depth; AO stays white */ }
       }
       _passSamples = 1;
       const o = opts || {};
@@ -2274,7 +2274,7 @@ const WGX = (function () {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
-        } catch (_) {}
+        } catch (_) { /* timer stays at last-good / -1 */ }
       }
       device.queue.submit([encoder.finish()]);
       if (_gpuTimerOn && _gpuReadBuf && typeof _gpuReadBuf.mapAsync === "function") {
@@ -2284,9 +2284,9 @@ const WGX = (function () {
               const t = new BigUint64Array(_gpuReadBuf.getMappedRange());
               _gpuMs = Number(t[1] - t[0]) / 1e6;
               _gpuReadBuf.unmap();
-            } catch (_) {}
+            } catch (_) { /* keep last-good gpuMs */ }
           });
-        } catch (_) {}
+        } catch (_) { /* mapAsync unsupported or already mapped */ }
       }
       encoder = null; currentView = null;
     }
@@ -2453,9 +2453,9 @@ const WGX = (function () {
                 [size, size]);
             }
             filled++;
-          } catch (_) {}
+          } catch (_) { /* skip a missing/bad layer; pack still ships */ }
         }
-        if (!filled) { try { tex.destroy(); } catch (_) {} return null; }
+        if (!filled) { try { tex.destroy(); } catch (_) { /* already invalid */ } return null; }
         _generateMips(tex, n);
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
       } catch (_) { return null; }
@@ -2580,7 +2580,7 @@ const WGX = (function () {
     }
     function freeInstancedBatch(batch) {
       if (!batch) return;
-      if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) {}
+      if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) { /* already destroyed */ }
       freeMesh(batch);
     }
     function castShadowInstanced(batch, model) {
@@ -2600,7 +2600,7 @@ const WGX = (function () {
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
       if (!_particleCap || _particleCap < floatCount) {
-        if (particleVBO) try { particleVBO.destroy(); } catch (_) {}
+        if (particleVBO) try { particleVBO.destroy(); } catch (_) { /* grow replaces it */ }
         _particleCap = Math.max(floatCount, 2560);
         particleVBO = device.createBuffer({
           size: _particleCap * 4,
