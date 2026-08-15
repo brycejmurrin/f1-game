@@ -147,8 +147,8 @@ const WGX = (function () {
   const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
-  const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 32
-  const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 2048
+  const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
+  const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 512
   const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 112
   const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 28
@@ -1766,10 +1766,9 @@ const WGX = (function () {
       // uMistShare parity). Always pack the resolved value so 0 reads as a real
       // "no mist glow" and is not an unset slot (WGSL reads params5.w directly).
       d[87] = (T && T.mistShare != null) ? T.mistShare : 1.5;
-      // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased ground anchor
-      // the shadow box is snapped around (game.js shadow pass; glides with the
-      // camera so the LIT distance fade never jumps on a box recentre), w =
-      // shadowRange (SHADOW DISTANCE knob, box half-size in m — same 80 fallback
+      // shadowCtr (floats 88..91): xyz = the UNSNAPPED forward-biased box snap
+      // (game.js); LIT/WGSL fade uses eye XZ + this Y so yaw does not sweep it.
+      // w = shadowRange (SHADOW DISTANCE, box half-size m — same 80 fallback
       // as GLX uShadowRange).
       const sctr = f.shadowCtr || f.eye || [0, 0, 0];
       d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];

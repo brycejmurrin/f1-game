@@ -144,6 +144,52 @@ test("every registered fixture's pool reaches the road", () => {
     offenders.join("\n  "));
 });
 
+test("no circuit races through an unlit stretch of road", () => {
+  // The third failure mode, and the one the two guards above cannot see: every
+  // light can sit on a fixture, and every fixture can reach the road, while the
+  // road itself is still dark — because the lamps are all somewhere else.
+  //
+  // That is what a wrong `k` does. `lampPosts.k` says which bit of road a
+  // fixture is beside, and the gap-fill/density walk measures spans in node
+  // units, so a k in the wrong frame makes it insert fill lights where the
+  // lamps are NOT. `lampPost` takes a node index and is absent from every
+  // remap list in tracks.js, so on a circuit with a `_sceneryShift` the stored
+  // k and the stored position disagreed: imola 74/74 fixtures (worst 2030 m)
+  // and hungaroring 96/96 (431 m). Imola ran 716 m of unlit road at frac 0.46
+  // with no light within 200 m, on a circuit carrying 74 lamp posts.
+  //
+  // Assert the OBSERVABLE property rather than the internal index, so this
+  // holds whatever future route a fixture takes to get registered.
+  const MIN_LIT = 95;          // %, of centreline samples inside some light radius
+  const MAX_DARK_M = 60;       // the DARK-GAP FILL knob's own default threshold
+  const offenders = [];
+  for (const def of Tracks().LIST) {
+    const { track, L } = nightLights(def.id);
+    const n = (L.length / STRIDE) | 0;
+    const ds = track.total / track.n;
+    let lit = 0, run = 0, worstRun = 0, worstAt = 0;
+    for (let k = 0; k < track.n; k++) {
+      let any = false;
+      for (let i = 0; i < n && !any; i++) {
+        const o = i * STRIDE;
+        const dx = L[o] - track.px[k], dy = L[o + 1] - track.py[k], dz = L[o + 2] - track.pz[k];
+        if (dx * dx + dy * dy + dz * dz < L[o + I_RAD] * L[o + I_RAD]) any = true;
+      }
+      if (any) { lit++; run = 0; }
+      else { run++; if (run > worstRun) { worstRun = run; worstAt = k; } }
+    }
+    const cov = 100 * lit / track.n, darkM = worstRun * ds;
+    if (cov < MIN_LIT || darkM > MAX_DARK_M) {
+      offenders.push(`${def.id}: ${cov.toFixed(1)}% of the lap lit, longest dark run ` +
+                     `${Math.round(darkM)} m at frac ${(worstAt / track.n).toFixed(3)}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "a night circuit has road no lamp reaches. Check that each fixture's `k` " +
+    "names the node it actually stands beside (resolvePostNodes in " +
+    "js/game/lighting.js) before adding more lamps:\n  " + offenders.join("\n  "));
+});
+
 test("the start-gantry downlights stay fixture-less AND invisible", () => {
   // These three are placed by formula at node 0 and deliberately not parented to
   // the gantry mesh, so they are the one light group allowed to have no fixture

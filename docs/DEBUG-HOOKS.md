@@ -393,7 +393,10 @@ check density is a false no-op — with a full grid it sticks near `lampCull`
 Lamp-slider probes (for Chromium MCP / `tools/cdmcp-lamps-tune.py`):
 - `meanLampRGB` — mean RGB of the **culled** `frame.lights` set this frame
   (after `lampTemp` / twilight / `lampLevel` scaling). Warm `lampTemp` raises R/B.
-- `bakedLights` — count of the cached `track._lights` records (pre-cull).
+- `bakedLights` — pre-cull bake: `track._lights` when that set is non-empty,
+  else `track._alwaysLights` (daytime always-on fixtures — Monaco tunnel).
+  Reading only `_lights` reports 0 on a day session that is still lighting
+  the tunnel.
 - `lampPosts` — mast/lens registry length (`track.lampPosts`).
 ```js
 __apex.race("singapore"); __apex.lightState();

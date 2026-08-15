@@ -115,7 +115,7 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   await page.waitForFunction(() => window.__apex.lightState().numLights > 0, { timeout: 60000 });
   const night = await page.evaluate(() => window.__apex.lightState());
   expect(night.numLights).toBeGreaterThan(0);
-  expect(night.numLights).toBeLessThanOrEqual(32);
+  expect(night.numLights).toBeLessThanOrEqual(48);
   expect(night.exposure).toBeCloseTo(0.90, 1);   // desert night
   expect(night.floodEmit).toBeCloseTo(0.78, 2);  // prop emissive ramp
   await page.evaluate(() => window.__apex.setTimeOfDay("day"));

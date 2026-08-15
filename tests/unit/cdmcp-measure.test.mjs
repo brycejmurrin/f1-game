@@ -65,6 +65,7 @@ test("apex lightState documents meanLampRGB / bakedLights / lampPosts probes", (
   const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
   assert.match(apex, /meanLampRGB/);
   assert.match(apex, /bakedLights/);
+  assert.match(apex, /_alwaysLights/);
   assert.match(apex, /lampPosts/);
   const hooks = fs.readFileSync(path.join(ROOT, "docs/DEBUG-HOOKS.md"), "utf8");
   assert.match(hooks, /meanLampRGB/);
