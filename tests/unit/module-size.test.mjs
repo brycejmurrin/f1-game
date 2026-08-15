@@ -226,7 +226,18 @@ const CEILINGS = {
   // distance breathed with frame time (28.7 cm at 320 km/h under a 16-38 ms
   // wobble). Damping the OFFSET in the car's frame cancels it to 0.0000 cm.
   // Bug-explaining growth at the site of the bug — the one kind this tolerates.
-  "js/game.js": 8201,
+  // 8201 -> 8210: three lighting/graphics fixes from the mechanism-sliced survey,
+  // three lines of "why" each. (1) The god-ray horizon cutoff was a STEP off
+  // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
+  // deleted full-strength shafts in a single frame; now a fade. (2) The fog
+  // scenery cull read the raw frame.fogDensity while the shader renders that
+  // times FOG DENSITY, so the knob moved the fog wall and not the cull — at FOG
+  // BOOST 24 the game hard-culled scenery at 32 m of perfectly clear air. (3)
+  // PER-CHUNK ROAD gated on the raw knob instead of the tier- and latch-resolved
+  // state, building a second GPU copy of the road ribbon on every device where
+  // per-chunk lamps are held off. Same category as the two entries above: growth
+  // at the site of the bug, explaining the bug. No extraction is worth 9 lines.
+  "js/game.js": 8210,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

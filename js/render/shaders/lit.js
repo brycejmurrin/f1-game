@@ -942,8 +942,18 @@ void main() {
     // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
     // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
     // Soaked grass/gravel darkens harder than tarmac and that is ALL it does.
+    // The porous coefficient must be the LARGER of the two: absorb multiplies
+    // albedo, so a bigger coefficient means a darker surface. These two were
+    // transposed — mix(A,B,porous) returns A for tarmac and B for porous, so
+    // tarmac absorbed 58% while soaked grass absorbed only 42%, leaving the
+    // verges 38% BRIGHTER than the ribbon they border. That is the mirror image
+    // of the "flooded canal with cyan banks" silhouette the porous branch was
+    // added to fix, and it contradicts both comments above ("darkens more than
+    // tarmac", "darkens harder than tarmac and that is ALL it does"). The 0.42
+    // named in the comment above is the ROAD's result (1 - 0.58), which is why
+    // the road literal stays put and only the porous one moves.
     float absorb = mix(clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0),
-                       clamp(1.0 - 0.42 * uWetDark, 0.0, 1.0), porous);
+                       clamp(1.0 - 0.72 * uWetDark, 0.0, 1.0), porous);
     albedo *= mix(1.0, absorb, wet);
     albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not

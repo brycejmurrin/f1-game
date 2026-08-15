@@ -1216,9 +1216,17 @@ void main() {
   q.x *= vAspect;
   float vr = length(q) * 0.70710678 / length(vec2(0.5 * vAspect, 0.5));
   // uVigSoft (VIGNETTE REACH) is the inner edge: lower = broad soft gradient
-  // reaching toward centre, higher = a thin ring hugging the corners. Kept below
-  // the fixed 0.95 outer edge so the smoothstep stays well-ordered.
-  float vig = smoothstep(0.95, min(uVigSoft, 0.94), vr);
+  // reaching toward centre, higher = a thin ring hugging the corners.
+  // OUTER EDGE IS THE CORNER, NOT 0.95. vr is normalised by the corner length,
+  // so it is exactly 0.70710678 at all four corners for EVERY aspect ratio
+  // (measured 1920x1080, 2160x1000, 1000x1000, 800x1600 — all identical). The
+  // old form was smoothstep(0.95, min(uVigSoft, 0.94), vr): edge0 > edge1, which
+  // GLSL ES 3.00 SS8.3 leaves undefined, and whose ramp the frame could never
+  // finish walking — the corner topped out at vig 0.198 (REACH min) to 0.972
+  // (REACH max), so VIGNETTE could not reach the "pure black corners" its help
+  // promises and REACH swung corner darkening 28x instead of pairing with it.
+  // Well-ordered now, and the corner lands on uVignette exactly.
+  float vig = 1.0 - smoothstep(min(uVigSoft, 0.69), 0.70710678, vr);
   c *= mix(uVignette, 1.0, vig);
 
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to

@@ -262,6 +262,18 @@ $("lt-reset").onclick = () => {
   // defaults (leaves other conditions and the file untouched).
   const key = ltKey();
   if (key && G._ltStore[key]) delete G._ltStore[key];
+  // …and the legacy GLOBAL layer, or the reset cannot reach the shipped values
+  // at all. light-store.js resolves def -> LightPresets["*"] -> LightPresets[key]
+  // -> profiles["*"] -> profiles[key], so profiles["*"] OUTRANKS the shipped
+  // file. Nothing in the current UI can create or edit that layer: it exists
+  // only because the legacy-format migration in js/game/light-store.js turns a
+  // pre-nested flat {id:number} save into { "*": saved }. So for a player
+  // carrying one, RESET was a no-op on
+  // every knob in that blob, on every track and every condition — invisible
+  // state defeating the one button that exists to clear state. Deleting it does
+  // reach other conditions, which is why the comment above no longer claims
+  // otherwise; migration residue is not a setting the player chose.
+  if (G._ltStore["*"]) delete G._ltStore["*"];
   persistLightTune();
   applyLightTune();
   refreshLightTunePanel();

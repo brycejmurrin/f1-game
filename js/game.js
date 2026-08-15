@@ -5188,7 +5188,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // _keepPositions is REQUIRED: createChunkedMesh nulls its source arrays, and
     // debrisworld.js + __apex.geo() both still read track.roadGeo.
     let _roadMesh = track.meshes.road, _roadChunked = false;
-    if (LT.roadChunkLamps && LT.perChunkLights) {
+    // RESOLVED per-chunk state, not the raw knob (frame.perChunkLights holds the
+    // same expression but is only assigned under _floodActive, so it is unset by
+    // day). Without the tier/latch terms this built a second GPU copy of the road
+    // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
+    if (LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
         if (track.roadGeo && gfx.createChunkedMesh) {
@@ -5527,7 +5531,11 @@ function render(dt) {
   // vertex/draw load is the one big cost class the resolution scale and shed
   // passes don't touch, and by tier 3 the device has proven it can't afford
   // the full vista (the fog wall hides most of the cut).
-  const _fogCull = frame.fogDensity > 3 / farPlane ? Math.ceil(3 / frame.fogDensity) : 0;
+  // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
+  // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
+  // 250 m with no fog drawn, and FOG BOOST 24 culled at 32 m of clear air.
+  const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
+  const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : _fogCull);
 
@@ -6663,7 +6671,10 @@ function render(dt) {
   // top of the flat GOD-RAY BASE (def 0.38); SUN GOD-RAYS (LT.grMul) scales the whole thing.
   const _grLowBoost = LT.godrayLowBoost != null ? LT.godrayLowBoost : 0.55;
   const _grBase     = LT.godrayBase != null ? LT.godrayBase : 0.38;
-  let _gr = (_grSunY > 0.02 ? (_grBase + _grLowBoost * _grLow) : 0) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
+  // FADE the horizon cutoff, don't step it: the old `_grSunY > 0.02 ? … : 0`
+  // switched the pass off from 2.26x its own midday strength, so one 0.1-deg
+  // notch of SUN ELEVATION deleted full shafts in a frame. Still 0 below.
+  let _gr = (_grBase + _grLowBoost * _grLow) * clamp(_grSunY / 0.02, 0, 1) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
   // NOTE: a sun-off-screen gate (project sunDir through the view-proj, zero _gr
   // when the sun is behind the camera or outside a 1.7-NDC margin) was reverted.
   // It saved the volumetric march when facing away from the sun, but it also
