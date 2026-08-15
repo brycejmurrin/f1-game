@@ -34,8 +34,8 @@
  *   - textureSampleLevel(t,s,uv,0.0) not texture(s,uv); split texture+sampler.
  *   - vec3<f32>, explicit f32(), 1.0 not 1. dFdx/dFdy -> dpdx/dpdy.
  *   - depth is [0,1] in WebGPU NDC (no *2-1 window->NDC remap that GL needs).
- *   - depth textures bind as texture_depth_2d, sampled with a NON-filtering
- *     sampler; textureSampleLevel(...) returns f32 directly (the raw depth).
+ *   - depth textures bind as texture_depth_2d and are read with textureLoad
+ *     (Safari / compat-mode rejects texture_depth_2d + a non-comparison sampler).
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * SHARED SCREEN CONVENTION (contract for wgx.js)
@@ -274,8 +274,13 @@ struct SsaoU {
 ${fullscreenTri}
 ${POST_VS}
 
+fn ssaoDepth(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(depthTex, px, 0);
+}
 fn ssaoViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = textureSampleLevel(depthTex, depthSamp, uv, 0i);
+  let d = ssaoDepth(uv);
   // Texture-space uv -> WebGPU NDC (y flip), depth already 0..1.
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
@@ -294,7 +299,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // return makes everything after it non-uniform).
   let P = ssaoViewPos(in.uv);
   let N = normalize(cross(dpdx(P), dpdy(P)));
-  let dCentre = textureSampleLevel(depthTex, depthSamp, in.uv, 0i);
+  let dCentre = ssaoDepth(in.uv);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
   // Screen-space radius shrinks with distance so world reach stays ~constant.
   let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
@@ -438,7 +443,9 @@ fn worldPos(uv: vec2<f32>, d: f32) -> vec3<f32> {
 }
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let d = textureSampleLevel(depthTex, depthSamp, in.uv, 0.0);
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(in.uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  let d = textureLoad(depthTex, px, 0);
   let viewDir = normalize(worldPos(in.uv, 0.5) - U.eye.xyz);
   let endP = select(worldPos(in.uv, d), U.eye.xyz + viewDir * 400.0, d >= 0.99999);
   let ro = U.eye.xyz;
@@ -971,8 +978,13 @@ ${POST_VS}
 // Reconstruct view-space position from the depth buffer at a texture-space uv.
 // Depth is already 0..1 in WebGPU (no *2-1 window->NDC remap); integer LOD 0i +
 // the non-filtering depthSamp are required for texture_depth_2d.
+fn ssrDepth(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(depthTex, px, 0);
+}
 fn ssrViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = textureSampleLevel(depthTex, depthSamp, uv, 0i);
+  let d = ssrDepth(uv);
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
   return v.xyz / v.w;
@@ -992,7 +1004,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let strength = U.p0.w;
   let yCut     = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
 
-  let dC = textureSampleLevel(depthTex, depthSamp, in.uv, 0i);
+  let dC = ssrDepth(in.uv);
   // Cheap early-outs: sky (far plane), upper screen (never wet road), pass off.
   // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
   // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.

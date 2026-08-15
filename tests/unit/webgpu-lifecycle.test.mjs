@@ -578,3 +578,17 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(POST_SOURCE, /1\.3846153846/, "SSAO/god-ray separable blur kernel");
   assert.match(FX_SOURCE, /fn vs_main[\s\S]*aCorner/, "particle shader");
 });
+
+test("Safari/compat: depth is textureLoad, adapter retries, phones skip timestamp", () => {
+  // texture_depth_2d + a non-comparison sampler is a pipeline-create reject on
+  // Safari 26 / compatibility mode. That used to fail the whole WGX.create().
+  assert.match(CHUNKS_SOURCE, /fn loadDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
+  assert.match(POST_SOURCE, /fn ssaoDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.match(POST_SOURCE, /fn ssrDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
+  assert.match(WGX_SOURCE, /IS_MOBILE \? "low-power" : "high-performance"/);
+  assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
+  assert.match(WGX_SOURCE, /!IS_MOBILE && !!\(adapter\.features/);
+  assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
+});

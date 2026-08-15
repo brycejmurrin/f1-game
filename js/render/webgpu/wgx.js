@@ -243,6 +243,7 @@ const WGX = (function () {
   let _gpuErrors = 0;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
+    try { localStorage.setItem("apex26.gfxWgxFail", _lastFailure.reason); } catch (_) { /* blocked storage: lastFailure() still holds it */ }
     try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent (node VM harness): lastFailure still records the reason */ }
     return null;
   }
@@ -310,9 +311,17 @@ const WGX = (function () {
 
     let adapter, device, ctx, format;
     try {
-      adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      // Phones: low-power first. MDN: high-performance on a portable GPU
+      // increases device.lost (iOS will shed the device under thermal). Desktop
+      // still prefers discrete, then retries with no hint if that adapter is null
+      // (Safari 26 sometimes returns null for high-performance only).
+      const _pref = IS_MOBILE ? "low-power" : "high-performance";
+      adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
+      if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
-      const _canTimestamp = !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
+      // timestamp-query on iOS has been advertised then lost the device; GLX
+      // already treats the phone timer as absent.
+      const _canTimestamp = !IS_MOBILE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
       device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
       if (!device) return _fail("no device");
       var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
@@ -553,12 +562,22 @@ const WGX = (function () {
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       carShadowView = carShadowTex.createView();
-      // Blocker map (PCSS-lite downsampled sun shadow map)
-      blockerTex = device.createTexture({
-        size: [512, 512], format: "r16float",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      blockerView = blockerTex.createView();
+      // Blocker map (PCSS-lite downsampled sun shadow map). Isolated: Safari
+      // may refuse r16float as a color target; LIT still needs a float view
+      // at binding 7, so a 1×1 placeholder keeps the frame group valid.
+      try {
+        blockerTex = device.createTexture({
+          size: [512, 512], format: "r16float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        blockerView = blockerTex.createView();
+      } catch (_) {
+        blockerTex = device.createTexture({
+          size: [1, 1], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        blockerView = blockerTex.createView();
+      }
       blockerSampler = device.createSampler({
         magFilter: "nearest",
         minFilter: "nearest",
@@ -755,28 +774,28 @@ const WGX = (function () {
       const blockerUBOData = new Float32Array([1.0 / SHADOW_SIZE, 1.0 / SHADOW_SIZE, 0.0, 0.0]);
       device.queue.writeBuffer(blockerUBO, 0, blockerUBOData);
 
-      blockerG0Layout = device.createBindGroupLayout({
-        entries: [
-          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
-          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
-          { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
-        ]
-      });
-      const blockerModule = device.createShaderModule({ code: WGSLChunks.BLOCKER });
-      blockerPipeline = device.createRenderPipeline({
-        layout: device.createPipelineLayout({ bindGroupLayouts: [blockerG0Layout] }),
-        vertex: { module: blockerModule, entryPoint: "vs_main" },
-        fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r16float" }] },
-        primitive: { topology: "triangle-list" },
-      });
-      blockerBG = device.createBindGroup({
-        layout: blockerG0Layout,
-        entries: [
-          { binding: 0, resource: shadowView },
-          { binding: 1, resource: blockerSampler },
-          { binding: 2, resource: { buffer: blockerUBO } },
-        ]
-      });
+      try {
+        blockerG0Layout = device.createBindGroupLayout({
+          entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          ]
+        });
+        const blockerModule = device.createShaderModule({ code: WGSLChunks.BLOCKER });
+        blockerPipeline = device.createRenderPipeline({
+          layout: device.createPipelineLayout({ bindGroupLayouts: [blockerG0Layout] }),
+          vertex: { module: blockerModule, entryPoint: "vs_main" },
+          fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r16float" }] },
+          primitive: { topology: "triangle-list" },
+        });
+        blockerBG = device.createBindGroup({
+          layout: blockerG0Layout,
+          entries: [
+            { binding: 0, resource: shadowView },
+            { binding: 1, resource: { buffer: blockerUBO } },
+          ]
+        });
+      } catch (_) { blockerPipeline = null; blockerBG = null; /* PCSS downsample optional; LIT still binds the placeholder */ }
       if (MSAA_COUNT > 1 && _Chunks.DEPTH_RESOLVE) {
         const drG0 = device.createBindGroupLayout({ entries: [
           { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth", multisampled: true } },
@@ -3096,6 +3115,8 @@ const WGX = (function () {
       try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost; fallback still proceeds */ }
       return _fail(_stReason);
     }
+    try { localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) { /* blocked storage */ }
+    _lastFailure = null;
 
     const noop = function () {};
 

@@ -1190,18 +1190,24 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    parity). This chunk was MISSING when wgx.js first referenced
   //    WGSLChunks.BLOCKER — createShaderModule({code: undefined}) threw and
   //    killed the whole WGX init (silent GLX fallback). Bindings must match
-  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = non-filtering
-  //    sampler, 2 = BlockerU (xy = 1/SHADOW_SIZE source texel).
+  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = BlockerU
+  //    (xy = 1/SHADOW_SIZE source texel). textureLoad, not textureSampleLevel:
+  //    Safari / compat-mode rejects texture_depth_2d + a non-comparison sampler
+  //    (gpuweb compatibility-mode.md) and that used to fail the whole create().
   const BLOCKER = `
 struct BlockerU { srcTexel : vec4<f32> };   // xy = 1/SHADOW_SIZE
 @group(0) @binding(0) var depthTex : texture_depth_2d;
-@group(0) @binding(1) var depthSamp : sampler;
-@group(0) @binding(2) var<uniform> B : BlockerU;
+@group(0) @binding(1) var<uniform> B : BlockerU;
 ${fullscreenTri}
 struct VOut {
   @builtin(position) pos : vec4<f32>,
   @location(0)       uv  : vec2<f32>,
 };
+fn loadDepth(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(depthTex, px, 0);
+}
 @vertex
 fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   var o : VOut;
@@ -1213,10 +1219,10 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let t = B.srcTexel.xy;
-  let d0 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0, -1.0), 0);
-  let d1 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0, -1.0), 0);
-  let d2 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0,  1.0), 0);
-  let d3 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0,  1.0), 0);
+  let d0 = loadDepth(in.uv + t * vec2<f32>(-1.0, -1.0));
+  let d1 = loadDepth(in.uv + t * vec2<f32>( 1.0, -1.0));
+  let d2 = loadDepth(in.uv + t * vec2<f32>(-1.0,  1.0));
+  let d3 = loadDepth(in.uv + t * vec2<f32>( 1.0,  1.0));
   return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
 
