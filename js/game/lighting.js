@@ -311,6 +311,52 @@ function lampRadius(post, themeRadius) {
   if (!post || post.radius == null) return themeRadius;
   return post.mast ? Math.max(themeRadius, post.radius) : post.radius;
 }
+// Re-seat each fixture's node index on the node it actually stands next to.
+//
+// `k` on a lampPosts record is meant to say "which bit of road this fixture is
+// beside", and TWO things here depend on it: the gap-fill/density spacing walk
+// (which sorts by k and measures spans in nodes), and the beam aim + throw
+// energy (which read px/py/pz/hw at k). The world position is authoritative —
+// it is what the shader lights from — but the k travelled by a different route
+// and can disagree.
+//
+// It disagrees on circuits with a `_sceneryShift`. The scenery api remaps node
+// arguments into racing space for the emitters listed in tracks.js (`anchor`,
+// `floodMast`, …), but `lampPost` takes a node index and is in none of those
+// lists, so a circuit that hand-places lamps stores the k it was handed while
+// its position came back through the remap. Measured: imola 74/74 fixtures with
+// k up to 2030 m from their own lamp, hungaroring 96/96 up to 431 m. The
+// visible cost is the spacing walk filling where the lamps are NOT — imola ran
+// a 716 m stretch of unlit road at frac 0.46 with zero lights within 200 m.
+//
+// Resolving from the position instead of trusting the caller's frame makes the
+// disagreement unexpressible, and needs no shift lookup here. Coarse scan then
+// a local refine — this runs once per bake over at most ~600 fixtures.
+function resolvePostNodes(track, posts) {
+  const n = track.n, px = track.px, pz = track.pz;
+  if (!n || !px || !pz) return posts;
+  let out = null;
+  for (let i = 0; i < posts.length; i++) {
+    const p = posts[i];
+    if (!p || !Number.isFinite(p.x)) continue;
+    let best = Infinity, bk = 0;
+    for (let k = 0; k < n; k += 8) {
+      const dx = p.x - px[k], dz = p.z - pz[k];
+      const d = dx * dx + dz * dz;
+      if (d < best) { best = d; bk = k; }
+    }
+    for (let j = bk - 8; j <= bk + 8; j++) {
+      const k = ((j % n) + n) % n;
+      const dx = p.x - px[k], dz = p.z - pz[k];
+      const d = dx * dx + dz * dz;
+      if (d < best) { best = d; bk = k; }
+    }
+    if (bk === p.k) continue;
+    if (!out) out = posts.slice();
+    out[i] = { ...p, k: bk };
+  }
+  return out || posts;
+}
 function lampDensityFactor() {
   const d = LT.lampDensity;
   return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
@@ -399,6 +445,9 @@ function buildTrackLights(track, onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
+  // BEFORE density and gap fill: both walk `k`, so they need it to mean the
+  // place the fixture actually stands.
+  if (posts) posts = resolvePostNodes(track, posts);
   posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions
