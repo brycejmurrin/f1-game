@@ -242,14 +242,13 @@ varied**: the first baseline here snapshotted before the free camera took effect
 so the camera never yawed and every lamp read a flat 1.00× — a clean bill of
 health from an experiment that did nothing.
 
-### OPEN, MEASURED: the sun shadow fade is camera-ORIENTATION dependent (2026-08-15)
+### FIXED: the sun shadow fade is camera-ORIENTATION dependent (2026-08-15)
 
-The daytime sibling of the night lamp bug, found by the same method and **not yet
-fixed**. `js/game.js` anchors the shadow box at `camEye + 20 m` along the camera's
-horizontal look direction, and `js/render/shaders/lit.js` fades shadows by distance
-from that same anchor (`edgeFade = 1 - smoothstep(range*0.62, range*0.84, aDist)`).
-A pure yaw with the eye pinned therefore sweeps the fade front around a 40 m circle.
-Measured (bahrain, day, eye pinned, aim swept ±40°, `shadowRange` 80):
+The daytime sibling of the night lamp bug. `js/game.js` still anchors the **box**
+at `camEye + 20 m` along the camera's horizontal look (texel allocation — invisible
+on yaw). The fade used to read that same point, so a pinned-eye yaw swept the fade
+front around a 40 m circle. Measured (bahrain, day, eye pinned, aim ±40°,
+`shadowRange` 80):
 
 | distance ahead | edgeFade range | note |
 |---|---|---|
@@ -258,20 +257,12 @@ Measured (bahrain, day, eye pinned, aim swept ±40°, `shadowRange` 80):
 | **70 m** | **0.625 – 0.986** | 58% of shadow strength, from camera yaw alone |
 | 80 m | 0.004 – 0.308 | faint either way |
 
-So it is real but confined to a 65–85 m band, and much milder than the lamp version
-(which reached 5×). MJP's *A Sampling of Shadow Techniques* states the standard
-requirement plainly — a stabilised cascade "won't change as the camera rotates";
-extent should follow camera POSITION, not orientation.
-
-**Why it was not fixed in the same pass.** The obvious repair — keep the BOX
-forward-biased (that only allocates texels, which is invisible) and anchor the FADE
-at the yaw-invariant look target — changes the coverage arithmetic: the box
-guarantees `0.875·range = 70 m` from the BOX anchor, and moving the fade anchor ~10 m
-away drops guaranteed coverage to ~60 m while the fade still completes at
-`0.84·range = 67 m`. Points in that 60–67 m gap fall outside the box and hit the UV
-border feather, i.e. shadows go missing by a different route. Fixing it properly
-means re-deriving the fade completion against the new anchor and re-measuring, which
-is a shadow-path change worth doing deliberately rather than at the end of a session.
+**Repair.** Fade from eye XZ + look-target Y (`vec3(uEye.x, uShadowCtr.y, uEye.z)`
+in `js/render/shaders/lit.js`; same in `tsl-lit.js` / `wgsl-chunks.js`). Height
+stays on the look target so aerial cameras do not erase ground shadows. At the
+default 80 m box / 20 m bias, `0.84·range` from the eye equals the 90° box edge
+(`sqrt(70²−20²)≈67`), so the 0.62/0.84 ratios stay. Box snap and car-map lookAt
+are unchanged. Source-contracted in `tests/unit/perf-governor.test.mjs`.
 
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 

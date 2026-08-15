@@ -350,6 +350,36 @@ test("a bad preset cannot invent a tier above the ladder", () => {
   assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
 });
 
+test("autoTier ignores the GRAPHICS user floor so look post stays live on LOW", () => {
+  // GRAPHICS: LOW pins userTier at 4. That must still shed env/SSR/shadows via
+  // tier(), but bloom/SSAO/god-rays/contact/lampVol read autoTier() so the
+  // lighting tuner stays live unless the governor or crash floor measured it.
+  const { PerfGov } = makeGov();
+  assert.equal(typeof PerfGov.autoTier, "function", "PerfGov.autoTier must exist");
+  assert.equal(PerfGov.autoTier(), 0, "healthy device, no user floor: autoTier is 0");
+  PerfGov.setUserTier(4);
+  assert.equal(PerfGov.tier(), 4, "GRAPHICS: LOW still floors the cost ladder");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin look-defining post");
+  PerfGov.setUserTier(2);
+  assert.equal(PerfGov.tier(), 2);
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin look post either");
+});
+
+test("autoTier still honours the crash-sentinel floor and a measured shed", () => {
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.autoTier(), 4, "two crash strikes must still shed look post");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
+});
+
 test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
@@ -371,6 +401,36 @@ test("shadow box and shader fade share the same unset shadowRange fallback", () 
   assert.match(glx, /T && T\.shadowRange != null \? T\.shadowRange : 80\.0/);
   assert.doesNotMatch(game, /LT\.shadowRange \|\| 64/,
     "|| 64 disagreed with the shader's 80 fallback and treated a 0 knob as unset");
+});
+
+test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
+  // docs/PERF-FINDINGS.md 2026-08-15: fading from the look-biased box anchor
+  // swept a 58% strength swing at 70 m on a pinned-eye yaw. The box stays
+  // forward-biased (texel allocation); the fade must not.
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  assert.match(lit, /distance\(wpos,\s*vec3\(uEye\.x,\s*uShadowCtr\.y,\s*uEye\.z\)\)/);
+  assert.match(tsl, /cameraPosition\.x[\s\S]{0,80}shadowCtr\.y[\s\S]{0,80}cameraPosition\.z/);
+  assert.match(wgsl, /F\.eye\.x[\s\S]{0,60}F\.shadowCtr\.y[\s\S]{0,60}F\.eye\.z/);
+});
+
+test("TLX zeros sunShaft when bloom is shed, matching GLX doBloom gate", () => {
+  const glx = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  assert.match(glx, /doBloom \? sunShaft \*/);
+  assert.match(tlx, /haveBloom \? sunShaft \*/);
+});
+
+test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  assert.match(lit, /wetSheen \* 0\.55/);
+  assert.match(tsl, /wetSheen\.mul\(0\.55\)/);
+  assert.match(lit, /surfaceId <= 27/);
+  assert.match(lit, /mirrorSurface = surfaceId == 27/);
+  assert.match(tsl, /lessThanEqual\(27\.0\)/);
+  assert.match(tsl, /surfaceId\.equal\(27\.0\)/);
 });
 
 test("changing preset drops a pending TIER verify", () => {

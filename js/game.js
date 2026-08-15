@@ -45,7 +45,7 @@ const els = {
 // otherwise it runs fully synchronously). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
-let _backendProved = false;   // boot-canary latch, set on the first world frame
+let _backendProved = false;   // boot-canary latch, set on the first world present
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
 // order — each group has eval-time dependencies inside it, which the <script>
 // tag order used to enforce and loadBackendScripts() now enforces by awaiting
@@ -86,21 +86,34 @@ function loadBackendScripts(files) {
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // Last load claimed the canvas then died — skip opt-in THIS tab only
+  // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
+  // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
+  // RENDERER button bounce back every refresh.
+  let skipClaim = false;
+  try { skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* no sessionStorage: try the opt-in as usual */ }
   // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
   // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
   // with the lower half black. But the menu is DOM over the canvas: it survives a
   // garbage frame, so the RENDERER button undoes that in one tap. An iOS jetsam
   // kill it can NOT undo (no JS error, no contextlost; the recovery below fires
   // only when GLX.init FAILS) — hence a probe armed before handing over the canvas
-  // and cleared on the first presented WORLD frame; armed at boot = never got there.
+  // and cleared once the alternate is bound (title SETTINGS never presents a
+  // world frame; leaving it armed until present() reverted every menu refresh).
+  // Re-armed around the first world present() so a jetsam on that frame still
+  // reverts; armed at the NEXT boot = never got through create() or present().
   const PROBE_KEY = "apex26.gfxBackendProbe";
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
-  if (armed) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
+  // skipClaim = this tab already claimed-and-died; the probe is leftover from
+  // that load. Do not persist webgl2 over the pick — attach GLX this boot and
+  // retry the alternate on the next cold start.
+  if (armed && !skipClaim) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
+  const optIn = !skipClaim && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
@@ -136,6 +149,9 @@ try {
       // raw {pos,nrm,col,idx} geometry that game.js uploads via the gfx handle.)
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
+      // Bound and live. Title has no track yet (deferred flyby), so present()
+      // will not run — disarm here or a refresh on SETTINGS reverts the pick.
+      if (gfx) { try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
     }
   }
 } catch (_) { gfx = null; }
@@ -143,20 +159,32 @@ if (!gfx) {
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already CLAIMED the canvas
     // (getContext "webgpu"/"webgl2" succeeded before init died) — then
-    // getContext("webgl2") can never attach on this load and the old path
-    // dead-ended at "needs WebGL2" forever. Clear the opt-in and reload once,
-    // the same recovery WGX's device-lost handler uses; the reset flag
-    // guarantees no reload loop.
+    // getContext("webgl2") can never attach on this load. Reload once with a
+    // session skip so THIS tab attaches GLX; keep the pick and disarm the
+    // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
     let backendTried = false;
     try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    let skipped = false;
     if (backendTried) {
-      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
+      // READ THE SKIP BACK before reloading. With sessionStorage blocked the
+      // write fails silently and the reload replays this exact claim-and-die
+      // boot forever; leaving the probe ARMED instead lets the next boot's
+      // canary revert the pick to webgl2 (the wgx.js device-lost idiom).
+      try { sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) {}
+    }
+    if (skipped) {
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
       try { location.reload(); } catch (_) {}
       return;
     }
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
+  // Live tab, create() refused. Keep the pick and disarm the canary so a
+  // refresh retries instead of reverting to WEBGL2. Jetsam during create()
+  // never reaches here — the probe stays armed and the next boot reverts.
+  try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
 // Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
 // the material-array load WITHOUT awaiting it: a pack is optional, the load is
@@ -6789,24 +6817,24 @@ function render(dt) {
   // smear only appears at speed (zero when parked; ramps in above ~40% of vTop()).
   const _spd = LT.speedBlur > 0 ? LT.speedBlur * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1) : 0;
   const po = _presentOpts;
-  // Bloom joins the last shedding tier: bloomAmt 0 skips the whole ~9-pass
-  // bright+mip chain in present() — the single biggest post-chain saving left
-  // on a device that has already shed everything else.
-  po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.tier() >= 4 ? 0 : _bloom * LT.bloomMul;
+  // Bloom joins the last MEASURED shed (autoTier, not GRAPHICS: LOW): bloomAmt
+  // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
+  // after env/SSR/shadows. Look post stays live for the lighting tuner.
+  po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.autoTier() >= 4 ? 0 : _bloom * LT.bloomMul;
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 drops the SSR march
-  // (road + car-paint), tier 4 the SSAO (+2 blurs) and god-ray passes.
-  po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
-  po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
+  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops SSR;
+  // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
+  po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
+  po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
   // contact is the SSAO half of exactly that bug, missed when lampVol's was fixed:
   // haveAO is `aoStr > 0 || contactStr > 0`, so a tier-4 DAYTIME frame (_cs is
   // non-zero whenever the key is bright) still ran the SSAO pass and both of its
   // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6837,6 +6865,13 @@ function render(dt) {
         if (_hazeOpts.str > 0.02) po.haze = _hazeOpts;
       }
     }
+  }
+  // Re-arm around the first world present so a jetsam mid-frame still reverts.
+  // Title already disarmed after bind; this window is only the first flyby/race.
+  if (!_backendProved) {
+    try { const p = localStorage.getItem("apex26.gfxBackend");
+      if (p === "three" || p === "webgpu") localStorage.setItem("apex26.gfxBackendProbe", p); }
+    catch (_) { /* no probe: first-frame jetsam will not auto-revert */ }
   }
   gfx.present(po);
   // Boot canary disarmed — a real world frame landed, so the next boot keeps it.
@@ -7126,47 +7161,12 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
-// RENDERER cycle (WEBGL2 → THREE → WEBGPU-if-available) — shown always now:
-// TLX ("THREE", the three.js/TSL backend, in-progress migration) needs no
-// WebGPU, so the toggle no longer hides without navigator.gpu; the WGX
-// "WEBGPU" stop is skipped on browsers that can't run it. Both alternates
-// are opt-in and the default stays WebGL2; flipping writes apex26.gfxBackend
-// (the raw key gfx.js reads) and reloads so Gfx.create() re-runs backend
-// selection at boot.
-{
-  const rb = $("pm-renderer");
-  if (rb) {
-    const read = () => {
-      try {
-        const v = localStorage.getItem("apex26.gfxBackend");
-        return v === "webgpu" || v === "three" ? v : "webgl2";
-      } catch (_) { return "webgl2"; }
-    };
-    const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
-    // SHOWN ON EVERY DEVICE, phones included. It hid whenever gfx.isMobile back
-    // when boot refused both alternates there. Boot honours the preference
-    // everywhere now, and this button IS the phone's recovery from a bad frame.
-    rb.hidden = false;
-    rb.textContent = "RENDERER: " + label(read());
-    rb.onclick = () => {
-      if (soundOn) GameAudio.uiSelect();
-      const cur = read();
-      const hasGpu = typeof navigator !== "undefined" && !!navigator.gpu;
-      const next = cur === "webgl2" ? "three"
-                 : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
-                 : "webgl2";
-      // Disarm the canary with the choice: a tap proves a live tab, so an armed
-      // probe from THIS load (switched before any world frame) must not outlive
-      // it and revert the preference just made.
-      try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-      rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
-      setTimeout(() => location.reload(), 350);
-    };
-  }
-}
+// RENDERER cycle lives in js/game/gfx-quality.js with GRAPHICS — wired at
+// DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
 
-// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
-// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// GRAPHICS presets + RENDERER cycle live in js/game/gfx-quality.js — it owns
+// #pm-gfx and #pm-renderer for EVERY device, and wires the preset's tier floor
+// into PerfGov.
 // It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 

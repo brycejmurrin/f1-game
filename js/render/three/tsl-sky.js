@@ -400,7 +400,11 @@
           .mul(0.28).mul(U.moonHalo).mul(U.moon);
         const moonCol = vec3(0.82, 0.88, 1.00);
         If(up.greaterThan(0.0).and(md.greaterThan(0.0)), () => {
-          c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)));
+          // Cloud occlusion: the moon sits BEHIND the deck exactly as the
+          // stars do (SKY_FS in js/render/shaders/sky.js). Without this a
+          // stormy/foggy night painted a crisp moon ON TOP of the clouds
+          // while the stars behind it were correctly hidden.
+          c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)).mul(cityCov.oneMinus()));
         });
       });
 

@@ -400,14 +400,14 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //      * [Block 8]    wet-road SSR consumption (ssrStrength = params4.w ;
   //        group0 @binding 6 SSR-result texture from wgsl-post.js)
   //    applyMaterial* / applyMaterialNormal are ported (14 procedural MAT ids).
-  //    STILL DEFERRED vs GLX: uAmbContactDark / uLampWallSpill / uWindowSunFlash
-  //    / uSkyRimGlow tuner knobs (no FrameU lanes).
+  //    params9 carries the four LIT tuner knobs that used to have no FrameU
+  //    lane (uAmbContactDark / uLampWallSpill / uWindowSunFlash / uSkyRimGlow).
   //
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 544 B (see WGX.FRAME_UNIFORM_BYTES)
-  //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
+  //      FrameU  : 560 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      Light   :  64 B/light × 48 = 3072 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
 struct FrameU {
@@ -433,7 +433,8 @@ struct FrameU {
   params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, lampNearClamp)
   lampLightVP: mat4x4<f32>,   // off 464  Z01-remapped nearest-floodlight spot VP
   params8    : vec4<f32>,     // off 528  (lampFog, lampShadowOn, lampIdx, matTexMix)
-};                            // size 544
+  params9    : vec4<f32>,     // off 544  (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow)
+};                            // size 560
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -448,7 +449,7 @@ struct DrawU {
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
-@group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
+@group(0) @binding(1) var<storage, read> lights : array<Light, 48>;
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
 @group(0) @binding(3) var shadowSamp : sampler_comparison;
 // ── Phase-4 deferred bindings (wgx.js binds real resources; placeholders are safe) ──
@@ -569,7 +570,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(in.matId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 26;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 27;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
@@ -577,10 +578,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let glassSurface = surfaceId == 24;
   let emissiveSurface = surfaceId == 25;
   let panelSurface = surfaceId == 26;
+  // MIRROR: chrome livery finish (car3d.js SURFACES.mirror = 27). Paint-like
+  // (keeps clearcoat + env lobe) but metallic and nearly smooth.
+  let mirrorSurface = surfaceId == 27;
   if (classifiedCar) {
-    if (paintSurface) {
+    if (paintSurface || mirrorSurface) {
       carPaint = D.mat1.w;
-      clearcoat = D.mat1.z;
+      clearcoat = select(max(D.mat1.z, 0.85), D.mat1.z, paintSurface);
     } else {
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface);
@@ -654,9 +658,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let keyMul    = F.params1.x;
   if (classifiedCar) {
     metalness = select(0.0, max(D.mat0.w, 0.78), metalSurface);
+    if (mirrorSurface) { metalness = max(D.mat0.w, 0.55); }
     if (carbonSurface) { metalness = 0.08; }
     if (rubberSurface) { specular = 0.18; }
-    if (metalSurface) { specular = 1.0; }
+    if (metalSurface || mirrorSurface) { specular = 1.0; }
     if (carbonSurface) { specular = 0.48; }
     if (panelSurface) { specular = 0.35; }
     emissive = select(0.0, D.mat0.x, paintSurface);
@@ -667,6 +672,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (glassSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
     if (panelSurface) { rough = max(rough, 0.72); }
+    if (mirrorSurface) { rough = min(rough, 0.09); }
   }
   applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm);
   roadMarkings(&albedo, &rough, in.trk);
@@ -695,16 +701,24 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
   // SSR + puddle reflection is Phase-4 wgx-side; here just the material response.
   var wet = 0.0;
+  var wetSheen = 0.0;
   if (wetness > 0.001) {
     let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
+    // Porous ground (grass/foliage/rock/sand/snow) drinks the water: it
+    // darkens but never polishes. Reflection-side terms key off wetSheen.
+    let wmid = i32(in.matId + 0.5);
+    let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
-    let puddle = smoothstep(0.48, 0.88, pn) * wet;
-    albedo = albedo * mix(1.0, clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0), wet);
+    let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    let absorb = mix(clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0),
+                     clamp(1.0 - 0.42 * F.params6.x, 0.0, 1.0), porous);
+    albedo = albedo * mix(1.0, absorb, wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
-    rough = mix(rough, 0.15, wet);
-    rough = mix(rough, 0.05, puddle);
-    f0 = mix(f0, vec3<f32>(0.04), wet * 0.6);    // thin water film dielectric
+    wetSheen = wet * (1.0 - porous);
+    rough = mix(rough, 0.30, wetSheen);
+    rough = mix(rough, 0.06, puddle);
+    f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
   }
 
   let a = rough * rough;
@@ -730,14 +744,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     // Distance + border fade (GLX sampleShadow parity, js/render/shaders/lit.js).
-    // Dissolve shadows by receiver distance from the UNSNAPPED box anchor
-    // (F.shadowCtr.xyz, glides with the camera) instead of hard-cutting at the
-    // box border: the box recentres in sBox/4 = 16 m snaps (game.js shadow pass),
-    // so an unfaded border made the whole shadow field's edge JUMP 16 m at a time
-    // while driving. The UV border fade stays as a safety clamp for worst-case
-    // box alignments. shadowCtr.w = shadowRange (box half-size, m).
+    // Fade from eye XZ + look-target Y (yaw-invariant). The box still recentres
+    // in sBox/4 = 16 m snaps; an unfaded BOX-anchored border jumped 16 m while
+    // driving, and a look-biased fade origin swept on yaw. UV border fade stays
+    // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
     let shRange = max(F.shadowCtr.w, 1.0);
-    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, F.shadowCtr.xyz));
+    // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
+    let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
+    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
     let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
            * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
     edgeFade = edgeFade * ef.x * ef.y;
@@ -751,7 +765,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
       let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
       // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
-      let aDist = distance(in.wpos, F.shadowCtr.xyz);
+      let aDist = distance(in.wpos, fadeCtr);
       let near = aDist < shRange * 0.80;
       let boxK = min(1.0, 80.0 / shRange);
       var R = 3.0;
@@ -884,7 +898,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // a tight sun disc reflected in the lacquer. Folded into the env colour so it rides
     // the same mirror weight (envF·strength) exactly as GLX adds it to envCC before ×envW.
     // Base floored at 1e-4 — pow(0.0, 400.0) is NaN on mobile GPUs (log2(0) = -Inf).
-    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow;
+    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow * keyMul;
     let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
     let refl = envCol * envF * strength * (1.0 - rough * 0.5);
     color = color + refl;
@@ -930,20 +944,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         }
       }
     }
-    color = color + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness);
+    color = color + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
     // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
     // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
     // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
     color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp (same microfacet BRDF as the sun).
+    // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
+    // so wet roads / walls still streak a lamp you can see, not only the pool.
+    let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
     let Hl = normalize(Ld + V);
     let NoHl = max(dot(N, Hl), 0.0);
     let VoHl = max(dot(V, Hl), 0.0);
     let Dl = D_GGX(NoHl, a);
     let Vl = V_SmithGGX(NoV, NoLl, a);
     let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    let radianceS = lcol * att;   // spotS floor (wet/dry) deferred with the wet model
+    let radianceS = lcol * (att * spotS * lampSh);
     var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
     lspec = lspec / (1.0 + lspec);
     color = color + lspec;
@@ -991,15 +1008,40 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
   // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
   // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
-  if (wet > 0.001) {
+  var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
+  envBlend = max(envBlend, wetSheen * 0.55);
+  if (envBlend > 0.001) {
     let Rw = reflect(-V, N);
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
-    let envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
-    let ef = 1.0 - max(dot(N, V), 0.0);
-    let envFresnel = ef * ef * ef * ef * ef;   // 5th power: concentrate into the grazing band
-    let envAdd = envColor * envFresnel * wet * 0.9 * (1.0 - metalness);
+    var envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
+    let envSunAlign = max(dot(Rw, F.sunDir.xyz), 0.0);
+    envColor = mix(envColor, envColor * F.sunColor.xyz * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
+    // WINDOW SUN FLASH (params9.z = uWindowSunFlash): dry glossy glass catches
+    // a tight sun glint. Gated (1-wetSheen) so wet road is unchanged; night
+    // moonlight is naturally negligible (GLX js/render/shaders/lit.js).
+    envColor = envColor + F.sunColor.xyz * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * F.params9.z * keyMul;
+    let ef0 = F_Schlick(max(dot(N, V), 0.0), vec3<f32>(0.04), 1.0).x;
+    let envFresnel = mix(ef0, ef0 * ef0, wetSheen * 0.35);
+    let envWet = envColor * (1.0 - wetSheen * 0.45);
+    let envAdd = envWet * envFresnel * envBlend * (1.0 - rough * 0.7) * (1.0 - metalness);
     let envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color = color + envAdd / (1.0 + envM);
+  }
+
+  // Sky rim / fresnel (GLX js/render/shaders/lit.js): grazing-angle atmospheric
+  // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).
+  {
+    let rf = 1.0 - NoV;
+    let rimFresnel = rf * rf * rf;
+    let rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18 * F.params9.w;
+    color = color + F.skyHorizon.xyz * rimAmt;
+  }
+
+  // Ambient contact darkening (GLX js/render/shaders/lit.js): extra crush on
+  // downward faces. AMBIENT CONTACT DARK = params9.x (def 1.0 = 0.88 floor).
+  {
+    let ao = pow(max(N.y * 0.5 + 0.5, 1e-4), 0.35);
+    color = color * mix(1.0 - 0.12 * F.params9.x, 1.0, ao);
   }
 
   // [Block 8] SSR consumption (F.params4.w = ssrStrength). On up-facing WET ground
@@ -1014,10 +1056,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // cleared texture) from darkening wet road toward black. ssrStrength=0 also
   // makes this a no-op.
   let ssrStrength = max(F.params4.w, 0.0);
-  if (wet > 0.001 && ssrStrength > 0.001) {
+  if (wetSheen > 0.001 && ssrStrength > 0.001) {
     let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
     let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
-    let ssrK = ssr.a * clamp(wet * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
+    let ssrK = ssr.a * clamp(wetSheen * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
     color = mix(color, color * 0.10 + ssr.rgb * 0.92, ssrK);
   }
 
@@ -1106,6 +1148,10 @@ fn vs_main(@location(0) aPos : vec3<f32>,
            @location(3) aInst2 : vec4<f32>,
            @location(4) aInst3 : vec4<f32>) -> @builtin(position) vec4<f32> {
   var model = M.model;
+  // Instancing gate: castShadowInstanced writes a zero model (w=0);
+  // every affine caster has model[3].w = 1. A dedicated flag would
+  // match GLX uInstanced / LIT D.mat2.y, but the zero-matrix write is
+  // the only caller of w<0.5 and IDENT/real models never trip it.
   if (M.model[3].w < 0.5) {
     model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
   }
@@ -1148,18 +1194,24 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    parity). This chunk was MISSING when wgx.js first referenced
   //    WGSLChunks.BLOCKER — createShaderModule({code: undefined}) threw and
   //    killed the whole WGX init (silent GLX fallback). Bindings must match
-  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = non-filtering
-  //    sampler, 2 = BlockerU (xy = 1/SHADOW_SIZE source texel).
+  //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = BlockerU
+  //    (xy = 1/SHADOW_SIZE source texel). textureLoad, not textureSampleLevel:
+  //    Safari / compat-mode rejects texture_depth_2d + a non-comparison sampler
+  //    (gpuweb compatibility-mode.md) and that used to fail the whole create().
   const BLOCKER = `
 struct BlockerU { srcTexel : vec4<f32> };   // xy = 1/SHADOW_SIZE
 @group(0) @binding(0) var depthTex : texture_depth_2d;
-@group(0) @binding(1) var depthSamp : sampler;
-@group(0) @binding(2) var<uniform> B : BlockerU;
+@group(0) @binding(1) var<uniform> B : BlockerU;
 ${fullscreenTri}
 struct VOut {
   @builtin(position) pos : vec4<f32>,
   @location(0)       uv  : vec2<f32>,
 };
+fn loadDepth(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(depthTex, px, 0);
+}
 @vertex
 fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   var o : VOut;
@@ -1171,10 +1223,10 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let t = B.srcTexel.xy;
-  let d0 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0, -1.0), 0);
-  let d1 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0, -1.0), 0);
-  let d2 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>(-1.0,  1.0), 0);
-  let d3 = textureSampleLevel(depthTex, depthSamp, in.uv + t * vec2<f32>( 1.0,  1.0), 0);
+  let d0 = loadDepth(in.uv + t * vec2<f32>(-1.0, -1.0));
+  let d1 = loadDepth(in.uv + t * vec2<f32>( 1.0, -1.0));
+  let d2 = loadDepth(in.uv + t * vec2<f32>(-1.0,  1.0));
+  let d3 = loadDepth(in.uv + t * vec2<f32>( 1.0,  1.0));
   return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
 
@@ -1184,9 +1236,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    city skyglow. Composed from the leaves above.
   //
   //    Deliberately reduced vs GLX SKY_FS (drops the overcast grey-shift, the
-  //    twilight cloud-bank enrichment, and azimuthal gradient variation) — those
-  //    land in Phase 2 when the sky becomes the real drawSky() call. This is the
-  //    end-to-end pipeline proof, not the final look.
+  //    twilight horizon cloud-bank, and azimuthal gradient variation). SkyU
+  //    is 240 B (p0–p5); p5.x is CLOUD DEFINITION (uCloudDef) so the billow
+  //    octave matches GLX / TLX. The moon sits behind covRay like the stars.
   //
   //    Uniform block layout MUST match WGX._writeSky() (see wgx.js). vec3s are
   //    padded to vec4 per WGSL's 16-byte alignment.
@@ -1203,6 +1255,7 @@ struct SkyU {
   p2          : vec4<f32>,     // (mieScatter, cloudSilver, coronaAureole, sunDiscSize) — pure-look knobs; read directly (0 is a real "off"), uploader always packs the resolved default
   p3          : vec4<f32>,     // (daySkyBlue, starSize, starTwinkle, moonDiscSize) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
   p4          : vec4<f32>,     // (moonHalo, sunCorona, sunSquash, cityGlowReach) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
+  p5          : vec4<f32>,     // (cloudDef, _, _, _) — CLOUD DEFINITION billow-octave scale (def 1.0)
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -1261,6 +1314,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let sunCorona     = U.p4.y;
   let sunSquash     = U.p4.z;
   let cityGlowReach = U.p4.w;
+  let cloudDef      = U.p5.x;   // CLOUD DEFINITION; 0 is a valid "soft smear"
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   // NIGHT gate (parity with GLX): at night sunDir stays HIGH as the moon
@@ -1270,7 +1324,10 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let nightSky = step(0.5, stars);
   // Gate daytime by (1 - nightSky) so the day-only deep-blue band never paints a
   // blue gradient among the stars (GLX js/render/shaders/sky.js).
-  let daytime = smoothstep(0.35, 0.60, sunE) * (1.0 - nightSky);
+  let dayGate = smoothstep(0.35, 0.60, sunE);
+  let daytime = dayGate * (1.0 - nightSky);
+  // TWILIGHT: low sun above the horizon, gated off night (GLX SKY_FS).
+  let twilight = smoothstep(0.02, 0.22, sunE) * (1.0 - dayGate) * (1.0 - nightSky);
   // Overcast factor: fades the deep-blue band under heavy cloud so grey days are
   // untouched (GLX js/render/shaders/sky.js).
   let overcast = smoothstep(0.5, 1.0, cloud);
@@ -1307,7 +1364,16 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let cp1 = cp + vec2<f32>(cT * 0.0028, cT * 0.0011);
     let cp2 = cp + vec2<f32>(cT * 0.0017, cT * 0.0023);
     let f = fbm(cp1);
-    let cov = smoothstep(0.50 - cloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
+    var cov = smoothstep(0.50 - cloud * 0.42, 0.84, f) * smoothstep(0.013, 0.05, up);
+    // Billow octave + CLOUD DEFINITION (GLX SKY_FS / TLX tsl-sky). Day +
+    // twilight get lumpy cumulus edges; deep night stays a soft smear.
+    let cloudRich = max(daytime, twilight);
+    if (cloudRich > 0.001) {
+      let billow = fbm(cp1 * 2.3 + vec2<f32>(11.7, 4.3));
+      let defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
+                  * smoothstep(0.013, 0.05, up);
+      cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
+    }
     covRay = cov;
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     let sl = pow(sd, 2.0);
@@ -1368,7 +1434,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let moonDisc = smoothstep(0.025 * moonDiscSize, 0.010 * moonDiscSize, moonPerp) * moon;   // MOON DISC SIZE knob
     let moonHalo = exp(-moonPerp * moonPerp * (140.0 / moonHaloK)) * 0.28 * moonHaloK * moon;   // MOON HALO knob
     if (up > 0.0 && md > 0.0) {
-      c = c + vec3<f32>(0.82, 0.88, 1.00) * (moonDisc * 1.10 + moonHalo);
+      // Cloud occlusion (GLX / TLX): the moon sits behind the deck.
+      c = c + vec3<f32>(0.82, 0.88, 1.00) * (moonDisc * 1.10 + moonHalo) * (1.0 - covRay);
     }
   }
 
@@ -1401,15 +1468,15 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLIT,
     BLOCKER,
     SHADOW,
-    // byte size of the SkyU uniform block (mat4 64 + 10*vec4 160 = 224)
-    SKY_UNIFORM_BYTES: 224,
+    // byte size of the SkyU uniform block (mat4 64 + 11*vec4 176 = 240)
+    SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-        FRAME_UNIFORM_BYTES: 544,   // FrameU + lampLightVP + params8 (lampFog / lamp shadow / matTexMix)
+        FRAME_UNIFORM_BYTES: 560,   // FrameU + lampLightVP + params8 + params9 (LIT tuner knobs)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
-    MAX_LIGHTS: 32,
+    MAX_LIGHTS: 48,
     DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
     DEPTH_RESOLVE: `

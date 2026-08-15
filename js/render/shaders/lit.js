@@ -1,7 +1,7 @@
 /*
  * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js):
  * the LIT program (LIT_VS/LIT_FS) — the scene pass: PBR sun +
- * hemisphere ambient + 32 point lights, procedural materials, sun shadow,
+ * hemisphere ambient + 48 point lights, procedural materials, sun shadow,
  * wet-road response, fog.
  * Split from the old monolithic glx-shaders.js. Template strings may
  * interpolate GLXChunks (js/render/shaders/chunks.js — loads first); each file
@@ -154,7 +154,7 @@ uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening 
 uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
 uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
-uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
+uniform vec3 uShadowCtr;    // unsnapped shadow-box snap anchor (Y = look-target height; fade uses eye XZ + this Y)
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
 // map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor
 // by default — SHADOW DISTANCE can widen it, see uCarBiasScale below.
@@ -174,16 +174,15 @@ uniform highp sampler2DShadow uLampShadowMap;
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
 uniform int uLampShadowIdx;
-// Point lights (floodlights / street lights — mainly for night tracks). Each is
-// {position, colour*intensity, radius}; uNumLights of the MAX_LIGHTS slots used.
-const int MAX_LIGHTS = 32;
+// Point lights (floodlights / street lights — mainly for night tracks). Packed
+// into 4 vec4s so 48 slots cost the same 192 default-block rows as the old six
+// vertical arrays at 32 (WebGL2 fragment-uniform floor is 224 rows).
+const int MAX_LIGHTS = 48;
 uniform int uNumLights;
-uniform vec3 uLightPos[MAX_LIGHTS];
-uniform vec3 uLightCol[MAX_LIGHTS];
-uniform float uLightRad[MAX_LIGHTS];
-uniform vec3 uLightDir[MAX_LIGHTS];    // per-lamp beam aim (normalized, tilted over the road)
-uniform vec2 uLightCone[MAX_LIGHTS];   // per-lamp spot cone: x=cosInner, y=cosOuter
-uniform float uLightBleed[MAX_LIGHTS]; // out-of-beam floor (city skyglow spill)
+uniform vec4 uLightA[MAX_LIGHTS]; // xyz pos, w radius
+uniform vec4 uLightB[MAX_LIGHTS]; // xyz colour*intensity, w out-of-beam bleed
+uniform vec4 uLightC[MAX_LIGHTS]; // xyz beam aim, w cone cosInner
+uniform vec4 uLightD[MAX_LIGHTS]; // x cone cosOuter
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -604,19 +603,15 @@ float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;
-  // Distance fade: dissolve shadows by RECEIVER distance from uShadowCtr — the
-  // unsnapped forward-biased ground anchor the box is snapped around (game.js
-  // shadow pass). The anchor glides smoothly with the camera, so the fade front
-  // never jumps on a box recentre (a BOX-anchored fade stepped sBox/4 = 16 m at
-  // a time while driving — the visible shadow pop/jump at racing speed). The box
-  // is guaranteed to cover 0.875·range from the anchor (snap slack = range/8),
-  // so completing the fade at 0.84·range retains shadows to ~74 m ahead of the
-  // camera at a 64 m box (the shipped default is 80 m, which reaches further
-  // still) — vs 46 m when this faded from the eye, which had to absorb the
-  // chase-cam offset AND the snap slack in one worst case.
-  // (Camera-height-independent too: fading by eye distance erased every shadow
-  // from high/aerial cameras, where vDist ≥ altitude for the whole ground.)
-  float aDist = distance(wpos, uShadowCtr);
+  // Distance fade: dissolve shadows by RECEIVER distance from a YAW-INVARIANT
+  // origin — eye XZ, look-target Y (uShadowCtr.y). The BOX stays forward-biased
+  // (game.js: camEye + look-dir, texel allocation only). Fading from that same
+  // biased point swept the fade front around a 40 m circle on a pinned-eye yaw
+  // (docs/PERF-FINDINGS.md 2026-08-15: 58% strength swing at 70 m). Height still
+  // comes from the look target so aerial cameras do not erase ground shadows.
+  // The box covers 0.875·range from its own anchor; at the default 80 m / 20 m
+  // bias, 0.84·range from the eye lands on the 90° box edge (sqrt(70²-20²)≈67).
+  float aDist = distance(wpos, vec3(uEye.x, uShadowCtr.y, uEye.z));
   float edgeFade = 1.0 - smoothstep(uShadowRange * 0.62, uShadowRange * 0.84, aDist);
   // UV border fade kept as a thin safety feather only: the distance fade above
   // completes at 0.84·range while the box guarantees 0.875·range from the anchor,
@@ -1033,8 +1028,9 @@ void main() {
   vec3 lampFog = vec3(0.0);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
-    vec3 LP = uLightPos[i] - vWorldPos;
-    float rad = uLightRad[i];
+    vec4 la = uLightA[i], lb = uLightB[i], lc = uLightC[i];
+    vec3 LP = la.xyz - vWorldPos;
+    float rad = la.w;
     // Range-reject on the SQUARED distance, before the root. On a 28-32 lamp
     // night circuit most lamps are out of range for any given fragment, so this
     // turns up to 32 sqrt per fragment into 32 dot products. Exact, not
@@ -1059,12 +1055,12 @@ void main() {
     float att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) continue;
     // Aimed spot cone: how deep the surface sits inside the lamp's beam.
-    // uLightDir = beam aim, uLightCone = (cosInner, cosOuter); uLightBleed is the
-    // out-of-beam floor (city skyglow spill between pools).
-    float cd = dot(-Ld, uLightDir[i]);
-    float beam = smoothstep(uLightCone[i].y, uLightCone[i].x, cd);
+    // uLightC.xyz = beam aim, uLightC.w/uLightD.x = (cosInner, cosOuter);
+    // uLightB.w is the out-of-beam floor (city skyglow spill between pools).
+    float cd = dot(-Ld, lc.xyz);
+    float beam = smoothstep(uLightD[i].x, lc.w, cd);
     // ILLUMINATION follows the beam (the pool on the road)…
-    float spotD = mix(uLightBleed[i], 1.0, beam);
+    float spotD = mix(lb.w, 1.0, beam);
     // …but the REFLECTION doesn't: the glowing lens itself is visible from far
     // outside the beam, so a wet road streaks beneath every lamp you can see —
     // not only inside its illumination cone. The floor is wetness-dependent:
@@ -1082,7 +1078,7 @@ void main() {
     // day frame. uLampFog is a uniform, so this stays uniform control flow.
     if (uLampFog > 0.0)
 #endif
-    lampFog += uLightCol[i] * (att * mix(0.35, 1.0, beam));
+    lampFog += lb.xyz * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
     // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this
     // surface and the lamp block its pool — the radial shadow swinging around
@@ -1120,12 +1116,12 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * uLightCol[i] * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+    color += albedo * lb.xyz * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
-    color += albedo * uLightCol[i] * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.
@@ -1140,7 +1136,7 @@ void main() {
       float Dl = D_GGX(NoHl, a);
       float Vl = V_SmithGGX(NoV, NoLl, a);
       vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-      vec3 radianceS = uLightCol[i] * (att * spotS * lampSh);
+      vec3 radianceS = lb.xyz * (att * spotS * lampSh);
       vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
       color += lspec / (1.0 + lspec);
       // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
@@ -1266,7 +1262,7 @@ void main() {
     // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
     float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
     float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow;  // CAR SUN GLINT knob (def 12.0) — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
@@ -1332,7 +1328,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash * uKeyMul;   // WINDOW SUN FLASH × KEY LIGHT (def 1.0 = shipped)
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square

@@ -50,7 +50,7 @@
 "use strict";
 
 (function () {
-  const MAX_LIGHTS = 32;
+  const MAX_LIGHTS = 48;
 
   function lit(THREE, TSL, ctx) {
     const {
@@ -82,8 +82,10 @@
     // nodes): tlx.js swaps its .value to a black dummy cube while rendering
     // INTO the probe (the env pass draws glass, an envSurface — sampling the
     // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
-    // js/render/glx.js). .sample(Rg) clones per use but resolves its binding
-    // from this base, so the swap covers all variants at once.
+    // js/render/glx.js). cubeTexture(base, dir, lod) clones per use with
+    // referenceNode = base (three.js CubeTextureNode), so the swap covers
+    // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
+    // setter and threw on every chrome/env surface.
     const ENV_CUBE = ctx.envCube || null;
     const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
@@ -320,7 +322,7 @@
     });
 
     /* ── M4 sun-shadow sampling (sampleShadow in js/render/shaders/lit.js) ───
-     * Distance fade anchored to the GLIDING uShadowCtr (never the box, which
+     * Distance fade from eye XZ + look-target Y (yaw-invariant; the box still
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
      * compiles clean in TSL), texel-grid-anchored IGN dither, car-map
@@ -339,8 +341,9 @@
       const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
       const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
       If(sc.z.lessThan(1.0), () => {
-        // Receiver-distance fade from the unsnapped anchor (js/render/shaders/lit.js).
-        const aDist = length(wp.sub(U.shadowCtr)).toVar();
+        // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
+        const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
+        const aDist = length(wp.sub(fadeCtr)).toVar();
         const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
           .oneMinus().toVar();
         // Thin UV border safety feather (js/render/shaders/lit.js).
@@ -1171,10 +1174,10 @@
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
-            // .sample() alone is mip 0 (always-sharp chrome); .level() is the
-            // TSL lod. Binding still resolves from the shared envCubeNode so
-            // setEnvCube()'s dummy-cube swap covers this clone.
-            const cubeRefl = envCubeNode.uv(Rg).level(rough.mul(2.5)).rgb;
+            // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
+            // clones with referenceNode = this base (mrdoob/three.js
+            // CubeTextureNode.js). Do not call .uv() on a cube node.
+            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
@@ -1182,7 +1185,7 @@
           const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
           envCC.addAssign(vec3(U.sunColor)
             .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow));
+            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
           color.mulAssign(envW.mul(0.94).oneMinus());          // absorb under the mirror
           const addCC = envCC.mul(envW);
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
@@ -1219,7 +1222,7 @@
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
           // dry glossy glass sun flash (WINDOW SUN FLASH knob)
           envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
-            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash));
+            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash).mul(U.keyMul));
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
           envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));

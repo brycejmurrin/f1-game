@@ -257,6 +257,14 @@ const CEILINGS = {
   // while 40 m and 60 m were flat. One line of code (bias along the car's heading
   // instead) plus the comment recording the measurement and why the coverage
   // guarantee is untouched — the same bug-explaining growth the header tolerates.
+  // 8259 -> 8242: RENDERER cycle extracted to gfx-quality.js (same home as
+  // GRAPHICS). game.js keeps the boot canary; the button is DOMContentLoaded.
+  // 8242 -> 8251: Safari WebGPU create-fail must not persist webgl2 (session
+  // claim-fail skip, disarm leftover probe, keep the user's THREE/WEBGPU pick).
+  // 8251 -> 8258: the claim-fail reload now reads the session skip BACK before
+  // reloading — with sessionStorage blocked the old path removed the probe
+  // (killing the canary revert) and reloaded into the identical claim-and-die
+  // boot forever. Bug-explaining growth at the site of the bug.
   // 8201 -> 8210: three lighting/graphics fixes from the mechanism-sliced survey,
   // three lines of "why" each. (1) The god-ray horizon cutoff was a STEP off
   // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
@@ -273,6 +281,10 @@ const CEILINGS = {
   // file, so neither 8246 nor 8210 fits their union. Measured on the merged tree
   // with the ceiling test's own metric (split-newline count), per the deploy-merge
   // rule that baselines are re-measured on the union and never inherited.
+  // -> 8270 on this merge: both lineages grew game.js again (their sun-shadow
+  // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
+  // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
+  // merged tree with the ceiling test's own metric, per the deploy-merge rule.
   // -> 8270 on this merge: both lineages grew game.js again (their sun-shadow
   // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
   // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the

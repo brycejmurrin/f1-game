@@ -470,7 +470,8 @@
       speedBlur: uniform(0), lensDirt: uniform(0.15),
       hazeUV: uniform(new THREE.Vector2(-9, -9)), hazeStr: uniform(0),
       hazeTime: uniform(0),
-      shaftDecay: uniform(0.82), flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
+      shaftDecay: uniform(0.82), shaftSpread: uniform(1.0),
+      flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
     };
     // Swappable inputs: bloom mip 0, blurred SSAO, godray — black/white
     // fallbacks make each disabled block a mathematical no-op (glx/post.js
@@ -615,7 +616,16 @@
           // is also the right degenerate fallback — defaulting to view-forward
           // (0,0,1) zeroed upDot and collapsed the mask in one step.
           const upVSn = normalize(C.upVS).toVar();
-          const Nv = select(crvL.greaterThan(1e-6), crv.div(crvL), upVSn).toVar();
+          // CONDITIONING, not absolute magnitude (COMPOSITE_FS in
+          // js/render/shaders/post.js). crvL scales with |dpx|·|dpy|, so at
+          // grazing distance the cross stays large while its DIRECTION is
+          // depth-quantization noise — the old crvL>1e-6 guard almost never
+          // fired where it was needed and the wet-road mask collapsed past
+          // the first few metres. sinT is the scale-free sine of the angle
+          // between the derivatives.
+          const sinT = crvL.div(max(length(dpx).mul(length(dpy)), 1e-12)).toVar();
+          const Nv = select(crvL.greaterThan(1e-6).and(sinT.greaterThan(0.08)),
+            crv.div(crvL), upVSn).toVar();
           If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
           // A ground normal's view-space z is ~0 at grazing incidence, so the flip
           // above is a coin toss and lands DOWN when the camera pitches up. That
@@ -708,7 +718,7 @@
               const carSoft = clamp(float(1.4).sub(C.carGloss).mul(0.5), 0.0, 1.0);
               const streak = select(carDom,
                 C.carReflect.mul(carSoft.mul(0.030).add(0.006)),
-                C.reflect.mul(clamp(float(0.62).sub(vUV.y).div(0.62), 0.0, 1.0).mul(0.022).add(0.010))).toVar();
+                C.reflect.mul(clamp(C.ssrTopUV.sub(vUV.y).div(C.ssrTopUV), 0.0, 1.0).mul(0.022).add(0.010))).toVar();
               streak.mulAssign(mix(float(0.3), float(1.6), clamp(hitDist.div(25.0), 0.0, 1.0)));
               const sTap = (k) => sceneT.sample(TL(hitUV.add(vec2(0.0, streak.mul(k))))).rgb;
               const w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
@@ -782,12 +792,16 @@
               uvi.addAssign(stp);
               const suv2 = clamp(uvi, vec2(0.0), vec2(1.0)).toVar();
               // Weight by sun proximity: no comet streaks off stray lamps.
-              const sw = clamp(length(suv2.sub(C.sunUV)).div(0.32), 0.0, 1.0).oneMinus().toVar();
+              // SCREEN SUN-SHAFT knob extends the rays (COMPOSITE_FS
+              // uShaftSpread), not just their brightness — a fixed 0.32
+              // disc made the slider look dead past 1.
+              const reach = float(0.32).mul(C.shaftSpread);
+              const sw = clamp(length(suv2.sub(C.sunUV)).div(reach), 0.0, 1.0).oneMinus().toVar();
               shaft.addAssign(bloomTexN.sample(TL(suv2)).rgb.mul(decay.mul(sw).mul(sw)));
               decay.mulAssign(C.shaftDecay);           // SUN-SHAFT REACH knob
             });
             shaft.divAssign(8.0);
-            const radial = clamp(dist.mul(2.6), 0.0, 1.0).oneMinus();
+            const radial = clamp(dist.mul(float(2.6).div(C.shaftSpread)), 0.0, 1.0).oneMinus();
             c.addAssign(shaft.mul(C.sunShaft).mul(radial).mul(radial).mul(0.60));
           });
         });

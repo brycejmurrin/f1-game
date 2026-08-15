@@ -51,11 +51,11 @@ divisors so every exposed slider extreme remains finite.
 
 | ID | Range | Neutral | Purpose |
 |---|---:|---:|---|
-| `blacks` | −1…1 | 0 | Deepest near-black detail |
-| `shadows` | −1…1 | 0 | Dark asphalt, tyres and unlit surfaces |
-| `midtones` | −1…1 | 0 | Middle-grey paint and environment detail |
-| `highlights` | −1…1 | 0 | Bright surfaces below peak white |
-| `whites` | −1…1 | 0 | Brightest HDR values entering the ACES shoulder |
+| `blacks` | −1.5…1.5 | 0 | Deepest near-black detail (shader stop gain ×3, then `exp2` clamps ±4) |
+| `shadows` | −1.5…1.5 | 0 | Dark asphalt, tyres and unlit surfaces (stop gain ×2) |
+| `midtones` | −3…3 | 0 | Middle-grey paint and environment detail |
+| `highlights` | −3…3 | 0 | Bright surfaces below peak white |
+| `whites` | −3…3 | 0 | Brightest HDR values entering the ACES shoulder |
 | `toe` | −1…1 | 0 | Transition out of black |
 | `shoulder` | −1…1 | 0 | Highlight compression before ACES |
 
@@ -63,9 +63,10 @@ These are distinct from the existing `blackLift` and `whitePoint` IDs, labelled
 **BLACK FLOOR** and **ACES WHITE SCALE** in the tuner. Their IDs and stored
 meaning are unchanged for preset compatibility.
 
-RGB grading exposes `liftR/G/B` (−0.15…0.15, neutral 0), `gammaR/G/B`
-(0.5…2, neutral 1), and `gainR/G/B` (0.5…1.5, neutral 1). The fitted transform
+RGB grading exposes `liftR/G/B` (−0.3…0.3, neutral 0), `gammaR/G/B`
+(0.4…2.5, neutral 1), and `gainR/G/B` (0.4…2.5, neutral 1). The fitted transform
 maps input black to Lift, input white to Gain, and Gamma controls the midpoint.
+`pow`/`log` inputs and curve divisors are clamped so every exposed extreme stays finite.
 
 All new registry defaults are neutral. The shipped broadcast grade lives in
 `LightPresets["*"]`; track/time/weather presets and localStorage profiles retain
@@ -99,15 +100,23 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-GLX uploads plain uniform arrays per frame — `uLightPos[i]` (xyz + radius),
-`uLightCol[i]`, `uNumLights`, plus per-lamp aim/cone/bleed/volumetric/glare
-arrays consumed by the lit shader and the god-ray pass. Every
+GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
+`uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
+plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
 exactly 15 values.
 
 `setFrameLights()` re-uploads every frame: it sorts active lamps by
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
-`LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
+`LT.lampCull` (def 40) when there is traffic, otherwise 48 (`MAX_LIGHTS`).
+
+**48 is an engine cap, not a WebGL one.** WebGL has no lights API and no
+`MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2
+minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
+UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
+rows — the same budget the old six vertical arrays used at 32. God-rays stay
+at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
+uniforms.
 
 ### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
 
@@ -230,7 +239,7 @@ reads as physically cast by a real structure. Street themes use slim posts
 keyed off the furniture `fz.lamp` style; open circuits get tall flood banks.
 
 `setFrameLights()` culls the full list to the nearest CAP lamps each frame
-(`lampCull` / 32 solo) and uploads the light uniforms. When the sun dominates
+(`lampCull` / 48 solo) and uploads the light uniforms. When the sun dominates
 (bright day) it sets `numLights = 0` and skips the upload.
 
 ---

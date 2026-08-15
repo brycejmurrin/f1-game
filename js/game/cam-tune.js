@@ -45,7 +45,7 @@ const CAM_TUNE_DEFS = [
   { id: "yaw",    label: "YAW",      min: -90, max: 90, step: 0.25, def: 0, unit: "°",
     help: "Pan the aim right (+) or left (−) without moving the eye." },
   { id: "fov",    label: "FOV",      min: -35, max: 35, step: 0.25, def: 0, unit: "°",
-    help: "Widen (+) or tighten (−) the field of view on top of the mode's own speed-scaled FOV." },
+    help: "Widen (+) or tighten (−) the field of view on top of the mode's own speed-scaled FOV. Solved FOV is clamped 20–110°: a tight onboard (~36°) clips the last −16° of this slider, and a wide chase (~81°) clips the last few + degrees." },
   // CORNER LEAD is not a geometric offset like the six above — CamTune.apply()
   // never touches it. js/game/cameras.js reads it directly in the chase/far
   // branch and blends the rig toward the classic road-frame chase (eye back

@@ -66,8 +66,8 @@
  * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
  * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
  * path keeps the flat fogColor clear, and the env-probe double-call (M9)
- * just overwrites uniforms (last drawSky before render wins). No post yet
- * (M8).
+ * just overwrites uniforms (last drawSky before render wins). Post chain
+ * is live (M8, tlx-post.js).
  *
  * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
  * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into
@@ -130,6 +130,15 @@
 "use strict";
 
 const TLX = (function () {
+  let _lastFailure = null;
+  function _fail(reason) {
+    _lastFailure = { reason: String(reason), at: Date.now() };
+    try { localStorage.setItem("apex26.gfxTlxFail", _lastFailure.reason); } catch (_) { /* blocked storage */ }
+    try { Log.warn("gfx", "TLX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent in the node harness */ }
+    try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+    try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
+    return null;
+  }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
@@ -173,14 +182,14 @@ const TLX = (function () {
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      // DEFAULT OFF EVERYWHERE, phones included — three picks WebGPU wherever the
-      // browser offers it. That is a deliberate product call, not an oversight:
-      // the alternative (pinning phones to three's WebGL2 backend, which is the
-      // codegen path every TLX milestone was actually developed against) trades
-      // the migration's whole point on mobile for safety against a WebKit bug we
-      // have diagnosed but never reproduced. Flip the default here if a real
-      // device says otherwise; `apex26.tlxForceGL` already overrides both ways.
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : false;
+      // Unset pin: WebKit (Safari Mac + every iOS browser) → WebGL2. three's
+      // getFallback fires only when navigator.gpu is ABSENT; Safari 26 exposes
+      // it (user-enabled) and then WebGPURenderer paints black / throws.
+      // Chromium desktop keeps auto-pick. `apex26.tlxForceGL` "1"/"0" overrides.
+      const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+      const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
+        (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
 
       const renderer = new THREE.WebGPURenderer({
         canvas,
@@ -249,6 +258,16 @@ const TLX = (function () {
           // 1.2 s: long enough for a real "restored" event to win the race
           // below, short enough that the player reads it as a hitch.
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
+          else {
+            // Third loss in one tab. GLX's identical 2-cap ends in a frozen
+            // frame because GLX has nothing beneath it — TLX DOES: surrender
+            // the tab to WebGL2 (the WGX device-lost idiom) and record why,
+            // instead of freezing on the last frame with the label lying.
+            try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
+            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+            sessionStorage.setItem("apex26.gfxClaimFail", "1");
+            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+          }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
       // three does NOT route "restored" anywhere (it only listens for the loss),
@@ -305,12 +324,19 @@ const TLX = (function () {
         Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
       } catch (_) { /* non-fatal: debug convenience only */ }
 
-      // Fallback material: unlit vertex colour (the M2 look). Kept as the
-      // never-fail path — if the lit factory is missing or throws, the
-      // backend still boots and renders geometry.
+      // Fallback materials: unlit vertex colour (the M2 look). Node unlit is
+      // the never-fail path when the lit *factory* throws at create time.
+      // Classic MeshBasicMaterial is the last canvas paint if TSL *codegen*
+      // itself throws on the first renderer.render() — that compile is lazy,
+      // so a factory that returned is not a compiled program.
       const unlitMat = new THREE.MeshBasicNodeMaterial();
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
+      const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+      rawUnlitMat.side = THREE.FrontSide;
+      // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
+      // first present() throw so later frames do not recompile the dead graph.
+      let _drawMatMode = 0;
 
       // Debug viz mode (?viz=… or localStorage apex26.tlxViz), read BEFORE
       // the factories: lit viz modes replace the scene material, post viz
@@ -354,6 +380,9 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode });
           if (post && !post.enabled()) post = null;
+          // Phone + no renderable float target: ACES/FXAA on 8-bit is the
+          // pale-ground look. Direct-to-canvas (M7) is the working picture.
+          if (post && isMobile && !post.hdrOk()) post = null;
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
@@ -496,13 +525,20 @@ const TLX = (function () {
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
       const matCache = new Map();
       const MAT_CACHE_CAP = 64;
+      function fallbackMat() { return _drawMatMode >= 2 ? rawUnlitMat : unlitMat; }
       function materialFor(opts, chunked) {
-        if (!lit) return unlitMat;
+        if (_drawMatMode || !lit) return fallbackMat();
         if (vizMat) return vizMat;
         if (!opts) return chunked ? defaultMatChunked : defaultMat;
         const o = opts;
+        // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
+        // every frame): raw in the key it mints a variant per step of the
+        // ramp, and on r184 every cache eviction leaks bindings for shared
+        // textures (three #33952, fixed only in r186). Quantised to 1/32 the
+        // full ramp costs ≤33 variants — under the cap, so no evictions —
+        // and the ≤0.03 emissive delta is invisible.
         const key =
-          (o.emissive !== undefined ? o.emissive : 0) + "," +
+          (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
           (o.alpha !== undefined ? o.alpha : 1) + "," +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
@@ -675,7 +711,7 @@ const TLX = (function () {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
         m.geometry = geo;
-        m.material = material || unlitMat;
+        m.material = material || fallbackMat();
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
         m.visible = true;
         poolUsed++;
@@ -977,7 +1013,18 @@ const TLX = (function () {
           poolUsed = 0;
           _envActive = false;
           envFacesMask |= 1 << (face & 7);
-          if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }   // full cube captured
+          if (envFacesMask === 63) {
+            envFacesMask = 0; envReady = true;
+            // WebGPU does not gl.generateMipmap a CubeRenderTarget the way
+            // WebGL2 does (three.js #31143 / #31639). Without an explicit
+            // pass, cubeTexture(..., rough*2.5) samples empty mips and chrome
+            // goes black/flat. WebGL2 already auto-mips; this is a no-op there
+            // when the chain already exists.
+            if (renderer.generateMipmaps && envRT.texture) {
+              try { renderer.generateMipmaps(envRT.texture); }
+              catch (_) { /* backend without cube-mip helper: lod 0 still works */ }
+            }
+          }
         },
         envProbeReady() { return envReady; },
         // New track/session: the cube still holds the OLD circuit — hold the
@@ -1242,18 +1289,63 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
-          // M8: with the post chain up, the world (opaques, sky background
-          // node, transparent FX — glow/particles feed bloom) renders into
-          // the HDR scene target; the chain resolves it to the canvas. The
-          // chain reads the lamp shadow map + its armed flag BEFORE
-          // clearArmed() below retires them (godrays sample the spot map).
-          if (post) {
-            renderer.setRenderTarget(post.sceneTarget());
-            renderer.render(scene, camera);
-            post.present(opts, _postF);
-          } else {
+          // First renderer.render() is when three compiles TSL → GLSL. A
+          // factory that returned is not a compiled program — Safari WebGL2
+          // often throws here. tick() reports any escape as the full-screen
+          // overlay ("Caught @ tick") and rethrows. The 1269 post catch then
+          // retried the SAME render unwrapped, so a compile error became the
+          // crash. Every paint below stays inside try; the pick is never
+          // written to webgl2 (session skip + reload if even classic dies).
+          const persistFail = (e) => {
+            const reason = (e && e.message) || String(e);
+            _lastFailure = { reason, at: Date.now() };
+            try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
+            try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
+          };
+          const paintCanvas = () => {
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
+          };
+          const dropTo = (mode, mat) => {
+            _drawMatMode = mode;
+            post = null;
+            sky = null;
+            try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
+            lit = null;
+            fx = null;
+            for (let i = 0; i < poolUsed; i++) {
+              if (meshPool[i]) meshPool[i].material = mat;
+            }
+          };
+          const refuseTab = () => {
+            try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
+            try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
+            try { location.reload(); } catch (_) { /* harness: GLX attaches next real boot */ }
+          };
+          let painted = false;
+          try {
+            if (post) {
+              renderer.setRenderTarget(post.sceneTarget());
+              renderer.render(scene, camera);
+              post.present(opts, _postF);
+            } else {
+              paintCanvas();
+            }
+            painted = true;
+          } catch (e) { persistFail(e); }
+          // Post-only death: same materials, canvas (the 1269 intent).
+          if (!painted && post) {
+            post = null;
+            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+          }
+          if (!painted) {
+            dropTo(1, unlitMat);
+            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+          }
+          if (!painted) {
+            dropTo(2, rawUnlitMat);
+            try { paintCanvas(); painted = true; }
+            catch (e) { persistFail(e); refuseTab(); }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // M7 staged release, final stage: the render above created the GPU
@@ -1363,13 +1455,17 @@ const TLX = (function () {
         },
       };
 
+      try { localStorage.removeItem("apex26.gfxTlxFail"); } catch (_) { /* blocked storage */ }
+      try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+      try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
+      _lastFailure = null;
       return backend;
-    } catch (_) {
-      return null;   // any failure -> GLX fallback (Gfx.create contract)
+    } catch (e) {
+      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }
 
-  return { create };
+  return { create, lastFailure: () => _lastFailure };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;
