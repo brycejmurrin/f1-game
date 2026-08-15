@@ -115,13 +115,14 @@ const GLX = (function () {
   // Track-lamp intensity scale applied in uploadLightSet. 1 unless PER-CHUNK
   // LAMPS is on, in which case it is that knob's value — see begin().
   let _lampScale = 1;
-  // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (32) and
+  // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (48) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
   // god-ray scratch, which moved to js/render/glx/post.js with present().
-  const _luPos = new Float32Array(32 * 3), _luCol = new Float32Array(32 * 3),
-        _luRad = new Float32Array(32), _luDir = new Float32Array(32 * 3),
-        _luCone = new Float32Array(32 * 2), _luBleed = new Float32Array(32);
+  // Four vec4s match lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
+  const MAX_LIGHTS = 48;
+  const _luA = new Float32Array(MAX_LIGHTS * 4), _luB = new Float32Array(MAX_LIGHTS * 4),
+        _luC = new Float32Array(MAX_LIGHTS * 4), _luD = new Float32Array(MAX_LIGHTS * 4);
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -449,7 +450,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
-      "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightBleed[0]"]);
+      "uNumLights", "uLightA[0]", "uLightB[0]", "uLightC[0]", "uLightD[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -1238,7 +1239,7 @@ const GLX = (function () {
     gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
-    // of at most MAX_LIGHTS (32) entries, already culled to the nearest set by
+    // of at most MAX_LIGHTS (48) entries, already culled to the nearest set by
     // the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
@@ -1255,9 +1256,9 @@ const GLX = (function () {
   // frame.lights (idx = null, entries read in order), and GLXChunked sends a
   // PER-CHUNK subset via an index array into the track's full baked light list
   // (PER-CHUNK LAMPS knob). The per-chunk path is why this is factored out: the
-  // shader still only ever sees <= 32 lights, so MAX_LIGHTS and the fragment
-  // loop are untouched — only WHICH 32 are bound changes, per draw. That lifts
-  // the 32-lamp limit for the SCENE as a whole (each chunk gets its own budget)
+  // shader still only ever sees <= MAX_LIGHTS, so the fragment loop is
+  // untouched — only WHICH lamps are bound changes, per draw. That lifts
+  // the cap for the SCENE as a whole (each chunk gets its own budget)
   // without costing a uniform slot or a per-fragment iteration.
   // L2/o2/n2 (optional): a SECOND source appended after the idx-selected ones —
   // the per-frame dynamic lights (car tail-lights), which appendCarTailLights
@@ -1267,24 +1268,23 @@ const GLX = (function () {
   // Tail lights are reserved FIRST (there are at most 5, and a car beside you
   // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
   function uploadLightSet(L, idx, n, L2, o2, n2) {
-    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, 32) : 0;
-    const nStatic = L ? Math.max(0, Math.min(32 - nTail, n | 0)) : 0;
+    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
+    const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
     gl.uniform1i(litU.uNumLights, nL);
     if (nL <= 0) return;
-    const pos = _luPos, col = _luCol, rad = _luRad, dir = _luDir,
-          cone = _luCone, bleed = _luBleed;
+    const A = _luA, B = _luB, C = _luC, D = _luD;
     for (let i = 0; i < nL; i++) {
       const fromTail = i >= nStatic;
       const src = fromTail ? L2 : L;
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
-      pos[i * 3] = src[o]; pos[i * 3 + 1] = src[o + 1]; pos[i * 3 + 2] = src[o + 2];
+      const i4 = i * 4;
       // PER-CHUNK LAMPS intensity. The knob is now a 0..1 amount, not a
-      // toggle: turning it on gives every chunk its OWN nearest-32 lamps
+      // toggle: turning it on gives every chunk its OWN nearest-N lamps
       // instead of making the whole visible scene share one set, so a fragment
       // that previously saw a handful of lamps that actually reach it now sees
-      // up to 32 — and the scene reads far brighter at the same LAMP LEVEL.
+      // up to MAX_LIGHTS — and the scene reads far brighter at the same LAMP LEVEL.
       // That is not a bug in the feature, it is more light genuinely arriving;
       // the knob's value is the dimmer that makes it usable.
       //
@@ -1292,18 +1292,15 @@ const GLX = (function () {
       // tail slice above nStatic) and are not per-chunk, so scaling them would
       // dim the field's lights for a reason that has nothing to do with them.
       const s = fromTail ? 1 : _lampScale;
-      col[i * 3] = src[o + 3] * s; col[i * 3 + 1] = src[o + 4] * s; col[i * 3 + 2] = src[o + 5] * s;
-      rad[i] = src[o + 6];
-      dir[i * 3] = src[o + 7]; dir[i * 3 + 1] = src[o + 8]; dir[i * 3 + 2] = src[o + 9];
-      cone[i * 2] = src[o + 10]; cone[i * 2 + 1] = src[o + 11];
-      bleed[i] = src[o + 12];
+      A[i4] = src[o]; A[i4 + 1] = src[o + 1]; A[i4 + 2] = src[o + 2]; A[i4 + 3] = src[o + 6];
+      B[i4] = src[o + 3] * s; B[i4 + 1] = src[o + 4] * s; B[i4 + 2] = src[o + 5] * s; B[i4 + 3] = src[o + 12];
+      C[i4] = src[o + 7]; C[i4 + 1] = src[o + 8]; C[i4 + 2] = src[o + 9]; C[i4 + 3] = src[o + 10];
+      D[i4] = src[o + 11]; D[i4 + 1] = 0; D[i4 + 2] = 0; D[i4 + 3] = 0;
     }
-    gl.uniform3fv(litU["uLightPos[0]"], pos.subarray(0, nL * 3));
-    gl.uniform3fv(litU["uLightCol[0]"], col.subarray(0, nL * 3));
-    gl.uniform1fv(litU["uLightRad[0]"], rad.subarray(0, nL));
-    gl.uniform3fv(litU["uLightDir[0]"], dir.subarray(0, nL * 3));
-    gl.uniform2fv(litU["uLightCone[0]"], cone.subarray(0, nL * 2));
-    gl.uniform1fv(litU["uLightBleed[0]"], bleed.subarray(0, nL));
+    gl.uniform4fv(litU["uLightA[0]"], A.subarray(0, nL * 4));
+    gl.uniform4fv(litU["uLightB[0]"], B.subarray(0, nL * 4));
+    gl.uniform4fv(litU["uLightC[0]"], C.subarray(0, nL * 4));
+    gl.uniform4fv(litU["uLightD[0]"], D.subarray(0, nL * 4));
   }
 
   // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked

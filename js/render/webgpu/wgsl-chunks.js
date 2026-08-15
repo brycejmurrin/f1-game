@@ -444,7 +444,7 @@ struct DrawU {
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
-@group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
+@group(0) @binding(1) var<storage, read> lights : array<Light, 48>;
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
 @group(0) @binding(3) var shadowSamp : sampler_comparison;
 // ── Phase-4 deferred bindings (wgx.js binds real resources; placeholders are safe) ──
@@ -1405,7 +1405,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
-    MAX_LIGHTS: 32,
+    MAX_LIGHTS: 48,
     DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
     DEPTH_RESOLVE: `

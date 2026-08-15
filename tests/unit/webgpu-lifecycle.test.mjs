@@ -505,7 +505,11 @@ test("god-ray uploads nearest lamps and remaps the shadowed index", async () => 
   gfx.lampShadowEnd();
   assert.equal(gfx.begin({ eye: [0, 0, 0], lights, invViewProj: ident }), true);
   gfx.present({ lampVol: 1, mist: 1 });
-  const lightBufs = h.buffers.filter((buffer) => buffer.desc.size === 2048);
+  // LIGHT_BYTES = LIGHT_STRIDE_BYTES * MAX_LIGHTS (64 * 48 = 3072). Was 2048
+  // at the old 32-slot cap; a hardcoded size silently matches nothing.
+  const stride = +CHUNKS_SOURCE.match(/LIGHT_STRIDE_BYTES:\s*(\d+)/)[1];
+  const maxL = +CHUNKS_SOURCE.match(/MAX_LIGHTS:\s*(\d+)/)[1];
+  const lightBufs = h.buffers.filter((buffer) => buffer.desc.size === stride * maxL);
   const gr = h.writes.filter((write) => lightBufs.includes(write.buffer)).at(-1);
   assert.ok(gr, "god-ray must write a nearest-N light buffer");
   assert.equal(gr.values[0], 1, "nearest lamp (1,0,0) must be slot 0");

@@ -3,7 +3,7 @@
 //   - GLX.hdrMode() boolean
 //   - __apex.lightState() shape
 //   - setTimeOfDay() night/day floodlight transitions
-//   - UBO 32-light cap
+//   - engine 48-light cap (MAX_LIGHTS packed vec4 arrays — not a WebGL / UBO limit)
 import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -124,10 +124,29 @@ test.describe("WebGL renderer probes", () => {
     expect(ls.sunColor).toBeDefined();
   });
 
+  test("monaco day reports always-on tunnel bake", async ({ page }) => {
+    // Day floods are off, but Monaco's tunnel lamps are always-on. The probe
+    // used to read only track._lights (empty by day) and report bakedLights=0
+    // while 28 tunnel slots were live.
+    await loadRace(page, "monaco");
+    await page.evaluate(() => window.__apex.setTimeOfDay("day"));
+    await page.waitForFunction(
+      () => {
+        const ls = window.__apex.lightState();
+        return ls.numLights > 0 && ls.bakedLights > 0;
+      },
+      { timeout: 8000, polling: 100 }
+    );
+    const ls = await page.evaluate(() => window.__apex.lightState());
+    expect(ls.numLights).toBeGreaterThan(0);
+    expect(ls.bakedLights).toBeGreaterThan(0);
+    expect(ls.numLights).toBeLessThanOrEqual(48);
+  });
+
   // Titled for what it actually checks. It used to say "UBO light count matches
   // lightState", but it never read the UBO — and its first assertion was
   // `numLights >= 0` on a count, which cannot fail. The real content is the cap.
-  test("night raises lights and the shader never receives more than 32", async ({ page }) => {
+  test("night raises lights and the shader never receives more than 48", async ({ page }) => {
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // Wait until night lights are up
@@ -138,7 +157,7 @@ test.describe("WebGL renderer probes", () => {
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights, "night must actually raise floodlights").toBeGreaterThan(0);
     // The uniform arrays are sized for 32; the shader must never receive more.
-    expect(ls.numLights).toBeLessThanOrEqual(32);
+    expect(ls.numLights).toBeLessThanOrEqual(48);
   });
 });
 

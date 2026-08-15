@@ -13,7 +13,7 @@ const LightTune = (function () {
 // Lamp set for ANY track (street posts and flood banks share this list; the
 // caller only feeds them to the shader when the scene is dark — night/dusk/dawn).
 // A light roughly every ~22 m (alternating sides) at mast height, capped to the
-// 32 shader slots (minus a small tail-light reservation in traffic) by the
+// 48 shader slots (minus a small tail-light reservation in traffic) by the
 // per-frame cull. Flat 15-float records [x,y,z, r,g,b, rad, aim, cone, bleed,
 // vol, glare]. Colour, brightness, pool size and mast style all vary by circuit
 // character (see floodColor). HDR (>1) so the pools bloom.
@@ -111,13 +111,13 @@ const TUNE_DEFS = [
   { id: "lampWarmup",    label: "LAMP WARM-UP",    group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 12, step: 0.01, def: 1.0, help: "How long lamps take to ramp from a dim sodium-orange strike to full cool brightness when they switch on (scales the ~4-8 s warm-up). 0 = instant full brightness, 1 = as-shipped, higher = a long, staggered warm-up glow." },
   { id: "lampWarmupDim", label: "WARM-UP DIP",     group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 0.9, step: 0.005, def: 0.30, help: "How dim a freshly-struck lamp starts before warming to full (depth of the strike dip). 0 = lamps strike at full brightness, 0.30 = as-shipped (start at 70%), higher = a deeper cold start." },
   { id: "lampWarmupWarm",label: "WARM-UP WARMTH",  group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 2.5, step: 0.005, def: 1.0, help: "How orange a freshly-struck lamp glows before settling to its true colour (strike-warmth amount). 0 = strikes at final colour, 1 = as-shipped sodium-warm start, higher = a strong amber ignition." },
-  { id: "lampCull",      label: "LAMP COUNT",      group: "LAMPS", section: "BEHAVIOUR", min: 16, max: 32, step: 1, def: 28, help: "How many of the nearest lamps light the scene at once when there's traffic (the shader has 32 slots; the rest are reserved for car tail-lights). Higher = more of the field lit but fewer tail-light slots on dense night grids. Solo running always uses all 32." },
+  { id: "lampCull",      label: "LAMP COUNT",      group: "LAMPS", section: "BEHAVIOUR", min: 16, max: 48, step: 1, def: 40, help: "How many of the nearest lamps light the scene at once when there's traffic (the shader has 48 slots; the rest are reserved for car tail-lights). Higher = more of the field lit but fewer tail-light slots on dense night grids. Solo running always uses all 48." },
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMPS", section: "BEHAVIOUR", min: 0.02, max: 0.9, step: 0.005, def: 0.35, help: "How far inside the lit radius a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Measured on each lamp's TRUE distance, so turning the camera never changes it. Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
   { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 600, step: 5, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\", or aliases \"floodlights\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 0.2, max: 30, step: 0.025, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. Also widens the radius the fade above is measured against, by the same amount, so the extra forward reach this buys stays lit instead of fading out. Low = lamps ranked closer to pure distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
   { id: "roadChunkLamps", label: "PER-CHUNK ROAD", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 1, def: 0, help: "EXPERIMENTAL, and needs PER-CHUNK LAMPS on to do anything. Extends the same per-chunk lamp binding to the ROAD, which is otherwise drawn as one mesh and so can only ever carry the single global set of 32. That is why the far road stays dark on a dense night circuit while the buildings beside it light up: the global cull picks the 32 lamps nearest the CAMERA, which covers the tarmac around the car and starves the road ahead. Splitting the road into spatial chunks lets each stretch carry its own lamps, and frustum-culls the ribbon as a side effect (today every metre of it is drawn every frame). Costs a second copy of the road geometry, built once on first use." },
   { id: "perChunkLights", label: "PER-CHUNK LAMPS", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 0.001, def: 0, help: "EXPERIMENTAL. 0 = off. ABOVE 0 it turns the feature on AND sets how strongly the per-chunk lamps light the scene \u2014 it is an amount, not a switch, because turning it on genuinely delivers more light: a fragment that used to see the handful of the global 32 that actually reach it now sees up to 32 that all do, so the whole night reads far too hot at the same LAMP LEVEL. Start around 0.2-0.4 and raise it; 1.0 is the original un-dimmed behaviour. Car tail-lights are NOT scaled by this.  Gives every chunk of scenery its OWN nearest-32 lamps instead of making the whole visible scene share one set of 32. The 32-lamp ceiling is the fragment shader\'s uniform-array size, so it limits lamps per DRAW, not per scene — and because lamps are baked per track and chunk bounds are fixed, each chunk\'s set is computed once and cached. On a dense night circuit this lights the far road without LAMP COUNT / LAMP REACH AHEAD having to ration slots, and per-fragment cost drops (a chunk binds only lamps that reach it). Costs one uniform upload per chunk draw, so it trades a little CPU for a lot of reach. 0 = as-shipped single global set. HELD OFF automatically below the top graphics tier (GRAPHICS must be HIGH or ULTRA) and after a display reset, because at full amount it can stall a weaker GPU — the slider then stores a value that takes effect once the tier allows it." },
-  { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 12, step: 0.01, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. The number is the REACH MULTIPLIER for a lamp dead ahead: 4 = a lamp four times further away still wins a slot (lamps to the side are unaffected, and 1 = as-shipped, pure distance + BEHIND-CAM BIAS). Only matters once a track has more lamps in range than the LAMP COUNT budget (32 shader slots, 28 with traffic) — where it does, expect the far end of a lit straight to extend rather than the near road to brighten." },
+  { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 12, step: 0.01, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. The number is the REACH MULTIPLIER for a lamp dead ahead: 4 = a lamp four times further away still wins a slot (lamps to the side are unaffected, and 1 = as-shipped, pure distance + BEHIND-CAM BIAS). Only matters once a track has more lamps in range than the LAMP COUNT budget (48 shader slots, 40 with traffic) — where it does, expect the far end of a lit straight to extend rather than the near road to brighten." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 18, step: 0.025, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. Both renderers." },
   // ── NIGHT GLOW & BLOOM ──
   { id: "floodEmitMul", label: "LIT GEOMETRY",    group: "NIGHT GLOW & BLOOM", min: 0, max: 1.425, step: 0.005,  def: 1.0,  help: "How lit the night buildings/windows/signage render (prop emissive ramp). Ceiling is 1.425 — `Math.min(1, this × factor)` in game.js, and the dusk factor tops at 0.70, so anything higher was dead travel (night's 0.78 factor saturates even earlier, at 1.28)." },
@@ -311,6 +311,52 @@ function lampRadius(post, themeRadius) {
   if (!post || post.radius == null) return themeRadius;
   return post.mast ? Math.max(themeRadius, post.radius) : post.radius;
 }
+// Re-seat each fixture's node index on the node it actually stands next to.
+//
+// `k` on a lampPosts record is meant to say "which bit of road this fixture is
+// beside", and TWO things here depend on it: the gap-fill/density spacing walk
+// (which sorts by k and measures spans in nodes), and the beam aim + throw
+// energy (which read px/py/pz/hw at k). The world position is authoritative —
+// it is what the shader lights from — but the k travelled by a different route
+// and can disagree.
+//
+// It disagrees on circuits with a `_sceneryShift`. The scenery api remaps node
+// arguments into racing space for the emitters listed in tracks.js (`anchor`,
+// `floodMast`, …), but `lampPost` takes a node index and is in none of those
+// lists, so a circuit that hand-places lamps stores the k it was handed while
+// its position came back through the remap. Measured: imola 74/74 fixtures with
+// k up to 2030 m from their own lamp, hungaroring 96/96 up to 431 m. The
+// visible cost is the spacing walk filling where the lamps are NOT — imola ran
+// a 716 m stretch of unlit road at frac 0.46 with zero lights within 200 m.
+//
+// Resolving from the position instead of trusting the caller's frame makes the
+// disagreement unexpressible, and needs no shift lookup here. Coarse scan then
+// a local refine — this runs once per bake over at most ~600 fixtures.
+function resolvePostNodes(track, posts) {
+  const n = track.n, px = track.px, pz = track.pz;
+  if (!n || !px || !pz) return posts;
+  let out = null;
+  for (let i = 0; i < posts.length; i++) {
+    const p = posts[i];
+    if (!p || !Number.isFinite(p.x)) continue;
+    let best = Infinity, bk = 0;
+    for (let k = 0; k < n; k += 8) {
+      const dx = p.x - px[k], dz = p.z - pz[k];
+      const d = dx * dx + dz * dz;
+      if (d < best) { best = d; bk = k; }
+    }
+    for (let j = bk - 8; j <= bk + 8; j++) {
+      const k = ((j % n) + n) % n;
+      const dx = p.x - px[k], dz = p.z - pz[k];
+      const d = dx * dx + dz * dz;
+      if (d < best) { best = d; bk = k; }
+    }
+    if (bk === p.k) continue;
+    if (!out) out = posts.slice();
+    out[i] = { ...p, k: bk };
+  }
+  return out || posts;
+}
 function lampDensityFactor() {
   const d = LT.lampDensity;
   return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
@@ -399,6 +445,9 @@ function buildTrackLights(track, onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
+  // BEFORE density and gap fill: both walk `k`, so they need it to mean the
+  // place the fixture actually stands.
+  if (posts) posts = resolvePostNodes(track, posts);
   posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions
@@ -669,8 +718,8 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   frame.tailStart = ((L.length / 15) | 0) - nT;
 }
 
-// Cull the track light set to the nearest CAP lamps (shader max 32; traffic uses
-// LT.lampCull, def 28, leaving room for car tail lights) and flatten into
+// Cull the track light set to the nearest CAP lamps (shader max 48; traffic uses
+// LT.lampCull, def 40, leaving room for car tail lights) and flatten into
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
@@ -706,14 +755,14 @@ const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breath
 // 8 free slots that did not exist, evicted nothing, and left the phone running 29
 // lights through the per-fragment loop the 24 was chosen to protect.
 function lampCap(carCount, mobileTier) {
-  // With traffic, CAP defaults to lampCull (28) so ~4 of the 32 shader slots stay
-  // free for tail-lights; solo runs use the full 32. Mobile tier clamps both
+  // With traffic, CAP defaults to lampCull (40) so ~8 of the 48 shader slots stay
+  // free for tail-lights; solo runs use the full 48. Mobile tier clamps both
   // paths to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
   // dominant night fill cost on phones, and clamping HERE (not the knob's def)
-  // means a per-track preset can't push a phone back up to 32.
+  // means a per-track preset can't push a phone back up to 48.
   return Math.min(
-    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 28) : 32,
-    mobileTier ? 24 : 32);
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : 48,
+    mobileTier ? 24 : 48);
 }
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);

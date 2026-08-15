@@ -99,15 +99,23 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-GLX uploads plain uniform arrays per frame — `uLightPos[i]` (xyz + radius),
-`uLightCol[i]`, `uNumLights`, plus per-lamp aim/cone/bleed/volumetric/glare
-arrays consumed by the lit shader and the god-ray pass. Every
+GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
+`uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
+plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
 exactly 15 values.
 
 `setFrameLights()` re-uploads every frame: it sorts active lamps by
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
-`LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
+`LT.lampCull` (def 40) when there is traffic, otherwise 48 (`MAX_LIGHTS`).
+
+**48 is an engine cap, not a WebGL one.** WebGL has no lights API and no
+`MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2
+minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
+UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
+rows — the same budget the old six vertical arrays used at 32. God-rays stay
+at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
+uniforms.
 
 ### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
 
@@ -230,7 +238,7 @@ reads as physically cast by a real structure. Street themes use slim posts
 keyed off the furniture `fz.lamp` style; open circuits get tall flood banks.
 
 `setFrameLights()` culls the full list to the nearest CAP lamps each frame
-(`lampCull` / 32 solo) and uploads the light uniforms. When the sun dominates
+(`lampCull` / 48 solo) and uploads the light uniforms. When the sun dominates
 (bright day) it sets `numLights = 0` and skips the upload.
 
 ---
