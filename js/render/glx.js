@@ -1760,6 +1760,10 @@ const GLX = (function () {
     // view's visible()) runs the same frustum maths the GPU path runs.
     makeFrustumPlanes: (viewProj) => CHK.makeFrustumPlanes(viewProj),
     aabbInFrustum: (planes, mn, mx) => CHK.aabbInFrustum(planes, mn, mx),
+    // WGX and TLX both export this; GLX had it in CHK but never forwarded it,
+    // so a future gfx.aabbDist2 caller would die on the DEFAULT backend only —
+    // the mirror image of the drift backend-surface-parity.test.mjs prevents.
+    aabbDist2: (mn, mx, ex, ey, ez) => CHK.aabbDist2(mn, mx, ex, ey, ez),
     drawSky,
     drawShadow,
     drawMark,

@@ -31,6 +31,7 @@ function makeGpuHarness(opts = {}) {
   const stored = opts.storage || null;
   const session = opts.session || null;
   let loseDevice = null;
+  let failEncoder = false;
   const device = {
     lost: new Promise((resolve) => { loseDevice = resolve; }),
     queue: {
@@ -48,12 +49,15 @@ function makeGpuHarness(opts = {}) {
     createShaderModule: () => ({}),
     createRenderPipeline: () => pipeline,
     createQuerySet: () => ({ count: 2 }),
-    createCommandEncoder: () => ({
-      beginRenderPass: () => pass,
-      resolveQuerySet() {},
-      copyBufferToBuffer() {},
-      finish: () => ({}),
-    }),
+    createCommandEncoder: () => {
+      if (failEncoder) throw new Error("injected encoder failure");
+      return {
+        beginRenderPass: () => pass,
+        resolveQuerySet() {},
+        copyBufferToBuffer() {},
+        finish: () => ({}),
+      };
+    },
     createTexture(desc) {
       textureCalls += 1;
       if (textureCalls === failTextureAt) throw new Error("injected texture failure");
@@ -169,6 +173,7 @@ function makeGpuHarness(opts = {}) {
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
+    setEncoderFail(v) { failEncoder = !!v; },
   };
 }
 
@@ -680,12 +685,53 @@ test("minimal rung: no post targets, no env probe, and a loss there exits to GLX
     t.desc.size[0] === 160 && t.desc.size[1] === 90);
   assert.equal(halfRes.length, 0, "minimal must not allocate the half-res post targets");
   gfx.present({});   // blit path must not throw with post unbuilt
+  assert.equal(storage.get("apex26.gfxWgxOk"), "1", "a presented frame counts one clean session");
   h.loseDevice({ reason: "unknown" });
   await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxOk"), "0", "a loss zeroes the heal streak");
   assert.equal(storage.get("apex26.gfxWgxLevel"), "2", "no rung above minimal");
   assert.equal(session.get("apex26.gfxClaimFail"), "1", "minimal loss surrenders the tab to GLX");
   assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
   assert.equal(reloads, 1, "the surrender reload boots GLX in this tab");
+});
+
+test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one", async () => {
+  const storage = new Map();
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true, "healthy begin");
+  h.setEncoderFail(true);
+  assert.equal(gfx.begin({}), false);   // strike 1
+  assert.equal(gfx.begin({}), false);   // strike 2
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "two strikes must not surrender");
+  assert.equal(reloads, 0);
+  assert.equal(gfx.begin({}), false);   // strike 3 = cap
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "the cap surrenders the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /begin threw/, "reason recorded");
+  assert.equal(reloads, 1);
+  h.setEncoderFail(false);
+  assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
+});
+
+test("clean sessions heal the ladder: minimal steps back to lite after a streak", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  for (let boot = 1; boot <= 5; boot++) {
+    const h = makeGpuHarness({ storage });
+    const gfx = await h.create();
+    gfx.resize();
+    assert.equal(gfx.begin({}), true);
+    gfx.present({});   // first presented frame of the boot = one clean session
+    if (boot < 5) {
+      assert.equal(storage.get("apex26.gfxWgxLevel"), "2", `rung must hold until the streak (boot ${boot})`);
+      assert.equal(storage.get("apex26.gfxWgxOk"), String(boot));
+    }
+  }
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "five clean sessions step minimal down to lite");
+  assert.equal(storage.get("apex26.gfxWgxOk"), "0", "streak restarts for the next rung");
 });
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {

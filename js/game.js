@@ -164,8 +164,16 @@ if (!gfx) {
     // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
     let backendTried = false;
     try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    let skipped = false;
     if (backendTried) {
-      try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) {}
+      // READ THE SKIP BACK before reloading. With sessionStorage blocked the
+      // write fails silently and the reload replays this exact claim-and-die
+      // boot forever; leaving the probe ARMED instead lets the next boot's
+      // canary revert the pick to webgl2 (the wgx.js device-lost idiom).
+      try { sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) {}
+    }
+    if (skipped) {
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
       try { location.reload(); } catch (_) {}
       return;

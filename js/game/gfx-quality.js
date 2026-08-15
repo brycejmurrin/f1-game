@@ -144,7 +144,8 @@ function initRenderer() {
     // device state): reset the WGX loss ladder so the boot re-attempts from
     // the sniffed baseline instead of a rung a long-dead session earned.
     if (next === "webgpu") {
-      try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite"); } catch (_) {}
+      try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
+        localStorage.removeItem("apex26.gfxWgxOk"); } catch (_) {}
       try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
     }
     rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
