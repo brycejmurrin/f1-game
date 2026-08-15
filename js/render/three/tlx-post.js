@@ -61,14 +61,20 @@
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
 
-    // ── HDR capability: RGBA16F targets need EXT_color_buffer_float on the
-    // GL backend (SwiftShader has it); WebGPU always renders half-float.
-    // LDR fallback keeps the whole chain alive at 8-bit, like GLX. ──────────
-    let hdr = true;
+    // ── HDR capability. RGBA16F needs a *renderable* half-float colour
+    // buffer. iOS Safari WebGL2 typically exposes EXT_color_buffer_half_float
+    // and NOT EXT_color_buffer_float (the 32-bit one). Checking only the
+    // latter forced UnsignedByteType + ACES on an 8-bit scene — the pale
+    // washed ground. A query that throws must not keep hdr=true on a phone
+    // (incomplete HalfFloat framebuffer = black / half-black frame).
+    let hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend);
     try {
       const gl = renderer.backend && renderer.backend.gl;
-      if (gl) hdr = !!gl.getExtension("EXT_color_buffer_float");
-    } catch (_) { /* WebGL backend absent or extension query threw — keep hdr=true (WebGPU is always half-float) */ }
+      if (gl) {
+        hdr = !!(gl.getExtension("EXT_color_buffer_float")
+              || gl.getExtension("EXT_color_buffer_half_float"));
+      }
+    } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
 
     // ── 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex) ─────────────────

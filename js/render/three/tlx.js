@@ -130,6 +130,13 @@
 "use strict";
 
 const TLX = (function () {
+  let _lastFailure = null;
+  function _fail(reason) {
+    _lastFailure = { reason: String(reason), at: Date.now() };
+    try { localStorage.setItem("apex26.gfxTlxFail", _lastFailure.reason); } catch (_) { /* blocked storage */ }
+    try { Log.warn("gfx", "TLX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent in the node harness */ }
+    return null;
+  }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
@@ -354,6 +361,9 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode });
           if (post && !post.enabled()) post = null;
+          // Phone + no renderable float target: ACES/FXAA on 8-bit is the
+          // pale-ground look. Direct-to-canvas (M7) is the working picture.
+          if (post && isMobile && !post.hdrOk()) post = null;
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
@@ -1259,9 +1269,17 @@ const TLX = (function () {
           // chain reads the lamp shadow map + its armed flag BEFORE
           // clearArmed() below retires them (godrays sample the spot map).
           if (post) {
-            renderer.setRenderTarget(post.sceneTarget());
-            renderer.render(scene, camera);
-            post.present(opts, _postF);
+            try {
+              renderer.setRenderTarget(post.sceneTarget());
+              renderer.render(scene, camera);
+              post.present(opts, _postF);
+            } catch (e) {
+              // One bad HDR/post frame must not leave a black canvas forever.
+              try { Log.warn("gfx", "TLX: post present failed, direct to canvas —", e); } catch (_) {}
+              post = null;
+              renderer.setRenderTarget(null);
+              renderer.render(scene, camera);
+            }
           } else {
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
@@ -1374,13 +1392,15 @@ const TLX = (function () {
         },
       };
 
+      try { localStorage.removeItem("apex26.gfxTlxFail"); } catch (_) { /* blocked storage */ }
+      _lastFailure = null;
       return backend;
-    } catch (_) {
-      return null;   // any failure -> GLX fallback (Gfx.create contract)
+    } catch (e) {
+      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }
 
-  return { create };
+  return { create, lastFailure: () => _lastFailure };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;

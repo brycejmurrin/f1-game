@@ -67,6 +67,17 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,800}setItem\("apex26\.gfxBackend", "webgl2"\)/);
 });
 
+test("TLX HDR accepts iOS half-float and a refused create records why", () => {
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(post, /EXT_color_buffer_half_float/);
+  assert.match(post, /EXT_color_buffer_float/);
+  assert.doesNotMatch(post, /keep hdr=true \(WebGPU is always half-float\)/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /apex26\.gfxTlxFail/);
+  assert.match(tlx, /isMobile && !post\.hdrOk\(\)/);
+  assert.match(tlx, /post present failed, direct to canvas/);
+});
+
 test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
