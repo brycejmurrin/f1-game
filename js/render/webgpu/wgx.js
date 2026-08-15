@@ -104,12 +104,51 @@ const WGX = (function () {
   const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
     (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
-  let _litePref = false;
-  try { _litePref = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked storage: sniff-only lite */ }
+  // Loss-escalation ladder, persisted per origin. One device.lost = one rung
+  // up + one reload, so every retry is genuinely CHEAPER than the config that
+  // just died — never the identical crash again:
+  //   rung 0  full    — desktop stack (MSAA 2, timestamp, 2048 shadows, SSR)
+  //   rung 1  lite    — phone-parity (MSAA 1, 1024 shadows, no SSR/timestamp)
+  //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
+  //                     DPR capped at 1 (scene+depth+swapchain only)
+  // A loss ON rung 2 is the exit: session-skip this tab to GLX, keep the pick.
+  // An explicit RENDERER re-pick clears the ladder (js/game/gfx-quality.js).
+  let _wgxLevel = 0;
+  try {
+    _wgxLevel = parseInt(localStorage.getItem("apex26.gfxWgxLevel") || "0", 10) || 0;
+    // Back-compat: the pre-ladder single flag mapped to rung 1.
+    if (!_wgxLevel && localStorage.getItem("apex26.gfxWgxLite") === "1") _wgxLevel = 1;
+  } catch (_) { /* blocked storage: sniff-only lite */ }
+  const _litePref = _wgxLevel >= 1;
   // Slim stack: every phone, every WebKit, or a previous device.lost on this
   // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
   // the "worked for a second then crashed" path.
   const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
+  // Minimal only ever comes from the ladder (a LITE device that still lost
+  // its device) — never from sniffing alone. WebKit/phones start at rung 1.
+  const WGX_MINIMAL = _wgxLevel >= 2;
+  // The ladder HEALS: one transient loss must not degrade every future
+  // session forever. Each boot that presents a real frame counts one clean
+  // session (apex26.gfxWgxOk); a streak of HEAL_SESSIONS steps the rung down
+  // one. Any loss or strike-cap zeroes the streak, so an actually-fragile
+  // device pays one probe crash per ~HEAL_SESSIONS sessions, not per boot.
+  const HEAL_SESSIONS = 5;
+  function _healTick() {
+    if (_wgxLevel <= 0) return;
+    try {
+      const n = (parseInt(localStorage.getItem("apex26.gfxWgxOk") || "0", 10) || 0) + 1;
+      if (n >= HEAL_SESSIONS) {
+        localStorage.setItem("apex26.gfxWgxLevel", String(_wgxLevel - 1));
+        if (_wgxLevel - 1 < 1) localStorage.removeItem("apex26.gfxWgxLite");
+        localStorage.setItem("apex26.gfxWgxOk", "0");
+      } else {
+        localStorage.setItem("apex26.gfxWgxOk", String(n));
+      }
+    } catch (_) { /* blocked storage: the rung just stays */ }
+  }
+  function _healReset() {
+    try { localStorage.setItem("apex26.gfxWgxOk", "0"); } catch (_) { /* blocked storage */ }
+  }
 
   // Identity mat4 (column-major) fallback.
   const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -379,22 +418,56 @@ const WGX = (function () {
     // menus are DOM layered over the canvas, and the RENDERER button is one tap
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
+    // JS-error strikes for begin()/present(). The old catch latched
+    // `_lost = true` for ANY exception — a healthy-device data bug froze the
+    // canvas forever, silently, with the label still claiming WEBGPU. Now a
+    // JS throw drops the frame and retries; a real device loss resolves
+    // device.lost long before the cap. Hitting the cap surrenders the tab to
+    // GLX with the reason recorded (the device.lost minimal-rung idiom).
+    let _jsStrikes = 0;
+    let _okCounted = false;   // first presented frame of the boot = one clean session
+    const JS_STRIKE_CAP = 3;
+    function _jsStrike(where, e) {
+      litPass = null; encoder = null; currentView = null;
+      try { Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
+      _jsStrikes++;
+      if (_jsStrikes < JS_STRIKE_CAP) return;
+      _lost = true;
+      _healReset();
+      try { localStorage.setItem("apex26.gfxWgxFail", where + " threw: " + ((e && e.message) || e)); } catch (_) { /* blocked storage */ }
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+      _markGlxBound();
+      let skipped = false;
+      try {
+        sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+      } catch (_) { /* no sessionStorage: the frozen-frame rule above applies */ }
+      if (skipped) { try { location.reload(); } catch (_) { /* harness */ } }
+    }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       _lost = true;
+      _healReset();
       const why = "device lost (" + ((info && info.reason) || "unknown") + ")";
       try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* lastFailure stays empty; the label still updates */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
-      // First loss on a full (Chrome desktop) stack: retry slim WGX once.
-      // Already slim (WebKit / phone / prior lite) and still died: this tab
-      // attaches GLX. Never write webgl2 over the pick — the button must say
+      // Climb the escalation ladder before surrendering the tab to GLX:
+      // full → lite → minimal, one rung per loss, each rung persisted so the
+      // next boot STARTS there. Only a loss on the minimal stack falls back.
+      // Never write webgl2 over the pick — the button must say
       // WEBGPU (WEBGL2) so the player can see the live backend.
-      if (!WGX_LITE) {
-        try { localStorage.setItem("apex26.gfxWgxLite", "1"); } catch (_) { /* cannot persist lite; fall through to GLX skip */ }
-        let armedLite = false;
-        try { armedLite = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked */ }
-        if (armedLite) {
-          try { Log.warn("gfx", "WGX " + why + " — retrying slim WebGPU"); } catch (_) { /* harness */ }
+      const _rung = WGX_MINIMAL ? 2 : (WGX_LITE ? 1 : 0);
+      if (_rung < 2) {
+        const nextRung = String(_rung + 1);
+        try {
+          localStorage.setItem("apex26.gfxWgxLevel", nextRung);
+          // Keep the legacy flag in step so an older cached build reads lite.
+          localStorage.setItem("apex26.gfxWgxLite", "1");
+        } catch (_) { /* cannot persist the rung; fall through to GLX skip */ }
+        let armed = false;
+        try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
+        if (armed) {
+          try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
           try { location.reload(); } catch (_) { /* no location */ }
           return;
         }
@@ -1083,7 +1156,12 @@ const WGX = (function () {
         _fxReady = true;
       } catch (_) { _fxReady = false; /* FX stay no-ops; lit/sky/shadow still run */ }
     }
-    _buildPost();
+    // Minimal rung: leave the post chain unbuilt. pComposite stays null, so
+    // ensureTargets allocates ONLY scene+depth+blit (no ssao/godray/bloom/ldr
+    // aux targets) and present() takes the Phase-2 tonemap blit — that is the
+    // bulk of the discretionary target bytes the device that just died was
+    // carrying. FX stay: they record into the lit pass and own no targets.
+    if (!WGX_MINIMAL) _buildPost();
     _buildFx();
 
     // ── Lit pipeline variants (blend / cull / alpha-write), built & cached lazily.
@@ -1131,9 +1209,13 @@ const WGX = (function () {
 
     // ── resize (mirror GLX.resize()) ──
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, WGX_LITE ? 1.5 : 2);
-      const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
-      const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
+      const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
+      // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
+      // past the 8192 default, and every ensureTargets() alloc (and the
+      // swapchain itself) then fails into a silent per-frame retry loop.
+      const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
+      const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
+      const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
       width = w; height = h; aspect = w / h;
     }
@@ -1527,10 +1609,27 @@ const WGX = (function () {
     }
 
     // ── Resources (Phase 2) ──
+    // createBuffer({mappedAtCreation}) may throw a synchronous RangeError when
+    // the client-side mapping cannot be allocated — exactly the memory
+    // pressure that precedes a device loss. The mesh family is called LAZILY
+    // from the render path (gear digits, LED strips mid-race), so a throw here
+    // would escape into tick() and paint the full-screen overlay. Every draw
+    // path checks .vbuf, so an inert mesh keeps the frame alive instead —
+    // the same contract createTexture already honours.
+    function _allocFail(what, e) {
+      try { Log.warn("gfx", "WGX " + what + " alloc failed —", e); } catch (_) { /* harness */ }
+    }
     function createMesh(data) {
       const b = _interleave(data);
-      const vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
-      const ibuf = _mkBuffer(b.idx,  GPUBufferUsage.INDEX);
+      let vbuf = null, ibuf = null;
+      try {
+        vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
+        ibuf = _mkBuffer(b.idx,  GPUBufferUsage.INDEX);
+      } catch (e) {
+        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
+        _allocFail("createMesh", e);
+        return { _wgx: "mesh", vbuf: null, ibuf: null, count: 0, indexFormat: b.indexFormat, chunks: null };
+      }
       return { _wgx: "mesh", vbuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
     // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
@@ -1550,8 +1649,15 @@ const WGX = (function () {
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
         inter[o+6] = uv[i*2];    inter[o+7] = uv[i*2+1];
       }
-      const vbuf = _mkBuffer(inter, GPUBufferUsage.VERTEX);
-      const ibuf = _mkBuffer(idx, GPUBufferUsage.INDEX);
+      let vbuf = null, ibuf = null;
+      try {
+        vbuf = _mkBuffer(inter, GPUBufferUsage.VERTEX);
+        ibuf = _mkBuffer(idx, GPUBufferUsage.INDEX);
+      } catch (e) {
+        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
+        _allocFail("createTexMesh", e);
+        return { _wgx: "texmesh", _phase: 4 };
+      }
       return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
     }
 
@@ -1565,9 +1671,14 @@ const WGX = (function () {
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
       const b = _interleave(data);
-      const vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexFormat = big ? "uint32" : "uint16";
+      let vbuf = null;
+      try { vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX); }
+      catch (e) {
+        _allocFail("createChunkedMesh", e);
+        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+      }
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
         const a = srcIdx[t], bi = srcIdx[t+1], c = srcIdx[t+2];
@@ -1585,11 +1696,20 @@ const WGX = (function () {
         if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
       }
       const chunks = [];
-      buckets.forEach((bk) => {
-        const arr = new IndexArray(bk.idx);
-        const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
-        chunks.push({ ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx });
-      });
+      try {
+        buckets.forEach((bk) => {
+          const arr = new IndexArray(bk.idx);
+          const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
+          chunks.push({ ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx });
+        });
+      } catch (e) {
+        // Partial chunk set under memory pressure: release everything — a
+        // half-uploaded prop mesh must not pin buffers on a struggling device.
+        try { vbuf.destroy(); } catch (_) { /* already invalid */ }
+        for (const c of chunks) { try { c.ibuf.destroy(); } catch (_) { /* already invalid */ } }
+        _allocFail("createChunkedMesh", e);
+        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+      }
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
@@ -1972,9 +2092,7 @@ const WGX = (function () {
       } catch (e) {
         // Device dying mid-begin used to throw into tick() ("Caught @ tick")
         // and THEN device.lost reloaded onto GLX — the overlay crash.
-        _lost = true;
-        litPass = null; encoder = null; currentView = null;
-        try { Log.warn("gfx", "WGX begin failed —", e); } catch (_) { /* harness */ }
+        _jsStrike("begin", e);
         return false;
       }
     }
@@ -2124,7 +2242,10 @@ const WGX = (function () {
     // being written is never simultaneously sampled (feedback). Runs BEFORE begin(), so
     // it uses its own encoder, submitted in envFaceEnd — fully isolated from the frame.
     function envFaceBegin(face, eye, frame) {
-      if (_lost || !skyPipeline) return null;
+      // Minimal rung sheds the probe entirely: 6 extra world passes + an
+      // rgba16f mip cube is exactly the discretionary load a device that has
+      // already died twice cannot carry. game.js checks the null return.
+      if (_lost || WGX_MINIMAL || !skyPipeline) return null;
       if (!envCubeTex) envInit();
       _passSamples = 1;
       const F = ENV_FACES[face];
@@ -2249,6 +2370,8 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         device.queue.submit([encoder.finish()]);
         encoder = null; currentView = null;
+        _jsStrikes = 0;   // a presented frame clears the strike count
+        if (!_okCounted) { _okCounted = true; _healTick(); }
         return;
       }
 
@@ -2514,11 +2637,11 @@ const WGX = (function () {
         } catch (_) { /* mapAsync unsupported or already mapped */ }
       }
       encoder = null; currentView = null;
+      _jsStrikes = 0;   // a presented frame clears the strike count
+      if (!_okCounted) { _okCounted = true; _healTick(); }
       } catch (e) {
         // Same as begin(): a dying device must not paint "Caught @ tick".
-        _lost = true;
-        litPass = null; encoder = null; currentView = null;
-        try { Log.warn("gfx", "WGX present failed —", e); } catch (_) { /* harness */ }
+        _jsStrike("present", e);
       }
     }
 
@@ -2745,7 +2868,14 @@ const WGX = (function () {
           packed[i * 20 + 16] = packed[i * 20 + 17] = packed[i * 20 + 18] = 1;
         }
       }
-      mesh.instBuf = n ? _mkBuffer(packed, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST) : identInstanceBuf;
+      try {
+        mesh.instBuf = n ? _mkBuffer(packed, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST) : identInstanceBuf;
+      } catch (e) {
+        _allocFail("createInstancedBatch", e);
+        mesh.instBuf = identInstanceBuf;
+        mesh.instances = 0; mesh.visible = 0; mesh._instPacked = null;
+        return mesh;   // drawInstanced checks .instances, so this batch is inert
+      }
       mesh.instances = n;
       mesh.visible = n;
       mesh._instPacked = packed;

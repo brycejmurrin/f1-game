@@ -211,12 +211,28 @@
       }
       return nLv > 0;
     }
+    // three r184: RenderTarget.setSize() calls this.dispose() internally, but
+    // that dispose does NOT dispose the RT's textures (fixed upstream in r185,
+    // three PR #33511) — the backend keeps the stale GPU textures and sampler
+    // bindings alive across every resize (rotation, renderScale change), which
+    // is both a GPU-memory leak and the "black frame after resize" report.
+    // Fire the texture disposals ourselves so the backend's dispose path runs;
+    // the JS texture objects stay valid and reallocate lazily at the new size.
+    function rtSetSize(rt, w, h) {
+      if (rt.width === w && rt.height === h) return;
+      rt.setSize(w, h);
+      try {
+        const ts = rt.textures || (rt.texture ? [rt.texture] : []);
+        for (let i = 0; i < ts.length; i++) ts[i].dispose();
+        if (rt.depthTexture) rt.depthTexture.dispose();
+      } catch (_) { /* best-effort; the worst case is r184's own leak */ }
+    }
     function layoutHalf() {
       aoW = Math.max(1, Math.floor(W / 2));
       aoH = Math.max(1, Math.floor(H / 2));
       grW = aoW; grH = aoH;
-      if (ssaoRT) { ssaoRT.setSize(aoW, aoH); ssaoBlurRT.setSize(aoW, aoH); }
-      if (godrayRT) { godrayRT.setSize(grW, grH); godrayBlurRT.setSize(grW, grH); }
+      if (ssaoRT) { rtSetSize(ssaoRT, aoW, aoH); rtSetSize(ssaoBlurRT, aoW, aoH); }
+      if (godrayRT) { rtSetSize(godrayRT, grW, grH); rtSetSize(godrayBlurRT, grW, grH); }
     }
     function layoutBloom() {
       if (!bloomLv) return;
@@ -225,7 +241,7 @@
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
         if (bw >= 8 && bh >= 8) {
-          bloomLv[i].rt.setSize(bw, bh);
+          rtSetSize(bloomLv[i].rt, bw, bh);
           bloomLv[i].w = bw; bloomLv[i].h = bh;
           nLv++;
         }
@@ -258,8 +274,8 @@
     function resize(w, h) {
       if (w === W && h === H) return;
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
-      sceneRT.setSize(W, H);
-      ldrRT.setSize(W, H);
+      rtSetSize(sceneRT, W, H);
+      rtSetSize(ldrRT, W, H);
       layoutHalf();
       layoutBloom();
     }
@@ -276,6 +292,11 @@
       const gk = (id, def) => (GT && GT[id] != null ? GT[id] : def);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
+      // try/finally, not a plain restore at the end: tlx.js catches around
+      // post.present() and repaints direct-to-canvas — without the finally, a
+      // throw mid-chain latches autoClear=false for every later classic-path
+      // frame, which skips three's clear and smears the canvas until reload.
+      try {
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
       const bloomAmt = o.bloom !== undefined ? o.bloom : 0.55;
@@ -529,14 +550,15 @@
         P.fxaa.U.texel.value.set(1 / W, 1 / H);
         runPass(P.fxaa.mat, null);
       }
-      renderer.setRenderTarget(null);
-      renderer.autoClear = prevAutoClear;
-
       _last.ssao = !!haveAO;
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && reflStr > 0.001);
       _last.fxaa = !viz;
+      } finally {
+        try { renderer.setRenderTarget(null); } catch (_) { /* device dying: tlx.js's catch owns the fallback */ }
+        renderer.autoClear = prevAutoClear;
+      }
     }
 
     return {

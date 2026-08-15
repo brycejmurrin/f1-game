@@ -59,6 +59,10 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const game = read("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
   assert.match(game, /armed && !skipClaim/);
+  // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
+  // blocked, removing the probe + reloading replays the claim-and-die boot
+  // forever (the probe was the only other escape).
+  assert.match(game, /skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
   assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
@@ -70,8 +74,27 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.match(wgx, /_canTimestamp = !WGX_LITE/);
   assert.match(wgx, /apex26\.gfxWgxLite/);
   assert.match(wgx, /apex26\.gfxBound/);
-  assert.match(wgx, /WGX begin failed/);
-  assert.match(wgx, /WGX present failed/);
+  // begin/present throws land in the strike counter — never tick()'s overlay,
+  // and never the old freeze-forever `_lost = true` latch for a healthy device.
+  assert.match(wgx, /_jsStrike\("begin", e\)/);
+  assert.match(wgx, /_jsStrike\("present", e\)/);
+  assert.match(wgx, /JS_STRIKE_CAP/);
+  // The ladder heals: a streak of clean sessions steps the rung back down.
+  assert.match(wgx, /apex26\.gfxWgxOk/);
+  assert.match(wgx, /HEAL_SESSIONS/);
+  // Lazy mesh creation on the render path must degrade to inert, not throw.
+  assert.match(wgx, /_allocFail\("createMesh", e\)/);
+  assert.match(wgx, /_allocFail\("createChunkedMesh", e\)/);
+  // The loss ladder: full → lite → minimal → GLX session skip. A loss must
+  // climb a rung (persisted) and reload, never re-run the identical config.
+  assert.match(wgx, /apex26\.gfxWgxLevel/);
+  assert.match(wgx, /WGX_MINIMAL = _wgxLevel >= 2/);
+  assert.match(wgx, /if \(!WGX_MINIMAL\) _buildPost\(\)/);
+  assert.match(wgx, /if \(_lost \|\| WGX_MINIMAL \|\| !skyPipeline\) return null/);
+  // A hand re-pick of WEBGPU resets the ladder so the player can retry full.
+  const gq = read("js/game/gfx-quality.js");
+  assert.match(gq, /removeItem\("apex26\.gfxWgxLevel"\)/);
+  assert.match(gq, /removeItem\("apex26\.gfxWgxLite"\)/);
 });
 
 test("RENDERER label names the live backend when WEBGPU fell back to GLX", () => {
@@ -92,6 +115,9 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.match(tlx, /TLX: present failed/);
   assert.match(tlx, /MeshBasicMaterial/);
   assert.match(tlx, /apex26\.gfxClaimFail/);
+  // The third context loss in a tab surrenders to GLX (TLX has a floor below
+  // it, unlike GLX) instead of freezing on the last frame with the label lying.
+  assert.match(tlx, /context lost x/);
   const present = tlx.indexOf("present(opts) {");
   const presentEnd = tlx.indexOf("// debug — the __tlx tooling", present);
   const body = tlx.slice(present, presentEnd);

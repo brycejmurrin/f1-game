@@ -258,6 +258,16 @@ const TLX = (function () {
           // 1.2 s: long enough for a real "restored" event to win the race
           // below, short enough that the player reads it as a hitch.
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
+          else {
+            // Third loss in one tab. GLX's identical 2-cap ends in a frozen
+            // frame because GLX has nothing beneath it — TLX DOES: surrender
+            // the tab to WebGL2 (the WGX device-lost idiom) and record why,
+            // instead of freezing on the last frame with the label lying.
+            try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
+            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+            sessionStorage.setItem("apex26.gfxClaimFail", "1");
+            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+          }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
       // three does NOT route "restored" anywhere (it only listens for the loss),
@@ -521,8 +531,14 @@ const TLX = (function () {
         if (vizMat) return vizMat;
         if (!opts) return chunked ? defaultMatChunked : defaultMat;
         const o = opts;
+        // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
+        // every frame): raw in the key it mints a variant per step of the
+        // ramp, and on r184 every cache eviction leaks bindings for shared
+        // textures (three #33952, fixed only in r186). Quantised to 1/32 the
+        // full ramp costs ≤33 variants — under the cap, so no evictions —
+        // and the ≤0.03 emissive delta is invisible.
         const key =
-          (o.emissive !== undefined ? o.emissive : 0) + "," +
+          (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
           (o.alpha !== undefined ? o.alpha : 1) + "," +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +

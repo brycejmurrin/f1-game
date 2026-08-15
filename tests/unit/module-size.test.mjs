@@ -261,7 +261,11 @@ const CEILINGS = {
   // GRAPHICS). game.js keeps the boot canary; the button is DOMContentLoaded.
   // 8242 -> 8251: Safari WebGPU create-fail must not persist webgl2 (session
   // claim-fail skip, disarm leftover probe, keep the user's THREE/WEBGPU pick).
-  "js/game.js": 8251,
+  // 8251 -> 8258: the claim-fail reload now reads the session skip BACK before
+  // reloading — with sessionStorage blocked the old path removed the probe
+  // (killing the canary revert) and reloaded into the identical claim-and-die
+  // boot forever. Bug-explaining growth at the site of the bug.
+  "js/game.js": 8259,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
