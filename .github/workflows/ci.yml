@@ -161,6 +161,15 @@ jobs:
       # import time even when they never launch a browser) but not the browser
       # binaries — those cost ~200 MB and only the smoke job needs them.
       - run: npm ci
+      # tests/unit/mcp-wrap.test.mjs drives tools/mcp-wrap.py for real. It needs
+      # the SDK and nothing else — no Chromium, no tinyfish key — and without this
+      # step the only honest option is a skip, which is how that test spent its
+      # whole life not checking the server it was written to guard.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: MCP Python SDK
+        run: pip install -r tools/requirements-mcp.txt
       - name: Structural guards
         run: npm run test:tooling-fast
       - name: Every test file belongs to a topical group

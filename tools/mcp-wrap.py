@@ -16,6 +16,15 @@ Shell helpers (no host required):
   python3 tools/mcp-wrap.py status
   python3 tools/mcp-wrap.py call chrome_evaluate_script '{"function":"() => 1"}'
 
+Environment:
+  APEX_MCP_BACKENDS   comma list of upstreams to bring up (default "chrome,tinyfish").
+                      "tinyfish" alone is the no-browser mode — nothing launches
+                      Chromium, which is what a Playwright run and the unit suite
+                      both need.
+  TINYFISH_MCP_BASE   override the tinyfish endpoint (default http://127.0.0.1:3711).
+                      A non-default endpoint never touches the real proxy's cached
+                      session id.
+
 Requires: pip install -r tools/requirements-mcp.txt
 See .claude/skills/mcp-probe — park chrome to about:blank before Playwright.
 """
@@ -38,12 +47,24 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 TINYFISH_SH = ROOT / "tools" / "tinyfish-mcp.sh"
-TINYFISH_BASE = os.environ.get("TINYFISH_MCP_BASE", "http://127.0.0.1:3711")
+TINYFISH_DEFAULT_BASE = "http://127.0.0.1:3711"
+TINYFISH_BASE = os.environ.get("TINYFISH_MCP_BASE", TINYFISH_DEFAULT_BASE)
 TINYFISH_MCP = f"{TINYFISH_BASE.rstrip('/')}/mcp"
 TINYFISH_PROTO = "2025-06-18"
 TINYFISH_STATE = ROOT / "scratch" / "tinyfish-mcp-server" / ".mcp-session"
+# Session ids are cached per proxy, so only the REAL proxy may read or write the
+# cache — a stub or a second endpoint would otherwise hand its own session id to
+# the running proxy and get an "unknown session" on the next probe.
+TINYFISH_PERSIST = TINYFISH_BASE == TINYFISH_DEFAULT_BASE
 CHROME_PREFIX = "chrome_"
 TINYFISH_PREFIX = "tinyfish_"
+# Which upstreams this process is allowed to bring up. Chromium costs a browser
+# launch, so a caller that only needs the web half can ask for one.
+BACKENDS_ENABLED = frozenset(
+    b.strip()
+    for b in os.environ.get("APEX_MCP_BACKENDS", "chrome,tinyfish").split(",")
+    if b.strip()
+)
 DEPLOY_VERSION = "https://brycejmurrin.github.io/f1-game/version.json"
 
 logging.basicConfig(
@@ -148,8 +169,9 @@ class TinyfishBackend:
                 sid = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id")
                 if sid:
                     self._session_id = sid.strip()
-                    TINYFISH_STATE.parent.mkdir(parents=True, exist_ok=True)
-                    TINYFISH_STATE.write_text(self._session_id, encoding="utf-8")
+                    if TINYFISH_PERSIST:
+                        TINYFISH_STATE.parent.mkdir(parents=True, exist_ok=True)
+                        TINYFISH_STATE.write_text(self._session_id, encoding="utf-8")
                 raw = resp.read().decode()
                 if not raw.strip():
                     return {}
@@ -178,7 +200,7 @@ class TinyfishBackend:
     def ensure(self) -> None:
         if self._tools:
             return
-        if TINYFISH_STATE.is_file():
+        if TINYFISH_PERSIST and TINYFISH_STATE.is_file():
             self._session_id = TINYFISH_STATE.read_text(encoding="utf-8").strip() or None
         if not self._healthz():
             log.info("starting tinyfish proxy…")
@@ -262,23 +284,38 @@ class TinyfishBackend:
 
 
 class Backends:
-    def __init__(self) -> None:
+    # An upstream that is down and one that was never asked for are different
+    # states, and only the first is an error. Both still degrade the same way:
+    # the wrapper serves whatever it could reach and reports the counts.
+    def __init__(self, enabled: frozenset[str] = BACKENDS_ENABLED) -> None:
+        self.enabled = enabled
         self.chrome = ChromeBackend()
         self.tinyfish = TinyfishBackend()
 
+    def on(self, name: str) -> bool:
+        return name in self.enabled
+
     def all_tools(self) -> list[dict[str, Any]]:
         tools: list[dict[str, Any]] = []
-        try:
-            tools.extend(self.chrome.list_tools())
-        except Exception as e:
-            log.error("chrome tools/list failed: %s", e)
-        try:
-            tools.extend(self.tinyfish.list_tools())
-        except Exception as e:
-            log.error("tinyfish tools/list failed: %s", e)
+        if self.on("chrome"):
+            try:
+                tools.extend(self.chrome.list_tools())
+            except Exception as e:
+                log.error("chrome tools/list failed: %s", e)
+        if self.on("tinyfish"):
+            try:
+                tools.extend(self.tinyfish.list_tools())
+            except Exception as e:
+                log.error("tinyfish tools/list failed: %s", e)
         return tools
 
     def dispatch(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        for prefix, backend in ((CHROME_PREFIX, "chrome"), (TINYFISH_PREFIX, "tinyfish")):
+            if name.startswith(prefix) and not self.on(backend):
+                raise RuntimeError(
+                    f"{backend} backend is off — APEX_MCP_BACKENDS="
+                    f"{','.join(sorted(self.enabled)) or '(none)'}"
+                )
         if name.startswith(CHROME_PREFIX):
             return self.chrome.call(name, arguments)
         if name.startswith(TINYFISH_PREFIX):
@@ -288,16 +325,20 @@ class Backends:
         )
 
     def status(self) -> dict[str, Any]:
-        chrome_err = None
-        try:
-            self.chrome.ensure()
-        except Exception as e:
-            chrome_err = str(e)
-        try:
-            self.tinyfish.ensure()
-        except Exception as e:
-            if not self.tinyfish.error:
-                self.tinyfish._error = str(e)  # noqa: SLF001
+        chrome_err = None if self.on("chrome") else "off (APEX_MCP_BACKENDS)"
+        if self.on("chrome"):
+            try:
+                self.chrome.ensure()
+            except Exception as e:
+                chrome_err = str(e)
+        if self.on("tinyfish"):
+            try:
+                self.tinyfish.ensure()
+            except Exception as e:
+                if not self.tinyfish.error:
+                    self.tinyfish._error = str(e)  # noqa: SLF001
+        elif not self.tinyfish.error:
+            self.tinyfish._error = "off (APEX_MCP_BACKENDS)"  # noqa: SLF001
         return {
             "server": "apex-probes",
             "version": "1.0.0",
