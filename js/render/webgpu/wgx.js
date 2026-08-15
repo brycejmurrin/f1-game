@@ -313,19 +313,42 @@ const WGX = (function () {
       if (!adapter) return _fail("no adapter");
       const _canTimestamp = !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
       device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
-      if (!device) return _fail("no device");
+      // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
+      // says so — even when it cannot give a valid one; the failure is signalled
+      // by handing back a device whose `lost` promise is ALREADY resolved. So a
+      // truthiness test can never fire, and a dead device would sail through as
+      // healthy.
+      //
+      // Detect it by MICROTASK ORDER, not a timer. An already-resolved promise
+      // schedules its handler the moment .then() is called, so a couple of
+      // `await`s here run strictly after it; a healthy device's `lost` never
+      // settles and simply leaves the flag null. Deliberately NOT a
+      // Promise.race against setTimeout: a timer is the wrong tool (it makes a
+      // synchronous fact wait on the macrotask queue) and it deadlocks under
+      // any harness that unref()s its timers to avoid holding the runner open —
+      // tests/unit/webgpu-lifecycle.test.mjs does exactly that, and the race
+      // hung there with "Promise resolution is still pending".
+      let _bornLost = null;
+      device.lost.then(function (info) { _bornLost = (info && info.reason) || "unknown"; });
+      await null; await null;
+      if (_bornLost) return _fail("device arrived lost (" + _bornLost + ")");
       var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
     } catch (e) {
       return _fail("device request threw: " + ((e && e.message) || e));
     }
 
+    // FORMAT ONLY — the canvas itself is claimed at the very END of create(),
+    // after the self-test has proven this device can actually draw. A canvas is
+    // bound to one context type for LIFE, so calling getContext("webgpu") here
+    // and then refusing below would leave GLX unable to attach webgl2 to it, and
+    // js/game.js can only recover that by clearing the opt-in and RELOADING the
+    // page. Safari 26 is where refusal is most likely (it loses the device
+    // mid-pipeline-setup, imgui#9103), i.e. exactly where the reload would be
+    // paid. Pipelines need the format, not the context, so nothing below cares.
     try {
-      ctx = canvas.getContext("webgpu");
-      if (!ctx) return _fail("canvas has no webgpu context");
       format = navigator.gpu.getPreferredCanvasFormat();
-      ctx.configure({ device, format, alphaMode: "opaque" });
     } catch (e) {
-      return _fail("context configure threw: " + ((e && e.message) || e));
+      return _fail("preferred canvas format threw: " + ((e && e.message) || e));
     }
 
     // Device-lost recovery. An unexpected loss (memory pressure, GPU reset) on
@@ -3078,6 +3101,19 @@ const WGX = (function () {
     if (_stReason) {
       try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost; fallback still proceeds */ }
       return _fail(_stReason);
+    }
+
+    // PROVEN — only now claim the canvas. Every refusal above returns with the
+    // element untouched, so GLX attaches webgl2 to it on the same load and the
+    // player never sees a reload. This is the last thing that can fail, and if
+    // it does the canvas may be half-claimed, so it still reports through _fail
+    // and game.js's reload path remains the backstop for that one case.
+    try {
+      ctx = canvas.getContext("webgpu");
+      if (!ctx) return _fail("canvas has no webgpu context");
+      ctx.configure({ device, format, alphaMode: "opaque" });
+    } catch (e) {
+      return _fail("context configure threw: " + ((e && e.message) || e));
     }
 
     const noop = function () {};

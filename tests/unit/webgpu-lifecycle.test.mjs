@@ -12,7 +12,27 @@ const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, WGX_SOURCE] = await Promise.all([
   readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
-function makeGpuHarness() {
+// The light storage buffer's size, DERIVED from the same constants WGX derives
+// it from rather than restated here. It was hardcoded as 2048, which stopped
+// being true the moment MAX_LIGHTS went 32 -> 48 (64 B x 48 = 3072): the filter
+// below matched no buffer and the god-ray test failed on the deploy branch. A
+// test that names a number the source owns goes stale silently the next time
+// that number moves, so read it from the source.
+const LIGHT_SBO_BYTES =
+  Number(/LIGHT_STRIDE_BYTES:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]) *
+  Number(/MAX_LIGHTS:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]);
+
+// opts lets a test pick a REAL WebGPU failure shape. Defaults keep the healthy
+// device every existing test was written against, so these are new switches and
+// never a changed baseline:
+//   bornLost    — requestDevice resolves a device whose `lost` is ALREADY
+//                 resolved. Per spec requestDevice ALWAYS returns a GPUDevice,
+//                 even when it cannot give a valid one, so this — not a null
+//                 return — is what a failed device acquisition looks like.
+//   shaderError — createShaderModule reports an error through
+//                 getCompilationInfo(), the way a WGSL module rejected by the
+//                 driver does. Safari 26 is where this actually bites.
+function makeGpuHarness(opts = {}) {
   const textures = [];
   const buffers = [];
   const writes = [];
@@ -27,7 +47,11 @@ function makeGpuHarness() {
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
   const device = {
-    lost: new Promise(() => {}),
+    // A healthy device's `lost` never settles; a born-lost one is ALREADY
+    // resolved by the time create() can look at it.
+    lost: opts.bornLost
+      ? Promise.resolve({ reason: "unknown", message: "injected born-lost device" })
+      : new Promise(() => {}),
     queue: {
       writeBuffer(buffer, offset, data, dataOffset = 0, size) {
         const values = Array.from(data).slice(dataOffset, size == null ? undefined : dataOffset + size);
@@ -40,7 +64,17 @@ function makeGpuHarness() {
     createSampler: () => ({}),
     createBindGroupLayout: () => ({}),
     createPipelineLayout: () => ({}),
-    createShaderModule: () => ({}),
+    // Real GPUShaderModules expose getCompilationInfo(). The old mock returned a
+    // bare {}, so create()'s "check every shader module's compilation info" step
+    // hit its own "a check that cannot be RUN is skipped, never fatal" rule and
+    // was inert in every test — the guard that matters most on Safari.
+    createShaderModule: () => ({
+      getCompilationInfo: async () => ({
+        messages: opts.shaderError
+          ? [{ type: "error", message: "injected WGSL compile error", lineNum: 1, linePos: 1 }]
+          : [],
+      }),
+    }),
     createRenderPipeline: () => pipeline,
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => ({
@@ -85,15 +119,22 @@ function makeGpuHarness() {
     },
   };
   const canvasTexture = { createView: () => ({ swapchain: true }) };
+  // A canvas is bound to ONE context type for life: once getContext("webgpu")
+  // succeeds, getContext("webgl2") returns null on that element forever. That is
+  // the whole reason a WGX refusal costs a page reload, and the old mock — which
+  // handed back a fresh context object for any argument and recorded nothing —
+  // could not express it, so no test could ever see the cost.
+  let claimedBy = null;
   const canvas = {
     clientWidth: 320,
     clientHeight: 180,
     width: 0,
     height: 0,
-    getContext: () => ({
-      configure() {},
-      getCurrentTexture: () => canvasTexture,
-    }),
+    getContext: (type) => {
+      if (claimedBy && claimedBy !== type) return null;
+      claimedBy = type;
+      return { configure() {}, getCurrentTexture: () => canvasTexture };
+    },
   };
   const context = vm.createContext({
     console,
@@ -147,6 +188,9 @@ function makeGpuHarness() {
     buffers,
     writes,
     create: () => context.window.WGX.create(canvas),
+    // What the GLX fallback would find: null while the canvas is still free for
+    // a webgl2 context, "webgpu" once WGX has claimed it.
+    canvasClaimedBy: () => claimedBy,
     textureCount: () => textureCalls,
     failNextTexture(offset = 1) { failTextureAt = textureCalls + offset; },
     failNextView(offset = 1) { failViewAt = viewCalls + offset; },
@@ -505,7 +549,7 @@ test("god-ray uploads nearest lamps and remaps the shadowed index", async () => 
   gfx.lampShadowEnd();
   assert.equal(gfx.begin({ eye: [0, 0, 0], lights, invViewProj: ident }), true);
   gfx.present({ lampVol: 1, mist: 1 });
-  const lightBufs = h.buffers.filter((buffer) => buffer.desc.size === 2048);
+  const lightBufs = h.buffers.filter((buffer) => buffer.desc.size === LIGHT_SBO_BYTES);
   const gr = h.writes.filter((write) => lightBufs.includes(write.buffer)).at(-1);
   assert.ok(gr, "god-ray must write a nearest-N light buffer");
   assert.equal(gr.values[0], 1, "nearest lamp (1,0,0) must be slot 0");
@@ -544,4 +588,43 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(POST_SOURCE, /hazeStr|uHazeStr/);
   assert.match(POST_SOURCE, /1\.3846153846/, "SSAO/god-ray separable blur kernel");
   assert.match(FX_SOURCE, /fn vs_main[\s\S]*aCorner/, "particle shader");
+});
+
+// ── Failure shapes the old harness could not express ─────────────────────────
+// Every test above runs against a device that cannot fail. These three assert
+// what happens when it does, which is the only thing that matters on Safari 26:
+// WebGPU there is documented to lose the device mid-pipeline-setup
+// (github.com/ocornut/imgui/issues/9103, open, macOS 26 + iOS 26) and to render
+// black with nothing on the console. A refusal is FINE — WGX is opt-in and GLX
+// is the floor. What is not fine is refusing in a way the fallback cannot use.
+
+test("a device that arrives already lost is refused", async () => {
+  const h = makeGpuHarness({ bornLost: true });
+  const gfx = await h.create();
+  // `if (!device)` can never catch this: requestDevice ALWAYS returns a
+  // GPUDevice, and an invalid one is signalled by `lost` being pre-resolved.
+  assert.equal(gfx, null, "a born-lost device must not be accepted as a backend");
+});
+
+test("a shader that fails to compile is refused", async () => {
+  const h = makeGpuHarness({ shaderError: true });
+  const gfx = await h.create();
+  assert.equal(gfx, null,
+    "WebGPU does not throw on a bad module — createShaderModule returns a " +
+    "live-looking object and the draw is silently dropped. getCompilationInfo " +
+    "is the only signal, so an error there must refuse.");
+});
+
+test("a refusal leaves the canvas free for the WebGL2 fallback", async () => {
+  const h = makeGpuHarness({ bornLost: true });
+  const gfx = await h.create();
+  assert.equal(gfx, null, "precondition: this harness refuses");
+  // The cost of getting this wrong is not cosmetic. game.js can only recover a
+  // claimed canvas by clearing the opt-in and RELOADING the page, so every
+  // refusal a player hits becomes a reload — on exactly the platform where
+  // refusal is most likely.
+  assert.equal(h.canvasClaimedBy(), null,
+    "WGX must prove itself BEFORE calling getContext('webgpu') on the real " +
+    "canvas — a canvas is bound to one context type for life, so claiming it " +
+    "and then refusing forces a page reload instead of a seamless GLX fallback");
 });
