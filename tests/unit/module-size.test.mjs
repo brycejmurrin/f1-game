@@ -241,7 +241,15 @@ const CEILINGS = {
   // chase-camera OFFSET damping and the three career/race fixes — so neither
   // side's number fits the union. Set from the merged file: 8244 (split-newline count, the ceiling test's own measure). Both sides are
   // bug-explaining growth, not a feature in the wrong file.
-  "js/game.js": 8244,
+  // -> 8246 for the frame.exposure initialiser and the two comment lines saying
+  // why: loadTrack()'s frame literal had no `exposure`, applyRaceSettings() is its
+  // ONLY writer and runs at startRace(), so the MENU FLYBY uploaded
+  // `undefined * exposureMul` = NaN and the composite's `c *= uExposure` rendered
+  // the attract screen BLACK. Measured either side of the one-word fix by wrapping
+  // GLX.present() and reading the framebuffer: centre-64px mean luminance
+  // 1.06/255 -> 84.39. Exactly the "bug-explaining comment at its site" growth the
+  // header above says this ratchet tolerates; the fix itself is a single field.
+  "js/game.js": 8246,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
