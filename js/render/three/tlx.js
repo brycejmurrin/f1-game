@@ -173,11 +173,31 @@ const TLX = (function () {
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : isMobile;
+      // DEFAULT OFF EVERYWHERE, phones included — three picks WebGPU wherever the
+      // browser offers it. That is a deliberate product call, not an oversight:
+      // the alternative (pinning phones to three's WebGL2 backend, which is the
+      // codegen path every TLX milestone was actually developed against) trades
+      // the migration's whole point on mobile for safety against a WebKit bug we
+      // have diagnosed but never reproduced. Flip the default here if a real
+      // device says otherwise; `apex26.tlxForceGL` already overrides both ways.
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : false;
 
       const renderer = new THREE.WebGPURenderer({
         canvas,
-        antialias: true,
+        // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
+        // the context-level AA path". This is NOT the scene target's MSAA
+        // (msaa() below is honestly 1: the post chain deliberately has no
+        // multisampled scene target — see the DEVIATION note in tlx-post.js).
+        // three turns antialias:true into renderer.samples = 4, and samples
+        // applies to the DEFAULT CANVAS target: a 4x multisampled colour+depth
+        // store at the full backing-store size, resolved every frame. With the
+        // post chain up the canvas receives exactly one fullscreen FXAA quad,
+        // which has no interior edges for MSAA to find — so on a phone that is
+        // ~20 MB and a full-res resolve per frame bought for nothing, against
+        // the jetsam budget that made GLX write the same line. Desktop keeps it
+        // for the post-less fallback path (a broken post factory renders the
+        // world straight to the canvas, where the samples do work).
+        antialias: !isMobile,
         forceWebGL,
       });
       renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
