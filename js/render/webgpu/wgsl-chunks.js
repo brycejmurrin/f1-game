@@ -894,7 +894,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // a tight sun disc reflected in the lacquer. Folded into the env colour so it rides
     // the same mirror weight (envF·strength) exactly as GLX adds it to envCC before ×envW.
     // Base floored at 1e-4 — pow(0.0, 400.0) is NaN on mobile GPUs (log2(0) = -Inf).
-    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow;
+    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow * keyMul;
     let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
     let refl = envCol * envF * strength * (1.0 - rough * 0.5);
     color = color + refl;
@@ -1015,7 +1015,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // WINDOW SUN FLASH (params9.z = uWindowSunFlash): dry glossy glass catches
     // a tight sun glint. Gated (1-wetSheen) so wet road is unchanged; night
     // moonlight is naturally negligible (GLX js/render/shaders/lit.js).
-    envColor = envColor + F.sunColor.xyz * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * F.params9.z;
+    envColor = envColor + F.sunColor.xyz * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * F.params9.z * keyMul;
     let ef0 = F_Schlick(max(dot(N, V), 0.0), vec3<f32>(0.04), 1.0).x;
     let envFresnel = mix(ef0, ef0 * ef0, wetSheen * 0.35);
     let envWet = envColor * (1.0 - wetSheen * 0.45);

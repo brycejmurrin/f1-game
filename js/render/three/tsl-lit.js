@@ -1185,7 +1185,7 @@
           const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
           envCC.addAssign(vec3(U.sunColor)
             .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow));
+            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
           color.mulAssign(envW.mul(0.94).oneMinus());          // absorb under the mirror
           const addCC = envCC.mul(envW);
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
@@ -1222,7 +1222,7 @@
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
           // dry glossy glass sun flash (WINDOW SUN FLASH knob)
           envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
-            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash));
+            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash).mul(U.keyMul));
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
           envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));

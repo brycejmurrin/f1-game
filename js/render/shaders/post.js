@@ -612,8 +612,8 @@ vec3 colourGrade(vec3 c) {
   c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * uVibrance);
   // Global saturation (uniform, after vibrance): a plain luma<->colour lerp.
   c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
-  // White-balance tint: warm tilts red up / blue down, cool the reverse. Subtle
-  // per-unit so the full -1..1 range stays natural rather than a colour cast.
+  // White-balance tint: warm tilts red up / blue down, cool the reverse. 0.07
+  // per unit so the tuner ±6 range stays natural rather than a colour cast.
   c *= vec3(1.0 + 0.07 * uTint, 1.0, 1.0 - 0.07 * uTint);
   // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
   // other (warm amber), blended by luma. A staple of the teal-orange film look —

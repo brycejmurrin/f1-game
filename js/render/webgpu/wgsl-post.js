@@ -394,7 +394,7 @@ struct GodrayU {
   sunDir   : vec4<f32>,     // off 208
   sunColor : vec4<f32>,     // off 224
   p0       : vec4<f32>,     // off 240  (str, lampStr, mist, time)
-  p1       : vec4<f32>,     // off 256  (cloudCover, cloudSpeed, hgAniso, hgFloor)
+  p1       : vec4<f32>,     // off 256  (cloudCover, cloudSpeed, godrayAniso, godrayFloor)
   p2       : vec4<f32>,     // off 272  (numLights, lampShadowIdx, 0, 0)
 };
 struct GRLight {

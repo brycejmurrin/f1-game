@@ -183,6 +183,32 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // (on-sun, horizon, clear) saturates at 1/0.22.
   assert.ok(get("mieScatter").max <= 1 / 0.22 + 0.01,
     `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
+  // lighting.js setFrameLights: reach 4 already saturates typical sightlines
+  // (Singapore 0.55 measured 415 m, no further lamps). 12 was leftover ×3.
+  assert.ok(get("lampReach").max <= 4 + 1e-9,
+    `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);
+});
+
+test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
+  // GLX uploads GT.godrayAniso / GT.godrayFloor; TLX maps gk("godrayAniso").
+  // WGX used to pack T.hgAniso / T.hgFloor — ids that do not exist on LT — so
+  // GOD-RAY FOCUS and GOD-RAY HAZE were stuck at the 0.60 / 0.020 fallbacks
+  // on WebGPU no matter where the sliders sat.
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /T\.godrayAniso/, "WGX must read T.godrayAniso");
+  assert.match(wgx, /T\.godrayFloor/, "WGX must read T.godrayFloor");
+  assert.doesNotMatch(wgx, /T\.hgAniso/, "stale T.hgAniso alias is dead — the slider id is godrayAniso");
+  assert.doesNotMatch(wgx, /T\.hgFloor/, "stale T.hgFloor alias is dead — the slider id is godrayFloor");
+});
+
+test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
+  const ids = new Set(defs().map((d) => d.id));
+  const wgx = read("js/render/webgpu/wgx.js");
+  const keys = [...wgx.matchAll(/\bT\.(\w+)/g)].map((m) => m[1]);
+  const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
+  assert.deepEqual(unknown, [],
+    "WGX reads a T.foo that is not a TUNE_DEFS id — the slider is a no-op on WebGPU " +
+    "(the upload falls back to a hardcoded default).");
 });
 
 test("amount-knob defaults are not crushed into the first quarter of the slider", () => {

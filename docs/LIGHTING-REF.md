@@ -51,11 +51,11 @@ divisors so every exposed slider extreme remains finite.
 
 | ID | Range | Neutral | Purpose |
 |---|---:|---:|---|
-| `blacks` | −1…1 | 0 | Deepest near-black detail |
-| `shadows` | −1…1 | 0 | Dark asphalt, tyres and unlit surfaces |
-| `midtones` | −1…1 | 0 | Middle-grey paint and environment detail |
-| `highlights` | −1…1 | 0 | Bright surfaces below peak white |
-| `whites` | −1…1 | 0 | Brightest HDR values entering the ACES shoulder |
+| `blacks` | −1.5…1.5 | 0 | Deepest near-black detail (shader stop gain ×3, then `exp2` clamps ±4) |
+| `shadows` | −1.5…1.5 | 0 | Dark asphalt, tyres and unlit surfaces (stop gain ×2) |
+| `midtones` | −3…3 | 0 | Middle-grey paint and environment detail |
+| `highlights` | −3…3 | 0 | Bright surfaces below peak white |
+| `whites` | −3…3 | 0 | Brightest HDR values entering the ACES shoulder |
 | `toe` | −1…1 | 0 | Transition out of black |
 | `shoulder` | −1…1 | 0 | Highlight compression before ACES |
 
@@ -63,9 +63,10 @@ These are distinct from the existing `blackLift` and `whitePoint` IDs, labelled
 **BLACK FLOOR** and **ACES WHITE SCALE** in the tuner. Their IDs and stored
 meaning are unchanged for preset compatibility.
 
-RGB grading exposes `liftR/G/B` (−0.15…0.15, neutral 0), `gammaR/G/B`
-(0.5…2, neutral 1), and `gainR/G/B` (0.5…1.5, neutral 1). The fitted transform
+RGB grading exposes `liftR/G/B` (−0.3…0.3, neutral 0), `gammaR/G/B`
+(0.4…2.5, neutral 1), and `gainR/G/B` (0.4…2.5, neutral 1). The fitted transform
 maps input black to Lift, input white to Gain, and Gamma controls the midpoint.
+`pow`/`log` inputs and curve divisors are clamped so every exposed extreme stays finite.
 
 All new registry defaults are neutral. The shipped broadcast grade lives in
 `LightPresets["*"]`; track/time/weather presets and localStorage profiles retain

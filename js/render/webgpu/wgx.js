@@ -2329,8 +2329,8 @@ const WGX = (function () {
         s[63] = frameTime;
         s[64] = lastFrame && lastFrame.cloud != null ? lastFrame.cloud : 0;
         s[65] = lastFrame && lastFrame.cloudSpeed != null ? lastFrame.cloudSpeed : 1;
-        s[66] = (T && T.hgAniso != null) ? T.hgAniso : 0.60;
-        s[67] = (T && T.hgFloor != null) ? T.hgFloor : 0.020;
+        s[66] = (T && T.godrayAniso != null) ? T.godrayAniso : 0.60;
+        s[67] = (T && T.godrayFloor != null) ? T.godrayFloor : 0.020;
         // Nearest-N to the eye (GLX glx/post.js). GLX uploads 12 slots
         // (GR_MAX_LIGHTS) but GODRAY_FS only marches the nearest 6
         // ("was 12" — 16 steps × 6 is the measured cost cap; slots 6-11
