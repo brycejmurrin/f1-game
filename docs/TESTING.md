@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 91 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 92 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -699,6 +699,7 @@ what it covers.
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
 | `scenery-grounding.test.mjs` | ratchet: FLOATING scenery must not grow — the vertical axis, gating `tools/float-audit.cjs` against `tools/float-baseline.json`. Same semantics as prop-clipping: absent circuit must read 0, listed circuit fails on growth, a cap above the measured count fails as slack. `npm run test:float` existed for a while but was in no CI job and behind no test, and could not have been wired up as-is — it exits 1 on any floater and 37 of 40 circuits have some |
+| `lamp-fixture-anchor.test.mjs` | all-circuit, STRICT ZERO on both axes of the night-lighting anchor: (a) no light record with `glareW > 0` may sit off a registered fixture — `drawGlow` paints a halo billboard for those, and the three start-gantry downlights shipped at `glareW 0.3` unparented (three orbs over every start line; Jeddah's whole tunnel was 311 of them, its poles having registered no lights at all); (b) no registered fixture's radius may stop short of the road — the `(1-(d/r)^4)^2` window is exactly 0 past `r`, and Bahrain's 39 m masts inherited a radius sized for a 13 m verge lamp, so the circuit rendered unlit (2 of 135 centreline samples). No baseline and no ALLOW hatch: both read 0 fleet-wide |
 | `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |

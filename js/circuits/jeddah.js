@@ -70,7 +70,8 @@
       const { out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit } = api;
+        cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
+        lampPost } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
@@ -120,13 +121,26 @@
       // row of these read as a TUNNEL rather than a row of posts: the heads
       // converge over the tarmac in perspective. `col` lets the run carry the
       // Saudi green/gold accent every few poles.
-      const ledHead = (k, side, dist, col) => {
+      // `lamp`: register this head as a real light source. The tunnel is ~560
+      // poles and lampPost caps at 96, so the caller lights a sampled subset —
+      // enough that track.lampPosts is non-empty, which is the part that
+      // matters. With it EMPTY, buildTrackLights fell back to its synthetic
+      // stride walk and invented 311 lights at a hard-coded 13 m, none of them
+      // over a pole and every one painting a lens halo in mid-air. DARK-GAP
+      // FILL covers the stretches between registered heads, and those fills are
+      // correctly halo-less.
+      const ledHead = (k, side, dist, col, lamp) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 2)) return;
         addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
         const head = vadd(vadd(a.c, a.u, 7.4), a.r, -side * 1.3);
         addBox(out, vadd(head, a.r, side * 0.65), [1.5, 0.14, 0.16], DARKPOLE, b);
         addBox(out, head, [0.62, 0.34, 0.55], col || LED, b);
+        // Register AFTER the on-track reject above, so a suppressed pole never
+        // leaves an orphan light behind it.
+        if (lamp && typeof lampPost === "function") {
+          lampPost({ pos: head, k, side, kind: "led" });
+        }
       };
 
       // Light tower: slim column + cool LED head (taller accents)
@@ -186,7 +200,14 @@
         for (const side of [1, -1]) {
           const accent = (poleI % 5 === 2) ? [0.24, 1.10, 0.48]
                        : (poleI % 5 === 4) ? [1.10, 0.88, 0.18] : LED;
-          ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent);
+          // Every 7th pole carries the light record; the rest are geometry that
+          // the registered neighbours and the gap fill light. The stride is set
+          // to land UNDER lampPost's 96 cap rather than on it: past the cap
+          // registration silently returns false, and because the tunnel is
+          // walked in lap order the drops would all fall at the end of the lap,
+          // leaving the final sector the one stretch with no fixtures.
+          ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent,
+                  poleI % 7 === 0);
           poleI++;
         }
       });
