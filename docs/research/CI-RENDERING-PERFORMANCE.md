@@ -88,9 +88,9 @@ only after §1 is measured.
 
 ## 3. WebGPU shipped everywhere — the `Gfx` seam assumption has moved
 
-`docs/ARCHITECTURE.md` describes WGX as "frozen (no new work)" and WebGPU as the
-opt-in nobody runs. **That framing is now out of date as a statement about the
-platform**, whatever we decide about the code:
+`docs/ARCHITECTURE.md` describes WGX as opt-in native WebGPU. **The
+"Safari cannot run WebGPU" framing is out of date as a statement about the
+platform**, whatever we decide about making it the default:
 
 Per the GPUWeb wiki (the authoritative source — the secondary write-ups checked
 out, but they flatten the gating that actually matters):
@@ -113,15 +113,15 @@ feature-detect and fall back to WebGL2 automatically — **which is exactly what
 `js/render/gfx.js` already does**, so the architecture is fine; only the
 commentary about it is stale.
 
-**What this does NOT imply.** It is not an argument to unfreeze WGX. §6 of
-`docs/ARCHITECTURE-REVIEW.md` makes the real point: the cost is *one look in
-three shading languages*, and WGX still lacks volumetrics, PCSS quality, MSAA
-and the baked material arrays (`docs/ARCHITECTURE.md`, renderer section).
-Broader platform support does not reduce that cost — if anything it raises the
-stakes of having two incomplete backends rather than one good one. The honest
-options are still "invest in one of TLX/WGX" or "keep GLX and let the seam be
-insurance", and this finding only changes the input to that decision, not the
-answer. If that investment *is* WGX, the API recipes and slice order live in
+**What this does NOT imply.** It is not an argument to flip the default
+renderer. §6 of `docs/ARCHITECTURE-REVIEW.md` makes the real point: the cost
+is *one look in three shading languages*. The 2026-08 WGX parity pass closed
+the documented API/shader gaps (see [WEBGPU-PARITY.md](WEBGPU-PARITY.md));
+keeping two shader trees in sync is still the tax. Broader platform support
+does not reduce that cost. The honest options are still "invest in one of
+TLX/WGX" or "keep GLX and let the seam be insurance", and this finding only
+changes the input to that decision, not the answer. The API recipes and
+slice order live in
 [WEBGPU-PARITY.md](WEBGPU-PARITY.md) — every listed gap is implementable in
 core WebGPU; the freeze was a cost call, not an API wall.
 

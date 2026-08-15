@@ -76,6 +76,257 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   // stand-in passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
   // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
   // min so the denominator can't reach 0 for x>=0.
+  // Surface-family hash/noise (GLXChunks.surfaceNoise / ignoise). Distinct from
+  // the sky-family hash2/vnoise above — procedural MAT ids are welded to these.
+  const matLib = `
+fn hash21(p_in: vec2<f32>) -> f32 {
+  var p = fract(p_in * vec2<f32>(123.34, 456.21));
+  p = p + dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+fn svnoise(p_in: vec2<f32>) -> f32 {
+  let i = floor(p_in);
+  var f = fract(p_in);
+  f = f * f * (3.0 - 2.0 * f);
+  let a = hash21(i);
+  let b = hash21(i + vec2<f32>(1.0, 0.0));
+  let c = hash21(i + vec2<f32>(0.0, 1.0));
+  let d = hash21(i + vec2<f32>(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+fn ignoise(p: vec2<f32>) -> f32 {
+  return fract(52.9829189 * fract(dot(p, vec2<f32>(0.06711056, 0.00583715))));
+}
+fn fw1(x: f32) -> f32 { return abs(dpdx(x)) + abs(dpdy(x)); }
+fn matScale(mid: i32) -> f32 {
+  if (mid < 0 || mid > 16) { return 0.0; }
+  return MatS.s[mid / 4][mid % 4];
+}
+fn matWallLike(mid: i32) -> bool {
+  return mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
+}
+fn matBumpHeight(mid: i32, uv: vec2<f32>) -> f32 {
+  let hc = uv.x; let y = uv.y;
+  if (mid == 1) {
+    let seam = smoothstep(0.05, 0.0, abs(fract(y / 1.25) - 0.5) - 0.46);
+    return svnoise(uv * 6.0) * 0.6 - seam * 0.5;
+  } else if (mid == 2) {
+    let ch = 0.20; let bl = 0.42; let mort = 0.06;
+    let row = floor(y / ch); let off = (row % 2.0) * 0.5 * bl;
+    let bx = fract((hc + off) / bl); let by = fract(y / ch);
+    let joint = max(smoothstep(mort, 0.0, min(bx, 1.0 - bx) * bl),
+                    smoothstep(mort, 0.0, min(by, 1.0 - by) * ch));
+    return (1.0 - joint) * 0.5 + svnoise(vec2<f32>(floor((hc + off) / bl), row) * 4.0) * 0.10;
+  } else if (mid == 4) { return svnoise(vec2<f32>(hc * 55.0, y * 3.0)) * 0.3;
+  } else if (mid == 5) {
+    let seam = smoothstep(0.05, 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46);
+    return (1.0 - seam) * 0.4 + svnoise(vec2<f32>(hc * 3.0, y * 22.0)) * 0.16;
+  } else if (mid == 6) { return svnoise(uv * 3.2) * 0.5 + svnoise(uv * 11.0) * 0.3;
+  } else if (mid == 7) { return sin(hc * 38.0) * 0.15 + sin(y * 38.0) * 0.15;
+  } else if (mid == 8) { return sin(hc * 3.0 + svnoise(uv * 0.3) * 6.0) * 0.5 + svnoise(uv * 8.0) * 0.2;
+  } else if (mid == 9) { return svnoise(uv * 6.0) * 0.4 + svnoise(uv * 20.0) * 0.25;
+  } else if (mid == 10) { return svnoise(uv * 1.3) * 0.6 + svnoise(uv * 4.5) * 0.3 + svnoise(uv * 15.0) * 0.15;
+  } else if (mid == 11) { return svnoise(uv * 1.8) * 0.45 + svnoise(uv * 21.0) * 0.18;
+  } else if (mid == 12) {
+    let ty = fract(y / 0.34);
+    return sin(ty * 3.14159) * 0.5 + svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) * 0.08;
+  } else if (mid == 13) {
+    let cell = floor(uv * 1.3);
+    let f = fract(uv * 1.3) - hash21(cell) * 0.12;
+    let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    return smoothstep(0.0, 0.16, d) * 0.55 + svnoise(uv * 5.0) * 0.15;
+  } else if (mid == 14) { return sin(hc * 7.5) * 0.55 + svnoise(uv * 6.0) * 0.10;
+  } else if (mid == 16) { return svnoise(uv * 9.0) * 0.34 + svnoise(uv * 26.0) * 0.16; }
+  return 0.0;
+}
+fn matTexUV(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>, uv_ptr: ptr<function, vec2<f32>>) -> bool {
+  if (F.params8.w <= 0.001 || mid <= 0 || mid > 16) { return false; }
+  let sc = matScale(mid);
+  if (sc <= 0.0) { return false; }
+  let an = abs(normalize(nrm));
+  if (matWallLike(mid)) {
+    *uv_ptr = vec2<f32>(select(wpos.x, wpos.z, an.x > an.z), wpos.y) / sc;
+  } else {
+    *uv_ptr = wpos.xz / sc;
+  }
+  return true;
+}
+fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>) {
+  var uv = vec2<f32>(0.0);
+  if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
+  let fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
+  if (fade <= 0.005) { return; }
+  let fp = max(fw1(uv.x), fw1(uv.y));
+  let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
+  if (aa <= 0.005) { return; }
+  let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, 0.0).xy - 0.5) * 2.0;
+  let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
+  let B = cross(*N_ptr, T);
+  let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
+  *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
+}
+fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>) {
+  if (mid == 0 || mid == 3 || mid == 15 || mid >= 20) { return; }
+  let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
+  if (bumpFade <= 0.005) { return; }
+  var N = *N_ptr;
+  if (matWallLike(mid)) {
+    let an = abs(N);
+    let hc = select(wpos.x, wpos.z, an.x > an.z);
+    let y = wpos.y;
+    let fp = max(fw1(hc), fw1(y));
+    let aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
+    if (aaFade <= 0.005) { return; }
+    let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N) + vec3<f32>(1e-5, 0.0, 0.0));
+    let e = 0.05;
+    let h0 = matBumpHeight(mid, vec2<f32>(hc, y));
+    let hx = matBumpHeight(mid, vec2<f32>(hc + e, y));
+    let hy = matBumpHeight(mid, vec2<f32>(hc, y + e));
+    let amt = select(select(0.05, 0.09, mid == 12 || mid == 14), 0.10, mid == 2 || mid == 13);
+    N = normalize(N + (T * (h0 - hx) + vec3<f32>(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
+  } else {
+    let p = wpos.xz;
+    let fpG = max(fw1(p.x), fw1(p.y));
+    let aaG = clamp(1.0 - (fpG - 0.10) / 0.55, 0.0, 1.0);
+    if (aaG <= 0.005) { return; }
+    let e = 0.22;
+    let h0 = matBumpHeight(mid, p);
+    let hx = matBumpHeight(mid, p + vec2<f32>(e, 0.0));
+    let hz = matBumpHeight(mid, p + vec2<f32>(0.0, e));
+    let amt = select(select(select(0.07, 0.025, mid == 16), 0.14, mid == 10), 0.16, mid == 8);
+    N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
+  }
+  *N_ptr = N;
+  applyMaterialTexNormal(mid, N_ptr, vd, wpos);
+}
+fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>) {
+  if (mid == 0) { return; }
+  let far = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);
+  if (far <= 0.001) { return; }
+  let near = clamp(1.0 - (vd - 26.0) / 64.0, 0.0, 1.0);
+  let an = abs(normalize(nrm));
+  let wall = an.y < 0.6;
+  let hc = select(wpos.x, wpos.z, an.x > an.z);
+  let y = wpos.y;
+  var albedo = *albedo_ptr;
+  var rough = *rough_ptr;
+  if (mid == 1) {
+    albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far);
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
+    if (wall) {
+      albedo = albedo * (1.0 - smoothstep(max(0.05, fw1(y / 1.25)), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+    }
+    rough = min(1.0, rough + 0.08 * far);
+  } else if (mid == 2) {
+    let ch = 0.20; let bl = 0.42; let mort = 0.06;
+    let row = floor(y / ch); let off = (row % 2.0) * 0.5 * bl;
+    let bx = fract((hc + off) / bl); let by = fract(y / ch);
+    let mortAA = max(mort, max(fw1(hc), fw1(y)));
+    let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
+                    smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
+    let bh = svnoise(vec2<f32>(floor((hc + off) / bl), row) * 1.3);
+    let brick = albedo * (0.82 + bh * 0.42) * vec3<f32>(1.06, 0.99, 0.92);
+    let mortar = mix(albedo, vec3<f32>(0.60, 0.58, 0.55), 0.6);
+    albedo = mix(brick, mortar, joint * near);
+    rough = min(1.0, rough + 0.12 * far);
+  } else if (mid == 3) {
+    let pw = 1.6; let ph = 1.4; let mull = 0.11;
+    let gx = fract(hc / pw); let gy = fract(y / ph);
+    let mullAA = max(mull, max(fw1(hc / pw), fw1(y / ph)));
+    let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
+                  smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far);
+    albedo = mix(albedo, albedo * 0.32, bar * near);
+    rough = mix(rough, min(rough, 0.12), near);
+  } else if (mid == 4) {
+    let brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade);
+    rough = clamp(rough - 0.15 * far, 0.05, 1.0);
+  } else if (mid == 5) {
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
+    albedo = albedo * (1.0 - smoothstep(max(0.05, fw1(hc / 0.35)), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+  } else if (mid == 6) {
+    let d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6 + svnoise(wpos.xz * 9.0) * 0.4 * near;
+    albedo = albedo * (1.0 + (d - 0.5) * 0.34 * far);
+    albedo.g = albedo.g * (1.0 + (d - 0.5) * 0.10 * far);
+  } else if (mid == 7) {
+    let weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade);
+  } else if (mid == 8) {
+    albedo = albedo * (1.0 + (svnoise(wpos.xz * 5.0) - 0.5) * 0.12 * near
+                          + sin(wpos.x * 0.7 + svnoise(wpos.xz * 0.2) * 6.0) * 0.05 * far);
+  } else if (mid == 9) {
+    let g = svnoise(wpos.xz * 3.5) * 0.6 + svnoise(wpos.xz * 14.0) * 0.4 * near - 0.5;
+    albedo = albedo * (1.0 + g * 0.22 * far);
+    albedo.g = albedo.g * (1.0 + g * 0.08 * far);
+  } else if (mid == 10) {
+    let r = svnoise(wpos.xz * 0.9 + y * 0.6) * 0.6 + svnoise(wpos.xz * 4.5) * 0.4 - 0.5;
+    albedo = albedo * (1.0 + r * 0.30 * far);
+    rough = min(1.0, rough + 0.16 * far);
+  } else if (mid == 11) {
+    let s = svnoise(wpos.xz * 1.6 + y * 0.4) - 0.5;
+    albedo = albedo * (1.0 + s * 0.10 * far);
+    albedo.b = albedo.b * (1.0 - s * 0.05 * far);
+    let sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
+    albedo = albedo * (1.0 + (svnoise(wpos.xz * 24.0) - 0.5) * 0.06 * sparkleFade);
+    rough = clamp(rough - 0.10 * far, 0.05, 1.0);
+  } else if (mid == 12) {
+    let ty = fract(y / 0.34);
+    let shadeAA = clamp(1.0 - fw1(ty) * 6.0, 0.0, 1.0);
+    albedo = albedo * (0.88 + sin(ty * 3.14159) * shadeAA * 0.16);
+    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
+    rough = min(1.0, rough + 0.10 * far);
+  } else if (mid == 13) {
+    let cell = floor(vec2<f32>(hc, y) * 1.3);
+    let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
+    let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    let jointAA = max(0.16, max(fw1(hc * 1.3), fw1(y * 1.3)));
+    let joint = smoothstep(0.0, jointAA, d);
+    let block = albedo * (0.80 + hash21(cell) * 0.4);
+    let mortar = mix(albedo, vec3<f32>(0.42, 0.40, 0.37), 0.65);
+    albedo = mix(mortar, block, joint * near);
+    rough = min(1.0, rough + 0.18 * far);
+  } else if (mid == 14) {
+    let ridgePhase = hc * 7.5;
+    let ridgeAA = clamp(1.0 - fw1(ridgePhase) * 3.0, 0.0, 1.0);
+    albedo = albedo * (0.85 + sin(ridgePhase) * ridgeAA * 0.18);
+    let rust = smoothstep(0.55, 0.9, svnoise(vec2<f32>(hc * 0.8, y * 0.35) + 5.0));
+    albedo = mix(albedo, albedo * vec3<f32>(0.62, 0.42, 0.28), rust * 0.5 * far);
+    rough = min(1.0, rough + 0.14 * far);
+  } else if (mid == 16) {
+    albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.035) - 0.5) * 0.10 * far);
+    albedo = albedo * (1.0 + (svnoise(wpos.xz * 7.0) - 0.5) * 0.13 * near);
+    rough = min(1.0, rough + 0.10 * far);
+  }
+  var tuv = vec2<f32>(0.0);
+  if (matTexUV(mid, nrm, wpos, &tuv)) {
+    let t = textureSampleLevel(matAlbedoTex, matSamp, tuv, mid, 0.0);
+    let k = F.params8.w * far;
+    albedo = mix(albedo, albedo * t.rgb * 2.0, k);
+    rough = clamp(mix(rough, t.a, k * 0.8), 0.04, 1.0);
+  }
+  *albedo_ptr = albedo;
+  *rough_ptr = rough;
+}
+fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>) {
+  let hw = trk.z;
+  if (hw <= 0.5) { return; }
+  let s = trk.x; let x = trk.y;
+  let paint = vec3<f32>(0.95, 0.95, 0.97);
+  let aaX = clamp(fw1(x), 1e-4, 0.30);
+  let dEdge = abs(abs(x) - (hw - 0.10));
+  let edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
+  let band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
+  let ph = fract(s / 7.0);
+  let aaS = clamp(fw1(s) / 7.0, 1e-4, 0.24);
+  let dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
+  let mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  let m = max(edge, band * dash) * mip;
+  *albedo_ptr = mix(*albedo_ptr, paint, m);
+  *rough_ptr = mix(*rough_ptr, 0.55, m);
+}
+`;
+
   const tonemap = `
 fn acesTonemap(x: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32> {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
@@ -151,7 +402,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
   //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 464 B (see WGX.FRAME_UNIFORM_BYTES)
+  //      FrameU  : 544 B (see WGX.FRAME_UNIFORM_BYTES)
   //      Light   :  64 B/light × 32 = 2048 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
@@ -175,8 +426,10 @@ struct FrameU {
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
   carLightVP : mat4x4<f32>,   // off 384  Z01-remapped car-shadow view-proj (per-frame car-only map)
-  params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, lampNearClamp) — GLX-parity lit-shader knobs (uLampFogClip / uCarSunGlint / uBloomBoost / uLampNearClamp); always packed, WGSL reads them directly
-};                            // size 464
+  params7    : vec4<f32>,     // off 448  (fogClip, carSunGlint, neonBoost, lampNearClamp)
+  lampLightVP: mat4x4<f32>,   // off 464  Z01-remapped nearest-floodlight spot VP
+  params8    : vec4<f32>,     // off 528  (lampFog, lampShadowOn, lampIdx, matTexMix)
+};                            // size 544
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -187,8 +440,9 @@ struct DrawU {
   model : mat4x4<f32>,        // off  0
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
-  mat2  : vec4<f32>,          // off 96  (sparkle, _, _, _)
+  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, _, _)
 };                            // size 112
+struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
 @group(0) @binding(1) var<storage, read> lights : array<Light, 32>;
 @group(0) @binding(2) var shadowTex  : texture_depth_2d;
@@ -206,10 +460,16 @@ struct DrawU {
 @group(0) @binding(6) var ssrTex  : texture_2d<f32>;
 @group(0) @binding(7) var blockerTex : texture_2d<f32>;      // PCSS-lite min-depth blocker map (512², r16float)
 @group(0) @binding(8) var carShadowTex : texture_depth_2d;   // per-frame car-only shadow map (shares shadowSamp)
+@group(0) @binding(9) var matAlbedoTex : texture_2d_array<f32>;
+@group(0) @binding(10) var matNormalTex : texture_2d_array<f32>;
+@group(0) @binding(11) var matSamp : sampler;
+@group(0) @binding(12) var lampShadowTex : texture_depth_2d;
+@group(0) @binding(13) var<uniform> MatS : MatScaleU;
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${hash}
 ${vnoise}
 ${brdf}
+${matLib}
 
 // Drifting cloud-shadow dapple (GLX parity, js/render/shaders/lit.js
 // cloudFBM/cloudShadow): FBM sampled where the sun ray through the receiver
@@ -249,6 +509,7 @@ struct VSOut {
   @location(2)       wpos  : vec3<f32>,
   @location(3)       dist  : f32,
   @location(4) @interpolate(flat) matId : f32,
+  @location(5)       trk   : vec3<f32>,
 };
 
 @vertex
@@ -257,16 +518,29 @@ fn vs_main(
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
   @location(3) aMat : f32,
+  @location(4) aTrk : vec3<f32>,
+  @location(5) aInst0 : vec4<f32>,
+  @location(6) aInst1 : vec4<f32>,
+  @location(7) aInst2 : vec4<f32>,
+  @location(8) aInst3 : vec4<f32>,
+  @location(9) aInstColor : vec3<f32>,
 ) -> VSOut {
   var o : VSOut;
-  let wp = D.model * vec4<f32>(aPos, 1.0);
+  var model = D.model;
+  var col = aCol;
+  if (D.mat2.y > 0.5) {
+    model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
+    col = aCol * aInstColor;
+  }
+  let wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
-  let nm = mat3x3<f32>(D.model[0].xyz, D.model[1].xyz, D.model[2].xyz);
+  let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
   o.nrm  = nm * aNrm;
-  o.col  = aCol;
+  o.col  = col;
   o.wpos = wp.xyz;
   o.dist = length(wp.xyz - F.eye.xyz);
   o.matId = aMat;               // flat — procedural material key (Phase 4)
+  o.trk = aTrk;
   o.clip = F.viewProj * wp;
   return o;
 }
@@ -277,6 +551,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
+  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos);
 
   // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
   //    DrawU/FrameU fields; a 0 value makes each block below a no-op so existing
@@ -389,6 +664,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (emissiveSurface) { rough = max(rough, 0.32); }
     if (panelSurface) { rough = max(rough, 0.72); }
   }
+  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm);
+  roadMarkings(&albedo, &rough, in.trk);
 
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js,
   // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
@@ -474,24 +751,34 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
       let aDist = distance(in.wpos, F.shadowCtr.xyz);
       let near = aDist < shRange * 0.80;
-      var pcfStep = F.params2.z;
+      let boxK = min(1.0, 80.0 / shRange);
+      var R = 3.0;
       if (near && F.params4.x > 0.0) {
-        let boxK = min(1.0, 64.0 / F.shadowCtr.w);
         let bt = (1.5 / 512.0) * boxK;
         let zb = findBlocker(suv, bt);
-        let pen = clamp((refD - zb) * (F.params4.x * 266.666), 0.0, 1.0);
-        pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0) * pen);
+        let pen = clamp((refD - zb) * F.params4.x, 0.0, 1.0);
+        R = mix(1.5, 6.0, pen);
+      }
+      let ign = ignoise(floor(suv / max(F.params2.z, 1e-6)));
+      let ang = ign * 6.2831853;
+      let cr = cos(ang); let sr = sin(ang);
+      let k = F.params2.z * R * boxK;
+      let rot0 = vec2<f32>(cr, -sr) * k;
+      let rot1 = vec2<f32>(sr, cr) * k;
+      var s = textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.94201624 + rot1 * -0.39906216, refD)
+            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.94558609 + rot1 * -0.76890725, refD)
+            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.09418410 + rot1 * -0.92938870, refD)
+            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.34495938 + rot1 *  0.29387760, refD);
+      var sh : f32;
+      if (near) {
+        s = s + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.91588581 + rot1 *  0.45771432, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.81544232 + rot1 * -0.87912464, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.38277543 + rot1 *  0.27676845, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.97484398 + rot1 *  0.75648379, refD);
+        sh = s * 0.125;
       } else {
-        pcfStep = F.params2.z * (1.0 + max(F.params4.x, 0.0));
+        sh = s * 0.25;
       }
-      var s = 0.0;
-      for (var oy = -1; oy <= 1; oy = oy + 1) {
-        for (var ox = -1; ox <= 1; ox = ox + 1) {
-          s = s + textureSampleCompareLevel(shadowTex, shadowSamp,
-                    suv + vec2<f32>(f32(ox), f32(oy)) * pcfStep, refD);
-        }
-      }
-      var sh = s / 9.0;
       // Dynamic CAR shadows (GLX parity): min-combine the per-frame car-only
       // map — cars can't live in the snap-cached static map, so without this
       // they cast nothing. Same slope/constant bias; params6.y arms it only on
@@ -583,7 +870,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var envCol : vec3<f32>;
     var strength : f32;
     if (envProbeStr > 0.001) {
-      envCol = textureSampleLevel(envCube, envSamp, R, 0.0).rgb;
+      let maxLod = f32(textureNumLevels(envCube) - 1u);
+      envCol = textureSampleLevel(envCube, envSamp, R, rough * maxLod).rgb;
       strength = envProbeStr;
     } else {
       let skyRT = pow(max(R.y, 1e-4), 0.40);
@@ -624,7 +912,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/shaders/lit.js)
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
-    color = color + albedo * lcol * (att * spotD) * NoLl * (1.0 - metalness);
+    var lampSh = 1.0;
+    if (F.params8.y > 0.5 && i == i32(F.params8.z) && NoLl > 0.0) {
+      let lpc = F.lampLightVP * vec4<f32>(in.wpos, 1.0);
+      if (lpc.w > 0.0) {
+        let lps = lpc.xyz / lpc.w;
+        let luv = vec2<f32>(lps.x * 0.5 + 0.5, 0.5 - lps.y * 0.5);
+        if (luv.x > 0.002 && luv.x < 0.998 && luv.y > 0.002 && luv.y < 0.998 && lps.z < 1.0) {
+          let lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
+          let lpt = 1.5 / 512.0;
+          lampSh = ( textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt, -lpt), lpz)
+                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt, -lpt), lpz)
+                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt,  lpt), lpz)
+                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt,  lpt), lpz) ) * 0.25;
+        }
+      }
+    }
+    color = color + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness);
     // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
     // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
     // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
@@ -750,16 +1054,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fTint = F.params3.y;
   fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
   // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
-  // glows around the lamps at night (mirrors GLX LIT_FS js/render/shaders/lit.js, reduced:
-  // fixed soft-clip, no uLampFog knob). lampFog is 0 with no lamps, so it is a no-op
-  // by day; the mix by fAmt gates it so clear near air gets no halo.
-  let lf = lampFog * 0.6;
+  // glows around the lamps at night (mirrors GLX LIT_FS; F.params8.x = uLampFog).
+  var lampFogC = vec3<f32>(0.0);
+  if (F.params8.x > 0.0) {
+    let lf = lampFog * F.params8.x;
   // FOG LAMP CLIP knob (F.params7.x = uLampFogClip, def 0.7; GLX js/render/shaders/lit.js):
   // scales the soft-clip denominator so a lamp cluster can never push the fog wall
   // past the night bloom threshold into a white wash. lampFogC is reused by the
   // ground-mist glow below, so the knob shapes both halos.
-  let lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * F.params7.x);
-  fogCol = fogCol + lampFogC;
+    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * F.params7.x);
+    fogCol = fogCol + lampFogC;
+  }
   color = mix(color, fogCol, fAmt);
 
   // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
@@ -780,7 +1085,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
   }
 
-  return vec4<f32>(color, alpha);
+  return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
 }`;
 
   // ── SHADOW: depth-only sun-shadow caster pass (Phase 3). Vertex-only pipeline
@@ -793,8 +1098,16 @@ struct ShadowModel { model : mat4x4<f32> };
 @group(0) @binding(0) var<uniform> S : ShadowU;
 @group(1) @binding(0) var<uniform> M : ShadowModel;
 @vertex
-fn vs_main(@location(0) aPos : vec3<f32>) -> @builtin(position) vec4<f32> {
-  return S.lightVP * (M.model * vec4<f32>(aPos, 1.0));
+fn vs_main(@location(0) aPos : vec3<f32>,
+           @location(1) aInst0 : vec4<f32>,
+           @location(2) aInst1 : vec4<f32>,
+           @location(3) aInst2 : vec4<f32>,
+           @location(4) aInst3 : vec4<f32>) -> @builtin(position) vec4<f32> {
+  var model = M.model;
+  if (M.model[3].w < 0.5) {
+    model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
+  }
+  return S.lightVP * (model * vec4<f32>(aPos, 1.0));
 }`;
 
   // ── BLIT: the present() resolve. Samples the RGBA16F scene target, applies
@@ -1090,13 +1403,28 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 224,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 464,   // FrameU (Phase 3: +lightVP +params2; tune: +params3; Phase 4: +params4..params6; +shadowCtr +carLightVP; +params7 GLX-parity lit knobs)
+        FRAME_UNIFORM_BYTES: 544,   // FrameU + lampLightVP + params8 (lampFog / lamp shadow / matTexMix)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 32,
     DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
+    DEPTH_RESOLVE: `
+@group(0) @binding(0) var src : texture_depth_multisampled_2d;
+struct DROut { @builtin(position) clip : vec4<f32> };
+@vertex
+fn vs_main(@builtin(vertex_index) vi : u32) -> DROut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  var o : DROut;
+  o.clip = vec4<f32>(p[vi], 0.0, 1.0);
+  return o;
+}
+@fragment
+fn fs_main(@builtin(position) pos : vec4<f32>) -> @builtin(frag_depth) f32 {
+  let c = vec2<i32>(pos.xy);
+  return min(textureLoad(src, c, 0), textureLoad(src, c, 1));
+}`,
   };
 })();
 

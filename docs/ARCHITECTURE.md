@@ -223,31 +223,29 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
 | `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; frozen (no new work). Unfreeze recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
 that writes the key and reloads. The eventual flip of the default and the
 deletion of GLX/WGX is "Phase D" — future work, out of scope here.
 
-**WGX is not at parity with GLX, and never reached it.** Do not assume a GLX
-feature exists there. The reduced/absent set (verified 2026-08; recipes in
-[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)):
+**WGX is opt-in and aims at the GLX draw-API surface.** Do not assume a GLX
+feature exists there until you have read the backend object — a missing name
+must stay an explicit `undefined` so game.js does not inherit a dead GLX
+function. The 2026-08 parity pass (recipes in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)) landed:
 
-- lamp-fog / post **volumetrics** (ground-mist *lit* block is ported; god-ray
-  is screen-radial, not the GLX world-space march)
-- **PCSS** quality (blocker map exists; kernel is 3×3, not Poisson-8)
-- **MSAA stays at 1** (color `resolveTarget` is core; depth resolve is not —
-  SSAO needs a manual MS-depth resolve)
-- **no `gpuTimer`** (`__apex.gpuTimer()` reports unsupported;
-  `"timestamp-query"` is the bit)
-- no baked material arrays (`createTextureArray`) — `matTexMix` is inert
-- no lamp shadows, instancing family, or `drawParticles` (all explicit
-  `undefined` on the backend object)
-- env probe sampled at LOD 0 (WebGPU has no `generateMipmap`)
+- `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
+- baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
+- lamp shadows, instancing family, `drawParticles`
+- Poisson-8 PCSS + far 4-tap, tunable lamp-fog, world-space god-ray + lamp vol
+- MSAA 2× (color `resolveTarget` + manual MS-depth resolve for SSAO)
+- env-probe / 2d / array mip chains (blit; WebGPU has no `generateMipmap`)
+- `applyMaterial*` / `roadMarkings` / heat haze / car-paint SSR scene-alpha tag
+- SSAO denoise + god-ray separable 5-tap blur (GLX `BLUR_FS`)
 
-This list was previously buried in a phase-notes build log; it is a live
-caveat about shipped code, so it lives here now.
+GLX stays the default. Nothing here flips that.
 
 **TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +

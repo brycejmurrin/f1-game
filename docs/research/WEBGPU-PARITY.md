@@ -4,8 +4,10 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 + `js/render/shaders/` + `js/render/glx/`) and the opt-in native WebGPU backend
 (`js/render/webgpu/wgx.js` + `wgsl-*.js`).
 
-**This is a recipe book, not a freeze-lift.** WGX stays opt-in
-(`apex26.gfxBackend=webgpu`); GLX stays the default. Nothing here flips that.
+**Status (2026-08): the gap inventory in §3 is implemented** in
+`js/render/webgpu/wgx.js` + `wgsl-*.js`. This file stays as the recipe book
+and the sharp-edge list. WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX
+stays the default. Nothing here flips that.
 The platform assumption that justified the freeze — "Safari cannot run WebGPU"
 — has moved; the *shader-duplication* cost has not. See
 [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 for the support
@@ -46,7 +48,7 @@ Do not re-port these. They are the Phase 2–4b ceiling:
 - LIT into `rgba16float` + `depth24plus`; FRAME UBO + 32-light storage buffer
 - Sun + car shadow maps, comparison-sampler PCF, 512² `r16float` blocker map
 - Sky, chunked cull, env-probe cube (LOD 0), road-only SSR pass
-- Post: SSAO, screen-radial god-ray, bloom mip chain, ACES composite, FXAA
+- Post: SSAO + separable denoise, world-space god-ray + lamp vol + separable blur, bloom mip chain, ACES composite, FXAA
 - Composite image FX: chromatic aberration, sharpen, speed blur, grain, flare
 - FX into the open lit pass: blob shadow, skid, glow, decal
 - Boot self-test + pixel readback; any proven failure returns `null` → GLX
@@ -66,23 +68,23 @@ surface is larger — several GLX features landed after WGX was frozen.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
-| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 1` | Plumbing | Color: `resolveTarget`. Depth: manual `textureLoad` of `texture_depth_multisampled_2d` |
-| **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Blocker search + **fixed 3×3**; `pcss()` always `true` | Shader | Already have `textureSampleCompareLevel` + `blockerTex` |
-| **Lamp-fog** | Tunable `uLampFog` | Accumulates, then hard `× 0.6` | Shader + uniform | One FRAME lane |
+| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 2` (1 on mobile); color `resolveTarget` + manual MS-depth resolve | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
+| **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
-| **God-ray / lamp vol** | World-space march through depth + sun/lamp shadow maps; separable blur | 8-tap **screen-radial** toward sun UV; no depth/shadow/lamp; no blur | Shader + binds | Same textures WGX already owns |
-| **gpuTimer** | `EXT_disjoint_timer_query_webgl2` | `undefined` | API | `"timestamp-query"` + `timestampWrites` |
-| **Baked MAT arrays** | `TEXTURE_2D_ARRAY` + mips + aniso; `matTexMix` ships 1.0 | `createTextureArray` / `setMaterialMaps` `undefined` | API + shader | `texture_2d_array<f32>` + blit mip chain |
-| **Env probe mips** | `generateMipmap` after the 6-face cycle; roughness LOD | Sampled at LOD 0 | Helper | Same mip-gen blit as arrays |
-| **Lamp shadows** | 512² spot map + 4-tap PCF in lit + god-ray | `lampShadowBegin/End` `undefined` | API | Clone of the existing sun depth pass |
-| **Instancing** | Full family; `TrackGraph.batches()` consumer | Whole family `undefined` | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
-| **Particles** | `drawParticles` | `undefined` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
-| **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Deferred in WGSL header | Shader | No new API |
-| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Vertex stride 40, no `trk` | Layout + shader | Extra `float32x3` attribute |
-| **Heat haze** | Composite `uHaze*` | Absent | Shader | Composite uniform |
-| **SSR car-paint** | Scene `.a` tag in composite | Road-only, separate pass | Shader | Restore the `.a` path or a second consume |
-| **SSAO denoise** | Separable blur | Single pass | Shader | Reuse the existing blur pipeline |
-| **`createTexture` mips** | `gl.generateMipmap` | Upload only | Helper | Same blit as arrays |
+| **God-ray / lamp vol** | World-space march through depth + sun/lamp shadow maps; separable blur | World-space 16-step march + double separable blur | Shader + binds | Same textures WGX already owns |
+| **gpuTimer** | `EXT_disjoint_timer_query_webgl2` | `gpuTimer` / `gpuMs`; `"timestamp-query"` when the adapter has it | API | `"timestamp-query"` + `timestampWrites` |
+| **Baked MAT arrays** | `TEXTURE_2D_ARRAY` + mips + aniso; `matTexMix` ships 1.0 | `createTextureArray` / `setMaterialMaps` / `materialMapState` | API + shader | `texture_2d_array<f32>` + blit mip chain |
+| **Env probe mips** | `generateMipmap` after the 6-face cycle; roughness LOD | Mip blit after the 6-face cycle; `textureSampleLevel(..., rough * maxLod)` | Helper | Same mip-gen blit as arrays |
+| **Lamp shadows** | 512² spot map + 4-tap PCF in lit + god-ray | `lampShadowBegin/End` + 4-tap PCF | API | Clone of the existing sun depth pass |
+| **Instancing** | Full family; `TrackGraph.batches()` consumer | Full family (`createInstancedBatch` … `castShadowInstanced`) | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
+| **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
+| **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Ported (`applyMaterial` / `applyMaterialNormal`) | Shader | No new API |
+| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Vertex stride 52 + `aTrk` + `roadMarkings()` | Layout + shader | Extra `float32x3` attribute |
+| **Heat haze** | Composite `uHaze*` | Composite `dirtFx.yzw` + time | Shader | Composite uniform |
+| **SSR car-paint** | Scene `.a` tag in composite | Scene alpha tags car-paint (`select(alpha, 0.35, …)`) | Shader | Restore the `.a` path |
+| **SSAO denoise** | Separable blur | Shared 5-tap `BLUR` (H then V) | Shader | Same kernel as GLX `BLUR_FS` |
+| **`createTexture` mips** | `gl.generateMipmap` | `_generateMips` blit chain | Helper | Same blit as arrays |
 
 Honest `pcss()`: once the Poisson kernel lands, keep returning `true`. Until
 then the current always-`true` over-claims quality versus GLX.

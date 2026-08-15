@@ -50,10 +50,11 @@ Three kinds of docs live here.
 `js/render/webgpu/*` is **DEFERRED** — no `<script>` tag; `js/game.js` injects it
 at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
 
-**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX never
-reached parity with GLX (no volumetrics, MSAA 1, no `gpuTimer`, no baked
-material arrays). The recipes to close those gaps — and the post-freeze GLX
-features WGX never grew (lamp shadows, instancing, particles) — are in
+**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX stays
+opt-in (`apex26.gfxBackend=webgpu`) with GLX as the default. The 2026-08
+parity pass closed the documented gaps (gpuTimer, texture arrays, lamp
+shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial).
+Recipes and remaining sharp edges live in
 [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). The six
 phase/migration build logs are provenance and live in
 [`archive/webgpu/`](archive/webgpu/).

@@ -49,22 +49,11 @@
  *     with draw()/drawSky() exactly as game.js expects. createTexMesh/createTexture
  *     are real (GPUTexture upload) so decals have an atlas.
  *
- * WHAT IS STILL STUBBED/REDUCED (tagged inline):
- *   - MSAA: msaa() stays 1 (a multisampled scene + resolve needs a sampleable
- *     single-sample depth for SSAO — depth resolve is not in core WebGPU; see
- *     docs/archive/webgpu/WEBGPU-PHASE4-NOTES.md).
- *   - Env probe: FULLY WIRED (envFaceBegin/End render a real RGBA16F cube one face/
- *     frame; Block 7 samples it once a 6-face cycle completes). Default reflection is
- *     still the cheap ANALYTIC sky gradient (carReflect); the real cube only kicks in
- *     when the CAR ENV REFLECTION tuner (carEnvCube) is turned up. No mip chain — the
- *     probe is sampled at LOD 0 (WebGPU has no generateMipmap; the paint is glossy).
- *   - Instancing (Phase 5) needs game.js to supply instance data (out of scope).
- *   - The GLX methods with NO WGX counterpart are listed, as explicit
- *     `undefined`, at the bottom of the returned object — see the comment there.
- *     They MUST stay listed: game.js installs this backend by copying its
- *     property descriptors onto GLX, so anything omitted here silently inherits
- *     GLX's implementation and runs against a WebGL context that was never
- *     initialised.
+ * PARITY (2026-08): gpuTimer, createTextureArray/matTexMix, generateMips (env +
+ *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 2× with
+ *   manual depth resolve, Poisson PCSS, world-space god-ray, applyMaterial*,
+ *   road markings, heat haze, SSAO/god-ray separable blur. See
+ *   docs/research/WEBGPU-PARITY.md.
  *
  * BOOT SELF-TEST (see _selfTest at the end of create()): WebGPU reports a bad
  * shader or pipeline ASYNCHRONOUSLY — createRenderPipeline() returns a
@@ -163,20 +152,46 @@ const WGX = (function () {
   // NB: unlike GLX (which keeps mat-less meshes at stride 36), WGX ALWAYS stores
   // the 10th float (mat, default 0) so a single pipeline vertex layout serves
   // every mesh — the shader declares @location(3) unconditionally.
+  const VERTEX_STRIDE = 52;   // pos3 nrm3 col3 mat1 trk3
   const VERTEX_LAYOUT = {
-    arrayStride: 40,
+    arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
       { shaderLocation: 3, offset: 36, format: "float32" },
+      { shaderLocation: 4, offset: 40, format: "float32x3" },
     ],
   };
-  // Shadow pass consumes only position (location 0) from the same interleaved VBO.
+  const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
+  const INSTANCE_LAYOUT = {
+    arrayStride: INSTANCE_STRIDE,
+    stepMode: "instance",
+    attributes: [
+      { shaderLocation: 5, offset: 0,  format: "float32x4" },
+      { shaderLocation: 6, offset: 16, format: "float32x4" },
+      { shaderLocation: 7, offset: 32, format: "float32x4" },
+      { shaderLocation: 8, offset: 48, format: "float32x4" },
+      { shaderLocation: 9, offset: 64, format: "float32x3" },
+    ],
+  };
   const SHADOW_VERTEX_LAYOUT = {
-    arrayStride: 40,
+    arrayStride: VERTEX_STRIDE,
     attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
   };
+  const SHADOW_INSTANCE_LAYOUT = {
+    arrayStride: INSTANCE_STRIDE,
+    stepMode: "instance",
+    attributes: [
+      { shaderLocation: 1, offset: 0,  format: "float32x4" },
+      { shaderLocation: 2, offset: 16, format: "float32x4" },
+      { shaderLocation: 3, offset: 32, format: "float32x4" },
+      { shaderLocation: 4, offset: 48, format: "float32x4" },
+    ],
+  };
+  const MAT_TEX_LAYERS = 17;
+  const LAMP_SHADOW_SIZE = 512;
+  const MSAA_COUNT = MOBILE_TIER ? 1 : 2;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -255,8 +270,10 @@ const WGX = (function () {
     try {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
       if (!adapter) return _fail("no adapter");
-      device = await adapter.requestDevice();
+      const _canTimestamp = !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
+      device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
       if (!device) return _fail("no device");
+      var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
     } catch (e) {
       return _fail("device request threw: " + ((e && e.message) || e));
     }
@@ -363,6 +380,21 @@ const WGX = (function () {
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0;
     const carShadowLVPData = new Float32Array(16);
+    let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
+    let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
+    const lampShadowLVPData = new Float32Array(16);
+    let matAlbedoView = null, matNormalView = null, matArraySamp = null;
+    let matScaleUBO = null, matScaleData = new Float32Array(20);
+    let _matAlbedoOn = false, _matNormalOn = false;
+    const _matScales = new Float32Array(MAT_TEX_LAYERS);
+    let _msaaCount = MSAA_COUNT, _passSamples = 1;
+    let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
+    let depthResolveTex = null, depthResolveView = null, pDepthResolve = null, depthResolveBG = null;
+    let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
+    let identInstanceBuf = null;
+    let pParticle = null, particleUBO = null, particleVBO = null, _particleCap = 0;
+    let skyPipelineMS = null, shadowPipelineInst = null;
+    let _fxPipes = { 1: {}, 2: {} };
 
     // Blocker map objects.
     let blockerTex = null, blockerView = null, blockerSampler = null;
@@ -387,14 +419,16 @@ const WGX = (function () {
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
     let _postReady = false, _fxReady = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
+        ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
         ldrTex = null, ldrView = null, ssrTex = null;
     let bloomLv = [];                 // [{tex, view, w, h}]
     let bloomDownUBO = [], bloomUpUBO = [], bloomDownBG = [], bloomUpBG = [];
-    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO, ssrUBO;
+    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO, ssrUBO, blurUBO;
     let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null;
-    let pBloomDown, pBloomUp, pSSAO, pGodray, pComposite, pFXAA, pointSampler, pSSR;
+    let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
+    let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pointSampler, pSSR;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
-    const postScratch = new Float32Array(64);
+    const postScratch = new Float32Array(80);
 
     // ── Phase-4 foreground FX (blob shadow / skid / glow / decal). ──
     let quadFxVBO = null, quadFxUBO = null, quadFxBG = null, fxQuadLayout = null;
@@ -484,6 +518,16 @@ const WGX = (function () {
             texture: { sampleType: "float" } },                          // blocker map (PCSS-lite)
           { binding: 8, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "depth" } },                          // per-frame car shadow map
+          { binding: 9, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float", viewDimension: "2d-array" } },
+          { binding: 10, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float", viewDimension: "2d-array" } },
+          { binding: 11, visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "filtering" } },
+          { binding: 12, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "depth" } },
+          { binding: 13, visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform" } },
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -521,6 +565,16 @@ const WGX = (function () {
         primitive: { topology: "triangle-list" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
       });
+      if (MSAA_COUNT > 1) {
+        skyPipelineMS = device.createRenderPipeline({
+          layout: "auto",
+          vertex: { module: skyModule, entryPoint: "vs_main" },
+          fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
+          primitive: { topology: "triangle-list" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+          multisample: { count: MSAA_COUNT },
+        });
+      }
       skyBindGroup = device.createBindGroup({
         layout: skyPipeline.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: skyUBO } }],
@@ -547,7 +601,7 @@ const WGX = (function () {
       shadowModule = device.createShaderModule({ code: WGSLChunks.SHADOW });
       shadowPipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({ bindGroupLayouts: [shadowG0Layout, shadowG1Layout] }),
-        vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT] },
+        vertex: { module: shadowModule, entryPoint: "vs_main", buffers: [SHADOW_VERTEX_LAYOUT, SHADOW_INSTANCE_LAYOUT] },
         // No fragment stage — depth-only. Slope-scaled bias fights shadow acne.
         // GLX renders the shadow depth with CULLING OFF ("render back faces to avoid
         // peter-panning" — js/render/glx/shadow.js, the CULL_FACE disable), so match that with cullMode:"none" — winding is
@@ -569,6 +623,38 @@ const WGX = (function () {
       carShadowG0BindGroup = device.createBindGroup({
         layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: carShadowUBO } }],
       });
+      lampShadowTex = device.createTexture({
+        size: [LAMP_SHADOW_SIZE, LAMP_SHADOW_SIZE], format: DEPTH_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      lampShadowView = lampShadowTex.createView();
+      lampShadowUBO = device.createBuffer({ size: WGSLChunks.SHADOW_LVP_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      lampShadowG0BindGroup = device.createBindGroup({
+        layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: lampShadowUBO } }],
+      });
+      const _matPlace = device.createTexture({
+        size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      matAlbedoView = _matPlace.createView({ dimension: "2d-array" });
+      matNormalView = matAlbedoView;
+      matArraySamp = device.createSampler({
+        magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
+        addressModeU: "repeat", addressModeV: "repeat",
+      });
+      matScaleUBO = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
+      const _ident = new Float32Array(20);
+      _ident[0] = _ident[5] = _ident[10] = _ident[15] = 1;
+      _ident[16] = _ident[17] = _ident[18] = 1;
+      identInstanceBuf = _mkBuffer(_ident, GPUBufferUsage.VERTEX);
+      if (_timestampOk) {
+        try {
+          _gpuQuerySet = device.createQuerySet({ type: "timestamp", count: 2 });
+          _gpuResolveBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+          _gpuReadBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        } catch (_) { _timestampOk = false; }
+      }
 
       // ── Blocker downsample pipeline ──
       blockerUBO = device.createBuffer({
@@ -601,6 +687,19 @@ const WGX = (function () {
           { binding: 2, resource: { buffer: blockerUBO } },
         ]
       });
+      if (MSAA_COUNT > 1 && _Chunks.DEPTH_RESOLVE) {
+        const drG0 = device.createBindGroupLayout({ entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth", multisampled: true } },
+        ] });
+        const drMod = device.createShaderModule({ code: _Chunks.DEPTH_RESOLVE });
+        pDepthResolve = device.createRenderPipeline({
+          layout: device.createPipelineLayout({ bindGroupLayouts: [drG0] }),
+          vertex: { module: drMod, entryPoint: "vs_main" },
+          fragment: { module: drMod, entryPoint: "fs_main", targets: [] },
+          primitive: { topology: "triangle-list" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "always" },
+        });
+      }
     } catch (e) {
       // Fall back to GLX on any pipeline/buffer build failure — but never
       // SILENTLY: this catch once hid a real init bug, and by the time create()
@@ -673,10 +772,32 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         }
-        pGodray    = fsPipe(_Post.GODRAY,     SCENE_FORMAT, null);
+        {
+          const grG0 = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "non-filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
+            { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+            { binding: 5, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+            { binding: 6, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
+          ] });
+          const grMod = device.createShaderModule({ code: _Post.GODRAY });
+          pGodray = device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [grG0] }),
+            vertex: { module: grMod, entryPoint: "vs_main" },
+            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
+            primitive: { topology: "triangle-list" },
+          });
+        }
+        if (_Post.BLUR) {
+          pBlur    = fsPipe(_Post.BLUR, SSAO_FORMAT,  null);
+          pBlurHDR = fsPipe(_Post.BLUR, SCENE_FORMAT, null);
+        }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
+        blurUBO      = device.createBuffer({ size: _Post.BLUR_UNIFORM_BYTES,      usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
@@ -702,6 +823,7 @@ const WGX = (function () {
         quadFxUBO = device.createBuffer({ size: FX_QUAD_SLOTS * FX_STRIDE, usage: _UCD });
         quadFxBG = device.createBindGroup({ layout: fxQuadLayout,
           entries: [{ binding: 0, resource: { buffer: quadFxUBO, offset: 0, size: _Fx.BLOB_SHADOW_UNIFORM_BYTES } }] });
+        const _fxMS = MSAA_COUNT > 1 ? { multisample: { count: MSAA_COUNT } } : {};
         const stampPipe = (code) => {
           const mod = device.createShaderModule({ code });
           return device.createRenderPipeline({
@@ -712,6 +834,7 @@ const WGX = (function () {
             // Coplanar road decals: bias toward the camera (GL polygonOffset(-4,-8)).
             depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
               depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+            ..._fxMS,
           });
         };
         pBlob = stampPipe(_Fx.BLOB_SHADOW);
@@ -731,6 +854,7 @@ const WGX = (function () {
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
             depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+          ..._fxMS,
         });
         skidUBO = device.createBuffer({ size: _Fx.SKID_UNIFORM_BYTES, usage: _UCD });
         skidFxBG = device.createBindGroup({ layout: pSkid.getBindGroupLayout(0),
@@ -750,6 +874,7 @@ const WGX = (function () {
           fragment: { module: glowMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },   // no bias
+          ..._fxMS,
         });
         glowUBO = device.createBuffer({ size: _Fx.GLOW_UNIFORM_BYTES, usage: _UCD });
         glowFxBG = device.createBindGroup({ layout: pGlow.getBindGroupLayout(0),
@@ -776,8 +901,28 @@ const WGX = (function () {
           fragment: { module: decalMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
+          ..._fxMS,
         });
         decalUBO = device.createBuffer({ size: FX_DECAL_SLOTS * FX_STRIDE, usage: _UCD });
+        if (_Fx.PARTICLE) {
+          const pMod = device.createShaderModule({ code: _Fx.PARTICLE });
+          pParticle = device.createRenderPipeline({
+            layout: "auto",
+            vertex: { module: pMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.PARTICLE_VERTEX_BYTES,
+              attributes: [
+                { shaderLocation: 0, offset: 0,  format: "float32x2" },
+                { shaderLocation: 1, offset: 8,  format: "float32x3" },
+                { shaderLocation: 2, offset: 20, format: "float32x3" },
+                { shaderLocation: 3, offset: 32, format: "float32" },
+                { shaderLocation: 4, offset: 36, format: "float32" },
+              ] }] },
+            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+            primitive: { topology: "triangle-list", cullMode: "none" },
+            depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
+            ..._fxMS,
+          });
+          particleUBO = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
+        }
         _fxReady = true;
       } catch (_) { _fxReady = false; }
     }
@@ -789,7 +934,8 @@ const WGX = (function () {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
-      const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0);
+      const samples = _passSamples | 0 || 1;
+      const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -804,7 +950,7 @@ const WGX = (function () {
       };
       p = device.createRenderPipeline({
         layout: litLayout,
-        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT] },
+        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
         // GLX default: CCW front, cull back. But WebGPU flips NDC-Y → framebuffer-Y
         // relative to WebGL (framebuffer origin is top-left, y-down), which REVERSES
@@ -820,6 +966,7 @@ const WGX = (function () {
         // texture as a solid wall for the SSAO/SSR post passes.
         primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
         depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal" },
+        multisample: { count: samples },
       });
       _litPipelines.set(key, p);
       return p;
@@ -859,6 +1006,11 @@ const WGX = (function () {
           { binding: 6, resource: nextSsrView },
           { binding: 7, resource: blockerView },
           { binding: 8, resource: carShadowView },
+          { binding: 9, resource: matAlbedoView },
+          { binding: 10, resource: matNormalView },
+          { binding: 11, resource: matArraySamp },
+          { binding: 12, resource: lampShadowView },
+          { binding: 13, resource: { buffer: matScaleUBO } },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -879,7 +1031,8 @@ const WGX = (function () {
 
     function _destroyTargetSet(t) {
       if (!t) return;
-      const textures = [t.sceneTex, t.depthTex, t.ssaoTex, t.godrayTex, t.ldrTex, t.ssrTex];
+      const textures = [t.sceneTex, t.depthTex, t.ssaoTex, t.godrayTex, t.ldrTex, t.ssrTex,
+        t.ssaoBlurTex, t.godrayBlurTex, t.sceneMSTex, t.depthMSTex];
       for (let i = 0; i < textures.length; i++) if (textures[i]) textures[i].destroy();
       const levels = t.bloomLv || [];
       for (let i = 0; i < levels.length; i++) levels[i].tex.destroy();
@@ -908,6 +1061,16 @@ const WGX = (function () {
         next.sceneView = next.sceneTex.createView();
         next.depthView = next.depthTex.createView();
         next.depthSampleView = next.depthTex.createView({ aspect: "depth-only" });
+        if (_msaaCount > 1) {
+          next.sceneMSTex = device.createTexture({
+            size: [width, height], format: SCENE_FORMAT, sampleCount: _msaaCount,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT });
+          next.depthMSTex = device.createTexture({
+            size: [width, height], format: DEPTH_FORMAT, sampleCount: _msaaCount,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.sceneMSView = next.sceneMSTex.createView();
+          next.depthMSView = next.depthMSTex.createView();
+        }
         next.blitBindGroup = device.createBindGroup({
           layout: blitPipeline.getBindGroupLayout(0),
           entries: [
@@ -924,12 +1087,18 @@ const WGX = (function () {
         } else {
           next.ssaoTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.ssaoBlurTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          next.godrayBlurTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ssaoView = next.ssaoTex.createView();
+          next.ssaoBlurView = next.ssaoBlurTex.createView();
           next.godrayView = next.godrayTex.createView();
+          next.godrayBlurView = next.godrayBlurTex.createView();
           next.ldrView = next.ldrTex.createView();
           next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -980,12 +1149,48 @@ const WGX = (function () {
               { binding: 2, resource: { buffer: ssaoUBO } },
             ],
           });
+          next.ssaoBlurSrcBG = device.createBindGroup({
+            layout: pBlur.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.ssaoView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: blurUBO } },
+            ],
+          });
+          next.ssaoBlurDstBG = device.createBindGroup({
+            layout: pBlur.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.ssaoBlurView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: blurUBO } },
+            ],
+          });
+          next.godrayBlurSrcBG = device.createBindGroup({
+            layout: pBlurHDR.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.godrayView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: blurUBO } },
+            ],
+          });
+          next.godrayBlurDstBG = device.createBindGroup({
+            layout: pBlurHDR.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: next.godrayBlurView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: blurUBO } },
+            ],
+          });
           next.godrayBG = device.createBindGroup({
             layout: pGodray.getBindGroupLayout(0),
             entries: [
-              { binding: 0, resource: next.sceneView },
-              { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: godrayUBO } },
+              { binding: 0, resource: next.depthSampleView },
+              { binding: 1, resource: pointSampler },
+              { binding: 2, resource: shadowView },
+              { binding: 3, resource: shadowSampler },
+              { binding: 4, resource: lampShadowView },
+              { binding: 5, resource: { buffer: godrayUBO } },
+              { binding: 6, resource: { buffer: lightSBO } },
             ],
           });
           next.compositeBG = device.createBindGroup({
@@ -1032,17 +1237,23 @@ const WGX = (function () {
       }
 
       const old = { sceneTex, depthTex, ssaoTex, godrayTex, ldrTex, ssrTex,
-        bloomLv, bloomDownUBO, bloomUpUBO };
+        ssaoBlurTex, godrayBlurTex, bloomLv, bloomDownUBO, bloomUpUBO, sceneMSTex, depthMSTex };
       sceneTex = next.sceneTex; depthTex = next.depthTex;
+      sceneMSTex = next.sceneMSTex || null; depthMSTex = next.depthMSTex || null;
+      sceneMSView = next.sceneMSView || null; depthMSView = next.depthMSView || null;
       sceneView = next.sceneView; depthView = next.depthView;
       depthSampleView = next.depthSampleView; blitBindGroup = next.blitBindGroup;
       ssaoTex = next.ssaoTex || null; godrayTex = next.godrayTex || null;
+      ssaoBlurTex = next.ssaoBlurTex || null; godrayBlurTex = next.godrayBlurTex || null;
       ldrTex = next.ldrTex || null; ssrTex = next.ssrTex || null;
       ssaoView = next.ssaoView || null; godrayView = next.godrayView || null;
+      ssaoBlurView = next.ssaoBlurView || null; godrayBlurView = next.godrayBlurView || null;
       ldrView = next.ldrView || null; ssrView = next.ssrView || ssrView;
       bloomLv = next.bloomLv; bloomDownUBO = next.bloomDownUBO;
       bloomUpUBO = next.bloomUpUBO; bloomDownBG = next.bloomDownBG;
       bloomUpBG = next.bloomUpBG; ssaoBG = next.ssaoBG || null;
+      ssaoBlurSrcBG = next.ssaoBlurSrcBG || null; ssaoBlurDstBG = next.ssaoBlurDstBG || null;
+      godrayBlurSrcBG = next.godrayBlurSrcBG || null; godrayBlurDstBG = next.godrayBlurDstBG || null;
       godrayBG = next.godrayBG || null; compositeBG = next.compositeBG || null;
       fxaaBG = next.fxaaBG || null; ssrBG = next.ssrBG || null;
       if (next.frameGroups) {
@@ -1066,6 +1277,60 @@ const WGX = (function () {
       return buf;
     }
 
+    const _mipPipes = new Map();
+    let _mipSamp = null;
+    function _generateMips(tex, layers) {
+      if (!tex || !device) return;
+      const w0 = tex.width | 0, h0 = tex.height | 0;
+      const levels = tex.mipLevelCount | 0;
+      if (levels <= 1 || !w0) return;
+      const nLay = layers || 1;
+      try {
+        let pipe = _mipPipes.get(tex.format);
+        if (!pipe) {
+          const code = `
+@group(0) @binding(0) var src : texture_2d<f32>;
+@group(0) @binding(1) var samp : sampler;
+@vertex fn vs_main(@builtin(vertex_index) vi : u32) -> @builtin(position) vec4<f32> {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0,-1.0), vec2<f32>(3.0,-1.0), vec2<f32>(-1.0,3.0));
+  return vec4<f32>(p[vi], 0.0, 1.0);
+}
+@fragment fn fs_main(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
+  let dim = vec2<f32>(textureDimensions(src));
+  return textureSampleLevel(src, samp, pos.xy / dim, 0.0);
+}`;
+          const mod = device.createShaderModule({ code });
+          pipe = device.createRenderPipeline({
+            layout: "auto",
+            vertex: { module: mod, entryPoint: "vs_main" },
+            fragment: { module: mod, entryPoint: "fs_main", targets: [{ format: tex.format }] },
+            primitive: { topology: "triangle-list" },
+          });
+          _mipPipes.set(tex.format, pipe);
+          if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+        }
+        const enc = device.createCommandEncoder();
+        for (let layer = 0; layer < nLay; layer++) {
+          let w = w0, h = h0;
+          for (let level = 1; level < levels; level++) {
+            w = Math.max(1, w >> 1); h = Math.max(1, h >> 1);
+            const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+              baseMipLevel: level - 1, mipLevelCount: 1 });
+            const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+              baseMipLevel: level, mipLevelCount: 1 });
+            const bg = device.createBindGroup({
+              layout: pipe.getBindGroupLayout(0),
+              entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
+            });
+            const p = enc.beginRenderPass({ colorAttachments: [{ view: dstView, loadOp: "clear",
+              clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+            p.setPipeline(pipe); p.setBindGroup(0, bg); p.draw(3); p.end();
+          }
+        }
+        device.queue.submit([enc.finish()]);
+      } catch (_) {}
+    }
+
     // Interleave [pos3, nrm3, col3, mat1] -> stride-40 Float32Array + index array.
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
@@ -1078,13 +1343,15 @@ const WGX = (function () {
         idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
       }
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
-      const inter = new Float32Array(vCount * 10);
+      const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
+      const inter = new Float32Array(vCount * 13);
       for (let i = 0; i < vCount; i++) {
-        const o = i * 10;
+        const o = i * 13;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
         inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
         inter[o+9] = mat ? mat[i] : 0;
+        if (trk) { inter[o+10] = trk[i*3]; inter[o+11] = trk[i*3+1]; inter[o+12] = trk[i*3+2]; }
       }
       return { vert: inter, idx, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", count: idx.length };
     }
@@ -1238,8 +1505,9 @@ const WGX = (function () {
       try {
         const w = src ? (src.width | 0) : 0, h = src ? (src.height | 0) : 0;
         if (!w || !h) return { _wgx: "texture", _phase: 4 };
+        const mips = Math.floor(Math.log2(Math.max(w, h))) + 1;
         const tex = device.createTexture({
-          size: [w, h], format: "rgba8unorm",
+          size: [w, h], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         if (src instanceof Uint8Array || src instanceof Uint8ClampedArray) {
@@ -1247,6 +1515,7 @@ const WGX = (function () {
         } else {
           device.queue.copyExternalImageToTexture({ source: src, flipY: true }, { texture: tex }, [w, h]);
         }
+        _generateMips(tex, 1);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
       } catch (_) { return { _wgx: "texture", _phase: 4 }; }
     }
@@ -1367,7 +1636,7 @@ const WGX = (function () {
       // gave an ~81-texel (~10 m) box-blur that smeared every WebGPU shadow to a
       // wash. Remap to the shader's units so pcssPen=80 → the intended ~0.30 step
       // (≈1.3 texels), scaling with the knob and capped so it can't blow out again.
-      d[80] = Math.min(2.0, ((T && T.pcssPen != null) ? T.pcssPen : 80) * 0.00375);
+      d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
       d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
@@ -1417,6 +1686,11 @@ const WGX = (function () {
       d[113] = (T && T.carSunGlint != null) ? T.carSunGlint : 12.0;
       d[114] = (T && T.neonBoost != null) ? T.neonBoost : 0.6;
       d[115] = (T && T.lampNearClamp != null) ? T.lampNearClamp : 4.0;
+      d.set(_lampShadowArmed ? lampShadowLVPData : IDENT, 116);
+      d[132] = f.lampFog != null ? f.lampFog : 0;
+      d[133] = _lampShadowArmed ? 1 : 0;
+      d[134] = _lampIdx;
+      d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1502,23 +1776,30 @@ const WGX = (function () {
       _writeFrame(frame || {});
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       encoder = device.createCommandEncoder();
-      litPass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: sceneView,
-          clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
-          loadOp: "clear", storeOp: "store",
-        }],
+      _passSamples = (_msaaCount > 1 && sceneMSView) ? _msaaCount : 1;
+      const colorAtt = _passSamples > 1
+        ? { view: sceneMSView, resolveTarget: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+            loadOp: "clear", storeOp: "discard" }
+        : { view: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+            loadOp: "clear", storeOp: "store" };
+      const rp = {
+        colorAttachments: [colorAtt],
         depthStencilAttachment: {
-          view: depthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
+          view: _passSamples > 1 ? depthMSView : depthView,
+          depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
         },
-      });
+      };
+      if (_gpuTimerOn && _gpuQuerySet) {
+        rp.timestampWrites = { querySet: _gpuQuerySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+      }
+      litPass = encoder.beginRenderPass(rp);
       return true;
     }
 
     function drawSky(sky) {
       if (!litPass) return;
       _writeSky(sky || lastFrame || {});
-      litPass.setPipeline(skyPipeline);
+      litPass.setPipeline((_passSamples > 1 && skyPipelineMS) ? skyPipelineMS : skyPipeline);
       litPass.setBindGroup(0, skyBindGroup);
       litPass.draw(3, 1, 0, 0);
     }
@@ -1537,7 +1818,7 @@ const WGX = (function () {
       d[22] = o.clearcoat != null ? o.clearcoat : 0;
       d[23] = o.carPaint  != null ? o.carPaint  : 0;
       d[24] = o.sparkle   != null ? o.sparkle   : 1;
-      d[25] = 0; d[26] = 0; d[27] = 0;
+      d[25] = o._instanced ? 1 : 0; d[26] = 0; d[27] = 0;
       device.queue.writeBuffer(drawUBO, slot * DRAW_STRIDE, drawData, 0, DRAW_FLOATS);
     }
 
@@ -1551,6 +1832,7 @@ const WGX = (function () {
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       litPass.setVertexBuffer(0, mesh.vbuf);
+      litPass.setVertexBuffer(1, identInstanceBuf);
       litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
     }
@@ -1565,6 +1847,7 @@ const WGX = (function () {
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       litPass.setVertexBuffer(0, mesh.vbuf);
+      litPass.setVertexBuffer(1, identInstanceBuf);
       if (!mesh.chunks) {
         litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
         litPass.drawIndexed(mesh.count);
@@ -1608,6 +1891,26 @@ const WGX = (function () {
       }).end();
     }
 
+    // Separable 5-tap gaussian (GLX BLUR_FS). `times` = 1 for SSAO, 2 for god-ray.
+    function _blurSep(pipe, srcView, tmpView, srcBG, tmpBG, texX, texY, times) {
+      if (!pipe || !srcView || !tmpView || !srcBG || !tmpBG || !blurUBO) return;
+      const n = times || 1;
+      for (let i = 0; i < n; i++) {
+        const sx = (1 + i) * texX, sy = (1 + i) * texY;
+        const s = postScratch;
+        s[0] = sx; s[1] = 0; s[2] = 0; s[3] = 0;
+        device.queue.writeBuffer(blurUBO, 0, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        let p = encoder.beginRenderPass({ colorAttachments: [{ view: tmpView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pipe); p.setBindGroup(0, srcBG); p.draw(3, 1, 0, 0); p.end();
+        s[0] = 0; s[1] = sy;
+        device.queue.writeBuffer(blurUBO, 0, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        p = encoder.beginRenderPass({ colorAttachments: [{ view: srcView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pipe); p.setBindGroup(0, tmpBG); p.draw(3, 1, 0, 0); p.end();
+      }
+    }
+
     // ── Live env-cube probe ────────────────────────────────────────────────────
     // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
@@ -1616,14 +1919,16 @@ const WGX = (function () {
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
     function envInit() {
       if (envCubeTex) return;
+      const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
       envCubeTex = device.createTexture({
         size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
+        mipLevelCount: envMips,
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       envSampleView = envCubeTex.createView({ dimension: "cube" });
       envFaceViews = [];
       for (let f = 0; f < 6; f++)
-        envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1 }));
+        envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
       envDepthTex = device.createTexture({
         size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
@@ -1638,6 +1943,7 @@ const WGX = (function () {
     function envFaceBegin(face, eye, frame) {
       if (_lost || !skyPipeline) return null;
       if (!envCubeTex) envInit();
+      _passSamples = 1;
       const F = ENV_FACES[face];
       _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
       M4.lookAtTo(_envView, eye, _envTgt, F[1]);
@@ -1677,6 +1983,7 @@ const WGX = (function () {
         _envFacesMask = 0;
         if (!_envProbeLive) {
           _envProbeLive = true;
+          _generateMips(envCubeTex, 6);
           envCubeView = envSampleView;   // main frame group now mirrors the real world
           _rebuildFrameBG();
         }
@@ -1720,6 +2027,23 @@ const WGX = (function () {
       _carShadowArmed = false;
       if (_lost || !encoder) return;
       if (litPass) { litPass.end(); litPass = null; }
+      if (_passSamples > 1 && pDepthResolve && depthMSView && depthView) {
+        try {
+          depthResolveBG = device.createBindGroup({
+            layout: pDepthResolve.getBindGroupLayout(0),
+            entries: [{ binding: 0, resource: depthMSView }],
+          });
+          const dr = encoder.beginRenderPass({
+            colorAttachments: [],
+            depthStencilAttachment: { view: depthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+          });
+          dr.setPipeline(pDepthResolve);
+          dr.setBindGroup(0, depthResolveBG);
+          dr.draw(3);
+          dr.end();
+        } catch (_) {}
+      }
+      _passSamples = 1;
       const o = opts || {};
       // Capture the wet-road SSR strength GLX consumes as opts.reflect (game.js
       // po.reflect = _ssr). Stored for the NEXT frame's _writeFrame (params4.w),
@@ -1766,7 +2090,7 @@ const WGX = (function () {
       // ── 0) SSAO (half-res) into ssaoTex, or clear it to white when unavailable.
       const aoStr = o.ssao != null ? o.ssao : 0;
       const contact = (o.contact > 0 && frameSunVS) ? o.contact : 0;
-      const haveAO = frameHaveProj && ssaoBG && aoStr > 0;
+      const haveAO = frameHaveProj && ssaoBG && (aoStr > 0 || contact > 0);
       if (haveAO) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
@@ -1779,6 +2103,9 @@ const WGX = (function () {
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssaoView, loadOp: "clear",
           clearValue: { r: 1, g: 1, b: 1, a: 1 }, storeOp: "store" }] });
         p.setPipeline(pSSAO); p.setBindGroup(0, ssaoBG); p.draw(3, 1, 0, 0); p.end();
+        if (pBlur && ssaoBlurView && ssaoBlurSrcBG && ssaoBlurDstBG) {
+          _blurSep(pBlur, ssaoView, ssaoBlurView, ssaoBlurSrcBG, ssaoBlurDstBG, 1 / halfW, 1 / halfH, 1);
+        }
       } else {
         _clearTarget(ssaoView, 1, 1, 1);
       }
@@ -1786,21 +2113,44 @@ const WGX = (function () {
       // ── 1) GODRAY (half-res) — screen-space radial shafts toward the sun,
       //    reading the scene HDR as the bright source; else clear to black.
       const grStr = o.godray != null ? o.godray : 0;
-      const haveGR = godrayBG && grStr > 0 && sun && sun.onScreen && sun.shaft > 0;
+      const lampVol = o.lampVol != null ? o.lampVol : 0;
+      const haveGR = godrayBG && ((grStr > 0 && sun && sun.onScreen && sun.shaft > 0) || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
-        s[0] = sunUVx; s[1] = sunUVy; s[2] = grStr; s[3] = 1.1;   // radialScale
+        const invVP = lastFrame && lastFrame.invViewProj;
+        if (invVP && invVP.length >= 16) {
+          const tmp = new Float32Array(16);
+          tmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
+          _mul4(s.subarray(0, 16), tmp, Z01INV);
+        } else s.set(IDENT, 0);
+        s.set(_shadowRendered ? shadowLVPData : IDENT, 16);
+        s.set(_lampShadowArmed ? lampShadowLVPData : IDENT, 32);
+        const eye = frameEye || [0, 0, 0];
+        s[48] = eye[0]; s[49] = eye[1]; s[50] = eye[2]; s[51] = 0;
+        const sd = frameSunDir || [0.3, 0.6, 0.5];
+        s[52] = sd[0]; s[53] = sd[1]; s[54] = sd[2]; s[55] = 0;
         const sc = frameSunColor || [1, 0.95, 0.85];
-        // SUN-SHAFT REACH knob (per-tap radial-march falloff). Default 0.82 =
-        // GLX uShaftDecay def — the old hardcoded 0.85 was a latent WGX drift
-        // from the shipped GLX look (the WGSL struct doc already reads "e.g.
-        // 0.82"); honouring the knob aligns both backends.
-        s[4] = sc[0]; s[5] = sc[1]; s[6] = sc[2];
-        s[7] = (T && T.sunShaftDecay != null) ? T.sunShaftDecay : 0.82;   // per-step decay
+        s[56] = sc[0]; s[57] = sc[1]; s[58] = sc[2]; s[59] = 0;
+        s[60] = (sun && sun.shaft > 0) ? grStr : 0;
+        s[61] = lampVol;
+        s[62] = o.mist != null ? o.mist : 0;
+        s[63] = frameTime;
+        s[64] = lastFrame && lastFrame.cloud != null ? lastFrame.cloud : 0;
+        s[65] = lastFrame && lastFrame.cloudSpeed != null ? lastFrame.cloudSpeed : 1;
+        s[66] = (T && T.hgAniso != null) ? T.hgAniso : 0.60;
+        s[67] = (T && T.hgFloor != null) ? T.hgFloor : 0.020;
+        const nL = lastFrame && lastFrame.lights ? Math.min(6, (lastFrame.lights.length / 15) | 0) : 0;
+        s[68] = nL;
+        s[69] = _lampShadowArmed ? _lampIdx : -1;
+        s[70] = 0; s[71] = 0;
         device.queue.writeBuffer(godrayUBO, 0, s, 0, _Post.GODRAY_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: godrayView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
         p.setPipeline(pGodray); p.setBindGroup(0, godrayBG); p.draw(3, 1, 0, 0); p.end();
+        if (pBlurHDR && godrayBlurView && godrayBlurSrcBG && godrayBlurDstBG) {
+          _blurSep(pBlurHDR, godrayView, godrayBlurView, godrayBlurSrcBG, godrayBlurDstBG,
+            1 / halfW, 1 / halfH, 2);
+        }
       } else {
         _clearTarget(godrayView, 0, 0, 0);
       }
@@ -1900,7 +2250,10 @@ const WGX = (function () {
         // dirtFx (off 240): LENS DIRT (.x; GLX parity, def 0.15). Always packed —
         // the WGSL reads the lane directly (0 = clean lens is a real value).
         s[60] = (T && T.lensDirt != null) ? T.lensDirt : 0.15;
-        s[61] = 0; s[62] = 0; s[63] = 0;
+        const haze = o.haze || null;
+        s[61] = haze && haze.u != null ? haze.u : 0;
+        s[62] = haze && haze.v != null ? haze.v : 0;
+        s[63] = haze && haze.str != null ? haze.str : 0;
         device.queue.writeBuffer(compositeUBO, 0, s, 0, _Post.COMPOSITE_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ldrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -1917,7 +2270,24 @@ const WGX = (function () {
         p.setPipeline(pFXAA); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
       }
 
+      if (_gpuTimerOn && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState !== "pending") {
+        try {
+          encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
+          encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
+        } catch (_) {}
+      }
       device.queue.submit([encoder.finish()]);
+      if (_gpuTimerOn && _gpuReadBuf && typeof _gpuReadBuf.mapAsync === "function") {
+        try {
+          _gpuReadBuf.mapAsync(GPUMapMode.READ).then(function () {
+            try {
+              const t = new BigUint64Array(_gpuReadBuf.getMappedRange());
+              _gpuMs = Number(t[1] - t[0]) / 1e6;
+              _gpuReadBuf.unmap();
+            } catch (_) {}
+          });
+        } catch (_) {}
+      }
       encoder = null; currentView = null;
     }
 
@@ -1956,6 +2326,7 @@ const WGX = (function () {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
       shadowPass.setVertexBuffer(0, mesh.vbuf);
+      shadowPass.setVertexBuffer(1, identInstanceBuf);
       if (mesh.chunks) {   // a chunked mesh cast without cull — draw every chunk
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
@@ -1971,6 +2342,7 @@ const WGX = (function () {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
       shadowPass.setVertexBuffer(0, mesh.vbuf);
+      shadowPass.setVertexBuffer(1, identInstanceBuf);
       if (!mesh.chunks) { shadowPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat); shadowPass.drawIndexed(mesh.count); return; }
       const cull = !!_shadowLightVP;   // planes were extracted into _fcPlanes in shadowBegin
       for (let i = 0; i < mesh.chunks.length; i++) {
@@ -2031,6 +2403,224 @@ const WGX = (function () {
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
       _carShadowArmed = true;
+    }
+
+    function lampShadowBegin(lightVP, lightIdx) {
+      if (_lost || !lampShadowView || MOBILE_TIER) return;
+      _lampArms++;
+      _lampIdx = lightIdx | 0;
+      _shadowLightVP = null;
+      _mul4(lampShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
+      device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
+      _shadowSlot = 0;
+      shadowEncoder = device.createCommandEncoder();
+      shadowPass = shadowEncoder.beginRenderPass({
+        colorAttachments: [],
+        depthStencilAttachment: { view: lampShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+      });
+      shadowPass.setPipeline(shadowPipeline);
+      shadowPass.setBindGroup(0, lampShadowG0BindGroup);
+    }
+    function lampShadowEnd() {
+      if (!shadowPass) return;
+      shadowPass.end(); shadowPass = null;
+      device.queue.submit([shadowEncoder.finish()]);
+      shadowEncoder = null;
+      _lampShadowArmed = true;
+    }
+
+    function createTextureArray(size, images, layers) {
+      if (!size || !images) return null;
+      const n = layers || MAT_TEX_LAYERS;
+      try {
+        const mips = Math.floor(Math.log2(size)) + 1;
+        const tex = device.createTexture({
+          size: [size, size, n], format: "rgba8unorm", mipLevelCount: mips,
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        let filled = 0;
+        for (let i = 0; i < n; i++) {
+          const img = images[i];
+          if (!img) continue;
+          try {
+            if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) {
+              device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, img,
+                { bytesPerRow: size * 4, rowsPerImage: size }, [size, size, 1]);
+            } else {
+              device.queue.copyExternalImageToTexture(
+                { source: img, flipY: false },
+                { texture: tex, origin: [0, 0, i] },
+                [size, size]);
+            }
+            filled++;
+          } catch (_) {}
+        }
+        if (!filled) { try { tex.destroy(); } catch (_) {} return null; }
+        _generateMips(tex, n);
+        return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
+      } catch (_) { return null; }
+    }
+    function setMaterialMaps(maps) {
+      if (!maps) {
+        _matAlbedoOn = false; _matNormalOn = false;
+        _matScales.fill(0); matScaleData.fill(0);
+        if (matScaleUBO) device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
+        return;
+      }
+      if (maps.albedo && maps.albedo.view) { matAlbedoView = maps.albedo.view; _matAlbedoOn = true; }
+      if (maps.normal && maps.normal.view) { matNormalView = maps.normal.view; _matNormalOn = true; }
+      const sc = maps.scales;
+      _matScales.fill(0);
+      if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) _matScales[i] = +sc[i] > 0 ? +sc[i] : 0;
+      if (!_matAlbedoOn) _matScales.fill(0);
+      matScaleData.fill(0);
+      matScaleData.set(_matScales);
+      if (matScaleUBO) device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
+      _rebuildFrameBG();
+    }
+    function materialMapState() {
+      let layers = 0;
+      for (let i = 0; i < MAT_TEX_LAYERS; i++) if (_matScales[i] > 0) layers++;
+      return { albedo: _matAlbedoOn, normal: _matNormalOn, layers, scales: Array.from(_matScales) };
+    }
+
+    function gpuTimer(on) {
+      if (on !== undefined) {
+        _gpuTimerOn = !!on && !!_timestampOk;
+        if (!_gpuTimerOn) _gpuMs = -1;
+      }
+      return { supported: !!_timestampOk, on: _gpuTimerOn };
+    }
+    function gpuMs() { return _gpuMs; }
+
+    function createInstancedBatch(data, matrices, colors, opts) {
+      const mesh = createMesh(data);
+      const n = (matrices && matrices.length) ? (matrices.length / 16) | 0 : 0;
+      const packed = new Float32Array(n * 20);
+      for (let i = 0; i < n; i++) {
+        packed.set(matrices.subarray ? matrices.subarray(i * 16, i * 16 + 16) : matrices.slice(i * 16, i * 16 + 16), i * 20);
+        if (colors && colors.length) {
+          packed[i * 20 + 16] = colors[i * 3] || 1;
+          packed[i * 20 + 17] = colors[i * 3 + 1] || 1;
+          packed[i * 20 + 18] = colors[i * 3 + 2] || 1;
+        } else {
+          packed[i * 20 + 16] = packed[i * 20 + 17] = packed[i * 20 + 18] = 1;
+        }
+      }
+      mesh.instBuf = n ? _mkBuffer(packed, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST) : identInstanceBuf;
+      mesh.instances = n;
+      mesh.visible = n;
+      mesh._instPacked = packed;
+      if (opts && opts.cellSize > 0 && n) {
+        const cell = opts.cellSize;
+        let reach = opts.radius || 0;
+        if (!reach) {
+          const p0 = data.pos;
+          for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
+        }
+        const buckets = new Map();
+        for (let i = 0; i < n; i++) {
+          const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
+          const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
+          const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
+          const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
+          const r = reach * Math.max(sx, sy, sz);
+          const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
+          let bk = buckets.get(key);
+          if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
+          bk.idx.push(i);
+          const mn = bk.mn, mx = bk.mx;
+          if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
+          if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
+          if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
+        }
+        mesh.cells = [...buckets.values()];
+        mesh.srcMatrices = matrices;
+        mesh.srcColors = colors && colors.length ? colors : null;
+      }
+      return mesh;
+    }
+    function cullInstances(batch, planes) {
+      if (!batch || !batch.cells) return batch ? batch.instances : 0;
+      const src = batch.srcMatrices, dst = batch._instPacked;
+      const sc = batch.srcColors;
+      let n = 0;
+      for (const c of batch.cells) {
+        if (!_aabbInFrustum(planes, c.mn, c.mx)) continue;
+        for (const i of c.idx) {
+          dst.set(src.subarray(i * 16, i * 16 + 16), n * 20);
+          if (sc) {
+            dst[n * 20 + 16] = sc[i * 3]; dst[n * 20 + 17] = sc[i * 3 + 1]; dst[n * 20 + 18] = sc[i * 3 + 2];
+          }
+          n++;
+        }
+      }
+      batch.visible = n;
+      if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
+        device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+      }
+      return n;
+    }
+    function drawInstanced(batch, opts) {
+      if (!litPass || !batch || !batch.vbuf || !batch.instances) return;
+      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      if (n <= 0) return;
+      const slot = _drawSlot++;
+      if (slot >= MAX_DRAWS) return;
+      const o = Object.assign({}, opts || {}, { _instanced: true });
+      _writeDraw(slot, IDENT, o);
+      litPass.setPipeline(_litPipeline(o));
+      litPass.setBindGroup(0, _activeFrameBG);
+      _dynOff[0] = slot * DRAW_STRIDE;
+      litPass.setBindGroup(1, drawBindGroup, _dynOff);
+      litPass.setVertexBuffer(0, batch.vbuf);
+      litPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
+      litPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
+      litPass.drawIndexed(batch.count, n);
+    }
+    function freeInstancedBatch(batch) {
+      if (!batch) return;
+      if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) {}
+      freeMesh(batch);
+    }
+    function castShadowInstanced(batch, model) {
+      if (!shadowPass || !batch || !batch.vbuf) return;
+      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      if (n <= 0) return;
+      const zero = new Float32Array(16);
+      if (_shadowSetModel(zero) < 0) return;
+      shadowPass.setVertexBuffer(0, batch.vbuf);
+      shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
+      shadowPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
+      shadowPass.drawIndexed(batch.count, n);
+    }
+
+    function drawParticles(data, floatCount, additive) {
+      if (!litPass || !pParticle || !data || !(floatCount > 0)) return;
+      const nVert = (floatCount / 10) | 0;
+      if (nVert <= 0) return;
+      if (!_particleCap || _particleCap < floatCount) {
+        if (particleVBO) try { particleVBO.destroy(); } catch (_) {}
+        _particleCap = Math.max(floatCount, 2560);
+        particleVBO = device.createBuffer({
+          size: _particleCap * 4,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+      }
+      device.queue.writeBuffer(particleVBO, 0, data, 0, floatCount);
+      const s = fxScratch;
+      s.set(frameVPGpu, 0);
+      const eye = frameEye || [0, 0, 0];
+      s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
+      device.queue.writeBuffer(particleUBO, 0, s, 0, 20);
+      const bg = device.createBindGroup({
+        layout: pParticle.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: particleUBO } }],
+      });
+      litPass.setPipeline(pParticle);
+      litPass.setBindGroup(0, bg);
+      litPass.setVertexBuffer(0, particleVBO);
+      litPass.draw(nVert);
     }
 
     // ── Phase-4 foreground FX (recorded INTO the open lit pass, matching how
@@ -2350,9 +2940,8 @@ const WGX = (function () {
       get height() { return height; },
       get aspect() { return aspect; },
       hdrMode: () => true,           // Phase 2: RGBA16F scene target + Phase 4 post chain
-      msaa: () => 1,                 // Phase 4: still 1 — needs sampleable single-sample
-                                     //   depth for SSAO (depth resolve absent in core WebGPU)
-      pcss: () => true,              // Phase 3: comparison-sampler 3×3 PCF sun shadows
+      msaa: () => _msaaCount,
+      pcss: () => true,              // Poisson-8 + far 4-tap + blocker search (GLX parity)
       isMobile: IS_MOBILE,
       mobileTier: MOBILE_TIER,
 
@@ -2422,23 +3011,21 @@ const WGX = (function () {
       // A descriptor whose value is undefined overwrites the inherited one, so
       // the feature test tells the truth again. Restoring any of these means
       // implementing it here and deleting the line.
-      drawParticles: undefined,          // js/game/particles.js (guarded)
-      lampShadowBegin: undefined,        // js/game.js (guarded)
-      lampShadowEnd: undefined,          // js/game.js
-      createTextureArray: undefined,     // js/render/assets.js — baked pack stays off
-      setMaterialMaps: undefined,        // js/render/assets.js
-      materialMapState: undefined,       // js/game/apex.js assets() (guarded)
-      gpuTimer: undefined,               // js/game/apex.js (guarded) -> {supported:false}
-      gpuMs: undefined,                  // js/game/apex.js (guarded)
-      createInstancedBatch: undefined,   // TrackGraph.batches() consumer — GLX only
-      cullInstances: undefined,
-      drawInstanced: undefined,
-      freeInstancedBatch: undefined,
-      castShadowInstanced: undefined,
-      // Debug introspection GLX exposes; answered honestly rather than left to
-      // GLX's version, which reads its null shadow module.
+      drawParticles,
+      lampShadowBegin,
+      lampShadowEnd,
+      createTextureArray,
+      setMaterialMaps,
+      materialMapState,
+      gpuTimer,
+      gpuMs,
+      createInstancedBatch,
+      cullInstances,
+      drawInstanced,
+      freeInstancedBatch,
+      castShadowInstanced,
       carShadowState: () => ({ enabled: !!carShadowView && !MOBILE_TIER, arms: _carArms }),
-      lampShadowState: () => ({ enabled: false, arms: 0, idx: -1 }),
+      lampShadowState: () => ({ enabled: !!lampShadowView && !MOBILE_TIER, arms: _lampArms, idx: _lampIdx }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",
