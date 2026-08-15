@@ -104,12 +104,29 @@ const WGX = (function () {
   const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
     (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
-  let _litePref = false;
-  try { _litePref = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked storage: sniff-only lite */ }
+  // Loss-escalation ladder, persisted per origin. One device.lost = one rung
+  // up + one reload, so every retry is genuinely CHEAPER than the config that
+  // just died — never the identical crash again:
+  //   rung 0  full    — desktop stack (MSAA 2, timestamp, 2048 shadows, SSR)
+  //   rung 1  lite    — phone-parity (MSAA 1, 1024 shadows, no SSR/timestamp)
+  //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
+  //                     DPR capped at 1 (scene+depth+swapchain only)
+  // A loss ON rung 2 is the exit: session-skip this tab to GLX, keep the pick.
+  // An explicit RENDERER re-pick clears the ladder (js/game/gfx-quality.js).
+  let _wgxLevel = 0;
+  try {
+    _wgxLevel = parseInt(localStorage.getItem("apex26.gfxWgxLevel") || "0", 10) || 0;
+    // Back-compat: the pre-ladder single flag mapped to rung 1.
+    if (!_wgxLevel && localStorage.getItem("apex26.gfxWgxLite") === "1") _wgxLevel = 1;
+  } catch (_) { /* blocked storage: sniff-only lite */ }
+  const _litePref = _wgxLevel >= 1;
   // Slim stack: every phone, every WebKit, or a previous device.lost on this
   // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
   // the "worked for a second then crashed" path.
   const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
+  // Minimal only ever comes from the ladder (a LITE device that still lost
+  // its device) — never from sniffing alone. WebKit/phones start at rung 1.
+  const WGX_MINIMAL = _wgxLevel >= 2;
 
   // Identity mat4 (column-major) fallback.
   const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -385,16 +402,23 @@ const WGX = (function () {
       const why = "device lost (" + ((info && info.reason) || "unknown") + ")";
       try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* lastFailure stays empty; the label still updates */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
-      // First loss on a full (Chrome desktop) stack: retry slim WGX once.
-      // Already slim (WebKit / phone / prior lite) and still died: this tab
-      // attaches GLX. Never write webgl2 over the pick — the button must say
+      // Climb the escalation ladder before surrendering the tab to GLX:
+      // full → lite → minimal, one rung per loss, each rung persisted so the
+      // next boot STARTS there. Only a loss on the minimal stack falls back.
+      // Never write webgl2 over the pick — the button must say
       // WEBGPU (WEBGL2) so the player can see the live backend.
-      if (!WGX_LITE) {
-        try { localStorage.setItem("apex26.gfxWgxLite", "1"); } catch (_) { /* cannot persist lite; fall through to GLX skip */ }
-        let armedLite = false;
-        try { armedLite = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked */ }
-        if (armedLite) {
-          try { Log.warn("gfx", "WGX " + why + " — retrying slim WebGPU"); } catch (_) { /* harness */ }
+      const _rung = WGX_MINIMAL ? 2 : (WGX_LITE ? 1 : 0);
+      if (_rung < 2) {
+        const nextRung = String(_rung + 1);
+        try {
+          localStorage.setItem("apex26.gfxWgxLevel", nextRung);
+          // Keep the legacy flag in step so an older cached build reads lite.
+          localStorage.setItem("apex26.gfxWgxLite", "1");
+        } catch (_) { /* cannot persist the rung; fall through to GLX skip */ }
+        let armed = false;
+        try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
+        if (armed) {
+          try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
           try { location.reload(); } catch (_) { /* no location */ }
           return;
         }
@@ -1083,7 +1107,12 @@ const WGX = (function () {
         _fxReady = true;
       } catch (_) { _fxReady = false; /* FX stay no-ops; lit/sky/shadow still run */ }
     }
-    _buildPost();
+    // Minimal rung: leave the post chain unbuilt. pComposite stays null, so
+    // ensureTargets allocates ONLY scene+depth+blit (no ssao/godray/bloom/ldr
+    // aux targets) and present() takes the Phase-2 tonemap blit — that is the
+    // bulk of the discretionary target bytes the device that just died was
+    // carrying. FX stay: they record into the lit pass and own no targets.
+    if (!WGX_MINIMAL) _buildPost();
     _buildFx();
 
     // ── Lit pipeline variants (blend / cull / alpha-write), built & cached lazily.
@@ -1131,7 +1160,7 @@ const WGX = (function () {
 
     // ── resize (mirror GLX.resize()) ──
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, WGX_LITE ? 1.5 : 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
       const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -2124,7 +2153,10 @@ const WGX = (function () {
     // being written is never simultaneously sampled (feedback). Runs BEFORE begin(), so
     // it uses its own encoder, submitted in envFaceEnd — fully isolated from the frame.
     function envFaceBegin(face, eye, frame) {
-      if (_lost || !skyPipeline) return null;
+      // Minimal rung sheds the probe entirely: 6 extra world passes + an
+      // rgba16f mip cube is exactly the discretionary load a device that has
+      // already died twice cannot carry. game.js checks the null return.
+      if (_lost || WGX_MINIMAL || !skyPipeline) return null;
       if (!envCubeTex) envInit();
       _passSamples = 1;
       const F = ENV_FACES[face];

@@ -140,6 +140,13 @@ function initRenderer() {
     // cannot be reverted by a title-screen refresh before the flyby presents.
     try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
     try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
+    // Landing on WEBGPU by hand is the retry signal (browser update, new
+    // device state): reset the WGX loss ladder so the boot re-attempts from
+    // the sniffed baseline instead of a rung a long-dead session earned.
+    if (next === "webgpu") {
+      try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite"); } catch (_) {}
+      try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
+    }
     rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);

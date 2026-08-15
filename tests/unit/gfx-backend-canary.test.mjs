@@ -72,6 +72,16 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.match(wgx, /apex26\.gfxBound/);
   assert.match(wgx, /WGX begin failed/);
   assert.match(wgx, /WGX present failed/);
+  // The loss ladder: full → lite → minimal → GLX session skip. A loss must
+  // climb a rung (persisted) and reload, never re-run the identical config.
+  assert.match(wgx, /apex26\.gfxWgxLevel/);
+  assert.match(wgx, /WGX_MINIMAL = _wgxLevel >= 2/);
+  assert.match(wgx, /if \(!WGX_MINIMAL\) _buildPost\(\)/);
+  assert.match(wgx, /if \(_lost \|\| WGX_MINIMAL \|\| !skyPipeline\) return null/);
+  // A hand re-pick of WEBGPU resets the ladder so the player can retry full.
+  const gq = read("js/game/gfx-quality.js");
+  assert.match(gq, /removeItem\("apex26\.gfxWgxLevel"\)/);
+  assert.match(gq, /removeItem\("apex26\.gfxWgxLite"\)/);
 });
 
 test("RENDERER label names the live backend when WEBGPU fell back to GLX", () => {

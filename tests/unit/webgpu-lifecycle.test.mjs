@@ -26,8 +26,13 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  // Optional persistent/session storage backing (Maps) so the loss-escalation
+  // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
+  const stored = opts.storage || null;
+  const session = opts.session || null;
+  let loseDevice = null;
   const device = {
-    lost: new Promise(() => {}),
+    lost: new Promise((resolve) => { loseDevice = resolve; }),
     queue: {
       writeBuffer(buffer, offset, data, dataOffset = 0, size) {
         const values = Array.from(data).slice(dataOffset, size == null ? undefined : dataOffset + size);
@@ -112,8 +117,17 @@ function makeGpuHarness(opts = {}) {
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
     window: { devicePixelRatio: 1 },
-    localStorage: { getItem: () => null, setItem() {} },
-    location: { reload() {} },
+    localStorage: stored ? {
+      getItem: (k) => (stored.has(k) ? stored.get(k) : null),
+      setItem: (k, v) => { stored.set(k, String(v)); },
+      removeItem: (k) => { stored.delete(k); },
+    } : { getItem: () => null, setItem() {} },
+    ...(session ? { sessionStorage: {
+      getItem: (k) => (session.has(k) ? session.get(k) : null),
+      setItem: (k, v) => { session.set(k, String(v)); },
+      removeItem: (k) => { session.delete(k); },
+    } } : {}),
+    location: { reload() { if (opts.onReload) opts.onReload(); } },
     GLX: opts.glx || undefined,
     navigator: {
       userAgent: opts.ua || "",
@@ -154,6 +168,7 @@ function makeGpuHarness(opts = {}) {
     failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
+    loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
   };
 }
 
@@ -619,6 +634,58 @@ test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
   assert.equal(gfx.lampShadowState().enabled, false);
+});
+
+test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", async () => {
+  const storage = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, onReload: () => { reloads += 1; } });
+  await h.create();
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "first desktop loss lands on the lite rung");
+  assert.equal(storage.get("apex26.gfxWgxLite"), "1", "legacy flag kept in step");
+  assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
+});
+
+test("device.lost on the lite rung climbs to minimal (level 2), not GLX", async () => {
+  const storage = new Map();
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    storage, session, onReload: () => { reloads += 1; },
+  });
+  await h.create();
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "2", "a lite loss must retry minimal before surrendering");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "no session skip while rungs remain");
+  assert.equal(reloads, 1);
+});
+
+test("minimal rung: no post targets, no env probe, and a loss there exits to GLX", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 1, "minimal implies the lite MSAA 1");
+  assert.equal(gfx.envFaceBegin(0, [0, 0, 0], {}), null, "env probe refused on minimal");
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  // 320x180 canvas -> the post chain's half-res aux targets would be 160x90.
+  // Minimal leaves pComposite unbuilt, so none may exist.
+  const halfRes = h.textures.filter((t) => Array.isArray(t.desc.size) &&
+    t.desc.size[0] === 160 && t.desc.size[1] === 90);
+  assert.equal(halfRes.length, 0, "minimal must not allocate the half-res post targets");
+  gfx.present({});   // blit path must not throw with post unbuilt
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "2", "no rung above minimal");
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "minimal loss surrenders the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
+  assert.equal(reloads, 1, "the surrender reload boots GLX in this tab");
 });
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
