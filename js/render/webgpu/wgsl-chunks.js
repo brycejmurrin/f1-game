@@ -726,14 +726,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ndc = sc.xyz / sc.w;
     let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     // Distance + border fade (GLX sampleShadow parity, js/render/shaders/lit.js).
-    // Dissolve shadows by receiver distance from the UNSNAPPED box anchor
-    // (F.shadowCtr.xyz, glides with the camera) instead of hard-cutting at the
-    // box border: the box recentres in sBox/4 = 16 m snaps (game.js shadow pass),
-    // so an unfaded border made the whole shadow field's edge JUMP 16 m at a time
-    // while driving. The UV border fade stays as a safety clamp for worst-case
-    // box alignments. shadowCtr.w = shadowRange (box half-size, m).
+    // Fade from eye XZ + look-target Y (yaw-invariant). The box still recentres
+    // in sBox/4 = 16 m snaps; an unfaded BOX-anchored border jumped 16 m while
+    // driving, and a look-biased fade origin swept on yaw. UV border fade stays
+    // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
     let shRange = max(F.shadowCtr.w, 1.0);
-    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, F.shadowCtr.xyz));
+    // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
+    let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
+    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
     let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
            * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
     edgeFade = edgeFade * ef.x * ef.y;
@@ -747,7 +747,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
       let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
       // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
-      let aDist = distance(in.wpos, F.shadowCtr.xyz);
+      let aDist = distance(in.wpos, fadeCtr);
       let near = aDist < shRange * 0.80;
       let boxK = min(1.0, 80.0 / shRange);
       var R = 3.0;

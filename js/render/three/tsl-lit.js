@@ -320,7 +320,7 @@
     });
 
     /* ── M4 sun-shadow sampling (sampleShadow in js/render/shaders/lit.js) ───
-     * Distance fade anchored to the GLIDING uShadowCtr (never the box, which
+     * Distance fade from eye XZ + look-target Y (yaw-invariant; the box still
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
      * compiles clean in TSL), texel-grid-anchored IGN dither, car-map
@@ -339,8 +339,9 @@
       const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
       const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
       If(sc.z.lessThan(1.0), () => {
-        // Receiver-distance fade from the unsnapped anchor (js/render/shaders/lit.js).
-        const aDist = length(wp.sub(U.shadowCtr)).toVar();
+        // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
+        const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
+        const aDist = length(wp.sub(fadeCtr)).toVar();
         const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
           .oneMinus().toVar();
         // Thin UV border safety feather (js/render/shaders/lit.js).

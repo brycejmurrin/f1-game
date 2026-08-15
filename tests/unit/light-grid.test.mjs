@@ -52,7 +52,8 @@ function defs() {
       const m = chunk.match(new RegExp(`\\b${k}:\\s*(-?[\\d.]+)`));
       return m ? Number(m[1]) : undefined;
     };
-    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def") };
+    const help = (chunk.match(/help:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def"), help };
     if (d.min === undefined || d.step === undefined) continue;
     out.push(d);
   }
@@ -103,6 +104,126 @@ test("every TUNE_DEFS default sits on its own slider's step grid", () => {
     "reachable); do not round the default to fit the widget.");
 });
 
+test("every slider maximum sits on its own min+step grid", () => {
+  // The thumb can only emit min+k*step. A max off that grid is a labelled
+  // extreme the player can never reach — the same class as an off-grid default.
+  const bad = defs()
+    .filter((d) => d.max !== undefined && !onGrid(d.max, d.min, d.step))
+    .map((d) => `${d.id}: max ${d.max} is off the ${d.step} grid from ${d.min}`);
+  assert.deepEqual(bad, [],
+    "a slider's own maximum cannot be selected — the last notch is short of the labelled extreme.");
+});
+
+test("slider maxima stop where the consumer saturates, not past it", () => {
+  // Each assertion is a measured saturate in the shipping consumer. A max
+  // above the saturate is dead travel; a help string that cites a different
+  // ceiling is the same bug in prose.
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  const get = (id) => {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    return d;
+  };
+  // post.js: carSoft = clamp((1.4 - uCarGloss) * 0.5, 0, 1) — sharpest at 1.4.
+  assert.ok(get("carGloss").max <= 1.4 + 1e-9,
+    `carGloss max ${get("carGloss").max} is past the SSR-streak saturate at 1.4`);
+  // post.js: dz > uSsrThick && dz < max(5, stepLen*1.5) — at 5 the window is empty.
+  assert.ok(get("ssrThick").max < 5,
+    `ssrThick max ${get("ssrThick").max} reaches the far-window reject`);
+  assert.doesNotMatch(get("ssrThick").help || "", /[Cc]eiling raised to 5/,
+    "ssrThick help must not call the far-window reject the slider ceiling");
+  // post.js: smoothstep(0.95, min(uVigSoft, 0.94), vr) — 0.94 is the last live notch.
+  assert.equal(get("vignetteSoft").max, 0.94,
+    "VIGNETTE REACH must end at the shader clamp, not an unexplained 0.68");
+  // lit.js fogCol: warm blue hits 0 at +4; cool red hits 0 at -1/0.12 ≈ 8.33.
+  assert.ok(get("fogTint").max <= 4 + 1e-9, "fogTint warm side past blue=0");
+  assert.ok(get("fogTint").min >= -1 / 0.12 - 0.05, "fogTint cool side past red=0");
+  // lit.js: mix(1 - 0.12*k, 1, ao) hits black at k = 1/0.12.
+  assert.ok(get("ambContactDark").max <= 1 / 0.12 + 0.05, "ambContactDark past black creases");
+  // game.js: Math.min(0.9, lampFogBase + …)
+  assert.equal(get("lampFogBase").max, 0.9);
+  // post.js: clamp(uHgAniso, 0, 0.95)
+  assert.equal(get("godrayAniso").max, 0.95);
+  // game.js: clamp(0.85 * roadRough, 0.04, 1)
+  assert.ok(get("roadRough").max <= 1 / 0.85 + 0.01, "roadRough past roughness=1");
+  // lit.js wet absorb: 1 - 0.42*uWetDark hits 0 at 1/0.42 (porous, the last term).
+  assert.ok(get("wetDark").max <= 1 / 0.42 + 0.05, "wetDark past full absorb");
+  // lit.js: 0.30 * spill > 1 inverts the wet pool.
+  assert.ok(get("lampWallSpill").max <= 1 / 0.30 + 0.01, "lampWallSpill past wet invert");
+  // lit.js: mix(1, vec3(0.90,0.96,1.12), amt) — amt>1 extrapolates past the
+  // designed cool-blue. Shader comment says 0..1.
+  assert.ok(get("shadowTintAmt").max <= 1 + 1e-9,
+    `shadowTintAmt max ${get("shadowTintAmt").max} is past the mix=1 designed tint`);
+  // atmosphere.js cityGlow: r*(1+0.20w) / b*(1-0.30w). First channel hits 0
+  // at w=+1/0.30 (blue) and w=-1/0.20 (red). Past that Math.max(0,…) floors
+  // the dead channel while the other keeps moving — same class as fogTint.
+  assert.ok(get("cityGlowWarm").max <= 1 / 0.30 + 0.05, "cityGlowWarm past blue=0");
+  assert.ok(get("cityGlowWarm").min >= -1 / 0.20 - 0.05, "cityGlowWarm past red=0");
+  // game.js cityGlowTint: weakest-channel factor 1 - 0.18*(tint/0.28) hits 0
+  // at 0.28/0.18 ≈ 1.556. Max 1.5 is the last live notch.
+  assert.ok(get("cityGlowTint").max <= 0.28 / 0.18 + 0.05, "cityGlowTint past weak-channel 0");
+});
+
+test("asymmetric white-balance sliders are not ±N when the mix is not", () => {
+  // fogTint already ships asymmetric (−6…3.9) because warm cuts blue at
+  // 0.25/unit and cool cuts red at 0.12/unit. The other WB knobs used the
+  // same class of mix (different coeffs per side) but kept a symmetric
+  // slider, so one side stopped short of the last live notch and the help
+  // had to apologise. Range = last live notch on EACH side, like fogTint.
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  const get = (id) => {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    return d;
+  };
+  const near = (got, want, id, side) => {
+    assert.ok(Math.abs(got - want) < 0.05,
+      `${id} ${side} is ${got}, expected last-live ≈ ${want}`);
+  };
+  // atmosphere.js: warm cuts blue at 0.30 (zero at −3.33); cool cuts red at
+  // 0.12 (zero at +8.33). Same coeffs on lampTemp in game.js.
+  assert.notEqual(Math.abs(get("sunTemp").min), get("sunTemp").max,
+    "sunTemp mix is not symmetric — the slider must not be ±N");
+  near(get("sunTemp").min, -1 / 0.30, "sunTemp", "warm min");
+  near(get("sunTemp").max, 1 / 0.12, "sunTemp", "cool max");
+  assert.notEqual(Math.abs(get("lampTemp").min), get("lampTemp").max,
+    "lampTemp mix is not symmetric — the slider must not be ±N");
+  near(get("lampTemp").min, -1 / 0.30, "lampTemp", "warm min");
+  near(get("lampTemp").max, 1 / 0.12, "lampTemp", "cool max");
+  // atmosphere.js ambTemp: warm cuts abb at 0.24 (zero at −4.17); cool cuts
+  // ar at 0.10 (zero at +10).
+  assert.notEqual(Math.abs(get("ambTemp").min), get("ambTemp").max,
+    "ambTemp mix is not symmetric — the slider must not be ±N");
+  near(get("ambTemp").min, -1 / 0.24, "ambTemp", "warm min");
+  near(get("ambTemp").max, 1 / 0.10, "ambTemp", "cool max");
+  // cityGlowWarm: already clipped in the saturate test; also must not be ±N.
+  assert.notEqual(Math.abs(get("cityGlowWarm").min), get("cityGlowWarm").max,
+    "cityGlowWarm mix is not symmetric — the slider must not be ±N");
+  // post.js tint: 0.07/unit BOTH ways (symmetric). Help must cite the
+  // coefficient — the shader comment still says "−1..1" which is a lie.
+  assert.equal(Math.abs(get("tint").min), get("tint").max,
+    "tint mix IS symmetric (0.07 both ways) — keep a symmetric slider");
+  assert.match(get("tint").help || "", /0\.07/,
+    "tint help must cite the 0.07/unit mix so ±6 is not a mystery");
+  // lampLevel: 0.001 floor left a notch that could not fully kill the lamps.
+  assert.equal(get("lampLevel").min, 0, "LAMP LEVEL must be able to go fully off");
+  // Same class: amount knobs whose consumer is a straight multiply, with no
+  // "floored so near-zero still leaves X" help, must reach true 0.
+  assert.equal(get("glowAmp").min, 0, "EMISSIVE GLOW must be able to go fully off");
+  assert.equal(get("poolEnergy").min, 0, "POOL ENERGY must be able to go fully off");
+  assert.equal(get("twilightFloor").min, 0, "TWILIGHT FLOOR must be able to go fully off");
+  // tables.js night paint clearcoat is 1.0; shader comment is 0..1. Past 1
+  // the night body overshoots the designed lacquer (wet-day 0.8 can no
+  // longer quite reach 1 — same trade as wetDark porous-vs-not).
+  assert.ok(get("carClearcoat").max <= 1 + 1e-9,
+    `carClearcoat max ${get("carClearcoat").max} is past the 0..1 lacquer`);
+  // tables.js paint metalness is 0.12; clamp(0.12*k, 0, 1) saturates at 1/0.12.
+  assert.ok(get("carMetal").max <= 1 / 0.12 + 0.05, "carMetal past metalness=1 on shipped paint");
+  // game.js terrain detail = 0.42 * slider; lit.js grain 1+(n-0.5)*uDetail
+  // floors at uDetail=2. 2/0.42 ≈ 4.76 — the 4.75 max is that last live notch.
+  assert.ok(get("surfDetail").max <= 2 / 0.42 + 0.05, "surfDetail past terrain grain-black");
+});
+
 test("every shipped preset value sits on its knob's step grid", () => {
   const byId = new Map(defs().map((d) => [d.id, d]));
   const P = presets();
@@ -132,4 +253,100 @@ test("every shipped preset value sits on its knob's step grid", () => {
     "fallback(id), the player's first nudge silently persists the SNAPPED value as an override " +
     "and flips the profile to \"(N tuned)\". Refine that knob's step to a divisor of the " +
     "current one rather than rounding the preset.");
+});
+
+/** Every other slider family in the shell — CAMERA TUNER, pause ADVANCED,
+ *  SETTINGS display/audio, photo-mode FOV. The lighting survey above is 183
+ *  knobs; these are the rest of the `<input type="range">` set. A range that
+ *  drifts from its JS clamp is the same class of bug as a TUNE_DEFS max past
+ *  its consumer saturate: the last notches are either unreachable or lie. */
+function htmlRanges() {
+  const src = read("index.html");
+  const out = {};
+  for (const m of src.matchAll(/id="([^"]+)"[^>]*type="range"[^>]*>/g)) {
+    const tag = m[0];
+    const num = (k) => {
+      const n = tag.match(new RegExp(`\\b${k}="([^"]+)"`));
+      return n ? Number(n[1]) : undefined;
+    };
+    out[m[1]] = { min: num("min"), max: num("max"), step: num("step") };
+  }
+  // Some tags put type="range" before id=.
+  for (const m of src.matchAll(/type="range"[^>]*id="([^"]+)"[^>]*>/g)) {
+    if (out[m[1]]) continue;
+    const tag = m[0];
+    const num = (k) => {
+      const n = tag.match(new RegExp(`\\b${k}="([^"]+)"`));
+      return n ? Number(n[1]) : undefined;
+    };
+    out[m[1]] = { min: num("min"), max: num("max"), step: num("step") };
+  }
+  return out;
+}
+
+function camDefs() {
+  const src = read("js/game/cam-tune.js");
+  const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
+  const out = [];
+  for (let i = 0; i < starts.length; i++) {
+    const chunk = src.slice(starts[i].index,
+      i + 1 < starts.length ? starts[i + 1].index : starts[i].index + 2000);
+    const num = (k) => {
+      const m = chunk.match(new RegExp(`\\b${k}:\\s*(-?[\\d.]+)`));
+      return m ? Number(m[1]) : undefined;
+    };
+    const help = (chunk.match(/help:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+    out.push({ id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def"), help });
+  }
+  const fovMin = Number((src.match(/FOV_MIN\s*=\s*(-?[\d.]+)/) || [])[1]);
+  const fovMax = Number((src.match(/FOV_MAX\s*=\s*(-?[\d.]+)/) || [])[1]);
+  return { defs: out, fovMin, fovMax };
+}
+
+test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
+  const R = htmlRanges();
+  assert.ok(Object.keys(R).length >= 16, `only parsed ${Object.keys(R).length} range inputs`);
+
+  const cam = camDefs();
+  assert.equal(cam.fovMin, 20);
+  assert.equal(cam.fovMax, 110);
+  const fov = cam.defs.find((d) => d.id === "fov");
+  assert.ok(fov, "CAM_TUNE_DEFS missing fov");
+  // cameras.js mode FOVs span ~36° (hood) to ~81° (onboard+ERS). ±35 on top
+  // of those hits the 20…110 solved clamp: hood 36−35=1→20, onboard 81+35=116→110.
+  // Help must name the clamp so the last notches are not a mystery.
+  assert.match(fov.help || "", /20/, "CAM FOV help must name the 20° solved floor");
+  assert.match(fov.help || "", /110/, "CAM FOV help must name the 110° solved ceiling");
+
+  const steer = read("js/game/steer-tuning.js");
+  const num = (src, k) => Number((src.match(new RegExp(`${k}\\s*=\\s*(-?[\\d.]+)`)) || [])[1]);
+  const SMIN = num(steer, "SLIDER_MIN"), SMAX = num(steer, "SLIDER_MAX");
+  const LMIN = num(steer, "LINE_MIN"), LMAX = num(steer, "LINE_MAX");
+  const PMIN = num(steer, "PACE_MIN"), PMAX = num(steer, "PACE_MAX");
+  assert.equal(SMIN, 1); assert.equal(SMAX, 10);
+  assert.equal(LMIN, -5); assert.equal(LMAX, 5);
+  assert.equal(PMIN, 1); assert.equal(PMAX, 19);
+
+  const game = read("js/game.js");
+  const SCALE_MIN = num(game, "SCALE_MIN"), SCALE_MAX = num(game, "SCALE_MAX");
+  assert.equal(SCALE_MIN, 40); assert.equal(SCALE_MAX, 200);
+
+  const expectRange = (id, min, max) => {
+    const r = R[id];
+    assert.ok(r, `${id} missing from index.html`);
+    assert.equal(r.min, min, `${id} min ${r.min} ≠ JS ${min}`);
+    assert.equal(r.max, max, `${id} max ${r.max} ≠ JS ${max}`);
+  };
+  for (const id of ["pm-rate", "pm-expo", "pm-smooth", "pm-tiltdeg", "pm-lock",
+                    "pm-speedsteer", "pm-help", "pm-tiltsimple"]) {
+    expectRange(id, SMIN, SMAX);
+  }
+  expectRange("pm-line", LMIN, LMAX);
+  expectRange("pm-pace", PMIN, PMAX);
+  expectRange("pm-uiscale", SCALE_MIN, SCALE_MAX);
+  expectRange("pm-hudscale", SCALE_MIN, SCALE_MAX);
+  expectRange("as-mvol", 0, 10);
+  expectRange("as-svol", 0, 10);
+  expectRange("pc-fov", cam.fovMin, cam.fovMax);
+  expectRange("sp-vol", 0, 100);
 });

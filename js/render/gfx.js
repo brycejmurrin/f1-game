@@ -90,8 +90,8 @@
  *   moonK (clear-night moon factor, 0-1), moonGate (moonK floored by the
  *   MOON SHADOWS knob's own above-0.5 weather override — what the shadow
  *   floor actually reads)                                       scalars
- *   shadowCtr:vec3                 shadow-fade anchor — the unsnapped ground
- *                                  point the shadow box recentres around
+ *   shadowCtr:vec3                 shadow-box snap anchor (look-biased);
+ *                                  shader fade uses eye XZ + this Y
  *                                  (defaults to eye)
  *   cullDist:number                far cull distance
  *   noEnv:bool                     disable env-cube sheen (menu preview)
