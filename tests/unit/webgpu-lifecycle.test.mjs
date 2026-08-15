@@ -5,9 +5,10 @@ import vm from "node:vm";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
-const [CHUNKS_SOURCE, POST_SOURCE, WGX_SOURCE] = await Promise.all([
+const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, WGX_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
+  readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
   readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
@@ -33,6 +34,7 @@ function makeGpuHarness() {
         writes.push({ buffer, offset, values });
       },
       writeTexture() {},
+      copyExternalImageToTexture() {},
       submit() {},
     },
     createSampler: () => ({}),
@@ -40,8 +42,11 @@ function makeGpuHarness() {
     createPipelineLayout: () => ({}),
     createShaderModule: () => ({}),
     createRenderPipeline: () => pipeline,
+    createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => ({
       beginRenderPass: () => pass,
+      resolveQuerySet() {},
+      copyBufferToBuffer() {},
       finish: () => ({}),
     }),
     createTexture(desc) {
@@ -67,6 +72,8 @@ function makeGpuHarness() {
         destroy() { this.destroyed = true; },
         getMappedRange: () => new ArrayBuffer(desc.size),
         unmap() {},
+        mapState: "unmapped",
+        mapAsync: async () => {},
       };
       buffers.push(buffer);
       return buffer;
@@ -111,18 +118,26 @@ function makeGpuHarness() {
       userAgent: "",
       maxTouchPoints: 0,
       gpu: {
-        requestAdapter: async () => ({ requestDevice: async () => device }),
+        requestAdapter: async () => ({
+          features: { has: (name) => name === "timestamp-query" },
+          requestDevice: async () => {
+            device.features = { has: (name) => name === "timestamp-query" };
+            return device;
+          },
+        }),
         getPreferredCanvasFormat: () => "bgra8unorm",
       },
     },
-    GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4 },
-    GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16 },
+    GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
+    GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16, QUERY_RESOLVE: 32, MAP_READ: 64, COPY_SRC: 128 },
     GPUShaderStage: { VERTEX: 1, FRAGMENT: 2 },
     GPUColorWrite: { RED: 1, GREEN: 2, BLUE: 4, ALL: 15 },
+    GPUMapMode: { READ: 1 },
   });
   context.window.window = context.window;
   vm.runInContext(`${CHUNKS_SOURCE}\nwindow.WGSLChunks = WGSLChunks;`, context);
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
+  vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -145,8 +160,9 @@ test("post resize keeps old resources valid and cleans partial texture allocatio
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
+  const targetTextureStart = h.textures.length;
   assert.equal(gfx.begin({}), true);
-  const oldTextures = h.textures.slice();
+  const oldTextures = h.textures.slice(targetTextureStart);
 
   h.canvas.clientWidth = 640;
   gfx.resize();
@@ -263,7 +279,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*464/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*544/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
@@ -272,7 +288,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 464);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -426,4 +442,54 @@ test("WGSL flake basis guards degenerate normals before normalization", () => {
 
 test("composite header describes implemented image effects", () => {
   assert.doesNotMatch(POST_SOURCE, /SSR \/ speed-blur \/ chromatic-aberration DEFERRED/);
+});
+
+test("WGX publishes the GLX-parity surface instead of undefined stubs", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  assert.equal(typeof gfx.gpuTimer, "function");
+  assert.equal(typeof gfx.gpuMs, "function");
+  assert.equal(typeof gfx.createTextureArray, "function");
+  assert.equal(typeof gfx.setMaterialMaps, "function");
+  assert.equal(typeof gfx.materialMapState, "function");
+  assert.equal(typeof gfx.lampShadowBegin, "function");
+  assert.equal(typeof gfx.lampShadowEnd, "function");
+  assert.equal(typeof gfx.createInstancedBatch, "function");
+  assert.equal(typeof gfx.cullInstances, "function");
+  assert.equal(typeof gfx.drawInstanced, "function");
+  assert.equal(typeof gfx.freeInstancedBatch, "function");
+  assert.equal(typeof gfx.castShadowInstanced, "function");
+  assert.equal(typeof gfx.drawParticles, "function");
+  const timer = gfx.gpuTimer();
+  assert.equal(timer.supported, true);
+  assert.equal(timer.on, false);
+  assert.equal(gfx.gpuMs(), -1);
+  gfx.gpuTimer(true);
+  assert.equal(gfx.gpuTimer().on, true);
+  assert.equal(gfx.msaa(), 2);
+  const maps = gfx.materialMapState();
+  assert.equal(maps.albedo, false);
+  assert.equal(maps.layers, 0);
+});
+
+test("WGX requests timestamp-query when the adapter exposes it", async () => {
+  assert.match(WGX_SOURCE, /requiredFeatures/);
+  assert.match(WGX_SOURCE, /timestamp-query/);
+  assert.match(WGX_SOURCE, /timestampWrites/);
+});
+
+test("WGSL closes the documented GLX look gaps", () => {
+  assert.match(CHUNKS_SOURCE, /texture_2d_array/);
+  assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
+  assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
+  assert.match(CHUNKS_SOURCE, /fn roadMarkings\(/);
+  assert.match(CHUNKS_SOURCE, /-0\.94201624/);
+  assert.match(CHUNKS_SOURCE, /lampShadowTex/);
+  assert.match(CHUNKS_SOURCE, /aInst0/);
+  assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(POST_SOURCE, /texture_depth_2d/);
+  assert.match(POST_SOURCE, /uLampStr|lampStr/);
+  assert.match(POST_SOURCE, /hazeStr|uHazeStr/);
+  assert.match(POST_SOURCE, /1\.3846153846/, "SSAO/god-ray separable blur kernel");
+  assert.match(FX_SOURCE, /fn vs_main[\s\S]*aCorner/, "particle shader");
 });

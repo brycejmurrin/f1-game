@@ -50,9 +50,13 @@ Three kinds of docs live here.
 `js/render/webgpu/*` is **DEFERRED** — no `<script>` tag; `js/game.js` injects it
 at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
 
-**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX never
-reached parity with GLX (no volumetrics, MSAA 1, no `gpuTimer`, no baked
-material arrays). The six phase/migration build logs are provenance and live in
+**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX stays
+opt-in (`apex26.gfxBackend=webgpu`) with GLX as the default. The 2026-08
+parity pass closed the documented gaps (gpuTimer, texture arrays, lamp
+shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial).
+Recipes and remaining sharp edges live in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). The six
+phase/migration build logs are provenance and live in
 [`archive/webgpu/`](archive/webgpu/).
 
 ### three.js / TLX backend (opt-in)
@@ -79,6 +83,7 @@ sit in this table was indexed by nothing and moved to
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
 | [research/ENGINEERING-PRACTICE-NOTES.md](research/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method for Phase 4 extractions, and the state of the no-build bet. |
 | [research/CI-RENDERING-PERFORMANCE.md](research/CI-RENDERING-PERFORMANCE.md) | Why the Playwright suite is slow under SwiftShader, what llvmpipe/xvfb/GPU runners would change, why sharding is the wrong first move, and the (now shipped everywhere) state of WebGPU. External findings, not measurements — flagged as such. |
+| [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Interactive Chrome DevTools MCP recipes (heap / perf insights / a11y snapshots) measured on the live shell — not a substitute for the suite. |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. |
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs z-index, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. Read before debugging anything that reproduces on one device and not another. |

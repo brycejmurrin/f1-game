@@ -117,6 +117,36 @@ rows — the same budget the old six vertical arrays used at 32. God-rays stay
 at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
 uniforms.
 
+### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
+
+Both read **zero** on all 40 circuits, with no baseline and no ALLOW hatch.
+
+**A light that glares needs a fixture under it.** `drawGlow` paints an additive
+halo billboard for every record with `glareW > 0`, so any such record must sit on
+a registered `track.lampPosts` lens. Fixture-less lights are legitimate — the
+gap fill, the density fill, the start-gantry bar — but they must push `glareW 0`
+(and a damped `volW`, or the shaft gives them away instead). The gantry bar
+shipped at `glareW 0.3` while explicitly not parented to the gantry mesh: three
+orbs 8 m over every start line. Jeddah drew a 560-pole LED tunnel that registered
+no lights at all, so the whole circuit fell to the synthetic stride walk — 311
+halos, none over a pole.
+
+**A fixture needs its pool to reach the road.** The window `(1-(d/r)^4)^2` is
+*exactly* 0 past `r`, so a lens further from the tarmac than its own radius
+lights nothing whatsoever. `floodColor`'s radii are sized for a 9-13 m verge
+lamp ("the pool's far corner sits 21-25 m from the lens"); a 39 m stadium mast
+standing 34 m out has a ~52 m throw, so Bahrain's fully-modelled floodlight ring
+covered **2 of 135** centreline samples — and the 2 were the start line, lit by
+the orbs above. `floodMast` therefore registers its measured throw × 1.5, and
+`lampRadius()` reads a **mast** record's radius as a floor over the theme value,
+never an override — `lampPost`'s hand-placed luminaires (Monaco's tunnel soffits
+at 21-27 m) are a different list and keep their deliberately small radii.
+
+Widening a radius costs no shader slots: the cull uploads the nearest CAP lights
+regardless of radius, and the fragment loop range-rejects on squared distance
+before the `sqrt`. Measured peak lights actually covering one road point after
+the fix: 11 on Bahrain, 13 on Qatar, against a CAP of 24-32.
+
 ### Dark-gap fill (`LT.lampGapFill`, def 60 m)
 
 Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that

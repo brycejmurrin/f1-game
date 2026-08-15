@@ -150,10 +150,11 @@ instance on its first run.
 
 **The cost is one look in three shading languages** — GLSL, WGSL, TSL, each
 assembling the same lit/sky/fx/post chain. A visual change is three
-implementations or it is a divergence. **WGX is not at parity and is frozen**:
-no volumetrics, no MSAA path, no `gpuTimer`, no `createTextureArray`
-(so no baked material pack and no procedural-material port either). It is
-feature-detected honestly; it is not a peer.
+implementations or it is a divergence. WGX now publishes the GLX draw-API
+surface (gpuTimer, texture arrays, lamp shadows, instancing, particles,
+MSAA 2×) and stays opt-in; GLX remains the default. The tax is keeping the
+two shader trees in sync, not an API wall. See
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
 
 ---
 
