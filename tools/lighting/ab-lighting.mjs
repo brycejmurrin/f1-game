@@ -178,7 +178,7 @@ const KNOBS = [
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "contact-hardening range; B is a dramatic uniform blur (4x the old max) for a visible before/after" },
   { id: "shadow.box", file: "js/game.js", scene: "monzaDay",
-    find: "const sBox = LT.shadowRange || 64;", b: "const sBox = (LT.shadowRange || 64) * 2;",
+    find: "const sBox = LT.shadowRange != null ? LT.shadowRange : 80;", b: "const sBox = (LT.shadowRange != null ? LT.shadowRange : 80) * 2;",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "light-box size; doubling it halves texel density (softer, muddier edges)" },
   { id: "shadow.biasClamp", file: "js/render/shaders/lit.js", scene: "monzaDay",
