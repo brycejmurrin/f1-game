@@ -48,6 +48,15 @@ test("RENDERER cycle lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
+test("TLX phones default to three's WebGL2 backend (WebKit WebGPU is present-and-broken)", () => {
+  // Header + create() comment say phones pin forceWebGL; a "DEFAULT OFF
+  // EVERYWHERE" flip left iPhone on three's WebGPU path, which does not
+  // fall back when navigator.gpu exists (getFallback is absence-only).
+  const src = read("js/render/three/tlx.js");
+  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!isMobile/);
+  assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
+});
+
 test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
