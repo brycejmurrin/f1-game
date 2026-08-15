@@ -45,6 +45,7 @@ const els = {
 // otherwise it runs fully synchronously). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
+let _backendProved = false;   // boot-canary latch, set on the first world frame
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
 // order — each group has eval-time dependencies inside it, which the <script>
 // tag order used to enforce and loadBackendScripts() now enforces by awaiting
@@ -85,28 +86,24 @@ function loadBackendScripts(files) {
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
-  // NEVER ON A PHONE. Both alternates are in-progress migrations, and TLX on
-  // iOS renders a flat pale ground under a correct sky with the lower half of
-  // the frame black — an unusable game, reported from a real device. Until
-  // build 895 that could not happen in production at all: vendor/ was not
-  // staged by the Pages workflow, three.js 404'd, Gfx.create() returned null
-  // and this fell straight back to GLX, so the RENDERER button LOOKED inert
-  // and cost nothing to press. Shipping vendor/ made it real, and the first
-  // phone to land on it got the broken frame.
-  //
-  // Checked here rather than trusted to the UI, because the preference is
-  // stored per device and long outlives the tap that set it — a phone that
-  // chose "three" yesterday must boot on WebGL2 today without anyone having to
-  // find their way back through a menu they cannot read. Desktop keeps both,
-  // which is what the migration needs.
-  // GLX owns the ONE mobile-tier detection (js/render/glx.js). This site re-sniffed
-  // navigator and, alone among the four copies, left out apex26.forceMobileTier — so a
-  // desktop with the flag set still loaded the alternate backends: the "phone" under test.
-  const phone = !!(typeof GLX !== "undefined" && GLX.isMobile);
+  // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
+  // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
+  // with the lower half black. But the menu is DOM over the canvas: it survives a
+  // garbage frame, so the RENDERER button undoes that in one tap. An iOS jetsam
+  // kill it can NOT undo (no JS error, no contextlost; the recovery below fires
+  // only when GLX.init FAILS) — hence a probe armed before handing over the canvas
+  // and cleared on the first presented WORLD frame; armed at boot = never got there.
+  const PROBE_KEY = "apex26.gfxBackendProbe";
+  let armed = null;
+  try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
+  if (armed) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
+  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
   if (optIn && typeof Gfx !== "undefined") {
+    // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
+    try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
     // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
     // together they are ~550 KB that every visitor downloaded, parsed and
     // evaluated so that almost none of them could use it. `optIn` above is
@@ -6818,6 +6815,8 @@ function render(dt) {
     }
   }
   gfx.present(po);
+  // Boot canary disarmed — a real world frame landed, so the next boot keeps it.
+  if (!_backendProved) { _backendProved = true; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
   if (isWetRoad() && Particles.rainActive()) {
     // Falling-streak precipitation, identical in every camera: full storm
     // streaks when raining, the sparse DRIZZLE tier when merely WET (the
@@ -7120,12 +7119,10 @@ applyResMode();
       } catch (_) { return "webgl2"; }
     };
     const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
-    // Hidden on phones, where boot refuses both alternates (see the backend
-    // selection at the top of this file). A button that stores a preference the
-    // next boot ignores is worse than no button: it reads as "I chose THREE and
-    // nothing happened", and the last phone to press it spent a while on an
-    // unusable game before anyone worked out why.
-    rb.hidden = !!(gfx && gfx.isMobile);
+    // SHOWN ON EVERY DEVICE, phones included. It hid whenever gfx.isMobile back
+    // when boot refused both alternates there. Boot honours the preference
+    // everywhere now, and this button IS the phone's recovery from a bad frame.
+    rb.hidden = false;
     rb.textContent = "RENDERER: " + label(read());
     rb.onclick = () => {
       if (soundOn) GameAudio.uiSelect();
@@ -7134,7 +7131,10 @@ applyResMode();
       const next = cur === "webgl2" ? "three"
                  : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
                  : "webgl2";
-      try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
+      // Disarm the canary with the choice: a tap proves a live tab, so an armed
+      // probe from THIS load (switched before any world frame) must not outlive
+      // it and revert the preference just made.
+      try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
       rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
       setTimeout(() => location.reload(), 350);
     };
