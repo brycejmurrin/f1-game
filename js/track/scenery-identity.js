@@ -110,10 +110,28 @@ const SceneryIdentity = (function () {
       // def.scenery runs, after SceneryIdentity.create has already closed.
       const register = ctx.registerMastLamp;
       if (light && typeof register === "function" && lensPos) {
+        // A stadium mast THROWS much further than a verge lamp, and the theme
+        // radius in buildTrackLights is sized for the latter (~30-36 m). This
+        // bank's lens stands `h` up and `dist` out, so its lens->road distance
+        // is 40-60 m on a ring like Sakhir's — past the radius, where the
+        // (1-(d/r)^4)^2 window is exactly 0, so the pool never lands and the
+        // circuit renders unlit under fully-modelled floodlights (measured:
+        // bahrain lit 2 of 135 centreline samples). Carry the real throw so the
+        // pool can land. buildTrackLights treats a MAST record's radius as a
+        // FLOOR over the theme value (lampRadius), never as an override, so a
+        // short mast still gets the tuned theme radius — and the hand-placed
+        // luminaires that legitimately want a SMALL radius (Monaco's tunnel
+        // soffits at 21-27 m) come through lampPost, a different list, untouched.
+        const kk = ((Math.round(k) % n) + n) % n;
+        const throwR = Math.hypot(lensPos[0] - px[kk], lensPos[1] - py[kk], lensPos[2] - pz[kk]);
         register({
           pos: [lensPos[0], lensPos[1], lensPos[2]],
           k, side,
           kind: cool ? "flood_bank" : "halogen",
+          // x1.5 keeps the aim point well inside the window (at d = throw the
+          // window is 0.66 of peak, vs 0 today). Capped so a freak mast height
+          // cannot open a lap-wide pool.
+          radius: Math.min(110, throwR * 1.5),
         });
       }
     };

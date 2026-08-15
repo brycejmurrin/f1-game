@@ -294,6 +294,23 @@ const LAMP_KINDS = {
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
   fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
 };
+// Pool radius for one fixture. `themeRadius` (floodColor) is sized for a verge
+// lamp — "the pool's far corner sits 21-25 m from the lens" — and a tall flood
+// bank throws far beyond that: Sakhir's ring stands 39 m up and 34 m out, so its
+// lens sits ~52 m from the road it aims at, past a 34 m radius, where the
+// (1-(d/r)^4)^2 window is exactly 0. Every mast lit nothing (measured: bahrain
+// covered 2 of 135 centreline samples, and the 2 were the start line, lit by the
+// fixture-less gantry bar below). floodMast now registers its real throw, and a
+// MAST record's radius is read as a FLOOR over the theme value rather than as an
+// override — so a short mast keeps the tuned theme radius, and the hand-placed
+// luminaires that deliberately want a SMALL one (Monaco's tunnel soffits at
+// 21-27 m) are unaffected because lampPost writes those without `mast`.
+// Energy needs no retune: ePhys already scales by the true lens->road distance
+// squared, so opening the window restores the pool the mast was always emitting.
+function lampRadius(post, themeRadius) {
+  if (!post || post.radius == null) return themeRadius;
+  return post.mast ? Math.max(themeRadius, post.radius) : post.radius;
+}
 function lampDensityFactor() {
   const d = LT.lampDensity;
   return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
@@ -538,7 +555,7 @@ function buildTrackLights(track, onlyAlways) {
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
-      (post && post.radius != null ? post.radius : radius) * LT.lampRadiusMul,
+      lampRadius(post, radius) * LT.lampRadiusMul,
       ax, ay, az, coneIn, coneOut, Math.min(0.9, bleed * LT.bleedMul), volW, glareW,
     );
   }
@@ -557,12 +574,20 @@ function buildTrackLights(track, onlyAlways) {
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
     // here too — the gantry bar previously ignored them ("every floodlight" per
     // help text; the energy factor was a 0.55 literal = poolEnergy's default).
+    // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the
+    // note in js/track/scenery-structures.js), so there is no fixture at its
+    // position — and drawGlow paints a lens halo for any record with glareW > 0.
+    // Shipped at glareW 0.3 it put three glowing orbs 8 m over the start line
+    // with nothing holding them up, each with a volumetric shaft under it; on
+    // Bahrain the nearest real fixture is 42 m away. Same rule the synth fill
+    // lights follow above ("A fill light has no fixture, so it must not draw a
+    // lens halo hanging in mid-air"). The downward pool on the grid is unchanged.
     for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
         1.02 * ge, 1.05 * ge, 1.12 * ge,
         26 * LT.lampRadiusMul, 0, -1, 0,
-        0.92, 0.92 - 0.14 * (LT.beamCone || 1), Math.min(0.9, 0.06 * LT.bleedMul), 0.9, 0.3);
+        0.92, 0.92 - 0.14 * (LT.beamCone || 1), Math.min(0.9, 0.06 * LT.bleedMul), 0, 0);
     }
   }
   return lights;
