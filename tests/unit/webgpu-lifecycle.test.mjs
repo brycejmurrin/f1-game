@@ -279,7 +279,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*544/);
+  assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
@@ -288,7 +289,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -308,6 +309,12 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.ok(Math.abs(frame[113] - 12.0) < 1e-6, "carSunGlint default in params7.y (float 113)");
   assert.ok(Math.abs(frame[114] - 0.6) < 1e-6, "neonBoost default in params7.z (float 114)");
   assert.equal(frame[115], 4.0, "lampNearClamp default in params7.w (float 115)");
+  // params9 = (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow) at
+  // off 544 = floats 136..139. Defaults 1.0 = shipped GLX look.
+  assert.equal(frame[136], 1, "ambContactDark default in params9.x (float 136)");
+  assert.equal(frame[137], 1, "lampWallSpill default in params9.y (float 137)");
+  assert.equal(frame[138], 1, "windowSunFlash default in params9.z (float 138)");
+  assert.equal(frame[139], 1, "skyRimGlow default in params9.w (float 139)");
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
@@ -336,7 +343,9 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   // live in the FRAME uniform (params6, written at begin()); flareStreak2/aces*
   // and the HDR grade live in the COMPOSITE uniform (written at present()).
   assert.equal(gfx.begin({ tune: { wetDark: -7, carSparkle: 0.25, fogSunCore: 0.75,
-    fogClip: 0.5, carSunGlint: 3.5, neonBoost: 0.75, lampNearClamp: 2.5 }, shadowCtr: [44, 55, 66] }), true);
+    fogClip: 0.5, carSunGlint: 3.5, neonBoost: 0.75, lampNearClamp: 2.5,
+    ambContactDark: 0.25, lampWallSpill: 0.75, windowSunFlash: 2.5, skyRimGlow: 3.5 },
+    shadowCtr: [44, 55, 66] }), true);
   gfx.present({ tune: {
     bloomKnee: 4.25, vignetteSoft: -2.5,
     flareStreak2: 1.75, flareStreak: 3.5,
@@ -357,6 +366,10 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(frame[113], 3.5, "carSunGlint must occupy params7.y (float 113)");
   assert.equal(frame[114], 0.75, "neonBoost must occupy params7.z (float 114)");
   assert.equal(frame[115], 2.5, "lampNearClamp must occupy params7.w (float 115)");
+  assert.equal(frame[136], 0.25, "ambContactDark must occupy params9.x (float 136)");
+  assert.equal(frame[137], 0.75, "lampWallSpill must occupy params9.y (float 137)");
+  assert.equal(frame[138], 2.5, "windowSunFlash must occupy params9.z (float 138)");
+  assert.equal(frame[139], 3.5, "skyRimGlow must occupy params9.w (float 139)");
   composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 4.25);
   assert.equal(composite[32], -2.5);
@@ -376,19 +389,20 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {
-  // SkyU grew from 208 → 224 (mat4 64 + 10 vec4 160) for the p4 knob lane.
-  assert.match(CHUNKS_SOURCE, /SKY_UNIFORM_BYTES:\s*224/);
+  // SkyU grew from 224 → 240 (mat4 64 + 11 vec4 176) for the p5 cloudDef lane.
+  assert.match(CHUNKS_SOURCE, /SKY_UNIFORM_BYTES:\s*240/);
   assert.match(CHUNKS_SOURCE, /p3\s*:\s*vec4<f32>.*starSize, starTwinkle, moonDiscSize/);
   assert.match(CHUNKS_SOURCE, /p4\s*:\s*vec4<f32>.*moonHalo, sunCorona, sunSquash, cityGlowReach/);
+  assert.match(CHUNKS_SOURCE, /p5\s*:\s*vec4<f32>.*cloudDef/);
 
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const skyBuffer = h.buffers.find((buffer) => buffer.desc.size === 224);
-  assert.ok(skyBuffer, "a 224-byte SkyU buffer must be allocated");
+  const skyBuffer = h.buffers.find((buffer) => buffer.desc.size === 240);
+  assert.ok(skyBuffer, "a 240-byte SkyU buffer must be allocated");
 
   // Defaults: every parity knob resolves to 1.0 (= as-shipped GLX look). p3.x is
-  // DAY SKY BLUE; p3.yzw + p4 are the seven new knobs.
+  // DAY SKY BLUE; p3.yzw + p4 are the seven size/halo knobs; p5.x is cloudDef.
   assert.equal(gfx.begin({}), true);
   gfx.drawSky({});
   let sky = h.writes.filter((write) => write.buffer === skyBuffer).at(-1).values;
@@ -400,10 +414,11 @@ test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () =>
   assert.equal(sky[53], 1, "sunCorona default in p4.y (float 53)");
   assert.equal(sky[54], 1, "sunSquash default in p4.z (float 54)");
   assert.equal(sky[55], 1, "cityGlowReach default in p4.w (float 55)");
+  assert.equal(sky[56], 1, "cloudDef default in p5.x (float 56)");
 
   // Extreme upload: exactly-f32-representable fractions so lanes compare exactly.
   gfx.drawSky({ starSize: 0.25, starTwinkle: 0.75, moonDiscSize: 3.5, moonHalo: 0.5,
-    sunCorona: 2.5, sunSquash: 0.125, cityGlowReach: 4.25 });
+    sunCorona: 2.5, sunSquash: 0.125, cityGlowReach: 4.25, cloudDef: 2.25 });
   sky = h.writes.filter((write) => write.buffer === skyBuffer).at(-1).values;
   assert.equal(sky[49], 0.25, "starSize must occupy p3.y (float 49)");
   assert.equal(sky[50], 0.75, "starTwinkle must occupy p3.z (float 50)");
@@ -412,6 +427,7 @@ test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () =>
   assert.equal(sky[53], 2.5, "sunCorona must occupy p4.y (float 53)");
   assert.equal(sky[54], 0.125, "sunSquash must occupy p4.z (float 54)");
   assert.equal(sky[55], 4.25, "cityGlowReach must occupy p4.w (float 55)");
+  assert.equal(sky[56], 2.25, "cloudDef must occupy p5.x (float 56)");
 });
 
 test("WGSL sky consumes the GLX-parity knob lanes", () => {
@@ -422,12 +438,14 @@ test("WGSL sky consumes the GLX-parity knob lanes", () => {
   assert.match(CHUNKS_SOURCE, /smoothstep\(0\.025 \* moonDiscSize, 0\.010 \* moonDiscSize/, "MOON DISC SIZE knob");
   assert.match(CHUNKS_SOURCE, /140\.0 \/ moonHaloK\)\) \* 0\.28 \* moonHaloK/, "MOON HALO knob");
   assert.match(CHUNKS_SOURCE, /3\.0 \* cityGlowReach/, "CITY GLOW REACH knob");
+  assert.match(CHUNKS_SOURCE, /0\.85 \* cloudDef/, "CLOUD DEFINITION billow mix");
+  assert.match(CHUNKS_SOURCE, /moonDisc \* 1\.10 \+ moonHalo\) \* \(1\.0 - covRay\)/, "moon sits behind the cloud deck");
 });
 
 test("WGSL consumes wet darkening, bloom knee, and vignette softness uniforms", () => {
   assert.match(
     CHUNKS_SOURCE,
-    /mix\(1\.0,\s*clamp\(1\.0\s*-\s*0\.58\s*\*\s*F\.params6\.x,\s*0\.0,\s*1\.0\),\s*wet\)/,
+    /clamp\(1\.0\s*-\s*0\.58\s*\*\s*F\.params6\.x,\s*0\.0,\s*1\.0\)/,
     "wetDark must mirror the GLSL clamp so high tuner values cannot make albedo negative",
   );
   assert.match(POST_SOURCE, /bloomKnee\s*=\s*U\.imgFx\.w/);
@@ -477,7 +495,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -534,11 +552,22 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
+  assert.match(CHUNKS_SOURCE, /surfaceId <= 27/);
+  assert.match(CHUNKS_SOURCE, /wetSheen/);
   assert.match(CHUNKS_SOURCE, /fn roadMarkings\(/);
   assert.match(CHUNKS_SOURCE, /-0\.94201624/);
   assert.match(CHUNKS_SOURCE, /lampShadowTex/);
   assert.match(CHUNKS_SOURCE, /aInst0/);
   assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
+  assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
+  assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
+  assert.match(CHUNKS_SOURCE, /0\.18 \* F\.params9\.w/, "SKY RIM GLOW");
+  assert.doesNotMatch(CHUNKS_SOURCE, /STILL DEFERRED vs GLX: uAmbContactDark/);
+  assert.doesNotMatch(WGX_SOURCE, /depthResolveTex/);
+  assert.doesNotMatch(WGX_SOURCE, /shadowPipelineInst/);
+  assert.match(POST_SOURCE, /li < 6/, "god-ray lamp loop matches GLX GODRAY_FS consumer cap");
+  assert.match(WGX_SOURCE, /Math\.min\(6, total\)/);
   assert.match(POST_SOURCE, /texture_depth_2d/);
   assert.match(POST_SOURCE, /uLampStr|lampStr/);
   assert.match(POST_SOURCE, /hazeStr|uHazeStr/);

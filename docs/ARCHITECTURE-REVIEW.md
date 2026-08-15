@@ -405,11 +405,13 @@ most-load-bearing first.
   anything during the synchronous script wall — sample in `requestAnimationFrame`,
   which runs before each paint, and read the computed values rather than a
   timestamp.
-- **Cross-backend shading divergences the parity test cannot see**: TLX ports the
-  pre-fix wet-surface model (soaked grass mirrors the sky on three.js; the wet
-  mirror floor is 0.15 vs GLSL's 0.55), and the MIRROR chrome surface id 27
-  exists only in GLSL, so chrome liveries lose their mirror on both WGX and TLX.
-  These are renderer-parity work, not GLX defects.
+- **Cross-backend shading divergences the parity test cannot see**: TLX and
+  WGX LIT now classify chrome (`SURFACES.mirror = 27`) and key wet reflections
+  off `wetSheen` (porous ground no longer mirrors lamps). WGX FrameU `params9`
+  carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` /
+  `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. Remaining WGX sky reductions
+  (overcast grey-shift, twilight horizon bank, azimuthal gradient) are
+  renderer-parity work, not GLX defects.
 - **The relational agent policy — FIXED (2026-08-13).** The under-drive was
   never the speed caps: pure feedback steering cannot track road curvature
   at speed (traced: 13.9 m road departure at 55 m/s with steer 0.04). The

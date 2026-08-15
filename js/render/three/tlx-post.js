@@ -68,7 +68,7 @@
     try {
       const gl = renderer.backend && renderer.backend.gl;
       if (gl) hdr = !!gl.getExtension("EXT_color_buffer_float");
-    } catch (_) {}
+    } catch (_) { /* WebGL backend absent or extension query threw — keep hdr=true (WebGPU is always half-float) */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
 
     // ── 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex) ─────────────────
@@ -139,7 +139,7 @@
         t.colorSpace = THREE.NoColorSpace;
         t.needsUpdate = true;
         return t;
-      } catch (_) { return null; }
+      } catch (_) { return null; }   // no canvas 2D → knob becomes a no-op (black fallback)
     }
     const dirtTex = makeDirtTex();
 
@@ -422,7 +422,12 @@
       C.sunUV.value.set(sunUVx, sunUVy);
       C.flareStr.value = flareStr * (o.flareMul != null ? o.flareMul : 1);   // LENS FLARE knob
       C.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;
-      C.sunShaft.value = sunShaft * gk("sunShaftMul", 1);  // SCREEN SUN-SHAFT knob
+      // GATED ON haveBloom: the shaft pass READS THE BLOOM CHAIN
+      // (COMPOSITE_FS in js/render/shaders/post.js). When bloom is off we
+      // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
+      // GLX zeroes the uniform rather than paying the taps; same here.
+      const _shaftMul = gk("sunShaftMul", 1);
+      C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
       C.gradeShadow.value.set(gs ? gs[0] : 1, gs ? gs[1] : 1, gs ? gs[2] : 1);
@@ -467,6 +472,9 @@
       C.acesE.value = gk("acesE", 0.14);
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
       C.shaftDecay.value = gk("sunShaftDecay", 0.82);
+      // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
+      // value (1) keeps the shipped radius (js/render/glx/post.js).
+      C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
       C.flareStreak.value = gk("flareStreak", 7.0);
       C.flareStreak2.value = gk("flareStreak2", 0.5);
       // EXHAUST HEAT HAZE plume anchor (opts.haze = {u, v, str} | null).

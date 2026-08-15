@@ -66,8 +66,8 @@
  * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
  * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
  * path keeps the flat fogColor clear, and the env-probe double-call (M9)
- * just overwrites uniforms (last drawSky before render wins). No post yet
- * (M8).
+ * just overwrites uniforms (last drawSky before render wins). Post chain
+ * is live (M8, tlx-post.js).
  *
  * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
  * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into

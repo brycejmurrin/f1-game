@@ -376,6 +376,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // 4. GODRAY — world-space 16-step march through scene depth + sun/lamp
   //    shadow maps (GLX GODRAY_FS). Composite adds the result. CPU gates on
   //    sun-on-screen or lampVol > 0. A separable BLUR follows the march.
+  //    Lamp loop is 6, not 12: GLX uploads GR_MAX_LIGHTS=12 as headroom but
+  //    GODRAY_FS only consumes nearest-6 (16×6 cost cap). Matching the
+  //    consumer keeps WGX from showing more beams than GLX.
   // ════════════════════════════════════════════════════════════════════════
   const GODRAY = `
 struct GodrayU {
@@ -473,7 +476,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     }
     if (uLampStr > 0.0 && td < 200.0) {
       let hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);
-      for (var li = 0; li < 6; li = li + 1) {
+      for (var li = 0; li < 6; li = li + 1) {   // GLX GODRAY_FS consumer cap (upload pad is 12; 16×6 is the cost floor)
         if (li >= nL) { break; }
         let LP = lights[li].posRad.xyz - p;
         let rad = lights[li].posRad.w;

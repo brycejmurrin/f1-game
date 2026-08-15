@@ -144,8 +144,8 @@ const WGX = (function () {
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 544
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 136
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 32
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 2048
@@ -473,11 +473,11 @@ const WGX = (function () {
     const _matScales = new Float32Array(MAT_TEX_LAYERS);
     let _msaaCount = MSAA_COUNT, _passSamples = 1;
     let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
-    let depthResolveTex = null, depthResolveView = null, pDepthResolve = null, depthResolveBG = null;
+    let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let identInstanceBuf = null;
     let pParticle = null, pParticleAdd = null, particleUBO = null, particleVBO = null, _particleCap = 0;
-    let skyPipelineMS = null, shadowPipelineInst = null;
+    let skyPipelineMS = null;
     let _fxPipes = { 1: {}, 2: {} };
 
     // Blocker map objects.
@@ -741,7 +741,7 @@ const WGX = (function () {
           _gpuQuerySet = device.createQuerySet({ type: "timestamp", count: 2 });
           _gpuResolveBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
           _gpuReadBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-        } catch (_) { _timestampOk = false; }
+        } catch (_) { _timestampOk = false; /* timestamp-query feature advertised but createQuerySet failed */ }
       }
 
       // ── Blocker downsample pipeline ──
@@ -1343,6 +1343,8 @@ const WGX = (function () {
           next.postReady = true;
         }
       } catch (_) {
+        // Alloc/bind of the new size failed: keep the previous target set
+        // and retry after a cooldown (same-size) or immediately (new size).
         _destroyTargetSet(next);
         _targetRetryW = width; _targetRetryH = height;
         _targetRetryAt = Date.now() + 1000;
@@ -1608,7 +1610,7 @@ const WGX = (function () {
         });
         device.queue.copyExternalImageToTexture({ source: cv, flipY: true }, { texture: tex }, [S, S]);
         return tex.createView();
-      } catch (_) { return _blackFallback(); }
+      } catch (_) { return _blackFallback(); /* dirt-map canvas/upload failed: composite samples black 1×1 */ }
     }
 
     // 2D texture (decal atlas, Phase 4): upload an ImageBitmap/canvas/ImageData
@@ -1800,6 +1802,13 @@ const WGX = (function () {
       d[133] = _lampShadowArmed ? 1 : 0;
       d[134] = _lampIdx;
       d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
+      // params9 (floats 136..139): LIT tuner knobs that used to have no FrameU
+      // lane. Always pack the resolved value — WGSL reads them directly, so 0
+      // is a real "off", not an unset slot. Defaults = shipped GLX look.
+      d[136] = (T && T.ambContactDark != null) ? T.ambContactDark : 1.0;
+      d[137] = (T && T.lampWallSpill  != null) ? T.lampWallSpill  : 1.0;
+      d[138] = (T && T.windowSunFlash != null) ? T.windowSunFlash : 1.0;
+      d[139] = (T && T.skyRimGlow     != null) ? T.skyRimGlow     : 1.0;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -1865,6 +1874,8 @@ const WGX = (function () {
       skyData[53]=f.sunCorona     != null ? f.sunCorona     : 1;
       skyData[54]=f.sunSquash     != null ? f.sunSquash     : 1;
       skyData[55]=f.cityGlowReach != null ? f.cityGlowReach : 1;
+      // p5.x: CLOUD DEFINITION (GLX uCloudDef). 0 is a valid "soft smear".
+      skyData[56]=f.cloudDef      != null ? f.cloudDef      : 1;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
@@ -2256,10 +2267,14 @@ const WGX = (function () {
         s[65] = lastFrame && lastFrame.cloudSpeed != null ? lastFrame.cloudSpeed : 1;
         s[66] = (T && T.hgAniso != null) ? T.hgAniso : 0.60;
         s[67] = (T && T.hgFloor != null) ? T.hgFloor : 0.020;
-        // Nearest-N to the eye (GLX glx/post.js): the march only reads 6, but
-        // the shadowed floodlight is remapped into that nearest-N order — using
-        // frame.lights[0..5] + the raw frame index missed distant-but-first
-        // records and carved the wrong cone.
+        // Nearest-N to the eye (GLX glx/post.js). GLX uploads 12 slots
+        // (GR_MAX_LIGHTS) but GODRAY_FS only marches the nearest 6
+        // ("was 12" — 16 steps × 6 is the measured cost cap; slots 6-11
+        // are unused headroom). Match the consumer, not the upload pad:
+        // raising this loop to 12 would make WGX show more beams than
+        // GLX. The shadowed floodlight is remapped into that nearest-N
+        // order — using frame.lights[0..5] + the raw frame index missed
+        // distant-but-first records and carved the wrong cone.
         let nL = 0, grLampIdx = -1;
         const L = lastFrame && lastFrame.lights;
         const total = L ? (L.length / 15) | 0 : 0;
@@ -2940,7 +2955,7 @@ const WGX = (function () {
         const name = mods[i][0], mod = mods[i][1];
         if (!mod || typeof mod.getCompilationInfo !== "function") continue;
         let info = null;
-        try { info = await mod.getCompilationInfo(); } catch (_) { continue; }
+        try { info = await mod.getCompilationInfo(); } catch (_) { continue; /* compilation-info unsupported: skip this module, never fatal */ }
         const msgs = (info && info.messages) || [];
         for (let j = 0; j < msgs.length; j++) {
           const m = msgs[j];
