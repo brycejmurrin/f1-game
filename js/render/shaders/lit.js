@@ -796,10 +796,23 @@ void main() {
       : (mirrorSurface ? max(uClearcoat, 0.85)
       : (glassSurface ? uClearcoat * 0.45 : 0.0)))
     : uClearcoat;
+  // PAINT gets uMetalness. It used to fall through to a literal 0.0, which made
+  // CAR METALLIC a 100% dead slider: every car pixel is classified (car3d.js
+  // surfaceOf() falls back to paint), metal/mirror are pinned by the max() floors
+  // below, carbon is a constant — so uMetalness reached NOTHING. The knob would
+  // have needed 6.5 against a max of 2.5 to move even the metal parts.
+  // This is restoring intent, not inventing a look: js/game/tables.js sets
+  // metalness 0.12 on all four PAINT_* constants and its comment says the mild
+  // metalness "tints specular + reflections toward the team colour like real
+  // metallic flake, and scales the sky env down so the paint stays saturated" —
+  // which is precisely what metalness does here (f0 mix toward albedo, and the
+  // (1.0 - metalness) factors on diffuse and on envAdd). The shader was throwing
+  // that data away. Scoped to paintSurface: rubber, glass, emissive and panel
+  // stay dielectric on the same 0.0 they had.
   float metalness = classifiedCar
     ? (metalSurface ? max(uMetalness, 0.78)
       : (mirrorSurface ? max(uMetalness, 0.55)
-      : (carbonSurface ? 0.08 : 0.0)))
+      : (carbonSurface ? 0.08 : (paintSurface ? uMetalness : 0.0))))
     : uMetalness;
   float specular = classifiedCar
     ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))

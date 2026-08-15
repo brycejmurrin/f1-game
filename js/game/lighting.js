@@ -687,7 +687,19 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // tail end is farthest). Measure against the SAME budget setFrameLights culled
   // to — against the literal 32 this whole reserve was a no-op on the mobile
   // tier, i.e. on exactly the devices it was written to protect.
-  const room = lampCap(cars.length, mobileTier) - ((L.length / 15) | 0);
+  // Measure against the TOTAL slot budget, not the LAMP budget. lampCap conflates
+  // the two: with traffic it returns lampCull (40) because — in its own words —
+  // "~8 of the 48 shader slots stay free for tail-lights". setFrameLights culls
+  // lamps to that 40, so room came out 40 - 40 = 0 and this evicted lamps into
+  // eight slots that were sitting empty. The eviction is a hard delete with no
+  // fade (the cull's distance ramp has already been applied and baked in), so on
+  // a desktop night grid three lamps at FULL brightness vanished the moment a
+  // third rival came inside tailRange, and which three depended on camera yaw
+  // because the set is ordered by the yaw-biased metric.
+  // Mobile still evicts, deliberately: there the cap IS 24 lights total, which is
+  // the per-fragment budget the tier exists to protect.
+  const SLOTS = mobileTier ? 24 : 48;   // js/render/glx.js MAX_LIGHTS
+  const room = SLOTS - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
   // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =

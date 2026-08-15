@@ -660,6 +660,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     metalness = select(0.0, max(D.mat0.w, 0.78), metalSurface);
     if (mirrorSurface) { metalness = max(D.mat0.w, 0.55); }
     if (carbonSurface) { metalness = 0.08; }
+    // PAINT gets metalness rather than the 0.0 base — mirrors
+    // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_* for the
+    // metallic-flake tint; the 0.0 discarded it and left CAR METALLIC dead.
+    if (paintSurface) { metalness = D.mat0.w; }
     if (rubberSurface) { specular = 0.18; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
     if (carbonSurface) { specular = 0.48; }

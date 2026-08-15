@@ -867,7 +867,12 @@
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
             select(mirrorSurface, max(matU.metalness, 0.55),
-              select(carbonSurface, float(0.08), float(0.0)))),
+              // PAINT gets metalness instead of falling through to 0.0 — mirrors
+              // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
+              // and describes the flake it is meant to produce; the 0.0 discarded
+              // it and made CAR METALLIC dead on every car pixel.
+              select(carbonSurface, float(0.08),
+                select(paintSurface, matU.metalness, float(0.0))))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
