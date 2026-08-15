@@ -396,7 +396,7 @@ test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
   const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
   assert.match(lit, /wetSheen \* 0\.55/);
-  assert.match(tsl, /wet\.mul\(0\.55\)/);
+  assert.match(tsl, /wetSheen\.mul\(0\.55\)/);
   assert.match(lit, /surfaceId <= 27/);
   assert.match(lit, /mirrorSurface = surfaceId == 27/);
   assert.match(tsl, /lessThanEqual\(27\.0\)/);
