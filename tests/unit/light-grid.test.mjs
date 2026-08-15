@@ -162,6 +162,27 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // game.js cityGlowTint: weakest-channel factor 1 - 0.18*(tint/0.28) hits 0
   // at 0.28/0.18 ≈ 1.556. Max 1.5 is the last live notch.
   assert.ok(get("cityGlowTint").max <= 0.28 / 0.18 + 0.05, "cityGlowTint past weak-channel 0");
+  // post.js: ao = 1 - clamp(occ)*uStrength, written raw to the AO buffer.
+  // game.js uploads 0.95*aoStr with no clamp. Past slider 1/0.95 the buffer
+  // goes negative and `c *= aoV` inverts creases (bright pits).
+  assert.ok(get("aoStr").max <= 1 / 0.95 + 1e-9,
+    `aoStr max ${get("aoStr").max} is past the invert (uStrength=1 at 1/0.95)`);
+  // lit.js: mix(..., clamp(uGroundMist * band * fbm * dRamp, 0, 0.45)).
+  // glx.js: uGroundMist = groundMist * mistDensity. atmosphere.js thinnest
+  // authored non-zero gm is wet 0.12 → last live 0.45/0.12 = 3.75.
+  assert.ok(get("mistDensity").max <= 0.45 / 0.12 + 1e-9,
+    `mistDensity max ${get("mistDensity").max} is past the 0.45 mix cap at wet gm 0.12`);
+  // sky.js: clamp(daytime*(1-overcast)*bandLM*uDaySkyBlue, 0, 1). Peak
+  // (bandLM=1) saturates at 1; 3 is last live for the core band (bandLM>=1/3).
+  assert.ok(get("daySkyBlue").max <= 3 + 1e-9,
+    `daySkyBlue max ${get("daySkyBlue").max} is past 3× the peak-band clamp`);
+  // game.js: Math.min(1, floodEmitMul * factor); dusk factor tops at 0.70.
+  assert.ok(get("floodEmitMul").max <= 1 / 0.70 + 0.01,
+    `floodEmitMul max ${get("floodEmitMul").max} is past the min(1) emit cap at dusk 0.70`);
+  // sky.js: clamp(pow(sd,5)*0.22*horizon*mieDamp*uMieScatter, 0, 1). Peak
+  // (on-sun, horizon, clear) saturates at 1/0.22.
+  assert.ok(get("mieScatter").max <= 1 / 0.22 + 0.01,
+    `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
 });
 
 test("asymmetric white-balance sliders are not ±N when the mix is not", () => {
