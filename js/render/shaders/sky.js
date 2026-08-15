@@ -357,7 +357,15 @@ void main() {
     vec3 moonCol = vec3(0.82, 0.88, 1.00);
     // The halo should only appear above the horizon and not wash out too much.
     if (up > 0.0 && md > 0.0) {
-      c += moonCol * (moonDisc * 1.10 + moonHalo);
+      // Cloud occlusion: the moon sits BEHIND the cloud deck exactly as the stars
+      // do, so coverage along this ray (cityCov, hoisted from the cloud pass
+      // above) fades the disc and halo out — the same term and the same style the
+      // star line uses. Without it a stormy or foggy night (cover reaches ~0.74
+      // wet / ~0.57 in fog) painted a crisp moon ON TOP of the clouds while the
+      // stars behind it were correctly hidden. The deck still picks up the moon's
+      // blue-silver tint from the moonLit term in the cloud pass, which is what
+      // the moon-behind-cloud look is made of.
+      c += moonCol * (moonDisc * 1.10 + moonHalo) * (1.0 - cityCov);
     }
   }
 

@@ -1,15 +1,19 @@
 /* Apex 26 — TLXShaders.shadowSys: the three-map shadow subsystem for the TLX
  * backend (M4). The three.js sibling of js/render/glx/shadow.js:
  *
- *   - STATIC SUN map   2048² desktop / 1024² mobile tier — snap-cached by
+ *   - STATIC SUN map   2048² desktop / 1024² on ANY phone — snap-cached by
  *     game.js (shadowBegin only runs on a recentre / sun change), terrain +
  *     road + props casters.
- *   - CAR map          1024², desktop only — cleared + redrawn every armed
+ *   - CAR map          1024², true desktop only — cleared + redrawn every armed
  *     frame so moving cars get live sun shadows (direction/length correct,
  *     car-on-car works). Armed by carShadowBegin, cleared in tlx present().
- *   - LAMP spot map    512², desktop only — per-frame depth render down the
- *     nearest floodlight's PERSPECTIVE beam; lampIdx tags which frame.lights
- *     record the lit pass gates its PCF to.
+ *   - LAMP spot map    512², true desktop only — per-frame depth render down
+ *     the nearest floodlight's PERSPECTIVE beam; lampIdx tags which
+ *     frame.lights record the lit pass gates its PCF to.
+ *
+ * All three key on the DEVICE (ctx.isMobile), never the memory tier — see the
+ * note above the constants for the GLX rule and the bug that keying on
+ * mobileTier caused.
  *
  * game.js DRIVES all three passes (snap cache, caster selection, light VPs —
  * js/game.js + 3636-3691); this file only implements the seam members.
@@ -35,7 +39,7 @@
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.shadowSys = (THREE, TSL, ctx) => ({ S, sunTex, … })
- * ctx = { renderer, mobileTier }. NEVER touches THREE/TSL at script eval —
+ * ctx = { renderer, isMobile, mobileTier }. NEVER touches THREE/TSL at script eval —
  * three exists only inside TLX.create().
  */
 "use strict";
@@ -43,11 +47,25 @@
 (function () {
   function shadowSys(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
-    const mobileTier = !!ctx.mobileTier;
+    // Keyed on the DEVICE, not the memory tier — js/render/glx/shadow.js's rule,
+    // for its reasons: GRAPHICS: HIGH on a phone must not 4x the snap-cache
+    // redraw cost (terrain + road + the whole city into the map, roughly every
+    // 10 m of travel — that redraw frame IS the periodic HIGH-tier stall), and
+    // the car/lamp maps are per-FRAME depth passes, a fill cost that is "the
+    // HIGH-tier lag, not a memory cap". js/game/perf.js draws the same line
+    // (its crash sentinel gates on isMobile, "NOT just the memory-safe
+    // STANDARD tier"). These three keyed on mobileTier instead, so a phone that
+    // opted into GRAPHICS: HIGH took a 2048² sun map plus two per-frame depth
+    // passes that GLX refuses on EVERY phone — i.e. the config most likely to
+    // be jetsam-killed got the allocations GLX withholds from it.
+    // mobileTier is kept as the fallback for a caller that predates
+    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx.js), so the
+    // OR can only ever be conservative, never wrong.
+    const isMobile = !!ctx.isMobile || !!ctx.mobileTier;
 
-    const SUN_SIZE = mobileTier ? 1024 : 2048;   // 1024² saves 12 MB on the mobile tier (GLX parity)
-    const CAR_SIZE = 1024;                        // dynamic car-only map (desktop tier)
-    const LAMP_SIZE = 512;                        // nearest-floodlight spot map (desktop tier)
+    const SUN_SIZE = isMobile ? 1024 : 2048;   // 1024² saves 12 MB on every phone (GLX parity)
+    const CAR_SIZE = 1024;                      // dynamic car-only map (true desktop only)
+    const LAMP_SIZE = 512;                      // nearest-floodlight spot map (true desktop only)
 
     // Shared state, field names 1:1 with GLXShadow's S so tlx.js's state
     // introspection (carShadowState/lampShadowState) and tsl-lit's updateFrame
@@ -58,7 +76,7 @@
       lightVP: new Float32Array(16),
       pcssEnabled: false,        // TODO M4-PCSS (see header)
       // True only between a Begin that actually opened a pass and its End —
-      // casts gate on THIS, not enabled: on the mobile tier the car/lamp maps
+      // casts gate on THIS, not enabled: on a phone the car/lamp maps
       // are never created, so their Begins no-op but game.js still issues the
       // caster draws, which must be silently swallowed (GLX S.depthPassOn).
       depthPassOn: false,
@@ -96,8 +114,8 @@
     }
 
     const sunRT = makeDepthTarget(SUN_SIZE, "TLXSunShadow");
-    const carRT = mobileTier ? null : makeDepthTarget(CAR_SIZE, "TLXCarShadow");
-    const lampRT = mobileTier ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow");
+    const carRT = isMobile ? null : makeDepthTarget(CAR_SIZE, "TLXCarShadow");
+    const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow");
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
@@ -196,7 +214,7 @@
     }
 
     function carShadowBegin(lightVP, boxScale) {
-      if (!S.carEnabled) return;      // mobile tier: no-op, casts swallowed via depthPassOn
+      if (!S.carEnabled) return;      // phone: no-op, casts swallowed via depthPassOn
       beginPass(carRT, lightVP, S.carLightVP);
       // GLX parity: SHADOW DISTANCE widens the car box, and the depth bias
       // must scale with the box/texel ratio or the widened map self-shadows
