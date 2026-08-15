@@ -1,0 +1,493 @@
+# WebGPU vs WebGL2 — WGX parity research (2026-08)
+
+How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.js`
++ `js/render/shaders/` + `js/render/glx/`) and the opt-in native WebGPU backend
+(`js/render/webgpu/wgx.js` + `wgsl-*.js`).
+
+**Status (2026-08): the gap inventory in §3 is implemented** in
+`js/render/webgpu/wgx.js` + `wgsl-*.js`. This file stays as the recipe book
+and the sharp-edge list. WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX
+stays the default. Nothing here flips that.
+The platform assumption that justified the freeze — "Safari cannot run WebGPU"
+— has moved; the *shader-duplication* cost has not. See
+[CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 for the support
+matrix and [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
+
+Companion provenance (do not treat as current structure): the original
+migration plan and four phase build logs under `docs/archive/webgpu/`.
+
+---
+
+## 1. Verdict
+
+Every documented WGX gap is **implementable in core WebGPU today**. None of
+them need a compute-shader rewrite, a new shading language, or a browser flag
+on the devices that already run WGX (`navigator.gpu` + a successful
+`WGX.create()`). The freeze was a cost call (two hand-tuned shader trees, no
+build step to keep them in sync), not an API wall.
+
+The gaps fall into three kinds:
+
+| Kind | Examples | What it actually is |
+|---|---|---|
+| **API missing in WGX** | `gpuTimer`, `createTextureArray`, `lampShadowBegin`, instancing family, `drawParticles` | Declared `undefined` on the backend object so game.js does not inherit a dead GLX function. The WebGPU primitive exists. |
+| **Reduced shader** | PCSS 3×3 vs Poisson-8, screen-radial god-ray vs world march, lamp-fog `× 0.6`, env cube LOD 0, no `applyMaterial*` | Port work against `js/render/shaders/`. Bindings are already there or are one buffer away. |
+| **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core, and SSAO needs a sampleable depth. That is the only real API mismatch with GLX's `blitFramebuffer`. |
+
+`WGX.create()` currently calls `adapter.requestDevice()` with **no
+`requiredFeatures`**. The only gap that needs a feature bit is `gpuTimer`
+(`"timestamp-query"`). Everything else is core.
+
+---
+
+## 2. What WGX already does
+
+Do not re-port these. They are the Phase 2–4b ceiling:
+
+- Adapter / device / swapchain, `Z01` GL→WebGPU clip remap, device-lost → GLX fallback
+- LIT into `rgba16float` + `depth24plus`; FRAME UBO + 32-light storage buffer
+- Sun + car shadow maps, comparison-sampler PCF, 512² `r16float` blocker map
+- Sky, chunked cull, env-probe cube (LOD 0), road-only SSR pass
+- Post: SSAO + separable denoise, world-space god-ray + lamp vol + separable blur, bloom mip chain, ACES composite, FXAA
+- Composite image FX: chromatic aberration, sharpen, speed blur, grain, flare
+- FX into the open lit pass: blob shadow, skid, glow, decal
+- Boot self-test + pixel readback; any proven failure returns `null` → GLX
+
+The install rule is load-bearing and must stay: every GLX name WGX does not
+implement is listed as `undefined` on the returned object
+(`js/render/webgpu/wgx.js`). Omitting a name keeps GLX's own function, which
+closes over a null `gl` and throws mid-frame. Gated by
+`tests/unit/backend-surface-parity.test.mjs`.
+
+---
+
+## 3. Gap inventory (verified against current source)
+
+`docs/ARCHITECTURE.md` lists four reduced items plus baked arrays. The live
+surface is larger — several GLX features landed after WGX was frozen.
+
+| Gap | GLX today | WGX today | Kind | WebGPU primitive |
+|---|---|---|---|---|
+| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 2` (1 on mobile); color `resolveTarget` + manual MS-depth resolve | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
+| **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
+| **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
+| **God-ray / lamp vol** | World-space march through depth + sun/lamp shadow maps; separable blur | World-space 16-step march + double separable blur | Shader + binds | Same textures WGX already owns |
+| **gpuTimer** | `EXT_disjoint_timer_query_webgl2` | `gpuTimer` / `gpuMs`; `"timestamp-query"` when the adapter has it | API | `"timestamp-query"` + `timestampWrites` |
+| **Baked MAT arrays** | `TEXTURE_2D_ARRAY` + mips + aniso; `matTexMix` ships 1.0 | `createTextureArray` / `setMaterialMaps` / `materialMapState` | API + shader | `texture_2d_array<f32>` + blit mip chain |
+| **Env probe mips** | `generateMipmap` after the 6-face cycle; roughness LOD | Mip blit after the 6-face cycle; `textureSampleLevel(..., rough * maxLod)` | Helper | Same mip-gen blit as arrays |
+| **Lamp shadows** | 512² spot map + 4-tap PCF in lit + god-ray | `lampShadowBegin/End` + 4-tap PCF | API | Clone of the existing sun depth pass |
+| **Instancing** | Full family; `TrackGraph.batches()` consumer | Full family (`createInstancedBatch` … `castShadowInstanced`) | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
+| **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
+| **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Ported (`applyMaterial` / `applyMaterialNormal`) | Shader | No new API |
+| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Vertex stride 52 + `aTrk` + `roadMarkings()` | Layout + shader | Extra `float32x3` attribute |
+| **Heat haze** | Composite `uHaze*` | Composite `dirtFx.yzw` + time | Shader | Composite uniform |
+| **SSR car-paint** | Scene `.a` tag in composite | Scene alpha tags car-paint (`select(alpha, 0.35, …)`) | Shader | Restore the `.a` path |
+| **SSAO denoise** | Separable blur | Shared 5-tap `BLUR` (H then V) | Shader | Same kernel as GLX `BLUR_FS` |
+| **`createTexture` mips** | `gl.generateMipmap` | `_generateMips` blit chain | Helper | Same blit as arrays |
+
+Honest `pcss()`: once the Poisson kernel lands, keep returning `true`. Until
+then the current always-`true` over-claims quality versus GLX.
+
+---
+
+## 4. Recipes (WebGPU API → WGX change)
+
+### 4.1 `gpuTimer` — smallest, unblocks measuring the rest
+
+GLX wraps the whole frame (`begin()` → `present()`) in
+`EXT_disjoint_timer_query_webgl2`. WebGPU's equivalent is a **per-pass** pair
+of timestamps, then a sum.
+
+Feature-detect, then request. Do **not** fail `create()` if the bit is absent
+— match GLX's `{supported:false}`:
+
+```js
+const canTimestamp = adapter.features.has("timestamp-query");
+device = await adapter.requestDevice({
+  requiredFeatures: canTimestamp ? ["timestamp-query"] : [],
+});
+```
+
+Per pass (lit, shadow, each post pass you care about):
+
+```js
+const querySet = device.createQuerySet({ type: "timestamp", count: 2 });
+const pass = encoder.beginRenderPass({
+  ...desc,
+  timestampWrites: {
+    querySet,
+    beginningOfPassWriteIndex: 0,
+    endOfPassWriteIndex: 1,
+  },
+});
+```
+
+After `pass.end()`:
+
+```js
+encoder.resolveQuerySet(querySet, 0, 2, resolveBuf, 0);
+encoder.copyBufferToBuffer(resolveBuf, 0, readBuf, 0, 16);
+// after submit, when readBuf is unmapped:
+await readBuf.mapAsync(GPUMapMode.READ);
+const t = new BigUint64Array(readBuf.getMappedRange());
+const ns = Number(t[1] - t[0]);   // implementation-defined epoch; delta is the duration
+readBuf.unmap();
+```
+
+Surface: implement `gpuTimer(on?)` / `gpuMs()` instead of `undefined`. Same
+shape as GLX — `{supported, on}` and last-good ms or `-1`.
+
+**Pitfalls**
+
+- Chrome **quantizes** timestamps to 100 µs against timing attacks
+  ([What's New in WebGPU — Chrome 121](https://developer.chrome.com/blog/new-in-webgpu-121)).
+  Still enough for `__apex.gpuTimer()`. The unquantized path is a developer
+  flag, not something to depend on.
+- `"timestamp-query-inside-passes"` / `writeTimestamp` mid-pass is a *different*,
+  not-universally-shipped feature. Do not need it; begin/end of the lit + post
+  passes matches GLX's whole-frame number closely enough.
+- `mapAsync` is one frame late. GLX is too (`QUERY_RESULT_AVAILABLE`). Keep
+  a 2–3 buffer ring so a mapped buffer is never also a copy dest.
+- SwiftShader / CI: treat missing feature as `supported: false`. Do not skip
+  the self-test.
+
+Tutorial that matches this shape:
+[WebGPU Fundamentals — Timing](https://webgpufundamentals.org/webgpu/lessons/webgpu-timing.html).
+
+### 4.2 Mip-gen helper — unblocks env cube + baked arrays + `createTexture`
+
+WebGPU has **no** `generateMipmap`. The standard replacement is a fullscreen
+triangle that samples mip `n-1` into mip `n`, once per layer / cube face
+([WebGPU Fundamentals — generating mipmaps](https://webgpufundamentals.org/webgpu/lessons/webgpu-compatibility-mode.html)).
+
+Requirements on the texture:
+
+```js
+usage: GPUTextureUsage.TEXTURE_BINDING
+     | GPUTextureUsage.COPY_DST
+     | GPUTextureUsage.RENDER_ATTACHMENT,   // mip n is a color attachment
+mipLevelCount: floor(log2(size)) + 1,
+```
+
+One cached pipeline per `(format, viewDimension)` (`2d` / `2d-array` / `cube`).
+Linear sampler, clamp. Submit as its own encoder so `createTextureArray` can
+run at pack-load time, not inside the frame.
+
+Call sites once the helper exists:
+
+1. `createTexture` — decal atlases currently have no mips
+2. Env cube — after the 6-face cycle in `envFaceEnd` (GLX does `generateMipmap`
+   there). Then LIT samples with `textureSampleLevel(envCube, samp, dir, rough * maxLod)`
+   instead of LOD `0.0`
+3. `createTextureArray` — §4.3
+
+Anisotropy is core: `device.createSampler({ minFilter: "linear", magFilter: "linear",
+mipmapFilter: "linear", maxAnisotropy: 16, addressModeU: "repeat", addressModeV: "repeat" })`.
+GLX applies aniso on the MAT arrays because trilinear smears tarmac at range.
+
+### 4.3 Baked material arrays (`createTextureArray` / `setMaterialMaps`)
+
+GLX: `texStorage3D` + per-layer `texSubImage3D` + `generateMipmap`; layer index
+**is** the MAT id; `matTexMix` ships at 1.0 (`js/render/assets.js` feature-detects
+both methods; WGX leaves the pack off).
+
+WebGPU equivalent (core, no feature bit):
+
+```js
+const tex = device.createTexture({
+  size: [size, size, layers],          // depthOrArrayLayers = MAT count
+  format: "rgba8unorm",
+  mipLevelCount: mips,
+  usage: GPUTextureUsage.TEXTURE_BINDING
+       | GPUTextureUsage.COPY_DST
+       | GPUTextureUsage.RENDER_ATTACHMENT,
+});
+for (let layer = 0; layer < layers; layer++) {
+  if (!images[layer]) continue;
+  device.queue.copyExternalImageToTexture(
+    { source: images[layer], flipY: false },   // GLX UNPACK_FLIP_Y is false here
+    { texture: tex, origin: [0, 0, layer] },
+    [size, size],
+  );
+}
+generateMips(device, tex);   // §4.2, viewDimension: "2d-array"
+```
+
+WGSL (LIT group 0 — pick free bindings; today 0–7 are taken):
+
+```wgsl
+@group(0) @binding(8) var matAlbedo : texture_2d_array<f32>;
+@group(0) @binding(9) var matNormal : texture_2d_array<f32>;
+@group(0) @binding(10) var matSamp  : sampler;
+// then, matching applyMaterialTexNormal in js/render/shaders/lit.js:
+let albedo = textureSample(matAlbedo, matSamp, uv, i32(matId));
+```
+
+Also export `setMaterialMaps` / `materialMapState` (or the pack stays
+undetected). `assets.js` already probes `typeof gfx.createTextureArray === "function"`.
+
+**Pitfall:** a missing layer must stay a well-defined zero, not a validation
+error. GLX relies on `texStorage3D` allocating every layer. Create the full
+array up front the same way; skip `copyExternalImageToTexture` on empty slots
+and keep `matTexScales[i] === 0` so the shader short-circuits.
+
+### 4.4 PCSS quality — shader only
+
+No new resource. WGX already:
+
+- binds `shadowTex` + `sampler_comparison` and uses `textureSampleCompareLevel`
+- downsamples the sun map to `blockerTex` (`r16float`) and runs `findBlocker`
+
+GLX's remaining quality is in `sampleShadow` (`js/render/shaders/lit.js`):
+rotated Poisson 8-tap in the near field, 4-tap when
+`aDist ≥ 0.80 * shadowRange`, `uPcss` early-out when the blocker FBO is dead.
+
+Port that kernel. Keep the existing remapped `params4.x` penumbra lane (WGX
+scales the GLX knob — do not silently change the number without a driven lap).
+
+**Do not** bind the depth texture as both `texture_depth_2d` + a non-comparison
+`sampler` in the same pipeline. Compat-mode / GLES validation rejects that
+([gpuweb compatibility-mode notes](https://github.com/gpuweb/gpuweb/blob/main/proposals/compatibility-mode.md)).
+The separate `r16float` blocker is the correct WebGPU spelling of GLX's
+sampler-object trick (one depth texture, two sampler objects).
+
+### 4.5 Lamp-fog + world-space god-ray
+
+**Lamp-fog** is a one-lane fix: LIT already accumulates `lampFog` and then
+multiplies by `0.6`. Feed `frame.lampFog` (GLX `uLampFog`) through FRAME and
+delete the constant.
+
+**God-ray** is the real visual hole on night tracks. GLX's `GODRAY_FS`
+(`js/render/glx/post.js`) marches in **world space** through scene depth + the
+sun shadow map, then adds the 12 nearest lamps (HG phase, optional lamp-shadow
+map) and a separable blur. WGX's `WGSLPost.GODRAY` is the cheap COMPOSITE
+sun-shaft: 8 taps toward `sunUV` in screen space, no depth, no shadow, no lamps.
+
+Port path (no new API):
+
+1. Bind to the god-ray pass: `depthSampleView` (already allocated for SSAO),
+   `shadowTex` + comparison sampler (already on the lit group), FRAME / light
+   storage (already uploaded), optional lamp-shadow view once §4.6 exists.
+2. Rewrite `fs_main` against the GLX march, not the radial stub. Keep the
+   CPU gate (`haveGR`) but also fire when `opts.lampVol > 0` on a night track
+   — today WGX requires a sun shaft, so Singapore/Vegas floodlight fog never
+   starts.
+3. Reuse the existing separable blur pipeline (SSAO already wants this) on
+   `godrayTex` before composite.
+
+This is the largest shader port in the list after `applyMaterial*`. Do it
+after the timer so a night-track frame-time delta is visible.
+
+### 4.6 Lamp shadows
+
+Clone the sun depth pass at 512²:
+
+- `lampShadowBegin(lightVP)` / `castShadow*` / `lampShadowEnd` — same
+  depth-only pipeline, different target + VP
+- Bind as `texture_depth_2d` + the existing `sampler_comparison`
+- 4-tap PCF in LIT on the indexed floodlight (GLX `js/render/shaders/lit.js`)
+- Feed the same view to the world-space god-ray once that lands
+
+Replace the `undefined` exports. `lampShadowState()` already returns
+`{enabled:false}` — flip it when the map exists, matching
+`carShadowState()`.
+
+Desktop-only in GLX (mobile standard tier skips the FBO). Keep that gate;
+mobile `castShadow` no-ops must stay no-ops.
+
+### 4.7 MSAA — the one real API mismatch
+
+GLX: MSAA renderbuffers → `blitFramebuffer` to the sampleable scene + depth
+textures → post.
+
+WebGPU color path is the same idea and is **core**
+([MDN `beginRenderPass` / `resolveTarget`](https://developer.mozilla.org/en-US/docs/Web/API/GPUCommandEncoder/beginRenderPass)):
+
+```js
+const sceneMS = device.createTexture({
+  size: [w, h],
+  format: "rgba16float",
+  sampleCount: 2,                       // match GLX's cap; query is not per-format the GL way
+  usage: GPUTextureUsage.RENDER_ATTACHMENT,
+});
+// lit pass:
+colorAttachments: [{
+  view: sceneMS.createView(),
+  resolveTarget: sceneTex.createView(), // existing single-sample HDR
+  loadOp: "clear",
+  storeOp: "discard",                   // transient; tilers skip the MSAA store
+}]
+```
+
+**Constraint:** every attachment in one pass must share `sampleCount`. You
+cannot attach today's single-sample `depthTex` to an MSAA color pass. And
+`depthStencilAttachment` has **no** `resolveTarget`
+([gpuweb#1924](https://github.com/gpuweb/gpuweb/issues/1924); PlayCanvas
+solved this with a manual resolver).
+
+WGX needs the resolved depth for SSAO (and for a world-space god-ray). Recipe:
+
+1. Allocate `depthMS` at `sampleCount: 2`, format `depth24plus`, usage
+   `RENDER_ATTACHMENT | TEXTURE_BINDING`.
+2. Lit pass uses `depthMS` as the depth attachment (`storeOp: "store"` this
+   time — we will read it).
+3. After the pass, a fullscreen resolve into a single-sample `r32float` (or
+   `@builtin(frag_depth)` into `depthTex`):
+
+```wgsl
+@group(0) @binding(0) var depthMS : texture_depth_multisampled_2d;
+@fragment
+fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) f32 {
+  let c = vec2<i32>(pos.xy);
+  var d = 1.0;
+  for (var i = 0; i < 2; i++) {
+    d = min(d, textureLoad(depthMS, c, i));   // closest surface, matches GL blit
+  }
+  return d;
+}
+```
+
+4. Point SSAO at that resolved depth. If it stays `r32float`, change the SSAO
+   binding from `texture_depth_2d` to `texture_2d<f32>` and read `.r`. That
+   is cheaper than fighting depth-as-color view rules.
+
+5. `msaa()` returns `2` when the MS targets exist, `1` on mobile / alloc fail
+   — same policy as GLX.
+
+`sampleCount: 4` is widely supported but GLX caps at 2× after
+`getInternalformatParameter`. Stay at 2× unless a driven A/B says 4× is free.
+
+### 4.8 Instancing
+
+WebGPU instancing is the default path, not an extension:
+
+```js
+// vertex buffer 0: mesh (stepMode: "vertex", existing VERTEX_LAYOUT)
+// vertex buffer 1: per-instance { mat4, color }
+{ arrayStride: 80, stepMode: "instance", attributes: [ /* mat cols + color */ ] }
+
+pass.setVertexBuffer(1, instanceBuf);
+pass.drawIndexed(indexCount, visibleCount, 0, 0, 0);
+```
+
+Implement the whole family (`createInstancedBatch`, `cullInstances`,
+`drawInstanced`, `freeInstancedBatch`, `castShadowInstanced`) or leave them
+all `undefined`. `TrackGraph.batches()` already produces the CPU-side data;
+GLX is the only consumer. This is a memory/CPU win (see
+[SCENE-GRAPH-PLAN.md](SCENE-GRAPH-PLAN.md)), not a fragment-shader win — do
+not expect it to move SwiftShader frame time.
+
+Shadow pass: same instance buffer, position-only mesh layout (already
+`SHADOW_VERTEX_LAYOUT`).
+
+### 4.9 Particles, `applyMaterial*`, `trk`, heat haze, car-paint SSR
+
+No API research left:
+
+- **Particles** — port `PARTICLE_VS/FS`, implement `drawParticles`. Additive
+  blend already exists on glow.
+- **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
+  into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
+- **`trk` / road markings** — extend `VERTEX_LAYOUT` with `@location(4) trk: vec3`.
+  Today's "always stride 40" comment has to give; meshes without `trk` keep
+  a zero-filled extra float[3] or a second pipeline.
+- **Heat haze / car-paint SSR** — composite / SSR-consume ports from
+  `js/render/shaders/post.js`.
+
+---
+
+## 5. Standing WebGPU hazards (already paid for once)
+
+These are not gaps; they are the reasons a "just translate the GLSL" pass
+regresses.
+
+| Hazard | What WGX already does | Do not undo |
+|---|---|---|
+| Clip-space z | GL NDC z ∈ [-1,1]; WebGPU ∈ [0,1]. `Z01` left-multiplies viewProj and lightVP; `Z01INV` rebuilds SSAO invProj | Applying `Z01` to `invViewProj` (sky rays) half-clips the sky |
+| No loose uniforms | FRAME UBO + light storage + 256-byte dynamic draw slots | Adding a `uniform` outside a struct / bind group |
+| Comparison vs raw depth | Comparison sampler on `texture_depth_2d`; raw reads from `r16float` blocker | Sampling `texture_depth_2d` with a filter sampler |
+| Async pipeline errors | `createRenderPipeline` returns a live-looking object; draws drop on the floor. Boot self-test + error scope | Shipping a new pass without extending `_selfTest` |
+| Descriptor-copy install | Missing names inherit dead GLX fns | Adding a GLX method without an explicit WGX value |
+| Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |
+| Depth compare | WebGPU NDC z already [0,1] after `Z01`; shadow `refD` is not remapped again | A leftover `* 0.5 + 0.5` on shadow z |
+
+---
+
+## 6. Recommended order
+
+Cost is shader/port size, not calendar. Each slice should land behind the
+existing opt-in and keep GLX untouched.
+
+| # | Slice | Why this position | Gate |
+|---|---|---|---|
+| 1 | `gpuTimer` + `requestDevice({requiredFeatures})` | Lets every later slice be measured | `webgpu-lifecycle` + `__apex.gpuTimer()` on a WebGPU page |
+| 2 | Shared `generateMips` + env-cube LOD + `createTexture` mips | One helper, three call sites | Env probe: roughness blur visible vs LOD 0 |
+| 3 | `createTextureArray` / `setMaterialMaps` / LIT array sample | Ships ON in GLX; WGX currently looks procedural | `assets.js` `supported()` true on WGX; `matTexMix` A/B |
+| 4 | PCSS Poisson kernel | Shader-only; blocker already live | Night + dusk driven lap vs GLX, same `uPcssPen` |
+| 5 | Lamp-fog uniform + world-space god-ray + blur | Night identity (Singapore / Vegas; Monza is `night:false`) | `lightState().numLights > 0` + visual |
+| 6 | Lamp shadow pass | Feeds §5 and LIT PCF | `lampShadowState().enabled` |
+| 7 | MSAA 2× + manual depth resolve | Most plumbing; do after the timer so the cost is known | `msaa() === 2`; SSAO still samples resolved depth |
+| 8 | Instancing family | Memory, not look; GLX already has the consumer | `TrackGraph.batches()` draws on WGX |
+| 9 | Particles / `applyMaterial*` / `trk` / haze / car SSR | Remaining look deltas | Per-feature `__apex` + a rendered lap |
+
+Do **not** flip `apex26.gfxBackend` default. Do **not** delete GLX. Do **not**
+hand a subagent a Playwright browser run of WGX — SwiftShader has no WebGPU;
+`--enable-unsafe-webgpu` does not make the software path a visual oracle.
+
+CI: `tests/unit/webgpu-lifecycle.test.mjs` and
+`tests/unit/backend-surface-parity.test.mjs` are the no-browser gates. A
+slice that adds a method must declare it (real or `undefined`) before
+`test:tooling-fast` will pass. Visual sign-off is a headed browser with
+`navigator.gpu`, not the Playwright suite.
+
+---
+
+## 7. What this does not recommend
+
+- **A GLSL→WGSL compiler / build step.** The no-build bet is load-bearing
+  (`js/` is the ship artefact). Chunk discipline (already true on both sides)
+  is the sync mechanism; a transform would be a third source of truth.
+- **Investing in WGX *and* TLX to parity.** Pick one opt-in to spend look
+  hours on. TLX already inherits three's WebGPU/WebGL2 fallback and the baked
+  arrays; WGX is the native path. This doc is only about WGX.
+- **Compute-shader volumetrics / ReSTIR / etc.** GLX's march is the look we
+  are matching. A better algorithm is a different project.
+- **Using WebGPU to make CI faster.** Chrome Linux WebGPU is still
+  GPU-vendor gated; the suite pins SwiftShader. See
+  [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
+
+---
+
+## Sources
+
+### This repo (read for this note)
+
+- `js/render/webgpu/wgx.js` — backend, stubs, `requestDevice()`, MSAA comment
+- `js/render/webgpu/wgsl-chunks.js` — LIT PCSS 3×3, lamp-fog `× 0.6`, env LOD 0
+- `js/render/webgpu/wgsl-post.js` — screen-radial god-ray, SSAO, composite FX
+- `js/render/gfx.js` — seam contract; WGX marked frozen
+- `js/render/glx.js` / `js/render/glx/post.js` / `js/render/glx/shadow.js` —
+  MSAA blit, timer, arrays, lamp shadows, instancing
+- `js/render/shaders/lit.js` / `post.js` / `fx.js` — the GLSL to match
+- `docs/ARCHITECTURE.md` — live caveat list
+- `tests/unit/backend-surface-parity.test.mjs` — absence-vs-`undefined` rule
+
+### WebGPU (2026-08)
+
+- [GPUWeb implementation status](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status)
+  (wiki edited 2026-08-13) — Safari 26 / Chrome 113+ / Firefox 141+ Windows
+- [MDN `GPUCommandEncoder.beginRenderPass`](https://developer.mozilla.org/en-US/docs/Web/API/GPUCommandEncoder/beginRenderPass)
+  — `resolveTarget` is color-only; `timestampWrites` needs `"timestamp-query"`
+- [WebGPU spec — `GPUFeatureName`](https://www.w3.org/TR/webgpu/#gpufeaturename)
+  — `"timestamp-query"` is the timer bit; texture arrays and MSAA color
+  resolve are core
+- [WGSL `textureSampleCompare` / `textureLoad`](https://www.w3.org/TR/WGSL/#texturesamplecompare)
+  — comparison sampling vs raw `textureLoad` on `texture_depth_multisampled_2d`
+- [What's New in WebGPU (Chrome 121)](https://developer.chrome.com/blog/new-in-webgpu-121)
+  — pass `timestampWrites`; 100 µs quantization
+- [WebGPU Fundamentals — timing](https://webgpufundamentals.org/webgpu/lessons/webgpu-timing.html)
+- [WebGPU Fundamentals — mipmap generation](https://webgpufundamentals.org/webgpu/lessons/webgpu-compatibility-mode.html)
+- [gpuweb#1924 — reading MSAA depth](https://github.com/gpuweb/gpuweb/issues/1924)
+- [PlayCanvas #5714 — MSAA + depth on WebGPU](https://github.com/playcanvas/engine/issues/5714)
+  — allocate MS depth, resolve color via `resolveTarget`, resolve depth by hand

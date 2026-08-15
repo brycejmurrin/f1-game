@@ -327,6 +327,46 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(lit, t.a);
 }`;
 
+  const PARTICLE = `
+struct ParticleU {
+  viewProj : mat4x4<f32>,   // off  0
+  eyeAdd   : vec4<f32>,     // off 64  (xyz eye, w additive)
+};                          // size 80
+@group(0) @binding(0) var<uniform> U : ParticleU;
+struct VSOut {
+  @builtin(position) clip : vec4<f32>,
+  @location(0) uv : vec2<f32>,
+  @location(1) color : vec3<f32>,
+  @location(2) alpha : f32,
+};
+@vertex
+fn vs_main(
+  @location(0) aCorner : vec2<f32>,
+  @location(1) aCenter : vec3<f32>,
+  @location(2) aColor : vec3<f32>,
+  @location(3) aSize : f32,
+  @location(4) aAlpha : f32,
+) -> VSOut {
+  var o : VSOut;
+  let fwd = normalize(U.eyeAdd.xyz - aCenter);
+  let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), fwd) + vec3<f32>(1e-4, 0.0, 0.0));
+  let upv = cross(fwd, right);
+  let wp = aCenter + (right * aCorner.x + upv * aCorner.y) * aSize;
+  o.uv = aCorner;
+  o.color = aColor;
+  o.alpha = aAlpha;
+  o.clip = U.viewProj * vec4<f32>(wp, 1.0);
+  return o;
+}
+@fragment
+fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
+  let r2 = dot(in.uv, in.uv);
+  var fall = max(1.0 - r2, 0.0);
+  fall = fall * fall;
+  let a = in.alpha * fall;
+  return mix(vec4<f32>(in.color, a), vec4<f32>(in.color * a, 1.0), U.eyeAdd.w);
+}`;
+
   return {
     // shader strings
     BLOB_SHADOW,
@@ -334,6 +374,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKID,
     GLOW,
     DECAL,
+    PARTICLE,
     // uniform block byte sizes (JS-side writers in wgx.js MUST agree)
     BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU: mat4 64 + mat4 64 + vec4 16
     MARK_UNIFORM_BYTES:        144,   // MarkU:   mat4 64 + mat4 64 + vec4 16
@@ -345,6 +386,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKID_VERTEX_BYTES:          36,   // pos3(12) + uv2(8) + rgba4(16)
     GLOW_VERTEX_BYTES:          36,   // corner2(8) + center3(12) + color3(12) + radius(4)
     DECAL_VERTEX_BYTES:         32,   // pos3(12) + nrm3(12) + uv2(8)
+    PARTICLE_UNIFORM_BYTES:     80,
+    PARTICLE_VERTEX_BYTES:      40,   // corner2 + center3 + color3 + size + alpha
   };
 })();
 
