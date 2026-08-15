@@ -660,7 +660,6 @@ def _serve_http(host: str, port: int) -> None:
 
 
 def cmd_serve(args: list[str]) -> None:
-    _require_sdk()
     p = argparse.ArgumentParser(prog="serve")
     p.add_argument(
         "--http",
@@ -671,6 +670,7 @@ def cmd_serve(args: list[str]) -> None:
     )
     p.add_argument("--host", default="127.0.0.1")
     ns = p.parse_args(args)
+    _require_sdk()
     if ns.http is not None:
         _serve_http(ns.host, int(ns.http))
         return
