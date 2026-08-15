@@ -207,6 +207,21 @@ test("asymmetric white-balance sliders are not ±N when the mix is not", () => {
     "tint help must cite the 0.07/unit mix so ±6 is not a mystery");
   // lampLevel: 0.001 floor left a notch that could not fully kill the lamps.
   assert.equal(get("lampLevel").min, 0, "LAMP LEVEL must be able to go fully off");
+  // Same class: amount knobs whose consumer is a straight multiply, with no
+  // "floored so near-zero still leaves X" help, must reach true 0.
+  assert.equal(get("glowAmp").min, 0, "EMISSIVE GLOW must be able to go fully off");
+  assert.equal(get("poolEnergy").min, 0, "POOL ENERGY must be able to go fully off");
+  assert.equal(get("twilightFloor").min, 0, "TWILIGHT FLOOR must be able to go fully off");
+  // tables.js night paint clearcoat is 1.0; shader comment is 0..1. Past 1
+  // the night body overshoots the designed lacquer (wet-day 0.8 can no
+  // longer quite reach 1 — same trade as wetDark porous-vs-not).
+  assert.ok(get("carClearcoat").max <= 1 + 1e-9,
+    `carClearcoat max ${get("carClearcoat").max} is past the 0..1 lacquer`);
+  // tables.js paint metalness is 0.12; clamp(0.12*k, 0, 1) saturates at 1/0.12.
+  assert.ok(get("carMetal").max <= 1 / 0.12 + 0.05, "carMetal past metalness=1 on shipped paint");
+  // game.js terrain detail = 0.42 * slider; lit.js grain 1+(n-0.5)*uDetail
+  // floors at uDetail=2. 2/0.42 ≈ 4.76 — the 4.75 max is that last live notch.
+  assert.ok(get("surfDetail").max <= 2 / 0.42 + 0.05, "surfDetail past terrain grain-black");
 });
 
 test("every shipped preset value sits on its knob's step grid", () => {
