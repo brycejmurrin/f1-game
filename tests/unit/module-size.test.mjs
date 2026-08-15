@@ -249,6 +249,14 @@ const CEILINGS = {
   // GLX.present() and reading the framebuffer: centre-64px mean luminance
   // 1.06/255 -> 84.39. Exactly the "bug-explaining comment at its site" growth the
   // header above says this ratchet tolerates; the fix itself is a single field.
+  // 8246 -> 8259 for the sun shadow anchor's bias DIRECTION: it followed the camera
+  // look vector, so uShadowCtr swung around a 2*fBias circle on a pure yaw and the
+  // shader's distance fade changed a stationary shadow's strength when the player
+  // only turned. Measured on bahrain/day with the eye pinned and the aim swept +-40
+  // degrees: a shadow 70 m ahead swung edgeFade 0.625..0.986, 58% of its strength,
+  // while 40 m and 60 m were flat. One line of code (bias along the car's heading
+  // instead) plus the comment recording the measurement and why the coverage
+  // guarantee is untouched — the same bug-explaining growth the header tolerates.
   // 8201 -> 8210: three lighting/graphics fixes from the mechanism-sliced survey,
   // three lines of "why" each. (1) The god-ray horizon cutoff was a STEP off
   // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
@@ -265,7 +273,11 @@ const CEILINGS = {
   // file, so neither 8246 nor 8210 fits their union. Measured on the merged tree
   // with the ceiling test's own metric (split-newline count), per the deploy-merge
   // rule that baselines are re-measured on the union and never inherited.
-  "js/game.js": 8257,
+  // -> 8270 on this merge: both lineages grew game.js again (their sun-shadow
+  // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
+  // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
+  // merged tree with the ceiling test's own metric, per the deploy-merge rule.
+  "js/game.js": 8270,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

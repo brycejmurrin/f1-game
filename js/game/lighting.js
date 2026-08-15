@@ -10,13 +10,13 @@
 const LightTune = (function () {
   "use strict";
 
-// Floodlight set for ANY track (every circuit gets them; the caller only feeds
-// them to the shader when the scene is dark — night/dusk/dawn). A light roughly
-// every ~22 m (alternating sides) at mast height, capped to the 32 shader slots
-// (minus a small tail-light reservation in traffic) by the per-frame cull.
-// Flat 15-float records [x,y,z, r,g,b, rad, aim, cone, bleed, vol, glare].
-// Colour, brightness, pool size and mast style all vary by circuit character
-// (see floodColor). HDR (>1) so the pools bloom.
+// Lamp set for ANY track (street posts and flood banks share this list; the
+// caller only feeds them to the shader when the scene is dark — night/dusk/dawn).
+// A light roughly every ~22 m (alternating sides) at mast height, capped to the
+// 32 shader slots (minus a small tail-light reservation in traffic) by the
+// per-frame cull. Flat 15-float records [x,y,z, r,g,b, rad, aim, cone, bleed,
+// vol, glare]. Colour, brightness, pool size and mast style all vary by circuit
+// character (see floodColor). HDR (>1) so the pools bloom.
 function floodColor(theme, id) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
@@ -79,12 +79,12 @@ const TUNE_DEFS = [
   // ── SHADOWS ──
   { id: "shadowStr",    label: "SHADOW DARKNESS", group: "SHADOWS", min: 0, max: 3, step: 0.01, def: 1.15, u: "uShadowStr", help: "How much direct sun the cast shadow removes. 1 = full shadow (ambient fill only inside it), 0 = shadows gone — full sun bleeds back in. Floor stays 0 (already the 'no shadow' extreme); above 1 crushes shadows past neutral toward black for a harder, more graphic look." },
   { id: "shadowRange",  label: "SHADOW DISTANCE", group: "SHADOWS", min: 16, max: 200, step: 2, def: 80, u: "uShadowRange", help: "Half-size of the sun shadow box (m). Lower = crisper nearby shadows; higher = shadows reach further before fading. Car shadow reach and shadow-map texel density scale with this too, so very high values soften/blur shadows in exchange for reach." },
-  { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS", min: 5, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth). No effect on the three.js renderer yet — its shadows use a fixed penumbra until the blocker map lands. WebGL2 and WebGPU honour it." },
+  { id: "pcssPen",      label: "SHADOW SOFTEN",   group: "SHADOWS", min: 5, max: 300, step: 5, def: 80, u: "uPcssPen", help: "How fast shadows soften with caster distance (PCSS penumbra growth). WebGL2 and WebGPU renderers only — both run a real blocker search. The three.js renderer has no blocker map, so it draws a fixed-radius kernel and this slider does nothing there." },
   { id: "shadowBias",   label: "SHADOW BIAS",     group: "SHADOWS", min: 0, max: 0.004, step: 0.0001, def: 0.001, u: "uShadowBias", help: "Depth offset. Too low = shadow acne (self-shadow shimmer); too high = shadows detach from feet. Repair tool." },
   { id: "shadowTintAmt",label: "SHADOW COOLNESS", group: "SHADOWS", min: 0, max: 2, step: 0.01, def: 0.0, u: "uShadowTintAmt", help: "Tints shadowed / ambient-only areas cool blue for a sunny-day contrast look. 0 = neutral." },
   { id: "moonShadow",   label: "MOON SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 0.001, def: 0.25, help: "Floor for cast-shadow strength under a bright CLEAR moon — soft moonlight shadows at night. Fades out by itself as cloud rolls in, the road gets wet, or fog sets; 0 = night shadows fade fully off (old behaviour). Above 0.5, this ALSO starts overriding the clear-moon weather gate so buildings/props cast shadows at night through cloud/fog/wet too — 1.0 = shadows cast regardless of weather." },
-  { id: "carShadow",    label: "CAR SUN SHADOWS", group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Real sun-projected car shadows from a per-frame car-only shadow map (direction and length match the scene; cars shadow each other). 0 = blob contact shadow only. Top graphics tiers only — the gate is GRAPHICS, not the renderer; all three backends implement it." },
-  { id: "lampShadow",   label: "LAMP SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Night: the single nearest floodlight casts REAL shadows — a per-frame 512² depth map from that lamp, so cars/walls under it throw radial shadows away from the mast and its volumetric beam is carved by the same occluders. One lamp only (the rest stay cone-shaped, no shadow cost). 0 = off. Top graphics tiers, WebGL2 and three.js renderers only (not WebGPU)." },
+  { id: "carShadow",    label: "CAR SUN SHADOWS", group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Real sun-projected car shadows from a per-frame car-only shadow map (direction and length match the scene; cars shadow each other). 0 = blob contact shadow only. Desktop tier only, on all three renderers (WebGL2, three.js and WebGPU)." },
+  { id: "lampShadow",   label: "LAMP SHADOWS",    group: "SHADOWS", min: 0, max: 1, step: 1, def: 1, help: "Night: the single nearest lamp casts REAL shadows — a per-frame 512² depth map from that fixture, so cars/walls under it throw radial shadows away from the mast and its volumetric beam is carved by the same occluders. One lamp only (the rest stay cone-shaped, no shadow cost). 0 = off. Desktop tier only, on all three renderers (WebGL2, three.js and WebGPU)." },
   { id: "aoStr",        label: "AMBIENT OCCLUSION", group: "SHADOWS", min: 0, max: 4, step: 0.01, def: 1.0, help: "Crease/contact darkening (SSAO). Floor 0 = off (already the minimum); above 1 pushes creases toward crushed black. Day/dusk/dawn only: it is skipped once the key dims to moonlight, so it does nothing at all on a night session. Also off at GRAPHICS: LOW." },
   { id: "ssaoRadius",   label: "AO RADIUS",       group: "SHADOWS", min: 0.02, max: 12.3, step: 0.005, def: 0.6, u: "uRadius", help: "World-space reach of the AO sampling. Small = tight contact shading; large = broad soft occlusion. The screen-space sample radius saturates at close range past the default, so extra headroom mainly extends how far into the distance strong AO still reaches." },
   { id: "contactStr",   label: "CONTACT SHADOW",  group: "SHADOWS", min: 0, max: 2, step: 0.01, def: 1.0, help: "Grounding shadow under the car/props where the sun map can't reach. Day/dusk/dawn only: it is skipped once the key dims to moonlight, so it does nothing at all on a night session. Also off at GRAPHICS: LOW." },
@@ -113,7 +113,7 @@ const TUNE_DEFS = [
   { id: "lampWarmupWarm",label: "WARM-UP WARMTH",  group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 2.5, step: 0.005, def: 1.0, help: "How orange a freshly-struck lamp glows before settling to its true colour (strike-warmth amount). 0 = strikes at final colour, 1 = as-shipped sodium-warm start, higher = a strong amber ignition." },
   { id: "lampCull",      label: "LAMP COUNT",      group: "LAMPS", section: "BEHAVIOUR", min: 16, max: 32, step: 1, def: 28, help: "How many of the nearest lamps light the scene at once when there's traffic (the shader has 32 slots; the rest are reserved for car tail-lights). Higher = more of the field lit but fewer tail-light slots on dense night grids. Solo running always uses all 32 — except on phones, which cap at 24 regardless (solo included), so every value above 24 behaves identically there." },
   { id: "lampCullFade",  label: "LAMP CULL FADE",  group: "LAMPS", section: "BEHAVIOUR", min: 0.02, max: 0.9, step: 0.005, def: 0.35, help: "How far inside the lit radius a lamp reaches full brightness (the distance fade that hides lamps entering/leaving the set at speed). Measured on each lamp's TRUE distance, so turning the camera never changes it. Low = a thin fade band, a sharper edge to the lit zone; high = a broad, gentle falloff into the dark." },
-  { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 600, step: 5, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off. Floored at twice the lamp stride (~44 m at default density), so every value from 5 up to that floor behaves the same." },
+  { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 600, step: 5, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\", or aliases \"floodlights\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 0.2, max: 30, step: 0.025, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. Also widens the radius the fade above is measured against, by the same amount, so the extra forward reach this buys stays lit instead of fading out. Low = lamps ranked closer to pure distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
   { id: "roadChunkLamps", label: "PER-CHUNK ROAD", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 1, def: 0, help: "EXPERIMENTAL, and needs PER-CHUNK LAMPS on to do anything. Extends the same per-chunk lamp binding to the ROAD, which is otherwise drawn as one mesh and so can only ever carry the single global set of 32. That is why the far road stays dark on a dense night circuit while the buildings beside it light up: the global cull picks the 32 lamps nearest the CAMERA, which covers the tarmac around the car and starves the road ahead. Splitting the road into spatial chunks lets each stretch carry its own lamps, and frustum-culls the ribbon as a side effect (today every metre of it is drawn every frame). Costs a second copy of the road geometry, built once on first use." },
   { id: "perChunkLights", label: "PER-CHUNK LAMPS", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 0.001, def: 0, help: "EXPERIMENTAL. 0 = off. ABOVE 0 it turns the feature on AND sets how strongly the per-chunk lamps light the scene \u2014 it is an amount, not a switch, because turning it on genuinely delivers more light: a fragment that used to see the handful of the global 32 that actually reach it now sees up to 32 that all do, so the whole night reads far too hot at the same LAMP LEVEL. Start around 0.2-0.4 and raise it; 1.0 is the original un-dimmed behaviour. Car tail-lights are NOT scaled by this.  Gives every chunk of scenery its OWN nearest-32 lamps instead of making the whole visible scene share one set of 32. The 32-lamp ceiling is the fragment shader\'s uniform-array size, so it limits lamps per DRAW, not per scene — and because lamps are baked per track and chunk bounds are fixed, each chunk\'s set is computed once and cached. On a dense night circuit this lights the far road without LAMP COUNT / LAMP REACH AHEAD having to ration slots, and per-fragment cost drops (a chunk binds only lamps that reach it). Costs one uniform upload per chunk draw, so it trades a little CPU for a lot of reach. 0 = as-shipped single global set. HELD OFF automatically below the top graphics tier (GRAPHICS must be HIGH or ULTRA) and after a display reset, because at full amount it can stall a weaker GPU — the slider then stores a value that takes effect once the tier allows it." },
@@ -201,7 +201,7 @@ const TUNE_DEFS = [
   { id: "moonDiscSize", label: "MOON DISC SIZE",  group: "SKY & WEATHER", min: 0.06, max: 12, step: 0.005, def: 1.0, u: "uMoonDiscSize", help: "Angular size of the moon disc at night. 1 = as-shipped, larger = a big dramatic moon, smaller = a distant pinpoint. Scales the disc without touching the halo." },
   { id: "moonHalo",     label: "MOON HALO SPREAD", group: "SKY & WEATHER", min: 0, max: 12, step: 0.002, def: 1.0, u: "uMoonHalo", help: "The soft glow spreading out from the moon disc. 1 = as-shipped, 0 = a bare disc with no halo, higher = a broad hazy glow (moon through thin cloud). Scales both the halo strength and how far it reaches." },
   { id: "cityGlowReach", label: "CITY GLOW REACH", group: "SKY & WEATHER", min: 0.04, max: 12, step: 0.002, def: 1.0, u: "uCityGlowReach", help: "How high up the sky the city light-pollution dome climbs from the horizon. 1 = as-shipped (hugs the horizon), lower = the glow reaches higher up toward the zenith, higher = a thin band pinned to the horizon. Pairs with CITY SKYGLOW (strength)." },
-  { id: "cloudDef",     label: "CLOUD DEFINITION", group: "SKY & WEATHER", min: 0, max: 1.2, step: 0.002, def: 1.0, u: "uCloudDef", help: "How sharply the billow octave carves lumpy cumulus edges onto the cloud cover. 1 = as-shipped, 0 = soft flat cloud smears, higher = harder-edged cauliflower puffs. WebGL2 and three.js renderers (the WebGPU sky uses a simpler cloud model)." },
+  { id: "cloudDef",     label: "CLOUD DEFINITION", group: "SKY & WEATHER", min: 0, max: 2.4, step: 0.002, def: 1.0, u: "uCloudDef", help: "How sharply the billow octave carves lumpy cumulus edges onto the cloud cover. 1 = as-shipped, 0 = soft flat cloud smears, higher = harder-edged cauliflower puffs. WebGL2 and three.js renderers (not WebGPU, whose sky uses a simpler cloud model)." },
   { id: "skyColorSat",  label: "SKY COLOUR SATURATION", group: "SKY & WEATHER", min: 0, max: 9, step: 0.002, def: 1.0, help: "How colourful vs neutral-grey the sky dome is (zenith + horizon bands). 1 = as-shipped, 0 = a flat achromatic grey sky, higher = a punchy oversaturated dome (deeper blue day, more vivid dawn/dusk colour). Applied to the condition-derived sky colours; the reflected sky (glass/wet-road mirror) follows it too, so the whole scene stays coherent. Distinct from SKY GRADIENT (gradient shape) and DAY SKY BLUE (the daytime blue band)." },
   { id: "wetness",      label: "WETNESS",         group: "SKY & WEATHER", min: -0.05, max: 1, step: 0.005, def: -0.05, fmt: "auto", help: "Override the road wetness ramp (AUTO = follow weather; ramps in over a few seconds after a weather flip)." },
   { id: "rainCount",    label: "RAIN INTENSITY",  group: "SKY & WEATHER", min: 20, max: 2100, step: 5, def: 360, reinitRain: true, help: "Number of falling rain streaks (storm density)." },
@@ -294,6 +294,23 @@ const LAMP_KINDS = {
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
   fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
 };
+// Pool radius for one fixture. `themeRadius` (floodColor) is sized for a verge
+// lamp — "the pool's far corner sits 21-25 m from the lens" — and a tall flood
+// bank throws far beyond that: Sakhir's ring stands 39 m up and 34 m out, so its
+// lens sits ~52 m from the road it aims at, past a 34 m radius, where the
+// (1-(d/r)^4)^2 window is exactly 0. Every mast lit nothing (measured: bahrain
+// covered 2 of 135 centreline samples, and the 2 were the start line, lit by the
+// fixture-less gantry bar below). floodMast now registers its real throw, and a
+// MAST record's radius is read as a FLOOR over the theme value rather than as an
+// override — so a short mast keeps the tuned theme radius, and the hand-placed
+// luminaires that deliberately want a SMALL one (Monaco's tunnel soffits at
+// 21-27 m) are unaffected because lampPost writes those without `mast`.
+// Energy needs no retune: ePhys already scales by the true lens->road distance
+// squared, so opening the window restores the pool the mast was always emitting.
+function lampRadius(post, themeRadius) {
+  if (!post || post.radius == null) return themeRadius;
+  return post.mast ? Math.max(themeRadius, post.radius) : post.radius;
+}
 function lampDensityFactor() {
   const d = LT.lampDensity;
   return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
@@ -385,8 +402,8 @@ function buildTrackLights(track, onlyAlways) {
   posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions
-  // kind "lamps" / "lighting") so bespoke fixtures own that ground. Suppressing
-  // the mast also deleted the light — gap-fill restores pools without geometry.
+  // kind "lamps" / "floodlights" / "lighting") so bespoke fixtures own that ground.
+  // Suppressing the mast also deleted the light — gap-fill restores pools without geometry.
   // Shared floodMast()/floodMastRing() register into track.lampPosts (unless
   // opts.light:false). Fill lights get no lens halo (glareW 0). Never runs for
   // the always-on subset (tunnel soffits etc.).
@@ -538,7 +555,7 @@ function buildTrackLights(track, onlyAlways) {
       Math.max(0, mr) * ePhys,
       Math.max(0, mg) * ePhys,
       Math.max(0, mb) * ePhys,
-      (post && post.radius != null ? post.radius : radius) * LT.lampRadiusMul,
+      lampRadius(post, radius) * LT.lampRadiusMul,
       ax, ay, az, coneIn, coneOut, Math.min(0.9, bleed * LT.bleedMul), volW, glareW,
     );
   }
@@ -557,12 +574,20 @@ function buildTrackLights(track, onlyAlways) {
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
     // here too — the gantry bar previously ignored them ("every floodlight" per
     // help text; the energy factor was a 0.55 literal = poolEnergy's default).
+    // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the
+    // note in js/track/scenery-structures.js), so there is no fixture at its
+    // position — and drawGlow paints a lens halo for any record with glareW > 0.
+    // Shipped at glareW 0.3 it put three glowing orbs 8 m over the start line
+    // with nothing holding them up, each with a volumetric shaft under it; on
+    // Bahrain the nearest real fixture is 42 m away. Same rule the synth fill
+    // lights follow above ("A fill light has no fixture, so it must not draw a
+    // lens halo hanging in mid-air"). The downward pool on the grid is unchanged.
     for (const lat of [-hwk * 0.55, 0, hwk * 0.55]) {
       lights.push(
         track.px[0] + track.rx[0] * lat, track.py[0] + 8, track.pz[0] + track.rz[0] * lat,
         1.02 * ge, 1.05 * ge, 1.12 * ge,
         26 * LT.lampRadiusMul, 0, -1, 0,
-        0.92, 0.92 - 0.14 * (LT.beamCone || 1), Math.min(0.9, 0.06 * LT.bleedMul), 0.9, 0.3);
+        0.92, 0.92 - 0.14 * (LT.beamCone || 1), Math.min(0.9, 0.06 * LT.bleedMul), 0, 0);
     }
   }
   return lights;

@@ -38,7 +38,7 @@
  *
  * M3 STATUS: the TSL lit core is live — TLXShaders.chunks + TLXShaders.lit
  * (tsl-chunks.js / tsl-lit.js) supply the full lit fragment (15 procedural
- * materials, car ids 20-26, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
+ * materials, car ids 20-27, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
  * wetness, cloud shadows). GLX's per-draw material scalars land through a
  * MATERIAL CACHE: three can't read per-object uniforms off one shared
  * material, so each distinct opts signature (9 scalars + flags, the game's
@@ -114,6 +114,18 @@
  * allocates nothing until first enabled. Debug: ?viz=ssao|bloom|shafts|
  * composite-off bisect views + __tlx.postState(). MSAA stays off (FXAA
  * carries AA — the GLX mobile-tier recipe; see tlx-post.js header).
+ *
+ * MOBILE (since every device may select every renderer — docs/ARCHITECTURE.md):
+ * - A PHONE DEFAULTS TO three's WebGL2 BACKEND, desktop keeps auto-pick. iOS
+ *   26+ ships navigator.gpu, so "three falls back by itself" is false exactly
+ *   where it is needed; the full reasoning is at the forceWebGL pin in
+ *   create(). apex26.tlxForceGL overrides in both directions ("1"/"0").
+ * - Context/device loss is RECOVERED here (renderer.onDeviceLost +
+ *   webglcontextrestored), because three's default handler leaves a silently
+ *   dead canvas and GLX's recovery lives in a GLX.init() this path never runs.
+ * - Every discretionary per-frame GPU pass keys on the DEVICE (isMobile), not
+ *   the memory tier (mobileTier) — the js/render/glx/shadow.js + js/game/perf.js
+ *   rule. See tlx-shadow.js.
  */
 "use strict";
 
@@ -138,20 +150,113 @@ const TLX = (function () {
       // encode anywhere (js/render/shaders/chunks.js).
       THREE.ColorManagement.enabled = false;
 
+      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" = allow
+      // WebGPU, UNSET = the phone/desktop split below. ─────────────────────────
+      //
+      // PHONES DEFAULT TO WebGL2, and that default is the point of this block.
+      // iOS 26+ Safari ships navigator.gpu, so on an iPhone three picks its
+      // WebGPU backend — and WebKit's WebGPU is documented-unstable through
+      // 26.x (black frames, crashes, throughput below its own WebGL2; still
+      // being patched in the 27 beta). three's automatic fallback does NOT
+      // cover that: getFallback fires only when WebGPU is ABSENT, never when it
+      // is present and broken, so "three falls back by itself" is true for an
+      // old Android and false for exactly the device this shipped for.
+      // The WebGL2 half is also the better-tested half of TLX — every milestone
+      // was developed and CI-gated through this same pin, and tsl-lit.js's
+      // STANDING RULE (the toVar anchors) was measured against GLSL codegen,
+      // not WGSL. Desktop keeps auto-pick: Chrome/Edge WebGPU is where the
+      // backend wins, and a desktop that renders garbage is one tap from the
+      // RENDERER button, which a phone under a jetsam kill is not.
+      // "1" is still the CI/SwiftShader repro pin the specs set
+      // (tests/specs/tlx-probes.spec.js) and behaves exactly as before; "0" is
+      // the escape hatch for deliberately exercising WebGPU on a real phone.
+      const _glPin = (function () {
+        try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
+      })();
+      // DEFAULT OFF EVERYWHERE, phones included — three picks WebGPU wherever the
+      // browser offers it. That is a deliberate product call, not an oversight:
+      // the alternative (pinning phones to three's WebGL2 backend, which is the
+      // codegen path every TLX milestone was actually developed against) trades
+      // the migration's whole point on mobile for safety against a WebKit bug we
+      // have diagnosed but never reproduced. Flip the default here if a real
+      // device says otherwise; `apex26.tlxForceGL` already overrides both ways.
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : false;
+
       const renderer = new THREE.WebGPURenderer({
         canvas,
-        antialias: true,
-        // Test/debug pin: apex26.tlxForceGL=1 keeps three on its WebGL2
-        // backend (SwiftShader CI has no WebGPU; this makes local repros
-        // match CI exactly). Desktop default: auto-pick WebGPU.
-        forceWebGL: (function () {
-          try { return localStorage.getItem("apex26.tlxForceGL") === "1"; } catch (_) { return false; }
-        })(),
+        // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
+        // the context-level AA path". This is NOT the scene target's MSAA
+        // (msaa() below is honestly 1: the post chain deliberately has no
+        // multisampled scene target — see the DEVIATION note in tlx-post.js).
+        // three turns antialias:true into renderer.samples = 4, and samples
+        // applies to the DEFAULT CANVAS target: a 4x multisampled colour+depth
+        // store at the full backing-store size, resolved every frame. With the
+        // post chain up the canvas receives exactly one fullscreen FXAA quad,
+        // which has no interior edges for MSAA to find — so on a phone that is
+        // ~20 MB and a full-res resolve per frame bought for nothing, against
+        // the jetsam budget that made GLX write the same line. Desktop keeps it
+        // for the post-less fallback path (a broken post factory renders the
+        // world straight to the canvas, where the samples do work).
+        antialias: !isMobile,
+        forceWebGL,
       });
       renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      try {
+        Log.info("gfx", "[TLX] three backend:",
+          (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
+          "(forceWebGL", forceWebGL, "pin", _glPin, "isMobile", isMobile + ")");
+      } catch (_) { /* logging must never cost the backend its boot */ }
+
+      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx.js webglcontextlost) ──
+      // three DETECTS a loss on both backends — the WebGL backend
+      // preventDefault()s the canvas event, the WebGPU backend resolves
+      // device.lost — and funnels both into renderer.onDeviceLost, whose
+      // DEFAULT logs once, sets _isDeviceLost and returns. Every _renderScene
+      // after that is a silent no-op: a dead canvas, forever, with no exception
+      // for index.html's error overlay and no reason for the player to suspect
+      // anything but "the game crashes when I try to play". That is the exact
+      // failure GLX's handler exists to break — and GLX registers it inside
+      // GLX.init(), which NEVER runs on this path, so TLX carried no recovery
+      // at all. It matters most on phones, whose tile GPUs are the ones that
+      // actually drop a context under memory pressure, and phones can now
+      // select this backend.
+      //
+      // Same three moves as GLX, deliberately on the SAME keys so the latches
+      // and the retry budget are shared with the WebGL2 path rather than
+      // doubled: persist the two heavy-feature opt-outs (only on a VISIBLE
+      // loss — iOS also drops the context on backgrounding, which is benign and
+      // must not permanently disable a feature the player turned on), then
+      // self-heal by reload, bounded to two per TAB session (sessionStorage) so
+      // a device that dies every boot is not trapped in a reload loop.
+      // Bound defensively: a three build that stopped seeding onDeviceLost must
+      // cost us the recovery, not the whole backend — a throw here would return
+      // null from create() and silently demote the player to GLX.
+      const _threeOnLost = (typeof renderer.onDeviceLost === "function")
+        ? renderer.onDeviceLost.bind(renderer) : null;
+      renderer.onDeviceLost = function (info) {
+        try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
+        try {
+          if (!document.hidden) {
+            try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage: the knob stays as-is and the tier gate is the only defence left */ }
+            try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* ditto — nothing in this handler may throw */ }
+          }
+          const rk = "apex26.ctxLostReloads";
+          const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+          sessionStorage.setItem(rk, String(n));
+          // 1.2 s: long enough for a real "restored" event to win the race
+          // below, short enough that the player reads it as a hitch.
+          if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
+        } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
+      };
+      // three does NOT route "restored" anywhere (it only listens for the loss),
+      // so the immediate-reload half of GLX's pair has to be registered here.
+      try {
+        canvas.addEventListener("webglcontextrestored",
+          function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
+      } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
       // ── lifecycle state ───────────────────────────────────────────────────
       let renderScale = 1;
@@ -226,7 +331,7 @@ const TLX = (function () {
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
-          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier });
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
@@ -427,7 +532,12 @@ const TLX = (function () {
       const drawList = [];          // {geo, matrix, material} in submission order
       const meshPool = [];          // recycled THREE.Mesh wrappers
       let poolUsed = 0;
-      const _tmpMat4 = new THREE.Matrix4();
+      // Two scratch matrices for begin()'s view reconstruction. BOTH are
+      // hoisted: multiplyMatrices reads its operands before writing, so the
+      // second cannot be _tmpMat4 — and it used to be a `new THREE.Matrix4()`
+      // per frame, the only per-frame allocation left in this file. 60 Hz of
+      // garbage buys nothing on desktop and buys a GC hitch on a phone.
+      const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
 
       // ── M6 FX plumbing ───────────────────────────────────────────────────
       // Shared unit quad for blob shadows + per-mark skid stamps: the GLX
@@ -920,7 +1030,7 @@ const TLX = (function () {
             camera.projectionMatrix.fromArray(frame.proj);
             camera.matrixWorldInverse.multiplyMatrices(
               _tmpMat4.fromArray(frame.invProj),
-              new THREE.Matrix4().fromArray(frame.viewProj));
+              _tmpMat4b.fromArray(frame.viewProj));
             camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
           } else if (frame && frame.viewProj) {
             camera.projectionMatrix.fromArray(frame.viewProj);
@@ -1233,6 +1343,15 @@ const TLX = (function () {
             return { on: !!envRT, face, size: ENV_SIZE, ready: envReady };
           },
           viz: vizMode,
+          // Which three backend actually came up, and why — the one question a
+          // "TLX looks wrong on my phone" report has to answer first, since the
+          // WebGPU/WebGL2 choice is now device-dependent (see the pin above).
+          backendState() {
+            return {
+              api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
+              forceWebGL, pin: _glPin, isMobile, mobileTier,
+            };
+          },
           materialCacheSize() { return matCache.size; },
           async shader(idx = 0) {
             const meshes = scene.children.filter((o) => o.isMesh && o.visible);

@@ -14,7 +14,7 @@ The lit shader combines three sources:
 |---|---|---|
 | Directional sun | `uSunDir`, `uSunColor` | With shadow map |
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
-| Point lights (up to 32) | uniform arrays — see below | Floodlights, emissives |
+| Point lights (up to 32) | uniform arrays — see below | Track lamps, emissives |
 
 The composite pass combines AO, shafts, exposure and bloom in HDR, applies the
 live HDR image grade described below, then runs ACES → display-domain colour
@@ -105,16 +105,47 @@ arrays consumed by the lit shader and the god-ray pass. Every
 `lights.push(...)` in `buildTrackLights` (`js/game/lighting.js`) must be
 exactly 15 values.
 
-`setFrameLights()` re-uploads every frame: it sorts active floodlights by
+`setFrameLights()` re-uploads every frame: it sorts active lamps by
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
 `LT.lampCull` (def 28) when there is traffic, otherwise 32 (`MAX_LIGHTS`).
+
+### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
+
+Both read **zero** on all 40 circuits, with no baseline and no ALLOW hatch.
+
+**A light that glares needs a fixture under it.** `drawGlow` paints an additive
+halo billboard for every record with `glareW > 0`, so any such record must sit on
+a registered `track.lampPosts` lens. Fixture-less lights are legitimate — the
+gap fill, the density fill, the start-gantry bar — but they must push `glareW 0`
+(and a damped `volW`, or the shaft gives them away instead). The gantry bar
+shipped at `glareW 0.3` while explicitly not parented to the gantry mesh: three
+orbs 8 m over every start line. Jeddah drew a 560-pole LED tunnel that registered
+no lights at all, so the whole circuit fell to the synthetic stride walk — 311
+halos, none over a pole.
+
+**A fixture needs its pool to reach the road.** The window `(1-(d/r)^4)^2` is
+*exactly* 0 past `r`, so a lens further from the tarmac than its own radius
+lights nothing whatsoever. `floodColor`'s radii are sized for a 9-13 m verge
+lamp ("the pool's far corner sits 21-25 m from the lens"); a 39 m stadium mast
+standing 34 m out has a ~52 m throw, so Bahrain's fully-modelled floodlight ring
+covered **2 of 135** centreline samples — and the 2 were the start line, lit by
+the orbs above. `floodMast` therefore registers its measured throw × 1.5, and
+`lampRadius()` reads a **mast** record's radius as a floor over the theme value,
+never an override — `lampPost`'s hand-placed luminaires (Monaco's tunnel soffits
+at 21-27 m) are a different list and keep their deliberately small radii.
+
+Widening a radius costs no shader slots: the cull uploads the nearest CAP lights
+regardless of radius, and the fragment loop range-rejects on squared distance
+before the `sqrt`. Measured peak lights actually covering one road point after
+the fix: 11 on Bahrain, 13 on Qatar, against a CAP of 24-32.
 
 ### Dark-gap fill (`LT.lampGapFill`, def 60 m)
 
 Lights are emitted **from the mast list** (`track.lampPosts`), so a circuit that
-suppresses the generic flood masts over a stretch — a `dressingExclusions` rule
-of kind `"floodlights"`, usually because a bespoke structure owns that ground —
-also deleted the *light* there. An audit of all 40 circuits found **nine with a
+suppresses the generic mast pass over a stretch — a `dressingExclusions` rule
+of kind `"lamps"` (`"floodlights"` / `"lighting"` are aliases for the same
+family), usually because a bespoke structure owns that ground — also deleted
+the *light* there. An audit of all 40 circuits found **nine with a
 genuinely unlit stretch at night** — worst of all baku (1.2 km, a fifth of the
 lap) and redbull (784 m spanning its own start/finish straight), plus madrid,
 mexico, silverstone, suzuka, monaco, abudhabi, montreal.
@@ -140,7 +171,7 @@ Called on race load and again whenever `setTimeOfDay()` fires.
 
 ### `raceTimeOfDay === "default"`
 Uses the track file's own palette verbatim. If the track's `night` flag is set
-(`def.night`), the scene sun is dimmed to moonlight and floodlights are
+(`def.night`), the scene sun is dimmed to moonlight and track lamps are
 activated. Palette luminance is not a second night detector — a `night: false`
 circuit stays a day session even if its colours are dark.
 
@@ -152,11 +183,11 @@ circuit stays a day session even if its colours are dark.
 - `frame.sunColor` is dimmed to moonlight (the palette may ship a near-overhead
   bright sun for sky glow; this prevents it lighting the road like day).
 - `frameSky.sunColor` is left warm so dusk sky tints survive.
-- Floodlights activated.
+- Track lamps activated.
 
 **`"dawn"` / `"dusk"`**
 - Rich split-tone skies with a low sun angle.
-- Floodlights activated (scene is dark enough).
+- Track lamps activated (scene is dark enough).
 
 **`"day"`**
 - Driven by `_trackAtmoBias(def)` which returns a value from −clear to +overcast:
@@ -165,16 +196,17 @@ circuit stays a day session even if its colours are dark.
     low haze.
   - **Humid/overcast circuits**: paled-out sky, more haze.
 - Bloom ≈ 0.60 (threshold 0.82), grade strength ≈ 0.34 (set just before `GLX.present()`).
-- Floodlights are suppressed in the render loop (`frame.lights = null`), not
-  inside `applyRaceSettings`. `LT.floodDay` can keep a dim day fill.
+- Track lamps are suppressed in the render loop (`frame.lights = null`), not
+  inside `applyRaceSettings`. `LT.floodDay` (DAYTIME LAMPS) can keep a dim day fill.
 
 ---
 
-## Floodlights / track lamps
+## Track lamps
 
-`buildTrackLights()` in `js/game/lighting.js` places one point light per entry
-in `track.lampPosts` (generic mast pass ~22 m both edges, plus `floodMast` /
-`lampPost` registrations). Activated whenever the scene is dark:
+Street posts and flood banks are **one system**. There is no second floodlight
+pipeline: `buildTrackLights()` in `js/game/lighting.js` places one point light
+per entry in `track.lampPosts` (generic mast pass ~22 m both edges, plus
+`floodMast` / `lampPost` registrations). Activated whenever the scene is dark:
 
 - Any explicit night/dusk/dawn time-of-day, on any track.
 - Default mode on a track whose `_night` flag is set.

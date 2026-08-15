@@ -1,7 +1,7 @@
 /* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the
    lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches
    for night/dawn/dusk/day, wet/overcast/fog post-modifiers, ground mist,
-   floodlight build, lightning arming) plus the per-track atmosphere bias
+   lamp build, lightning arming) plus the per-track atmosphere bias
    table. Extracted verbatim; live state (frame, frameSky, track, weather,
    cloud/lightning timers) is reached through the ctx façade G handed to
    Atmosphere.create(G); stable helpers (clamp, satAdjust, weather predicates,
@@ -54,7 +54,7 @@ function applyRaceSettings() {
   } else {
     G.frameSky.cityGlow = null;
   }
-  // Pre-build the floodlight set at race start so the first dark-session frame is
+  // Pre-build the lamp set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
   const floodActive = isFloodActiveSession();
@@ -124,7 +124,9 @@ function applyRaceSettings() {
       // Sun rising in the east; azimuth varies per circuit (mirrors _duskAz) so
       // the low raking light doesn't strike every track from the same angle.
       const _dawnAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
-      G.frameSky.sunDir  = V3.norm([-0.62 - _dawnAz, 0.08, 0.28]);
+      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
+      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
+      G.frameSky.sunDir  = _sunDirAz([-0.62, 0.08, 0.28], -_dawnAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dwOvc * 0.10, 0.80 - _dwClr * 0.04 + _dwOvc * 0.06, 0.50 - _dwClr * 0.08 + _dwOvc * 0.16];
       // Cool teal fill from the sky, soft warm rose bounce from the ground
@@ -157,7 +159,9 @@ function applyRaceSettings() {
       // Sun low in the west; vary azimuth slightly per track so not every
       // circuit has identical low-angle raking light.
       const _duskAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
-      G.frameSky.sunDir  = V3.norm([0.50 + _duskAz, 0.10, 0.22]);
+      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
+      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
+      G.frameSky.sunDir  = _sunDirAz([0.50, 0.10, 0.22], _duskAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dkOvc * 0.12, 0.62 + _dkOvc * 0.04 - _dkClr * 0.05, 0.22 + _dkOvc * 0.14 - _dkClr * 0.06];
       // Warm amber ground bounce, cool sky fill from the blue zenith overhead
@@ -199,7 +203,9 @@ function applyRaceSettings() {
       // everything else falls back to the atmosphere-bias heuristic.
       const _dayAz = (G.track && G.track.def && G.track.def.sunAzimBias != null)
         ? G.track.def.sunAzimBias : _bias * 0.6;
-      G.frameSky.sunDir = V3.norm([0.46 + _dayAz, 0.58, 0.42]);
+      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
+      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
+      G.frameSky.sunDir = _sunDirAz([0.46, 0.58, 0.42], _dayAz);
       G.frame.sunDir    = G.frameSky.sunDir;
       // Strong WARM sun vs a cooler, slightly darker sky-fill: neutral concrete
       // then reads with a warm sunlit side and a cool shadow side (chiaroscuro),
@@ -273,7 +279,7 @@ function applyRaceSettings() {
     // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
     // the road/scenery like daytime, which is why night looked washed (Singapore).
     // frameSky.sunColor is left alone so the warm sky/dusk glow survives; the
-    // floodlights (buildTrackLights) now carve out the actually-lit areas.
+    // lamps (buildTrackLights) now carve out the actually-lit areas.
     if (isNightSession) G.frame.sunColor = [0.12, 0.14, 0.22];   // unified moonlight key (matches explicit-night)
     G._cloudBase = G.frameSky.cloud !== undefined ? G.frameSky.cloud
                : (isNightSession ? 0.22 : 0.44);   // modest cover; the sky shader carries the richer cumulus look
@@ -427,7 +433,17 @@ function applyRaceSettings() {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     G.frameSky.cloud = Math.min(0.85, G._cloudBase + 0.35);
     G.frame.fogDensity = (G.frame.fogDensity || 0.0017) * (LT.fogWxMul != null ? LT.fogWxMul : 3.0);
-    const fc = [0.74, 0.76, 0.78];
+    // A NIGHT fog must stay night — the same guard, for the same reason, as the
+    // exposure floor below. This pale daylight grey is ~20x the night horizon
+    // band ([0.04,0.03,0.06]) and fogWxMul has just TRIPLED the density on the
+    // line above, so on a dark session it laid a bright grey sheet across the
+    // whole distance and grey-washed exactly the night the exposure guard exists
+    // to protect. The night value is a dim cool murk — lifted well clear of the
+    // near-black clear-night base ([0.015,0.017,0.035]) so the fog still reads as
+    // fog and catches the lamp glow, nowhere near daylight. Density is untouched:
+    // a night fog is every bit as THICK, it just is not bright. The default-mode
+    // horizon flatten below reads the same `fc`, so it follows automatically.
+    const fc = isNightSession ? [0.09, 0.10, 0.13] : [0.74, 0.76, 0.78];
     G.frame.fogColor = fc;
     // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
     // flatten the horizon to fog-grey in default mode. Sync frame.skyHorizon so
@@ -533,6 +549,27 @@ function applyRaceSettings() {
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+}
+
+// ── Per-track sun AZIMUTH bias ────────────────────────────────────────────────
+// Apply a per-track azimuth (compass) bias to an authored sun direction as a TRUE
+// XZ ROTATION — the same idiom the default-mode block below uses on _pal.sunDir.
+// The three explicit-TOD branches used to fold the bias straight into x and then
+// V3.norm the result; adding a scalar to x changes |v|, so normalising rescaled y
+// as well and a knob documented as HORIZONTAL silently moved the sun's ELEVATION.
+// Measured on the shipped bias tables: Spa's DAY sun sank 42.96° -> 30.28° while
+// Bahrain's rose to 53.34° — a 23° elevation spread across the roster — and
+// Qatar's DUSK sun climbed 10.37° -> 18.36°, right out of the "close to the deck"
+// golden hour its branch is written for.
+// WHAT MOVED: nothing horizontal. `xBias` is still consumed exactly as it was, so
+// the compass angle every circuit gets is the shipped one to the last digit; only
+// the elevation is restored to the branch's authored base (dawn 6.71°, dusk
+// 10.37°, day 42.96°), which is the entire point of the fix. Holding y AND the
+// horizontal length |xz| fixed is what makes a rotation a rotation.
+function _sunDirAz(base, xBias) {
+  const az = Math.atan2(base[0] + xBias, base[2]);   // the compass angle, as shipped
+  const h  = Math.hypot(base[0], base[2]);           // authored horizontal length — preserved
+  return V3.norm([h * Math.sin(az), base[1], h * Math.cos(az)]);
 }
 
 // ── Per-track atmosphere bias ─────────────────────────────────────────────────

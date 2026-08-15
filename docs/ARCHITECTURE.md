@@ -223,26 +223,47 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
 | `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; frozen (no new work) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
 that writes the key and reloads. The eventual flip of the default and the
 deletion of GLX/WGX is "Phase D" — future work, out of scope here.
 
-**WGX is not at parity with GLX, and never reached it.** Four things are still
-reduced or absent on the WebGPU path, so do not assume a GLX feature exists
-there:
+**Every device may select every backend, phones included.** Boot used to refuse
+both alternates whenever `GLX.isMobile` and the RENDERER button hid there, after
+TLX on iOS rendered a flat pale ground with the lower half of the frame black.
+The replacement is a **boot canary**: `js/game.js` writes `apex26.gfxBackendProbe`
+before handing the canvas to an alternate and clears it on the first presented
+*world* frame; a boot that still finds it armed resets `apex26.gfxBackend` to
+`webgl2`. That covers the failure a visible button cannot — an iOS jetsam kill,
+which takes the tab with no JS error and no `webglcontextlost`, and which the
+`GLX.init`-failure recovery in the same file never sees. Everything else is
+recoverable by hand: the menus are DOM layered over the canvas, so they stay
+legible through a garbage frame and the button is one tap away. Pressing the
+button also disarms the probe, so switching from the menu before any world frame
+does not revert the choice just made.
 
-- lamp-fog / ground-mist **volumetrics**
-- **PCSS** soft-shadow quality
-- **MSAA stays at 1**
-- **no `gpuTimer`** (`__apex.gpuTimer()` reports unsupported)
+Note that iOS 26+ and Android 12+ (Qualcomm/ARM) expose `navigator.gpu`, so the
+**WEBGPU** stop is reachable on phones. The canary is what makes a bad boot
+survivable, not a claim that every phone looks right.
 
-WGX also does not implement the baked material arrays (`createTextureArray`),
-so `matTexMix` does nothing there and the look falls back to procedural. This
-list was previously buried in a phase-notes build log; it is a live caveat about
-shipped code, so it lives here now.
+**WGX is opt-in and aims at the GLX draw-API surface.** Do not assume a GLX
+feature exists there until you have read the backend object — a missing name
+must stay an explicit `undefined` so game.js does not inherit a dead GLX
+function. The 2026-08 parity pass (recipes in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)) landed:
+
+- `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
+- baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
+- lamp shadows, instancing family, `drawParticles`
+- Poisson-8 PCSS + far 4-tap, tunable lamp-fog, world-space god-ray + lamp vol
+- MSAA 2× (color `resolveTarget` + manual MS-depth resolve for SSAO)
+- env-probe / 2d / array mip chains (blit; WebGPU has no `generateMipmap`)
+- `applyMaterial*` / `roadMarkings` / heat haze / car-paint SSR scene-alpha tag
+- SSAO denoise + god-ray separable 5-tap blur (GLX `BLUR_FS`)
+
+GLX stays the default. Nothing here flips that.
 
 **TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +

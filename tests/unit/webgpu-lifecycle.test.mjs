@@ -5,9 +5,10 @@ import vm from "node:vm";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
-const [CHUNKS_SOURCE, POST_SOURCE, WGX_SOURCE] = await Promise.all([
+const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, WGX_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
+  readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
   readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
@@ -33,6 +34,7 @@ function makeGpuHarness() {
         writes.push({ buffer, offset, values });
       },
       writeTexture() {},
+      copyExternalImageToTexture() {},
       submit() {},
     },
     createSampler: () => ({}),
@@ -40,8 +42,11 @@ function makeGpuHarness() {
     createPipelineLayout: () => ({}),
     createShaderModule: () => ({}),
     createRenderPipeline: () => pipeline,
+    createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => ({
       beginRenderPass: () => pass,
+      resolveQuerySet() {},
+      copyBufferToBuffer() {},
       finish: () => ({}),
     }),
     createTexture(desc) {
@@ -67,6 +72,8 @@ function makeGpuHarness() {
         destroy() { this.destroyed = true; },
         getMappedRange: () => new ArrayBuffer(desc.size),
         unmap() {},
+        mapState: "unmapped",
+        mapAsync: async () => {},
       };
       buffers.push(buffer);
       return buffer;
@@ -111,18 +118,26 @@ function makeGpuHarness() {
       userAgent: "",
       maxTouchPoints: 0,
       gpu: {
-        requestAdapter: async () => ({ requestDevice: async () => device }),
+        requestAdapter: async () => ({
+          features: { has: (name) => name === "timestamp-query" },
+          requestDevice: async () => {
+            device.features = { has: (name) => name === "timestamp-query" };
+            return device;
+          },
+        }),
         getPreferredCanvasFormat: () => "bgra8unorm",
       },
     },
-    GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4 },
-    GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16 },
+    GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
+    GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16, QUERY_RESOLVE: 32, MAP_READ: 64, COPY_SRC: 128 },
     GPUShaderStage: { VERTEX: 1, FRAGMENT: 2 },
     GPUColorWrite: { RED: 1, GREEN: 2, BLUE: 4, ALL: 15 },
+    GPUMapMode: { READ: 1 },
   });
   context.window.window = context.window;
   vm.runInContext(`${CHUNKS_SOURCE}\nwindow.WGSLChunks = WGSLChunks;`, context);
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
+  vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -145,8 +160,9 @@ test("post resize keeps old resources valid and cleans partial texture allocatio
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
+  const targetTextureStart = h.textures.length;
   assert.equal(gfx.begin({}), true);
-  const oldTextures = h.textures.slice();
+  const oldTextures = h.textures.slice(targetTextureStart);
 
   h.canvas.clientWidth = 640;
   gfx.resize();
@@ -263,7 +279,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*464/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*544/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
@@ -272,7 +288,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 464);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -310,11 +326,10 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   for (let i = 0; i < 4; i++) {
     assert.ok(Math.abs(composite[56 + i] - ACES_DEF[i]) < 1e-6, `ACES tone-curve default float ${56 + i}`);
   }
-  // dirtFx = (lensDirt, _pad, _pad, _pad) at off 240 = floats 60..63. Default
-  // 0.15 reproduces the shipped GLX lens-dirt strength. (f32 rounding: 0.15 isn't
-  // exactly representable, so compare with a tol; the pads are exact zeros.)
+  // dirtFx = (lensDirt, hazeU, hazeV, hazeStr) at off 240 = floats 60..63.
+  // Default 0.15 reproduces the shipped GLX lens-dirt strength; haze is off.
   assert.ok(Math.abs(composite[60] - 0.15) < 1e-6, "lensDirt default in dirtFx.x (float 60)");
-  assert.deepEqual(composite.slice(61, 64), [0, 0, 0], "dirtFx pads must be 0 (floats 61..63)");
+  assert.deepEqual(composite.slice(61, 64), [0, 0, 0], "haze defaults must be 0 (floats 61..63)");
 
   // Extreme upload: powers-of-two fractions (0.25/0.75/3.5 …) are exactly f32-
   // representable, so these lanes can be compared exactly. carSparkle/fogSunCore
@@ -332,7 +347,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
     gammaR: 11, gammaG: 12, gammaB: 13,
     gainR: 14, gainG: 15, gainB: 16,
     lensDirt: 0.75,
-  } });
+  }, haze: { u: 0.25, v: 0.75, str: 0.5 } });
   frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [44, 55, 66, 80], "wetDark must not overwrite shadowCtr");
   assert.equal(frame[92], -7);
@@ -350,7 +365,9 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[35], 3.5, "flareStreak must occupy tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(56, 60), [3, 0.25, 3.5, 0.75], "aces a,b,c,d must occupy floats 56..59");
   assert.equal(composite[60], 0.75, "lensDirt must occupy dirtFx.x (float 60)");
-  assert.deepEqual(composite.slice(61, 64), [0, 0, 0], "dirtFx pads must stay 0 (floats 61..63)");
+  assert.equal(composite[61], 0.25, "haze.u must occupy dirtFx.y (float 61)");
+  assert.equal(composite[62], 0.75, "haze.v must occupy dirtFx.z (float 62)");
+  assert.equal(composite[63], 0.5, "haze.str must occupy dirtFx.w (float 63)");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
   assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
   assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
@@ -426,4 +443,105 @@ test("WGSL flake basis guards degenerate normals before normalization", () => {
 
 test("composite header describes implemented image effects", () => {
   assert.doesNotMatch(POST_SOURCE, /SSR \/ speed-blur \/ chromatic-aberration DEFERRED/);
+});
+
+test("WGX publishes the GLX-parity surface instead of undefined stubs", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  assert.equal(typeof gfx.gpuTimer, "function");
+  assert.equal(typeof gfx.gpuMs, "function");
+  assert.equal(typeof gfx.createTextureArray, "function");
+  assert.equal(typeof gfx.setMaterialMaps, "function");
+  assert.equal(typeof gfx.materialMapState, "function");
+  assert.equal(typeof gfx.lampShadowBegin, "function");
+  assert.equal(typeof gfx.lampShadowEnd, "function");
+  assert.equal(typeof gfx.createInstancedBatch, "function");
+  assert.equal(typeof gfx.cullInstances, "function");
+  assert.equal(typeof gfx.drawInstanced, "function");
+  assert.equal(typeof gfx.freeInstancedBatch, "function");
+  assert.equal(typeof gfx.castShadowInstanced, "function");
+  assert.equal(typeof gfx.drawParticles, "function");
+  const timer = gfx.gpuTimer();
+  assert.equal(timer.supported, true);
+  assert.equal(timer.on, false);
+  assert.equal(gfx.gpuMs(), -1);
+  gfx.gpuTimer(true);
+  assert.equal(gfx.gpuTimer().on, true);
+  assert.equal(gfx.msaa(), 2);
+  const maps = gfx.materialMapState();
+  assert.equal(maps.albedo, false);
+  assert.equal(maps.layers, 0);
+});
+
+test("lamp shadow arm does not leak into the next frame", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
+  gfx.lampShadowBegin(new Float32Array([
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+  ]), 2);
+  gfx.lampShadowEnd();
+  assert.equal(gfx.begin({}), true);
+  let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.equal(frame[133], 1, "params8.y armed after lampShadowEnd");
+  assert.equal(frame[134], 2, "params8.z = lamp idx");
+  gfx.present({});
+  assert.equal(gfx.begin({}), true);
+  frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.equal(frame[133], 0, "params8.y must clear after present");
+});
+
+test("god-ray uploads nearest lamps and remaps the shadowed index", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const lights = new Float32Array(45);
+  lights[0] = 100; lights[6] = 10;
+  lights[15] = 1; lights[21] = 10;
+  lights[30] = 50; lights[36] = 10;
+  const ident = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  gfx.lampShadowBegin(ident, 0);
+  gfx.lampShadowEnd();
+  assert.equal(gfx.begin({ eye: [0, 0, 0], lights, invViewProj: ident }), true);
+  gfx.present({ lampVol: 1, mist: 1 });
+  const lightBufs = h.buffers.filter((buffer) => buffer.desc.size === 2048);
+  const gr = h.writes.filter((write) => lightBufs.includes(write.buffer)).at(-1);
+  assert.ok(gr, "god-ray must write a nearest-N light buffer");
+  assert.equal(gr.values[0], 1, "nearest lamp (1,0,0) must be slot 0");
+  assert.equal(gr.values[16], 50, "next-nearest lamp must be slot 1");
+  const godrayBuf = h.buffers.find((buffer) => buffer.desc.size === 288);
+  const gu = h.writes.filter((write) => write.buffer === godrayBuf).at(-1).values;
+  assert.equal(gu[68], 3, "numLights is the nearest-N count");
+  assert.equal(gu[69], 2, "lampShadowIdx remaps frame index 0 onto nearest-N slot 2");
+});
+
+test("WGX requests timestamp-query when the adapter exposes it", async () => {
+  assert.match(WGX_SOURCE, /requiredFeatures/);
+  assert.match(WGX_SOURCE, /timestamp-query/);
+  assert.match(WGX_SOURCE, /timestampWrites/);
+});
+
+test("WGX source keeps the proven parity fixes", () => {
+  assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
+  assert.match(WGX_SOURCE, /mapState === "unmapped"/);
+  assert.match(WGX_SOURCE, /pParticleAdd/);
+  assert.match(WGX_SOURCE, /_grByD/);
+  assert.doesNotMatch(WGX_SOURCE, /colors\[i \* 3\] \|\| 1/);
+});
+
+test("WGSL closes the documented GLX look gaps", () => {
+  assert.match(CHUNKS_SOURCE, /texture_2d_array/);
+  assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
+  assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
+  assert.match(CHUNKS_SOURCE, /fn roadMarkings\(/);
+  assert.match(CHUNKS_SOURCE, /-0\.94201624/);
+  assert.match(CHUNKS_SOURCE, /lampShadowTex/);
+  assert.match(CHUNKS_SOURCE, /aInst0/);
+  assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(POST_SOURCE, /texture_depth_2d/);
+  assert.match(POST_SOURCE, /uLampStr|lampStr/);
+  assert.match(POST_SOURCE, /hazeStr|uHazeStr/);
+  assert.match(POST_SOURCE, /1\.3846153846/, "SSAO/god-ray separable blur kernel");
+  assert.match(FX_SOURCE, /fn vs_main[\s\S]*aCorner/, "particle shader");
 });

@@ -2,7 +2,7 @@
  *
  * A 1:1 port of js/render/shaders/lit.js (the GLSL source of truth) into
  * three.js TSL nodes: all 15 procedural track materials + the car surface ids
- * (20-26), the FLAG cloth-wave vertex displacement, hemisphere ambient +
+ * (20-27, including MIRROR chrome), the FLAG cloth-wave vertex displacement, hemisphere ambient +
  * lambert sun + GGX specular (soft-clipped), the 32-lamp spot loop with GGX +
  * clearcoat lobes, cloud shadows, wetness, the analytic clearcoat env mirror,
  * metallic-flake sparkle, emissive/hdrTag over-white glow, and the full fog
@@ -143,7 +143,16 @@
       shadowBias:     uniform(0.001), // SHADOW BIAS
       shadowTexel:    uniform(1 / 2048),
       shadowCtr:      uniform(new THREE.Vector3()),   // gliding fade anchor (frame.shadowCtr)
-      pcssPen:        uniform(80.0),  // SHADOW SOFTEN — TODO M4-PCSS (unused until the blocker map lands)
+      // SHADOW SOFTEN. INTENTIONALLY UNCONSUMED — declared here and uploaded
+      // by updateFrame below purely to keep the uniform block 1:1 with GLX's
+      // uPcssPen, but NO node reads it: TLX has no blocker map (tlx.js pcss()
+      // returns false, see the TODO M4-PCSS note in tlx-shadow.js), so the sun
+      // PCF uses the fixed radius `R = float(3.0)` in the shadow node below
+      // instead of the mix(1.5, 6.0, pen) the blocker search would drive.
+      // Moving the slider changes nothing on this backend — do not read that
+      // silence as "the knob works and is subtle". Wire it up when the blocker
+      // map lands; the knob's TUNE_DEFS help carries the same caveat.
+      pcssPen:        uniform(80.0),
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
@@ -160,10 +169,19 @@
     const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
     const lampGeo = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(1, 0.8, 0.5, 0));
     U.lampPos = uniformArray(lampPos);
-    // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 0) + per-layer world tile
-    // size. 17 entries so the array is indexable by MAT id directly; 0 means
-    // "this material has no baked layer" and every sample site tests it first.
-    U.matTexMix = uniform(0.0);
+    // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 1.0 — the pack ships ON)
+    // + per-layer world tile size. 17 entries so the array is indexable by MAT
+    // id directly; 0 means "this material has no baked layer" and every sample
+    // site tests it first.
+    // WAS 0.0, on both this declaration and the updateFrame fallback below,
+    // while TUNE_DEFS and the glx.js bindMaterialMaps() call both defaulted to
+    // 1.0. A frame arriving with no `tune` object — or with matTexMix absent
+    // from it — therefore rendered pure procedural on TLX and baked on GLX
+    // from the same input, breaking the rule stated in the `frame` contract of
+    // js/render/gfx.js that a backend's defaults MUST mirror TUNE_DEFS.
+    // Defaulting ON is safe with no pack: matTexScale stays all-zero and every
+    // sample site gates on it (and MAT_MAPS absent compiles none of this in).
+    U.matTexMix = uniform(1.0);
     U.matTexScale = uniformArray(new Array(17).fill(0));
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
@@ -203,7 +221,7 @@
       U.mistHeight.value = k("mistHeight", 0.30);
       U.shadowTintAmt.value = k("shadowTintAmt", 0.0);
       U.wetDark.value = k("wetDark", 1.0);
-      U.matTexMix.value = k("matTexMix", 0.0);
+      U.matTexMix.value = k("matTexMix", 1.0);   // TUNE_DEFS def (was 0.0 — see the declaration)
       U.cloudShadowDim.value = k("cloudShadowDim", 0.80);
       U.carSunGlint.value = k("carSunGlint", 12.0);
       U.carSparkle.value = k("carSparkle", 1.6);
@@ -522,7 +540,9 @@
      * ENV_CUBE uses above, and it is required here for the same reason: the
      * material variants are compiled once at init, the pack arrives
      * asynchronously, and a rebuild after init is not possible. U.matTexMix
-     * (TUNE_DEFS `matTexMix`, shipped at 0) gates the whole thing.
+     * (TUNE_DEFS `matTexMix`, shipped at 1.0 — ON, matching GLX; this comment
+     * said "shipped at 0", which was true of the old TLX-only uniform default
+     * and never of the knob) gates the whole thing.
      *
      * ctx.matMaps absent (an older tlx.js, or a boot where the arrays could not
      * be created) means NONE of this is compiled in and TLX renders exactly the
@@ -821,9 +841,9 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/shaders/lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // ── car surface ids 20-26 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
+        // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(26.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(27.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
@@ -831,19 +851,24 @@
         const glassSurface = surfaceId.equal(24.0).toVar();
         const emissiveSurface = surfaceId.equal(25.0).toVar();
         const panelSurface = surfaceId.equal(26.0).toVar();
+        // MIRROR: chrome livery finish (FINISH_SURFACE.chrome). Paint-like
+        // (keeps clearcoat + env lobe) but metallic and nearly smooth.
+        const mirrorSurface = surfaceId.equal(27.0).toVar();
         const carPaint = select(classifiedCar,
-          select(paintSurface, matU.carPaint, float(0.0)), matU.carPaint).toVar();
+          select(paintSurface.or(mirrorSurface), matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
           select(paintSurface, matU.clearcoat,
-            select(glassSurface, matU.clearcoat.mul(0.45), float(0.0))),
+            select(mirrorSurface, max(matU.clearcoat, 0.85),
+              select(glassSurface, matU.clearcoat.mul(0.45), float(0.0)))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
-            select(carbonSurface, float(0.08), float(0.0))),
+            select(mirrorSurface, max(matU.metalness, 0.55),
+              select(carbonSurface, float(0.08), float(0.0)))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
-            select(metalSurface, float(1.0),
+            select(metalSurface.or(mirrorSurface), float(1.0),
               select(carbonSurface, float(0.48),
                 select(panelSurface, float(0.35), matU.specular)))),
           matU.specular).toVar();
@@ -917,6 +942,7 @@
         If(glassSurface, () => { rough.assign(min(rough, 0.13)); });
         If(emissiveSurface, () => { rough.assign(max(rough, 0.32)); });
         If(panelSurface, () => { rough.assign(max(rough, 0.72)); });
+        If(mirrorSurface, () => { rough.assign(min(rough, 0.09)); });
         If(matU.detail.greaterThan(0.0), () => {   // glossier repair patches
           rough.assign(clamp(rough.add(patchM.sub(0.5).mul(0.16).mul(min(matU.detail.mul(4.0), 1.0))), 0.04, 1.0));
         });
@@ -952,19 +978,35 @@
         const f0 = mix(vec3(specular.mul(0.08)), albedo, metalness).toVar();
 
         // ── wet surface (rain — js/render/shaders/lit.js) ─────────────────────────────
+        // wet = "rained on"; wetSheen = the specular WATER FILM. Porous ground
+        // (grass/foliage/rock/sand/snow) drinks the water: it darkens but never
+        // polishes. Reflection-side terms must key off wetSheen, not wet —
+        // otherwise soaked grass mirrors the lamps and the sky (the pre-fix
+        // TLX port).
         const wet = float(0.0).toVar();
         const puddle = float(0.0).toVar();
+        const wetSheen = float(0.0).toVar();
         If(U.wetness.greaterThan(0.001), () => {
           const upFace = smoothstep(0.50, 0.90, N.y);
+          const wmid = surfaceId;
+          const porous = select(
+            wmid.equal(9.0).or(wmid.equal(6.0)).or(wmid.equal(10.0))
+              .or(wmid.equal(8.0)).or(wmid.equal(11.0)),
+            float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
-          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet));
-          albedo.mulAssign(mix(float(1.0), clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0), wet));
+          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          const absorb = mix(
+            clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0),
+            clamp(U.wetDark.mul(0.42).oneMinus(), 0.0, 1.0),
+            porous);
+          albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.50), puddle));
-          rough.assign(mix(rough, 0.15, wet));
-          rough.assign(mix(rough, 0.05, puddle));
+          wetSheen.assign(wet.mul(porous.oneMinus()));
+          rough.assign(mix(rough, 0.30, wetSheen));
+          rough.assign(mix(rough, 0.06, puddle));
           a.assign(rough.mul(rough));
-          f0.assign(mix(f0, vec3(0.04), wet.mul(0.6)));   // thin water film dielectric
+          f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
         });
 
         const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5)).toVar();
@@ -972,8 +1014,14 @@
         // ── shadow: hard sun/car map (M4) × soft drifting cloud shadows
         //    (js/render/shaders/lit.js). Nvary = the RAW varying normal, matching the GLSL
         //    sampleShadow's normalize(vNrm). ───────────────────────────────────
-        const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
-        const shadow = sunSh.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()).toVar();
+        // NoL GATE — js/render/shaders/lit.js: sampleShadow + cloudShadow are
+        // thrown away on back-faces (litNoL *= NoL) except clearcoat, which
+        // shades on Ngeo. Skip the taps when the result cannot contribute.
+        const shadow = float(1.0).toVar();
+        If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
+          const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
+          shadow.assign(sunSh.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()));
+        });
         const litNoL = NoL.mul(shadow).mul(U.keyMul).toVar();
 
         // Base diffuse + hemisphere ambient (js/render/shaders/lit.js).
@@ -1007,7 +1055,7 @@
               const cd = dot(Ld.negate(), U.lampDir.element(i));
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
-              const spotS = mix(mix(float(0.16), float(0.30), wet).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
+              const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
               // fog in-scatter share (consumed by the fog stack below)
               lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               const NoLl = max(dot(N, Ld), 0.0).toVar();
@@ -1017,7 +1065,11 @@
               // far plane), 4-tap PCF at 1.5/512.
               const lampSh = float(1.0).toVar();
               if (lampShadowOn) {
-                If(U.lampShadowOn.greaterThan(0.5).and(float(i).equal(U.lampShadowIdx)), () => {
+                // NoLl GATE — js/render/shaders/lit.js: lampSh's only readers
+                // are the NoLl-scaled diffuse and the specular block already
+                // inside NoLl>0. A back-facing fragment paid 4 compare taps
+                // for a result multiplied by zero.
+                If(U.lampShadowOn.greaterThan(0.5).and(float(i).equal(U.lampShadowIdx)).and(NoLl.greaterThan(0.0)), () => {
                   const lpc = U.lampShadowVP.mul(vec4(wp, 1.0)).toVar();
                   If(lpc.w.greaterThan(0.0), () => {
                     const lps = lpc.xyz.div(lpc.w).mul(0.5).add(0.5).toVar();
@@ -1037,7 +1089,7 @@
               // diffuse pool — fades as the road wets (reflection takes over)
               color.addAssign(albedo.mul(U.lampCol.element(i))
                 .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
-                .mul(metalness.oneMinus()).mul(wet.mul(0.85).oneMinus()));
+                .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/shaders/lit.js)
               color.addAssign(albedo.mul(U.lampCol.element(i))
                 .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
@@ -1118,7 +1170,11 @@
           // .toVar()-anchored, so this unconditional reassign never strands
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
-            const cubeRefl = envCubeNode.sample(Rg).rgb;
+            // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
+            // .sample() alone is mip 0 (always-sharp chrome); .level() is the
+            // TSL lod. Binding still resolves from the shared envCubeNode so
+            // setEnvCube()'s dummy-cube swap covers this clone.
+            const cubeRefl = envCubeNode.uv(Rg).level(rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
@@ -1153,7 +1209,7 @@
 
         // ── environment sky reflection for glossy/wet surfaces (js/render/shaders/lit.js)
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
-        envBlend.assign(max(envBlend, wet.mul(0.15)));
+        envBlend.assign(max(envBlend, wetSheen.mul(0.55)));
         If(envBlend.greaterThan(0.001), () => {
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
@@ -1163,11 +1219,11 @@
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
           // dry glossy glass sun flash (WINDOW SUN FLASH knob)
           envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
-            .mul(wet.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash));
+            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash));
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
-          envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wet));
-          const envWet = envColor.mul(wet.mul(0.90).oneMinus());
+          envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));
+          const envWet = envColor.mul(wetSheen.mul(0.45).oneMinus());
           const envAdd = envWet.mul(envFresnel).mul(envBlend).mul(roughDamp).mul(metalness.oneMinus()).toVar();
           const envM = max(max(envAdd.r, envAdd.g), envAdd.b);
           color.addAssign(envAdd.div(envM.add(1.0)));           // Reinhard shoulder
