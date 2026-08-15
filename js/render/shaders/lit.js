@@ -631,7 +631,17 @@ float sampleShadow(vec3 wpos) {
   // harness (tools/lighting/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
   // site, so keep the bias term factored here rather than repeating the clamp.
   float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
-  float z = sc.z - biasTerm;
+  // BIAS MUST TRACK THE BOX, like the kernel below already does. slopeBias is
+  // built from t = 1/SHADOW_SIZE, a UV quantity, so it is blind to the world
+  // size of a texel — but that sweeps 12.5x across SHADOW DISTANCE (0.0156 m at
+  // 16, 0.195 m at 200). Unscaled it was ~25x more offset than needed at 16 and
+  // only ~2x at 200, i.e. a fixed 0.393 m of depth push at every setting (about
+  // 1.08 m of ground detachment under a 20-degree sun) with the acne margin
+  // nearly gone at the far end. Scaling here holds that margin roughly constant.
+  // Applied to the STATIC map ONLY: the car map below multiplies the same
+  // biasTerm by uCarBiasScale (= max(1, box/80) from game.js), so scaling the
+  // shared term would square the correction on cars.
+  float z = sc.z - biasTerm * (uShadowRange / 80.0);
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
@@ -786,10 +796,23 @@ void main() {
       : (mirrorSurface ? max(uClearcoat, 0.85)
       : (glassSurface ? uClearcoat * 0.45 : 0.0)))
     : uClearcoat;
+  // PAINT gets uMetalness. It used to fall through to a literal 0.0, which made
+  // CAR METALLIC a 100% dead slider: every car pixel is classified (car3d.js
+  // surfaceOf() falls back to paint), metal/mirror are pinned by the max() floors
+  // below, carbon is a constant — so uMetalness reached NOTHING. The knob would
+  // have needed 6.5 against a max of 2.5 to move even the metal parts.
+  // This is restoring intent, not inventing a look: js/game/tables.js sets
+  // metalness 0.12 on all four PAINT_* constants and its comment says the mild
+  // metalness "tints specular + reflections toward the team colour like real
+  // metallic flake, and scales the sky env down so the paint stays saturated" —
+  // which is precisely what metalness does here (f0 mix toward albedo, and the
+  // (1.0 - metalness) factors on diffuse and on envAdd). The shader was throwing
+  // that data away. Scoped to paintSurface: rubber, glass, emissive and panel
+  // stay dielectric on the same 0.0 they had.
   float metalness = classifiedCar
     ? (metalSurface ? max(uMetalness, 0.78)
       : (mirrorSurface ? max(uMetalness, 0.55)
-      : (carbonSurface ? 0.08 : 0.0)))
+      : (carbonSurface ? 0.08 : (paintSurface ? uMetalness : 0.0))))
     : uMetalness;
   float specular = classifiedCar
     ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
@@ -937,8 +960,25 @@ void main() {
     // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
     // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
     // Soaked grass/gravel darkens harder than tarmac and that is ALL it does.
-    float absorb = mix(clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0),
-                       clamp(1.0 - 0.42 * uWetDark, 0.0, 1.0), porous);
+    // The porous coefficient must be the LARGER of the two: absorb multiplies
+    // albedo, so a bigger coefficient means a darker surface. These two were
+    // transposed — mix(A,B,porous) returns A for tarmac and B for porous, so
+    // tarmac absorbed 58% while soaked grass absorbed only 42%, leaving the
+    // verges 38% BRIGHTER than the ribbon they border. That is the mirror image
+    // of the "flooded canal with cyan banks" silhouette the porous branch was
+    // added to fix, and it contradicts both comments above ("darkens more than
+    // tarmac", "darkens harder than tarmac and that is ALL it does"). The 0.42
+    // named in the comment above is the ROAD's result (1 - 0.58), which is why
+    // the road literal stays put and only the porous one moves.
+    // Porous expressed as a FRACTION of the road result, not its own coefficient.
+    // An independent 0.72 was darker at the default (0.28 vs 0.42) but clipped to
+    // pure black at uWetDark 1.389 while the road still rendered detail until
+    // 1.724 — verges going black BEFORE the tarmac is the same silhouette break
+    // this branch exists to prevent, just with the polarity flipped. As a
+    // fraction the two saturate together and porous is strictly darker across
+    // the whole 0..2.4 range, with no clip-order to get wrong.
+    float absorbRoad = clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0);
+    float absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo *= mix(1.0, absorb, wet);
     albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
@@ -1245,7 +1285,7 @@ void main() {
     // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
     float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
     float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow;  // CAR SUN GLINT knob (def 12.0) — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
     color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
@@ -1311,7 +1351,7 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash;   // WINDOW SUN FLASH knob (def 1.0 = shipped)
+    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash * uKeyMul;   // WINDOW SUN FLASH × KEY LIGHT (def 1.0 = shipped)
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square

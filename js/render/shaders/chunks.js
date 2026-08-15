@@ -102,6 +102,19 @@ float vnoise(vec2 p) {
 // floored >0 by the slider min so the denominator can't reach 0 for x>=0.
 vec3 acesTonemap(vec3 x) {
   float a = uAcesA, b = uAcesB, c = uAcesC, d = uAcesD, e = uAcesE;
+  // SIGN GUARD, not defensive padding. The curve is a rational function, and for
+  // x < -b/a BOTH the numerator x(ax+b) and the denominator x(cx+d)+e are
+  // positive, so it RISES back out of the negatives: at the shipped coefficients
+  // x=-0.05 maps to 10/255, x=-0.1517 to 128/255 and x<=-0.2417 clips to pure
+  // WHITE. Negative x is reachable — the SHARPEN unsharp mask (post.js) is an
+  // unclamped overshoot, and nothing else floors the signal before this call
+  // (applyHdrGrade's max(c,0) sits behind uHdrGradeOn, which is 0 at every
+  // shipped default). Dark tarmac beside a sunlit kerb went white at SHARPEN
+  // 0.131, night tarmac beside neon at 0.098, on a 0..6 slider. Clamping in the
+  // curve rather than at the call site keeps it true for every future consumer.
+  // NOT a single-source fix: TLX and WGX carry their own hand-ported copies of
+  // this function, so they were patched alongside it and must be kept in step.
+  x = max(x, vec3(0.0));
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }`;
 

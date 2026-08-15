@@ -161,7 +161,21 @@ self.addEventListener("install", (event) => {
     const cache = await caches.open(name);
     await pooled(urls.essential, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
-    await pooled(urls.optional, 4, (u) => cacheOptionalAsset(cache, u));
+    // The DEFERRED backends are the one group in `optional` that is NOT pinned
+    // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
+    // mirroring the shell's tags. Seeded bare they were cached under a key
+    // nothing ever requests: the fetch handler matches without `ignoreSearch`,
+    // so offline the query'd URL missed, the fetch rejected, the script's
+    // onerror resolved with the global absent, and an opted-in TLX/WGX player
+    // silently fell back to GLX. Stamp the same build here. Safe against
+    // staleness because the cache NAME already carries the build and `activate`
+    // deletes every other generation, so a key inside this cache can only ever
+    // be this build's. Everything else in the list stays bare — the vendored
+    // three.js reaches the network through the importmap with no query at all.
+    const build = name.slice(CACHE_PREFIX.length);
+    const stamped = urls.optional.map((u) =>
+      /^js\/render\/(three|webgpu)\//.test(u) ? u + "?v=" + build : u);
+    await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();
   })());
 });

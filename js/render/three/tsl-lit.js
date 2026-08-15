@@ -82,8 +82,10 @@
     // nodes): tlx.js swaps its .value to a black dummy cube while rendering
     // INTO the probe (the env pass draws glass, an envSurface — sampling the
     // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
-    // js/render/glx.js). .sample(Rg) clones per use but resolves its binding
-    // from this base, so the swap covers all variants at once.
+    // js/render/glx.js). cubeTexture(base, dir, lod) clones per use with
+    // referenceNode = base (three.js CubeTextureNode), so the swap covers
+    // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
+    // setter and threw on every chrome/env surface.
     const ENV_CUBE = ctx.envCube || null;
     const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
@@ -865,7 +867,12 @@
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
             select(mirrorSurface, max(matU.metalness, 0.55),
-              select(carbonSurface, float(0.08), float(0.0)))),
+              // PAINT gets metalness instead of falling through to 0.0 — mirrors
+              // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
+              // and describes the flake it is meant to produce; the 0.0 discarded
+              // it and made CAR METALLIC dead on every car pixel.
+              select(carbonSurface, float(0.08),
+                select(paintSurface, matU.metalness, float(0.0))))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
@@ -997,10 +1004,14 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
-          const absorb = mix(
-            clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0),
-            clamp(U.wetDark.mul(0.42).oneMinus(), 0.0, 1.0),
-            porous);
+          // Porous as a FRACTION of the road result — mirrors js/render/shaders/lit.js.
+          // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
+          // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed
+          // 58% while soaked grass absorbed only 42%, leaving verges BRIGHTER than
+          // the ribbon they border. As a fraction the two saturate together and
+          // porous stays strictly darker across the whole wetDark range.
+          const absorbRoad = clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0);
+          const absorb = mix(absorbRoad, absorbRoad.mul(0.66), porous);
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.50), puddle));
           wetSheen.assign(wet.mul(porous.oneMinus()));
@@ -1172,10 +1183,10 @@
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
-            // .sample() alone is mip 0 (always-sharp chrome); .level() is the
-            // TSL lod. Binding still resolves from the shared envCubeNode so
-            // setEnvCube()'s dummy-cube swap covers this clone.
-            const cubeRefl = envCubeNode.uv(Rg).level(rough.mul(2.5)).rgb;
+            // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
+            // clones with referenceNode = this base (mrdoob/three.js
+            // CubeTextureNode.js). Do not call .uv() on a cube node.
+            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
@@ -1183,7 +1194,7 @@
           const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
           envCC.addAssign(vec3(U.sunColor)
             .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow));
+            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
           color.mulAssign(envW.mul(0.94).oneMinus());          // absorb under the mirror
           const addCC = envCC.mul(envW);
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
@@ -1220,7 +1231,7 @@
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
           // dry glossy glass sun flash (WINDOW SUN FLASH knob)
           envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
-            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash));
+            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash).mul(U.keyMul));
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
           envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));

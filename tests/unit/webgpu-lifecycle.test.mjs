@@ -46,12 +46,21 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  // Optional persistent/session storage backing (Maps) so the loss-escalation
+  // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
+  const stored = opts.storage || null;
+  const session = opts.session || null;
+  let loseDevice = null;
+  let failEncoder = false;
   const device = {
-    // A healthy device's `lost` never settles; a born-lost one is ALREADY
-    // resolved by the time create() can look at it.
+    // Three distinct states, because they fail differently: a healthy device
+    // whose `lost` never settles, one the test can lose LATER via loseDevice()
+    // (the escalation ladder), and one that arrives ALREADY lost — which is what
+    // a failed requestDevice actually looks like, since the spec has it always
+    // resolve a GPUDevice.
     lost: opts.bornLost
       ? Promise.resolve({ reason: "unknown", message: "injected born-lost device" })
-      : new Promise(() => {}),
+      : new Promise((resolve) => { loseDevice = resolve; }),
     queue: {
       writeBuffer(buffer, offset, data, dataOffset = 0, size) {
         const values = Array.from(data).slice(dataOffset, size == null ? undefined : dataOffset + size);
@@ -77,12 +86,15 @@ function makeGpuHarness(opts = {}) {
     }),
     createRenderPipeline: () => pipeline,
     createQuerySet: () => ({ count: 2 }),
-    createCommandEncoder: () => ({
-      beginRenderPass: () => pass,
-      resolveQuerySet() {},
-      copyBufferToBuffer() {},
-      finish: () => ({}),
-    }),
+    createCommandEncoder: () => {
+      if (failEncoder) throw new Error("injected encoder failure");
+      return {
+        beginRenderPass: () => pass,
+        resolveQuerySet() {},
+        copyBufferToBuffer() {},
+        finish: () => ({}),
+      };
+    },
     createTexture(desc) {
       textureCalls += 1;
       if (textureCalls === failTextureAt) throw new Error("injected texture failure");
@@ -153,10 +165,20 @@ function makeGpuHarness(opts = {}) {
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
     window: { devicePixelRatio: 1 },
-    localStorage: { getItem: () => null, setItem() {} },
-    location: { reload() {} },
+    localStorage: stored ? {
+      getItem: (k) => (stored.has(k) ? stored.get(k) : null),
+      setItem: (k, v) => { stored.set(k, String(v)); },
+      removeItem: (k) => { stored.delete(k); },
+    } : { getItem: () => null, setItem() {} },
+    ...(session ? { sessionStorage: {
+      getItem: (k) => (session.has(k) ? session.get(k) : null),
+      setItem: (k, v) => { session.set(k, String(v)); },
+      removeItem: (k) => { session.delete(k); },
+    } } : {}),
+    location: { reload() { if (opts.onReload) opts.onReload(); } },
+    GLX: opts.glx || undefined,
     navigator: {
-      userAgent: "",
+      userAgent: opts.ua || "",
       maxTouchPoints: 0,
       gpu: {
         requestAdapter: async () => ({
@@ -197,6 +219,8 @@ function makeGpuHarness(opts = {}) {
     failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
+    loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
+    setEncoderFail(v) { failEncoder = !!v; },
   };
 }
 
@@ -323,7 +347,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*544/);
+  assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
@@ -332,7 +357,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -352,6 +377,12 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.ok(Math.abs(frame[113] - 12.0) < 1e-6, "carSunGlint default in params7.y (float 113)");
   assert.ok(Math.abs(frame[114] - 0.6) < 1e-6, "neonBoost default in params7.z (float 114)");
   assert.equal(frame[115], 4.0, "lampNearClamp default in params7.w (float 115)");
+  // params9 = (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow) at
+  // off 544 = floats 136..139. Defaults 1.0 = shipped GLX look.
+  assert.equal(frame[136], 1, "ambContactDark default in params9.x (float 136)");
+  assert.equal(frame[137], 1, "lampWallSpill default in params9.y (float 137)");
+  assert.equal(frame[138], 1, "windowSunFlash default in params9.z (float 138)");
+  assert.equal(frame[139], 1, "skyRimGlow default in params9.w (float 139)");
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
@@ -380,7 +411,9 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   // live in the FRAME uniform (params6, written at begin()); flareStreak2/aces*
   // and the HDR grade live in the COMPOSITE uniform (written at present()).
   assert.equal(gfx.begin({ tune: { wetDark: -7, carSparkle: 0.25, fogSunCore: 0.75,
-    fogClip: 0.5, carSunGlint: 3.5, neonBoost: 0.75, lampNearClamp: 2.5 }, shadowCtr: [44, 55, 66] }), true);
+    fogClip: 0.5, carSunGlint: 3.5, neonBoost: 0.75, lampNearClamp: 2.5,
+    ambContactDark: 0.25, lampWallSpill: 0.75, windowSunFlash: 2.5, skyRimGlow: 3.5 },
+    shadowCtr: [44, 55, 66] }), true);
   gfx.present({ tune: {
     bloomKnee: 4.25, vignetteSoft: -2.5,
     flareStreak2: 1.75, flareStreak: 3.5,
@@ -401,6 +434,10 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(frame[113], 3.5, "carSunGlint must occupy params7.y (float 113)");
   assert.equal(frame[114], 0.75, "neonBoost must occupy params7.z (float 114)");
   assert.equal(frame[115], 2.5, "lampNearClamp must occupy params7.w (float 115)");
+  assert.equal(frame[136], 0.25, "ambContactDark must occupy params9.x (float 136)");
+  assert.equal(frame[137], 0.75, "lampWallSpill must occupy params9.y (float 137)");
+  assert.equal(frame[138], 2.5, "windowSunFlash must occupy params9.z (float 138)");
+  assert.equal(frame[139], 3.5, "skyRimGlow must occupy params9.w (float 139)");
   composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 4.25);
   assert.equal(composite[32], -2.5);
@@ -420,19 +457,20 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {
-  // SkyU grew from 208 → 224 (mat4 64 + 10 vec4 160) for the p4 knob lane.
-  assert.match(CHUNKS_SOURCE, /SKY_UNIFORM_BYTES:\s*224/);
+  // SkyU grew from 224 → 240 (mat4 64 + 11 vec4 176) for the p5 cloudDef lane.
+  assert.match(CHUNKS_SOURCE, /SKY_UNIFORM_BYTES:\s*240/);
   assert.match(CHUNKS_SOURCE, /p3\s*:\s*vec4<f32>.*starSize, starTwinkle, moonDiscSize/);
   assert.match(CHUNKS_SOURCE, /p4\s*:\s*vec4<f32>.*moonHalo, sunCorona, sunSquash, cityGlowReach/);
+  assert.match(CHUNKS_SOURCE, /p5\s*:\s*vec4<f32>.*cloudDef/);
 
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const skyBuffer = h.buffers.find((buffer) => buffer.desc.size === 224);
-  assert.ok(skyBuffer, "a 224-byte SkyU buffer must be allocated");
+  const skyBuffer = h.buffers.find((buffer) => buffer.desc.size === 240);
+  assert.ok(skyBuffer, "a 240-byte SkyU buffer must be allocated");
 
   // Defaults: every parity knob resolves to 1.0 (= as-shipped GLX look). p3.x is
-  // DAY SKY BLUE; p3.yzw + p4 are the seven new knobs.
+  // DAY SKY BLUE; p3.yzw + p4 are the seven size/halo knobs; p5.x is cloudDef.
   assert.equal(gfx.begin({}), true);
   gfx.drawSky({});
   let sky = h.writes.filter((write) => write.buffer === skyBuffer).at(-1).values;
@@ -444,10 +482,11 @@ test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () =>
   assert.equal(sky[53], 1, "sunCorona default in p4.y (float 53)");
   assert.equal(sky[54], 1, "sunSquash default in p4.z (float 54)");
   assert.equal(sky[55], 1, "cityGlowReach default in p4.w (float 55)");
+  assert.equal(sky[56], 1, "cloudDef default in p5.x (float 56)");
 
   // Extreme upload: exactly-f32-representable fractions so lanes compare exactly.
   gfx.drawSky({ starSize: 0.25, starTwinkle: 0.75, moonDiscSize: 3.5, moonHalo: 0.5,
-    sunCorona: 2.5, sunSquash: 0.125, cityGlowReach: 4.25 });
+    sunCorona: 2.5, sunSquash: 0.125, cityGlowReach: 4.25, cloudDef: 2.25 });
   sky = h.writes.filter((write) => write.buffer === skyBuffer).at(-1).values;
   assert.equal(sky[49], 0.25, "starSize must occupy p3.y (float 49)");
   assert.equal(sky[50], 0.75, "starTwinkle must occupy p3.z (float 50)");
@@ -456,6 +495,7 @@ test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () =>
   assert.equal(sky[53], 2.5, "sunCorona must occupy p4.y (float 53)");
   assert.equal(sky[54], 0.125, "sunSquash must occupy p4.z (float 54)");
   assert.equal(sky[55], 4.25, "cityGlowReach must occupy p4.w (float 55)");
+  assert.equal(sky[56], 2.25, "cloudDef must occupy p5.x (float 56)");
 });
 
 test("WGSL sky consumes the GLX-parity knob lanes", () => {
@@ -466,12 +506,14 @@ test("WGSL sky consumes the GLX-parity knob lanes", () => {
   assert.match(CHUNKS_SOURCE, /smoothstep\(0\.025 \* moonDiscSize, 0\.010 \* moonDiscSize/, "MOON DISC SIZE knob");
   assert.match(CHUNKS_SOURCE, /140\.0 \/ moonHaloK\)\) \* 0\.28 \* moonHaloK/, "MOON HALO knob");
   assert.match(CHUNKS_SOURCE, /3\.0 \* cityGlowReach/, "CITY GLOW REACH knob");
+  assert.match(CHUNKS_SOURCE, /0\.85 \* cloudDef/, "CLOUD DEFINITION billow mix");
+  assert.match(CHUNKS_SOURCE, /moonDisc \* 1\.10 \+ moonHalo\) \* \(1\.0 - covRay\)/, "moon sits behind the cloud deck");
 });
 
 test("WGSL consumes wet darkening, bloom knee, and vignette softness uniforms", () => {
   assert.match(
     CHUNKS_SOURCE,
-    /mix\(1\.0,\s*clamp\(1\.0\s*-\s*0\.58\s*\*\s*F\.params6\.x,\s*0\.0,\s*1\.0\),\s*wet\)/,
+    /clamp\(1\.0\s*-\s*0\.58\s*\*\s*F\.params6\.x,\s*0\.0,\s*1\.0\)/,
     "wetDark must mirror the GLSL clamp so high tuner values cannot make albedo negative",
   );
   assert.match(POST_SOURCE, /bloomKnee\s*=\s*U\.imgFx\.w/);
@@ -521,7 +563,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 544);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -578,11 +620,22 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
+  assert.match(CHUNKS_SOURCE, /surfaceId <= 27/);
+  assert.match(CHUNKS_SOURCE, /wetSheen/);
   assert.match(CHUNKS_SOURCE, /fn roadMarkings\(/);
   assert.match(CHUNKS_SOURCE, /-0\.94201624/);
   assert.match(CHUNKS_SOURCE, /lampShadowTex/);
   assert.match(CHUNKS_SOURCE, /aInst0/);
   assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
+  assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
+  assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
+  assert.match(CHUNKS_SOURCE, /0\.18 \* F\.params9\.w/, "SKY RIM GLOW");
+  assert.doesNotMatch(CHUNKS_SOURCE, /STILL DEFERRED vs GLX: uAmbContactDark/);
+  assert.doesNotMatch(WGX_SOURCE, /depthResolveTex/);
+  assert.doesNotMatch(WGX_SOURCE, /shadowPipelineInst/);
+  assert.match(POST_SOURCE, /li < 6/, "god-ray lamp loop matches GLX GODRAY_FS consumer cap");
+  assert.match(WGX_SOURCE, /Math\.min\(6, total\)/);
   assert.match(POST_SOURCE, /texture_depth_2d/);
   assert.match(POST_SOURCE, /uLampStr|lampStr/);
   assert.match(POST_SOURCE, /hazeStr|uHazeStr/);
@@ -627,4 +680,151 @@ test("a refusal leaves the canvas free for the WebGL2 fallback", async () => {
     "WGX must prove itself BEFORE calling getContext('webgpu') on the real " +
     "canvas — a canvas is bound to one context type for life, so claiming it " +
     "and then refusing forces a page reload instead of a seamless GLX fallback");
+});
+
+test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips timestamp", () => {
+  // texture_depth_2d + a non-comparison sampler is a pipeline-create reject on
+  // Safari 26 / compatibility mode. That used to fail the whole WGX.create().
+  assert.match(CHUNKS_SOURCE, /fn loadDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
+  assert.match(POST_SOURCE, /fn ssaoDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.match(POST_SOURCE, /fn ssrDepth[\s\S]{0,200}textureLoad\(depthTex/);
+  assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
+  // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
+  // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
+  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // painted one frame then lost the device. Phone ULTRA also matches GLX
+  // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
+  assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
+  assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
+  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
+});
+
+test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
+  assert.equal(gfx.carShadowState().enabled, true);
+  assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+  });
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 1);
+  assert.equal(gfx.gpuTimer().supported, false);
+  assert.equal(gfx.carShadowState().enabled, false);
+  assert.equal(gfx.lampShadowState().enabled, false);
+});
+
+test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", async () => {
+  const storage = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, onReload: () => { reloads += 1; } });
+  await h.create();
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "first desktop loss lands on the lite rung");
+  assert.equal(storage.get("apex26.gfxWgxLite"), "1", "legacy flag kept in step");
+  assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
+});
+
+test("device.lost on the lite rung climbs to minimal (level 2), not GLX", async () => {
+  const storage = new Map();
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    storage, session, onReload: () => { reloads += 1; },
+  });
+  await h.create();
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "2", "a lite loss must retry minimal before surrendering");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "no session skip while rungs remain");
+  assert.equal(reloads, 1);
+});
+
+test("minimal rung: no post targets, no env probe, and a loss there exits to GLX", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  assert.equal(gfx.msaa(), 1, "minimal implies the lite MSAA 1");
+  assert.equal(gfx.envFaceBegin(0, [0, 0, 0], {}), null, "env probe refused on minimal");
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  // 320x180 canvas -> the post chain's half-res aux targets would be 160x90.
+  // Minimal leaves pComposite unbuilt, so none may exist.
+  const halfRes = h.textures.filter((t) => Array.isArray(t.desc.size) &&
+    t.desc.size[0] === 160 && t.desc.size[1] === 90);
+  assert.equal(halfRes.length, 0, "minimal must not allocate the half-res post targets");
+  gfx.present({});   // blit path must not throw with post unbuilt
+  assert.equal(storage.get("apex26.gfxWgxOk"), "1", "a presented frame counts one clean session");
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(storage.get("apex26.gfxWgxOk"), "0", "a loss zeroes the heal streak");
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "2", "no rung above minimal");
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "minimal loss surrenders the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
+  assert.equal(reloads, 1, "the surrender reload boots GLX in this tab");
+});
+
+test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one", async () => {
+  const storage = new Map();
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true, "healthy begin");
+  h.setEncoderFail(true);
+  assert.equal(gfx.begin({}), false);   // strike 1
+  assert.equal(gfx.begin({}), false);   // strike 2
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "two strikes must not surrender");
+  assert.equal(reloads, 0);
+  assert.equal(gfx.begin({}), false);   // strike 3 = cap
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "the cap surrenders the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2", "the RENDERER label must say (WEBGL2)");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /begin threw/, "reason recorded");
+  assert.equal(reloads, 1);
+  h.setEncoderFail(false);
+  assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
+});
+
+test("clean sessions heal the ladder: minimal steps back to lite after a streak", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  for (let boot = 1; boot <= 5; boot++) {
+    const h = makeGpuHarness({ storage });
+    const gfx = await h.create();
+    gfx.resize();
+    assert.equal(gfx.begin({}), true);
+    gfx.present({});   // first presented frame of the boot = one clean session
+    if (boot < 5) {
+      assert.equal(storage.get("apex26.gfxWgxLevel"), "2", `rung must hold until the streak (boot ${boot})`);
+      assert.equal(storage.get("apex26.gfxWgxOk"), String(boot));
+    }
+  }
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "five clean sessions step minimal down to lite");
+  assert.equal(storage.get("apex26.gfxWgxOk"), "0", "streak restarts for the next rung");
+});
+
+test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
+  // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
+  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took MSAA 2×
+  // rgba16float and lost the device after one frame.
+  const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
+  const gfx = await h.create();
+  assert.equal(gfx.isMobile, true);
+  assert.equal(gfx.mobileTier, false);
+  assert.equal(gfx.msaa(), 1);
+  assert.equal(gfx.gpuTimer().supported, false);
+  assert.equal(gfx.carShadowState().enabled, false);
 });

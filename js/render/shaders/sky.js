@@ -89,8 +89,25 @@ void main() {
   vec3 c;
   if (up >= 0.0) {
     // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
-    vec3 zenithO  = mix(uZenith,  vec3(0.55, 0.56, 0.58), overcast * 0.75);
-    vec3 horizonO = mix(uHorizon, vec3(0.58, 0.58, 0.60), overcast * 0.60);
+    // NIGHT-GATED, the way daytime and twilight are above. This target grey is
+    // a DAYLIGHT overcast ceiling, and overcast was the one cloud term the
+    // nightSky gate never touched — so a night+rain session (cloud 0.74, the
+    // authored zenith [0.01,0.02,0.05]) painted [0.200,0.210,0.237]: 20x/10.5x/
+    // 4.7x too bright, a flat pale-grey lid over a scene whose exposure is
+    // raised, not lowered. That is the same "night that looks like dim day"
+    // failure atmosphere.js and _nightAmbientBand guard against everywhere else.
+    // ONE target for both bands at night, so this stays a FLATTEN. Scaling each
+    // band separately (zenith*3, horizon*3) lifted them by different absolute
+    // amounts and WIDENED the zenith-to-horizon spread under cloud — the exact
+    // opposite of "flatten toward a uniform grey". A common value derived from
+    // the authored pair converges them and keeps the circuit's night hue, while
+    // still lifting: an overcast night really is brighter than a clear one,
+    // because the lid catches the city's own light.
+    vec3 nightLid = (uZenith + uHorizon) * 1.25;
+    vec3 greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
+    vec3 greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
+    vec3 zenithO  = mix(uZenith,  greyZ, overcast * 0.75);
+    vec3 horizonO = mix(uHorizon, greyH, overcast * 0.60);
     // pow(up, uSkyGrad): richer blue zenith extends further down, horizon band
     // narrower — avoids the pale/washed look at mid-sky while keeping the
     // gradient smooth. (Was 0.5 which mapped too much sky to the horizon tint.)

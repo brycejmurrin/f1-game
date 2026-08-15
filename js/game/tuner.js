@@ -26,7 +26,24 @@ function fmtTune(d, v) {
   // invariant in tests/unit/light-grid.test.mjs.
   const dec = (String(d.step).split(".")[1] || "").length;
   const s = v.toFixed(Math.min(dec, 5));
-  return d.fmt === "signed" && v > 0 ? "+" + s : s;
+  return (d.fmt === "signed" && v > 0 ? "+" + s : s) + gateNote(d, v);
+}
+// The gated-state suffix belongs to the READOUT ITSELF, not to one refresh path.
+// It used to be appended in refreshLightTunePanel only, but the slider's own
+// oninput rewrites textContent from fmtTune — so dragging the knob wiped the one
+// line explaining why the knob was doing nothing, and it stayed wiped until a
+// TIME/WEATHER chip or a panel reopen. Building it here means every writer of
+// this readout carries it by construction.
+function gateNote(d, v) {
+  if (d.id !== "perChunkLights" || !(v > 0)) return "";
+  let latched = false;
+  try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
+  if (latched) return " · held after a display reset — set to 0 and back on to retry";
+  const tier = (typeof PerfGov !== "undefined" && PerfGov.tier) ? PerfGov.tier() : 0;
+  // Names the TIER, not just the GRAPHICS preset: tier() is max(floor, user,
+  // governor), so a player already on ULTRA whose governor has shed a tier is
+  // also held off, and "pick ULTRA" would be advice they have taken.
+  return tier >= 1 ? " · held off by the graphics tier — needs HIGH or ULTRA, and a frame budget the governor has not shed" : "";
 }
 // PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
 // effect under the right conditions (night sliders do nothing on a day track,
@@ -268,17 +285,8 @@ function refreshLightTunePanel() {
   // PER-CHUNK LAMPS is force-disabled below the top graphics tier and after a
   // display reset (js/game.js resolves frame.perChunkLights on PerfGov.tier()
   // and a crash latch), so the slider can hold a positive value while changing
-  // nothing on screen. Say so at the readout — a silent no-op reads as broken.
-  // The latch line is also the instruction for the way back the game.js rising
-  // edge provides: drop to 0 and raise it again.
-  const pcv = $("lt-v-perChunkLights");
-  if (pcv && LT.perChunkLights > 0) {
-    let latched = false;
-    try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
-    const tier = (typeof PerfGov !== "undefined" && PerfGov.tier) ? PerfGov.tier() : 0;
-    if (latched) pcv.textContent += " · held after a display reset — set to 0 and back on to retry";
-    else if (tier >= 1) pcv.textContent += " · held off — needs GRAPHICS on HIGH or ULTRA";
-  }
+  // nothing on screen. That note now lives in gateNote() beside fmtTune, so the
+  // loop above already wrote it and the slider's own oninput preserves it.
   updateLtProfileLabel();
   // An armed COPY ALL is armed for the condition that was on screen when it was
   // clicked. This runs on every time-of-day / weather switch, so cancelling here

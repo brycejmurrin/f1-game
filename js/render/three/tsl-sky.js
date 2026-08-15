@@ -189,8 +189,16 @@
       const c = vec3(0.0).toVar();
       If(up.greaterThanEqual(0.0), () => {
         // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
-        const zenithO = mix(U.zenith, vec3(0.55, 0.56, 0.58), overcast.mul(0.75));
-        const horizonO = mix(U.horizon, vec3(0.58, 0.58, 0.60), overcast.mul(0.60));
+        // NIGHT-GATED, like daytime/twilight above: this target is a DAYLIGHT
+        // overcast ceiling, and overcast was the one cloud term the nightSky gate
+        // never covered — a night+rain sky painted a pale grey lid ~20x the
+        // authored zenith. One common target at night so it stays a FLATTEN.
+        // Mirrors js/render/shaders/sky.js.
+        const nightLid = U.zenith.add(U.horizon).mul(1.25);
+        const greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
+        const greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
+        const zenithO = mix(U.zenith, greyZ, overcast.mul(0.75));
+        const horizonO = mix(U.horizon, greyH, overcast.mul(0.60));
         // SKY GRADIENT knob (def 0.35 = as-shipped).
         c.assign(mix(horizonO, zenithO, pow(up, U.skyGrad)));
         // Day gradient LIFE: deep saturated-blue low/mid band + faint
@@ -392,7 +400,11 @@
           .mul(0.28).mul(U.moonHalo).mul(U.moon);
         const moonCol = vec3(0.82, 0.88, 1.00);
         If(up.greaterThan(0.0).and(md.greaterThan(0.0)), () => {
-          c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)));
+          // Cloud occlusion: the moon sits BEHIND the deck exactly as the
+          // stars do (SKY_FS in js/render/shaders/sky.js). Without this a
+          // stormy/foggy night painted a crisp moon ON TOP of the clouds
+          // while the stars behind it were correctly hidden.
+          c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)).mul(cityCov.oneMinus()));
         });
       });
 

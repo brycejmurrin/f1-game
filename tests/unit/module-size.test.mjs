@@ -257,7 +257,39 @@ const CEILINGS = {
   // while 40 m and 60 m were flat. One line of code (bias along the car's heading
   // instead) plus the comment recording the measurement and why the coverage
   // guarantee is untouched — the same bug-explaining growth the header tolerates.
-  "js/game.js": 8259,
+  // 8259 -> 8242: RENDERER cycle extracted to gfx-quality.js (same home as
+  // GRAPHICS). game.js keeps the boot canary; the button is DOMContentLoaded.
+  // 8242 -> 8251: Safari WebGPU create-fail must not persist webgl2 (session
+  // claim-fail skip, disarm leftover probe, keep the user's THREE/WEBGPU pick).
+  // 8251 -> 8258: the claim-fail reload now reads the session skip BACK before
+  // reloading — with sessionStorage blocked the old path removed the probe
+  // (killing the canary revert) and reloaded into the identical claim-and-die
+  // boot forever. Bug-explaining growth at the site of the bug.
+  // 8201 -> 8210: three lighting/graphics fixes from the mechanism-sliced survey,
+  // three lines of "why" each. (1) The god-ray horizon cutoff was a STEP off
+  // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
+  // deleted full-strength shafts in a single frame; now a fade. (2) The fog
+  // scenery cull read the raw frame.fogDensity while the shader renders that
+  // times FOG DENSITY, so at FOG DENSITY 0 ("off") a night-fog preset still
+  // hard-culled chunked scenery at 250 m with no fog drawn at all. (3)
+  // PER-CHUNK ROAD gated on the raw knob instead of the tier- and latch-resolved
+  // state, building a second GPU copy of the road ribbon on every device where
+  // per-chunk lamps are held off. Same category as the two entries above: growth
+  // at the site of the bug, explaining the bug. No extraction is worth 9 lines.
+  // -> 8257 on this merge: the deploy lineage (frame.exposure/menu-flyby) and the
+  // lighting-survey lineage (god-ray fade, fog cull, per-chunk road) both grew the
+  // file, so neither 8246 nor 8210 fits their union. Measured on the merged tree
+  // with the ceiling test's own metric (split-newline count), per the deploy-merge
+  // rule that baselines are re-measured on the union and never inherited.
+  // -> 8270 on this merge: both lineages grew game.js again (their sun-shadow
+  // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
+  // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
+  // merged tree with the ceiling test's own metric, per the deploy-merge rule.
+  // -> 8270 on this merge: both lineages grew game.js again (their sun-shadow
+  // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
+  // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
+  // merged tree with the ceiling test's own metric, per the deploy-merge rule.
+  "js/game.js": 8270,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

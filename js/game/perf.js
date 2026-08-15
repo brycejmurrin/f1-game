@@ -339,6 +339,11 @@ function clearStrikes() {
 return {
   init, tick, sentinelArm, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
+  // Crash + measured only — no GRAPHICS user floor. Look-defining post
+  // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
+  // GRAPHICS: LOW still sheds env/SSR/shadows via tier() but the lighting
+  // tuner stays live unless the device proved it cannot afford the pass.
+  autoTier: () => Math.max(_perfTierFloor, _perfTier),
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
   // Clamped to the ladder's own range so a bad preset id can't invent a tier 7

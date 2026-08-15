@@ -259,9 +259,22 @@ $("lt-help-on").onchange = (e) => {
 };
 $("lt-reset").onclick = () => {
   // Drop this condition's LOCAL edits so it falls back to the shipped file /
-  // defaults (leaves other conditions and the file untouched).
+  // defaults. The shipped file is never touched; other CONDITIONS are only
+  // reached through the legacy global layer cleared below.
   const key = ltKey();
   if (key && G._ltStore[key]) delete G._ltStore[key];
+  // …and the legacy GLOBAL layer, or the reset cannot reach the shipped values
+  // at all. light-store.js resolves def -> LightPresets["*"] -> LightPresets[key]
+  // -> profiles["*"] -> profiles[key], so profiles["*"] OUTRANKS the shipped
+  // file. Nothing in the current UI can create or edit that layer: it exists
+  // only because the legacy-format migration in js/game/light-store.js turns a
+  // pre-nested flat {id:number} save into { "*": saved }. So for a player
+  // carrying one, RESET was a no-op on
+  // every knob in that blob, on every track and every condition — invisible
+  // state defeating the one button that exists to clear state. Deleting it does
+  // reach other conditions, which is why the comment above no longer claims
+  // otherwise; migration residue is not a setting the player chose.
+  if (G._ltStore["*"]) delete G._ltStore["*"];
   persistLightTune();
   applyLightTune();
   refreshLightTunePanel();
@@ -273,8 +286,22 @@ $("lt-copy").onclick = () => {
   // file's `window.LightPresets = {…}` literal with this to bake it in.
   const merged = {};
   const F = window.LightPresets || {};
+  const S = G._ltStore || {};
   for (const k in F) merged[k] = Object.assign({}, F[k]);
-  for (const k in G._ltStore) merged[k] = Object.assign(merged[k] || {}, G._ltStore[k]);
+  for (const k in S) if (!merged[k]) merged[k] = {};
+  // PRESERVE THE LIVE PRECEDENCE. light-store.js resolves
+  //   def -> F["*"] -> F[key] -> store["*"] -> store[key]
+  // so the local GLOBAL layer outranks the file's per-condition maps. A baked
+  // preset file has only two layers and there the per-key map always wins, so
+  // assigning store["*"] into merged["*"] inverts the order: every knob present
+  // in both store["*"] and some F[key] would come back as the shipped value the
+  // next time the file loaded — a silent revert on up to 254 conditions. Folding
+  // the global layer DOWN onto each condition is the only shape that round-trips.
+  // Harmless today (the 17 knobs in F["*"] are disjoint from every per-condition
+  // map) and load-bearing the moment either side gains an overlapping knob.
+  const glob = S["*"];
+  if (glob) for (const k in merged) if (k !== "*") Object.assign(merged[k], glob);
+  for (const k in S) merged[k] = Object.assign(merged[k] || {}, S[k]);
   // Drop any now-empty condition maps for a clean file.
   for (const k in merged) if (!Object.keys(merged[k]).length) delete merged[k];
   const json = "window.LightPresets = " + JSON.stringify(merged, null, 2) + ";";

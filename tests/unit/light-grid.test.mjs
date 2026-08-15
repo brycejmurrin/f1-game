@@ -132,9 +132,14 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
     `ssrThick max ${get("ssrThick").max} reaches the far-window reject`);
   assert.doesNotMatch(get("ssrThick").help || "", /[Cc]eiling raised to 5/,
     "ssrThick help must not call the far-window reject the slider ceiling");
-  // post.js: smoothstep(0.95, min(uVigSoft, 0.94), vr) — 0.94 is the last live notch.
-  assert.equal(get("vignetteSoft").max, 0.94,
-    "VIGNETTE REACH must end at the shader clamp, not an unexplained 0.68");
+  // post.js: 1.0 - smoothstep(min(uVigSoft, 0.69), 0.70710678, vr) — 0.69 is the
+  // last live notch. This assertion previously read 0.94 against the OLD form,
+  // smoothstep(0.95, min(uVigSoft, 0.94), vr), whose edges were ill-ordered
+  // (edge0 > edge1) and whose ramp the frame could never finish walking. When the
+  // shader was rewritten the clamp moved to 0.69 and this number did not, so the
+  // guard actively held 29.8% of the slider in a region that is now bit-identical.
+  assert.equal(get("vignetteSoft").max, 0.69,
+    "VIGNETTE REACH must end at the shader clamp min(uVigSoft, 0.69)");
   // lit.js fogCol: warm blue hits 0 at +4; cool red hits 0 at -1/0.12 ≈ 8.33.
   assert.ok(get("fogTint").max <= 4 + 1e-9, "fogTint warm side past blue=0");
   assert.ok(get("fogTint").min >= -1 / 0.12 - 0.05, "fogTint cool side past red=0");
@@ -146,8 +151,11 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   assert.equal(get("godrayAniso").max, 0.95);
   // game.js: clamp(0.85 * roadRough, 0.04, 1)
   assert.ok(get("roadRough").max <= 1 / 0.85 + 0.01, "roadRough past roughness=1");
-  // lit.js wet absorb: 1 - 0.42*uWetDark hits 0 at 1/0.42 (porous, the last term).
-  assert.ok(get("wetDark").max <= 1 / 0.42 + 0.05, "wetDark past full absorb");
+  // lit.js wet absorb: absorbRoad = 1 - 0.58*uWetDark hits 0 at 1/0.58 = 1.7241,
+  // and porous is now a FRACTION of it (absorbRoad * 0.66), so both saturate at
+  // the same point. The old form here cited 0.42 — the pre-fix porous coefficient,
+  // which no longer exists — and so permitted a max of 2.43, i.e. 28% dead travel.
+  assert.ok(get("wetDark").max <= 1 / 0.58 + 0.01, "wetDark past full absorb");
   // lit.js: 0.30 * spill > 1 inverts the wet pool.
   assert.ok(get("lampWallSpill").max <= 1 / 0.30 + 0.01, "lampWallSpill past wet invert");
   // lit.js: mix(1, vec3(0.90,0.96,1.12), amt) — amt>1 extrapolates past the
@@ -162,6 +170,128 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // game.js cityGlowTint: weakest-channel factor 1 - 0.18*(tint/0.28) hits 0
   // at 0.28/0.18 ≈ 1.556. Max 1.5 is the last live notch.
   assert.ok(get("cityGlowTint").max <= 0.28 / 0.18 + 0.05, "cityGlowTint past weak-channel 0");
+  // post.js: ao = 1 - clamp(occ)*uStrength, written raw to the AO buffer.
+  // game.js uploads 0.95*aoStr with no clamp. Past slider 1/0.95 the buffer
+  // goes negative and `c *= aoV` inverts creases (bright pits).
+  assert.ok(get("aoStr").max <= 1 / 0.95 + 1e-9,
+    `aoStr max ${get("aoStr").max} is past the invert (uStrength=1 at 1/0.95)`);
+  // lit.js: mix(..., clamp(uGroundMist * band * fbm * dRamp, 0, 0.45)).
+  // glx.js: uGroundMist = groundMist * mistDensity. atmosphere.js thinnest
+  // authored non-zero gm is wet 0.12 → last live 0.45/0.12 = 3.75.
+  assert.ok(get("mistDensity").max <= 0.45 / 0.12 + 1e-9,
+    `mistDensity max ${get("mistDensity").max} is past the 0.45 mix cap at wet gm 0.12`);
+  // sky.js: clamp(daytime*(1-overcast)*bandLM*uDaySkyBlue, 0, 1). Peak
+  // (bandLM=1) saturates at 1; 3 is last live for the core band (bandLM>=1/3).
+  assert.ok(get("daySkyBlue").max <= 3 + 1e-9,
+    `daySkyBlue max ${get("daySkyBlue").max} is past 3× the peak-band clamp`);
+  // game.js: Math.min(1, floodEmitMul * factor); dusk factor tops at 0.70.
+  assert.ok(get("floodEmitMul").max <= 1 / 0.70 + 0.01,
+    `floodEmitMul max ${get("floodEmitMul").max} is past the min(1) emit cap at dusk 0.70`);
+  // sky.js: clamp(pow(sd,5)*0.22*horizon*mieDamp*uMieScatter, 0, 1). Peak
+  // (on-sun, horizon, clear) saturates at 1/0.22.
+  assert.ok(get("mieScatter").max <= 1 / 0.22 + 0.01,
+    `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
+  // lighting.js setFrameLights: reach 4 already saturates typical sightlines
+  // (Singapore 0.55 measured 415 m, no further lamps). 12 was leftover ×3.
+  assert.ok(get("lampReach").max <= 4 + 1e-9,
+    `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);
+});
+
+test("GRAPHICS: LOW must not zero look-defining post (bloom/SSAO/god-rays)", () => {
+  // GRAPHICS: LOW sets userTier 4, and present() used to hard-zero po.bloom
+  // (and the rest of the last post stack) on PerfGov.tier() >= 4. That made
+  // BLOOM AMOUNT and every sibling look slider a no-op on LOW even on a
+  // healthy desktop. Look post reads autoTier() (crash + measured only);
+  // cost rungs (env/SSR/shadows) still read tier() so LOW stays cheaper.
+  const game = read("js/game.js");
+  const gfx = read("js/game/gfx-quality.js");
+  assert.match(gfx, /id:\s*"low"[\s\S]*?tier:\s*4/,
+    "LOW must stay a cost-floor of 4 (env/SSR/shadows still shed)");
+  for (const id of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
+    assert.match(game, new RegExp(`po\\.${id} = PerfGov\\.autoTier\\(\\) >= 4`),
+      `po.${id} must shed on autoTier (governor/crash), not the GRAPHICS user floor`);
+    assert.doesNotMatch(game, new RegExp(`po\\.${id} = PerfGov\\.tier\\(\\) >= 4`),
+      `po.${id} must not hard-zero on GRAPHICS: LOW`);
+  }
+  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/,
+    "SSR stays on the user cost floor (MEDIUM/LOW)");
+  assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/,
+    "car-paint SSR stays on the user cost floor");
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  for (const id of ["bloomMul", "bloomSpread", "threshOff", "bloomKnee",
+                    "grMul", "aoStr", "contactStr"]) {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    assert.match(d.help || "", /GRAPHICS: LOW/,
+      `${id} help must say the slider stays live on GRAPHICS: LOW`);
+  }
+  for (const id of ["ssrWetMul", "ssrDryNight", "ssrDryDay", "ssrThick",
+                    "carReflect", "lampShadow"]) {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    assert.match(d.help || "", /GRAPHICS/,
+      `${id} help must name the GRAPHICS cost shed so a dead LOW/MEDIUM slider is not a mystery`);
+  }
+  const carSh = byId.get("carShadow");
+  assert.ok(carSh, "carShadow missing from TUNE_DEFS");
+  assert.match(carSh.help || "", /GRAPHICS: LOW/,
+    "carShadow help must name GRAPHICS: LOW (tier-3 cost shed)");
+});
+
+test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
+  // GLX uploads GT.godrayAniso / GT.godrayFloor; TLX maps gk("godrayAniso").
+  // WGX used to pack T.hgAniso / T.hgFloor — ids that do not exist on LT — so
+  // GOD-RAY FOCUS and GOD-RAY HAZE were stuck at the 0.60 / 0.020 fallbacks
+  // on WebGPU no matter where the sliders sat.
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /T\.godrayAniso/, "WGX must read T.godrayAniso");
+  assert.match(wgx, /T\.godrayFloor/, "WGX must read T.godrayFloor");
+  assert.doesNotMatch(wgx, /T\.hgAniso/, "stale T.hgAniso alias is dead — the slider id is godrayAniso");
+  assert.doesNotMatch(wgx, /T\.hgFloor/, "stale T.hgFloor alias is dead — the slider id is godrayFloor");
+});
+
+test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
+  const ids = new Set(defs().map((d) => d.id));
+  const wgx = read("js/render/webgpu/wgx.js");
+  const keys = [...wgx.matchAll(/\bT\.(\w+)/g)].map((m) => m[1]);
+  const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
+  assert.deepEqual(unknown, [],
+    "WGX reads a T.foo that is not a TUNE_DEFS id — the slider is a no-op on WebGPU " +
+    "(the upload falls back to a hardcoded default).");
+});
+
+test("amount-knob defaults are not crushed into the first quarter of the slider", () => {
+  // HTML range thumbs are linear in [min, max]. After the leftover ×1.5 / "raise
+  // the ceiling" pass, a 1.0 default on a 0..12 slider sat at 8% of travel —
+  // a few pixels from the left edge, so everyday nudges were unusable. Off-by-
+  // default knobs (def === min) and signed/auto knobs stay where they are.
+  const crushed = defs()
+    .filter((d) => d.def !== undefined && d.max !== undefined)
+    .filter((d) => d.min >= 0 && d.def > d.min && (d.max - d.min) > d.step)
+    // 0..1 (and other max≤1) amounts: the ceiling IS the designed unit. A
+    // 0.05 default on CLEARCOAT has to sit left or you lose the 0..1 lacquer.
+    .filter((d) => d.max > 1)
+    // CAR REFLECTION default is a whisper (0.05) on a 0..1.5 mix that still
+    // has to reach the 0.85 mixAmt cap — same class as a unit amount.
+    .filter((d) => d.id !== "carReflect")
+    // VIBRANCE is the same class, measured: post.js weights it by
+    // (1 - clamp(sat*1.5,0,1)), which is an exact identity on achromatic pixels
+    // and shrinks as a pixel gets colourful, so the knob has very little
+    // authority per unit. The ENTIRE old 0..0.5 range moved the worst-affected
+    // pixel by 16/255 and mid-greys by under 2/255. The headroom to 1.5 is real
+    // travel that the consumer honours; the 0.20 default is deliberately gentle
+    // and pulling the max back down to flatter the thumb would delete the only
+    // part of the slider that does anything visible.
+    .filter((d) => d.id !== "vibrance")
+    .filter((d) => (d.def - d.min) / (d.max - d.min) < 0.25)
+    .map((d) => {
+      const pct = ((d.def - d.min) / (d.max - d.min) * 100).toFixed(1);
+      return `${d.id}: def ${d.def} sits at ${pct}% of [${d.min}, ${d.max}]`;
+    });
+  assert.deepEqual(crushed, [],
+    "an amount knob's shipped default is in the first quarter of its slider. " +
+    "Pull the leftover-wide max down so the default (and shipped presets) sit " +
+    "in a usable band — do not raise the default to chase the thumb.");
 });
 
 test("asymmetric white-balance sliders are not ±N when the mix is not", () => {

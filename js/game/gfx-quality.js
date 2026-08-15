@@ -1,5 +1,9 @@
-/* Apex 26 — GRAPHICS quality presets: the user-facing half of the perf
-   governor. Owns the four presets, their persistence, and the #pm-gfx control.
+/* Apex 26 — GRAPHICS quality presets + the RENDERER cycle. Owns the four
+   presets, their persistence, #pm-gfx, and #pm-renderer (WEBGL2 / THREE /
+   WEBGPU). RENDERER lives here so SETTINGS can show and flip it at
+   DOMContentLoaded — js/game.js is an async IIFE that awaits deferred
+   backend scripts on an opt-in, and a hidden button wired after that await
+   is invisible for the whole load and dead if the IIFE never reaches it.
 
    THE INTERACTION RULE, which is the whole design: a preset sets the FLOOR of
    degradation, never the ceiling. It is applied by handing PerfGov a user tier
@@ -27,10 +31,13 @@ function gstore() {
   return (typeof GameStore !== "undefined" && GameStore.store) || null;
 }
 
-// userTier is a FLOOR on the shedding ladder documented in js/game/perf.js:
+// userTier is a FLOOR on the COST shedding ladder in js/game/perf.js:
 //   0 nothing pinned off · 1 env probe · 2 +lamp shadow/SSR · 3 +car shadow
-//   4 +SSAO/god rays/bloom
-// so a bigger number means "shed at least this much, permanently".
+// Look-defining post (bloom / SSAO / god rays / contact / lamp volumetrics)
+// reads PerfGov.autoTier() instead — GRAPHICS: LOW must not mute the lighting
+// tuner. The governor and crash-sentinel floor can still shed that stack
+// when the device proves it cannot afford it.
+// so a bigger number means "shed at least this much cost, permanently".
 //
 // ULTRA and HIGH share tier 0 deliberately: both mean "do not pin anything
 // off, let the governor decide". They differ only in the MOBILE boot tier
@@ -88,6 +95,68 @@ function syncBootTier() {
 
 function label() { return "GRAPHICS: " + current().label; }
 
+// RENDERER cycle. Always three stops so the WEBGPU label is visible on a
+// phone that has no navigator.gpu — tapping it there flashes UNAVAILABLE
+// rather than writing a pref boot will silently ignore. THREE needs no GPU.
+const BACKENDS = ["webgl2", "three", "webgpu"];
+function readBackend() {
+  try {
+    const v = localStorage.getItem("apex26.gfxBackend");
+    return v === "webgpu" || v === "three" ? v : "webgl2";
+  } catch (_) { return "webgl2"; }
+}
+function backendLabel(v) { return v === "three" ? "THREE" : String(v).toUpperCase(); }
+function nextBackend(cur) {
+  const i = BACKENDS.indexOf(cur);
+  return BACKENDS[(i < 0 ? 0 : i + 1) % BACKENDS.length];
+}
+function hasWebGPU() { return typeof navigator !== "undefined" && !!navigator.gpu; }
+function boundIsGlx() {
+  try { return sessionStorage.getItem("apex26.gfxBound") === "webgl2"; } catch (_) { return false; }
+}
+function paintRenderer(rb) {
+  if (!rb) return;
+  const pref = readBackend();
+  // Preference is what the next tap cycles. Live may be GLX after a
+  // device.lost / create refuse — saying WEBGPU then was the lie.
+  rb.textContent = (boundIsGlx() && (pref === "webgpu" || pref === "three"))
+    ? ("RENDERER: " + backendLabel(pref) + " (WEBGL2)")
+    : ("RENDERER: " + backendLabel(pref));
+}
+
+function initRenderer() {
+  const rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
+  if (!rb) return;
+  rb.hidden = false;
+  paintRenderer(rb);
+  try { window.addEventListener("apex-gfx-live", function () { paintRenderer(rb); }); } catch (_) { /* no window */ }
+  rb.onclick = () => {
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    const cur = readBackend();
+    const next = nextBackend(cur);
+    if (next === "webgpu" && !hasWebGPU()) {
+      rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
+      setTimeout(() => { paintRenderer(rb); }, 900);
+      return;
+    }
+    // A tap is a live tab. Disarm any in-flight boot probe so this choice
+    // cannot be reverted by a title-screen refresh before the flyby presents.
+    try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
+    try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
+    // Landing on WEBGPU by hand is the retry signal (browser update, new
+    // device state): reset the WGX loss ladder so the boot re-attempts from
+    // the sniffed baseline instead of a rung a long-dead session earned.
+    if (next === "webgpu") {
+      try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
+        localStorage.removeItem("apex26.gfxWgxOk"); } catch (_) {}
+      try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
+    }
+    rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
+    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+  };
+}
+
 function set(id, opts) {
   const p = byId(id);
   if (!p) return false;
@@ -125,6 +194,7 @@ function init() {
   _cur = (st && st.get("gfxPreset", null)) || defaultId(_isMobile);
   if (!byId(_cur)) _cur = defaultId(_isMobile);
   applyLive();
+  initRenderer();
 
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (!btn) return;      // shell without the button: the tier floor still applied above
@@ -146,5 +216,6 @@ if (typeof document !== "undefined") {
   else init();
 }
 
-return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId };
+return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
+  nextBackend, backendLabel, readBackend };
 })();

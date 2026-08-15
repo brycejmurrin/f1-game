@@ -30,9 +30,10 @@
  * through the blend stage instead: CustomBlending with
  * blendSrcAlpha=Zero / blendDstAlpha=One leaves dst alpha untouched for the
  * SAME result the colorMask gave. All five FX materials use it — GLX's
- * shadow/mark/skid alpha writes only ever hit its offscreen HDR target,
- * while TLX (no post chain until M8) renders straight to the canvas, where
- * a written a<1 would make the page bleed through the blob shadows.
+ * colorMask protects the SSR car-paint tag on the HDR scene target; TLX
+ * has no per-channel mask, so the blend stage must leave dst alpha
+ * untouched or a written a<1 would punch through that tag (and, on the
+ * direct-to-canvas fallback, the page).
  * three owns per-material state, so nothing leaks into the next pass's
  * clear (the M4 caster-bug lesson).
  *

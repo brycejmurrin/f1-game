@@ -350,6 +350,36 @@ test("a bad preset cannot invent a tier above the ladder", () => {
   assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
 });
 
+test("autoTier ignores the GRAPHICS user floor so look post stays live on LOW", () => {
+  // GRAPHICS: LOW pins userTier at 4. That must still shed env/SSR/shadows via
+  // tier(), but bloom/SSAO/god-rays/contact/lampVol read autoTier() so the
+  // lighting tuner stays live unless the governor or crash floor measured it.
+  const { PerfGov } = makeGov();
+  assert.equal(typeof PerfGov.autoTier, "function", "PerfGov.autoTier must exist");
+  assert.equal(PerfGov.autoTier(), 0, "healthy device, no user floor: autoTier is 0");
+  PerfGov.setUserTier(4);
+  assert.equal(PerfGov.tier(), 4, "GRAPHICS: LOW still floors the cost ladder");
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: LOW must not pin look-defining post");
+  PerfGov.setUserTier(2);
+  assert.equal(PerfGov.tier(), 2);
+  assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin look post either");
+});
+
+test("autoTier still honours the crash-sentinel floor and a measured shed", () => {
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.autoTier(), 4, "two crash strikes must still shed look post");
+  PerfGov.setUserTier(0);
+  assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
+});
+
 test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
