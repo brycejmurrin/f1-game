@@ -320,7 +320,7 @@
     });
 
     /* ── M4 sun-shadow sampling (sampleShadow in js/render/shaders/lit.js) ───
-     * Distance fade anchored to the GLIDING uShadowCtr (never the box, which
+     * Distance fade from eye XZ + look-target Y (yaw-invariant; the box still
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
      * compiles clean in TSL), texel-grid-anchored IGN dither, car-map
@@ -339,8 +339,9 @@
       const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
       const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
       If(sc.z.lessThan(1.0), () => {
-        // Receiver-distance fade from the unsnapped anchor (js/render/shaders/lit.js).
-        const aDist = length(wp.sub(U.shadowCtr)).toVar();
+        // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
+        const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
+        const aDist = length(wp.sub(fadeCtr)).toVar();
         const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
           .oneMinus().toVar();
         // Thin UV border safety feather (js/render/shaders/lit.js).
@@ -841,9 +842,9 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/shaders/lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // ── car surface ids 20-26 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
+        // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(26.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(27.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
@@ -851,19 +852,22 @@
         const glassSurface = surfaceId.equal(24.0).toVar();
         const emissiveSurface = surfaceId.equal(25.0).toVar();
         const panelSurface = surfaceId.equal(26.0).toVar();
+        const mirrorSurface = surfaceId.equal(27.0).toVar();
         const carPaint = select(classifiedCar,
-          select(paintSurface, matU.carPaint, float(0.0)), matU.carPaint).toVar();
+          select(paintSurface.or(mirrorSurface), matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
           select(paintSurface, matU.clearcoat,
-            select(glassSurface, matU.clearcoat.mul(0.45), float(0.0))),
+            select(mirrorSurface, max(matU.clearcoat, 0.85),
+              select(glassSurface, matU.clearcoat.mul(0.45), float(0.0)))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
-            select(carbonSurface, float(0.08), float(0.0))),
+            select(mirrorSurface, max(matU.metalness, 0.55),
+              select(carbonSurface, float(0.08), float(0.0)))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
-            select(metalSurface, float(1.0),
+            select(metalSurface.or(mirrorSurface), float(1.0),
               select(carbonSurface, float(0.48),
                 select(panelSurface, float(0.35), matU.specular)))),
           matU.specular).toVar();
@@ -1173,7 +1177,7 @@
 
         // ── environment sky reflection for glossy/wet surfaces (js/render/shaders/lit.js)
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
-        envBlend.assign(max(envBlend, wet.mul(0.15)));
+        envBlend.assign(max(envBlend, wet.mul(0.55)));
         If(envBlend.greaterThan(0.001), () => {
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);

@@ -154,7 +154,7 @@ uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening 
 uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
 uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
-uniform vec3 uShadowCtr;    // unsnapped shadow-box anchor (ground level, glides with the camera) — the fade origin
+uniform vec3 uShadowCtr;    // unsnapped shadow-box snap anchor (Y = look-target height; fade uses eye XZ + this Y)
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
 // map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor
 // by default — SHADOW DISTANCE can widen it, see uCarBiasScale below.
@@ -604,19 +604,15 @@ float sampleShadow(vec3 wpos) {
   vec4 lc = uLightVP * vec4(wpos, 1.0);
   vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
   if (sc.z >= 1.0) return 1.0;
-  // Distance fade: dissolve shadows by RECEIVER distance from uShadowCtr — the
-  // unsnapped forward-biased ground anchor the box is snapped around (game.js
-  // shadow pass). The anchor glides smoothly with the camera, so the fade front
-  // never jumps on a box recentre (a BOX-anchored fade stepped sBox/4 = 16 m at
-  // a time while driving — the visible shadow pop/jump at racing speed). The box
-  // is guaranteed to cover 0.875·range from the anchor (snap slack = range/8),
-  // so completing the fade at 0.84·range retains shadows to ~74 m ahead of the
-  // camera at a 64 m box (the shipped default is 80 m, which reaches further
-  // still) — vs 46 m when this faded from the eye, which had to absorb the
-  // chase-cam offset AND the snap slack in one worst case.
-  // (Camera-height-independent too: fading by eye distance erased every shadow
-  // from high/aerial cameras, where vDist ≥ altitude for the whole ground.)
-  float aDist = distance(wpos, uShadowCtr);
+  // Distance fade: dissolve shadows by RECEIVER distance from a YAW-INVARIANT
+  // origin — eye XZ, look-target Y (uShadowCtr.y). The BOX stays forward-biased
+  // (game.js: camEye + look-dir, texel allocation only). Fading from that same
+  // biased point swept the fade front around a 40 m circle on a pinned-eye yaw
+  // (docs/PERF-FINDINGS.md 2026-08-15: 58% strength swing at 70 m). Height still
+  // comes from the look target so aerial cameras do not erase ground shadows.
+  // The box covers 0.875·range from its own anchor; at the default 80 m / 20 m
+  // bias, 0.84·range from the eye lands on the 90° box edge (sqrt(70²-20²)≈67).
+  float aDist = distance(wpos, vec3(uEye.x, uShadowCtr.y, uEye.z));
   float edgeFade = 1.0 - smoothstep(uShadowRange * 0.62, uShadowRange * 0.84, aDist);
   // UV border fade kept as a thin safety feather only: the distance fade above
   // completes at 0.84·range while the box guarantees 0.875·range from the anchor,

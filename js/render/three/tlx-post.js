@@ -410,7 +410,8 @@
       C.sunUV.value.set(sunUVx, sunUVy);
       C.flareStr.value = flareStr * (o.flareMul != null ? o.flareMul : 1);   // LENS FLARE knob
       C.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;
-      C.sunShaft.value = sunShaft * gk("sunShaftMul", 1);  // SCREEN SUN-SHAFT knob
+      // Gated on haveBloom: the shaft pass reads the bloom chain (GLX doBloom).
+      C.sunShaft.value = haveBloom ? sunShaft * gk("sunShaftMul", 1) : 0;
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
       C.gradeShadow.value.set(gs ? gs[0] : 1, gs ? gs[1] : 1, gs ? gs[2] : 1);

@@ -373,6 +373,36 @@ test("shadow box and shader fade share the same unset shadowRange fallback", () 
     "|| 64 disagreed with the shader's 80 fallback and treated a 0 knob as unset");
 });
 
+test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
+  // docs/PERF-FINDINGS.md 2026-08-15: fading from the look-biased box anchor
+  // swept a 58% strength swing at 70 m on a pinned-eye yaw. The box stays
+  // forward-biased (texel allocation); the fade must not.
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  assert.match(lit, /distance\(wpos,\s*vec3\(uEye\.x,\s*uShadowCtr\.y,\s*uEye\.z\)\)/);
+  assert.match(tsl, /cameraPosition\.x[\s\S]{0,80}shadowCtr\.y[\s\S]{0,80}cameraPosition\.z/);
+  assert.match(wgsl, /F\.eye\.x[\s\S]{0,60}F\.shadowCtr\.y[\s\S]{0,60}F\.eye\.z/);
+});
+
+test("TLX zeros sunShaft when bloom is shed, matching GLX doBloom gate", () => {
+  const glx = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  assert.match(glx, /doBloom \? sunShaft \*/);
+  assert.match(tlx, /haveBloom \? sunShaft \*/);
+});
+
+test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  assert.match(lit, /wetSheen \* 0\.55/);
+  assert.match(tsl, /wet\.mul\(0\.55\)/);
+  assert.match(lit, /surfaceId <= 27/);
+  assert.match(lit, /mirrorSurface = surfaceId == 27/);
+  assert.match(tsl, /lessThanEqual\(27\.0\)/);
+  assert.match(tsl, /surfaceId\.equal\(27\.0\)/);
+});
+
 test("changing preset drops a pending TIER verify", () => {
   // Same class as the setAutoRes fix: _pendingVerify attributes the next EMA
   // delta to the governor's own last provisional step, so a user changing
