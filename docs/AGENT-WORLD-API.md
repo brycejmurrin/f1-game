@@ -69,7 +69,7 @@ What survives:
 
 | Structure | Where | What it gives |
 |---|---|---|
-| `track.lampPosts` | `js/track/tracks.js:1659` | **The only semantic prop registry.** `{k, side, x, y, z, kind}` per floodlight/lamp |
+| `track.lampPosts` | `js/track/tracks.js:1659` | **The only semantic prop registry.** `{k, side, x, y, z, kind}` per lamp (street post or flood bank) |
 | `track.barL` / `barR` | `js/track/tracks.js:499` | Per-node lateral barrier limit. No kind, no height |
 | `track.kerbL` / `kerbR` | `js/track/mesh.js:152` | Which side has a kerb, per node |
 | `track.meshes.props.chunks[]` | `js/render/glx/chunked.js:136` | 72 m XZ cells with AABBs — anonymous mixed geometry |

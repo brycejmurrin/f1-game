@@ -2175,9 +2175,9 @@ function _nightAmbientBand() {
   }
 }
 
-// Floodlights are used on ANY track at night/dusk/dawn, plus a night-default
-// track in default mode. Shared by applyRaceSettings (pre-build) and the render
-// loop (per-frame) so the two can't drift out of sync.
+// Lamps (street posts + flood banks, one list) fire at night/dusk/dawn, plus a
+// night-default track in default mode. Shared by applyRaceSettings (pre-build)
+// and the render loop (per-frame) so the two can't drift out of sync.
 function isFloodActiveSession() {
   return raceTimeOfDay === "night" || raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn" ||
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
@@ -5870,14 +5870,14 @@ function render(dt) {
     if (_ltFlash < 0.001) _ltFlash = 0;
   }
 
-  // Floodlights: EVERY track has them (see buildTrackLights); they're fed to the
+  // Lamps: EVERY track has them (see buildTrackLights); they're fed to the
   // shader whenever the scene is dark enough to read them — night, dusk, or dawn
   // on any circuit, or a night-default track in default mode. In bright day the
   // sun dominates so they're normally left off (no washed-out daylight pools) —
   // UNLESS the DAYTIME LAMPS knob (LT.floodDay) is turned up, which lights the
   // pools under a blue sky for a lit-stadium look (handled in the else-branch).
   const _floodActive = isFloodActiveSession();
-  // Daytime floods: only when the session isn't already a dark one AND the knob is
+  // Daytime lamps: only when the session isn't already a dark one AND the knob is
   // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
   const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
   if (_floodActive || _floodDayLvl > 0) {
@@ -5885,7 +5885,7 @@ function render(dt) {
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
     if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
-    // Time-dependent floodlights: brightness + COLOUR ramp with sun elevation.
+    // Time-dependent lamps: brightness + COLOUR ramp with sun elevation.
     // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
     // freshly switched on / still warming up; by deep night they reach full
     // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.

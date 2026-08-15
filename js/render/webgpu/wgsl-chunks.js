@@ -395,9 +395,9 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //        group0 @binding 4/5 env cube+sampler ; mirrors GLX uCarReflect)
   //      * [Block 8]    wet-road SSR consumption (ssrStrength = params4.w ;
   //        group0 @binding 6 SSR-result texture from wgsl-post.js)
-  //    STILL DEFERRED: analytic sky mirror + rim/AO (Phase 3 probe);
-  //    per-material applyMaterial* bump/tint (brick/glass/metal/wood — the "14
-  //    procedural materials").
+  //    applyMaterial* / applyMaterialNormal are ported (14 procedural MAT ids).
+  //    STILL DEFERRED vs GLX: uAmbContactDark / uLampWallSpill / uWindowSunFlash
+  //    / uSkyRimGlow tuner knobs (no FrameU lanes).
   //
   //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
   //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
@@ -719,9 +719,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // 80% of the shadow range, pcssPen > 0) runs a REAL blocker search: a 4-tap
   // min-depth read of blockerTex (findBlocker above) scales the PCF step with
   // the receiver-blocker gap, so contact edges stay crisp while the body
-  // softens. Outside that band the kernel falls back to a fixed widening
-  // (step * (1 + pcssPen)). pcssPen=0 keeps the exact Phase-3 1-texel 3×3
-  // kernel (byte-for-byte no-op).
+  // softens. Far field drops to 4-tap. pcssPen=0 skips the blocker search.
   var shadow = 1.0;
   if (F.params2.x > 0.5) {
     let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
@@ -891,7 +889,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
   // math from GLX LIT_FS (js/render/shaders/lit.js): windowed 1/d² falloff, aimed spot
   // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
-  // the light. (Bounce-fill + per-lamp clearcoat glint deferred to Phase 4.)
+  // the light. The nearest floodlight also 4-tap-PCF-samples lampShadowTex.
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
   let nL = i32(F.params0.w);
   for (var i = 0; i < nL; i = i + 1) {

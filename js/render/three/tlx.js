@@ -38,7 +38,7 @@
  *
  * M3 STATUS: the TSL lit core is live — TLXShaders.chunks + TLXShaders.lit
  * (tsl-chunks.js / tsl-lit.js) supply the full lit fragment (15 procedural
- * materials, car ids 20-26, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
+ * materials, car ids 20-27, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
  * wetness, cloud shadows). GLX's per-draw material scalars land through a
  * MATERIAL CACHE: three can't read per-object uniforms off one shared
  * material, so each distinct opts signature (9 scalars + flags, the game's

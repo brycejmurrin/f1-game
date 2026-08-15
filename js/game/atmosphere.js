@@ -1,7 +1,7 @@
 /* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the
    lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches
    for night/dawn/dusk/day, wet/overcast/fog post-modifiers, ground mist,
-   floodlight build, lightning arming) plus the per-track atmosphere bias
+   lamp build, lightning arming) plus the per-track atmosphere bias
    table. Extracted verbatim; live state (frame, frameSky, track, weather,
    cloud/lightning timers) is reached through the ctx façade G handed to
    Atmosphere.create(G); stable helpers (clamp, satAdjust, weather predicates,
@@ -54,7 +54,7 @@ function applyRaceSettings() {
   } else {
     G.frameSky.cityGlow = null;
   }
-  // Pre-build the floodlight set at race start so the first dark-session frame is
+  // Pre-build the lamp set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
   const floodActive = isFloodActiveSession();
@@ -279,7 +279,7 @@ function applyRaceSettings() {
     // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
     // the road/scenery like daytime, which is why night looked washed (Singapore).
     // frameSky.sunColor is left alone so the warm sky/dusk glow survives; the
-    // floodlights (buildTrackLights) now carve out the actually-lit areas.
+    // lamps (buildTrackLights) now carve out the actually-lit areas.
     if (isNightSession) G.frame.sunColor = [0.12, 0.14, 0.22];   // unified moonlight key (matches explicit-night)
     G._cloudBase = G.frameSky.cloud !== undefined ? G.frameSky.cloud
                : (isNightSession ? 0.22 : 0.44);   // modest cover; the sky shader carries the richer cumulus look
