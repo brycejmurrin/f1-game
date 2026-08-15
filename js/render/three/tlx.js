@@ -173,14 +173,9 @@ const TLX = (function () {
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      // DEFAULT OFF EVERYWHERE, phones included — three picks WebGPU wherever the
-      // browser offers it. That is a deliberate product call, not an oversight:
-      // the alternative (pinning phones to three's WebGL2 backend, which is the
-      // codegen path every TLX milestone was actually developed against) trades
-      // the migration's whole point on mobile for safety against a WebKit bug we
-      // have diagnosed but never reproduced. Flip the default here if a real
-      // device says otherwise; `apex26.tlxForceGL` already overrides both ways.
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : false;
+      // Unset pin: phones → WebGL2 (the header above). Desktop keeps auto-pick.
+      // `apex26.tlxForceGL` "1"/"0" overrides both ways (CI pins "1").
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!isMobile;
 
       const renderer = new THREE.WebGPURenderer({
         canvas,
@@ -977,7 +972,18 @@ const TLX = (function () {
           poolUsed = 0;
           _envActive = false;
           envFacesMask |= 1 << (face & 7);
-          if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }   // full cube captured
+          if (envFacesMask === 63) {
+            envFacesMask = 0; envReady = true;
+            // WebGPU does not gl.generateMipmap a CubeRenderTarget the way
+            // WebGL2 does (three.js #31143 / #31639). Without an explicit
+            // pass, cubeTexture(..., rough*2.5) samples empty mips and chrome
+            // goes black/flat. WebGL2 already auto-mips; this is a no-op there
+            // when the chain already exists.
+            if (renderer.generateMipmaps && envRT.texture) {
+              try { renderer.generateMipmaps(envRT.texture); }
+              catch (_) { /* backend without cube-mip helper: lod 0 still works */ }
+            }
+          }
         },
         envProbeReady() { return envReady; },
         // New track/session: the cube still holds the OLD circuit — hold the

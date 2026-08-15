@@ -82,8 +82,10 @@
     // nodes): tlx.js swaps its .value to a black dummy cube while rendering
     // INTO the probe (the env pass draws glass, an envSurface — sampling the
     // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
-    // js/render/glx.js). .sample(Rg) clones per use but resolves its binding
-    // from this base, so the swap covers all variants at once.
+    // js/render/glx.js). cubeTexture(base, dir, lod) clones per use with
+    // referenceNode = base (three.js CubeTextureNode), so the swap covers
+    // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
+    // setter and threw on every chrome/env surface.
     const ENV_CUBE = ctx.envCube || null;
     const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
@@ -1172,11 +1174,10 @@
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
-            // CubeTextureNode has no .uv() (that's a 2D TextureNode setter);
-            // .sample(dir) clones per use and still resolves from this shared
-            // node so setEnvCube()'s dummy-cube swap covers the clone. .level()
-            // is the TSL lod (mip 0 without it is always-sharp chrome).
-            const cubeRefl = envCubeNode.sample(Rg).level(rough.mul(2.5)).rgb;
+            // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
+            // clones with referenceNode = this base (mrdoob/three.js
+            // CubeTextureNode.js). Do not call .uv() on a cube node.
+            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
