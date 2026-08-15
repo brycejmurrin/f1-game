@@ -14,9 +14,9 @@ const LightTune = (function () {
 // them to the shader when the scene is dark — night/dusk/dawn). A light roughly
 // every ~22 m (alternating sides) at mast height, capped to the 32 shader slots
 // (minus a small tail-light reservation in traffic) by the per-frame cull.
-// Flat [x,y,z, r,g,b, rad, …] septets. Colour, brightness, pool
-// size and mast style all vary by circuit character (see floodColor). HDR (>1)
-// so the pools bloom.
+// Flat 15-float records [x,y,z, r,g,b, rad, aim, cone, bleed, vol, glare].
+// Colour, brightness, pool size and mast style all vary by circuit character
+// (see floodColor). HDR (>1) so the pools bloom.
 function floodColor(theme, id) {
   // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
   // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.

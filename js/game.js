@@ -5618,16 +5618,16 @@ function render(dt) {
     const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
     // only on the position snap), so the slider responds without driving.
-    const sBox = LT.shadowRange || 64;
+    const sBox = LT.shadowRange != null ? LT.shadowRange : 80;
     const step = sBox / 4;
     // Forward-biased CAMERA anchor, not the raw player position: the box budget
     // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
     // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
-    // to dissolve shadows by 0.72·range (≈46 m at the default 64) to stay inside
-    // the worst-case border — the "shadow horizon" ~46 m ahead. Anchoring at
+    // to dissolve shadows by 0.72·range (≈58 m at the default 80) to stay inside
+    // the worst-case border — the "shadow horizon" ~58 m ahead. Anchoring at
     // camera + a forward bias makes the safe radius symmetric around the view
     // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
-    // hold ~74 m ahead of the camera at the same texel density. Height comes from
+    // hold ~67 m ahead of the camera at the same texel density. Height comes from
     // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
     // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
     // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
@@ -6775,8 +6775,8 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
-  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  // slow at the scale floor sheds those instead. Tier 2 drops the SSR march
+  // (road + car-paint), tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
@@ -6785,7 +6785,7 @@ function render(dt) {
   // non-zero whenever the key is bright) still ran the SSAO pass and both of its
   // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
