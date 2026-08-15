@@ -952,8 +952,15 @@ void main() {
     // tarmac", "darkens harder than tarmac and that is ALL it does"). The 0.42
     // named in the comment above is the ROAD's result (1 - 0.58), which is why
     // the road literal stays put and only the porous one moves.
-    float absorb = mix(clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0),
-                       clamp(1.0 - 0.72 * uWetDark, 0.0, 1.0), porous);
+    // Porous expressed as a FRACTION of the road result, not its own coefficient.
+    // An independent 0.72 was darker at the default (0.28 vs 0.42) but clipped to
+    // pure black at uWetDark 1.389 while the road still rendered detail until
+    // 1.724 — verges going black BEFORE the tarmac is the same silhouette break
+    // this branch exists to prevent, just with the polarity flipped. As a
+    // fraction the two saturate together and porous is strictly darker across
+    // the whole 0..2.4 range, with no clip-order to get wrong.
+    float absorbRoad = clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0);
+    float absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo *= mix(1.0, absorb, wet);
     albedo *= mix(1.0, 0.50, puddle);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not

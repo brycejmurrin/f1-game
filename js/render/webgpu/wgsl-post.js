@@ -696,7 +696,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let vAspect = select(1.0, texel.y / texel.x, texel.x > 0.0);
   q.x = q.x * vAspect;
   let vr = length(q) * 0.70710678 / length(vec2<f32>(0.5 * vAspect, 0.5));
-  let vig = smoothstep(0.95, min(vignetteSoft, 0.94), vr);
+  // Outer edge is the CORNER (vr is corner-normalised => exactly 0.70710678 at
+  // every aspect), not 0.95. The old form ran edge0 > edge1 and never finished
+  // its ramp. Mirrors js/render/shaders/post.js.
+  let vig = 1.0 - smoothstep(min(vignetteSoft, 0.69), 0.70710678, vr);
   c = c * mix(vignette, 1.0, vig);
 
   // Triangular-PDF dither (breaks 8-bit banding in sky/fog gradients).

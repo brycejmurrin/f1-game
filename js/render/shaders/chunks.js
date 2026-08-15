@@ -110,8 +110,10 @@ vec3 acesTonemap(vec3 x) {
   // unclamped overshoot, and nothing else floors the signal before this call
   // (applyHdrGrade's max(c,0) sits behind uHdrGradeOn, which is 0 at every
   // shipped default). Dark tarmac beside a sunlit kerb went white at SHARPEN
-  // 0.131, night tarmac beside neon at 0.098, on a 0..6 slider. Clamping here
-  // rather than at the one call site fixes GLX, TLX and WGX in one place.
+  // 0.131, night tarmac beside neon at 0.098, on a 0..6 slider. Clamping in the
+  // curve rather than at the call site keeps it true for every future consumer.
+  // NOT a single-source fix: TLX and WGX carry their own hand-ported copies of
+  // this function, so they were patched alongside it and must be kept in step.
   x = max(x, vec3(0.0));
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }`;

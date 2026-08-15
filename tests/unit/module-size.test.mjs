@@ -231,8 +231,8 @@ const CEILINGS = {
   // 2.26x its own midday strength, so one 0.1-degree notch of SUN ELEVATION
   // deleted full-strength shafts in a single frame; now a fade. (2) The fog
   // scenery cull read the raw frame.fogDensity while the shader renders that
-  // times FOG DENSITY, so the knob moved the fog wall and not the cull — at FOG
-  // BOOST 24 the game hard-culled scenery at 32 m of perfectly clear air. (3)
+  // times FOG DENSITY, so at FOG DENSITY 0 ("off") a night-fog preset still
+  // hard-culled chunked scenery at 250 m with no fog drawn at all. (3)
   // PER-CHUNK ROAD gated on the raw knob instead of the tier- and latch-resolved
   // state, building a second GPU copy of the road ribbon on every device where
   // per-chunk lamps are held off. Same category as the two entries above: growth

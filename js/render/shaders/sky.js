@@ -98,8 +98,16 @@ void main() {
     // failure atmosphere.js and _nightAmbientBand guard against everywhere else.
     // At night the cloud lid still LIFTS — to 3x the authored sky, keeping the
     // circuit's own night hue — rather than jumping to a daytime grey.
-    vec3 greyZ = mix(vec3(0.55, 0.56, 0.58), uZenith  * 3.0, nightSky);
-    vec3 greyH = mix(vec3(0.58, 0.58, 0.60), uHorizon * 3.0, nightSky);
+    // ONE target for both bands at night, so this stays a FLATTEN. Scaling each
+    // band separately (zenith*3, horizon*3) lifted them by different absolute
+    // amounts and WIDENED the zenith-to-horizon spread under cloud — the exact
+    // opposite of "flatten toward a uniform grey". A common value derived from
+    // the authored pair converges them and keeps the circuit's night hue, while
+    // still lifting: an overcast night really is brighter than a clear one,
+    // because the lid catches the city's own light.
+    vec3 nightLid = (uZenith + uHorizon) * 1.25;
+    vec3 greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
+    vec3 greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
     vec3 zenithO  = mix(uZenith,  greyZ, overcast * 0.75);
     vec3 horizonO = mix(uHorizon, greyH, overcast * 0.60);
     // pow(up, uSkyGrad): richer blue zenith extends further down, horizon band

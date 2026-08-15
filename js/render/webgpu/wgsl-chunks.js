@@ -77,7 +77,11 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
   // min so the denominator can't reach 0 for x>=0.
   const tonemap = `
-fn acesTonemap(x: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32> {
+fn acesTonemap(x0: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f32> {
+  // Sign guard, mirroring GLXChunks.tonemap: the curve rises back out of the
+  // negatives (x=-0.2417 clips to pure WHITE), and SHARPEN's overshoot is
+  // unclamped, so a negative here paints a white fringe on a dark edge.
+  let x = max(x0, vec3<f32>(0.0));
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }`;
 

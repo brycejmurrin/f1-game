@@ -482,9 +482,16 @@
     // ACES fitted filmic tone-map — the PARAMETERISED Narkowicz fit
     // (GLXChunks.tonemap 1:1; coefficients from the TONE CURVE knobs; the
     // defaults 2.51/0.03/2.43/0.59/0.14 reproduce the shipped curve exactly).
-    const acesTonemap = (x) =>
-      clamp(x.mul(C.acesA.mul(x).add(C.acesB))
+    // max(x,0) FIRST — mirrors the sign guard in GLXChunks.tonemap. The rational
+    // curve rises back out of the negatives (x=-0.2417 clips to pure WHITE at the
+    // shipped coefficients), and SHARPEN's unsharp overshoot is unclamped, so a
+    // negative can reach here and paint a white fringe on the DARK side of a
+    // high-contrast edge. Bit-identical for every x >= 0.
+    const acesTonemap = (x0) => {
+      const x = max(x0, vec3(0.0));
+      return clamp(x.mul(C.acesA.mul(x).add(C.acesB))
         .div(x.mul(C.acesC.mul(x).add(C.acesD)).add(C.acesE)), 0.0, 1.0);
+    };
 
     // Reconstruct view-space position from depth (COMPOSITE ssrViewPos).
     const ssrViewPos = (uvGl) => {
@@ -873,7 +880,11 @@
         q.x.mulAssign(vAspect);
         const vr = length(q).mul(0.70710678)
           .div(length(vec2(vAspect.mul(0.5), 0.5)));
-        const vig = smoothstep(0.95, min(C.vigSoft, 0.94), vr);
+        // Outer edge is the CORNER (vr is corner-normalised, so exactly
+        // 0.70710678 at every aspect), not 0.95. The old form ran edge0 > edge1
+        // and could never finish its ramp, so VIGNETTE could not reach black and
+        // REACH swung corner darkening 28x. Mirrors js/render/shaders/post.js.
+        const vig = smoothstep(min(C.vigSoft, 0.69), 0.70710678, vr).oneMinus();
         c.mulAssign(mix(C.vignette, float(1.0), vig));
 
         // Triangular-PDF LDR dither, golden-ratio time-stepped js/render/shaders/post.js.
