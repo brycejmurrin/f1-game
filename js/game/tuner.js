@@ -265,6 +265,20 @@ function refreshLightTunePanel() {
     if (inp) inp.value = LT[d.id];
     if (b) b.textContent = fmtTune(d, LT[d.id]);
   }
+  // PER-CHUNK LAMPS is force-disabled below the top graphics tier and after a
+  // display reset (js/game.js resolves frame.perChunkLights on PerfGov.tier()
+  // and a crash latch), so the slider can hold a positive value while changing
+  // nothing on screen. Say so at the readout — a silent no-op reads as broken.
+  // The latch line is also the instruction for the way back the game.js rising
+  // edge provides: drop to 0 and raise it again.
+  const pcv = $("lt-v-perChunkLights");
+  if (pcv && LT.perChunkLights > 0) {
+    let latched = false;
+    try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
+    const tier = (typeof PerfGov !== "undefined" && PerfGov.tier) ? PerfGov.tier() : 0;
+    if (latched) pcv.textContent += " · held after a display reset — set to 0 and back on to retry";
+    else if (tier >= 1) pcv.textContent += " · held off — needs GRAPHICS on HIGH or ULTRA";
+  }
   updateLtProfileLabel();
   // An armed COPY ALL is armed for the condition that was on screen when it was
   // clicked. This runs on every time-of-day / weather switch, so cancelling here
