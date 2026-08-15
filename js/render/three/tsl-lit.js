@@ -1171,10 +1171,11 @@
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
-            // .sample() alone is mip 0 (always-sharp chrome); .level() is the
-            // TSL lod. Binding still resolves from the shared envCubeNode so
-            // setEnvCube()'s dummy-cube swap covers this clone.
-            const cubeRefl = envCubeNode.uv(Rg).level(rough.mul(2.5)).rgb;
+            // CubeTextureNode has no .uv() (that's a 2D TextureNode setter);
+            // .sample(dir) clones per use and still resolves from this shared
+            // node so setEnvCube()'s dummy-cube swap covers the clone. .level()
+            // is the TSL lod (mip 0 without it is always-sharp chrome).
+            const cubeRefl = envCubeNode.sample(Rg).level(rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance
