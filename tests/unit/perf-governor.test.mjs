@@ -350,6 +350,29 @@ test("a bad preset cannot invent a tier above the ladder", () => {
   assert.equal(PerfGov.userTier(), 0, "clamped at the bottom");
 });
 
+test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", () => {
+  // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
+  // kill car-paint SSR on every dry lap. The governor must pass a separate
+  // opts.carReflect = 0 at tier ≥ 2, and both present() paths must honour it.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/);
+  assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
+  assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
+  assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);
+  assert.match(SRC, /SSR march off \(wet-road \+ car-paint\)/);
+});
+
+test("shadow box and shader fade share the same unset shadowRange fallback", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const glx = fs.readFileSync(path.join(ROOT, "js/render/glx.js"), "utf8");
+  assert.match(game, /LT\.shadowRange != null \? LT\.shadowRange : 80/);
+  assert.match(glx, /T && T\.shadowRange != null \? T\.shadowRange : 80\.0/);
+  assert.doesNotMatch(game, /LT\.shadowRange \|\| 64/,
+    "|| 64 disagreed with the shader's 80 fallback and treated a 0 knob as unset");
+});
+
 test("changing preset drops a pending TIER verify", () => {
   // Same class as the setAutoRes fix: _pendingVerify attributes the next EMA
   // delta to the governor's own last provisional step, so a user changing

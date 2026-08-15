@@ -451,7 +451,7 @@
       C.vignette.value = gk("vignette", 0.80);
       C.vigSoft.value = gk("vignetteSoft", 0.35);
       C.bloomKnee.value = gk("bloomKnee", 0.5);
-      C.carReflect.value = gk("carReflect", 0.05);
+      C.carReflect.value = o.carReflect != null ? o.carReflect : gk("carReflect", 0.05);
       C.carGloss.value = gk("carGloss", 1.0);
       C.chromAb.value = gk("chromAb", 0.0);
       C.grain.value = gk("grain", 0.0);

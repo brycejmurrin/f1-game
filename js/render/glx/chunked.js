@@ -66,8 +66,14 @@ const GLXChunked = (function () {
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
       let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
+      // Same optional attribs as createMesh: mat (attrib 3) then trk (attrib 4).
+      // Dropping trk here is why PER-CHUNK ROAD painted a blank ribbon — the
+      // markings shader gates on vTrk.z (half-width) and the generic attrib is 0.
+      const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
       const hasMat = mat != null;
-      const fpv = hasMat ? 10 : 9;
+      const hasTrk = trk != null;
+      const fpv = 9 + (hasMat ? 1 : 0) + (hasTrk ? 3 : 0);
+      const trkOff = 9 + (hasMat ? 1 : 0);
       let interleaved = new Float32Array(vCount * fpv);
       for (let i = 0; i < vCount; i++) {
         const o = i * fpv;
@@ -75,6 +81,11 @@ const GLXChunked = (function () {
         interleaved[o+3]=nrm[i*3  ]; interleaved[o+4]=nrm[i*3+1]; interleaved[o+5]=nrm[i*3+2];
         interleaved[o+6]=col[i*3  ]; interleaved[o+7]=col[i*3+1]; interleaved[o+8]=col[i*3+2];
         if (mat) interleaved[o+9]=mat[i];
+        if (trk) {
+          interleaved[o+trkOff  ] = trk[i*3  ];
+          interleaved[o+trkOff+1] = trk[i*3+1];
+          interleaved[o+trkOff+2] = trk[i*3+2];
+        }
       }
       // Interleave done: normals/colours/materials are now baked into `interleaved`
       // and never read again. Drop them (both the toF32 copies and the source refs)
@@ -83,7 +94,7 @@ const GLXChunked = (function () {
       // needed below for triangle centroids/AABBs, so it's nulled after the bins.
       nrm = col = mat = null;
       data.nrm = data.mat = null;
-      if (!data._keepPositions) data.col = null;
+      if (!data._keepPositions) { data.col = null; data.trk = null; }
       // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
       // grid is bounded (tracks span a few km), so pack signed cell coords.
       const buckets = new Map();
@@ -121,6 +132,7 @@ const GLXChunked = (function () {
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
       gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
       if (hasMat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
+      if (hasTrk) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, stride, trkOff * 4); }
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
       const BPI = big ? 4 : 2;                 // bytes per index

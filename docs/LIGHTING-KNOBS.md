@@ -105,7 +105,7 @@ catalog to follow.
 |---|---|---|
 | `pcss.penScale` — `(z-zb) * 80` | How fast penumbra grows with receiver-blocker gap (80 ≈ 3.2 m gap → full softness). | road edgeE ↓ when raised |
 | `pcss.radiusRange` — `mix(1.5, 6.0, pen)` | Contact crispness → max softness range. B (24,24) = PCSS off, a dramatic uniform blur (4x the old max) for a visible before/after. | road edgeE |
-| `shadow.box` — ortho ±`LT.shadowRange` (def 80, fallback 64), snap sBox/4 | Texel density vs guaranteed coverage radius. Doubling the box halves density. | shadow edge sharpness |
+| `shadow.box` — ortho ±`LT.shadowRange` (def 80, fallback 80), snap sBox/4 | Texel density vs guaranteed coverage radius. Doubling the box halves density. | shadow edge sharpness |
 | `shadow.biasClamp` — `(0.0005, 0.004)` | Acne (too low) vs peter-panning/detached shadows (too high). | road mean ↑ when over-biased |
 
 ## Surface detail (LIT_FS `uDetail` blocks)
