@@ -45,7 +45,7 @@ const els = {
 // otherwise it runs fully synchronously). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
-let _backendProved = false;   // boot-canary latch, set on the first world frame
+let _backendProved = false;   // boot-canary latch, set on the first world present
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
 // order — each group has eval-time dependencies inside it, which the <script>
 // tag order used to enforce and loadBackendScripts() now enforces by awaiting
@@ -92,7 +92,10 @@ try {
   // garbage frame, so the RENDERER button undoes that in one tap. An iOS jetsam
   // kill it can NOT undo (no JS error, no contextlost; the recovery below fires
   // only when GLX.init FAILS) — hence a probe armed before handing over the canvas
-  // and cleared on the first presented WORLD frame; armed at boot = never got there.
+  // and cleared once the alternate is bound (title SETTINGS never presents a
+  // world frame; leaving it armed until present() reverted every menu refresh).
+  // Re-armed around the first world present() so a jetsam on that frame still
+  // reverts; armed at the NEXT boot = never got through create() or present().
   const PROBE_KEY = "apex26.gfxBackendProbe";
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
@@ -136,6 +139,9 @@ try {
       // raw {pos,nrm,col,idx} geometry that game.js uploads via the gfx handle.)
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
+      // Bound and live. Title has no track yet (deferred flyby), so present()
+      // will not run — disarm here or a refresh on SETTINGS reverts the pick.
+      if (gfx) { try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
     }
   }
 } catch (_) { gfx = null; }
@@ -157,6 +163,11 @@ if (!gfx) {
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
+  // create() returned null without claiming the canvas — persist GLX so the
+  // next boot does not retry a backend that just refused.
+  try { const p = localStorage.getItem("apex26.gfxBackend");
+    if (p === "webgpu" || p === "three") { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem("apex26.gfxBackendProbe"); } }
+  catch (_) { /* private-mode; in-memory handle is already GLX. */ }
 }
 // Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
 // the material-array load WITHOUT awaiting it: a pack is optional, the load is
@@ -6827,6 +6838,13 @@ function render(dt) {
       }
     }
   }
+  // Re-arm around the first world present so a jetsam mid-frame still reverts.
+  // Title already disarmed after bind; this window is only the first flyby/race.
+  if (!_backendProved) {
+    try { const p = localStorage.getItem("apex26.gfxBackend");
+      if (p === "three" || p === "webgpu") localStorage.setItem("apex26.gfxBackendProbe", p); }
+    catch (_) { /* no probe: first-frame jetsam will not auto-revert */ }
+  }
   gfx.present(po);
   // Boot canary disarmed — a real world frame landed, so the next boot keeps it.
   if (!_backendProved) { _backendProved = true; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
@@ -7115,47 +7133,12 @@ $("pm-res").onclick = () => {
 };
 applyResMode();
 
-// RENDERER cycle (WEBGL2 → THREE → WEBGPU-if-available) — shown always now:
-// TLX ("THREE", the three.js/TSL backend, in-progress migration) needs no
-// WebGPU, so the toggle no longer hides without navigator.gpu; the WGX
-// "WEBGPU" stop is skipped on browsers that can't run it. Both alternates
-// are opt-in and the default stays WebGL2; flipping writes apex26.gfxBackend
-// (the raw key gfx.js reads) and reloads so Gfx.create() re-runs backend
-// selection at boot.
-{
-  const rb = $("pm-renderer");
-  if (rb) {
-    const read = () => {
-      try {
-        const v = localStorage.getItem("apex26.gfxBackend");
-        return v === "webgpu" || v === "three" ? v : "webgl2";
-      } catch (_) { return "webgl2"; }
-    };
-    const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
-    // SHOWN ON EVERY DEVICE, phones included. It hid whenever gfx.isMobile back
-    // when boot refused both alternates there. Boot honours the preference
-    // everywhere now, and this button IS the phone's recovery from a bad frame.
-    rb.hidden = false;
-    rb.textContent = "RENDERER: " + label(read());
-    rb.onclick = () => {
-      if (soundOn) GameAudio.uiSelect();
-      const cur = read();
-      const hasGpu = typeof navigator !== "undefined" && !!navigator.gpu;
-      const next = cur === "webgl2" ? "three"
-                 : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
-                 : "webgl2";
-      // Disarm the canary with the choice: a tap proves a live tab, so an armed
-      // probe from THIS load (switched before any world frame) must not outlive
-      // it and revert the preference just made.
-      try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-      rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
-      setTimeout(() => location.reload(), 350);
-    };
-  }
-}
+// RENDERER cycle lives in js/game/gfx-quality.js with GRAPHICS — wired at
+// DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
 
-// GRAPHICS presets live in js/game/gfx-quality.js — it owns #pm-gfx for EVERY
-// device now, not just phones, and wires the preset's tier floor into PerfGov.
+// GRAPHICS presets + RENDERER cycle live in js/game/gfx-quality.js — it owns
+// #pm-gfx and #pm-renderer for EVERY device, and wires the preset's tier floor
+// into PerfGov.
 // It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 

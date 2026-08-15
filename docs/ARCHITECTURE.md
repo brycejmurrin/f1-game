@@ -226,23 +226,29 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
-**RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU-if-available)
-that writes the key and reloads. The eventual flip of the default and the
-deletion of GLX/WGX is "Phase D" — future work, out of scope here.
+**RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU) that writes
+the key and reloads. WEBGPU without `navigator.gpu` flashes UNAVAILABLE and
+does not persist. The eventual flip of the default and the deletion of
+GLX/WGX is "Phase D" — future work, out of scope here.
 
 **Every device may select every backend, phones included.** Boot used to refuse
 both alternates whenever `GLX.isMobile` and the RENDERER button hid there, after
 TLX on iOS rendered a flat pale ground with the lower half of the frame black.
 The replacement is a **boot canary**: `js/game.js` writes `apex26.gfxBackendProbe`
-before handing the canvas to an alternate and clears it on the first presented
-*world* frame; a boot that still finds it armed resets `apex26.gfxBackend` to
-`webgl2`. That covers the failure a visible button cannot — an iOS jetsam kill,
-which takes the tab with no JS error and no `webglcontextlost`, and which the
-`GLX.init`-failure recovery in the same file never sees. Everything else is
-recoverable by hand: the menus are DOM layered over the canvas, so they stay
-legible through a garbage frame and the button is one tap away. Pressing the
-button also disarms the probe, so switching from the menu before any world frame
-does not revert the choice just made.
+before handing the canvas to an alternate and clears it once that backend is
+*bound* (title SETTINGS never presents a world frame — `render()` returns on
+`!track` until the deferred flyby builds — so waiting for `present()` reverted
+every menu refresh to WEBGL2). The probe is re-armed around the first world
+`present()` so a jetsam on that frame still reverts; a boot that still finds it
+armed resets `apex26.gfxBackend` to `webgl2`. That covers the failure a visible
+button cannot — an iOS jetsam kill, which takes the tab with no JS error and no
+`webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
+never sees. Everything else is recoverable by hand: the menus are DOM layered
+over the canvas, so they stay legible through a garbage frame and the button
+(owned by `js/game/gfx-quality.js`, visible in the HTML, wired at
+DOMContentLoaded) is one tap away. Pressing the button also disarms the probe,
+so switching from the menu before any world frame does not revert the choice
+just made.
 
 Note that iOS 26+ and Android 12+ (Qualcomm/ARM) expose `navigator.gpu`, so the
 **WEBGPU** stop is reachable on phones. The canary is what makes a bad boot

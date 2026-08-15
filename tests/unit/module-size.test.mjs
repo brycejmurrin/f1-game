@@ -257,7 +257,9 @@ const CEILINGS = {
   // while 40 m and 60 m were flat. One line of code (bias along the car's heading
   // instead) plus the comment recording the measurement and why the coverage
   // guarantee is untouched — the same bug-explaining growth the header tolerates.
-  "js/game.js": 8259,
+  // 8259 -> 8241: RENDERER cycle extracted to gfx-quality.js (same home as
+  // GRAPHICS). game.js keeps the boot canary; the button is DOMContentLoaded.
+  "js/game.js": 8241,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

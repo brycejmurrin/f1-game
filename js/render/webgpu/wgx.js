@@ -82,7 +82,7 @@
  * (SSAO rgba8 vs GLX r8; bloom/godray rgba16float vs GLX R11F_G11F_B10F), so a
  * phone frame still carries roughly 1.5x GLX's discretionary target bytes.
  * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
- * which reverts to WebGL2 when a backend never presents a world frame.
+ * which reverts to WebGL2 when a backend never binds, or jetsams on first present.
  *
  * Feature-detected & inert: WGX.create() returns null on any failure so the
  * caller falls back to GLX. Constructing on a supported browser never throws.

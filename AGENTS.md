@@ -21,7 +21,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 113 Playwright
-specs plus 91 `node --test` unit suites; the browser half runs on SwiftShader
+specs plus 92 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **`npm install` FIRST on a fresh container** — a missing `node_modules`
@@ -128,8 +128,9 @@ js/game/                one Module.create(G) per file; modules never reach into
                         Self-init (no create(G)): scrollfade.js sheetshape.js
                         topmodal.js menunav.js ariastate.js uilayers.js (THE
                         layer stack) css-zoom.js gfx-quality.js (GRAPHICS
-                        presets; the preset's tier floor enters PerfGov.tier()'s
-                        max(), so the render path has no per-preset branch)
+                        presets + the RENDERER cycle; the preset's tier floor
+                        enters PerfGov.tier()'s max(), so the render path has
+                        no per-preset branch)
                         perf-try.js (default-OFF renderer A/B switches +
                         the SETTINGS panel; GLSL ones are #defines injected
                         in GLX.compile) cockpit-opts.js (first-person view
