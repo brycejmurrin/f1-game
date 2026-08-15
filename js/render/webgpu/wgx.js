@@ -336,17 +336,17 @@ const WGX = (function () {
       try {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
         persisted = localStorage.getItem("apex26.gfxBackend") === "webgl2";
-      } catch (_) {}
+      } catch (_) { /* a throwing setItem IS the read-only case: persisted stays false, which is the whole decision below */ }
       try {
         Log.warn("gfx", "WGX device lost (" + ((info && info.reason) || "unknown") + ") — " +
           (persisted ? "reverted to WebGL2, reloading"
                      : "could NOT persist the WebGL2 fallback (storage read-only?); not reloading, " +
                        "a reload would land back on WebGPU and loop. Use the RENDERER button."));
-      } catch (_) {}
+      } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
       // The boot probe is deliberately LEFT ARMED: if this loss happened before
       // the first presented world frame, the canary reporting it on the next boot
       // is the truth, and it is the only backstop left when the write above failed.
-      if (persisted) { try { location.reload(); } catch (_) {} }
+      if (persisted) { try { location.reload(); } catch (_) { /* no location (harness/worker): nothing to reload, and the flag is already flipped for the next real boot */ } }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -370,9 +370,9 @@ const WGX = (function () {
         if (!_bootError) _bootError = msg;
         _gpuErrors++;
         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
-          try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) {}
+          try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* Log absent (node VM harness): _gpuErrors still counts, which is the load-bearing part */ }
           if (_gpuErrors === GPU_ERR_LOG_CAP) {
-            try { Log.warn("gfx", "WGX: further GPU errors suppressed — read the count from WGX.gpuErrors()"); } catch (_) {}
+            try { Log.warn("gfx", "WGX: further GPU errors suppressed — read the count from WGX.gpuErrors()"); } catch (_) { /* same: the suppression itself does not depend on announcing it */ }
           }
         }
       };
