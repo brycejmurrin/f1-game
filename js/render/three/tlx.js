@@ -135,6 +135,8 @@ const TLX = (function () {
     _lastFailure = { reason: String(reason), at: Date.now() };
     try { localStorage.setItem("apex26.gfxTlxFail", _lastFailure.reason); } catch (_) { /* blocked storage */ }
     try { Log.warn("gfx", "TLX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent in the node harness */ }
+    try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+    try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
     return null;
   }
 
@@ -1438,6 +1440,8 @@ const TLX = (function () {
       };
 
       try { localStorage.removeItem("apex26.gfxTlxFail"); } catch (_) { /* blocked storage */ }
+      try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+      try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
       _lastFailure = null;
       return backend;
     } catch (e) {

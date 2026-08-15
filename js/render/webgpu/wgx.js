@@ -98,6 +98,18 @@ const WGX = (function () {
   // the typeof guard is belt-and-braces for a standalone harness.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.isMobile;
   const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
+  // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
+  // first full-size frame if we take the desktop stack (high-performance +
+  // timestamp-query + MSAA 2× rgba16float + 2048 shadows). Same sniff as TLX.
+  const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
+    (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
+  let _litePref = false;
+  try { _litePref = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked storage: sniff-only lite */ }
+  // Slim stack: every phone, every WebKit, or a previous device.lost on this
+  // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
+  // the "worked for a second then crashed" path.
+  const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
 
   // Identity mat4 (column-major) fallback.
   const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -167,7 +179,7 @@ const WGX = (function () {
   // into the map every ~10 m of travel). This read MOBILE_TIER, which handed a
   // HIGH-tier phone a 2048² map GLX would never give it — 12 MB of jetsam-counted
   // GPU memory plus the redraw stall, on the least-ready backend.
-  const SHADOW_SIZE = IS_MOBILE ? 1024 : 2048;          // sun depth-map resolution
+  const SHADOW_SIZE = WGX_LITE ? 1024 : 2048;          // sun depth-map resolution
   const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
   // The dynamic CAR shadow map is DESKTOP-ONLY in GLX (js/render/glx/shadow.js
   // creates carTex only `if (ok && !core.IS_MOBILE)` — "a per-frame pass is the
@@ -178,7 +190,7 @@ const WGX = (function () {
   // any phone. Shrink the texture to 1×1 on phones: binding 8 stays a valid
   // depth texture (the layout demands one), and the shader never samples it
   // because params6.y (_carShadowArmed) stays 0 with the pass gated off below.
-  const CAR_SHADOW_ALLOC = IS_MOBILE ? 1 : CAR_SHADOW_SIZE;
+  const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
@@ -225,8 +237,8 @@ const WGX = (function () {
     ],
   };
   const MAT_TEX_LAYERS = 17;
-  const LAMP_SHADOW_SIZE = 512;
-  const MSAA_COUNT = MOBILE_TIER ? 1 : 2;
+  const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
+  const MSAA_COUNT = WGX_LITE ? 1 : 2;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -241,10 +253,19 @@ const WGX = (function () {
   // ONLY here — the boot self-test is over and game.js's canary proves that
   // present() ran, not that anything reached the screen.
   let _gpuErrors = 0;
+  function _markGlxBound() {
+    try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick until the next paint */ }
+    try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window (harness) */ }
+  }
+  function _clearGlxBound() {
+    try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+    try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window (harness) */ }
+  }
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
     try { localStorage.setItem("apex26.gfxWgxFail", _lastFailure.reason); } catch (_) { /* blocked storage: lastFailure() still holds it */ }
     try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent (node VM harness): lastFailure still records the reason */ }
+    _markGlxBound();
     return null;
   }
 
@@ -315,13 +336,14 @@ const WGX = (function () {
       // increases device.lost (iOS will shed the device under thermal). Desktop
       // still prefers discrete, then retries with no hint if that adapter is null
       // (Safari 26 sometimes returns null for high-performance only).
-      const _pref = IS_MOBILE ? "low-power" : "high-performance";
+      const _pref = WGX_LITE ? "low-power" : "high-performance";
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
-      // timestamp-query on iOS has been advertised then lost the device; GLX
-      // already treats the phone timer as absent.
-      const _canTimestamp = !IS_MOBILE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
+      // timestamp-query on WebKit/iOS has been advertised then lost the device
+      // on the first real frame (the "worked for a second" crash). GLX already
+      // treats the phone timer as absent; Safari Mac is the same GPU.
+      const _canTimestamp = !WGX_LITE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
       device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
       if (!device) return _fail("no device");
       var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
@@ -360,20 +382,32 @@ const WGX = (function () {
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       _lost = true;
-      // Keep the WEBGPU pick. Safari 26 exposes navigator.gpu, WGX then loses
-      // the device on the first frame, and writing webgl2 made RENDERER bounce
-      // back every tap. Session skip + disarm: this tab attaches GLX; the next
-      // cold start retries WGX. Reload only if the skip actually landed —
-      // otherwise a read-only store would boot WebGPU again and loop.
+      const why = "device lost (" + ((info && info.reason) || "unknown") + ")";
+      try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* lastFailure stays empty; the label still updates */ }
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+      // First loss on a full (Chrome desktop) stack: retry slim WGX once.
+      // Already slim (WebKit / phone / prior lite) and still died: this tab
+      // attaches GLX. Never write webgl2 over the pick — the button must say
+      // WEBGPU (WEBGL2) so the player can see the live backend.
+      if (!WGX_LITE) {
+        try { localStorage.setItem("apex26.gfxWgxLite", "1"); } catch (_) { /* cannot persist lite; fall through to GLX skip */ }
+        let armedLite = false;
+        try { armedLite = localStorage.getItem("apex26.gfxWgxLite") === "1"; } catch (_) { /* blocked */ }
+        if (armedLite) {
+          try { Log.warn("gfx", "WGX " + why + " — retrying slim WebGPU"); } catch (_) { /* harness */ }
+          try { location.reload(); } catch (_) { /* no location */ }
+          return;
+        }
+      }
+      _markGlxBound();
       let skipped = false;
       try {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
       } catch (_) { /* no sessionStorage: still do not wipe the pick */ }
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
       try {
-        Log.warn("gfx", "WGX device lost (" + ((info && info.reason) || "unknown") +
-          ") — keeping WEBGPU pick" + (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
+        Log.warn("gfx", "WGX " + why + " — keeping WEBGPU pick" +
+          (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
       if (skipped) { try { location.reload(); } catch (_) { /* no location (harness/worker) */ } }
     });
@@ -1097,7 +1131,7 @@ const WGX = (function () {
 
     // ── resize (mirror GLX.resize()) ──
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, WGX_LITE ? 1.5 : 2);
       const w = Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale));
       const h = Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -1230,7 +1264,7 @@ const WGX = (function () {
           // whose .a is 0, and the LIT SSR block documents that as the exact
           // no-op case ("masked-out texels, incl. the 1×1 placeholder"). Wet
           // road on a phone falls back to the analytic sky reflection.
-          if (!MOBILE_TIER) {
+          if (!WGX_LITE) {
             next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
             next.ssrView = next.ssrTex.createView();
@@ -1903,37 +1937,46 @@ const WGX = (function () {
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
     function begin(frame) {
       if (_lost) return false;
-      lastFrame = frame || null;
-      if (width < 1) resize();
-      ensureTargets();
-      if (!sceneView) return false;
-      let tex;
-      try { tex = ctx.getCurrentTexture(); } catch (_) { return false; /* swapchain lost mid-frame: drop the frame */ }
-      currentView = tex.createView();
-      _drawSlot = 0;
-      _fxQuadSlot = 0; _fxDecalSlot = 0;
-      _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
-      _writeFrame(frame || {});
-      const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
-      encoder = device.createCommandEncoder();
-      _passSamples = (_msaaCount > 1 && sceneMSView) ? _msaaCount : 1;
-      const colorAtt = _passSamples > 1
-        ? { view: sceneMSView, resolveTarget: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
-            loadOp: "clear", storeOp: "discard" }
-        : { view: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
-            loadOp: "clear", storeOp: "store" };
-      const rp = {
-        colorAttachments: [colorAtt],
-        depthStencilAttachment: {
-          view: _passSamples > 1 ? depthMSView : depthView,
-          depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
-        },
-      };
-      if (_gpuTimerOn && _gpuQuerySet) {
-        rp.timestampWrites = { querySet: _gpuQuerySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+      try {
+        lastFrame = frame || null;
+        if (width < 1) resize();
+        ensureTargets();
+        if (!sceneView) return false;
+        let tex;
+        try { tex = ctx.getCurrentTexture(); } catch (_) { return false; /* swapchain lost mid-frame: drop the frame */ }
+        currentView = tex.createView();
+        _drawSlot = 0;
+        _fxQuadSlot = 0; _fxDecalSlot = 0;
+        _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
+        _writeFrame(frame || {});
+        const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
+        encoder = device.createCommandEncoder();
+        _passSamples = (_msaaCount > 1 && sceneMSView) ? _msaaCount : 1;
+        const colorAtt = _passSamples > 1
+          ? { view: sceneMSView, resolveTarget: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+              loadOp: "clear", storeOp: "discard" }
+          : { view: sceneView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+              loadOp: "clear", storeOp: "store" };
+        const rp = {
+          colorAttachments: [colorAtt],
+          depthStencilAttachment: {
+            view: _passSamples > 1 ? depthMSView : depthView,
+            depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
+          },
+        };
+        if (_gpuTimerOn && _gpuQuerySet) {
+          rp.timestampWrites = { querySet: _gpuQuerySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+        }
+        litPass = encoder.beginRenderPass(rp);
+        return true;
+      } catch (e) {
+        // Device dying mid-begin used to throw into tick() ("Caught @ tick")
+        // and THEN device.lost reloaded onto GLX — the overlay crash.
+        _lost = true;
+        litPass = null; encoder = null; currentView = null;
+        try { Log.warn("gfx", "WGX begin failed —", e); } catch (_) { /* harness */ }
+        return false;
       }
-      litPass = encoder.beginRenderPass(rp);
-      return true;
     }
 
     function drawSky(sky) {
@@ -2174,6 +2217,7 @@ const WGX = (function () {
       // dead device. Harmless while the reload above lands, unbounded when it
       // cannot (see the device.lost handler). Drop the frame state instead.
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
+      try {
       if (litPass) { litPass.end(); litPass = null; }
       if (_passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
@@ -2470,6 +2514,12 @@ const WGX = (function () {
         } catch (_) { /* mapAsync unsupported or already mapped */ }
       }
       encoder = null; currentView = null;
+      } catch (e) {
+        // Same as begin(): a dying device must not paint "Caught @ tick".
+        _lost = true;
+        litPass = null; encoder = null; currentView = null;
+        try { Log.warn("gfx", "WGX present failed —", e); } catch (_) { /* harness */ }
+      }
     }
 
     // ── Shadow pass (Phase 3): sun depth map ──────────────────────────────
@@ -2566,7 +2616,7 @@ const WGX = (function () {
     // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
     // what keeps the pass from rasterising cars into a 1-pixel target.
     function carShadowBegin(lightVP) {
-      if (_lost || !carShadowView || IS_MOBILE) return;
+      if (_lost || !carShadowView || IS_MOBILE || WGX_LITE) return;
       _carArms++;   // lifetime arm count, mirroring GLX SHD.carArms (debug only)
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
@@ -2589,7 +2639,7 @@ const WGX = (function () {
     }
 
     function lampShadowBegin(lightVP, lightIdx) {
-      if (_lost || !lampShadowView || MOBILE_TIER) return;
+      if (_lost || !lampShadowView || MOBILE_TIER || WGX_LITE) return;
       _lampArms++;
       _lampIdx = lightIdx | 0;
       const raw = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;
@@ -3117,6 +3167,7 @@ const WGX = (function () {
     }
     try { localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) { /* blocked storage */ }
     _lastFailure = null;
+    _clearGlxBound();
 
     const noop = function () {};
 

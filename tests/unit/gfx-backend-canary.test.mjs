@@ -63,8 +63,22 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
   const wgx = read("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,800}apex26\.gfxClaimFail/);
-  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,800}setItem\("apex26\.gfxBackend", "webgl2"\)/);
+  assert.match(wgx, /device\.lost[\s\S]{0,2200}apex26\.gfxClaimFail/);
+  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\("apex26\.gfxBackend", "webgl2"\)/);
+  assert.match(wgx, /WGX_LITE/);
+  assert.match(wgx, /IS_WEBKIT/);
+  assert.match(wgx, /_canTimestamp = !WGX_LITE/);
+  assert.match(wgx, /apex26\.gfxWgxLite/);
+  assert.match(wgx, /apex26\.gfxBound/);
+  assert.match(wgx, /WGX begin failed/);
+  assert.match(wgx, /WGX present failed/);
+});
+
+test("RENDERER label names the live backend when WEBGPU fell back to GLX", () => {
+  const src = read("js/game/gfx-quality.js");
+  assert.match(src, /WEBGPU \(WEBGL2\)|backendLabel\(pref\) \+ " \(WEBGL2\)"/);
+  assert.match(src, /apex26\.gfxBound/);
+  assert.match(src, /apex-gfx-live/);
 });
 
 test("TLX HDR accepts iOS half-float and a refused create records why", () => {

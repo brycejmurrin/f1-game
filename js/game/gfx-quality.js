@@ -108,24 +108,38 @@ function nextBackend(cur) {
   return BACKENDS[(i < 0 ? 0 : i + 1) % BACKENDS.length];
 }
 function hasWebGPU() { return typeof navigator !== "undefined" && !!navigator.gpu; }
+function boundIsGlx() {
+  try { return sessionStorage.getItem("apex26.gfxBound") === "webgl2"; } catch (_) { return false; }
+}
+function paintRenderer(rb) {
+  if (!rb) return;
+  const pref = readBackend();
+  // Preference is what the next tap cycles. Live may be GLX after a
+  // device.lost / create refuse — saying WEBGPU then was the lie.
+  rb.textContent = (boundIsGlx() && (pref === "webgpu" || pref === "three"))
+    ? ("RENDERER: " + backendLabel(pref) + " (WEBGL2)")
+    : ("RENDERER: " + backendLabel(pref));
+}
 
 function initRenderer() {
   const rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
   if (!rb) return;
   rb.hidden = false;
-  rb.textContent = "RENDERER: " + backendLabel(readBackend());
+  paintRenderer(rb);
+  try { window.addEventListener("apex-gfx-live", function () { paintRenderer(rb); }); } catch (_) { /* no window */ }
   rb.onclick = () => {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
     const cur = readBackend();
     const next = nextBackend(cur);
     if (next === "webgpu" && !hasWebGPU()) {
       rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
-      setTimeout(() => { rb.textContent = "RENDERER: " + backendLabel(cur); }, 900);
+      setTimeout(() => { paintRenderer(rb); }, 900);
       return;
     }
     // A tap is a live tab. Disarm any in-flight boot probe so this choice
     // cannot be reverted by a title-screen refresh before the flyby presents.
     try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
+    try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
     rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
