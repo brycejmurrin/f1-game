@@ -6,10 +6,6 @@
     "chrome-devtools": {
       "command": "tools/chrome-devtools-mcp.sh",
       "args": ["run"]
-    },
-    "apex-wrap": {
-      "command": "python3",
-      "args": ["tools/mcp-wrap.py", "serve"]
     }
   }
 }

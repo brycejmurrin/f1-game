@@ -46,6 +46,18 @@
 
   function postChain(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
+    // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
+    // dropped gate: the MSAA deviation above means this chain already runs the
+    // GLX mobile-tier recipe (no multisampled scene target, FXAA carries the
+    // AA) on every tier, and every remaining block is gated by the caller —
+    // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
+    // and the GRAPHICS preset, so a disabled block allocates nothing (the
+    // per-block bail above). A second phone-only gate here would shadow the
+    // governor's decision rather than add to it. The one place where a phone
+    // still costs more than GLX is FORMAT, not gating: GLX uses R8 for the SSAO
+    // pair and R11F_G11F_B10F for bloom/godray, while three exposes neither as
+    // a render-target format — those targets are RGBA8/RGBA16F here (~4 MB more
+    // at phone resolution). Documented, accepted, not silently unnoticed.
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
 
@@ -439,7 +451,7 @@
       C.vignette.value = gk("vignette", 0.80);
       C.vigSoft.value = gk("vignetteSoft", 0.35);
       C.bloomKnee.value = gk("bloomKnee", 0.5);
-      C.carReflect.value = gk("carReflect", 0.05);
+      C.carReflect.value = o.carReflect != null ? o.carReflect : gk("carReflect", 0.05);
       C.carGloss.value = gk("carGloss", 1.0);
       C.chromAb.value = gk("chromAb", 0.0);
       C.grain.value = gk("grain", 0.0);

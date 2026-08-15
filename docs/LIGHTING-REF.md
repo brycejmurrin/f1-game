@@ -169,9 +169,10 @@ all 40 circuits is within 28 m of a lamp.
 Called on race load and again whenever `setTimeOfDay()` fires.
 
 ### `raceTimeOfDay === "default"`
-Uses the track file's own palette verbatim. If the track's `_night` flag is set
-(or the palette is detectably dark) the scene sun is dimmed to moonlight and
-floodlights are activated.
+Uses the track file's own palette verbatim. If the track's `night` flag is set
+(`def.night`), the scene sun is dimmed to moonlight and floodlights are
+activated. Palette luminance is not a second night detector — a `night: false`
+circuit stays a day session even if its colours are dark.
 
 ### `raceTimeOfDay !== "default"` (explicit time)
 
@@ -194,7 +195,8 @@ floodlights are activated.
     low haze.
   - **Humid/overcast circuits**: paled-out sky, more haze.
 - Bloom ≈ 0.60 (threshold 0.82), grade strength ≈ 0.34 (set just before `GLX.present()`).
-- `numLights = 0` — sun dominates, floodlights are suppressed.
+- Floodlights are suppressed in the render loop (`frame.lights = null`), not
+  inside `applyRaceSettings`. `LT.floodDay` can keep a dim day fill.
 
 ---
 

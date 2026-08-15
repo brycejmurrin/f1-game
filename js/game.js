@@ -45,6 +45,7 @@ const els = {
 // otherwise it runs fully synchronously). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
+let _backendProved = false;   // boot-canary latch, set on the first world frame
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
 // order — each group has eval-time dependencies inside it, which the <script>
 // tag order used to enforce and loadBackendScripts() now enforces by awaiting
@@ -85,28 +86,24 @@ function loadBackendScripts(files) {
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
-  // NEVER ON A PHONE. Both alternates are in-progress migrations, and TLX on
-  // iOS renders a flat pale ground under a correct sky with the lower half of
-  // the frame black — an unusable game, reported from a real device. Until
-  // build 895 that could not happen in production at all: vendor/ was not
-  // staged by the Pages workflow, three.js 404'd, Gfx.create() returned null
-  // and this fell straight back to GLX, so the RENDERER button LOOKED inert
-  // and cost nothing to press. Shipping vendor/ made it real, and the first
-  // phone to land on it got the broken frame.
-  //
-  // Checked here rather than trusted to the UI, because the preference is
-  // stored per device and long outlives the tap that set it — a phone that
-  // chose "three" yesterday must boot on WebGL2 today without anyone having to
-  // find their way back through a menu they cannot read. Desktop keeps both,
-  // which is what the migration needs.
-  // GLX owns the ONE mobile-tier detection (js/render/glx.js). This site re-sniffed
-  // navigator and, alone among the four copies, left out apex26.forceMobileTier — so a
-  // desktop with the flag set still loaded the alternate backends: the "phone" under test.
-  const phone = !!(typeof GLX !== "undefined" && GLX.isMobile);
+  // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
+  // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
+  // with the lower half black. But the menu is DOM over the canvas: it survives a
+  // garbage frame, so the RENDERER button undoes that in one tap. An iOS jetsam
+  // kill it can NOT undo (no JS error, no contextlost; the recovery below fires
+  // only when GLX.init FAILS) — hence a probe armed before handing over the canvas
+  // and cleared on the first presented WORLD frame; armed at boot = never got there.
+  const PROBE_KEY = "apex26.gfxBackendProbe";
+  let armed = null;
+  try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
+  if (armed) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = !phone && (pref === "three" || (pref === "webgpu" && navigator.gpu));
+  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
   if (optIn && typeof Gfx !== "undefined") {
+    // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
+    try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
     // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
     // together they are ~550 KB that every visitor downloaded, parsed and
     // evaluated so that almost none of them could use it. `optIn` above is
@@ -2120,7 +2117,9 @@ function loadTrack(idx) {
     fogColor: pal.fog, fogDensity: pal.fogDensity,
     skyZenith:  pal.zenith,
     skyHorizon: pal.horizon,
-    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018,
+    // exposure: applyRaceSettings() is its ONLY writer and runs at startRace(), so the
+    // MENU FLYBY had none — po.exposure went NaN, blacking it out (meanLum 1.06/255).
+    fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018, exposure: 1,
   };
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
@@ -5616,16 +5615,16 @@ function render(dt) {
     const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
     // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
     // only on the position snap), so the slider responds without driving.
-    const sBox = LT.shadowRange || 64;
+    const sBox = LT.shadowRange != null ? LT.shadowRange : 80;
     const step = sBox / 4;
     // Forward-biased CAMERA anchor, not the raw player position: the box budget
     // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
     // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
-    // to dissolve shadows by 0.72·range (≈46 m at the default 64) to stay inside
-    // the worst-case border — the "shadow horizon" ~46 m ahead. Anchoring at
+    // to dissolve shadows by 0.72·range (≈58 m at the default 80) to stay inside
+    // the worst-case border — the "shadow horizon" ~58 m ahead. Anchoring at
     // camera + a forward bias makes the safe radius symmetric around the view
     // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
-    // hold ~74 m ahead of the camera at the same texel density. Height comes from
+    // hold ~67 m ahead of the camera at the same texel density. Height comes from
     // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
     // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
     // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
@@ -6773,8 +6772,8 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 drops the wet-road SSR
-  // march, tier 4 the SSAO (+2 blurs) and god-ray passes.
+  // slow at the scale floor sheds those instead. Tier 2 drops the SSR march
+  // (road + car-paint), tier 4 the SSAO (+2 blurs) and god-ray passes.
   po.ssao = PerfGov.tier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.tier() >= 4 ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set kept the whole march alive past po.godray = 0.
@@ -6783,7 +6782,7 @@ function render(dt) {
   // non-zero whenever the key is bright) still ran the SSAO pass and both of its
   // blurs after po.ssao had already gone to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.tier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.tier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -6816,6 +6815,8 @@ function render(dt) {
     }
   }
   gfx.present(po);
+  // Boot canary disarmed — a real world frame landed, so the next boot keeps it.
+  if (!_backendProved) { _backendProved = true; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
   if (isWetRoad() && Particles.rainActive()) {
     // Falling-streak precipitation, identical in every camera: full storm
     // streaks when raining, the sparse DRIZZLE tier when merely WET (the
@@ -7118,12 +7119,10 @@ applyResMode();
       } catch (_) { return "webgl2"; }
     };
     const label = (v) => v === "three" ? "THREE" : v.toUpperCase();
-    // Hidden on phones, where boot refuses both alternates (see the backend
-    // selection at the top of this file). A button that stores a preference the
-    // next boot ignores is worse than no button: it reads as "I chose THREE and
-    // nothing happened", and the last phone to press it spent a while on an
-    // unusable game before anyone worked out why.
-    rb.hidden = !!(gfx && gfx.isMobile);
+    // SHOWN ON EVERY DEVICE, phones included. It hid whenever gfx.isMobile back
+    // when boot refused both alternates there. Boot honours the preference
+    // everywhere now, and this button IS the phone's recovery from a bad frame.
+    rb.hidden = false;
     rb.textContent = "RENDERER: " + label(read());
     rb.onclick = () => {
       if (soundOn) GameAudio.uiSelect();
@@ -7132,7 +7131,10 @@ applyResMode();
       const next = cur === "webgl2" ? "three"
                  : cur === "three" ? (hasGpu ? "webgpu" : "webgl2")
                  : "webgl2";
-      try { localStorage.setItem("apex26.gfxBackend", next); } catch (_) {}
+      // Disarm the canary with the choice: a tap proves a live tab, so an armed
+      // probe from THIS load (switched before any world frame) must not outlive
+      // it and revert the preference just made.
+      try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
       rb.textContent = "RENDERER: " + label(next) + " — RELOADING…";
       setTimeout(() => location.reload(), 350);
     };

@@ -1106,6 +1106,19 @@ const GLX = (function () {
     // and both other backends — an omitted field is documented-valid and must not
     // upload `undefined * mul = NaN`, which blacks out the whole scene.
     gl.uniform1f(litU.uFogDensity, (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
+    // uBlockerMap's UNIT IS ASSIGNED UNCONDITIONALLY, the bind is not. It is the
+    // only `sampler2D` in LIT_FS and uShadowMap on unit 0 is a `sampler2DShadow`,
+    // so leaving it at its default unit 0 puts two DIFFERENT sampler types on one
+    // texture image unit — GLES 3.0 §2.11.7 makes that an INVALID_OPERATION at the
+    // next draw, not a link error, so the whole lit pass would draw nothing and
+    // the world would vanish under sky + post. Reachable: glx/shadow.js allocates
+    // the blocker as R16F, which needs EXT_color_buffer_float, so a device without
+    // it fails checkFramebufferStatus and leaves pcssEnabled false forever. The
+    // neighbouring uLampShadowMap comment makes this argument correctly for the
+    // SAME sampler type; the blocker was the one case it did not cover. Hoisted
+    // ABOVE the SHD.enabled branch because its else-arm leaves BOTH samplers at
+    // their default unit 0, which is the same collision by another route.
+    gl.uniform1i(litU.uBlockerMap, 7);
     if (SHD.enabled) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, SHD.mapTex);
@@ -1113,7 +1126,6 @@ const GLX = (function () {
       if (SHD.pcssEnabled) {
         gl.activeTexture(gl.TEXTURE7);
         gl.bindTexture(gl.TEXTURE_2D, SHD.blockerTex);
-        gl.uniform1i(litU.uBlockerMap, 7);
         gl.activeTexture(gl.TEXTURE0);
       }
       gl.uniform1f(litU.uPcss, SHD.pcssEnabled ? 1.0 : 0.0);

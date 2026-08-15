@@ -78,6 +78,23 @@
  * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
  * WGSL lives as inline template strings (js/render/webgpu/wgsl-chunks.js).
  *
+ * ON PHONES (added after the fact — WGX was written and FROZEN while boot
+ * refused every alternate backend whenever GLX.isMobile). iOS 26+ Safari and
+ * Android 12+ Chrome expose navigator.gpu, so the RENDERER button's WEBGPU stop
+ * now lands here on real handsets. Nothing below claims that looks right; what
+ * it does claim is that the phone pays no MORE than GLX would:
+ *   - SHADOW_SIZE and the dynamic car shadow map key on IS_MOBILE (the device),
+ *     matching js/render/glx/shadow.js, not MOBILE_TIER — GRAPHICS: HIGH buys
+ *     quality on a desktop, never a per-frame extra depth pass on a phone GPU.
+ *   - the full-res SSR target (8 B/px that GLX does not allocate at all) is
+ *     skipped on the mobile tier; the 1×1 placeholder makes the LIT SSR block a
+ *     documented no-op.
+ * What is NOT covered: post-chain target FORMATS are still the fat ones
+ * (SSAO rgba8 vs GLX r8; bloom/godray rgba16float vs GLX R11F_G11F_B10F), so a
+ * phone frame still carries roughly 1.5x GLX's discretionary target bytes.
+ * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
+ * which reverts to WebGL2 when a backend never presents a world frame.
+ *
  * Feature-detected & inert: WGX.create() returns null on any failure so the
  * caller falls back to GLX. Constructing on a supported browser never throws.
  */
@@ -154,8 +171,24 @@ const WGX = (function () {
   const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 16
 
   // ── shadow map (Phase 3) ──
-  const SHADOW_SIZE = MOBILE_TIER ? 1024 : 2048;        // sun depth-map resolution
+  // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
+  // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
+  // must not 4x the snap-cache redraw cost (terrain+road+whole city re-rasterised
+  // into the map every ~10 m of travel). This read MOBILE_TIER, which handed a
+  // HIGH-tier phone a 2048² map GLX would never give it — 12 MB of jetsam-counted
+  // GPU memory plus the redraw stall, on the least-ready backend.
+  const SHADOW_SIZE = IS_MOBILE ? 1024 : 2048;          // sun depth-map resolution
   const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
+  // The dynamic CAR shadow map is DESKTOP-ONLY in GLX (js/render/glx/shadow.js
+  // creates carTex only `if (ok && !core.IS_MOBILE)` — "a per-frame pass is the
+  // HIGH-tier lag, not a memory cap"). WGX allocated the full 1024² depth texture
+  // on EVERY tier and only gated the PASS, and gated it on MOBILE_TIER — so a
+  // phone paid 4 MB for a texture nothing ever rendered into, and a HIGH-tier
+  // phone additionally ran a whole-car depth pass per frame that GLX refuses on
+  // any phone. Shrink the texture to 1×1 on phones: binding 8 stays a valid
+  // depth texture (the layout demands one), and the shader never samples it
+  // because params6.y (_carShadowArmed) stays 0 with the pass gated off below.
+  const CAR_SHADOW_ALLOC = IS_MOBILE ? 1 : CAR_SHADOW_SIZE;
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
@@ -184,6 +217,13 @@ const WGX = (function () {
   // running WebGL2" is a question with an answer instead of a mystery. (The
   // fallback itself is silent by design — the player never sees a broken frame.)
   let _lastFailure = null;
+  // Lifetime count of UNCAPTURED GPU errors on the live device. Module-scope
+  // rather than per-create because only one backend is ever live (the same
+  // reason _lastFailure sits here), and because the useful read is post-mortem:
+  // a backend that boots clean and then renders garbage leaves its evidence
+  // ONLY here — the boot self-test is over and game.js's canary proves that
+  // present() ran, not that anything reached the screen.
+  let _gpuErrors = 0;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
     try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) {}
@@ -276,12 +316,37 @@ const WGX = (function () {
     // load would reload → lose → reload in a loop. Clearing the opt-in flag makes
     // the reload boot the stable WebGL2 backend; the user can re-enable via the
     // RENDERER toggle. ("destroyed" is our own teardown — ignore it.)
+    //
+    // RELOAD ONLY IF THE FALLBACK ACTUALLY PERSISTED. localStorage can be
+    // READABLE but not WRITABLE — Safari private browsing, and any full quota.
+    // The old unconditional reload then booted straight back into the preference
+    // it had failed to clear, lost the device again, and reloaded forever: an
+    // unrecoverable phone, from the one storage state most likely to occur on a
+    // phone. game.js's boot canary cannot break that tie either — its arm/clear
+    // writes fail for exactly the same reason, so the probe is never armed and
+    // never reverts anything. So read the key BACK, and when the write did not
+    // land, stay put and say so: every entry point below is _lost-guarded, the
+    // menus are DOM layered over the canvas, and the RENDERER button is one tap
+    // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       _lost = true;
-      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
-      try { location.reload(); } catch (_) {}
+      let persisted = false;
+      try {
+        localStorage.setItem("apex26.gfxBackend", "webgl2");
+        persisted = localStorage.getItem("apex26.gfxBackend") === "webgl2";
+      } catch (_) { /* a throwing setItem IS the read-only case: persisted stays false, which is the whole decision below */ }
+      try {
+        Log.warn("gfx", "WGX device lost (" + ((info && info.reason) || "unknown") + ") — " +
+          (persisted ? "reverted to WebGL2, reloading"
+                     : "could NOT persist the WebGL2 fallback (storage read-only?); not reloading, " +
+                       "a reload would land back on WebGPU and loop. Use the RENDERER button."));
+      } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
+      // The boot probe is deliberately LEFT ARMED: if this loss happened before
+      // the first presented world frame, the canary reporting it on the next boot
+      // is the truth, and it is the only backstop left when the write above failed.
+      if (persisted) { try { location.reload(); } catch (_) { /* no location (harness/worker): nothing to reload, and the flag is already flipped for the next real boot */ } }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -289,12 +354,27 @@ const WGX = (function () {
     // error surfaces here, asynchronously. That is precisely how this backend
     // could initialise "successfully" and then draw nothing, so the boot
     // self-test below treats anything caught here during init as fatal.
+    //
+    // AFTER boot the same handler is the only runtime signal this backend has —
+    // and it is unbounded. An invalid pipeline or bind group errors once PER DRAW,
+    // so a broken frame raises hundreds of these a second: at the `warn` console
+    // threshold that is a per-frame console flood that costs more frame time than
+    // the bug, and it evicts Log's 500-entry ring buffer, destroying the evidence
+    // for everything else that went wrong. Log a bounded prefix and keep counting;
+    // WGX.gpuErrors() carries the real total for a diagnosis.
     let _bootError = null;
+    const GPU_ERR_LOG_CAP = 8;
     try {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
-        try { Log.warn("gfx", "WGX GPU error:", msg); } catch (_) {}
+        _gpuErrors++;
+        if (_gpuErrors <= GPU_ERR_LOG_CAP) {
+          try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* Log absent (node VM harness): _gpuErrors still counts, which is the load-bearing part */ }
+          if (_gpuErrors === GPU_ERR_LOG_CAP) {
+            try { Log.warn("gfx", "WGX: further GPU errors suppressed — read the count from WGX.gpuErrors()"); } catch (_) { /* same: the suppression itself does not depend on announcing it */ }
+          }
+        }
       };
     } catch (_) {}
 
@@ -424,11 +504,12 @@ const WGX = (function () {
       shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
 
       // Dynamic CAR shadow map (GLX parity): car meshes only, re-rendered every
-      // frame — movers can't live in the snap-cached static map above. Created
-      // on every tier so binding 8 is always valid; the PASS itself is gated
-      // (carShadowBegin no-ops on the mobile tier, matching GLX blob-only).
+      // frame — movers can't live in the snap-cached static map above. Always
+      // created so binding 8 is a valid depth texture, but at CAR_SHADOW_ALLOC —
+      // 1×1 on a phone, where GLX creates no car map at all and the pass below
+      // is gated off (see the CAR_SHADOW_ALLOC comment).
       carShadowTex = device.createTexture({
-        size: [CAR_SHADOW_SIZE, CAR_SHADOW_SIZE], format: DEPTH_FORMAT,
+        size: [CAR_SHADOW_ALLOC, CAR_SHADOW_ALLOC], format: DEPTH_FORMAT,
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       carShadowView = carShadowTex.createView();
@@ -931,9 +1012,18 @@ const WGX = (function () {
           next.ssaoView = next.ssaoTex.createView();
           next.godrayView = next.godrayTex.createView();
           next.ldrView = next.ldrTex.createView();
-          next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          next.ssrView = next.ssrTex.createView();
+          // Wet-road SSR gets its own FULL-RES rgba16float target — 8 B/px that
+          // GLX never allocates at all (its SSR is inline in the composite
+          // shader). On the mobile tier that is the single largest discretionary
+          // allocation here, so skip it: binding 6 keeps the 1×1 placeholder,
+          // whose .a is 0, and the LIT SSR block documents that as the exact
+          // no-op case ("masked-out texels, incl. the 1×1 placeholder"). Wet
+          // road on a phone falls back to the analytic sky reflection.
+          if (!MOBILE_TIER) {
+            next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
+              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+            next.ssrView = next.ssrTex.createView();
+          }
 
           let bw = halfW, bh = halfH;
           for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
@@ -1008,7 +1098,7 @@ const WGX = (function () {
               { binding: 2, resource: { buffer: fxaaUBO } },
             ],
           });
-          if (pSSR) {
+          if (pSSR && next.ssrView) {
             next.ssrBG = device.createBindGroup({
               layout: pSSR.getBindGroupLayout(0),
               entries: [
@@ -1021,7 +1111,9 @@ const WGX = (function () {
             });
             next.ssrReady = true;
           }
-          next.frameGroups = _makeFrameBGs(next.ssrView);
+          // `|| ssrView` keeps the 1×1 placeholder bound when the target above
+          // was skipped — binding 6 must always resolve to a real texture view.
+          next.frameGroups = _makeFrameBGs(next.ssrView || ssrView);
           next.postReady = true;
         }
       } catch (_) {
@@ -1718,7 +1810,12 @@ const WGX = (function () {
       // Car shadow map must be re-armed by a fresh carShadowBegin every frame
       // (GLX parity): the flag was consumed by this frame's _writeFrame already.
       _carShadowArmed = false;
-      if (_lost || !encoder) return;
+      // A device lost MID-FRAME used to return here with litPass/encoder still
+      // set, and begin() bails before it can clear them — so every later draw()
+      // passed its `if (!litPass)` guard and recorded into a pass belonging to a
+      // dead device. Harmless while the reload above lands, unbounded when it
+      // cannot (see the device.lost handler). Drop the frame state instead.
+      if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       if (litPass) { litPass.end(); litPass = null; }
       const o = opts || {};
       // Capture the wet-road SSR strength GLX consumes as opts.reflect (game.js
@@ -2008,10 +2105,12 @@ const WGX = (function () {
     // ── Dynamic CAR shadow pass (GLX parity): car meshes only, every frame ──
     // Shares the depth pipeline and the dynamic-offset model ring with the
     // static pass (safe: shadowEnd submits before this Begin rewrites slots).
-    // Mobile tier keeps blob-only shadows, matching GLX. game.js drives this
-    // through the same carShadowBegin/castShadow/carShadowEnd sequence as GLX.
+    // PHONES keep blob-only shadows, matching GLX — which gates on IS_MOBILE, the
+    // device, not MOBILE_TIER: GRAPHICS: HIGH buys quality, not a per-frame extra
+    // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
+    // what keeps the pass from rasterising cars into a 1-pixel target.
     function carShadowBegin(lightVP) {
-      if (_lost || !carShadowView || MOBILE_TIER) return;
+      if (_lost || !carShadowView || IS_MOBILE) return;
       _carArms++;   // lifetime arm count, mirroring GLX SHD.carArms (debug only)
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
@@ -2437,7 +2536,7 @@ const WGX = (function () {
       castShadowInstanced: undefined,
       // Debug introspection GLX exposes; answered honestly rather than left to
       // GLX's version, which reads its null shadow module.
-      carShadowState: () => ({ enabled: !!carShadowView && !MOBILE_TIER, arms: _carArms }),
+      carShadowState: () => ({ enabled: !!carShadowView && !IS_MOBILE, arms: _carArms }),
       lampShadowState: () => ({ enabled: false, arms: 0, idx: -1 }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
@@ -2449,7 +2548,10 @@ const WGX = (function () {
   // null if it never refused. The RENDERER control reports the STORED preference,
   // not the live backend, so this is currently the only way to tell "WebGPU is
   // selected" from "WebGPU is running".
-  return { create, lastFailure: () => _lastFailure };
+  // gpuErrors(): how many uncaptured GPU errors the live device has raised. Zero
+  // is the only healthy value; a nonzero count on a backend that "initialised
+  // fine" is the answer to "why is the screen black / wrong on my phone".
+  return { create, lastFailure: () => _lastFailure, gpuErrors: () => _gpuErrors };
 })();
 
 // No-build global export.

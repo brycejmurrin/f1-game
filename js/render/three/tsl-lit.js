@@ -143,7 +143,16 @@
       shadowBias:     uniform(0.001), // SHADOW BIAS
       shadowTexel:    uniform(1 / 2048),
       shadowCtr:      uniform(new THREE.Vector3()),   // gliding fade anchor (frame.shadowCtr)
-      pcssPen:        uniform(80.0),  // SHADOW SOFTEN — TODO M4-PCSS (unused until the blocker map lands)
+      // SHADOW SOFTEN. INTENTIONALLY UNCONSUMED — declared here and uploaded
+      // by updateFrame below purely to keep the uniform block 1:1 with GLX's
+      // uPcssPen, but NO node reads it: TLX has no blocker map (tlx.js pcss()
+      // returns false, see the TODO M4-PCSS note in tlx-shadow.js), so the sun
+      // PCF uses the fixed radius `R = float(3.0)` in the shadow node below
+      // instead of the mix(1.5, 6.0, pen) the blocker search would drive.
+      // Moving the slider changes nothing on this backend — do not read that
+      // silence as "the knob works and is subtle". Wire it up when the blocker
+      // map lands; the knob's TUNE_DEFS help carries the same caveat.
+      pcssPen:        uniform(80.0),
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
@@ -160,10 +169,19 @@
     const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
     const lampGeo = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(1, 0.8, 0.5, 0));
     U.lampPos = uniformArray(lampPos);
-    // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 0) + per-layer world tile
-    // size. 17 entries so the array is indexable by MAT id directly; 0 means
-    // "this material has no baked layer" and every sample site tests it first.
-    U.matTexMix = uniform(0.0);
+    // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 1.0 — the pack ships ON)
+    // + per-layer world tile size. 17 entries so the array is indexable by MAT
+    // id directly; 0 means "this material has no baked layer" and every sample
+    // site tests it first.
+    // WAS 0.0, on both this declaration and the updateFrame fallback below,
+    // while TUNE_DEFS and the glx.js bindMaterialMaps() call both defaulted to
+    // 1.0. A frame arriving with no `tune` object — or with matTexMix absent
+    // from it — therefore rendered pure procedural on TLX and baked on GLX
+    // from the same input, breaking the rule stated in the `frame` contract of
+    // js/render/gfx.js that a backend's defaults MUST mirror TUNE_DEFS.
+    // Defaulting ON is safe with no pack: matTexScale stays all-zero and every
+    // sample site gates on it (and MAT_MAPS absent compiles none of this in).
+    U.matTexMix = uniform(1.0);
     U.matTexScale = uniformArray(new Array(17).fill(0));
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
@@ -203,7 +221,7 @@
       U.mistHeight.value = k("mistHeight", 0.30);
       U.shadowTintAmt.value = k("shadowTintAmt", 0.0);
       U.wetDark.value = k("wetDark", 1.0);
-      U.matTexMix.value = k("matTexMix", 0.0);
+      U.matTexMix.value = k("matTexMix", 1.0);   // TUNE_DEFS def (was 0.0 — see the declaration)
       U.cloudShadowDim.value = k("cloudShadowDim", 0.80);
       U.carSunGlint.value = k("carSunGlint", 12.0);
       U.carSparkle.value = k("carSparkle", 1.6);
@@ -522,7 +540,9 @@
      * ENV_CUBE uses above, and it is required here for the same reason: the
      * material variants are compiled once at init, the pack arrives
      * asynchronously, and a rebuild after init is not possible. U.matTexMix
-     * (TUNE_DEFS `matTexMix`, shipped at 0) gates the whole thing.
+     * (TUNE_DEFS `matTexMix`, shipped at 1.0 — ON, matching GLX; this comment
+     * said "shipped at 0", which was true of the old TLX-only uniform default
+     * and never of the knob) gates the whole thing.
      *
      * ctx.matMaps absent (an older tlx.js, or a boot where the arrays could not
      * be created) means NONE of this is compiled in and TLX renders exactly the

@@ -104,7 +104,7 @@ const VERIFY_MARGIN = 0.5, VERIFY_COOL = 300;
 // tier at a time — cheapest visual loss first — and restore them only under
 // clear sustained headroom at FULL resolution, so the ladder can't oscillate:
 //   1  env probe off        (car paint falls back to the analytic sky mirror)
-//   2  lamp spot shadow + wet-road SSR off
+//   2  lamp spot shadow + SSR march off (wet-road + car-paint)
 //   3  car sun-shadow map off (the blob contact shadow remains)
 //   4  SSAO + god rays + bloom off
 
