@@ -82,7 +82,8 @@
  * (SSAO rgba8 vs GLX r8; bloom/godray rgba16float vs GLX R11F_G11F_B10F), so a
  * phone frame still carries roughly 1.5x GLX's discretionary target bytes.
  * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
- * which reverts to WebGL2 when a backend never binds, or jetsams on first present.
+ * which reverts to WebGL2 on jetsam. A live create/device-lost refusal keeps
+ * the WEBGPU pick and falls this tab back to GLX (session skip).
  *
  * Feature-detected & inert: WGX.create() returns null on any failure so the
  * caller falls back to GLX. Constructing on a supported browser never throws.
@@ -350,21 +351,22 @@ const WGX = (function () {
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       _lost = true;
-      let persisted = false;
+      // Keep the WEBGPU pick. Safari 26 exposes navigator.gpu, WGX then loses
+      // the device on the first frame, and writing webgl2 made RENDERER bounce
+      // back every tap. Session skip + disarm: this tab attaches GLX; the next
+      // cold start retries WGX. Reload only if the skip actually landed —
+      // otherwise a read-only store would boot WebGPU again and loop.
+      let skipped = false;
       try {
-        localStorage.setItem("apex26.gfxBackend", "webgl2");
-        persisted = localStorage.getItem("apex26.gfxBackend") === "webgl2";
-      } catch (_) { /* a throwing setItem IS the read-only case: persisted stays false, which is the whole decision below */ }
+        sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+      } catch (_) { /* no sessionStorage: still do not wipe the pick */ }
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
       try {
-        Log.warn("gfx", "WGX device lost (" + ((info && info.reason) || "unknown") + ") — " +
-          (persisted ? "reverted to WebGL2, reloading"
-                     : "could NOT persist the WebGL2 fallback (storage read-only?); not reloading, " +
-                       "a reload would land back on WebGPU and loop. Use the RENDERER button."));
+        Log.warn("gfx", "WGX device lost (" + ((info && info.reason) || "unknown") +
+          ") — keeping WEBGPU pick" + (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
-      // The boot probe is deliberately LEFT ARMED: if this loss happened before
-      // the first presented world frame, the canary reporting it on the next boot
-      // is the truth, and it is the only backstop left when the write above failed.
-      if (persisted) { try { location.reload(); } catch (_) { /* no location (harness/worker): nothing to reload, and the flag is already flipped for the next real boot */ } }
+      if (skipped) { try { location.reload(); } catch (_) { /* no location (harness/worker) */ } }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or

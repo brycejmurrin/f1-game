@@ -245,7 +245,8 @@ one-shot `sessionStorage` claim-fail skip. A *live* `Gfx.create()` refusal
 (Safari WebGPU self-test, missing adapter) must not write `webgl2` — keep the
 pick, disarm the probe, and retry next boot. A canvas-claim failure sets that
 skip, disarms the probe, and reloads so this tab can attach GLX without
-erasing THREE/WEBGPU. That covers the failure a visible
+erasing THREE/WEBGPU. WGX `device.lost` uses the same skip — it must not
+write `webgl2` (Safari often loses the device on the first frame). That covers the failure a visible
 button cannot — an iOS jetsam kill, which takes the tab with no JS error and no
 `webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
 never sees. Everything else is recoverable by hand: the menus are DOM layered
