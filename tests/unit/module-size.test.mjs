@@ -259,7 +259,9 @@ const CEILINGS = {
   // guarantee is untouched — the same bug-explaining growth the header tolerates.
   // 8259 -> 8242: RENDERER cycle extracted to gfx-quality.js (same home as
   // GRAPHICS). game.js keeps the boot canary; the button is DOMContentLoaded.
-  "js/game.js": 8242,
+  // 8242 -> 8251: Safari WebGPU create-fail must not persist webgl2 (session
+  // claim-fail skip, disarm leftover probe, keep the user's THREE/WEBGPU pick).
+  "js/game.js": 8251,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

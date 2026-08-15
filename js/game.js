@@ -86,6 +86,13 @@ function loadBackendScripts(files) {
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // Last load claimed the canvas then died — skip opt-in THIS tab only
+  // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
+  // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
+  // RENDERER button bounce back every refresh.
+  let skipClaim = false;
+  try { skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* no sessionStorage: try the opt-in as usual */ }
   // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
   // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
   // with the lower half black. But the menu is DOM over the canvas: it survives a
@@ -99,11 +106,14 @@ try {
   const PROBE_KEY = "apex26.gfxBackendProbe";
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
-  if (armed) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
+  // skipClaim = this tab already claimed-and-died; the probe is leftover from
+  // that load. Do not persist webgl2 over the pick — attach GLX this boot and
+  // retry the alternate on the next cold start.
+  if (armed && !skipClaim) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = pref === "three" || (pref === "webgpu" && navigator.gpu);
+  const optIn = !skipClaim && (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
@@ -149,25 +159,24 @@ if (!gfx) {
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already CLAIMED the canvas
     // (getContext "webgpu"/"webgl2" succeeded before init died) — then
-    // getContext("webgl2") can never attach on this load and the old path
-    // dead-ended at "needs WebGL2" forever. Clear the opt-in and reload once,
-    // the same recovery WGX's device-lost handler uses; the reset flag
-    // guarantees no reload loop.
+    // getContext("webgl2") can never attach on this load. Reload once with a
+    // session skip so THIS tab attaches GLX; keep the pick and disarm the
+    // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
     let backendTried = false;
     try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
     if (backendTried) {
-      try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
+      try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) {}
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
       try { location.reload(); } catch (_) {}
       return;
     }
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
-  // create() returned null without claiming the canvas — persist GLX so the
-  // next boot does not retry a backend that just refused.
-  try { const p = localStorage.getItem("apex26.gfxBackend");
-    if (p === "webgpu" || p === "three") { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem("apex26.gfxBackendProbe"); } }
-  catch (_) { /* private-mode; in-memory handle is already GLX. */ }
+  // Live tab, create() refused. Keep the pick and disarm the canary so a
+  // refresh retries instead of reverting to WEBGL2. Jetsam during create()
+  // never reaches here — the probe stays armed and the next boot reverts.
+  try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
 // Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
 // the material-array load WITHOUT awaiting it: a pack is optional, the load is

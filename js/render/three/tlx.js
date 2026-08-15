@@ -173,9 +173,14 @@ const TLX = (function () {
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      // Unset pin: phones → WebGL2 (the header above). Desktop keeps auto-pick.
-      // `apex26.tlxForceGL` "1"/"0" overrides both ways (CI pins "1").
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!isMobile;
+      // Unset pin: WebKit (Safari Mac + every iOS browser) → WebGL2. three's
+      // getFallback fires only when navigator.gpu is ABSENT; Safari 26 exposes
+      // it (user-enabled) and then WebGPURenderer paints black / throws.
+      // Chromium desktop keeps auto-pick. `apex26.tlxForceGL` "1"/"0" overrides.
+      const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+      const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
+        (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
 
       const renderer = new THREE.WebGPURenderer({
         canvas,

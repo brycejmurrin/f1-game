@@ -240,7 +240,12 @@ before handing the canvas to an alternate and clears it once that backend is
 `!track` until the deferred flyby builds — so waiting for `present()` reverted
 every menu refresh to WEBGL2). The probe is re-armed around the first world
 `present()` so a jetsam on that frame still reverts; a boot that still finds it
-armed resets `apex26.gfxBackend` to `webgl2`. That covers the failure a visible
+armed resets `apex26.gfxBackend` to `webgl2` unless this tab is already on a
+one-shot `sessionStorage` claim-fail skip. A *live* `Gfx.create()` refusal
+(Safari WebGPU self-test, missing adapter) must not write `webgl2` — keep the
+pick, disarm the probe, and retry next boot. A canvas-claim failure sets that
+skip, disarms the probe, and reloads so this tab can attach GLX without
+erasing THREE/WEBGPU. That covers the failure a visible
 button cannot — an iOS jetsam kill, which takes the tab with no JS error and no
 `webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
 never sees. Everything else is recoverable by hand: the menus are DOM layered

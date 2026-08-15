@@ -48,13 +48,20 @@ test("RENDERER cycle lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
-test("TLX phones default to three's WebGL2 backend (WebKit WebGPU is present-and-broken)", () => {
-  // Header + create() comment say phones pin forceWebGL; a "DEFAULT OFF
-  // EVERYWHERE" flip left iPhone on three's WebGPU path, which does not
-  // fall back when navigator.gpu exists (getFallback is absence-only).
+test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
   const src = read("js/render/three/tlx.js");
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!isMobile/);
+  assert.match(src, /isWebKit/);
+  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!\(isMobile \|\| isWebKit\)/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
+});
+
+test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {
+  const game = read("js/game.js");
+  assert.match(game, /apex26\.gfxClaimFail/);
+  assert.match(game, /armed && !skipClaim/);
+  assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
+  assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
+  assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
 });
 
 test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
