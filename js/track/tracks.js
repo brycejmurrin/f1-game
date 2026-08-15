@@ -2548,6 +2548,15 @@ const Tracks = (function () {
   const LIST = DEFS.map((d) => {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
+      // A REAL grand prix distance for this circuit, by the actual regulation:
+      // the fewest laps exceeding 305 km (Monaco alone runs to 260 km). Derived
+      // from lengthKm rather than authored as 40 numbers, so a circuit whose
+      // length is corrected gets the right race without a second edit — and so
+      // there is no table to fall out of step. Spa 44, Monza 53, Silverstone 52.
+      // lengthKm is stored to 1 dp, which can leave a circuit one lap off its
+      // real figure (Monaco reads 79 against a true 78); the shape of the race
+      // is what this is for, not the record book.
+      gpLaps: Math.ceil((d.id === "monaco" ? 260 : 305) / (d.lengthKm || 5)),
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       // Retired / off-calendar circuit: playable everywhere, but NOT a
       // championship round (see SEASON below).
