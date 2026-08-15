@@ -5628,7 +5628,20 @@ function render(dt) {
     // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
     // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
     // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
+    // THE BIAS DIRECTION IS THE CAR'S HEADING, NOT THE VIEW. Biasing along the look
+    // direction made the FADE camera-ORIENTATION dependent: uShadowCtr swings around
+    // a 2·fBias circle on a pure yaw and sampleShadow dissolves shadows by distance
+    // from it, so a stationary shadow changed strength when the player only turned.
+    // Measured (bahrain/day, eye pinned, aim swept ±40°): a shadow 70 m ahead swung
+    // edgeFade 0.625..0.986 — 58% of its strength — while 40 m and 60 m were flat.
+    // Same class as the night lamp-cull bug, and the same rule MJP's shadow notes
+    // state: a stabilised map must not change as the camera rotates. Heading is
+    // invariant under a camera-only rotation and still points where the car is
+    // going, so the reach the bias buys is unchanged; |bias| and therefore the
+    // 0.875·sBox coverage guarantee are untouched. No player (menu flyby) falls
+    // back to the look direction, which is the only direction that exists there.
     let fbx = camTgt[0] - camEye[0], fbz = camTgt[2] - camEye[2];
+    if (player && player.head != null) { fbx = Math.sin(player.head); fbz = Math.cos(player.head); }
     const fbl = Math.hypot(fbx, fbz), fBias = Math.min(20, sBox * 0.3);
     if (fbl > 1e-6) { fbx = fbx / fbl * fBias; fbz = fbz / fbl * fBias; } else { fbx = 0; fbz = 0; }
     _shadowCtr[0] = camEye[0] + fbx; _shadowCtr[1] = camTgt[1]; _shadowCtr[2] = camEye[2] + fbz;
@@ -6013,8 +6026,8 @@ function render(dt) {
   // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
   // per-light shadow cost). Casters: last frame's pooled car matrices (same
   // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
-  // the lamp frustum (barriers, grandstands, buildings). Desktop only — WGX
-  // has no lampShadowBegin, the mobile tier never creates the map.
+  // the lamp frustum (barriers, grandstands, buildings). Desktop only — all
+  // three backends expose lampShadowBegin; the mobile tier never creates the map.
   if (gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !_studioRig &&
       player && state !== "menu") {
     // Gate on the KEY being dim (true night): by day/dusk the sun owns the

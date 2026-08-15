@@ -3156,10 +3156,10 @@ const WGX = (function () {
       // so every name the backend does NOT define keeps GLX's own function —
       // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
       // GLX.init() was never called. A caller's feature test
-      // (`if (gfx.lampShadowBegin)`) then PASSES and the call dies inside GLX.
-      // js/game.js is the live example: its comment says "WGX has no
-      // lampShadowBegin", but before this list it inherited one, and every night
-      // frame threw inside SHD (null) — aborting tickBody before present().
+      // (`if (gfx.someMissingApi)`) then PASSES and the call dies inside GLX.
+      // That happened with lampShadowBegin before WGX grew a real one: game.js
+      // inherited GLX's, and every night frame threw inside SHD (null) — aborting
+      // tickBody before present().
       // A descriptor whose value is undefined overwrites the inherited one, so
       // the feature test tells the truth again. Restoring any of these means
       // implementing it here and deleting the line.
