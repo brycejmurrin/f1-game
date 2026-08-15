@@ -113,3 +113,33 @@ test("the five once-dropped fields carry their authored values", () => {
   assert.ok(Object.prototype.hasOwnProperty.call(at("monza"), "undulate"),
     "undulate must exist on the built def for the opt-out to be takeable");
 });
+
+// gpLaps — a REAL grand prix distance per circuit, derived from lengthKm by the
+// actual regulation rather than the flat 57 the lap picker offered on all forty.
+// Derived, so there is no authored table to fall out of step with lengthKm; the
+// pin is that the derivation lands on the real races within the 1-dp rounding.
+test("gpLaps is the circuit's real race distance, not a flat number", () => {
+  const Tracks = buildContext();
+  const at = (id) => Tracks.LIST.find((t) => t.id === id);
+
+  // Fewest laps over 305 km (260 km at Monaco). lengthKm is stored to 1 dp, so
+  // allow ±1 lap against the real figure.
+  const near = (id, real) => {
+    const g = at(id).gpLaps;
+    assert.equal(typeof g, "number", `${id} must carry a derived gpLaps`);
+    assert.ok(Math.abs(g - real) <= 1, `${id} gpLaps ${g} should be about ${real}`);
+  };
+  near("monaco", 78);        // the short-race exception — 260 km, not 305
+  near("spa", 44);           // the longest lap, the fewest laps
+  near("monza", 53);
+  near("silverstone", 52);
+
+  // The defect this replaced: one number for every circuit. Monaco and Spa must
+  // not agree, or FULL is again a flat literal wearing a circuit's name.
+  assert.notEqual(at("monaco").gpLaps, at("spa").gpLaps,
+    "distinct-length circuits must get distinct race distances");
+  // And every circuit's FULL must beat the 3-lap sprint default, or the picker's
+  // top rung is below its own floor.
+  for (const t of Tracks.LIST)
+    assert.ok(t.gpLaps > 3, `${t.id} gpLaps ${t.gpLaps} must exceed the 3-lap floor`);
+});
