@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 90 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 91 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -870,6 +870,7 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
+| `mcp-wrap.test.mjs` | official `apex-wrap` MCP server (`tools/mcp-wrap.py`) wrapping chrome-devtools + tinyfish — SDK Server, resources/prompts, stdio initialize, `.mcp.json` entry alongside the original two |
 
 ---
 

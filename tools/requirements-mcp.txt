@@ -1,0 +1,2 @@
+# Official MCP Python SDK — required by tools/mcp-wrap.py (apex-probes).
+mcp>=1.28
