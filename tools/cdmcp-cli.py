@@ -106,6 +106,19 @@ class McpClient:
                 if "error" in msg:
                     raise RuntimeError(json.dumps(msg["error"]))
                 return msg.get("result", msg)
+            # A server that EXITED will never answer, so waiting out the full
+            # TIMEOUT only turns "no Chromium here" into a three-minute stall.
+            # The grace sleep is not decoration: a reply written just before exit
+            # can still be in the reader thread when poll() goes non-None.
+            if self.proc.poll() is not None:
+                time.sleep(0.2)
+                if "result" in self._pending[rid]:
+                    continue
+                err = (self.proc.stderr.read() if self.proc.stderr else "") or ""
+                raise RuntimeError(
+                    f"chrome-devtools MCP exited ({self.proc.returncode}) "
+                    f"during {method}: {err.strip()[:300]}"
+                )
             time.sleep(0.05)
         raise TimeoutError(method)
 
