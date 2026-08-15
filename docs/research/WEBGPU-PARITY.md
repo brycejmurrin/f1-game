@@ -30,13 +30,12 @@ The gaps fall into three kinds:
 
 | Kind | Examples | What it actually is |
 |---|---|---|
-| **API missing in WGX** | `gpuTimer`, `createTextureArray`, `lampShadowBegin`, instancing family, `drawParticles` | Declared `undefined` on the backend object so game.js does not inherit a dead GLX function. The WebGPU primitive exists. |
-| **Reduced shader** | PCSS 3×3 vs Poisson-8, screen-radial god-ray vs world march, lamp-fog `× 0.6`, env cube LOD 0, no `applyMaterial*` | Port work against `js/render/shaders/`. Bindings are already there or are one buffer away. |
-| **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core, and SSAO needs a sampleable depth. That is the only real API mismatch with GLX's `blitFramebuffer`. |
+| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. Remaining honest gaps are tuner knobs with no FrameU lane (`uAmbContactDark`, `uLampWallSpill`, `uWindowSunFlash`, `uSkyRimGlow`, `uCloudDef`). |
+| **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray, `params8.x` lamp-fog, roughness env LOD, and `applyMaterial*` are in. |
+| **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
-`WGX.create()` currently calls `adapter.requestDevice()` with **no
-`requiredFeatures`**. The only gap that needs a feature bit is `gpuTimer`
-(`"timestamp-query"`). Everything else is core.
+`WGX.create()` requests `"timestamp-query"` when the adapter exposes it
+(`requiredFeatures`). Everything else in the §3 inventory is core.
 
 ---
 
@@ -86,8 +85,7 @@ surface is larger — several GLX features landed after WGX was frozen.
 | **SSAO denoise** | Separable blur | Shared 5-tap `BLUR` (H then V) | Shader | Same kernel as GLX `BLUR_FS` |
 | **`createTexture` mips** | `gl.generateMipmap` | `_generateMips` blit chain | Helper | Same blit as arrays |
 
-Honest `pcss()`: once the Poisson kernel lands, keep returning `true`. Until
-then the current always-`true` over-claims quality versus GLX.
+Honest `pcss()`: Poisson-8 is in; keep returning `true`.
 
 ---
 
@@ -270,9 +268,9 @@ Port path (no new API):
    `shadowTex` + comparison sampler (already on the lit group), FRAME / light
    storage (already uploaded), optional lamp-shadow view once §4.6 exists.
 2. Rewrite `fs_main` against the GLX march, not the radial stub. Keep the
-   CPU gate (`haveGR`) but also fire when `opts.lampVol > 0` on a night track
-   — today WGX requires a sun shaft, so Singapore/Vegas floodlight fog never
-   starts.
+   CPU gate (`haveGR`) and also fire when `opts.lampVol > 0` on a night track
+   — that gate is in; Singapore/Vegas floodlight fog no longer needs a sun
+   shaft. God-ray now sorts nearest-N lamps and remaps `lampShadowIdx`.
 3. Reuse the existing separable blur pipeline (SSAO already wants this) on
    `godrayTex` before composite.
 
@@ -463,9 +461,9 @@ slice that adds a method must declare it (real or `undefined`) before
 
 ### This repo (read for this note)
 
-- `js/render/webgpu/wgx.js` — backend, stubs, `requestDevice()`, MSAA comment
-- `js/render/webgpu/wgsl-chunks.js` — LIT PCSS 3×3, lamp-fog `× 0.6`, env LOD 0
-- `js/render/webgpu/wgsl-post.js` — screen-radial god-ray, SSAO, composite FX
+- `js/render/webgpu/wgx.js` — backend, `requestDevice({requiredFeatures})`, MSAA 2×
+- `js/render/webgpu/wgsl-chunks.js` — LIT Poisson-8 PCSS, `params8.x` lamp-fog, env LOD
+- `js/render/webgpu/wgsl-post.js` — world-space god-ray, SSAO denoise, composite FX
 - `js/render/gfx.js` — seam contract; WGX marked frozen
 - `js/render/glx.js` / `js/render/glx/post.js` / `js/render/glx/shadow.js` —
   MSAA blit, timer, arrays, lamp shadows, instancing

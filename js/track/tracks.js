@@ -2197,11 +2197,11 @@ const Tracks = (function () {
     for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
     plantRoadsideTrees();
 
-    // Generic floodlight masts — EVERY circuit gets them (visible day and night).
-    // Co-located with the point lights (game.js buildTrackLights uses the same
-    // 22 m stride, hw+6 offset and side parity) so each light pool reads as cast
-    // by a real mast. Street/modern circuits get slim lamp posts with an arm over
-    // the track; open circuits get tall floodlight banks. The lens uses a bright
+    // Generic lamp masts — EVERY circuit gets them (visible day and night).
+    // Street posts and flood banks share one lampPosts list / buildTrackLights
+    // bake (same 22 m stride, hw+6 offset, side parity) so each pool reads as
+    // cast by a real mast. Street/modern circuits get slim posts with an arm
+    // over the track; open circuits get tall flood banks. The lens uses a bright
     // albedo so the prop-emissive (ramped up as the sun drops) makes it glow at
     // night. Theme tints the lens warm (desert) / cool (street/modern) / neutral.
     {

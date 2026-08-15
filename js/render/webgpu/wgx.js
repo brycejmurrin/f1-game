@@ -11,14 +11,14 @@
  *   - adapter / device acquisition (async); context configure(); DPR resize;
  *     device-lost reload — unchanged from Phase 1.
  *   - REAL mesh geometry: createMesh / createChunkedMesh build interleaved
- *     GPUBuffers (stride 40 = pos3/nrm3/col3/mat1) + index buffers; per-chunk
+ *     GPUBuffers (stride 52 = pos3/nrm3/col3/mat1/trk3) + index buffers; per-chunk
  *     AABBs kept for cull. free* call buffer.destroy().
  *   - A LIT render pass into an RGBA16F HDR scene texture (+ depth24plus depth):
  *       * FRAME uniform buffer (viewProj/eye/sun/ambient/sky/fog/tune scalars)
  *       * a 32-entry Light STORAGE buffer (the flat stride-15 array maps verbatim)
  *       * per-draw model+material via a dynamic-offset uniform buffer (stride 256)
- *       * base PBR fragment shader (WGSLChunks.LIT): ambient + sun diffuse/spec +
- *         32 point lights + emissive + fog. (Reduced — see the LIT header TODOs.)
+ *       * PBR fragment shader (WGSLChunks.LIT): ambient + sun + 32 lamps +
+ *         emissive + fog + applyMaterial* + lamp-shadow PCF + Poisson PCSS.
  *       * opaque / alpha / double-sided / no-alpha-write pipeline variants (cached)
  *   - drawSky() renders the WGSL SKY into the same pass (background).
  *   - drawChunked() frustum-culls chunks against frame.viewProj + frame.cullDist
@@ -33,8 +33,8 @@
  *
  * PHASE 4 (this pass): the post-processing chain + foreground FX.
  *   - present() now runs the WGSLPost chain (js/render/webgpu/wgsl-post.js) in its
- *     documented PASS_ORDER: SSAO (half-res) -> GODRAY (half-res, screen-space
- *     radial) -> BLOOM down/up mip chain (rgba16f, additive up) -> COMPOSITE
+ *     documented PASS_ORDER: SSAO (half-res) -> GODRAY (half-res, world-space
+ *     march) -> BLOOM down/up mip chain (rgba16f, additive up) -> COMPOSITE
  *     (scene * AO + godray, exposure, bloom, ACES, colour grade, lens flare,
  *     vignette, grain, dither) into an LDR target -> FXAA to the swapchain. Every
  *     uniform is driven from the present `opts` (exposure/bloom/threshold/ssao/
@@ -137,15 +137,15 @@ const WGX = (function () {
   // hit vendor/ in production, so it must degrade the documented way instead:
   // WGX still exists, and WGX.create() returns null so the caller uses GLX.
   const _Chunks = (function () {
-    try { if (typeof WGSLChunks !== "undefined" && WGSLChunks) return WGSLChunks; } catch (_) {}
-    try { if (typeof window !== "undefined" && window.WGSLChunks) return window.WGSLChunks; } catch (_) {}
+    try { if (typeof WGSLChunks !== "undefined" && WGSLChunks) return WGSLChunks; } catch (_) { /* TDZ / missing global: fall through to window, then null */ }
+    try { if (typeof window !== "undefined" && window.WGSLChunks) return window.WGSLChunks; } catch (_) { /* no window (node harness): create() refuses via _Chunks null */ }
     return null;
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
-  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 464
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 116
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 544
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 136
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
@@ -181,10 +181,11 @@ const WGX = (function () {
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
-  // ── vertex layout: interleaved [pos3, nrm3, col3, mat1], stride 40 ──
+  // ── vertex layout: interleaved [pos3, nrm3, col3, mat1, trk3], stride 52 ──
   // NB: unlike GLX (which keeps mat-less meshes at stride 36), WGX ALWAYS stores
-  // the 10th float (mat, default 0) so a single pipeline vertex layout serves
-  // every mesh — the shader declares @location(3) unconditionally.
+  // the 10th float (mat, default 0) plus a zero-filled trk3 so a single pipeline
+  // vertex layout serves every mesh — the shader declares @location(3/4)
+  // unconditionally.
   const VERTEX_STRIDE = 52;   // pos3 nrm3 col3 mat1 trk3
   const VERTEX_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
@@ -241,7 +242,7 @@ const WGX = (function () {
   let _gpuErrors = 0;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
-    try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) {}
+    try { Log.warn("gfx", "WGX unavailable (" + _lastFailure.reason + ") — falling back to WebGL2"); } catch (_) { /* Log absent (node VM harness): lastFailure still records the reason */ }
     return null;
   }
 
@@ -393,7 +394,7 @@ const WGX = (function () {
           }
         }
       };
-    } catch (_) {}
+    } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
 
     // ── state ──
     let width = 0, height = 0, aspect = 1, renderScale = 1;
@@ -402,6 +403,9 @@ const WGX = (function () {
     // Per-frame scratch (reused; writeBuffer snapshots on call so reuse is safe).
     const frameData = new Float32Array(FRAME_FLOATS);
     const lightData = new Float32Array(LIGHT_FLOATS);
+    const grLightData = new Float32Array(LIGHT_FLOATS);
+    const _grSel = [];
+    function _grByD(a, b) { return a.d - b.d; }
     const drawData  = new Float32Array(DRAW_FLOATS);
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
@@ -422,7 +426,7 @@ const WGX = (function () {
 
     // GPU objects assembled below (fail -> return null).
     let g0Layout, g1Layout, litLayout, litModule, skyModule, blitModule;
-    let frameUBO, lightSBO, drawUBO, blitUBO, skyUBO;
+    let frameUBO, lightSBO, grLightSBO, drawUBO, blitUBO, skyUBO;
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler;
     const _litPipelines = new Map();
@@ -472,7 +476,7 @@ const WGX = (function () {
     let depthResolveTex = null, depthResolveView = null, pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let identInstanceBuf = null;
-    let pParticle = null, particleUBO = null, particleVBO = null, _particleCap = 0;
+    let pParticle = null, pParticleAdd = null, particleUBO = null, particleVBO = null, _particleCap = 0;
     let skyPipelineMS = null, shadowPipelineInst = null;
     let _fxPipes = { 1: {}, 2: {} };
 
@@ -625,6 +629,9 @@ const WGX = (function () {
 
       frameUBO = device.createBuffer({ size: FRAME_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       lightSBO = device.createBuffer({ size: LIGHT_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+      // God-ray march reads nearest-N lamps (GLX sorts by eye). Must NOT reuse
+      // lightSBO — LIT consumes frame.lights in record order.
+      grLightSBO = device.createBuffer({ size: LIGHT_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
       drawUBO  = device.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -987,25 +994,39 @@ const WGX = (function () {
         decalUBO = device.createBuffer({ size: FX_DECAL_SLOTS * FX_STRIDE, usage: _UCD });
         if (_Fx.PARTICLE) {
           const pMod = device.createShaderModule({ code: _Fx.PARTICLE });
+          const pVert = { module: pMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.PARTICLE_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x2" },
+              { shaderLocation: 1, offset: 8,  format: "float32x3" },
+              { shaderLocation: 2, offset: 20, format: "float32x3" },
+              { shaderLocation: 3, offset: 32, format: "float32" },
+              { shaderLocation: 4, offset: 36, format: "float32" },
+            ] }] };
+          const pPrim = { topology: "triangle-list", cullMode: "none" };
+          const pDepth = { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" };
           pParticle = device.createRenderPipeline({
             layout: "auto",
-            vertex: { module: pMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.PARTICLE_VERTEX_BYTES,
-              attributes: [
-                { shaderLocation: 0, offset: 0,  format: "float32x2" },
-                { shaderLocation: 1, offset: 8,  format: "float32x3" },
-                { shaderLocation: 2, offset: 20, format: "float32x3" },
-                { shaderLocation: 3, offset: 32, format: "float32" },
-                { shaderLocation: 4, offset: 36, format: "float32" },
-              ] }] },
+            vertex: pVert,
             fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
-            primitive: { topology: "triangle-list", cullMode: "none" },
-            depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
+            primitive: pPrim,
+            depthStencil: pDepth,
+            ..._fxMS,
+          });
+          // GLX drawParticles switches to ONE/ONE for sparks. The shader already
+          // premultiplies when U.eyeAdd.w=1; alpha-blend + alpha=1 would REPLACE
+          // the HDR scene instead of adding.
+          pParticleAdd = device.createRenderPipeline({
+            layout: "auto",
+            vertex: pVert,
+            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
+            primitive: pPrim,
+            depthStencil: pDepth,
             ..._fxMS,
           });
           particleUBO = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
         }
         _fxReady = true;
-      } catch (_) { _fxReady = false; }
+      } catch (_) { _fxReady = false; /* FX stay no-ops; lit/sky/shadow still run */ }
     }
     _buildPost();
     _buildFx();
@@ -1280,7 +1301,7 @@ const WGX = (function () {
               { binding: 3, resource: shadowSampler },
               { binding: 4, resource: lampShadowView },
               { binding: 5, resource: { buffer: godrayUBO } },
-              { binding: 6, resource: { buffer: lightSBO } },
+              { binding: 6, resource: { buffer: grLightSBO } },
             ],
           });
           next.compositeBG = device.createBindGroup({
@@ -1423,7 +1444,7 @@ const WGX = (function () {
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3, mat1] -> stride-40 Float32Array + index array.
+    // Interleave [pos3, nrm3, col3, mat1, trk3] -> stride-52 Float32Array + index array.
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -1529,7 +1550,7 @@ const WGX = (function () {
           device.queue.writeTexture({ texture: tex }, new Uint8Array([0, 0, 0, 255]),
             { bytesPerRow: 4, rowsPerImage: 1 }, [1, 1]);
           return tex.createView();
-        } catch (_) { return null; }
+        } catch (_) { return null; /* 1×1 fallback itself failed: composite dirt binding stays unset */ }
       };
       try {
         if (typeof document === "undefined" || !document.createElement) return _blackFallback();
@@ -1609,7 +1630,7 @@ const WGX = (function () {
         }
         _generateMips(tex, 1);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
-      } catch (_) { return { _wgx: "texture", _phase: 4 }; }
+      } catch (_) { return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */ }
     }
 
     function freeMesh(m) { if (!m) return; if (m.vbuf) m.vbuf.destroy(); if (m.ibuf) m.ibuf.destroy(); }
@@ -1721,13 +1742,9 @@ const WGX = (function () {
       // (_ssrReady below); until then the frame group holds a 1×1 placeholder
       // and it reads 0. carReflect needs no such gate — its reflection term is
       // analytic-sky (no probe resource to wait for).
-      // pcssPen is a GLX PENUMBRA-RATE knob (default 80, range 10-300) that GLX
-      // feeds into `clamp((z-zb)*pcssPen,0,1)` → a 1.5-6 texel radius. The WGSL
-      // shadow shader instead uses it DIRECTLY as `pcfStep = texel*(1+params4.x)`,
-      // which was authored around ~0.3 (see the 0.30 fallback). Feeding the raw 80
-      // gave an ~81-texel (~10 m) box-blur that smeared every WebGPU shadow to a
-      // wash. Remap to the shader's units so pcssPen=80 → the intended ~0.30 step
-      // (≈1.3 texels), scaling with the knob and capped so it can't blow out again.
+      // pcssPen is the GLX PENUMBRA-RATE knob (default 80). WGSL findBlocker
+      // uses the same `clamp((refD-zb)*params4.x,0,1)` as GLX sampleShadow —
+      // pack the raw knob, do not remap.
       d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
@@ -1860,7 +1877,7 @@ const WGX = (function () {
       ensureTargets();
       if (!sceneView) return false;
       let tex;
-      try { tex = ctx.getCurrentTexture(); } catch (_) { return false; }
+      try { tex = ctx.getCurrentTexture(); } catch (_) { return false; /* swapchain lost mid-frame: drop the frame */ }
       currentView = tex.createView();
       _drawSlot = 0;
       _fxQuadSlot = 0; _fxDecalSlot = 0;
@@ -2061,9 +2078,8 @@ const WGX = (function () {
       return _envInvVP;
     }
 
-    // Close + submit the face pass. After all six faces the probe goes live: the main
-    // frame group is rebuilt to sample the real cube (no mipmaps — Block 7 reads LOD 0,
-    // a sharp reflection; WebGPU has no generateMipmap and the car's clearcoat is glossy).
+    // Close + submit the face pass. After all six faces the probe goes live: mips
+    // are blitted and the main frame group samples the real cube (LIT LOD = rough * maxLod).
     function envFaceEnd(face) {
       if (!envCubeTex || !litPass || !_envEncoder) return;
       litPass.end();
@@ -2114,9 +2130,13 @@ const WGX = (function () {
     // ── present(opts): close the lit pass, run the Phase-4 post chain
     //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
     function present(opts) {
-      // Car shadow map must be re-armed by a fresh carShadowBegin every frame
-      // (GLX parity): the flag was consumed by this frame's _writeFrame already.
+      // Car / lamp shadow maps must be re-armed by a fresh *Begin every frame
+      // (GLX parity: SH.lampArmed is snapshotted then cleared in glx/post.js
+      // present). LIT already consumed the flags in this frame's _writeFrame;
+      // the god-ray pass below still needs this frame's lamp-armed snapshot.
+      const lampArmed = _lampShadowArmed;
       _carShadowArmed = false;
+      _lampShadowArmed = false;
       // A device lost MID-FRAME used to return here with litPass/encoder still
       // set, and begin() bails before it can clear them — so every later draw()
       // passed its `if (!litPass)` guard and recorded into a pass belonging to a
@@ -2207,8 +2227,8 @@ const WGX = (function () {
         _clearTarget(ssaoView, 1, 1, 1);
       }
 
-      // ── 1) GODRAY (half-res) — screen-space radial shafts toward the sun,
-      //    reading the scene HDR as the bright source; else clear to black.
+      // ── 1) GODRAY (half-res) — world-space march through depth + sun/lamp
+      //    shadow maps (GLX GODRAY_FS). CPU gates on sun-on-screen or lampVol.
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
       const haveGR = godrayBG && ((grStr > 0 && sun && sun.onScreen && sun.shaft > 0) || lampVol > 0);
@@ -2221,7 +2241,7 @@ const WGX = (function () {
           _mul4(s.subarray(0, 16), tmp, Z01INV);
         } else s.set(IDENT, 0);
         s.set(_shadowRendered ? shadowLVPData : IDENT, 16);
-        s.set(_lampShadowArmed ? lampShadowLVPData : IDENT, 32);
+        s.set(lampArmed ? lampShadowLVPData : IDENT, 32);
         const eye = frameEye || [0, 0, 0];
         s[48] = eye[0]; s[49] = eye[1]; s[50] = eye[2]; s[51] = 0;
         const sd = frameSunDir || [0.3, 0.6, 0.5];
@@ -2236,9 +2256,38 @@ const WGX = (function () {
         s[65] = lastFrame && lastFrame.cloudSpeed != null ? lastFrame.cloudSpeed : 1;
         s[66] = (T && T.hgAniso != null) ? T.hgAniso : 0.60;
         s[67] = (T && T.hgFloor != null) ? T.hgFloor : 0.020;
-        const nL = lastFrame && lastFrame.lights ? Math.min(6, (lastFrame.lights.length / 15) | 0) : 0;
+        // Nearest-N to the eye (GLX glx/post.js): the march only reads 6, but
+        // the shadowed floodlight is remapped into that nearest-N order — using
+        // frame.lights[0..5] + the raw frame index missed distant-but-first
+        // records and carved the wrong cone.
+        let nL = 0, grLampIdx = -1;
+        const L = lastFrame && lastFrame.lights;
+        const total = L ? (L.length / 15) | 0 : 0;
+        if (lampVol > 0 && total > 0) {
+          const ex = eye[0], ey = eye[1], ez = eye[2];
+          for (let i = 0; i < total; i++) {
+            const off = i * 15;
+            const dx = L[off] - ex, dy = L[off + 1] - ey, dz = L[off + 2] - ez;
+            const e = _grSel[i];
+            if (e) { e.d = dx * dx + dy * dy + dz * dz; e.o = off; e.i = i; }
+            else _grSel[i] = { d: dx * dx + dy * dy + dz * dz, o: off, i: i };
+          }
+          _grSel.length = total;
+          _grSel.sort(_grByD);
+          nL = Math.min(6, total);
+          const ld = grLightData;
+          for (let i = 0; i < nL; i++) {
+            const off = _grSel[i].o, b = i * 16;
+            if (lampArmed && _grSel[i].i === _lampIdx) grLampIdx = i;
+            ld[b]    = L[off];    ld[b+1]  = L[off+1];  ld[b+2]  = L[off+2];  ld[b+3]  = L[off+6];
+            ld[b+4]  = L[off+3];  ld[b+5]  = L[off+4];  ld[b+6]  = L[off+5];  ld[b+7]  = L[off+12];
+            ld[b+8]  = L[off+7];  ld[b+9]  = L[off+8];  ld[b+10] = L[off+9];  ld[b+11] = L[off+13];
+            ld[b+12] = L[off+10]; ld[b+13] = L[off+11]; ld[b+14] = L[off+14]; ld[b+15] = 0;
+          }
+          if (grLightSBO) device.queue.writeBuffer(grLightSBO, 0, ld, 0, nL * 16);
+        }
         s[68] = nL;
-        s[69] = _lampShadowArmed ? _lampIdx : -1;
+        s[69] = grLampIdx;
         s[70] = 0; s[71] = 0;
         device.queue.writeBuffer(godrayUBO, 0, s, 0, _Post.GODRAY_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: godrayView, loadOp: "clear",
@@ -2367,14 +2416,14 @@ const WGX = (function () {
         p.setPipeline(pFXAA); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
       }
 
-      if (_gpuTimerOn && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState !== "pending") {
+      if (_gpuTimerOn && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
       device.queue.submit([encoder.finish()]);
-      if (_gpuTimerOn && _gpuReadBuf && typeof _gpuReadBuf.mapAsync === "function") {
+      if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
         try {
           _gpuReadBuf.mapAsync(GPUMapMode.READ).then(function () {
             try {
@@ -2508,9 +2557,14 @@ const WGX = (function () {
       if (_lost || !lampShadowView || MOBILE_TIER) return;
       _lampArms++;
       _lampIdx = lightIdx | 0;
-      _shadowLightVP = null;
-      _mul4(lampShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
+      const raw = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;
+      // Point chunk cull at the lamp frustum (GLX S.castCullVP = lampLightVP).
+      // Nulling this (to avoid stale sun planes) skipped the cull entirely and
+      // rasterised every chunk into the 512² map.
+      _shadowLightVP = raw;
+      _mul4(lampShadowLVPData, Z01, raw);
       device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
+      if (lightVP) _extractPlanes(raw, _fcPlanes);
       _shadowSlot = 0;
       shadowEncoder = device.createCommandEncoder();
       shadowPass = shadowEncoder.beginRenderPass({
@@ -2557,7 +2611,7 @@ const WGX = (function () {
         if (!filled) { try { tex.destroy(); } catch (_) { /* already invalid */ } return null; }
         _generateMips(tex, n);
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
-      } catch (_) { return null; }
+      } catch (_) { return null; /* alloc/copy failed: pack stays procedural */ }
     }
     function setMaterialMaps(maps) {
       if (!maps) {
@@ -2599,9 +2653,9 @@ const WGX = (function () {
       for (let i = 0; i < n; i++) {
         packed.set(matrices.subarray ? matrices.subarray(i * 16, i * 16 + 16) : matrices.slice(i * 16, i * 16 + 16), i * 20);
         if (colors && colors.length) {
-          packed[i * 20 + 16] = colors[i * 3] || 1;
-          packed[i * 20 + 17] = colors[i * 3 + 1] || 1;
-          packed[i * 20 + 18] = colors[i * 3 + 2] || 1;
+          packed[i * 20 + 16] = colors[i * 3];
+          packed[i * 20 + 17] = colors[i * 3 + 1];
+          packed[i * 20 + 18] = colors[i * 3 + 2];
         } else {
           packed[i * 20 + 16] = packed[i * 20 + 17] = packed[i * 20 + 18] = 1;
         }
@@ -2716,7 +2770,7 @@ const WGX = (function () {
         layout: pParticle.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: particleUBO } }],
       });
-      litPass.setPipeline(pParticle);
+      litPass.setPipeline(additive && pParticleAdd ? pParticleAdd : pParticle);
       litPass.setBindGroup(0, bg);
       litPass.setVertexBuffer(0, particleVBO);
       litPass.draw(nVert);
@@ -2976,7 +3030,7 @@ const WGX = (function () {
         const gpuErr = await device.popErrorScope();
         if (!reason && gpuErr) reason = "smoke test validation: " + String(gpuErr.message || "error").slice(0, 200);
       }
-      try { if (src) src.destroy(); if (dst) dst.destroy(); if (buf) buf.destroy(); } catch (_) {}
+      try { if (src) src.destroy(); if (dst) dst.destroy(); if (buf) buf.destroy(); } catch (_) { /* smoke-test temps already invalid */ }
       if (reason) return reason;
       // Anything the device reported asynchronously while we were booting.
       if (_bootError) return "gpu error during init: " + _bootError;
@@ -3017,13 +3071,13 @@ const WGX = (function () {
                               SELFTEST_BUDGET_MS);
       }),
     ]);
-    try { if (_stTimer !== null) clearTimeout(_stTimer); } catch (_) {}
+    try { if (_stTimer !== null) clearTimeout(_stTimer); } catch (_) { /* timer already fired or missing in harness */ }
     const _stMs = Date.now() - _stT0;
     if (!_stReason && _stMs > SELFTEST_BUDGET_MS) {
       _stReason = "self-test took " + _stMs + " ms (budget " + SELFTEST_BUDGET_MS + " ms)";
     }
     if (_stReason) {
-      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) {}
+      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost; fallback still proceeds */ }
       return _fail(_stReason);
     }
 
@@ -3103,10 +3157,10 @@ const WGX = (function () {
       // so every name the backend does NOT define keeps GLX's own function —
       // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
       // GLX.init() was never called. A caller's feature test
-      // (`if (gfx.lampShadowBegin)`) then PASSES and the call dies inside GLX.
-      // js/game.js is the live example: its comment says "WGX has no
-      // lampShadowBegin", but before this list it inherited one, and every night
-      // frame threw inside SHD (null) — aborting tickBody before present().
+      // (`if (gfx.someMissingApi)`) then PASSES and the call dies inside GLX.
+      // That happened with lampShadowBegin before WGX grew a real one: game.js
+      // inherited GLX's, and every night frame threw inside SHD (null) — aborting
+      // tickBody before present().
       // A descriptor whose value is undefined overwrites the inherited one, so
       // the feature test tells the truth again. Restoring any of these means
       // implementing it here and deleting the line.
