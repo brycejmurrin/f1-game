@@ -101,3 +101,129 @@ test("the retired flag is the ONLY discriminator between the two rounds", () => 
   assert.notEqual(finished.row.double, retired.row.double,
     "same classified order, different retired flag — the double facts must differ");
 });
+
+// ── the contract binds, and the budget ladder moves (F1 25 research fixes) ───
+// A DRIVER career this time, because the two contract rules under test are
+// excluded for MY TEAM by design. Its own context: rollover() reaches
+// DriverRatings (driver/team development, the market), which settleRound() does
+// not, so this loader stubs it flat — every driver rates the same, which parks
+// the market (a swap needs a midfielder to out-rate a top-team seat) and leaves
+// the contract and budget rules the only things moving.
+function loadDriver() {
+  const stored = new Map();
+  const flatRating = { pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 };
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    GameStore: {
+      CAREER_V: 3,
+      store: {
+        get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+        set: (k, v) => stored.set(k, v),
+      },
+      seasonDriverId: (teamId, i) => teamId + ":" + i,
+      migrateCareer: (c) => c,
+    },
+    Teams: {
+      POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      // A real spread of tiers so makeOffers() has a ladder to draw from, each
+      // with two seats and a `name` (rolloverMarket reads it when it records a
+      // swap — parked here, but present so a future change does not NPE).
+      LIST: [
+        { id: "custom", name: "My Team", tier: 2, custom: true,
+          drivers: [{ name: "You", code: "YOU", num: 99 }] },
+        { id: "apex", name: "Apex", tier: 0,
+          drivers: [{ name: "P1", code: "AP1", num: 3 }, { name: "P2", code: "AP2", num: 4 }] },
+        { id: "vega", name: "Vega", tier: 2,
+          drivers: [{ name: "V1", code: "VG1", num: 5 }, { name: "V2", code: "VG2", num: 6 }] },
+        { id: "haas", name: "Haas", tier: 4,
+          drivers: [{ name: "H1", code: "HH1", num: 1 }, { name: "H2", code: "HH2", num: 2 }] },
+      ],
+    },
+    // getCost feeds worksCost() -> budget(): a non-custom team's fitted cap is a
+    // multiple of what its works car costs. 600 is a plausible mid-grid figure;
+    // the ladder is a RATIO over it, so the exact number is not the subject.
+    Parts: { getFactorySetup: () => ({}), getCost: () => 600 },
+    Tracks: { LIST: [], SEASON: [] },
+    DriverRatings: {
+      get: () => Object.assign({}, flatRating),
+      overall: () => 80,
+      AXES: ["pace", "craft", "awareness", "consistency", "experience"],
+    },
+  });
+  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
+    { filename: "js/game/career.js" });
+  return vm.runInContext("Career", ctx);
+}
+
+// Start a driver career signed to Haas, force a known season goal, and roll the
+// year over — returning what the winter decided about the contract.
+function rollWith(goalValue, dealYears) {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.rep = 50;                                    // mid-scale, clear of the 0/100 clamp
+  career.deal.goal = { type: "champPos", value: goalValue };
+  if (dealYears != null) { career.deal.years = dealYears; career.deal.left = dealYears; }
+  const out = Career.rollover();
+  return { career, out, goalResult: career.goalResult, offers: career.offers, deal: career.deal };
+}
+
+test("the season goal is RESOLVED at the winter: met lifts reputation", () => {
+  // value 99 is met at any finishing position, so this pins the met branch
+  // without depending on where the empty-standings sort places the player.
+  const { career, goalResult } = rollWith(99);
+  assert.ok(goalResult, "a driver career must record how the contract's goal was settled");
+  assert.equal(goalResult.met, true, "P99-or-better is met at every position");
+  assert.equal(goalResult.met, goalResult.pos <= goalResult.value, "met is pos <= value, nothing else");
+  assert.equal(career.rep, 55, "meeting the goal is worth +5 reputation");
+});
+
+test("the season goal is RESOLVED at the winter: missed costs reputation", () => {
+  // value 1 is P1-or-better; with a flat, empty season the player is not champion,
+  // so this is the missed branch.
+  const { career, goalResult } = rollWith(1);
+  assert.equal(goalResult.met, false, "P1-or-better is missed short of the title");
+  assert.equal(career.rep, 45, "missing the goal costs 5 reputation");
+});
+
+test("a multi-year contract suppresses the winter market until it expires", () => {
+  // deal.left 3 -> 2 after the decrement: still under contract, so no seats are
+  // drawn and the hub goes straight to next season. This is the fix for a
+  // three-year deal that re-signed itself every winter.
+  const { deal, offers } = rollWith(99, 3);
+  assert.equal(deal.left, 2, "a 3-year deal ticks down to 2, it does not reset");
+  // .length, not deepStrictEqual([]): career.offers is built inside the VM realm,
+  // so its Array.prototype is not this file's and a strict deep-equal on an empty
+  // array fails on the prototype alone. Emptiness is the fact under test.
+  assert.equal(offers.length, 0, "offers are withheld while the contract still runs");
+});
+
+test("offers ARE drawn the winter the contract runs out", () => {
+  // deal.left 1 -> 0: the term is up, so the market opens. Your own team always
+  // talks first, so the list is never empty in the expiring winter.
+  const { deal, offers } = rollWith(99, 1);
+  assert.equal(deal.left, 0, "the final year ticks down to 0");
+  assert.ok(offers.length >= 1, "a seat is on the table the winter the deal expires");
+});
+
+test("the budget ladder raises the fitted cap, three rungs then stops", () => {
+  // BUDGET_MULT is [1.0, 1.15, 1.35, 1.6]; upgradeBudget() was complete but had
+  // no caller, so budgetLvl sat at 0 for the life of every career.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.money = 1_000_000;                           // affordable, not the subject
+  const cap0 = Career.state().budget;
+  assert.equal(career.budgetLvl, 0, "a fresh career starts at cap level 0");
+  assert.equal(Career.upgradeBudget(), true, "the first rung is affordable and taken");
+  assert.equal(career.budgetLvl, 1, "budgetLvl advances");
+  assert.ok(Career.state().budget > cap0, "the fitted cap actually rises");
+  assert.equal(Career.upgradeBudget(), true);
+  assert.equal(Career.upgradeBudget(), true);
+  assert.equal(career.budgetLvl, 3, "three rungs reach the top of BUDGET_MULT");
+  assert.equal(Career.state().budgetCost, null, "at the ceiling there is nothing left to buy");
+  assert.equal(Career.upgradeBudget(), false, "and the fourth rung is refused");
+});

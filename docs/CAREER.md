@@ -233,14 +233,28 @@ Ownership alone would let one good season max the car out and kill the economy
 dead. The cap is what keeps a career owning more than it can fit at once, so every
 weekend stays a choice.
 
-> **The cap does not currently move.** `BUDGET_MULT` describes a four-level
-> ladder and `Career.upgradeBudget()` / `budgetUpgradeCost()` implement it
-> correctly — but neither has a caller outside `js/game/career.js`, so
-> `budgetLvl` stays 0 and `budget()` always returns exactly the works car.
-> The rules are done; the missing piece is a control in `career-ui.js` (beside
-> the FACILITY button, which is the same shape and is wired). The career guide
-> used to advertise "three upgrades" and now describes the cap as fixed —
-> restore that text in the same change that adds the button, not before.
+**The cap moves three times.** `BUDGET_MULT` is a four-level ladder
+(`1.0 / 1.15 / 1.35 / 1.6`) priced by `BUDGET_UPGRADE` (2,500 / 5,000 / 9,000 cr),
+and the RAISE THE CAP card in `career-ui.js` is what spends it — the same card
+shape as FACILITY, directly beneath it, and hidden at the top rung rather than
+shown disabled.
+
+The two sinks are deliberately different in kind, and that is why both exist:
+the **factory** cuts what every *future* part costs, so it compounds and never
+runs out; the **cap** raises how much of what you *already own* may be bolted on
+at once, so it is the only way a fully-researched garage converts into lap time.
+Three rungs against the factory's eight means the cap is the scarce one. Spending
+on either is genuinely giving up the other.
+
+> Both career guides quote the ladder. They previously described the cap as
+> fixed, because the rules shipped without a screen and `budgetLvl` sat at 0 for
+> the life of every career — the guide text and the button were required to land
+> together, and did.
+>
+> **Re-measure after touching `BUDGET_MULT` or `BUDGET_UPGRADE`.** Raising
+> `budget()` lowers `tools/career-economy.mjs`'s re-spec figure with no change in
+> income, because more of what a season earns goes onto the car instead of into
+> the owned set.
 
 Ownership is enforced on **write**, not on read. `getTeamParts`/`saveTeamParts` in
 `js/game.js` is the two-line funnel every parts consumer already goes through, so
@@ -291,6 +305,23 @@ two — you in seat 0, and a hire from `FREE_AGENTS` in seat 1 (stored as
 `career.roster`, put in the seat by `driverOverride()`). Everywhere else it returns
 `team.drivers` untouched: every other team, a driver career, and all of free play,
 where the custom team stays the single entry it has always been.
+
+**Both cars run your build.** `makeCars()` hands every non-player car its team's
+`factoryParts`, which for the custom team resolves to the all-cost-0 `DEFAULTS` —
+so the hire was driving a startup car all season while the guide said otherwise,
+and the constructors' championship your R&D was paying for was being contested by
+one of your two entries. The `mate` branch (`team.custom` plus a seat that is not
+yours — the custom team fields one entry everywhere except a MY TEAM career, so
+free play and driver careers cannot reach it) gives the second car the career
+build, visually and in pace.
+
+Pace rides in **`tierV`**, the number the tier has always contributed, so the
+per-car update stays `c.tierV * c.skill * dd.ai` and no AI gains a parts branch
+on the physics path. `buildPace()` is the mean of the four `Parts` axes over the
+works car's, because a human car spends its mods across speed/accel/cornering/
+braking and an AI has exactly one scalar — one axis alone would score a cornering
+upgrade as no upgrade. It is pure and draws no RNG, so the `simRnd` stream
+position after `makeCars()` is untouched.
 
 The hire is paid **every round, out of the BALANCE** — `wageBill()`, deducted in
 `settleRound()` — and never off the fitted cap. Real driver salaries sit outside the
@@ -347,6 +378,11 @@ five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
 | `outQualMate` | you started ahead of your team-mate (`car.gridPos`) | — |
 | `points` | `pts >= value` | 1 |
 | `clean` | no track-limits cuts, no penalty | — |
+
+`clean` reads `car.cuts`, the **lifetime** cut count. The penalty ladder in
+`game.js` counts on a separate `cutWarn` that RESETS — three warnings, one +5 s
+penalty, reset — precisely so that "no cuts at all" cannot become satisfiable by
+cutting four more times. Do not merge the two counters.
 
 The save stores four **scalars** — `{round, type, value, done}` — never the sentence.
 Wording comes from `OBJ_LABELS` at render time, because prose in a save can never be
@@ -494,6 +530,36 @@ does `season = c.season`, and that shared identity is the whole reason `buildRes
 `buildStandings` / the HUD work in career with no career-specific branch. Swapping in a
 fresh object orphans game.js's alias: the next race writes its points into a dead object
 while the standings still render the stale one, which looks entirely fine.
+
+### The contract binds
+
+Two rules that were written down and never ran.
+
+**The season goal is resolved at the winter.** `deal.goal` — the championship
+position the team expects of you, derived from the car by `expectedFinish()` —
+was written by `newDeal()`, rendered on the hub and on the offer sheet, and read
+by nothing. Meeting it is worth `GOAL_REP` (+5); missing it costs the same, and
+also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
+That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
+costs most of a tier's worth of interest without needing a second rule to say so.
+
+**No money either way, deliberately.** `tools/career-economy.mjs` measures this
+economy against the catalog, and a once-a-season bonus it does not model would
+invalidate every figure in "The economy, measured" above. Reputation is the
+channel that already carries season-long form.
+
+`career.goalResult` is transient, like `career.moves`, and the end-of-season
+sheet draws it — a rule the player never sees fire is barely better than one that
+does not run. Absent on an older save, the block simply does not render, so no
+`CAREER_V` rung is owed.
+
+**Offers are drawn in the winter the term expires.** `deal.left--` ran while
+`makeOffers()` ran unconditionally beside it, so every winter opened the offer
+sheet and re-signing reset the term — "3 seasons" on the CONTRACT card could
+never become 2. `career.offers` is now `[]` while `left > 0`, which is the
+empty-list path the hub has always handled (it is the same one MY TEAM takes).
+Leaving a seat early would be a feature with a control that says so; a silent
+yearly re-shop was not that control.
 
 `Career.acceptOffer(i)` rewrites `deal`/`team`/`seat`. **Moving** re-seeds `owned`/`fitted`
 from the new team's factory preset — you do not take the old team's parts with you, and

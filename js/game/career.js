@@ -383,6 +383,14 @@ function start(opts) {
 function salaryFor(team, rep) {
   return Math.round(20 + rep * 1.2 + team.tier * 15);
 }
+// What the contract's season goal is worth at the winter (see rollover). Rep is
+// 0..100 and the round objective already moves it +/-2 a weekend, so +/-5 is a
+// season's verdict without being able to undo a year of weekends on its own.
+// GOAL_MV is in marketValue() units, where offerBar() spaces the tiers 18 apart
+// — so a missed goal costs you most of a tier's worth of interest, not all of it.
+const GOAL_REP = 5;
+const GOAL_MV = 12;
+
 function newDeal(team, years) {
   return {
     team: team.id,
@@ -568,17 +576,14 @@ function research(opt) {
   save();
   return true;
 }
-// NOT WIRED TO ANY UI. This and budgetUpgradeCost() have no caller outside this
-// file, so `budgetLvl` is permanently 0 and budget() always returns
-// worksCost x BUDGET_MULT[0] — i.e. exactly the team's works car, for the whole
-// career. The rules are complete and correct; there is simply no button.
+// Raise the fitted-cost cap one rung of BUDGET_MULT. Wired to the RAISE THE CAP
+// card in js/game/career-ui.js, beside the FACILITY card it is modelled on.
 //
-// Left in place rather than deleted because the mechanic is wanted and the
-// missing part is a screen, not a decision. What is NOT acceptable is telling
-// the player it exists: the career guide advertised "three upgrades" while this
-// sat unreachable, so that text now describes the cap as fixed. Wiring it means
-// adding the control in js/game/career-ui.js (beside the FACILITY button, which
-// is the same shape and does work) and putting the ladder back in the guide.
+// The two sinks are deliberately different in kind, which is why both exist: the
+// factory cuts what every FUTURE part costs (it compounds, and never runs out),
+// while this raises how much of what you already own may be BOLTED ON AT ONCE
+// (it is capped at three rungs, and is the only way a fully-researched garage
+// converts into lap time). Spending on one is genuinely giving up the other.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
   if (!career || budgetUpgradeCost() == null || cost > career.money) return false;
@@ -1207,7 +1212,36 @@ function rollover() {
   rolloverTeams(tStand);
   rolloverMarket();
 
-  const mv = marketValue(dStand);
+  let mv = marketValue(dStand);
+  // THE CONTRACT'S SEASON GOAL, RESOLVED. `deal.goal` was written by newDeal(),
+  // rendered on the hub and on the offer sheet, and read by nothing at all — the
+  // one promise the contract makes cost exactly nothing to break.
+  //
+  // Met is worth reputation; missed costs reputation AND market value, and the
+  // market-value hit is what makes the next winter's offers come from further
+  // down the grid. That demotion is drawn by the offerBar() ladder that already
+  // exists rather than by a second rule, so a missed goal cannot disagree with
+  // the "WHO WOULD SIGN YOU" ladder the hub shows all season.
+  //
+  // Deliberately NO money in either direction. tools/career-economy.mjs measures
+  // this economy against the catalog, and a once-a-season bonus it does not model
+  // would silently invalidate every figure in docs/CAREER.md "The economy,
+  // measured". Reputation is the channel that already carries season-long form.
+  //
+  // MY TEAM is excluded for the same reason its deal has no clock: you are not
+  // signed to anybody, so there is nobody to have promised a finish to.
+  if (career.flavour !== "myteam" && career.deal && career.deal.goal) {
+    const met = entry.pos <= career.deal.goal.value;
+    career.rep = clamp(career.rep + (met ? GOAL_REP : -GOAL_REP), 0, 100);
+    if (!met) mv = Math.max(0, mv - GOAL_MV);
+    // Transient, like career.moves: the end-of-season sheet is the one screen
+    // between two seasons, and a rule the player never sees fire is barely
+    // better than one that does not run. Absent on an older save, and the sheet
+    // simply does not draw the line — so no CAREER_V rung is owed.
+    career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met };
+  } else {
+    career.goalResult = null;
+  }
   // An owner's deal has no clock to run down: there is no year at which you stop
   // being allowed to drive your own car, and counting to zero only ever showed
   // "Seasons left 0" on the hub for the rest of the save.
@@ -1216,7 +1250,15 @@ function rollover() {
   // then read by nothing at all — the driver could never be renewed, replaced or
   // lost, which made the one relationship MY TEAM is built on a static number.
   rolloverHire(dStand);
-  career.offers = makeOffers(mv);
+  // A CONTRACT THAT RUNS IS A CONTRACT. `left--` above counted a multi-year deal
+  // down while makeOffers() ran unconditionally right beside it, so every winter
+  // opened the offer sheet and a re-signing reset the term — "3 seasons" on the
+  // CONTRACT card could never become 2. Offers are drawn in the winter the term
+  // actually expires; until then the hub goes straight to NEXT RACE, which is
+  // the empty-list path it has always handled (see makeOffers's own [] for
+  // MY TEAM). Leaving a seat early is a feature, not this fix: it would need a
+  // control that says so, and a silent yearly re-shop is not that control.
+  career.offers = career.deal && career.deal.left > 0 ? [] : makeOffers(mv);
 
   career.year++;
   // MUTATED IN PLACE, never reassigned. game.js holds this exact object as its
@@ -1257,6 +1299,9 @@ function state() {
     team: career.team, teamName: team ? team.name : career.team,
     money: career.money, rep: career.rep,
     budget: budget(), budgetLvl: career.budgetLvl,
+    // null at the top of the ladder — the card hides rather than showing a
+    // disabled rung, the same way the facility card does at FACILITY_MAX.
+    budgetCost: budgetUpgradeCost(), budgetMax: BUDGET_MULT.length - 1,
     facility: facility(), facilityCost: facilityCost(),
     facilityDiscount: facilityDiscount(),
     owned: career.owned.length,
