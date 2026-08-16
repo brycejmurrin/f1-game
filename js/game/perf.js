@@ -135,6 +135,19 @@ let _crashStrikes = 0;
 // heavy post stack too (tier 4).
 let _perfTierFloor = 0;
 let _perfTier = 0;
+// HOW MANY RUNGS THE GOVERNOR ITSELF HAS SHED, independent of any floor it
+// stepped over. _perfTier is the EFFECTIVE tier (floor + these), because a step
+// onto a rung the floor already covers changes nothing the EMA can see — see the
+// degrade branch. But storing the floor inside _perfTier is what setUserTier's
+// own comment forbids: it conflates "shed because the device struggled" with
+// "shed because the player asked", and then lowering the preset cannot release
+// what the preset itself caused. On a phone that made GRAPHICS one-way — booting
+// at MEDIUM (userTier 2) meant the governor's FIRST shed wrote _perfTier = 3, so
+// raising to HIGH left tier() at 3 and SSR, per-chunk lamps, lamp shadows and car
+// shadows all stayed off until a reload. Picking ULTRA appeared to "fix" it only
+// because it flips the mobileHigh bit and forces that reload.
+// Keeping the count here lets tier() be re-derived whenever a floor moves.
+let _govSheds = 0;
 // The USER's floor, from the GRAPHICS preset (js/game/gfx-quality.js). It is a
 // third term in tier()'s max(), and that is the whole interaction rule:
 //
@@ -182,6 +195,7 @@ function init(gfx) {
     } catch (_) {}
   }
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
+  _govSheds = 0;
   _perfTier = _perfTierFloor;
 }
 
@@ -189,6 +203,10 @@ function init(gfx) {
 // and simply missing from cleanRace(), so paying a strike down moved the counter
 // and left the floor where boot had put it. See cleanRace() for what that cost.
 function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
+// The EFFECTIVE governor tier: every floor it must clear, plus the rungs it has
+// actually shed on its own evidence. Stepping from the floor keeps each shed
+// one the EMA can feel; keeping the count separate keeps it releasable.
+function _effTier() { return Math.min(4, _floorTier() + _govSheds); }
 
 function sentinelArm(on) {
   if (!_gfx || !_gfx.isMobile) return;
@@ -213,6 +231,7 @@ function cleanRace() {
     // clearStrikes() has always done this; this path was missed, and the two
     // now share _floorFromStrikes so they cannot drift apart again.
     _perfTierFloor = _floorFromStrikes(_crashStrikes);
+    _perfTier = _effTier();
   }
 }
 
@@ -255,7 +274,7 @@ function tick(dtMs) {
                         : (_frameEMA > v.ema - VERIFY_MARGIN);
     if (failed) {
       if (v.kind === "scale") _gfx.setRenderScale(v.prev);
-      else _perfTier = v.prev;
+      else { _perfTier = v.prev; if (v.prevSheds !== undefined) _govSheds = v.prevSheds; }
       _govCool = VERIFY_COOL;
       return;
     }
@@ -298,8 +317,9 @@ function tick(dtMs) {
       // distinguish, because the step genuinely did not help and the reason
       // (redundant, not mis-targeted) is invisible to a frame-time delta.
       // Skipping to floor+1 guarantees every step is one that can be felt.
-      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
-      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _govCool = 90; _downHold = 600;
+      _pendingVerify = { kind: "tier", prev: _perfTier, prevSheds: _govSheds, ema: _frameEMA };
+      _govSheds = Math.min(4, _govSheds + 1);
+      _perfTier = _effTier(); _govCool = 90; _downHold = 600;
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
@@ -340,8 +360,9 @@ function tick(dtMs) {
     // one per ~4 s — and never below the crash-sentinel floor OR the user's
     // GRAPHICS preset floor (_floorTier folds both).
     if (!stepped && _perfTier > _floorTier()) {
-      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA, up: true };
-      _perfTier--; _govCool = 240;
+      _pendingVerify = { kind: "tier", prev: _perfTier, prevSheds: _govSheds, ema: _frameEMA, up: true };
+      _govSheds = Math.max(0, _govSheds - 1);
+      _perfTier = _effTier(); _govCool = 240;
     }
   }
 }
@@ -362,7 +383,12 @@ return {
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
   // GRAPHICS: LOW still sheds env/SSR/shadows via tier() but the lighting
   // tuner stays live unless the device proved it cannot afford the pass.
-  autoTier: () => Math.max(_perfTierFloor, _perfTier),
+  // Crash floor + the governor's OWN sheds. Deliberately NOT _perfTier: that is
+  // the EFFECTIVE tier and now steps from _floorTier(), which folds in the
+  // player's GRAPHICS preset — reading it here would put the user floor back
+  // into the one accessor whose entire purpose is to exclude it, and pin the
+  // lighting tuner's look post off on LOW. _govSheds is the evidence alone.
+  autoTier: () => Math.min(4, _perfTierFloor + _govSheds),
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
   // Clamped to the ladder's own range so a bad preset id can't invent a tier 7
@@ -375,6 +401,9 @@ return {
     const t = Math.max(0, Math.min(4, n | 0));
     if (t === _userTier) return;
     _userTier = t;
+    // Re-derive: the sheds the governor genuinely made are kept, the part that
+    // was only the OLD floor is released. Raising quality now takes effect.
+    _perfTier = _effTier();
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed

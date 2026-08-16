@@ -445,3 +445,36 @@ test("changing preset drops a pending TIER verify", () => {
   assert.ok(gov.tier() >= Math.max(before, 1),
     `no revert may fire across a user quality change — was ${before}, now ${gov.tier()}`);
 });
+
+test("raising the GRAPHICS preset releases a shed the preset itself caused", () => {
+  // THE PHONE BUG. The degrade branch steps from _floorTier() so that every shed
+  // is one the EMA can feel — a rung the floor already covers changes nothing.
+  // But it used to STORE that result in _perfTier, which is exactly the
+  // conflation setUserTier's own comment forbids: "shed because the device
+  // struggled" became indistinguishable from "shed because the player asked".
+  //
+  // On a phone the default preset is MEDIUM (userTier 2), so the governor's
+  // FIRST shed wrote _perfTier = max(0, 2) + 1 = 3. Raising to HIGH then set
+  // userTier 0 and left _perfTier at 3, so tier() stayed 3 and SSR (WET MIRROR
+  // + the dry sheens), PER-CHUNK LAMPS, lamp shadows and car shadows all stayed
+  // off. Only a reload cleared it — and on mobile the one preset switch that
+  // forces a reload is ULTRA, because it flips the mobileHigh bit. Hence the
+  // report: "wet sheen and chunk lighting only work on ULTRA".
+  const gov = makeGovAtFloor();
+  gov.setUserTier(2);                       // GRAPHICS: MEDIUM, the mobile default
+  assert.equal(gov.tier(), 2, "MEDIUM floors the ladder at 2");
+
+  // Frames that genuinely get cheaper with each shed, so the causal check keeps
+  // the steps rather than reverting them.
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 2000);
+  assert.ok(gov.tier() > 2, "the governor should have shed at least one rung above the floor");
+  const shedTier = gov.tier();
+
+  gov.setUserTier(0);                       // the player raises to HIGH
+  assert.ok(gov.tier() < shedTier,
+    `raising the preset must release the part of the shed the preset caused (was ${shedTier}, now ${gov.tier()})`);
+  assert.equal(gov.tier(), gov.autoTier(),
+    "with no user floor left, tier() must equal the governor's own evidence");
+  assert.ok(gov.tier() <= 2,
+    `only the rungs the governor genuinely measured may survive, got ${gov.tier()}`);
+});
