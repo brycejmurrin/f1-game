@@ -56,10 +56,15 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
 test("bump-cache: --check catches drift, --apply lands max+1 everywhere, --at pins", () => {
-  // artifacts/ is gitignored — a fresh CI checkout does not have it, and
-  // mkdtemp does not create parents (measured: ENOENT on runner, green local).
-  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "bumpfix-"));
+  // artifacts/ is GITIGNORED, so it does not exist in a fresh checkout — mkdtemp
+  // straight into it is ENOENT on any clone that has not run a test yet, which
+  // is every CI run. It passed locally only because an earlier run had created
+  // the directory, and read as flaky in a fresh one because whichever suite got
+  // there first created it for the rest. Same fix, same idiom, as
+  // tests/unit/lighting-campaign.test.mjs: own the mkdir, and use artifacts/tmp.
+  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "bumpfix-"));
   try {
     fs.writeFileSync(path.join(dir, "index.html"),
       `<script src="a.js?v=7"></script>\n<link href="b.css?v=7">\n<script src="c.js?v=9"></script>\n`);
