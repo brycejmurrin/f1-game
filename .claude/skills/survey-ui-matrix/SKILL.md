@@ -5,6 +5,10 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 
 # Surveying the whole UI across the whole matrix
 
+**Token note:** this skill is long — for a single menu bug use `ui-menu-a11y`
+instead. Read §traps only when a measurement looks wrong; prefer
+`tools/layout-audit.mjs` for batch matrix work.
+
 A layout bug in this app is never "on a screen" — it is in a **cell of a matrix**:
 screen x viewport x scale x pointer. `tools/layout-audit.mjs` measures that matrix
 in Playwright and is the batch instrument. **This skill is the INTERACTIVE one**:

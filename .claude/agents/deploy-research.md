@@ -17,9 +17,9 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 ## Required skill
 
-Follow `.claude/skills/mcp-probe/SKILL.md` — especially **tinyfish MCP** and
-**Research recipes**. Prefer shell helpers when MCP tools are missing from the
-session catalog:
+Follow `.claude/skills/mcp-probe/SKILL.md` (thin index) and, when needed,
+`.claude/skills/mcp-probe/references/recipes.md` (tinyfish section). Prefer
+shell helpers when MCP tools are missing from the session catalog:
 
 ```sh
 ./tools/tinyfish-mcp.sh ensure
