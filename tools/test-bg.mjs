@@ -87,6 +87,14 @@ function outcome(run) {
     return `${tap[2] === "0" ? "passed" : "failed"} (${tap[1]} passed, ${tap[2]} failed${suffix})`;
   }
 
+  // Plain-script groups (test:audit is `node tools/test-coverage-audit.mjs`)
+  // print neither format, so a PASSING audit read as "died before finishing"
+  // and --wait exited 1 on a green batch. start() appends this trailer to
+  // every log for exactly this case; pw/tap stay first because they carry
+  // richer detail.
+  const bg = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
+  if (bg) return bg[1] === "0" ? "passed (exit 0)" : `failed (exit ${bg[1]})`;
+
   const fails = [...text.matchAll(/^\[[\d:]+\] x FAIL/gm)].length;
   return fails ? `died after ${fails} failure(s)` : "died before finishing";
 }
@@ -221,7 +229,11 @@ function start(groups, force) {
       ? ["--", `--workers=${WORKERS}`] : [];
     // detached + ignored stdin: the run must outlive this process and must
     // never block waiting for a terminal that is no longer attached.
-    const child = spawn("npm", ["run", "--silent", `test:${group}`, ...forward], {
+    // The `= bg exit N` trailer is the terminal line for groups that print
+    // neither the Playwright reporter's `= run …` nor a TAP summary — see
+    // outcome() above for why a log without one reads as a dead run.
+    const cmd = `npm run --silent test:${group}${forward.length ? " " + forward.join(" ") : ""}; echo "= bg exit $?"`;
+    const child = spawn("sh", ["-c", cmd], {
       cwd: ROOT,
       detached: true,
       stdio: ["ignore", fd, fd],

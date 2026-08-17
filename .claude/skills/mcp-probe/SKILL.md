@@ -57,7 +57,7 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   anything on the DEPLOYED artifact use tinyfish, which fetches server-side from
   its own network. This is the canvas-**visible** probe: render a track/car,
   drive `__apex`, screenshot, take a heap snapshot, read the console. The
-  interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
+  interactive twin of `playwright-probe`'s `shot.mjs`. Shell:
   `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
 - **Both are reachable two ways, and the MCP way needs no shell.** VERIFIED
   2026-08-17: the `apex-wrap` MCP server is `ready` and advertises 56 tools — 40
@@ -686,7 +686,7 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 ### When NOT to use it
 
-Regression coverage, anything that must assert-and-gate, the 111-spec batch, or
+Regression coverage, anything that must assert-and-gate, the 113-spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
 framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
 

@@ -14,6 +14,7 @@ area doc — testing evidence goes in `docs/TESTING.md` §Field notes.
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
 npm run test:tooling-fast           # the no-browser guard suite (~30 s)
+node tools/verify-change.mjs        # ONE command: fast gate + batched groups (start in background; --wait/--plan/--fast)
 node tools/verify-track.cjs <id>    # 2 s headless build check for track edits
 node tools/pick-tests.mjs           # which test GROUPS does this change need?
 node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
@@ -148,6 +149,9 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `index.html` — shell: script tags, all static DOM, `?v=N` cache busting;
   `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
+- `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
+  `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor)
+  that encode the flat prohibitions above so a subagent cannot un-know them
 
 ## Critical conventions
 
