@@ -525,6 +525,17 @@ const TLX = (function () {
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
       const matCache = new Map();
       const MAT_CACHE_CAP = 64;
+      // Frame stamp per cached material, so eviction can never dispose one that
+      // is still queued to draw. drawList holds `mat` REFERENCES and is flushed
+      // at the end of the frame, while eviction disposed the oldest INSERTED
+      // entry the moment the cache hit its cap — FIFO, not LRU, so the earliest
+      // material of the frame was the first to go. In the garage the cache never
+      // fills and nothing is evicted; a 22-car race blows past 64 distinct keys
+      // easily, so the car — drawn early — had its material disposed mid-frame
+      // and its body silently vanished while everything else still drew.
+      // Reported from an iPhone: garage correct, race identical to WebGL2 except
+      // the car body was missing.
+      let _matFrame = 0;
       function fallbackMat() { return _drawMatMode >= 2 ? rawUnlitMat : unlitMat; }
       function materialFor(opts, chunked) {
         if (_drawMatMode || !lit) return fallbackMat();
@@ -554,14 +565,21 @@ const TLX = (function () {
         let m = matCache.get(key);
         if (!m) {
           if (matCache.size >= MAT_CACHE_CAP) {
-            const oldest = matCache.keys().next().value;
-            const old = matCache.get(oldest);
-            matCache.delete(oldest);
-            if (old) old.dispose();
+            // Evict the oldest entry NOT used this frame. If every entry is in
+            // use the cache simply runs over cap for the rest of the frame:
+            // exceeding a soft cap costs some variants, disposing a material
+            // that drawList still points at costs the object on screen.
+            for (const [k, v] of matCache) {
+              if (v && v.__tlxFrame === _matFrame) continue;
+              matCache.delete(k);
+              if (v) v.dispose();
+              break;
+            }
           }
           m = lit.makeMaterial(chunked ? Object.assign({ chunked: true }, o) : o);
           matCache.set(key, m);
         }
+        if (m) m.__tlxFrame = _matFrame;
         return m;
       }
 
@@ -1064,6 +1082,7 @@ const TLX = (function () {
         freeInstancedBatch: undefined,
         castShadowInstanced: undefined,
         begin(frame) {
+          _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
           const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
           scene.background.setRGB(f[0], f[1], f[2]);

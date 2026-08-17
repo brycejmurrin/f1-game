@@ -2999,7 +2999,7 @@ const api = {
         ua: safe(() => navigator.userAgent, ""),
         dpr: safe(() => window.devicePixelRatio, 0),
         viewport: safe(() => [innerWidth, innerHeight], []),
-        backend: safe(() => localStorage.getItem("apex26.gfxBackend") || "webgl2", "?"),
+        backend: safe(() => { let b = null; try { b = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { /* no sessionStorage: the pick is the best available answer */ } const p = localStorage.getItem("apex26.gfxBackend") || "webgl2"; return b && b !== p ? b + " (pick: " + p + ")" : p; }, "?"),   // what BOUND, not the pick
         mobile: safe(() => !!(gfx && gfx.isMobile), null),
         mobileTier: safe(() => !!(gfx && gfx.mobileTier), null),
         hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),

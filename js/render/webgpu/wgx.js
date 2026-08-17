@@ -384,19 +384,42 @@ const WGX = (function () {
       // treats the phone timer as absent; Safari Mac is the same GPU.
       const _canTimestamp = !WGX_LITE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
       device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
-      if (!device) return _fail("no device");
+      // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
+      // says so — even when it cannot give a valid one; the failure is signalled
+      // by handing back a device whose `lost` promise is ALREADY resolved. So a
+      // truthiness test can never fire, and a dead device would sail through as
+      // healthy.
+      //
+      // Detect it by MICROTASK ORDER, not a timer. An already-resolved promise
+      // schedules its handler the moment .then() is called, so a couple of
+      // `await`s here run strictly after it; a healthy device's `lost` never
+      // settles and simply leaves the flag null. Deliberately NOT a
+      // Promise.race against setTimeout: a timer is the wrong tool (it makes a
+      // synchronous fact wait on the macrotask queue) and it deadlocks under
+      // any harness that unref()s its timers to avoid holding the runner open —
+      // tests/unit/webgpu-lifecycle.test.mjs does exactly that, and the race
+      // hung there with "Promise resolution is still pending".
+      let _bornLost = null;
+      device.lost.then(function (info) { _bornLost = (info && info.reason) || "unknown"; });
+      await null; await null;
+      if (_bornLost) return _fail("device arrived lost (" + _bornLost + ")");
       var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
     } catch (e) {
       return _fail("device request threw: " + ((e && e.message) || e));
     }
 
+    // FORMAT ONLY — the canvas itself is claimed at the very END of create(),
+    // after the self-test has proven this device can actually draw. A canvas is
+    // bound to one context type for LIFE, so calling getContext("webgpu") here
+    // and then refusing below would leave GLX unable to attach webgl2 to it, and
+    // js/game.js can only recover that by clearing the opt-in and RELOADING the
+    // page. Safari 26 is where refusal is most likely (it loses the device
+    // mid-pipeline-setup, imgui#9103), i.e. exactly where the reload would be
+    // paid. Pipelines need the format, not the context, so nothing below cares.
     try {
-      ctx = canvas.getContext("webgpu");
-      if (!ctx) return _fail("canvas has no webgpu context");
       format = navigator.gpu.getPreferredCanvasFormat();
-      ctx.configure({ device, format, alphaMode: "opaque" });
     } catch (e) {
-      return _fail("context configure threw: " + ((e && e.message) || e));
+      return _fail("preferred canvas format threw: " + ((e && e.message) || e));
     }
 
     // Device-lost recovery. An unexpected loss (memory pressure, GPU reset) on
@@ -764,7 +787,10 @@ const WGX = (function () {
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-      _rebuildFrameBG();
+      // NOT here — the frame group binds material, blocker and shadow resources
+      // that are still null at this point. It is built at the END of init(),
+      // once they all exist. (The guard in _makeFrameBGs makes this a no-op
+      // rather than a throw, but calling it here at all is misleading.)
       drawBindGroup = device.createBindGroup({
         layout: g1Layout,
         // size = the DrawU slice; the dynamic offset selects the slot at draw time.
@@ -903,6 +929,13 @@ const WGX = (function () {
           ]
         });
       } catch (_) { blockerPipeline = null; blockerBG = null; /* PCSS downsample optional; LIT still binds the placeholder */ }
+
+      // Frame bind group, built HERE: every resource it binds — the material
+      // array + scale UBO, both shadow views, the blocker view — exists by now.
+      // If this still cannot build, the guard inside leaves frameBindGroup null
+      // and the self-test below refuses rather than shipping a renderer that
+      // would draw nothing.
+      _rebuildFrameBG();
       if (MSAA_COUNT > 1 && _Chunks.DEPTH_RESOLVE) {
         const drG0 = device.createBindGroupLayout({ entries: [
           { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth", multisampled: true } },
@@ -1232,7 +1265,25 @@ const WGX = (function () {
     // changes: the SSR result texture is resize-dependent, and the env cube swaps
     // from placeholder to real when the probe runs.
     function _makeFrameBGs(nextSsrView) {
-      if (!g0Layout || !frameUBO) return;
+      // EVERY binding, not just frameUBO. WebGPU rejects a bind group whose
+      // resource is null — Safari's message is "Member GPUBufferBinding.buffer
+      // is required and must be an instance of GPUBuffer" — and the old guard
+      // named only two of the fifteen. init() calls _rebuildFrameBG() straight
+      // after the UBOs are made, ~90 lines BEFORE matScaleUBO, the material
+      // views, the blocker view and both extra shadow views exist, so the
+      // first call built a group full of nulls and threw out of init. That
+      // aborted WGX entirely on a real device (measured: iPhone, Safari 26.6,
+      // build 1281, `apex26.gfxWgxFail` = that exact string, RENDERER showing
+      // "WEBGPU (WEBGL2)"). It survived every test because the WebGPU mock in
+      // tests/unit/webgpu-lifecycle.test.mjs does not validate bind groups.
+      //
+      // Bailing is safe: this is a rebuild, and the callers that matter re-run
+      // it once their resource lands (env probe, setMaterialMaps, and the
+      // explicit call at the end of init).
+      if (!g0Layout || !frameUBO || !lightSBO || !matScaleUBO) return;
+      if (!shadowView || !shadowSampler || !linearSampler || !nextSsrView) return;
+      if (!blockerView || !carShadowView || !lampShadowView) return;
+      if (!matAlbedoView || !matNormalView || !matArraySamp) return;
       const base = (cubeView) => ({
         layout: g0Layout,
         entries: [
@@ -3298,6 +3349,19 @@ const WGX = (function () {
     try { localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) { /* blocked storage */ }
     _lastFailure = null;
     _clearGlxBound();
+
+    // PROVEN — only now claim the canvas. Every refusal above returns with the
+    // element untouched, so GLX attaches webgl2 to it on the same load and the
+    // player never sees a reload. This is the last thing that can fail, and if
+    // it does the canvas may be half-claimed, so it still reports through _fail
+    // and game.js's reload path remains the backstop for that one case.
+    try {
+      ctx = canvas.getContext("webgpu");
+      if (!ctx) return _fail("canvas has no webgpu context");
+      ctx.configure({ device, format, alphaMode: "opaque" });
+    } catch (e) {
+      return _fail("context configure threw: " + ((e && e.message) || e));
+    }
 
     const noop = function () {};
 
