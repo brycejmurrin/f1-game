@@ -301,3 +301,19 @@ under a minute; heavier goals from `list_runs` history took 12–20 minutes,
 so poll `get_run` at the interval the queue message suggests, not in a loop.
 
 ---
+## Getting a report off a REAL device (a phone with the bug)
+
+MCP cannot reach the reporter's phone, and the backends that only misbehave
+there (three/TLX on iOS) are exactly the ones a container cannot reproduce. Two
+deliveries, same paste — `tools/apex-report.js` (bundle: `diag()`, GL identity,
+canvas context attributes, log ring, `apex26.*`, frame sample + PNG, `verdict`).
+
+| Page the device is on | Loader line for its console | Where the bundle goes |
+| --- | --- | --- |
+| Served from your box (`node tools/report-server.mjs`, phone opens the printed LAN URL) | `fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))` | POSTs itself to `artifacts/reports/`, verdict printed in your terminal |
+| The deployed site | same, but fetch `https://raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/apex-report.js` | downloads on the device — the POST cannot cross from https to a plain-http laptop |
+
+`pages.yml` stages runtime dirs only, so `tools/` is NOT on the live site: the
+same-origin loader works **only** off a local server, which is also the one that
+serves whatever tree you are debugging. Ask for the LAN URL, not localhost — the
+phone cannot reach your loopback. `apexReport({post:false})` forces a download.
