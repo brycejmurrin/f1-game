@@ -1636,17 +1636,17 @@ const WGX = (function () {
                   if ((r + g + b) > maxPx) maxPx = r + g + b;
                 }
               }
-              if (maxPx >= 8) _displayCtx.putImageData(img, 0, 0);
+              if (maxPx >= 8) {
+                _displayCtx.putImageData(img, 0, 0);
+                _softBlitNotify();
+              }
             } catch (_) { /* 2D blit failed */ }
             try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
-            _softBlitNotify();
           }).catch(function () {
             try { buf.destroy(); } catch (_) { /* device dying */ }
-            _softBlitNotify();
           });
         } catch (_) {
           try { buf.destroy(); } catch (_) { /* device dying */ }
-          _softBlitNotify();
         }
       };
       try {
@@ -2941,26 +2941,31 @@ const WGX = (function () {
       if (!cap) return;
       const req = _capReq; _capReq = null;
       const { buf, bpr, w, h } = cap;
-      buf.mapAsync(GPUMapMode.READ).then(function () {
-        const src = new Uint8Array(buf.getMappedRange());
-        const out = new Uint8ClampedArray(w * h * 4);
-        const bgra = !!cap.bgra;
-        for (let y = 0; y < h; y++) {
-          const s = y * bpr, d = y * w * 4;
-          for (let x = 0; x < w; x++) {
-            const si = s + x * 4, di = d + x * 4;
-            out[di]     = src[bgra ? si + 2 : si];
-            out[di + 1] = src[si + 1];
-            out[di + 2] = src[bgra ? si : si + 2];
-            out[di + 3] = 255;   // alphaMode "opaque": ignore stored alpha
+      const finish = function () {
+        buf.mapAsync(GPUMapMode.READ).then(function () {
+          const src = new Uint8Array(buf.getMappedRange());
+          const out = new Uint8ClampedArray(w * h * 4);
+          const bgra = !!cap.bgra;
+          for (let y = 0; y < h; y++) {
+            const s = y * bpr, d = y * w * 4;
+            for (let x = 0; x < w; x++) {
+              const si = s + x * 4, di = d + x * 4;
+              out[di]     = src[bgra ? si + 2 : si];
+              out[di + 1] = src[si + 1];
+              out[di + 2] = src[bgra ? si : si + 2];
+              out[di + 3] = 255;   // alphaMode "opaque": ignore stored alpha
+            }
           }
-        }
-        try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
-        req.resolve({ width: w, height: h, data: out });
-      }, function (e) {
-        try { buf.destroy(); } catch (_) { /* device dying */ }
-        req.reject(e);
-      });
+          try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
+          req.resolve({ width: w, height: h, data: out });
+        }, function (e) {
+          try { buf.destroy(); } catch (_) { /* device dying */ }
+          req.reject(e);
+        });
+      };
+      try {
+        device.queue.onSubmittedWorkDone().then(finish, finish);
+      } catch (_) { finish(); }
     }
 
     // ── present(opts): close the lit pass, run the Phase-4 post chain
