@@ -45,9 +45,11 @@ node tools/test-bg.mjs --status
 node tools/test-bg.mjs --stop
 ```
 
-`verify-change` and `test-bg` already cap at **one browser group per
-batch**. Do not pair two browser groups yourself. Do not edit `js/`/`css/`
-while a run serves this tree (use a worktree).
+`verify-change` batches at **one browser group** (padded with node-only
+groups). `test-bg` itself caps total groups at `floor(CORES/WORKERS)` with
+no browser/node split — `smoke` + `physics` is allowed on 4 cores. Do not
+pair two browser groups yourself. Do not edit `js/`/`css/` while a run
+serves this tree (use a worktree).
 
 ## Escalation
 

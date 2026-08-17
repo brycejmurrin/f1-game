@@ -85,5 +85,5 @@ node tools/test-bg.mjs ab       # lighting-ab only
 
 `tests/specs/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading
 only** — it does not check `numLights` or day/night ambient. After any
-`applyRaceSettings` edit, run `lighting-ab` first (accidentally lighting the
+`applyRaceSettings` edit, run `node tools/test-bg.mjs ab` first (accidentally lighting the
 night scene like day).

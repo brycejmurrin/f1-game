@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: Use when baking or verifying assets/pack, editing js/render/assets.js or tools/assets.mjs, debugging matTexMix/baked PBR blend, __apex.assets()/matTex(), MAT layer mismatches, or procedural-vs-textured tarmac look on GLX/TLX.
+description: Use when baking or verifying assets/pack, editing js/render/assets.js or tools/assets.mjs, debugging matTexMix/baked PBR blend, __apex.assets()/matTex(), MAT layer mismatches, or procedural-vs-textured tarmac look on GLX/TLX/WGX.
 ---
 
 # Baked asset pack

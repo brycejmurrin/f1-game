@@ -31,12 +31,14 @@ circuit file; no browser runs).
 1. Read the brief — 3–5 highest-leverage fixes.
 2. `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
    flagged probe (`--` holes, >1 m steps, sag).
-3. Edit dressing in `js/circuits/<id>.js`; terrain `def` flags in
-   `buildTerrain` **and** `groundYAt`, plus the `LIST` whitelist in
-   `js/track/tracks.js`.
+3. Edit dressing in `js/circuits/<id>.js`. New terrain `def` flags need
+   `buildTerrain` **and** `groundYAt` plus the `LIST` whitelist in
+   `js/track/tracks.js` — that is **engine** work (parent / not
+   **track-surveyor**).
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
 5. `survey-track.mjs <id> after` — same framings; flags should clear.
-6. `node tools/test-bg.mjs circuit` + **bump-cache**.
+6. Parent ship: `node tools/test-bg.mjs circuit` + **bump-cache**. The
+   **track-surveyor** subagent stops at verify-track / coplanar / float-audit.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.

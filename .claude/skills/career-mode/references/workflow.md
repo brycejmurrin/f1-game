@@ -62,7 +62,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 - Confusing **research facility** with **fitted budget cap**: facility =
   `facilityDiscount()` on research cost; cap = `Career.budget()` /
-  `budgetLvl` (separate ladder, may be unwired in UI). When the user says
+  `budgetLvl` (separate ladder; UI is `Career.upgradeBudget()`). When the user says
   "budget cap wrong after facility upgrade", check this split first — upgrading
   the facility does not raise the cap.
 - Treating "save exists" as "career rules are active", leaking development or

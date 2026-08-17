@@ -95,6 +95,9 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["ui-menu-a11y", "references/workflow.md"],
     ["check-changes", "references/guards.md"],
     ["webgpu-debug", "references/defects.md"],
+    ["bake-lighting", "references/steps.md"],
+    ["scenery-dress", "references/rules.md"],
+    ["game-feel", "references/workflow.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -122,6 +125,41 @@ test("skills do not recommend the retired test:career group", () => {
   };
   for (const d of dirs) walk(path.join(SKILLS, d.name));
   assert.deepEqual(bad, [], "use `test-bg.mjs modes` — there is no test:career");
+});
+
+test("skills only name real test-bg groups", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const groups = new Set(
+    Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)),
+  );
+  const flags = new Set(["--status", "--stop", "--wait", "--force", "--json"]);
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".md")) {
+        const text = fs.readFileSync(p, "utf8");
+        for (const m of text.matchAll(/test-bg\.mjs((?:[ \t]+(?:--[a-z]+|[a-z][a-z0-9-]*))+)/g)) {
+          for (const tok of m[1].trim().split(/[ \t]+/)) {
+            if (flags.has(tok) || groups.has(tok)) continue;
+            bad.push(`${path.relative(ROOT, p)}: ${tok}`);
+          }
+        }
+      }
+    }
+  };
+  walk(SKILLS);
+  walk(AGENTS);
+  assert.deepEqual(bad, [], "unknown test-bg group (barriers, career, …) — use a package.json test:* name");
+});
+
+test("verify-agent stays --fast and never starts Playwright", () => {
+  const text = fs.readFileSync(path.join(AGENTS, "verify-agent.md"), "utf8");
+  assert.match(text, /verify-change\.mjs --fast/);
+  assert.match(text, /wgx-validate\.mjs --static/);
+  assert.doesNotMatch(text, /test-solo\.mjs/);
+  assert.doesNotMatch(text, /verify-change\.mjs --wait/);
 });
 
 test("every custom subagent declares name, description, and model", () => {

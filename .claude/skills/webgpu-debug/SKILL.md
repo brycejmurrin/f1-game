@@ -13,14 +13,15 @@ failure must degrade to GLX, never a dead canvas.
 ## 1. First probe — static, then Dawn
 
 ```sh
-node tools/wgx-validate.mjs --static             # no browser: sky/MSAA/bloom/fw1
-node tools/wgx-validate.mjs                      # full stack (MSAA 4, HDR)
-node tools/wgx-validate.mjs --lite               # phone stack (MSAA 1)
-node tools/wgx-validate.mjs --no-rg11b10         # rgba16float fallback
+node tools/wgx-validate.mjs --static             # ALWAYS this first (no browser)
+# parent session only — these launch Chromium:
+# node tools/wgx-validate.mjs
+# node tools/wgx-validate.mjs --lite
+# node tools/wgx-validate.mjs --no-rg11b10
 ```
 
-`--static` is the default for **verify-agent** and any subagent. The full
-Dawn pass launches Chromium — parent session only. The container adapter HAS
+`--static` is the only command **verify-agent** / any subagent may run. The
+full Dawn pass launches Chromium — parent session only. The container adapter HAS
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 

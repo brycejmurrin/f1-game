@@ -61,8 +61,11 @@ helped asset fetch; they are not the current harness.
    ```
 3. **Free ports**, don't hardcode — bind `:0` and read back the port, or you'll
    collide with a leftover server.
-4. **Wait for readiness**: `waitForFunction(() => window.__apex != null)` then
-   `race(id)` then `waitForFunction(() => __apex.info().track === id)` then a
+4. **Wait for readiness**: every rendering-page `waitForFunction` needs
+   `{ polling: 100 }` (default rAF polling starves under SwiftShader):
+   `waitForFunction(() => window.__apex != null, { polling: 100 })` then
+   `race(id)` then
+   `waitForFunction(() => __apex.info().track === id, { polling: 100 })` then a
    ~1.6 s settle for the mesh build before probing/shooting.
 5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
    `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.

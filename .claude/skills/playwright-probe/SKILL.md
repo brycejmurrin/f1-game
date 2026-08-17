@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Use when the user asks to screenshot/show a track or car in-game, check whether a visual change looks right, capture before/after, frame Monaco/Spa/etc., validate camera modes/screens/tracks, run Playwright headless probes, exercise __apex hooks, or inspect blank renders.
+description: Use when the user asks to screenshot/show a track or car in-game, check whether a visual change looks right, capture before/after, frame Monaco/Spa/etc., validate camera modes/screens/tracks, run Playwright headless probes, or exercise __apex hooks. A blank WGX canvas in-container is expected (webgpu-debug); live deploy version.json is mcp-probe deploy-check.
 ---
 
 # Headless Playwright probing (parallel)

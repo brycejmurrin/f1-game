@@ -1,6 +1,6 @@
 ---
 name: webgl-debug
-description: Use when the user reports lights wrong, shadow acne/flicker/shimmer, bloom too strong/missing, HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or renderer artifacts.
+description: Use when the user reports lights wrong, shadow acne/flicker/shimmer, bloom too strong/missing, HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or renderer artifacts. For a WebGPU black screen or NaN-white road use webgpu-debug.
 ---
 
 # Debug WebGL2 / GLX renderer issues

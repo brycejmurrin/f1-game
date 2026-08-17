@@ -36,7 +36,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **lighting-tuner** | Scene lighting — `lightTune`, time-of-day/weather, `lightState`, orbit shots. |
 | **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
 | **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
-| **webgpu-debug** | WebGPU/WGX issues — black screen, WGSL derivative uniformity, GPU validation errors, device-loss ladder, `wgx-validate.mjs` Dawn matrix. |
+| **webgpu-debug** | WebGPU/WGX issues — black screen, WGSL derivative uniformity, GPU validation errors, device-loss ladder, `wgx-validate.mjs --static` (full Dawn parent-only). |
 | **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
 | **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
 | **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |

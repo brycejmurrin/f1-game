@@ -28,10 +28,9 @@ mirrored — or explicitly recorded as a gap — in the other two.
    uploads it. Grep the knob name across ALL of `js/render/` before calling a
    change complete; the shipped failure mode is a slider that works on one
    backend and silently does nothing on the others.
-4. **WGX changes**: validate with real Dawn in-container —
-   `node tools/wgx-validate.mjs` (full matrix: `--lite`, `--no-rg11b10`); the
-   `webgpu-debug` skill has the defect classes (derivative uniformity, sample
-   counts, renderable formats).
+4. **WGX changes**: `node tools/wgx-validate.mjs --static` first (no browser).
+   Full Dawn (`wgx-validate.mjs`, `--lite`, `--no-rg11b10`) is parent-session
+   only — never a subagent. Defect classes: **webgpu-debug**.
 5. **TLX sharp edges**: TSL values need `.toVar()` BEFORE conditional use;
    `ColorManagement.enabled = false` (the look is calibrated without sRGB
    re-encode); the backend loads via dynamic `import()` only at `TLX.create()`.
