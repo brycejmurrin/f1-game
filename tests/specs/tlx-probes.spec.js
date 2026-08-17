@@ -194,18 +194,21 @@ test.describe("TLX — boot", () => {
     expect(day.sunDir[1]).toBeGreaterThan(0);   // sun above the horizon
     // Night: uStars flips to 1 (SKY_FS's nightSky gate keys off it — the sun
     // disc must never paint among the stars even though sunDir stays high).
+    // Freeze the loop BEFORE the rebuild: setTimeOfDay("night") calls
+    // loadTrack(), and a live SwiftShader present during that rebuild is
+    // what turned a 260 s pass into a 530 s+ evaluate that never returned
+    // (GPU process 387%). Rebuild is CPU; one resumed frame arms the sky.
+    await page.evaluate(() => window.__apex.headless(true));
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
-    // The day->night flip rebuilds scenery before the next sky frame lands —
-    // wait on the uniform, not a fixed sleep (SwiftShader rebuilds are slow).
+    await page.evaluate(() => window.__apex.headless(false));
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
     const night = await page.evaluate(() => GLX.__tlx.skyState());
     expect(night.on).toBe(true);
     expect(night.stars).toBe(1);
     expect(errors).toEqual([]);
-    // Night rebuild leaves the game loop presenting a full SwiftShader frame.
-    // Stop it before Playwright tears the page down — the next test's
-    // beforeEach (new context) otherwise waits on a 387% GPU process and
-    // dies with "timeout while running beforeEach" (measured M9 after M5).
+    // Stop the loop before Playwright tears the page down — the next test's
+    // beforeEach otherwise waits on a 387% GPU process and dies with
+    // "timeout while running beforeEach" (measured M9 after M5).
     await stopRendering(page);
   });
 
