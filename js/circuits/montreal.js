@@ -66,7 +66,7 @@
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, foundation,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
-        cross, norm, MAT, COL } = api;
+        cross, norm, MAT, COL, frameAt } = api;
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
@@ -884,7 +884,8 @@
       // ===================================================================
       {
         const k = K(0.45);
-        const deckY = py[k] + 8;
+        const frame = frameAt(0.45);
+        const deckY = frame.c[1] + 8;
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 5);
           const h = deckY - a.c[1];
