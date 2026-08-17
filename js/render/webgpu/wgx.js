@@ -563,6 +563,7 @@ const WGX = (function () {
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softReadDefer = false, _softW = 0, _softH = 0;
+    const _softRetired = []; // {buf, tex} — destroyed only after mapAsync finishes
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
     const _softPresentWaiters = [];
@@ -698,7 +699,9 @@ const WGX = (function () {
     // for everything else that went wrong. Log a bounded prefix and keep counting;
     // WGX.gpuErrors() carries the real total for a diagnosis.
     let _bootError = null;
+    let _runtimeReady = false; // set after a successful create() return path
     const GPU_ERR_LOG_CAP = 8;
+    const GPU_ERR_ESCALATE_CAP = 8;
     try {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
@@ -709,6 +712,12 @@ const WGX = (function () {
           if (_gpuErrors === GPU_ERR_LOG_CAP) {
             try { Log.warn("gfx", "WGX: further GPU errors suppressed — read the count from WGX.gpuErrors()"); } catch (_) { /* same: the suppression itself does not depend on announcing it */ }
           }
+        }
+        // After boot, a flood of uncaptured errors means the GPU is drawing
+        // nothing while the UI still says WEBGPU. Climb the same ladder as
+        // device.lost / JS-strike cap — do not keep presenting a dead backend.
+        if (_runtimeReady && !_lost && _gpuErrors >= GPU_ERR_ESCALATE_CAP) {
+          _wgxEscalate("runtime GPU errors (" + _gpuErrors + ")");
         }
       };
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
@@ -1574,12 +1583,35 @@ const WGX = (function () {
         return "canvas configure threw: " + ((e && e.message) || e);
       }
     }
+    function _destroyRetiredSoft() {
+      for (let i = _softRetired.length - 1; i >= 0; i--) {
+        const r = _softRetired[i];
+        const st = r.buf && r.buf.mapState;
+        if (st === "pending") continue;
+        if (st === "mapped") { try { r.buf.unmap(); } catch (_) { /* already unmapped */ } }
+        if (r.buf) { try { r.buf.destroy(); } catch (_) { /* already dead */ } }
+        if (r.tex) { try { r.tex.destroy(); } catch (_) { /* already dead */ } }
+        _softRetired.splice(i, 1);
+      }
+    }
+    function _retireSoftPresent() {
+      if (!softPresentTex && !_softBlitBuf) return;
+      const buf = _softBlitBuf, tex = softPresentTex;
+      const st = buf && buf.mapState;
+      if (buf && st && st !== "unmapped") {
+        _softRetired.push({ buf: buf, tex: tex });
+      } else {
+        if (buf) { try { buf.destroy(); } catch (_) { /* already dead */ } }
+        if (tex) { try { tex.destroy(); } catch (_) { /* already dead */ } }
+      }
+      softPresentTex = null; softPresentView = null; _softBlitBuf = null;
+    }
     function _ensureSoftPresent() {
       if (!_softGpu || width < 1 || height < 1) return;
       if (softPresentTex && _softW === width && _softH === height) return;
       try {
-        if (softPresentTex) softPresentTex.destroy();
-        if (_softBlitBuf) _softBlitBuf.destroy();
+        _retireSoftPresent();
+        _destroyRetiredSoft();
         softPresentTex = device.createTexture({
           size: [width, height], format: LDR_FORMAT,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC |
@@ -1647,23 +1679,34 @@ const WGX = (function () {
       if (typeof _softBlitBuf.mapAsync !== "function") return;
       _softBusy = true;
       const doMap = function () {
+        const buf = _softBlitBuf;
+        const bpr = _softBlitBPR;
+        const w = width, h = height;
+        if (!buf) { _softBlitNotify(); return; }
         try {
-          _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
+          buf.mapAsync(GPUMapMode.READ).then(function () {
             try {
-              const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
-              if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
-                _softImg = _displayCtx.createImageData(width, height);
+              if (buf !== _softBlitBuf) {
+                try { buf.unmap(); } catch (_) { /* retired */ }
+                _destroyRetiredSoft();
+                _softBlitNotify();
+                return;
+              }
+              const mapped = new Uint8Array(buf.getMappedRange());
+              if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+                _softImg = _displayCtx.createImageData(w, h);
               }
               const img = _softImg;
-              const rowBytes = width * 4;
-              for (let y = 0; y < height; y++) {
-                img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
+              const rowBytes = w * 4;
+              for (let y = 0; y < h; y++) {
+                img.data.set(mapped.subarray(y * bpr, y * bpr + rowBytes), y * rowBytes);
               }
               _displayCtx.putImageData(img, 0, 0);
             } catch (_) { /* 2D blit failed */ }
-            try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
+            try { buf.unmap(); } catch (_) { /* already unmapped */ }
+            _destroyRetiredSoft();
             _softBlitNotify();
-          }).catch(function () { _softBlitNotify(); });
+          }).catch(function () { _destroyRetiredSoft(); _softBlitNotify(); });
         } catch (_) { _softBlitNotify(); }
       };
       // mapAsync waits behind ALL prior submits — start readback only after THIS
@@ -4243,6 +4286,7 @@ const WGX = (function () {
     }
 
     const noop = function () {};
+    _runtimeReady = true;
 
     return {
       // ── Lifecycle / capability ──

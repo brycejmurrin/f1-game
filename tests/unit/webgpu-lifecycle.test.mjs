@@ -926,6 +926,10 @@ test("soft-present defers readback when staging buffer is still mapped", () => {
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
   assert.match(WGX_SOURCE, /_softReadDefer/);
   assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /function _retireSoftPresent\(/);
+  assert.match(WGX_SOURCE, /function _destroyRetiredSoft\(/);
+  assert.match(WGX_SOURCE, /if \(st === "pending"\) continue/);
+  assert.match(WGX_SOURCE, /if \(buf !== _softBlitBuf\)/);
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
     /_retireFlush[\s\S]{0,400}_softBusy = false/,
@@ -1375,6 +1379,24 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
 
   h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
+});
+
+test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
+  const storage = new Map();
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  await h.create();
+  for (let i = 0; i < 7; i++) {
+    h.device.onuncapturederror({ error: { message: "synthetic validation error " + i } });
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "seven GPU errors must not surrender");
+  assert.equal(reloads, 0);
+  h.device.onuncapturederror({ error: { message: "synthetic validation error cap" } });
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "eight GPU errors surrender the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /runtime GPU errors/);
+  assert.equal(reloads, 1);
 });
 
 test("pipelines that share a shader module never use layout:'auto'", async () => {
