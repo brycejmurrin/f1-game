@@ -862,14 +862,14 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let toSun = sunUV - in.uv;
     let dist = length(toSun);
     if (dist > 0.005) {
-      let step = toSun / dist * min(dist, 0.40) / 8.0;
+      let shaftStep = toSun / dist * min(dist, 0.40) / 8.0;
       var shaft = vec3<f32>(0.0);
       let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
-      var uv = in.uv + step * ign;
+      var uv = in.uv + shaftStep * ign;
       var decay = 1.0;
       let reach = 0.32 * shaftSpread;
       for (var i = 0; i < 8; i = i + 1) {
-        uv = uv + step;
+        uv = uv + shaftStep;
         let suv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
         let sw = 1.0 - clamp(length(suv - sunUV) / reach, 0.0, 1.0);
         shaft = shaft + textureSampleLevel(bloomTex, samp, suv, 0.0).rgb * (decay * sw * sw);
