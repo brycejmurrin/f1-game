@@ -325,8 +325,8 @@ const CEILINGS = {
   // -> 3109 perf-hunt: __apex.perf() + autoTier/userTier on renderScale report.
   // -> 3112 carAt exposes craft/awareness/experience/lane for AI racecraft probes.
   // -> 3115 deploy∪perf-hunt merge (split-newline count).
-  // 3115 -> 3118: carAt AI intent peek (stuckT/deploying) for probes.
-  "js/game/apex.js": 3118,
+  // 3115 -> 3119: carAt AI intent peek (stuckT/deploying) for probes.
+  "js/game/apex.js": 3119,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
