@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // wgx-capture.mjs — capture WGX render evidence on a REAL WebGPU device.
 //
-// SwiftShader-Vulkan in this container VALIDATES and runs the frame graph but
-// does not execute shader work — canvas PNGs are usually BLANK here. The
-// reliable capture is __apex.render({what:"view"}) (character raster + coverage
-// from the CPU-side scene tags) plus diag/state JSON.
+// SwiftShader-Dawn EXECUTES shader work in this container (a pipeline draw
+// reads back exact fragment output) — it is only the headless canvas
+// PRESENT/screenshot path that is blank. So the real pixels come from
+// WGX.capturePixels(): a copyTextureToBuffer readback of the presented frame,
+// written here as frame.png (PNG-encoded in-page via a 2D canvas). The
+// page.screenshot() canvas.png is kept only as the present-path probe, and
+// __apex.render({what:"view"}) as the CPU-side coverage cross-check.
 //
 // Usage:
 //   node tools/wgx-capture.mjs [trackId] [--lite] [--out DIR] [--frames N]
@@ -41,13 +44,20 @@ try {
     headless: true,
     args: WEBGPU_CHROMIUM_ARGS,
   });
-  const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+  // Small viewport on purpose: SwiftShader EXECUTES every pass now (offscreen
+  // mode), and a 960×540 full-post frame costs ~10 s of software rasterizing —
+  // 480×270 keeps a capture round under ~20 s.
+  const page = await browser.newPage({ viewport: { width: 480, height: 270 } });
 
   await page.addInitScript((wantLite) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
     // Soft-adapter gate refuses Dawn SwiftShader by default (blank canvas).
     // This tool intentionally validates/captures on software — allow it.
     localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
+    // Offscreen present: headless SwiftShader breaks mapAsync device-wide on
+    // the FIRST getCurrentTexture() call, so capturePixels() only works when
+    // WGX renders its final pass offscreen (wgx.js create() note).
+    localStorage.setItem("apex26.gfxWgxOffscreen", "1");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
   }, lite);
 
@@ -80,6 +90,39 @@ try {
     };
   });
 
+  // Real pixels: WGX.capturePixels() resolves off the NEXT presented frame, so
+  // it needs the render loop live — request it, then let frames run.
+  const frameCap = await page.evaluate(() => new Promise((res) => {
+    // game.js installs the backend by descriptor-copy ONTO GLX, so the live
+    // surface (incl. capturePixels) is read from GLX, not the WGX module.
+    // NB: GLX is a `const` script global — it is NOT on window; test with typeof.
+    if (typeof GLX === "undefined" || !GLX.capturePixels || GLX.backend !== "webgpu")
+      return res({ ok: false, why: "no capturePixels on the live backend (WGX not installed?)" });
+    GLX.capturePixels().then((cap) => {
+      const c = document.createElement("canvas");
+      c.width = cap.width; c.height = cap.height;
+      c.getContext("2d").putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+      // Cheap non-blank stats before encoding: mean + max luma over a stride.
+      let sum = 0, max = 0, n = 0;
+      for (let i = 0; i < cap.data.length; i += 401 * 4) {
+        const l = (cap.data[i] + cap.data[i + 1] + cap.data[i + 2]) / 3;
+        sum += l; if (l > max) max = l; n++;
+      }
+      res({ ok: true, width: cap.width, height: cap.height,
+            meanLuma: +(sum / n).toFixed(1), maxLuma: max,
+            png: c.toDataURL("image/png").split(",")[1] });
+    }, (e) => res({ ok: false, why: String((e && e.message) || e) }));
+    // Offscreen frames are paced by onSubmittedWorkDone (one in flight), and a
+    // software-rasterized frame can take several seconds — wait generously.
+    setTimeout(() => res({ ok: false, why: "capture timed out (no frame presented in 90 s)" }), 90000);
+  }));
+  let frameBytes = 0;
+  if (frameCap.ok) {
+    const buf = Buffer.from(frameCap.png, "base64");
+    writeFileSync(join(outDir, "frame.png"), buf);
+    frameBytes = buf.length;
+  }
+
   const canvasPath = join(outDir, "canvas.png");
   await page.screenshot({ path: canvasPath, type: "png" });
   const canvasStat = require("node:fs").statSync(canvasPath);
@@ -94,13 +137,17 @@ try {
     lastFailure: payload.lastFailure,
     coveragePct: payload.coveragePct,
     light: payload.light,
+    frame: frameCap.ok
+      ? { width: frameCap.width, height: frameCap.height, meanLuma: frameCap.meanLuma, maxLuma: frameCap.maxLuma, bytes: frameBytes }
+      : { failed: frameCap.why },
     canvasBytes: canvasStat.size,
     canvasLikelyBlank: canvasStat.size < 8000,
-    note: "Canvas PNG may be blank in SwiftShader-Vulkan CI — use view.txt + coveragePct.",
+    note: "frame.png is the WGX.capturePixels() readback (real pixels); canvas.png only probes the headless present path and may be blank.",
   }, null, 2));
   writeFileSync(join(outDir, "diag.json"), JSON.stringify(payload.diag, null, 2));
 
-  const ok = payload.backend === "webgpu" && payload.gpuErrors === 0;
+  const ok = payload.backend === "webgpu" && payload.gpuErrors === 0
+    && frameCap.ok && frameCap.maxLuma > 0;
   if (!ok) exitCode = 1;
 
   console.log(JSON.stringify({
@@ -111,9 +158,12 @@ try {
     backend: payload.backend,
     msaa: payload.msaa,
     gpuErrors: payload.gpuErrors,
+    frame: frameCap.ok
+      ? { width: frameCap.width, height: frameCap.height, meanLuma: frameCap.meanLuma, maxLuma: frameCap.maxLuma, bytes: frameBytes }
+      : { failed: frameCap.why },
     coveragePct: payload.coveragePct,
     canvasBytes: canvasStat.size,
-    files: ["canvas.png", "view.txt", "state.json", "diag.json"],
+    files: ["frame.png", "canvas.png", "view.txt", "state.json", "diag.json"],
   }, null, 2));
 } catch (e) {
   console.error("wgx-capture failed:", (e && e.message) || e);

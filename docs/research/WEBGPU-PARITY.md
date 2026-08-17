@@ -63,11 +63,54 @@ node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
 Measured 2026-08-17 after the fourth fix: `true`, on a Monza race, with an
 empty `__apex.logs()` gfx filter — WGX's first live frames in this repo.
 
-SwiftShader is a **validation and lifecycle** oracle, not a visual one: it
-proves the shaders compile, the bind groups match and the buffers upload. It
-says nothing about how the result looks. Note also that three's WebGPU backend
-(TLX auto-picks it on Chromium desktop) still dies here inside its own
-`mappedAtCreation` upload — probe TLX with the WebGL2 pin, as the specs do.
+**CORRECTED 2026-08-17 (same day, later):** SwiftShader-Dawn **executes**
+shader work in this container — a pipeline draw reads back its exact fragment
+output through `copyTextureToBuffer` + `mapAsync`. The old "validates but does
+not execute" belief conflated two real but narrower limits: (a) the headless
+canvas PRESENT/compositor path is blank (screenshots show DOM only), and (b)
+**the first `ctx.getCurrentTexture()` call permanently breaks
+`GPUBuffer.mapAsync` on that device** — every later map rejects with "A valid
+external Instance reference no longer exists", unrecoverable even by
+`unconfigure()` (`configure()` alone is harmless; bisected). So a device that
+ever touched its swapchain can render but never read back — which is exactly
+what "doesn't execute" looked like from outside.
+
+The way past both: `apex26.gfxWgxOffscreen=1` (test-only) renders WGX's final
+pass into an offscreen texture instead of the swapchain, never calls
+`getCurrentTexture()`, and paces the loop with `onSubmittedWorkDone` (one
+frame in flight — without present there is NO backpressure, the queue backlog
+grows unboundedly, and `mapAsync` waits behind it forever). Then
+`GLX.capturePixels()` (WGX-only member) returns real RGBA frames —
+`tools/wgx-capture.mjs` writes them as `frame.png`. The first such capture
+found four latent WGX bugs in one afternoon (§1a below). SwiftShader remains
+non-representative for PERFORMANCE and for anything MSAA (software adapters
+force MSAA 1), but it is now a genuine pixel + validation oracle.
+
+Note also that three's WebGPU backend (TLX auto-picks it on Chromium desktop)
+still dies here inside its own `mappedAtCreation` upload — probe TLX with the
+WebGL2 pin, as the specs do.
+
+### 1a. The four bugs the first real capture found (2026-08-17)
+
+All four passed every mock test and every prior "validates clean" run, because
+they live in exactly the layers the mock cannot model and the old absence
+signals never exercised:
+
+| Bug | Mechanism | Why no run ever saw it |
+|---|---|---|
+| Bloom pipelines `SCENE_FORMAT`, bloom mip textures `POST_HDR_FORMAT` | "Attachment state … not compatible", one invalid submit per frame — black screen | Mismatch needs `rg11b10ufloat-renderable` granted AND a perf tier that runs bloom; container runs never had both |
+| `skyBindGroup` from `skyPipeline`'s auto layout, drawn with `skyPipelineMS` | Two `layout:"auto"` pipelines are NEVER bind-group compatible → every MSAA sky draw invalid | Software adapters force MSAA 1, so the MS pair never ran in-container |
+| `drawParticles` bind group from `pParticle`'s auto layout, drawn with `pParticleAdd` | Same auto-layout rule → every additive spark draw invalid | Needs sparks on screen + someone reading errors during them |
+| `drawParticles` destroyed the grown-over VBO mid-frame | "used in submit while destroyed" — pass already recorded it; frame dropped | Needs growth BETWEEN the frame's two particle calls (smoke → sparks) |
+
+Fixes: shared explicit `createPipelineLayout` for both pairs, bloom pipelines
+on `POST_HDR_FORMAT`, and a `_retiredBufs` list flushed after the frame's
+submit. Guarded by `tests/unit/webgpu-lifecycle.test.mjs` ("pipelines that
+share a shader module never use layout:'auto'" — functional, on the recorded
+descriptors — plus source pins for the container-unreachable bloom/retire
+paths). The capture rig is the primary oracle for this class: the mock
+validates nothing, and faithfully reproducing Dawn's validation in a mock
+would just be a second, worse Dawn.
 
 ---
 
@@ -499,7 +542,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **refuses** by default → GLX fallback (`gfxWgxFail=software WebGPU adapter…`). Escape: `apex26.gfxWgxAllowSoftware=1` |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`, agentview coverage healthy — **GPUCanvasContext still composites blank/white** (CDP + `createImageBitmap` empty). Not a visual oracle. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`, agentview coverage healthy — the GPUCanvasContext still composites blank in headless (present path), **but shader work EXECUTES**: with `apex26.gfxWgxOffscreen=1`, `GLX.capturePixels()` returns real rendered frames (§0 correction / §1a). A visual oracle via `tools/wgx-capture.mjs`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools

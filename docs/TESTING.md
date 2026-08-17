@@ -1048,9 +1048,15 @@ All three were one-line Dawn errors the moment the code ran on a real device.
 Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
 --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
 --use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
-every WGSL module and validates every pipeline. Know the ceiling: Dawn here
-VALIDATES but does not EXECUTE — readbacks return zeros, WGX-canvas
-screenshots are BLANK (environment, not bug), and the full desktop stack can
-LOSE the device seconds in (Chrome reports it as `createBuffer failed, size
-(N) is too large` on a tiny N — that wording means device-lost, not size).
-Validation evidence here is exact; pixel truth still needs a real GPU.
+every WGSL module and validates every pipeline. The ceiling, corrected
+2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
+returns real rendered pixels (offscreen mode; see
+`docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
+found). What remains environmental: WGX-canvas SCREENSHOTS are blank (the
+present path), the first `getCurrentTexture()` call breaks `mapAsync`
+device-wide (why readbacks ever looked like zeros), software adapters force
+MSAA 1 (MSAA-only paths need the unit-test source guards), and the full
+desktop stack can LOSE the device seconds in (Chrome reports it as
+`createBuffer failed, size (N) is too large` on a tiny N — that wording means
+device-lost, not size). Validation evidence here is exact; pixel evidence now
+exists in-container; PERFORMANCE truth still needs a real GPU.

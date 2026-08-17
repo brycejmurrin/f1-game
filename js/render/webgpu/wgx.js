@@ -389,6 +389,7 @@ const WGX = (function () {
     }
 
     let adapter, device, ctx, format;
+    let _offscreen = false;   // set from apex26.gfxWgxOffscreen below
     try {
       // Phones: low-power first. MDN: high-performance on a portable GPU
       // increases device.lost (iOS will shed the device under thermal). Desktop
@@ -424,6 +425,16 @@ const WGX = (function () {
       if (_softAdapter && !_allowSoft) {
         return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
       }
+      // TEST-ONLY offscreen present (apex26.gfxWgxOffscreen=1): headless
+      // Chromium+SwiftShader permanently breaks GPUBuffer.mapAsync on a device
+      // the moment ctx.getCurrentTexture() is FIRST called — "A valid external
+      // Instance reference no longer exists" from then on, unrecoverable even
+      // by unconfigure() (bisected 2026-08-17; configure() alone is harmless).
+      // With this flag the final pass renders into an offscreen texture
+      // instead, the swapchain is never touched, and capturePixels() stays
+      // usable — the container's only real pixel oracle (tools/wgx-capture.mjs
+      // sets it). The visible canvas stays black; never set it for players.
+      try { _offscreen = localStorage.getItem("apex26.gfxWgxOffscreen") === "1"; } catch (_) { /* stays false */ }
       // sampleCount 4 resolveTarget frames have also come back blank on
       // software when the escape hatch is set — force MSAA 1.
       if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
@@ -699,7 +710,8 @@ const WGX = (function () {
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let identInstanceBuf = null;
-    let pParticle = null, pParticleAdd = null, particleUBO = null, particleVBO = null, _particleCap = 0;
+    let pParticle = null, pParticleAdd = null, particleBGL = null, particleUBO = null, particleVBO = null, _particleCap = 0;
+    const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
     let _fxPipes = { 1: {}, 2: {} };
 
@@ -887,8 +899,20 @@ const WGX = (function () {
       // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
       // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
       // melted world; cars still visible because they draw after the sky).
+      // EXPLICIT shared layout — skyBindGroup is set with BOTH pipelines
+      // (drawSky picks the MS variant when the lit pass is multisampled), and
+      // two `layout:"auto"` pipelines are NEVER bind-group compatible, even
+      // when byte-identical. With auto layouts every MSAA sky draw raised
+      // "created with a default layout, and is not compatible" and killed the
+      // whole frame's command buffer — invisible in this container (software
+      // adapters force MSAA 1 above), broken on every real GPU running MSAA 4.
+      const skyBGL = device.createBindGroupLayout({ entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: { type: "uniform" } },
+      ] });
+      const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [skyBGL] });
       skyPipeline = device.createRenderPipeline({
-        layout: "auto",
+        layout: skyLayout,
         vertex: { module: skyModule, entryPoint: "vs_main" },
         fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
         primitive: { topology: "triangle-list" },
@@ -896,7 +920,7 @@ const WGX = (function () {
       });
       if (MSAA_COUNT > 1) {
         skyPipelineMS = device.createRenderPipeline({
-          layout: "auto",
+          layout: skyLayout,
           vertex: { module: skyModule, entryPoint: "vs_main" },
           fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
           primitive: { topology: "triangle-list" },
@@ -905,7 +929,7 @@ const WGX = (function () {
         });
       }
       skyBindGroup = device.createBindGroup({
-        layout: skyPipeline.getBindGroupLayout(0),
+        layout: skyBGL,
         entries: [{ binding: 0, resource: { buffer: skyUBO } }],
       });
 
@@ -1084,8 +1108,15 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         };
-        pBloomDown = fsPipe(_Post.BLOOM_DOWN, SCENE_FORMAT, null);
-        pBloomUp   = fsPipe(_Post.BLOOM_UP,   SCENE_FORMAT, ADD_BLEND);   // additive accumulate
+        // Bloom mips are POST_HDR_FORMAT textures (ensureTargets) — the
+        // pipelines MUST match. These were SCENE_FORMAT for months and no run
+        // ever caught it, because the mismatch only exists when the device
+        // grants rg11b10ufloat-renderable (POST_HDR != SCENE) AND the perf
+        // tier lets bloom run — a combination first hit by the offscreen
+        // capture rig (2026-08-17): "Attachment state of [RenderPipeline] is
+        // not compatible", one invalid submit per frame, black screen.
+        pBloomDown = fsPipe(_Post.BLOOM_DOWN, POST_HDR_FORMAT, null);
+        pBloomUp   = fsPipe(_Post.BLOOM_UP,   POST_HDR_FORMAT, ADD_BLEND);   // additive accumulate
         // SSAO samples a DEPTH texture — "auto" layout infers a *filtering*
         // sampler slot, which WebGPU rejects for depth. Build an explicit layout
         // with a non-filtering sampler (pointSampler is nearest = non-filtering).
@@ -1268,8 +1299,17 @@ const WGX = (function () {
             ] }] };
           const pPrim = { topology: "triangle-list", cullMode: "none" };
           const pDepth = { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" };
+          // EXPLICIT shared layout (same reason as the sky pair above):
+          // drawParticles builds ONE bind group and sets pParticleAdd for
+          // sparks — with auto layouts every additive spark draw raised
+          // "default layout … not compatible" and invalidated the frame.
+          particleBGL = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform" } },
+          ] });
+          const pLayout = device.createPipelineLayout({ bindGroupLayouts: [particleBGL] });
           pParticle = device.createRenderPipeline({
-            layout: "auto",
+            layout: pLayout,
             vertex: pVert,
             fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
             primitive: pPrim,
@@ -1280,7 +1320,7 @@ const WGX = (function () {
           // premultiplies when U.eyeAdd.w=1; alpha-blend + alpha=1 would REPLACE
           // the HDR scene instead of adding.
           pParticleAdd = device.createRenderPipeline({
-            layout: "auto",
+            layout: pLayout,
             vertex: pVert,
             fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
             primitive: pPrim,
@@ -2263,8 +2303,32 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
+    // Offscreen final target (test-only, see the apex26.gfxWgxOffscreen note
+    // in create()): stands in for the swapchain texture so getCurrentTexture()
+    // is never called and mapAsync survives. Same format as the swapchain, so
+    // the FXAA pipeline needs no variant.
+    let _osTex = null, _osW = 0, _osH = 0;
+    // Offscreen mode has NO present backpressure — the swapchain never paces
+    // the loop — so rAF submits frames faster than SwiftShader retires them
+    // and the queue backlog grows without bound. mapAsync resolves only after
+    // ALL earlier submitted work, so the first capture works (small backlog)
+    // and every later one waits behind minutes of queued frames — measured as
+    // "second capturePixels() never resolves". Cap the queue at one in-flight
+    // frame: begin() drops the frame while the previous one is still on the
+    // GPU (a dropped frame is invisible offscreen by definition).
+    let _osBusy = false;
+    function _offscreenTarget() {
+      if (!_osTex || _osW !== width || _osH !== height) {
+        if (_osTex) { try { _osTex.destroy(); } catch (_) { /* already invalid */ } }
+        _osTex = device.createTexture({ size: [width, height], format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+        _osW = width; _osH = height;
+      }
+      return _osTex;
+    }
+
     // ── begin(frame): open the lit pass into the HDR scene target ──
-    let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
+    let encoder = null, litPass = null, currentView = null, _frameTex = null, _drawSlot = 0;
     function begin(frame) {
       if (_lost) return false;
       try {
@@ -2272,8 +2336,10 @@ const WGX = (function () {
         if (width < 1) resize();
         ensureTargets();
         if (!sceneView) return false;
+        if (_offscreen && _osBusy) return false;   // previous frame still on the GPU
         let tex;
-        try { tex = ctx.getCurrentTexture(); } catch (_) { return false; /* swapchain lost mid-frame: drop the frame */ }
+        try { tex = _offscreen ? _offscreenTarget() : ctx.getCurrentTexture(); } catch (_) { return false; /* swapchain lost mid-frame: drop the frame */ }
+        _frameTex = tex;   // capture source: THE texture this frame renders into
         currentView = tex.createView();
         _drawSlot = 0;
         _fxQuadSlot = 0; _fxDecalSlot = 0;
@@ -2538,6 +2604,92 @@ const WGX = (function () {
       return { ux, uy, flare, shaft, onScreen: ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1 };
     }
 
+    // ── capturePixels(): read the NEXT presented frame back as RGBA ──────────
+    // The swapchain is configured with COPY_SRC (create() tail) precisely so
+    // this can exist: present() appends one copyTextureToBuffer from
+    // getCurrentTexture() — still this frame's texture inside the same task —
+    // to the frame's own encoder, then maps the staging buffer after submit.
+    // This is the container's ONLY real pixel oracle for WGX: SwiftShader-Dawn
+    // EXECUTES draws (verified: pipeline draw reads back exact shader output),
+    // it is only the headless canvas PRESENT/screenshot path that shows blank.
+    // One request in flight; resolves {width, height, data:Uint8ClampedArray}
+    // already swizzled to RGBA regardless of the bgra8unorm swapchain format.
+    let _capReq = null;
+    function capturePixels() {
+      if (_lost) return Promise.reject(new Error("device lost"));
+      if (_capReq) return Promise.reject(new Error("capture already pending"));
+      return new Promise((resolve, reject) => { _capReq = { resolve, reject }; });
+    }
+    // Encode the readback copy into the FRAME'S OWN encoder (call just before
+    // its finish/submit), then start the map after submit. Split in two
+    // because present() has TWO exits — the tonemap-blit fallback (post off /
+    // perf tier dropped) and the full post chain — and a capture hooked on
+    // only one of them starves whenever PerfGov moves the frame to the other.
+    function _capEncode() {
+      if (!_capReq) return null;
+      try {
+        // _frameTex is THE texture this frame's final pass wrote (set in
+        // begin(); the offscreen stand-in on headless SwiftShader, where the
+        // swapchain path cannot work — the first getCurrentTexture() call
+        // kills mapAsync device-wide). Never re-derive it here: a mid-frame
+        // resize would make _offscreenTarget() DESTROY it while it is still
+        // referenced by this very encoder ("used in submit while destroyed").
+        const capTex = _frameTex;
+        if (!capTex) throw new Error("no frame texture");
+        const w = capTex.width, h = capTex.height;
+        const bpr = (w * 4 + 255) & ~255;
+        const buf = device.createBuffer({ size: bpr * h,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        encoder.copyTextureToBuffer({ texture: capTex },
+          { buffer: buf, bytesPerRow: bpr }, [w, h]);
+        return { buf, bpr, w, h };
+      } catch (e) {
+        const r = _capReq; _capReq = null; r.reject(e);
+        return null;
+      }
+    }
+    // Destroy buffers retired mid-frame (drawParticles VBO growth) now that the
+    // frame's submit has consumed their last recorded reference.
+    function _retireFlush() {
+      for (let i = 0; i < _retiredBufs.length; i++) {
+        try { _retiredBufs[i].destroy(); } catch (_) { /* already invalid */ }
+      }
+      _retiredBufs.length = 0;
+      if (_offscreen && !_osBusy) {
+        _osBusy = true;
+        try {
+          device.queue.onSubmittedWorkDone().then(
+            function () { _osBusy = false; },
+            function () { _osBusy = false; });
+        } catch (_) { _osBusy = false; /* keep rendering unpaced */ }
+      }
+    }
+    function _capFinish(cap) {
+      if (!cap) return;
+      const req = _capReq; _capReq = null;
+      const { buf, bpr, w, h } = cap;
+      buf.mapAsync(GPUMapMode.READ).then(function () {
+        const src = new Uint8Array(buf.getMappedRange());
+        const out = new Uint8ClampedArray(w * h * 4);
+        const bgra = format === "bgra8unorm";
+        for (let y = 0; y < h; y++) {
+          const s = y * bpr, d = y * w * 4;
+          for (let x = 0; x < w; x++) {
+            const si = s + x * 4, di = d + x * 4;
+            out[di]     = src[bgra ? si + 2 : si];
+            out[di + 1] = src[si + 1];
+            out[di + 2] = src[bgra ? si : si + 2];
+            out[di + 3] = 255;   // alphaMode "opaque": ignore stored alpha
+          }
+        }
+        try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
+        req.resolve({ width: w, height: h, data: out });
+      }, function (e) {
+        try { buf.destroy(); } catch (_) { /* device dying */ }
+        req.reject(e);
+      });
+    }
+
     // ── present(opts): close the lit pass, run the Phase-4 post chain
     //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
     function present(opts) {
@@ -2584,7 +2736,10 @@ const WGX = (function () {
       // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
+        const cap = _capEncode();
         device.queue.submit([encoder.finish()]);
+        _retireFlush();
+        _capFinish(cap);
         encoder = null; currentView = null;
         _jsStrikes = 0;   // a presented frame clears the strike count
         if (!_okCounted) { _okCounted = true; _healTick(); }
@@ -2878,7 +3033,10 @@ const WGX = (function () {
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
+      const _cap = _capEncode();
       device.queue.submit([encoder.finish()]);
+      _retireFlush();
+      _capFinish(_cap);
       if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
         try {
           _gpuReadBuf.mapAsync(GPUMapMode.READ).then(function () {
@@ -2896,6 +3054,7 @@ const WGX = (function () {
       } catch (e) {
         // Same as begin(): a dying device must not paint "Caught @ tick".
         _jsStrike("present", e);
+        if (_capReq) { const r = _capReq; _capReq = null; r.reject(e); }
       }
     }
 
@@ -3257,7 +3416,13 @@ const WGX = (function () {
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
       if (!_particleCap || _particleCap < floatCount) {
-        if (particleVBO) try { particleVBO.destroy(); } catch (_) { /* grow replaces it */ }
+        // NEVER destroy the old VBO here: this frame's litPass may have already
+        // recorded a setVertexBuffer on it (game.js calls drawParticles twice a
+        // frame — alpha smoke then additive sparks — so growth between the two
+        // referenced a destroyed buffer: "used in submit while destroyed", one
+        // invalid command buffer, the whole frame dropped). Retire it instead;
+        // present() destroys retired buffers AFTER the frame's submit.
+        if (particleVBO) _retiredBufs.push(particleVBO);
         _particleCap = Math.max(floatCount, 2560);
         particleVBO = device.createBuffer({
           size: _particleCap * 4,
@@ -3271,7 +3436,7 @@ const WGX = (function () {
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
       device.queue.writeBuffer(particleUBO, 0, s, 0, 20);
       const bg = device.createBindGroup({
-        layout: pParticle.getBindGroupLayout(0),
+        layout: particleBGL,   // shared EXPLICIT layout: valid with BOTH pipelines
         entries: [{ binding: 0, resource: { buffer: particleUBO } }],
       });
       litPass.setPipeline(additive && pParticleAdd ? pParticleAdd : pParticle);
@@ -3715,6 +3880,11 @@ const WGX = (function () {
       // IS_MOBILE gate — GRAPHICS: HIGH must not buy a per-frame extra map.
       carShadowState: () => ({ enabled: !!carShadowView && !WGX_LITE, arms: _carArms }),
       lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx }),
+
+      // extension: reads the next presented frame back as RGBA pixels — the
+      // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the
+      // backend-surface-parity test imposes nothing on GLX/TLX for it.
+      capturePixels,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

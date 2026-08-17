@@ -29,12 +29,19 @@ matrix (full/lite × with/without rg11b10) after ANY wgsl or pipeline change —
 the container adapter HAS `rg11b10ufloat-renderable`, so without `--no-rg11b10`
 the fallback branch is never exercised.
 
-**The ceiling (do not chase pixels here):** this environment VALIDATES but does
-not EXECUTE. WGX canvas screenshots are BLANK, readbacks return zeros, and
-SwiftShader may lose the device seconds after a clean init — all environment
-limits, not bugs. `deviceLostHint: true` after a clean init is a note, not a
-failure. Scene truth is `__apex.render({what:"view"})`; pixel sign-off needs a
-real GPU (deployed site + `mcp-probe`, or a phone).
+**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES shader work
+here. Two narrower limits remain: headless canvas PRESENT is blank
+(screenshots show DOM only), and the FIRST `getCurrentTexture()` call
+permanently breaks `mapAsync` on that device ("A valid external Instance
+reference no longer exists"). Real pixels: `node tools/wgx-capture.mjs <track>`
+— it sets `apex26.gfxWgxOffscreen=1` (WGX renders its final pass offscreen,
+never touches the swapchain, paces one frame in flight) and writes the
+`GLX.capturePixels()` readback as `frame.png`. That capture found the bloom
+format, sky-MSAA layout, particle layout, and particle-VBO retire bugs in one
+afternoon — prefer it over reasoning from absence. Still true: SwiftShader is
+not a PERFORMANCE oracle, software adapters force MSAA 1 (MSAA-only paths need
+the source guards in `webgpu-lifecycle.test.mjs`), and `deviceLostHint: true`
+after a clean init is a note, not a failure.
 
 ## 2. The three shipped defect classes (2026-08-17) — check these first
 
@@ -113,6 +120,7 @@ node tools/apex-eval.mjs montreal "a.diag({download:false}).env" --raw \
 ```
 
 For a real browser session use the `mcp-probe` skill (set
-`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload). Remember
-`render({what:"view"})` is the scene truth in headless; screenshots of the WGX
-canvas are blank in-container (see §1 ceiling).
+`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload).
+`render({what:"view"})` is the cheap scene truth; for REAL pixels run
+`node tools/wgx-capture.mjs <track>` (offscreen capture — the WGX canvas
+itself still screenshots blank in-container; see §1 ceiling, corrected).
