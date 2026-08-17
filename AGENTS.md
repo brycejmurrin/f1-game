@@ -214,6 +214,17 @@ the LAST frame and is stale under `headless(true)`; `snapCam()` after
 `park()`/`jump()` before any shot. `node tools/agent.mjs <track> <cmd>` is the
 same surface from a shell.
 
+## Agent extensions (skills / subagents)
+
+- **Skills** (on-demand workflows): `.claude/skills/` — index in
+  `.claude/skills/README.md`. Live game + deploy MCP: `mcp-probe`.
+- **Subagents** (isolated context): `.claude/agents/` — index in
+  `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
+  post-deploy / public-web worker (no Chrome, no Playwright).
+- **Cursor** loads the same Claude paths; thin always-on pointer:
+  `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
+  `.cursor/skills/`.
+
 ## Area references (load on demand)
 
 Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
