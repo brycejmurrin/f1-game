@@ -70,12 +70,11 @@ test("every skill: name matches folder, description has a trigger, body ≤ 500 
 });
 
 test("previously-fat skills stay split (index + references/)", () => {
-  // Measured 2026-08-17 then split: survey-ui-matrix 389, agent-view 298,
-  // playwright-probe 200, restructure-screens-css 209, multiplayer-debug 193,
-  // career-mode 176. A revert that pastes the catalog back into SKILL.md
-  // would pass the 500-line ceiling and still burn tokens.
+  // Measured 2026-08-17 then split. A revert that pastes the catalog back
+  // into SKILL.md would pass the 500-line ceiling and still burn tokens.
   const splits = [
     ["survey-ui-matrix", "references/probes.md"],
+    ["survey-ui-matrix", "references/setup.md"],
     ["agent-view", "references/surface.md"],
     ["playwright-probe", "references/recipes.md"],
     ["restructure-screens-css", "references/rules.md"],
@@ -84,6 +83,18 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["race-incidents-control", "references/workflow.md"],
     ["new-track", "references/workflow.md"],
     ["webgl-debug", "references/failures.md"],
+    ["garage-parts-livery", "references/workflow.md"],
+    ["lighting-tuner", "references/symptoms.md"],
+    ["tune-physics", "references/harness.md"],
+    ["car-viewer", "references/presets.md"],
+    ["scene-graph-instancing", "references/workflow.md"],
+    ["audio-debug", "references/diagnose.md"],
+    ["survey-track", "references/loop.md"],
+    ["pwa-cache-service-worker", "references/workflow.md"],
+    ["asset-pack", "references/workflow.md"],
+    ["ui-menu-a11y", "references/workflow.md"],
+    ["check-changes", "references/guards.md"],
+    ["webgpu-debug", "references/defects.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -91,6 +102,26 @@ test("previously-fat skills stay split (index + references/)", () => {
     assert.match(skill, new RegExp(ref.replace(".", "\\.")));
     assert.ok(fs.existsSync(path.join(SKILLS, name, ref)), `${name} lost ${ref}`);
   }
+});
+
+test("skills do not recommend the retired test:career group", () => {
+  // career + quali + season + TT live in `test:modes`. `test-bg.mjs career`
+  // exits 2 (unknown group). Saying "there is no test:career" is the warning.
+  const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".md")) {
+        const text = fs.readFileSync(p, "utf8");
+        if (/test-bg\.mjs career\b/.test(text) || /npm run test:career\b/.test(text))
+          bad.push(path.relative(ROOT, p));
+      }
+    }
+  };
+  for (const d of dirs) walk(path.join(SKILLS, d.name));
+  assert.deepEqual(bad, [], "use `test-bg.mjs modes` — there is no test:career");
 });
 
 test("every custom subagent declares name, description, and model", () => {

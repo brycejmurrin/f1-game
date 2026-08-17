@@ -5,140 +5,40 @@ description: Use when the engine sounds flat at high speed, sfx isn't triggering
 
 # Debug and tune the audio engine
 
-The game uses a WebAudio synth (`js/game/audio.js` — the `GameAudio` IIFE). The
-engine voice has two layers: a **sample-based core** (CC0 MP3s in
-`assets/sfx/f1_engine.mp3` + `f1_rev.mp3`, pitched via `playbackRate`) and a
-**synth fallback** (detuned sawtooth oscillators + lowpass) that takes over if
-the samples haven't decoded yet. Gear-shift pops, collision thuds, and ambient
-music tracks are separate layers. Three **independent toggles** under one master:
+WebAudio synth in `js/game/audio.js` (`GameAudio`). Sample core (CC0 MP3s in
+`assets/sfx/`) plus synth fallback. Three **independent** toggles under one
+master:
 
-| Bus | API | What it carries |
+| Bus | API | Carries |
 |---|---|---|
-| **Master** | `GameAudio.setEnabled(b)` / `soundOn` | Both buses — `#soundbtn` on the **title screen only** |
+| **Master** | `GameAudio.setEnabled(b)` / `soundOn` | Both — `#soundbtn` on the **title screen only** |
 | **SFX** | `GameAudio.setSfxEnabled(b)` / `sfxOn` | Engine, skids, rain, UI ticks, gear pops |
-| **Music** | `GameAudio.setMusicEnabled(b)` / `musicEnabled` | Race/menu soundtrack (built-in playlist or Spotify backend) |
+| **Music** | `GameAudio.setMusicEnabled(b)` / `musicEnabled` | Soundtrack |
 
-Signal path: engine/SFX → `sfxBus` → `master` → destination; music → `musicGain` →
-`master`. Muting music does **not** silence the engine — it sits on the sfx bus.
+Muting music does **not** silence the engine — it sits on the sfx bus.
 
-## Architecture overview
-
-`GameAudio` exposes one object on `window.GameAudio`.  Key internals:
-
-| Layer | What it does |
-|---|---|
-| Engine (sample core) | `f1_engine.mp3` (idle loop) + `f1_rev.mp3` (high-rev loop) crossfaded by load; pitch set via `playbackRate` per gear/RPM |
-| Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass; fires until samples are decoded |
-| Turbo whine | Sine oscillator at ~1500 Hz, level tracks throttle |
-| MGU-K harvest whirr | Filtered noise that fades in when decelerating |
-| Rev-limiter / gear-shift pop | Short blip at gear-change boundary; `shift()` call |
-| Collision thud | White-noise burst scaled to impact `dv` |
-| Tyre screech / skid | Filtered noise proportional to lateral slip |
-| Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
-| Master enable | `GameAudio.setEnabled(bool)` — sets master gain 0 or 0.8; wired to title `#soundbtn` |
-| SFX enable | `GameAudio.setSfxEnabled(bool)` — mutes engine/SFX only; music keeps playing |
-| Music enable | `GameAudio.setMusicEnabled(bool)` — mutes soundtrack only; engine keeps humming |
-
-## Quick inspection (browser console)
+## Quick inspection
 
 ```js
-// Master mute (both buses — title #soundbtn):
-GameAudio.enabled()   // true | false
-GameAudio.setEnabled(false)   // master gain → 0
-GameAudio.setEnabled(true)    // master gain → 0.8
-
-// Per-bus (in-race pause → #audioset):
-GameAudio.setSfxEnabled(false)    // engine/SFX off; music can stay on
-GameAudio.setMusicEnabled(false)  // soundtrack off; engine keeps humming
-
-// Sample-load status + whether the sample or synth core is active:
-GameAudio.debug()
-// { samplesReady: bool, usingSamples: bool, engineOn: bool,
-//   loop: { s: loopStart, e: loopEnd } | null }
-
-// Current playback-rate (pitch multiplier) of the idle engine sample:
-GameAudio.rate()   // e.g. 1.42 at mid-speed — 0 if synth core or engine off
-
-// Spectral centroid of live engine output in Hz (pitch proxy):
-GameAudio.centroidHz()  // e.g. 340 at idle, higher at speed
-
-// The AudioContext itself is a private var — not directly exposed.
-// Use GameAudio.debug().samplesReady to check if assets loaded,
-// and __apex.timing().raceT to confirm the sim is running.
+GameAudio.enabled()
+GameAudio.setEnabled(true)          // master gain → 0.8
+GameAudio.setSfxEnabled(false)      // engine/SFX off; music can stay
+GameAudio.setMusicEnabled(false)    // soundtrack off; engine keeps humming
+GameAudio.debug()                   // samplesReady, usingSamples, engineOn, loop
+GameAudio.rate()                    // idle-sample playbackRate (0 if synth/off)
+GameAudio.centroidHz()              // spectral centroid of live engine
 ```
-
-## Tuning the engine pitch curve
-
-The pitch mapping lives in `js/game/audio.js` — search for `setEngine(rev01,
-boost01, offroad, speed01, gear)`.  The game loop passes normalised rev/throttle
-and gear each frame; the **sample core** sets `playbackRate` from those inputs,
-and the **synth fallback** sets oscillator frequencies directly until MP3s decode.
-To shift the tonal range, adjust the gear-ratio constants or the rev→rate mapping
-inside `setEngine`.
-
-```js
-// Manual probe (matches the signature the game uses):
-GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
-// rev01, boost01, offroad, speed01, gear
-```
-
-After editing `js/game/audio.js`, **bump the cache version** (`bump-cache` skill) and
-reload — WebAudio doesn't hot-reload.  Use `GameAudio.rate()` before and after
-to confirm the playback-rate changed at the same speed.
-
-## In-race mute (not `#soundbtn`)
-
-During a race `#soundbtn` is **hidden** — the title-screen master toggle is not
-reachable. Open **pause → MUSIC & SOUND** (`#pm-audio` opens `#audioset`):
-
-| Control | DOM ids | Effect |
-|---|---|---|
-| Music ON/OFF | `#as-music-on` / `#as-music-off` | `setMusicEnabled` — soundtrack only |
-| SFX ON/OFF | `#as-sound-on` / `#as-sound-off` | `setSfxEnabled` — engine + effects only |
-
-**Common mistake:** turning **music** off and expecting silence — the engine idle
-still hums on the **sfx** bus. That is correct behaviour, not a failed mute.
-
-**Pause stops the engine:** `setPaused(true)` calls `GameAudio.stopEngine()`; resume
-calls `GameAudio.startEngine()` again when `soundOn` is true (independent of the
-music toggle).
-
-## Diagnosing silence or flat pitch
-
-1. Check `GameAudio.enabled()` — if `false`, call `GameAudio.setEnabled(true)`.
-   Also check `GameAudio.setSfxEnabled(true)` if only the engine is missing while
-   music plays.
-2. Check `GameAudio.debug().samplesReady` — if `false`, the MP3s haven't decoded
-   yet (network/CORS issue, or the CC0 files are absent from the checkout); the
-   synth fallback should be active.  Check `usingSamples` to confirm which core
-   is running — absence of sample files is not fatal.
-3. If the AudioContext is suspended (autoplay policy), clicking `#soundbtn` or
-   any user gesture resumes it.  In the browser console:
-   ```js
-   // Reach the AudioContext indirectly — it's private, but the game's
-   // init() is triggered by user interaction. For a quick test:
-   document.dispatchEvent(new MouseEvent("click"));
-   ```
-4. Open Chrome DevTools → three-dot → **Web Audio** to see the live node graph
-   and verify oscillators / buffer sources are connected to the destination.
-5. Confirm the game loop is running: `__apex.timing().raceT` should be
-   increasing.  A frozen sim means `setEngine()` never gets called and pitch
-   stays at the last value.
-
-## Testing
-
-`tests/specs/audio-smoke.spec.js` covers three browser checks: `GameAudio` initialises
-without console errors, re-enabling sound during a race restarts race music, and
-a real user-gesture unlock runs engine synthesis (`setEngine(0.75, 0.4, false,
-0.6, 4)` then `centroidHz() > 50`, `contextState === "running"`). Run it with:
 
 ```sh
-npx playwright test tests/specs/audio-smoke.spec.js
+node tools/test-bg.mjs audio        # audio-smoke + music-library
+python3 -m http.server 3456         # then DevTools → Web Audio
 ```
 
-For live inspection, start the dev server and use DevTools Web Audio:
+`tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a
+user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
+`centroidHz() > 50`). After editing `js/game/audio.js`, **bump-cache**.
 
-```sh
-python3 -m http.server 3456
-# Open http://localhost:3456, start a race, open DevTools → Web Audio
-```
+## Load on demand
+
+- Layer table, in-race `#audioset`, pitch curve, silence diagnosis →
+  [references/diagnose.md](references/diagnose.md).

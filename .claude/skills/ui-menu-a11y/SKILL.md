@@ -3,138 +3,48 @@ name: ui-menu-a11y
 description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, or menu/HUD accessibility regressions are being changed or debugged."
 ---
 
-## Overview
+# Menu / HUD accessibility
 
-Menu correctness is one shared layer question plus declared screen exits: ask
-`UiLayers` what is on top, and route Escape/back through the same button path a
-player would use.
+One shared layer question plus declared screen exits: ask `UiLayers` what is
+on top, and route Escape/back through the same button path a player would use.
 
 ## When to Use
 
-Use this for:
-
 - Adding, removing, or restacking a menu/dialog/screen.
-- Fixing Escape, BACK, focus, wheel/trackpad scroll, arrow-key navigation, or
-  touch menu bugs.
-- Changing `.sheet`, `.pane`, scroll regions, selected chips, UI scale, or HUD
-  layout CSS.
-- Debugging iPad/touch-only layout issues, especially after `zoom`,
-  `getBoundingClientRect()`, or `(pointer: coarse)` changes.
+- Escape, BACK, focus, wheel/trackpad, arrow-key, or touch menu bugs.
+- `.sheet` / `.pane` / selected chips / UI scale / HUD layout CSS.
+- iPad/touch layout after `zoom`, `getBoundingClientRect()`, or
+  `(pointer: coarse)` changes.
 
-Do **not** use this for:
-
-- In-race driving input unless the bug is that a menu lets keys reach the car.
-- Data-hub telemetry logic; use it only for the overlay's menu behavior.
-- Renderer/canvas visuals outside menu/HUD layout.
+Do **not** use for in-race driving input (unless a menu leaks keys), data-hub
+logic, or renderer/canvas visuals outside menu/HUD layout. Whole-matrix
+review → **survey-ui-matrix**. Restructure decisions →
+**restructure-screens-css**.
 
 ## Quick Reference
 
 | Surface | Owner | Contract |
 |---|---|---|
-| Topmost screen / input gate | `js/game/uilayers.js` | `UiLayers.top()` ranks `:modal` above any z-index; `UiLayers.anyOpen()` gates driving keys |
-| Dialog top layer seam | `js/game/topmodal.js` | `hidden` remains source of truth; `<dialog>.showModal()` mirrors it |
-| Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control; do not invent a second close path |
-| Desktop menu navigation | `js/game/menunav.js` | Redirect wheel only when no scroll region owns it; arrow keys move by geometry |
-| Sheet layout classification | `js/game/sheetshape.js` | Writes `data-shape` / `data-pair` for CSS; JS consumers should not read it |
-| Selected-state a11y | `js/game/ariastate.js` | Mirrors visual selected classes to `aria-pressed` unless semantics are already claimed |
-| Scroll affordance | `js/game/scrollfade.js` | Measures menu scroll regions and writes fade/position CSS classes |
-
-Commands:
+| Topmost / input gate | `js/game/uilayers.js` | `top()` ranks `:modal` above z-index; `anyOpen()` gates driving keys |
+| Dialog seam | `js/game/topmodal.js` | `hidden` is source of truth; `showModal()` mirrors it |
+| Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control |
+| Desktop nav | `js/game/menunav.js` | Redirect wheel only when no scroller owns it |
+| Sheet class | `js/game/sheetshape.js` | Writes `data-shape` / `data-pair`; JS must not read it |
+| Selected a11y | `js/game/ariastate.js` | Mirrors visual selected → `aria-pressed` unless claimed |
+| Scroll fade | `js/game/scrollfade.js` | Measures regions; writes fade/position classes |
 
 ```sh
 node tools/pick-tests.mjs js/game/uilayers.js js/game/topmodal.js css/components.css
 node tools/test-bg.mjs ui
+node tools/test-bg.mjs gallery          # ui-audit captures — read the PNGs
 npm run test:tooling-fast
 ```
 
-Relevant specs in `test:ui`:
+`tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
+Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
+`docs/ARCHITECTURE-REVIEW.md`.
 
-| Spec | What it tends to catch |
-|---|---|
-| `tests/specs/menu-keyboard.spec.js` | Arrow-key movement, wheel redirect, open-layer targeting |
-| `tests/specs/ui-button-touch.spec.js` | Escape/back ladder (incl. pause settings → `#pm-settings-close`), touch controls, dialog cancel paths |
-| `tests/specs/ui-scale.spec.js` | UI-size/zoom and coarse-pointer layout regressions |
-| `tests/specs/hud-layout.spec.js` | HUD safe-area, touch landscape, control docking |
-| `tests/specs/ui-audit.spec.js` | The screen gallery — every menu at four viewports (portrait, landscape, iPad, desktop). A capture harness: it asserts nothing, so read its PNGs, do not read its pass count. `node tools/test-bg.mjs gallery` |
+## Load on demand
 
-Deep references:
-
-- `docs/research/PLATFORM-INPUT-NOTES.md`
-- open UI defects and the layout backlog in `docs/ARCHITECTURE-REVIEW.md`
-- `check-changes` skill for picking/running validation groups.
-
-## Workflow / Implementation
-
-1. **Identify the layer first.**
-   - If keys, wheel, or Escape go to the wrong place, inspect
-     `UiLayers.top()` / `UiLayers.anyOpen()` before touching individual modules.
-   - New full-screen overlays must be added to the internal `DEFS` array in
-     `uilayers.js` (only `LAYER_IDS` is exported — do not assign `UiLayers.DEFS`).
-
-2. **Use the declared close door.**
-   - For real dialogs, let `TopModal` mirror `hidden` to `showModal()`/`close()`.
-   - Add `data-esc-close="<button-id>"` to name the same action the visible back
-     button uses.
-   - Use `data-esc="none"` only for screens that must refuse Escape.
-
-3. **Respect the platform top layer.**
-   - A modal dialog has `z-index: auto`; do not sort it with
-     `parseInt(zIndex)`.
-   - `UiLayers` treats `:modal` as above every z-index. Keep any new ranking
-     logic there, not in each consumer.
-
-4. **Keep keyboard and wheel routing menu-local.**
-   - `MenuNav` owns desktop wheel redirect and arrow-key focus movement.
-   - Do not redirect a wheel gesture that already landed on a scroll region; a
-     pinned pane should contain the gesture, not donate it sideways.
-   - The photo/free-camera sub-layer is not a menu; arrows belong to the camera.
-
-5. **Measure the actual thing CSS needs.**
-   - `SheetShape` classifies `.sheet` geometry and writes attributes for CSS.
-   - Do not replace it with viewport orientation: a portrait viewport can contain
-     a wide sheet.
-   - When a screen opens, classify in the same tick; waiting for only
-     `ResizeObserver` creates a one-frame wrong layout.
-
-6. **Make visual state audible.**
-   - If a group of buttons uses `.active`, `.dh-active`, or an equivalent visual
-     selected state, ensure `AriaState` observes that root/class or add explicit
-     semantics (`aria-selected`, `aria-checked`, `role=option`, `role=tab`).
-   - Keep HUD roots out of broad observers; the HUD mutates every frame.
-
-7. **Handle touch/UI-scale geometry carefully.**
-   - `.sheet` uses `zoom: var(--ui-scale)`; `getBoundingClientRect()` returns the
-     scaled box.
-   - On touch, `--ui-scale` defaults above 1.0, so raw-width arithmetic can be
-     right on desktop and wrong on iPad.
-   - `(pointer: coarse)` is the primary pointer only; use `any-pointer` when the
-     question is "does any attached input exist?"
-
-8. **Verify through the grouped tests.**
-   - Run `npm run test:tooling-fast` for docs/load-order/style inventory checks.
-   - Run `test:ui` via `tools/test-bg.mjs`; see `check-changes`.
-   - If JS/CSS changed, use `bump-cache` before committing.
-
-### Pause settings overlay
-
-Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible. Escape
-routes through `data-esc-close="pm-settings-close"` on that screen (same ladder
-asserted in `tests/specs/ui-button-touch.spec.js`). Scroll region:
-`#pmsettings-inner .sheet-body.pane`.
-
-## Common Mistakes
-
-- Closing a dialog by setting `open`/`close()` directly instead of changing
-  `hidden`, which desynchronizes the app state machine.
-- Adding a new screen to markup/CSS but not to `UiLayers`, `ScrollFade`, or
-  `AriaState` where applicable.
-- Handling Escape in a second bespoke code path instead of clicking the
-  `data-esc-close` control.
-- Ranking a `<dialog>` by z-index; the browser top layer is not orderable that
-  way.
-- Using viewport orientation as a proxy for sheet shape.
-- Forgetting that `zoom` changes layout boxes, so touch UI scale changes all
-  measured geometry.
-- Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that must
-  also run when rendering is suspended.
-- Editing JS/CSS and forgetting the `?v=N` plus `version.json` cache bump.
+- Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
+  [references/workflow.md](references/workflow.md).

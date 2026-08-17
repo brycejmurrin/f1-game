@@ -5,120 +5,57 @@ description: Use when WebGPU/WGX rendering is wrong — black screen, missing ro
 
 # Debug WebGPU / WGX renderer issues
 
-WGX lives in `js/render/webgpu/` — `wgx.js` (the core, ~3.6k lines),
-`wgsl-chunks.js` (lit/material WGSL as data), `wgsl-post.js` (post chain).
-It is a DEFERRED backend: no `<script>` tag; `game.js` injects it at boot when
-`apex26.gfxBackend === "webgpu"` (sw.js precaches it — see
-`pwa-cache-service-worker`). GLX stays the shipped default; every WGX failure
-must degrade to GLX, never to a dead canvas.
+WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-post.js`.
+DEFERRED: no `<script>` tag; `js/game.js` injects it when
+`apex26.gfxBackend === "webgpu"`. GLX stays the shipped default; every WGX
+failure must degrade to GLX, never a dead canvas.
 
-## 1. Real Dawn validation in-container — ALWAYS the first probe
+## 1. First probe — static, then Dawn
 
 ```sh
 node tools/wgx-validate.mjs --static             # no browser: sky/MSAA/bloom/fw1
 node tools/wgx-validate.mjs                      # full stack (MSAA 4, HDR)
-node tools/wgx-validate.mjs --lite               # the PHONE stack (MSAA 1)
-node tools/wgx-validate.mjs --no-rg11b10         # spoof a phone-class adapter:
-                                                 # forces the rgba16float post-
-                                                 # target fallback branch
-node tools/wgx-validate.mjs vegas --frames 120   # more frames on a night track
+node tools/wgx-validate.mjs --lite               # phone stack (MSAA 1)
+node tools/wgx-validate.mjs --no-rg11b10         # rgba16float fallback
 ```
 
-PASS = binds `webgpu`, zero WGSL parse errors, zero GPU validation errors, and
-the character raster sees the world (road ~40%+ coverage on montreal). Run the
-matrix (full/lite × with/without rg11b10) after ANY wgsl or pipeline change —
-the container adapter HAS `rg11b10ufloat-renderable`, so without `--no-rg11b10`
-the fallback branch is never exercised.
+`--static` is the default for **verify-agent** and any subagent. The full
+Dawn pass launches Chromium — parent session only. The container adapter HAS
+`rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
+exercised.
 
-**The ceiling (do not chase pixels here):** this environment VALIDATES but does
-not EXECUTE. WGX canvas screenshots are BLANK, readbacks return zeros, and
-SwiftShader may lose the device seconds after a clean init — all environment
-limits, not bugs. `deviceLostHint: true` after a clean init is a note, not a
-failure. Scene truth is `__apex.render({what:"view"})`; pixel sign-off needs a
-real GPU (deployed site + `mcp-probe`, or a phone).
+**Ceiling:** this environment VALIDATES but does not EXECUTE. WGX canvas
+screenshots are BLANK; SwiftShader may lose the device after a clean init
+(`deviceLostHint: true` is a note, not a failure). Scene truth is
+`__apex.render({what:"view"})`; pixel sign-off needs a real GPU.
 
-## 2. The three shipped defect classes (2026-08-17) — check these first
-
-1. **Late sky erased the world.** Sky pipelines must use
-   `depthCompare: "less-equal"` with `depthWriteEnabled: false` (GLX LEQUAL
-   parity). With `"always"` + `skyLate` default-ON, the sky (depth 1.0, drawn
-   AFTER the world) overwrote everything except cars/FX. Only the MSAA
-   depth-resolve pipeline legitimately uses `"always"` (it fills depth).
-2. **WGSL derivative uniformity — the NaN-white road.** Unlike GLSL, WGSL makes
-   a `dpdx`/`dpdy`/`fwidth` call reached through a non-uniform branch or early
-   return a `derivative_uniformity` error. Strict Dawn rejects the module (WGX
-   silently falls back to GLX); warning-mode Dawn (phones) executes UNDEFINED
-   derivatives exactly where returns diverge — the road rendered NaN-white
-   while grass/walls/cars looked fine. The shape that ships: `fs_main` takes
-   ALL derivatives of varyings FIRST, in uniform flow (`fwWpos`, `fwTrk`), and
-   threads the widths into the material helpers as parameters. Enforced
-   statically by `tests/unit/webgpu-lifecycle.test.mjs` (helpers must contain
-   no derivative calls). Never add a derivative inside `applyMaterial*`,
-   `roadMarkings`, `matBumpHeight`, or `matTexUV`.
-3. **Spec-invalid resources.** WebGPU allows ONLY sample counts 1 and 4 —
-   `MSAA_COUNT` is 4 (1 in lite); a 2 invalidates every MS pipeline on every
-   compliant device. `rg11b10ufloat` is color-renderable only behind the
-   optional `rg11b10ufloat-renderable` feature — `create()` requests it when
-   the adapter has it, else `POST_HDR_FORMAT` downgrades to `rgba16float`.
-   Any new render-target format needs the same feature audit. Bloom down/up
-   pipelines must target `POST_HDR_FORMAT` (not `SCENE_FORMAT`) or a granted
-   `rg11b10ufloat` feature becomes a color-format mismatch and bloom drops.
-   `DEPTH_RESOLVE` must min samples 0–3 (the 4× leftover mined only 0 and 1).
-   SAA/clearcoat derivatives stay on geometric N (`topNgeo`) — GLX uses
-   post-bump `dFdx(N)`, which is illegal in WGSL after a material branch.
-
-## 3. Backend and error state from the page
+## 2. Backend and error state
 
 ```js
-__apex.diag({download:false}).env   // { backend, msaa, hdr, ... } — the TRUTH
-WGX.gpuErrors()                     // popErrorScope tally — MUST be 0
-WGX.lastFailure                     // why WGX refused or surrendered
-__apex.logs()                       // ring buffer; "gfx" ns carries WGX errors
+__apex.diag({download:false}).env   // { backend, msaa, hdr, ... }
+WGX.gpuErrors()                     // MUST be 0
+WGX.lastFailure
+__apex.logs()                       // "gfx" ns
 ```
 
-`backend: "webgl2"` when you expected webgpu means WGX refused (parse error,
-pipeline failure, previous crash rung) — read `WGX.lastFailure` and
-`localStorage["apex26.gfxWgxFail"]`, don't guess. A misleading classic:
-`createBuffer failed, size (N) is too large` on a tiny N is Chrome's LOST
-DEVICE error, not an allocation bug.
+`backend: "webgl2"` when you expected webgpu means WGX refused — read
+`WGX.lastFailure` and `localStorage["apex26.gfxWgxFail"]`.
 
-## 4. The device-loss escalation ladder (black screen on real hardware)
+## 3. Unit gates and live poke
 
-Persisted per origin in `apex26.gfxWgxLevel`; one `device.lost` = one rung up +
-one reload, so every retry is cheaper than the config that died:
-
-- rung 0 full — desktop stack (MSAA 4, timestamp-query, 2048 shadows)
-- rung 1 lite — phone parity (MSAA 1, 1024 shadows; ALL phones and WebKit
-  START here — `IS_MOBILE || IS_WEBKIT` in wgx.js)
-- rung 2 minimal — lite + no post chain, DPR capped at 1
-- loss on rung 2 → session-skip to GLX; the user's RENDERER pick is preserved
-
-The ladder HEALS (5 clean sessions step a rung down; `apex26.gfxWgxOk`), and an
-explicit RENDERER re-pick clears it (`gfx-quality.js` RESET). JS exceptions do
-NOT latch a dead canvas: 3 strikes (`JS_STRIKE_CAP`) surrender to GLX with the
-reason in `apex26.gfxWgxFail`. So a persistent black screen on hardware means
-the ladder itself is broken — check those keys before touching pipelines.
-
-## 5. Unit gates and parity
-
-- `tests/unit/webgpu-lifecycle.test.mjs` — mock-GPU harness: init, fallback,
-  texture ownership, gpuErrors surface, and the STATIC WGSL uniformity tests.
-- `tests/unit/gfx-backend-canary.test.mjs` — boot canary / probe-revert logic.
-- `tests/unit/backend-surface-parity.test.mjs` + `docs/research/WEBGPU-PARITY.md`
-  — every Gfx façade member × 3 backends. A GLX look/knob fix is NOT done
-  until mirrored (or explicitly gapped) in `wgsl-chunks.js`/`wgsl-post.js` and
-  TLX; `ff45ec90` and `447e904b` are the measured drift incidents.
-
-## 6. Live poking
-
-Boot the working tree with the backend forced, then use the standard hooks:
+- `tests/unit/webgpu-lifecycle.test.mjs` — mock-GPU + static WGSL uniformity.
+- `tests/unit/gfx-backend-canary.test.mjs` — boot canary / probe-revert.
+- `tests/unit/backend-surface-parity.test.mjs` +
+  `docs/research/WEBGPU-PARITY.md` — Gfx façade × 3 backends.
 
 ```sh
-node tools/apex-eval.mjs montreal "a.diag({download:false}).env" --raw \
-  APEX_GFX=webgpu   # if supported; otherwise set localStorage in an init script
+node tools/apex-eval.mjs montreal "a.diag({download:false}).env" --raw APEX_GFX=webgpu
 ```
 
-For a real browser session use the `mcp-probe` skill (set
-`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload). Remember
-`render({what:"view"})` is the scene truth in headless; screenshots of the WGX
-canvas are blank in-container (see §1 ceiling).
+Live session: **mcp-probe** with
+`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
+
+## Load on demand
+
+- Late-sky / derivative_uniformity / MSAA+HDR defects, device-loss ladder →
+  [references/defects.md](references/defects.md).
