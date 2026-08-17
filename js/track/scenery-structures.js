@@ -662,7 +662,7 @@ const SceneryStructures = (function () {
           addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
           addBox(out, vadd(vadd(rc, a.r, -side * setback * 0.46), a.u, -rise * 0.42),
                  [0.16, rise, seg], riserCol, b);                                        // foot board
-          crowdBand(vadd(rc, a.u, 0.62), b, side, 0.58, 0.95, seg - 0.6,
+          crowdBand(vadd(rc, a.u, 0.68), b, side, 0.58, 0.78, seg - 0.6,
                     opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);
         }
         if (opts.rail !== false) {

@@ -50,7 +50,7 @@
  *     are real (GPUTexture upload) so decals have an atlas.
  *
  * PARITY (2026-08): gpuTimer, createTextureArray/matTexMix, generateMips (env +
- *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 2× with
+ *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 4× with
  *   manual depth resolve, Poisson PCSS, world-space god-ray, applyMaterial*,
  *   road markings, heat haze, SSAO/god-ray separable blur. See
  *   docs/research/WEBGPU-PARITY.md.
@@ -100,14 +100,14 @@ const WGX = (function () {
   const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
   // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
   // first full-size frame if we take the desktop stack (high-performance +
-  // timestamp-query + MSAA 2× rgba16float + 2048 shadows). Same sniff as TLX.
+  // timestamp-query + MSAA 4× rgba16float + 2048 shadows). Same sniff as TLX.
   const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
     (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
   // Loss-escalation ladder, persisted per origin. One device.lost = one rung
   // up + one reload, so every retry is genuinely CHEAPER than the config that
   // just died — never the identical crash again:
-  //   rung 0  full    — desktop stack (MSAA 2, timestamp, 2048 shadows, SSR)
+  //   rung 0  full    — desktop stack (MSAA 4, timestamp, 2048 shadows, SSR)
   //   rung 1  lite    — phone-parity (MSAA 1, 1024 shadows, no SSR/timestamp)
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
@@ -121,7 +121,7 @@ const WGX = (function () {
   } catch (_) { /* blocked storage: sniff-only lite */ }
   const _litePref = _wgxLevel >= 1;
   // Slim stack: every phone, every WebKit, or a previous device.lost on this
-  // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
+  // origin. GRAPHICS: ULTRA must not 4× MSAA a phone WebGPU device — that is
   // the "worked for a second then crashed" path.
   const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
   // Minimal only ever comes from the ladder (a LITE device that still lost
@@ -177,7 +177,10 @@ const WGX = (function () {
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
   const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
-  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
+  // bloom/godray (GLX R11F_G11F_B10F). `let`, not const: rg11b10ufloat is only
+  // color-RENDERABLE behind the optional 'rg11b10ufloat-renderable' feature —
+  // create() downgrades this to rgba16float when the adapter lacks it.
+  let POST_HDR_FORMAT = "rg11b10ufloat";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -278,7 +281,10 @@ const WGX = (function () {
   };
   const MAT_TEX_LAYERS = 17;
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
-  const MSAA_COUNT = WGX_LITE ? 1 : 2;
+  // WebGPU permits ONLY sample counts 1 and 4 (the old 2 was rejected by every
+  // compliant device: "Multisample count (2) is not supported", which silently
+  // invalidated every MS pipeline — GLX's 2x has no WebGPU equivalent).
+  const MSAA_COUNT = WGX_LITE ? 1 : 4;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -384,7 +390,19 @@ const WGX = (function () {
       // on the first real frame (the "worked for a second" crash). GLX already
       // treats the phone timer as absent; Safari Mac is the same GPU.
       const _canTimestamp = !WGX_LITE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
-      device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
+      const _requiredFeatures = _canTimestamp ? ["timestamp-query"] : [];
+      // rg11b10ufloat is only RENDERABLE behind this optional feature — without
+      // it every bloom/godray pipeline and texture fails validation ("Color
+      // format (TextureFormat::RG11B10Ufloat) is not color renderable", seen
+      // live on SwiftShader). Where absent, POST_HDR_FORMAT falls back to
+      // rgba16float: costs 2x the bytes on those targets but is core-renderable
+      // everywhere.
+      if (adapter.features && adapter.features.has && adapter.features.has("rg11b10ufloat-renderable")) {
+        _requiredFeatures.push("rg11b10ufloat-renderable");
+      } else {
+        POST_HDR_FORMAT = "rgba16float";
+      }
+      device = await adapter.requestDevice(_requiredFeatures.length ? { requiredFeatures: _requiredFeatures } : {});
       // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
       // says so — even when it cannot give a valid one; the failure is signalled
       // by handing back a device whose `lost` promise is ALREADY resolved. So a

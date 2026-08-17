@@ -745,7 +745,7 @@ what it covers.
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
-| `scenery-api-contract.test.mjs` | freezes the 110-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
@@ -967,6 +967,20 @@ invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
 'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
 "orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
 second run you forgot is indistinguishable from orphans by process count.
+One specific orphan bites the NEXT run: a superseded/killed batch can strand
+its `python3 -m http.server 3456`, and the following direct `npx playwright
+test` then dies instantly with "Process from config.webServer was not able to
+start. Exit code: 1" (measured 2026-08-17). `pgrep -af http.server`, kill it,
+re-run — that error is the port, not the code.
+
+**A waiter is not a work slot.** Starting a browser run and then sitting in a
+blocking wait wastes the whole run's wall time (measured 2026-08-17: 17 idle
+minutes on one `--wait`). Start the run in the BACKGROUND and spend the run
+doing what it permits: docs edits, test/tools edits, log analysis, commit
+prep, subagent audits — everything except `js/`/`css/` edits and the
+`?v=N`/`version.json` bump, which stay queued until the terminal line. Check
+the log for `= run (passed|failed|timedout|interrupted)` when you come back;
+never re-enter a foreground wait just to "keep an eye on it".
 
 **`waitForFunction` on a rendering page.** Playwright polls the predicate on
 `requestAnimationFrame`; a SwiftShader page running the game loop starves the
@@ -987,3 +1001,26 @@ lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
 tree with an 8,409-line game.js). Every worktree brief starts with
 `git checkout -B <branch> <session SHA>` plus a fingerprint check of a
 session-known file.
+
+**WebGPU IS validatable in-container — stop shipping "read-verified" WGSL
+(2026-08-17).** For months every `js/render/webgpu/` change carried a "WGSL is
+not compilable in this container" disclaimer and shipped on read-review alone.
+That belief was FALSE, and it shipped a phone-visible defect: a
+`derivative_uniformity` violation (derivatives called behind `roadMarkings`'s
+`hw > 0.5` early return — the road surface itself) that enforcing Dawn builds
+reject (WGX silently fell back to GLX) and warning-mode phone builds executed
+as undefined values — the entire road + shoulders rendered NaN-white while
+grass, walls and cars looked fine. Two more spec violations sat alongside it:
+MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
+rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
+All three were one-line Dawn errors the moment the code ran on a real device.
+`node tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
+--enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
+--use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
+every WGSL module and validates every pipeline. Know the ceiling: Dawn here
+VALIDATES but does not EXECUTE — readbacks return zeros, WGX-canvas
+screenshots are BLANK (environment, not bug), and the full desktop stack can
+LOSE the device seconds in (Chrome reports it as `createBuffer failed, size
+(N) is too large` on a tiny N — that wording means device-lost, not size).
+Validation evidence here is exact; pixel truth still needs a real GPU.

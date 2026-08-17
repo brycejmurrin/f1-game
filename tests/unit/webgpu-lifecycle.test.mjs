@@ -46,6 +46,7 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
   const stored = opts.storage || null;
@@ -84,7 +85,7 @@ function makeGpuHarness(opts = {}) {
           : [],
       }),
     }),
-    createRenderPipeline: () => pipeline,
+    createRenderPipeline: (desc) => { pipelineDescs.push(desc); return pipeline; },
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -227,6 +228,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    pipelineDescs,
     WGX: context.window.WGX,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
@@ -572,7 +574,7 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(gfx.gpuMs(), -1);
   gfx.gpuTimer(true);
   assert.equal(gfx.gpuTimer().on, true);
-  assert.equal(gfx.msaa(), 2);
+  assert.equal(gfx.msaa(), 4);
   const maps = gfx.materialMapState();
   assert.equal(maps.albedo, false);
   assert.equal(maps.layers, 0);
@@ -625,6 +627,31 @@ test("WGX requests timestamp-query when the adapter exposes it", async () => {
   assert.match(WGX_SOURCE, /requiredFeatures/);
   assert.match(WGX_SOURCE, /timestamp-query/);
   assert.match(WGX_SOURCE, /timestampWrites/);
+});
+
+test("depth-testing pipelines never use compare 'always' (skyLate erased the world)", async () => {
+  // PerfTry.skyLate ships ON, so game.js draws the sky AFTER the opaque world
+  // on every backend. GLX's sky sits at depth 1.0 under LEQUAL and is rejected
+  // where the world already wrote; WGX's sky pipeline declared
+  // depthCompare:"always", so the late fullscreen sky triangle overwrote every
+  // world pixel — WebGPU rendered with no road, terrain, or props (only
+  // cars/FX drawn after the sky survived). The invariant that pins the fix:
+  // any pipeline that reads depth without writing it (sky, glow, skid, decal,
+  // particles) exists to be occluded by the world, so "always" is never right
+  // there. (The MS depth-resolve pass legitimately uses "always" — it WRITES
+  // depth via @builtin(frag_depth) — hence the depthWriteEnabled filter.)
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  gfx.drawSky({});
+  const readOnlyDepth = h.pipelineDescs.filter(
+    (d) => d && d.depthStencil && !d.depthStencil.depthWriteEnabled);
+  assert.ok(readOnlyDepth.length >= 1, "the sky pipeline must be among the recorded descriptors");
+  for (const d of readOnlyDepth) {
+    assert.notEqual(d.depthStencil.depthCompare, "always",
+      "a depth-test-only pipeline must respect the world's depth (GLX LEQUAL parity)");
+  }
 });
 
 test("WGX source keeps the proven parity fixes", () => {
@@ -785,21 +812,23 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
   // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
-  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // stack there. WGX cannot: timestamp-query + MSAA rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
   assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  // Desktop MSAA is 4, never 2: WebGPU only permits sample counts 1 and 4, and
+  // the old 2 was rejected by every compliant device (all MS pipelines invalid).
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
 test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
-  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.msaa(), 4, "Chrome desktop takes MSAA 4 (WebGPU allows only 1 or 4)");
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
@@ -995,6 +1024,27 @@ test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 re
   assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
   assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
   assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+});
+
+test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white road)", () => {
+  // The mechanism the hoist above fixes, pinned per-helper: these functions
+  // all early-return on per-fragment values (roadMarkings on trk.z > 0.5 — the
+  // road surface itself), so a derivative INSIDE any of them either
+  // invalidates the whole lit pipeline (enforcing Dawn: WGX silently fell back
+  // to GLX) or executes UNDEFINED values exactly where the returns diverge
+  // (warning-mode Dawn: the entire road + shoulders rendered NaN-white on
+  // phones while grass, walls and cars — hw 0, early return before any
+  // derivative — looked fine). Widths are computed at fs_main top and threaded
+  // in; every pattern width is linear in them, so the chain-rule scaling is
+  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
+                   "applyMaterialNormal", "applyMaterial", "roadMarkings"];
+  for (const name of helpers) {
+    const m = CHUNKS_SOURCE.match(new RegExp("fn " + name + "\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}", ""));
+    assert.ok(m, "helper fn " + name + " exists in wgsl-chunks.js");
+    assert.doesNotMatch(m[0], /dpdx|dpdy|fwidth|fw1\(/,
+      "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
+  }
 });
 
 test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {

@@ -58,6 +58,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // panel joint on the lap already contributes. The alternative was a 1.1 m
 // barrier hanging over the racing surface (the props-over-road failure this
 // baseline's +1 paid for). A deliberate trade, not drift.
+//
+// silverstone 15 -> 16 (2026-08-17): the start-gantry crossbar fix (4f109f76)
+// seats the beam on the mast anchors (`vadd(L.c, L.u, ...)`) instead of a raw
+// sceneryShift-uncompensated `px[kb]` read that hung it tens of metres away.
+// Bridging the masts means the beam's underside now abuts two same-height
+// mast caps — the same seam class as vegas's panel joints. The +1 pays for a
+// gantry that actually spans the grid; measured identically on the deploy
+// head alone and on the WGX-fix merge (this tree), so it is that commit's
+// deliberate trade, not a merge interaction.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
