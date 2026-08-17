@@ -5749,7 +5749,22 @@ function render(dt) {
       M4.mulTo(_mLVP, _mLProj, _mLView);
       gfx.shadowBegin(_mLVP);
       gfx.castShadow(track.meshes.terrain, MAT_IDENT);
-      gfx.castShadow(track.meshes.road, MAT_IDENT);
+      // Shadow-only road chunk: frustum-cull the ribbon against the ±shadow-box
+      // ortho (castShadowChunked). Independent of LT.roadChunkLamps — that knob
+      // is for the lit pass (and needs trk); depth casting only needs positions.
+      // Lazy-build shares track.meshes.roadChunked with the lamp draw path.
+      if (track.meshes.roadChunked === undefined) {
+        track.meshes.roadChunked = null;
+        if (track.roadGeo && gfx.createChunkedMesh) {
+          track.roadGeo._keepPositions = true;
+          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+        }
+      }
+      {
+        const _roadSh = track.meshes.roadChunked;
+        if (_roadSh && _roadSh.chunks) gfx.castShadowChunked(_roadSh, MAT_IDENT);
+        else gfx.castShadow(track.meshes.road, MAT_IDENT);
+      }
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map at NIGHT — directional sun shadows are invisible under the dim
       // moonlight, so this is the biggest night saving. Gate on the KEY's actual

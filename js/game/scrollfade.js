@@ -148,7 +148,8 @@ window.ScrollFade = (function () {
     settle();
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
   return { refresh: settle, paint };

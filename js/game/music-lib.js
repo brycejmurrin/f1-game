@@ -330,7 +330,8 @@ window.MusicLib = (function () {
     init();
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire, { once: true });
+  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", wire, { once: true });
   else wire();
 
   return {
