@@ -34,6 +34,7 @@
 
 import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./harness.mjs";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,11 +45,44 @@ const args = process.argv.slice(2);
 const track = args.find((a) => !a.startsWith("--")) || "montreal";
 const lite = args.includes("--lite");
 const noRg11b10 = args.includes("--no-rg11b10");
+const staticOnly = args.includes("--static");
 const framesArg = args.indexOf("--frames");
 const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) || 60) : 60;
 
+// Source invariants the Dawn pass cannot see on a software adapter (it forces
+// MSAA 1) and cannot see at all for legal-but-wrong pipeline state (sky
+// depthCompare: "always" validates). Run these FIRST, and `--static` stops here
+// so a verify-agent can gate WGX edits without launching Chromium.
+function staticCheck() {
+  const wgx = readFileSync(join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  const chunks = readFileSync(join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  const sky = [...wgx.matchAll(/skyPipeline\w*\s*=\s*device\.createRenderPipeline\(\{[\s\S]*?depthCompare:\s*"(\w+)"/g)];
+  for (const m of sky) {
+    if (m[1] === "always") fail("sky pipeline depthCompare is \"always\" — late sky erases the world; must be less-equal");
+  }
+  if (/MSAA_COUNT\s*=\s*[^;\n]*\b2\b/.test(wgx) || /sampleCount:\s*2\b/.test(wgx)) {
+    fail("MSAA sampleCount 2 is not a legal WebGPU value (only 1 or 4)");
+  }
+  if (!/pBloomDown = fsPipe\([^,]+,\s*POST_HDR_FORMAT/.test(wgx)) {
+    fail("pBloomDown must target POST_HDR_FORMAT (mismatch vs bloom textures when rg11b10 is granted)");
+  }
+  if (!/textureLoad\(src,\s*c,\s*3\)/.test(chunks)) {
+    fail("DEPTH_RESOLVE must min sample 3 (4× MSAA leftover mined only 0 and 1)");
+  }
+  if (/\bfn\s+fw1\s*\(/.test(chunks)) {
+    fail("fn fw1 is back — derivatives must stay hoisted in fs_main, not wrapped");
+  }
+}
+
 let failures = 0;
 const fail = (msg) => { failures += 1; console.error("FAIL:", msg); };
+
+staticCheck();
+if (staticOnly) {
+  if (failures) { console.error("FAIL: wgx-validate --static (" + failures + ")"); process.exit(1); }
+  console.log(JSON.stringify({ ok: true, static: true }, null, 2));
+  process.exit(0);
+}
 
 try {
   const srv = await startStaticServer(ROOT);

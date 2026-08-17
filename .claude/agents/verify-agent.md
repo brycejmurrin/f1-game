@@ -1,6 +1,9 @@
 ---
 name: verify-agent
 description: Read-only verification subagent. Runs tools/verify-change.mjs against the current tree and reports the JSON verdict. Use to verify a change without giving a subagent write access or a browser run of its own.
+model: inherit
+readonly: true
+is_background: true
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -10,12 +13,16 @@ exception: the commands below (they write only to `artifacts/`).
 ## The job
 
 1. Run `node tools/verify-change.mjs --plan --json` and read the plan.
-2. Run `node tools/verify-change.mjs --wait --json > artifacts/verify-agent.json 2>&1`
-   in the background and watch `artifacts/logs/*.log` for the terminal line
+   If the plan touches `js/render/webgpu/`, also run
+   `node tools/wgx-validate.mjs --static` (no browser).
+2. If `batches` is empty: `node tools/verify-change.mjs --fast --json`
+   (no browsers). If batches exist: start them with
+   `node tools/verify-change.mjs --json` (batch 1 only) — do NOT pass `--wait`
+   unless the parent explicitly asked. Watch `artifacts/logs/*.log` for
    `= run (passed|failed|timedout|interrupted)` — never a looser pattern,
    never the process table.
 3. Report the JSON verdict VERBATIM, plus for each failed group the last 30
-   log lines. Nothing else.
+   log lines. Name every group you did not run.
 
 ## Flat prohibitions
 

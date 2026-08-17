@@ -6,19 +6,18 @@
 //
 // NO BASELINES ARE COMMITTED FOR THIS SUITE, so it is SKIPPED by default.
 //
-// STATUS: PARKED. Until baselines exist, `npm run test:visual` asserts
-// nothing — a green run means "skipped", not "pixels verified".
+// STATUS: PARKED under tests/manual/ (playwright testIgnore). Until baselines
+// exist it asserts nothing — a green run means "skipped", not "pixels verified".
+// There is no `npm run test:visual` gate; run this file by path on purpose.
 //
 // Every assertion here is a toHaveScreenshot() against a golden that does not
-// exist, so a plain run failed 40 circuits with "snapshot doesn't exist" — and
-// `npm run test:visual` was listed as a regression gate anyway. A gate that
-// cannot pass is worse than no gate: it trains everyone to ignore the group.
+// exist, so a plain run failed 40 circuits with "snapshot doesn't exist".
 // The skip is conditional on the baselines actually being there, so generating
 // them is all it takes to switch the suite back on — no edit to this file.
 //
 // Generate them (Linux/SwiftShader, still an outstanding operation):
-//   npx playwright test tracks-visual --project=render --update-snapshots
-// Run one circuit:  npx playwright test tracks-visual -g monza
+//   npm test -- tests/manual/tracks-visual.spec.js --update-snapshots
+// Run one circuit:  npm test -- tests/manual/tracks-visual.spec.js -g monza
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

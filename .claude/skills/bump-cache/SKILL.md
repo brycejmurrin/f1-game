@@ -18,6 +18,21 @@ only docs, tests, tools, or `index.html`'s non-asset markup, you do NOT need to 
 
 ## Steps
 
+The ritual is a tool. Prefer it over the sed one-liners (they are the fallback
+when you cannot run Node):
+
+```sh
+node tools/bump-cache.mjs --check            # exit 1 if tags/version.json drift
+node tools/bump-cache.mjs --apply            # everything to max+1
+node tools/bump-cache.mjs --apply --merge origin/claude/f1-game-project-26h3ng
+                                             # cross-lineage: max(ours, theirs)+1
+```
+
+Never `--apply` while a browser test run is in flight — the bump is the LAST
+edit before commit.
+
+Manual fallback:
+
 1. Read the **highest** existing version, not the first match — a stray stale
    tag from a previous manual edit means `head -1` can hand you an old number:
    ```sh

@@ -3,7 +3,7 @@
   "lite": true,
   "outRoot": "artifacts/tmp/wgx-shots/gallery",
   "backend": "webgpu",
-  "build": 1312,
+  "build": 1316,
   "note": "PNG output is gitignored under artifacts/; re-run node tools/wgx-gallery.mjs --lite to regenerate.",
   "shots": [
     {

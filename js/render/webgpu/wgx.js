@@ -1163,6 +1163,10 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         };
+        // Same format as the bloom targets (POST_HDR_FORMAT). SCENE_FORMAT here
+        // was a silent validation miss when rg11b10ufloat-renderable is granted:
+        // textures became rg11b10ufloat, pipelines stayed rgba16float, and
+        // every bloom draw dropped. Godray/blur already used POST_HDR_FORMAT.
         pBloomDown = fsPipe(_Post.BLOOM_DOWN, POST_HDR_FORMAT, null);
         pBloomUp   = fsPipe(_Post.BLOOM_UP,   POST_HDR_FORMAT, ADD_BLEND);   // additive accumulate
         // SSAO samples a DEPTH texture — "auto" layout infers a *filtering*

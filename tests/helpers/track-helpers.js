@@ -28,7 +28,7 @@
 // 12% of pixels is far too coarse to catch a real regression, which is the whole
 // point of the suite. Find the last source first.
 // Shared helpers + data for the consolidated per-track visual regression suite
-// (tests/specs/tracks-visual.spec.js) and the all-circuit audit specs. Previously each
+// (tests/manual/tracks-visual.spec.js) and the all-circuit audit specs. Previously each
 // of the then-24 circuits had its own
 // 5-line stub spec calling describeTrack(id) with 25 fractions each (600 golden
 // PNGs) AND a parallel visual-regression-circuits-N set — the two were redundant

@@ -13,7 +13,8 @@
 >
 > The accuracy spec could not catch it: it compares the game against the same
 > upstream GeoJSON the path came from, so both sides were backwards and agreed.
-> See the direction section of `docs/tracks/RESEARCH-LEDGER.md`.
+> Direction evidence and the ledger that tracked it are archived — see the
+> archive index in `docs/README.md`.
 >
 > Sourcing, away from that dataset: Pirelli — "an asphalt-covered street circuit
 > on which cars are driving anti-clockwise"; Singapore's National Library Board
