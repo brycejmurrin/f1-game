@@ -522,18 +522,35 @@ framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
 ## tinyfish MCP — post-deploy liveness check
 
 The whole suite tests the working tree; **nothing verifies the shipped artifact**.
-After a Pages deploy, confirm the live site actually serves the build you shipped:
+After a Pages deploy, confirm the live site actually serves the build you shipped.
+
+Prefer the shell helper (works in cloud agents where `mcp__tinyfish__*` is not
+in the session catalog):
+
+```
+./tools/tinyfish-mcp.sh ensure
+./tools/tinyfish-mcp.sh deploy-check
+# → live=N local=M OK   or   live=N local=M STALE (exit 1)
+./tools/tinyfish-mcp.sh fetch --ttl 0 \
+  "https://brycejmurrin.github.io/f1-game/js/<path>.js?v=<N>"
+```
+
+Or via MCP tools when the host has them wired (`.mcp.json` → `:3711` after
+`./tools/tinyfish-mcp.sh start`):
 
 ```
 mcp__tinyfish__fetch_content
   urls: ["https://brycejmurrin.github.io/f1-game/version.json"]
 ```
+
 Expect `{ "build": <N> }` matching the `version.json` you pushed. A stale build
 here means the Pages deploy lagged or failed (measured 2026-08-12: live was 971
 while the repo was 1089 — a real lag the local suite could never have caught).
-Fetch `index.html` too and grep the `?v=` tags if you suspect a partial deploy.
-`run_web_automation` can go further — boot the deployed page and assert `__apex`
-responds — but for a smoke check the static fetch is enough and far cheaper.
+`deploy-check` now compares live vs local and exits 1 on mismatch.
+
+Fetch `index.html` too only for readable content — TinyFish's content extract
+**strips `<script>` tags**, so `?v=` cache-bust markers are not there. Grep a
+shipped JS URL with `?v=<live>` instead.
 
 **Go further than `version.json`: fetch the shipped JS and grep it for your
 change.** A matching build number only proves Pages published *a* build with
@@ -549,6 +566,7 @@ code was demonstrably deployed — the fetcher had rendered it `d /= k \\* k`.
 Any pattern containing `*`, `_` or backticks needs the raw text checked
 (`python3 -c "print(repr(t[i-200:i+200]))"` around a nearby unescaped anchor)
 before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
+Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
 
