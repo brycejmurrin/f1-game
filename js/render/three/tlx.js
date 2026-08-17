@@ -732,6 +732,13 @@ const TLX = (function () {
 
       function cullInstances(batch, planes) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
+        let sig = 0;
+        for (let pi = 0; pi < 6; pi++) {
+          const p = planes[pi];
+          sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+        }
+        if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
+        if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
         const src = batch.srcMatrices, dst = batch.packMatrices;
         const sc = batch.srcColors, dc = batch.packColors;
         let n = 0;
@@ -751,6 +758,8 @@ const TLX = (function () {
         }
         batch.visible = n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
+        batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
+        batch._cullSig0 = sig; batch._cullN0 = n;
         return n;
       }
 

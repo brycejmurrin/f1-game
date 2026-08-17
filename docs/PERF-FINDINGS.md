@@ -895,6 +895,12 @@ sphere of radius R, so these are **lower** bounds):
 | provably outside the 900 m far plane | **53 %** | **43 %** | **45 %** |
 | provably outside the ±80 m shadow ortho | **89 %** | **88 %** | **89 %** |
 
+> **SUPERSEDED 2026-08-17 (render-audit follow-ups).** Camera-pass road AND
+> terrain now lazy-build `*Chunked` under default-ON `PerfTry.envCull` +
+> `PerfGov.tier() < 3` (`js/game.js` drawWorldMeshes). Shadow ribbons already
+> chunked independently. The table above remains a valid *pre-chunk* reach
+> measurement; do not re-derive “unreachable” from it.
+
 Three things make this worth writing down rather than doing:
 
 1. **The shadow half is bit-identical; the camera half is not.** The AABB-vs-
@@ -908,6 +914,7 @@ Three things make this worth writing down rather than doing:
    but only under `LT.roadChunkLamps && LT.perChunkLights`, a *lamp* feature
    that is default-off and now tier-shed. Same shape as the `uInstanced` entry
    in §2: a fix that existed and had not been copied across.
+   (**Also superseded:** envCull now opens the camera path without lamp knobs.)
 3. **It sharpens a §3 entry above.** `frameCullDist` is read in exactly one
    place, inside the chunked path. `draw()` never reads it — so `PerfTry.envCull`,
    the switch built for the env-probe reach, **cannot remove a single ribbon
@@ -936,6 +943,9 @@ Verbatim the `po.contact` / `lampVol` defect, on the third operand-pair nobody
 grepped. **Not taken because it is not bit-identical** — it removes a visible
 reflection — though it is the same trade tier 2 already makes for the road. The
 strictly-equivalent half of this site WAS taken; see §2.
+
+> **SUPERSEDED 2026-08-17.** `game.js` now sets `po.carReflect = tier >= 2 ? 0 :
+> undefined` and `glx/post.js` prefers `opts.carReflect`. Do not re-open.
 
 **The boot script wall, re-measured — and the headline is not what it looks
 like.** Corrected counts: **148 tags, 5,638,215 B** on this commit (§0's
@@ -1039,3 +1049,8 @@ to a full scan.
 `GLX.drawInstanced` / `cullInstances` allocate a `Float32Array` view **per
 instance**, which would be serious if they ran. They do not: the only callers
 are in `tests/`. Fix before wiring `TrackGraph.batches()` up.
+
+> **SUPERSEDED 2026-08-17.** Instancing is live on the race path
+> (`game.js` → `propBatches`); GLX/WGX/TLX element-copy (no `.subarray`);
+> dual-sig cull cache skips redundant GPU uploads when the frustum is unchanged.
+> Do not defer work based on the “tests only” line above.

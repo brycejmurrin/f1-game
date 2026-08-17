@@ -301,7 +301,8 @@ const CEILINGS = {
   // propBatches/envCull + WGX software-present merge (split-newline count).
   // -> 8384 render-audit: pooled _pbPlanes / cockpit+ghost opts on the hot
   // draw path (GC parity with lighting pools; no new feature surface).
-  "js/game.js": 8384,
+  // -> 8412 follow-ups: lamp-shadow eye snap + terrain camera chunking.
+  "js/game.js": 8412,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

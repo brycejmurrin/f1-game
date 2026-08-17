@@ -1438,6 +1438,15 @@ const GLX = (function () {
   // without cellSize has no cells and is left whole (always drawn in full).
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
+    // Dual-sig cache: main + env-probe VPs alternate; skip repack/upload when
+    // the plane set matches a recent cull (static props, same camera cell).
+    let sig = 0;
+    for (let pi = 0; pi < 6; pi++) {
+      const p = planes[pi];
+      sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+    }
+    if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
+    if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
     let n = 0;
@@ -1465,6 +1474,8 @@ const GLX = (function () {
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
       }
     }
+    batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
+    batch._cullSig0 = sig; batch._cullN0 = n;
     return n;
   }
 

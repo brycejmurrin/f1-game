@@ -1188,6 +1188,10 @@ const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its o
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
+// Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
+// Props dominate the cost; freezing the map for a 12 m eye cell is the night twin
+// of the sun snap cache (cars already one-frame lag on AI mats).
+let _lampShBest = -1, _lampShSX = null, _lampShSZ = null;
 const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
@@ -2124,6 +2128,7 @@ function loadTrack(idx) {
   // silhouette until the camera moved a cell (~16 m).
   _shadowSnapX = _shadowSnapZ = _shadowBox = null;
   _shadowSunX = _shadowSunY = _shadowSunZ = null;
+  _lampShBest = -1; _lampShSX = _lampShSZ = null;
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
@@ -5309,7 +5314,22 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   const _rr = LT.roadRough, _sd = LT.surfDetail;
   if (!hideMeshes.terrain) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
-    gfx.draw(track.meshes.terrain, MAT_IDENT, m);
+    // Camera/probe terrain chunking — same envCull gate as the road ribbon.
+    // Shadow path already lazy-builds terrainChunked; reuse that handle.
+    let _tMesh = track.meshes.terrain, _tChunked = false;
+    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
+      if (track.meshes.terrainChunked === undefined) {
+        track.meshes.terrainChunked = null;
+        if (track.terrainGeo && gfx.createChunkedMesh) {
+          track.terrainGeo._keepPositions = true;
+          track.meshes.terrainChunked = gfx.createChunkedMesh(track.terrainGeo, 72);
+        }
+      }
+      const _tc = track.meshes.terrainChunked;
+      if (_tc && _tc.chunks) { _tMesh = _tc; _tChunked = true; }
+    }
+    if (_tChunked) gfx.drawChunked(_tMesh, MAT_IDENT, m);
+    else gfx.draw(_tMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.road) {
     let m;
@@ -6194,6 +6214,13 @@ function render(dt) {
       if (flBest >= 0) {
         const o = flBest * 15;
         const rad = L[o + 6];
+        // Snap: 12 m eye cell + same flood index → keep previous lamp map
+        // (props are static for that cell; AI cars already one-frame lag).
+        const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
+        if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
+          // Map from last rebuild still bound; skip the 512² props pass.
+        } else {
+        _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus
         // margin for the soft skirt), capped where 512² texel density and
         // perspective-depth precision still hold up; far = the lamp radius
@@ -6237,6 +6264,7 @@ function render(dt) {
         const _lpb = track.meshes.propBatches;
         if (_lpb && gfx.castShadowInstanced) for (let i = 0; i < _lpb.length; i++) gfx.castShadowInstanced(_lpb[i]);
         gfx.lampShadowEnd();
+        } // end lamp-shadow snap rebuild
       }
     }
   }

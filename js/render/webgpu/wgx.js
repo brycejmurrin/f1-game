@@ -714,7 +714,11 @@ const WGX = (function () {
     const grLightData = new Float32Array(LIGHT_FLOATS);
     const _grSel = [];
     function _grByD(a, b) { return a.d - b.d; }
-    const drawData  = new Float32Array(DRAW_FLOATS);
+    // Per-slot CPU ring (stride = DRAW_STRIDE/4). Filled during the lit pass;
+    // one writeBuffer before litPass.end() replaces hundreds of per-draw uploads.
+    const DRAW_F32_STRIDE = DRAW_STRIDE >> 2;   // 64
+    const drawRing = new Float32Array(MAX_DRAWS * DRAW_F32_STRIDE);
+    const drawData = drawRing;   // _writeDraw indexes via slot base; alias keeps call sites short
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
@@ -2543,22 +2547,29 @@ const WGX = (function () {
       litPass.draw(3, 1, 0, 0);
     }
 
-    // Write model + material into the per-draw ring slot.
+    // Write model + material into the per-draw CPU ring slot (no GPU upload yet).
     function _writeDraw(slot, model, opts) {
-      const d = drawData;
-      d.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
+      const base = slot * DRAW_F32_STRIDE;
+      const d = drawRing;
+      d.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base);
       const o = opts || {};
-      d[16] = o.emissive  != null ? o.emissive  : 0;
-      d[17] = o.alpha     != null ? o.alpha     : 1;
-      d[18] = o.roughness != null ? o.roughness : 0.7;
-      d[19] = o.metalness != null ? o.metalness : 0;
-      d[20] = o.specular  != null ? o.specular  : 0.5;
-      d[21] = o.detail    != null ? o.detail    : 0;
-      d[22] = o.clearcoat != null ? o.clearcoat : 0;
-      d[23] = o.carPaint  != null ? o.carPaint  : 0;
-      d[24] = o.sparkle   != null ? o.sparkle   : 1;
-      d[25] = o._instanced ? 1 : 0; d[26] = 0; d[27] = 0;
-      device.queue.writeBuffer(drawUBO, slot * DRAW_STRIDE, drawData, 0, DRAW_FLOATS);
+      d[base + 16] = o.emissive  != null ? o.emissive  : 0;
+      d[base + 17] = o.alpha     != null ? o.alpha     : 1;
+      d[base + 18] = o.roughness != null ? o.roughness : 0.7;
+      d[base + 19] = o.metalness != null ? o.metalness : 0;
+      d[base + 20] = o.specular  != null ? o.specular  : 0.5;
+      d[base + 21] = o.detail    != null ? o.detail    : 0;
+      d[base + 22] = o.clearcoat != null ? o.clearcoat : 0;
+      d[base + 23] = o.carPaint  != null ? o.carPaint  : 0;
+      d[base + 24] = o.sparkle   != null ? o.sparkle   : 1;
+      d[base + 25] = o._instanced ? 1 : 0; d[base + 26] = 0; d[base + 27] = 0;
+    }
+    // One (or ranged) writeBuffer for every slot filled this pass — call before
+    // litPass.end(). writeBuffer is queue-ordered before submit, so draws
+    // recorded earlier still see the data.
+    function _flushDrawUBO() {
+      if (!drawUBO || _drawSlot <= 0) return;
+      device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
 
     function draw(mesh, model, opts) {
@@ -2721,6 +2732,7 @@ const WGX = (function () {
     // are blitted and the main frame group samples the real cube (LIT LOD = rough * maxLod).
     function envFaceEnd(face) {
       if (!envCubeTex || !litPass || !_envEncoder) return;
+      _flushDrawUBO();
       litPass.end();
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
@@ -2871,7 +2883,7 @@ const WGX = (function () {
       // cannot (see the device.lost handler). Drop the frame state instead.
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       try {
-      if (litPass) { litPass.end(); litPass = null; }
+      if (litPass) { _flushDrawUBO(); litPass.end(); litPass = null; }
       // Acquire the present target at present time — swapchain on hardware, a
       // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
@@ -3545,6 +3557,13 @@ const WGX = (function () {
     }
     function cullInstances(batch, planes) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
+      let sig = 0;
+      for (let pi = 0; pi < 6; pi++) {
+        const p = planes[pi];
+        sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+      }
+      if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
+      if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
       const src = batch.srcMatrices, dst = batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
@@ -3564,6 +3583,8 @@ const WGX = (function () {
       if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
       }
+      batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
+      batch._cullSig0 = sig; batch._cullN0 = n;
       return n;
     }
     function drawInstanced(batch, opts) {
