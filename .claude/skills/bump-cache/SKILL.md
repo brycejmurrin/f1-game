@@ -1,6 +1,6 @@
 ---
 name: bump-cache
-description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, or Apex 26 asset changes need a new ?v=N/version.json build. For live vs local GitHub Pages version.json use mcp-probe deploy-check — do not bump to "check" the deploy.
+description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, or Apex 26 asset changes need a new ?v=N/version.json build. For live vs deploy-tip version.json use deploy-research — do not bump to "check" the deploy.
 ---
 
 # Bump cache-busting version
@@ -63,7 +63,7 @@ Manual fallback:
 
 - Bump by exactly **+1** per logical change set; don't jump numbers. If a merge
   finds the other side already at a higher N, resolve to max(both)+1 in BOTH files.
-- `CLAUDE.md` deliberately names no number ("check `index.html` for the current
-  N") — trust `index.html`, and don't add a literal N to CLAUDE.md.
+- `AGENTS.md` deliberately names no number ("check `index.html` for the current
+  N") — trust `index.html`, and don't add a literal N to AGENTS.md.
 - This pairs with the `check-changes` skill, which reminds you to bump as part of
   pre-push validation.

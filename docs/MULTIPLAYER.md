@@ -5,7 +5,7 @@ Two to four players over WebRTC, with **no backend**. This was 227 lines inside
 a convention an agent needs before editing something else. It is the reasoning
 behind a set of unobvious choices, which is what a reference doc is for.
 
-`CLAUDE.md` keeps the one-paragraph summary and the rules that bind other code;
+`AGENTS.md` keeps the one-paragraph summary and the rules that bind other code;
 everything below is the why.
 
 ---

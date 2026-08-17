@@ -53,8 +53,8 @@ default; every worker is a Chromium + SwiftShader process, so total browsers is
 groups × workers.
 
 **ONE GROUP AT A TIME on a four-core box.** This line used to read "2-3 groups
-is the sweet spot", which contradicted CLAUDE.md's "one heavy group is its full
-capacity" — and CLAUDE.md is the one the measurement supports. Running `tiny` +
+is the sweet spot", which contradicted AGENTS.md's "one heavy group is its full
+capacity" — and AGENTS.md is the one the measurement supports. Running `tiny` +
 `circuit` together is 2 groups × 2 workers = four SwiftShader browsers on four
 cores; load reached 16.8 and the batch produced **five failures, four of which
 were bare 120 s timeouts** (138 s, 148 s, 153 s, 163 s) with a single genuine
@@ -473,7 +473,7 @@ page, so keep importing `test`. The opt-in is deliberate: this is not a silent
 change of meaning for the specs already on the base fixture.
 
 **Telling a real failure from a busy box.** Both present as a 120 s timeout, and
-CLAUDE.md's standing rule is that a timeout on four cores measures the machine.
+AGENTS.md's standing rule is that a timeout on four cores measures the machine.
 The discriminator is a load INVERSION: `career`'s "the garage returns to the hub"
 passed in 18.2 s while two Playwright processes fought for the box, then timed
 out at 123.9 s when one process had it to itself. Load cannot invert like that,
@@ -876,7 +876,7 @@ what it covers.
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
 | `terrain-normals.test.mjs` | the terrain ribbon must be shaded by its own shape: `TrackMesh.buildTerrain` normals are unit length, point up, and carry real tilt spread on both a street and an open circuit. `buildTerrain` shipped `nrm.push(0, 1, 0)` for every vertex — an embankment, a banked verge and a flat runoff all took identical sun — and nothing caught it, because a constant normal throws nothing and changes no vertex count |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
-| `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
+| `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; AGENTS.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/`; previously-fat skills stay split (index ≤180 + the named reference file) |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
@@ -925,7 +925,7 @@ what it covers.
 
 ## Operational field notes (moved from CLAUDE.md, 2026-08-13)
 
-The measured history behind the testing gates. CLAUDE.md carries the rules;
+The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
 
 **`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
@@ -958,7 +958,7 @@ verbatim is pure waste.
 **Watcher anchoring.** Anchor on the reporter's terminal line
 `= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
 heartbeat lines contain `N/M done, K failed`, so a pattern like
-`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — CLAUDE.md recommended
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — AGENTS.md recommended
 exactly that for weeks and every watcher built from it misfired. Match every
 terminal status, not just `passed`: a success-only watcher is silent through a
 crash, and silence looks like "still running". Watch the LOG, never the

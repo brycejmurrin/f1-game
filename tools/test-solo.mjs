@@ -2,7 +2,7 @@
 // test-solo — re-run ONE spec (or one grep) alone, on a box that is actually
 // quiet, and refuse to pretend otherwise.
 //
-// CLAUDE.md's standing rule is "a timeout on a busy box measures the machine,
+// AGENTS.md's standing rule is "a timeout on a busy box measures the machine,
 // not the code — re-run that spec ALONE before believing it." That rule was a
 // hand-rolled ritual: set APEX_WORKERS=1, eyeball /proc/loadavg, run
 // tools/run-playwright.mjs by hand, read the durations by eye. It was executed

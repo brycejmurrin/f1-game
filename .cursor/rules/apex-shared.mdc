@@ -7,16 +7,16 @@ alwaysApply: true
 
 - **Rules:** read root `AGENTS.md` (canonical). Root `CLAUDE.md` is a stub that
   imports it; do not edit rules into `CLAUDE.md`.
-- **Skills:** `.claude/skills/*/SKILL.md` (shared with Claude Code). Do not add
-  a parallel `.cursor/skills/` tree unless a skill is Cursor-only.
-- **Subagents:** `.claude/agents/*.md` (e.g. `deploy-research` for tinyfish
-  post-deploy / public-web research). Prefer these over inventing ad-hoc
-  workers for the same job.
-- **MCP:** `.mcp.json` → `probe` / `tinyfish` / `chrome-devtools`. Live game or
-  deploy checks: skill `mcp-probe` (thin index — traps/recipes load on demand
-  under `references/`). Never run Chrome MCP while Playwright is running;
-  never hand a subagent a browser test group. Prefer subagent `deploy-research`
-  for tinyfish noise; do not attach fat skills unless the task needs them.
+- **Skills / subagents:** `.claude/skills/*/SKILL.md` and `.claude/agents/*.md`
+  (shared with Claude Code). Do not add `.cursor/skills/` or `.cursor/agents/`
+  unless a file is explicitly Cursor-only.
+- **Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
+  live canvas → `mcp-probe`. Do not attach `mcp-probe` for a version.json check.
+- **MCP:** repo `.mcp.json` is the desktop catalog (`probe` / `tinyfish` /
+  `chrome-devtools`). Cursor Cloud does **not** auto-load it — default Cloud
+  path is `tools/tinyfish-mcp.sh`, `tools/probe-mcp.py`, or `deploy-research`.
+  Never run Chrome MCP while Playwright is running; never hand a subagent a
+  browser test group.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Path-scoped rules
   under `.cursor/rules/` (e.g. `render-wgx`, `render-tlx`) attach by globs.

@@ -1,7 +1,7 @@
 # Apex 26 — the parts system (`js/car/parts.js`)
 
 Twelve upgrade categories, a 600 cr budget, and the measured effect of each on
-the four stats. Extracted from `CLAUDE.md`, which keeps only the rules another
+the four stats. Extracted from the agent brief. `AGENTS.md` keeps only the rules another
 subsystem has to respect.
 
 ---

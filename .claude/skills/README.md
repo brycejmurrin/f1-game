@@ -50,8 +50,11 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture.mjs` so
 changes are validated visually, not just asserted.
 
+**Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
+live canvas → `mcp-probe`. Do not attach `mcp-probe` for a version.json check.
+
 Output paths: batch/test under `artifacts/`, human-reviewed captures under
-`scratch/` (see `CLAUDE.md`).
+`scratch/` (see `AGENTS.md`).
 
 Design principles:
 - **No build step** — bump `?v=N` + `version.json` on asset edits (`tools/bump-cache.mjs`).

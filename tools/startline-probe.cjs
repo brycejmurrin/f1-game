@@ -10,7 +10,7 @@
  *      A start line sits on a straight. `> 0.004` rad/m mean (a ~250 m radius
  *      held right across the line) means it is in a corner and still wrong.
  *   2. FIRST APEX HAND — walk forward from s=0 to the first curvature peak
- *      above 0.008 rad/m and report its sign. `+k = LEFT` (CLAUDE.md), but that
+ *      above 0.008 rad/m and report its sign. `+k = LEFT` (AGENTS.md), but that
  *      label has shipped backwards before, so --calibrate scores the measure
  *      against six circuits whose Turn 1 is not in dispute before any other
  *      number here is worth reading. Montreal is deliberately in that set: its

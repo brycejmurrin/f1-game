@@ -16,7 +16,7 @@ python3 tools/probe-mcp.py list-tools
 python3 tools/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
 python3 tools/probe-mcp.py call chrome_...
 python3 tools/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
-./tools/tinyfish-mcp.sh deploy-check             # live vs local version.json
+./tools/tinyfish-mcp.sh deploy-check --tip        # live vs deploy-branch tip
 node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
@@ -24,6 +24,11 @@ A bare `call` without `chrome-start` spawns a **fresh** Chromium each time —
 navigate → evaluate → screenshot across separate calls is broken. Prefer host
 MCP `chrome_*` / `tinyfish_*` when the session catalog has them; use shell
 wrappers for `deploy-check` / `deploy-js --marker` / `mcp-cli probe` batching.
+
+**Cursor Cloud does not auto-load repo `.mcp.json`.** The dashboard catalog is
+not `probe` / `tinyfish` / `chrome-devtools`. Default Cloud path: the shell
+wrappers above, or subagent `deploy-research` for `version.json` / public web.
+Do not attach this skill for a version.json STALE check.
 
 | Need | Use |
 |---|---|

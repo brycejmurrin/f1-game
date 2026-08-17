@@ -20,7 +20,7 @@ import { resolveRepoDefault } from "./output-paths.mjs";
 // Was hardcoded to /workspace/scratch/... — a container path from another
 // machine, which on this tree means the module-scope mkdirSync either fails or
 // scatters output outside the repo. Output belongs under the repo's scratch/
-// (CLAUDE.md "Output dirs"), derived from this file's own location.
+// (AGENTS.md "Output dirs"), derived from this file's own location.
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const OUT = resolveRepoDefault(ROOT, "scratch", "ui-survey");
 const JSON_OUT = resolveRepoDefault(ROOT, "scratch", "ui-survey-probe.json");

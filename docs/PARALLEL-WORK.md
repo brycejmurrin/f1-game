@@ -37,7 +37,7 @@ These are token-bound, not CPU-bound. Many at once costs nothing but tokens.
 | Work | Why it parallelises |
 |---|---|
 | Exploration across many files (`Explore` agent) | pure reads; the answer is a conclusion, not a file dump |
-| Auditing a contract across a domain — e.g. "every `Tracks.curvature` call site: AI-only, assist-gated, broadcast, or surface?" (see the sweep in CLAUDE.md) | one agent per column of the question |
+| Auditing a contract across a domain — e.g. "every `Tracks.curvature` call site: AI-only, assist-gated, broadcast, or surface?" (see the sweep in AGENTS.md) | one agent per column of the question |
 | Reviewing a diff from several angles at once (correctness / perf / a11y / docs-drift) | independent lenses, no shared state |
 | Cross-checking prose against code — the repo's standing weakness, per `ARCHITECTURE-REVIEW.md` | one agent per doc |
 | Per-file analysis ahead of a mechanical migration — e.g. B1's before/after font-size dumps for 11 CSS files | the *measurement* is parallel even when the commits are serial |

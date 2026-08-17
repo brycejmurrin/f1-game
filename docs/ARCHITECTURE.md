@@ -691,7 +691,7 @@ The table lists the modules whose contracts need prose; the rest of `js/game/`
 (input, audio, lighting/light-store/light-presets, particles, carmesh,
 bodyattitude, debrisworld, incidentsim, racecontrol, agentview,
 agentview-raster, music-lib, spotify, cam-tune, cam-tuner, tables, uilayers)
-is one-line-summarised in CLAUDE.md's file layout, which the docs-integrity
+is one-line-summarised in AGENTS.md's file layout, which the docs-integrity
 guard keeps complete.
 
 ## js/game.js — main
