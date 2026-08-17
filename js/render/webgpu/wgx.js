@@ -2435,18 +2435,29 @@ const WGX = (function () {
       //    pass NEXT frame (frame binding 6, 1-frame lag). Skipped when dry; the
       //    LIT wet-gate (wet=0) no-ops any stale content, so no clear is needed.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
-      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01) {
+      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
+      // on wetness ALONE kept dispatching the 24-step march on a shed device for
+      // every wet lap — the pass ran, the LIT block multiplied its result by a
+      // params4.w of 0, and the whole cost was thrown away. That is the shed the
+      // player asked for not actually being taken.
+      const _ssrStr = o.reflect != null ? o.reflect : 0;
+      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01 && _ssrStr > 0.001) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
         s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
         const up = frameUpVS || [0, 1, 0];
         s[32] = up[0]; s[33] = up[1]; s[34] = up[2]; s[35] = 0;
         const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
-        s[36] = 1 / width; s[37] = 1 / height; s[38] = ssrThick; s[39] = 1.0;   // texel, thick, strength
+        s[36] = 1 / width; s[37] = 1 / height; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
         const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
         const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
-        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = 0.62;   // reflSkyLo + upper-screen cutoff
-        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = 0;      // reflSkyHi
+        // ssrTopUV / ssrNear are CAMERA-AWARE (game.js widens both for a low
+        // onboard eye). The literals here reproduced only the chase-cam pair, so
+        // cockpit and hood views got a mirror clipped to the chase geometry.
+        const topUV = (o.ssrTopUV != null) ? o.ssrTopUV : 0.62;
+        const ssrNear = (o.ssrNear != null) ? o.ssrNear : -2.5;
+        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;   // reflSkyLo + upper-screen cutoff
+        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear; // reflSkyHi + near fade start
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
@@ -2589,8 +2600,18 @@ const WGX = (function () {
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
-        // SCREEN SUN-SHAFT knob scales the composite shaft gate (GLX folds
-        // sunShaftMul into uSunShaft the same way). Default 1.0 = as-shipped.
+        // SCREEN SUN-SHAFT knob. NOT at GLX parity, and the difference is
+        // load-bearing: GLX has a SEPARATE 8-tap radial screen shaft that reads
+        // the bright pass, and uSunShaft scales ONLY that — the volumetric
+        // god-ray texture is added unscaled (`c += texture(uGodray, vUV).rgb`).
+        // WGX has no screen shaft, so p0.z lands on the god-ray texture instead.
+        // Consequence for the player: turning SCREEN SUN-SHAFT down to 0 on
+        // WebGPU removes the VOLUMETRIC shafts, which on WebGL2 that knob cannot
+        // touch. sunShaftDecay and sunShaftSpread have no WGX consumer at all.
+        // Fixing this means porting the screen-shaft block from
+        // js/render/shaders/post.js and widening CompositeU past its 256 B —
+        // do not "fix" it by dropping the multiply, which would leave the knob
+        // with no authority over anything here.
         const shaftMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
         s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? shaftMul : 0.0; s[3] = flareStr;   // p0
         s[4] = sunUVx; s[5] = sunUVy;
