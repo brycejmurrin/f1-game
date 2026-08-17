@@ -843,3 +843,35 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
 });
+
+test("Frustum culling uses WebGPU [0, 1] near/far clip plane extraction", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+
+  // In WebGPU clip space Z in [0, 1]:
+  // Near plane: [row2.x, row2.y, row2.z, row2.w] (i.e. z >= 0)
+  // Far plane: [row3.x - row2.x, row3.y - row2.y, row3.z - row2.z, row3.w - row2.w] (i.e. w - z >= 0)
+  // Identity matrix:
+  const ident = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ]);
+  const planes = gfx.makeFrustumPlanes(ident);
+  assert.equal(planes.length, 6);
+
+  // Near plane (index 4) should have m10=1, m14=0: normal [0, 0, 1], dist 0
+  assert.equal(planes[4][0], 0);
+  assert.equal(planes[4][1], 0);
+  assert.equal(planes[4][2], 1);
+  assert.equal(planes[4][3], 0);
+
+  // Far plane (index 5) should have m15-m14=1, m11-m10=-1: normal [0, 0, -1], dist 1
+  assert.equal(planes[5][0], 0);
+  assert.equal(planes[5][1], 0);
+  assert.equal(planes[5][2], -1);
+  assert.equal(planes[5][3], 1);
+});
+
+
