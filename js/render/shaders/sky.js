@@ -298,8 +298,9 @@ void main() {
   // frame all three 'c +=' below add exactly nothing. Every local here
   // (coronaDamp, golden, sunWarm, dd, perp, disc, discCore) is dead after this
   // block, so nothing downstream can observe the skip.
-  // What it was costing: SKY_FS runs BEFORE the opaque world by default
-  // (skyLate is a default-OFF PerfTry switch), so there is no early-Z relief and
+  // What it was costing: SKY_FS used to run BEFORE the opaque world by default
+  // (skyLate is now a default-ON PerfTry switch — counted coveragePct in
+  // docs/PERF-FINDINGS.md), so with the switch off there is no early-Z relief and
   // this is 2 pow + 2 sqrt + ~85 ALU on 100% of the pixels of every night frame.
   // uStars is a uniform, so the branch is uniform control flow — no divergence.
   if (nightSky < 0.5) {

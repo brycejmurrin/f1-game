@@ -88,8 +88,8 @@ const GLX = (function () {
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
   // Probe draw-distance cull, metres — used ONLY when PerfTry.envCull is on
-  // (default OFF; see the switch's entry in js/game/perf-try.js for the counted
-  // reach at each radius and the sub-pixel argument for this value). A face is
+  // (default ON; counted reach in docs/PERF-FINDINGS.md / tools/chunk-reach.cjs,
+  // switch entry in js/game/perf-try.js). A face is
   // 90 deg across ENV_SIZE pixels = 1.41 deg/px, so a 20 m building subtends
   // ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
@@ -217,8 +217,9 @@ const GLX = (function () {
 
   function compile(type, src) {
     const sh = gl.createShader(type);
-    // PerfTry #defines (js/game/perf-try.js) — default-off switches for the
-    // GLSL-side optimisations. Injected AFTER the #version line, because GLSL
+    // PerfTry #defines (js/game/perf-try.js) — GLSL-side optimisations. Counted /
+    // bit-identical gates default ON (`def: true`); others stay OFF. Injected
+    // AFTER the #version line, because GLSL
     // requires #version to be the first non-comment token; prepending would
     // fail every compile. This is the single chokepoint for all GLX shaders,
     // so one insertion covers lit/sky/post/shadow/decal/glow/particle.
@@ -387,7 +388,7 @@ const GLX = (function () {
       // test:tiny is 71/71. But with the knob at 1 the other three changes in
       // that build are provably no-ops (_lampScale computes to exactly 1, so
       // col*1 is bit-identical; the knob ranges change no runtime behaviour;
-      // envCull is default-off), which leaves this as the only live behavioural
+      // envCull was default-off), which leaves this as the only live behavioural
       // delta reaching that player.
       //
       // Suspect by elimination, not by a fault anyone has pointed at — so it
@@ -910,7 +911,8 @@ const GLX = (function () {
       gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
     const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
-    // PerfTry.envCull (default OFF): the probe inherits the MAIN camera's
+    // PerfTry.envCull (default ON; counted reach in docs/PERF-FINDINGS.md): the
+    // probe inherits the MAIN camera's
     // cullDist, which game.js sets to 0 — no radial cull at all — below PerfGov
     // tier 3. So a 64x64 reflection target re-draws the city through the 900 m
     // frustum above. Counted with tools/chunk-reach.cjs: 238.3 chunks /
