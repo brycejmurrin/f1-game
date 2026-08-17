@@ -609,6 +609,21 @@ Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
 
+**Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
+(shell env / `.env` override it), so `ensure` works on a fresh checkout.
+All 16 upstream tools verified working 2026-08-17 except `get_wallet`
+("Wallet is not available for your account yet" — account-gated upstream,
+not a wrapper bug).
+
+**Upstream quirk (measured 2026-08-17): `create_browser_session` returns
+`session_id: "tf-<uuid>"`, but `run_web_automation`/`run_web_automation_async`
+validate `session_id` as a BARE UUID** — pass the id with the `tf-` prefix
+stripped or the call fails `Invalid UUID` without ever reaching the session.
+The completed-run proof: a trivial automation against the deployed
+`version.json` queued, ran, and answered ("The build number is 1297") in
+under a minute; heavier goals from `list_runs` history took 12–20 minutes,
+so poll `get_run` at the interval the queue message suggests, not in a loop.
+
 ---
 
 ## The one-line summary

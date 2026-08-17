@@ -119,6 +119,15 @@ test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   assert.match(r.stdout, /OK/);
 });
 
+test("tinyfish-mcp.sh carries the baked project key (zero-setup reuse)", () => {
+  // Owner's decision 2026-08-17: the key ships in the repo so any checkout can
+  // probe the deployed site with no setup. Precedence stays shell env >
+  // .env file > baked default — this only pins that the default exists.
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /BAKED_KEY="sk-tinyfish-[A-Za-z0-9_-]{20,}"/);
+  assert.match(src, /\$\{from_shell:-\$\{TINYFISH_API_KEY:-\$BAKED_KEY\}\}/);
+});
+
 test("every mcp_post body in tinyfish-mcp.sh is valid JSON once splices are stubbed", () => {
   // cmd_search shipped with a stray trailing quote inside its single-quoted
   // JSON body ('}}}"'), so every search returned -32700 Parse error from the

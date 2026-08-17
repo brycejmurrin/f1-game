@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # TinyFish local MCP proxy — start/stop and curl helpers for http://127.0.0.1:3711/mcp
-# Clone lives at scratch/tinyfish-mcp-server (gitignored). Needs TINYFISH_API_KEY.
+# Clone lives at scratch/tinyfish-mcp-server (gitignored). The project key is
+# baked in below (shell env / .env override it), so a fresh checkout needs no setup.
 #
 # Agent-facing defaults (measured 2026-08-17):
 # - fetch/search/deploy-check auto-ensure (start + init) so a cold box works
@@ -26,11 +27,18 @@ FETCH_FORMAT="markdown"
 FETCH_TTL=""
 FETCH_PURPOSE=""
 
+# Project key baked in so any checkout works with zero setup (owner's call,
+# 2026-08-17). Precedence: shell env > $ENV_FILE > this default. If it is ever
+# abused, rotate at https://agent.tinyfish.ai/api-keys and update this line.
+BAKED_KEY="sk-tinyfish-khLFUpjoWmSBQgf_6f834NI9vyaYaEjW"
+
 load_env() {
+  local from_shell="${TINYFISH_API_KEY:-}"
   if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     set -a; source "$ENV_FILE"; set +a
   fi
+  TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-$BAKED_KEY}}"
 }
 
 need_key() {

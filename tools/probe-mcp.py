@@ -267,6 +267,15 @@ class TinyfishBackend:
             raw = e.read().decode() if e.fp else ""
             if not raw and allow_empty and 200 <= e.code < 300:
                 return None
+            # Upstream wraps refusals as JSON-RPC errors inside HTTP 400 —
+            # surface the human message, not the transport wrapper.
+            msg = ""
+            try:
+                msg = (json.loads(raw).get("error") or {}).get("message") or ""
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            if msg:
+                raise RuntimeError(f"tinyfish: {msg}") from e
             raise RuntimeError(f"tinyfish HTTP {e.code}: {raw[:500]}") from e
         if not raw:
             if allow_empty:
@@ -456,7 +465,11 @@ def cmd_call(args: argparse.Namespace) -> int:
         return 1
     bridge = Bridge()
     try:
-        result = bridge.call(args.name, arguments)
+        try:
+            result = bridge.call(args.name, arguments)
+        except Exception as e:  # noqa: BLE001 — a traceback buries the upstream message
+            print(f"error: {e}", file=sys.stderr)
+            return 1
         text = json.dumps(result, indent=2, sort_keys=True)
         full = os.environ.get("PROBE_MCP_FULL", "").strip() not in ("", "0")
         if full or len(text) <= 12000:
