@@ -189,34 +189,44 @@
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
+    // Frame stamp per cached decal material — same guard as tlx.js materialFor.
+    // drawList holds material REFERENCES flushed at present(); FIFO eviction of
+    // an in-use entry mid-frame disposed the car's sponsor marks while later
+    // draws still referenced them.
+    let _decalFrame = 0;
     function decalMaterialFor(tex, glow) {
       const key = tex.id + "|" + glow;
       let m = decalCache.get(key);
-      if (m) return m;
-      if (decalCache.size >= DECAL_CACHE_CAP) {
-        const oldest = decalCache.keys().next().value;
-        const old = decalCache.get(oldest);
-        decalCache.delete(oldest);
-        if (old) old.dispose();        // material only — the texture is game-owned
+      if (!m) {
+        if (decalCache.size >= DECAL_CACHE_CAP) {
+          for (const [k, v] of decalCache) {
+            if (v && v.__tlxFrame === _decalFrame) continue;
+            decalCache.delete(k);
+            if (v) v.dispose();        // material only — the texture is game-owned
+            break;
+          }
+        }
+        m = fxMaterial({ doubleSided: true });   // GLX: cull off, depth write off
+        m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
+        const smp = texture(tex);                // samples the mesh "uv" attribute
+        m.colorNode = Fn(() => {
+          const t = smp.toVar();                                  // anchor
+          const N = normalize(vec3(normalWorld).toVar());         // anchor
+          const ndl = max(dot(N, U.sunDir), 0.0);
+          const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
+          return t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
+        })();
+        m.opacityNode = smp.a;
+        decalCache.set(key, m);
       }
-      m = fxMaterial({ doubleSided: true });   // GLX: cull off, depth write off
-      m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
-      const smp = texture(tex);                // samples the mesh "uv" attribute
-      m.colorNode = Fn(() => {
-        const t = smp.toVar();                                  // anchor
-        const N = normalize(vec3(normalWorld).toVar());         // anchor
-        const ndl = max(dot(N, U.sunDir), 0.0);
-        const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
-        return t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
-      })();
-      m.opacityNode = smp.a;
-      decalCache.set(key, m);
+      if (m) m.__tlxFrame = _decalFrame;
       return m;
     }
 
     /** begin(frame) -> decal-pass uniforms (js/render/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
     function updateFrame(frame) {
+      _decalFrame++;   // new frame: last frame's decal mats are evictable again
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
       const kM = k("keyMul", 1), aM = k("ambientMul", 1);

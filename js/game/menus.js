@@ -228,6 +228,7 @@ function buildSelect() {
       }
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
+      row.dataset.trackIdx = String(i);
       row.setAttribute("aria-label", t.name);
       row.setAttribute("role", "option");
       row.setAttribute("aria-selected", i === G.trackIdx ? "true" : "false");
@@ -254,7 +255,20 @@ function buildSelect() {
         row.appendChild(recEl);
       }
 
-      row.onclick = () => { G.trackIdx = i; store.set("track", i); vt(() => { buildSelect(); tickUi(); }); scheduleFlybyTrack(); };
+      row.onclick = () => {
+        G.trackIdx = i;
+        store.set("track", i);
+        // In-place highlight — full buildSelect() was O(all tracks) + ScrollFade
+        // + View Transition on every click.
+        els.selTracks.querySelectorAll(".track-row").forEach((r) => {
+          const on = r.dataset.trackIdx === String(i);
+          r.classList.toggle("active", on);
+          r.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        updateTrackPreview();
+        tickUi();
+        scheduleFlybyTrack();
+      };
       els.selTracks.appendChild(row);
     });
     updateTrackPreview();

@@ -1263,6 +1263,12 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
+        // Active light VP for instanced shadow cull (GLX shadowCullVP).
+        get shadowCullVP() {
+          if (!shadowSys) return null;
+          const S = shadowSys.S;
+          return S.castCullVP || S.lightVP;
+        },
         // M9 env probe. game.js issues one face per ~2 frames on a live race
         // (gated on LT.carEnvCube>0.001, tier<1, no debug/paused cam):
         //   const inv = envFaceBegin(face, eye, frame);

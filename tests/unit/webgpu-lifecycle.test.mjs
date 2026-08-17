@@ -1376,18 +1376,32 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
+test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
+  // H then V (and times>1) into one uniform region before submit left every
+  // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.
+  assert.match(WGX_SOURCE, /hasDynamicOffset:\s*true/,
+    "blur bind group layout must advertise dynamic offsets");
+  assert.match(WGX_SOURCE, /_blurWriteSlot/,
+    "each H/V pass must allocate a distinct blurUBO slot");
+  assert.match(WGX_SOURCE, /setBindGroup\(0,\s*\w+,\s*\[off\]\)/,
+    "blur draws must pass the slot offset to setBindGroup");
+});
+
 test("drawParticles never destroys the VBO mid-frame (retire, flush after submit)", () => {
   // game.js calls drawParticles twice per frame (alpha smoke, then additive
   // sparks). Growth between the two used to destroy a buffer the frame's pass
   // had already recorded: "used in submit while destroyed", one invalid
   // command buffer, the whole frame dropped. The old buffer must be RETIRED
-  // and destroyed only after the frame's submit.
+  // and destroyed only after the frame's submit. Dual ping-pong slots
+  // (particleVBO[i]) also keep smoke/sparks from sharing one writeBuffer target.
   const draw = WGX_SOURCE.match(/function drawParticles\([\s\S]*?\n    \}/);
   assert.ok(draw, "drawParticles exists");
-  assert.doesNotMatch(draw[0], /particleVBO\.destroy\(\)/,
+  assert.doesNotMatch(draw[0], /particleVBO(?:\[\w+\])?\.destroy\(\)/,
     "drawParticles must not destroy the old VBO in-frame — push it to _retiredBufs");
-  assert.match(draw[0], /_retiredBufs\.push\(particleVBO\)/,
+  assert.match(draw[0], /_retiredBufs\.push\(particleVBO/,
     "grown-over VBO must be retired for the post-submit flush");
+  assert.match(draw[0], /_particleFlip/,
+    "smoke + sparks must ping-pong distinct VBO/UBO slots before submit");
   assert.match(WGX_SOURCE, /_retireFlush\(\)/,
     "present must flush retired buffers after submit");
 });

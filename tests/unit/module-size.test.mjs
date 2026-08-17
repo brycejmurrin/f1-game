@@ -299,7 +299,9 @@ const CEILINGS = {
   // this raise is call-site glue + nearbyN / soft brakeLvl path.
   // -> 8377 deploy∪perf-hunt∪WGX-present: AiDrive + energy short-circuit +
   // propBatches/envCull + WGX software-present merge (split-newline count).
-  "js/game.js": 8377,
+  // -> 8451 GLX survey bugs: lit/env terrainChunked (roadChunked mirror) +
+  // _castPropBatchesShadow (light-frustum cull before castShadowInstanced).
+  "js/game.js": 8451,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -370,7 +372,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2889, // +31 2026-08-17 perf-hunt S3: dry-run/_absorbOnly emitter guards + preferInstance gate on createInstancedBatch. // +64 2026-08-17 PERF-FINDINGS sand: lazy LIST points (24ms boot ×40 circuits deferred to first touch) + massBlocked CELL grid (SAT exact, candidates only). // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  "js/track/tracks.js": 2895, // +6 2026-08-17: sceneryLapMirror circuits get full sceneryFrac/sceneryNode remap on overheadSpan/frameAt/circuitKit/groundPatch (singapore portal decks vs anchor). // +31 2026-08-17 perf-hunt S3: dry-run/_absorbOnly emitter guards + preferInstance gate on createInstancedBatch. // +64 2026-08-17 PERF-FINDINGS sand: lazy LIST points (24ms boot ×40 circuits deferred to first touch) + massBlocked CELL grid (SAT exact, candidates only). // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

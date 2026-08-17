@@ -524,21 +524,27 @@
       // the whole race — got NO procedural relief on this backend at all.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
+      // DERIVATIVES ARE UNCONDITIONAL — same rule as roadMarkings(): fwidth
+      // inside a non-uniform If is a hard WGSL compile error on WebGPU TLX.
+      // Coords + footprints hoist to Fn entry; branches only consume them.
+      const an0 = abs(N);
+      const hc0 = select(an0.x.greaterThan(an0.z), wp.z, wp.x).toVar();
+      const y0 = wp.y.toVar();
+      const p0 = wp.xz;
+      const fp = max(fwidth(hc0), fwidth(y0)).toVar();
+      const fpG = max(fwidth(p0.x), fwidth(p0.y)).toVar();
+      const aaFade = clamp(fp.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
+      const aaG = clamp(fpG.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
       If(inRange.and(bumpFade.greaterThan(0.005)), () => {
         If(matWallLike(mid), () => {
-          const an = abs(N);
-          const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
-          const y = wp.y.toVar();
           // fwidth-AA fade on the (hc,y) world footprint — grazing-angle moiré
           // guard (the aaFade 0.04/0.22 constants in lit.js).
-          const fp = max(fwidth(hc), fwidth(y));
-          const aaFade = clamp(fp.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
           If(aaFade.greaterThan(0.005), () => {
             const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
             const e = 0.05;
-            const h0 = matBumpHeight(mid, vec2(hc, y));
-            const hx = matBumpHeight(mid, vec2(hc.add(e), y));
-            const hy = matBumpHeight(mid, vec2(hc, y.add(e)));
+            const h0 = matBumpHeight(mid, vec2(hc0, y0));
+            const hx = matBumpHeight(mid, vec2(hc0.add(e), y0));
+            const hy = matBumpHeight(mid, vec2(hc0, y0.add(e)));
             const amt = select(mid.equal(2.0).or(mid.equal(13.0)), float(0.10),
                         select(mid.equal(12.0).or(mid.equal(14.0)), float(0.09), float(0.05)));
             N.assign(normalize(N.add(
@@ -546,7 +552,6 @@
                 .mul(amt.mul(bumpFade).mul(aaFade).div(e)))));
           });
         }).Else(() => {
-          const p = wp.xz;
           // Ground/road gets the SAME grazing-angle guard as the wall branch
           // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
           // the road — the one horizontal surface viewed almost edge-on at
@@ -554,13 +559,11 @@
           // probe epsilon and the 3-tap gradient aliases into crawling moire.
           // The fade only ever REDUCES bump, so head-on grass/sand/rock are
           // unchanged.
-          const fpG = max(fwidth(p.x), fwidth(p.y));
-          const aaG = clamp(fpG.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
           If(aaG.greaterThan(0.005), () => {
             const e = 0.22;
-            const h0 = matBumpHeight(mid, p);
-            const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
-            const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
+            const h0 = matBumpHeight(mid, p0);
+            const hx = matBumpHeight(mid, p0.add(vec2(e, 0.0)));
+            const hz = matBumpHeight(mid, p0.add(vec2(0.0, e)));
             const amt = select(mid.equal(8.0), float(0.16),
                         select(mid.equal(10.0), float(0.14),
                         select(mid.equal(16.0), float(0.025), float(0.07))));
@@ -712,16 +715,29 @@
       const near = clamp(vd.sub(26.0).div(64.0).oneMinus(), 0.0, 1.0).toVar();   // fine: near field
       // Includes ASPHALT(16) — see the applyMaterialNormal note above.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5)).and(mid.notEqual(15.0));
+      // DERIVATIVES ARE UNCONDITIONAL — same rule as roadMarkings(): hoist every
+      // fwidth() to Fn entry, then consume the widths inside material branches.
+      const an = abs(normalize(nrm)).toVar();
+      const wall = an.y.lessThan(0.6);
+      const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
+      const y = wp.y.toVar();
+      const fwY125 = fwidth(y.div(1.25)).toVar();
+      const fwHc = fwidth(hc).toVar();
+      const fwY = fwidth(y).toVar();
+      const fwHcPw = fwidth(hc.div(1.6)).toVar();
+      const fwYPh = fwidth(y.div(1.4)).toVar();
+      const fwHc035 = fwidth(hc.div(0.35)).toVar();
+      const ty = fract(y.div(0.34)).toVar();
+      const fwTy = fwidth(ty).toVar();
+      const fwHc13 = fwidth(hc.mul(1.3)).toVar();
+      const fwY13 = fwidth(y.mul(1.3)).toVar();
+      const fwRidge = fwidth(hc.mul(7.5)).toVar();
       If(inRange.and(far.greaterThan(0.001)), () => {
-        const an = abs(normalize(nrm)).toVar();
-        const wall = an.y.lessThan(0.6);
-        const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
-        const y = wp.y.toVar();
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
           albedo.mulAssign(vnoise(wp.xz.mul(0.09).add(y.mul(0.05))).sub(0.5).mul(0.16).mul(far).add(1.0));
           albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
           // fwidth-AA the seam on the PRE-fract coordinate (js/render/shaders/lit.js)
-          const seam = smoothstep(max(float(0.05), fwidth(y.div(1.25))), 0.0,
+          const seam = smoothstep(max(float(0.05), fwY125), 0.0,
             abs(fract(y.div(1.25)).sub(0.5)).sub(0.46)).mul(0.14).mul(near);
           albedo.mulAssign(select(wall, seam.oneMinus(), float(1.0)));
           rough.assign(min(1.0, rough.add(far.mul(0.08))));
@@ -731,7 +747,7 @@
           const off = mod(row, 2.0).mul(0.5 * bl);
           const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
           // mort is WORLD-space — AA width = raw hc/y footprint (js/render/shaders/lit.js)
-          const mortAA = max(float(mort), max(fwidth(hc), fwidth(y)));
+          const mortAA = max(float(mort), max(fwHc, fwY));
           const joint = max(smoothstep(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
                             smoothstep(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
           const bh = vnoise(vec2(floor(hc.add(off).div(bl)), row).mul(1.3));
@@ -743,7 +759,7 @@
           const pw = 1.6, ph = 1.4, mull = 0.11;
           const gx = fract(hc.div(pw)), gy = fract(y.div(ph));
           // NORMALIZED-space AA: fwidth of the pre-fract pane fraction (js/render/shaders/lit.js)
-          const mullAA = max(float(mull), max(fwidth(hc.div(pw)), fwidth(y.div(ph))));
+          const mullAA = max(float(mull), max(fwHcPw, fwYPh));
           const bar = max(smoothstep(mullAA, 0.0, min(gx, gx.oneMinus())),
                           smoothstep(mullAA, 0.0, min(gy, gy.oneMinus())));
           albedo.mulAssign(vnoise(vec2(floor(hc.div(pw)), floor(y.div(ph))).mul(1.7)).sub(0.5).mul(0.5).mul(far).add(1.0));
@@ -756,7 +772,7 @@
         }).ElseIf(mid.equal(5.0), () => {   // WOOD — grain + plank seams
           albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
           // normalized-space AA (as glass) — js/render/shaders/lit.js
-          albedo.mulAssign(smoothstep(max(float(0.05), fwidth(hc.div(0.35))), 0.0,
+          albedo.mulAssign(smoothstep(max(float(0.05), fwHc035), 0.0,
             abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46)).mul(0.16).mul(near).oneMinus());
         }).ElseIf(mid.equal(6.0), () => {   // FOLIAGE — dapple + green variation
           const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6)
@@ -788,8 +804,7 @@
           albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
           rough.assign(clamp(rough.sub(far.mul(0.10)), 0.05, 1.0));
         }).ElseIf(mid.equal(12.0), () => {  // ROOF — ridged courses, warm bands
-          const ty = fract(y.div(0.34));
-          const shadeAA = clamp(fwidth(ty).mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/shaders/lit.js)
+          const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/shaders/lit.js)
           const shade = sin(ty.mul(3.14159)).mul(shadeAA);
           albedo.mulAssign(shade.mul(0.16).add(0.88));
           albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
@@ -799,7 +814,7 @@
           const f = fract(vec2(hc, y).mul(1.3)).sub(hash21(cell).mul(0.12));
           const d = min(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus()));
           // normalized-space AA in the *1.3 fract domain (js/render/shaders/lit.js)
-          const jointAA = max(float(0.16), max(fwidth(hc.mul(1.3)), fwidth(y.mul(1.3))));
+          const jointAA = max(float(0.16), max(fwHc13, fwY13));
           const joint = smoothstep(0.0, jointAA, d);
           const block = albedo.mul(hash21(cell).mul(0.4).add(0.80));
           const mortar = mix(albedo, vec3(0.42, 0.40, 0.37), 0.65);
@@ -807,7 +822,7 @@
           rough.assign(min(1.0, rough.add(far.mul(0.18))));
         }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED — ridges + rust streaks
           const ridgePhase = hc.mul(7.5);
-          const ridgeAA = clamp(fwidth(ridgePhase).mul(3.0).oneMinus(), 0.0, 1.0);  // corrugation AA (js/render/shaders/lit.js)
+          const ridgeAA = clamp(fwRidge.mul(3.0).oneMinus(), 0.0, 1.0);  // corrugation AA (js/render/shaders/lit.js)
           const ridge = sin(ridgePhase).mul(ridgeAA);
           albedo.mulAssign(ridge.mul(0.18).add(0.85));
           const rust = smoothstep(0.55, 0.9, vnoise(vec2(hc.mul(0.8), y.mul(0.35)).add(5.0)));

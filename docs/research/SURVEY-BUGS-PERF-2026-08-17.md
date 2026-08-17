@@ -1,5 +1,13 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
+**Status (same session):** Priority-board items 1–7 and most High/Medium
+follow-ups were implemented on `cursor/survey-bugs-perf-8ee4` (WGX blur/particle
+rings, career/season, VSC/SC + shiftLong, Singapore remappers, net predict
+contact, GLX env/terrain/shadow/AA, TLX fwidth, live TTL, TURN TTL, ScrollFade,
+focus trap, …). Remaining deferred: pine re-parameterize for reuse, Rapier
+marble CPU, collision broadphase, WGX per-draw UBO batching, TLX three≥r186
+dispose leak, god-ray light partial-select.
+
 Read-only fleet audit of the working tree at deploy tip `46554737`
 (local/live `version.json` **1325** after fetch; tinyfish deploy-check was
 **OK** at **1324** during the run, then tip advanced one build). No code was

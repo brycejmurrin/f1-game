@@ -139,11 +139,15 @@ const DataLive = (function () {
           if (err && err.message && err.message.indexOf("Live F1 session") !== -1) gateErr = err;
           return null;
         }
+        // AUTO (and manual refresh) must not hit the 10 min TTL_LATEST cache —
+        // otherwise a 30 s loop silently re-serves the same payload. ttl:0
+        // bypasses the read (api.js request) while still writing on success.
+        const ttl = 0;
         Promise.all([
-          F1API.weather(meta.sessionKey).catch(catchLive),
-          F1API.positions(meta.sessionKey).catch(catchLive),
-          F1API.sessionDrivers(meta.sessionKey).catch(catchLive),
-          F1API.intervals(meta.sessionKey).catch(catchLive)
+          F1API.weather(meta.sessionKey, ttl).catch(catchLive),
+          F1API.positions(meta.sessionKey, ttl).catch(catchLive),
+          F1API.sessionDrivers(meta.sessionKey, ttl).catch(catchLive),
+          F1API.intervals(meta.sessionKey, ttl).catch(catchLive)
         ]).then(res => {
           if (myGen !== liveRefreshGen) return;
           clear(dataEl);

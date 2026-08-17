@@ -140,17 +140,36 @@ function trackIndex(round) {
 }
 
 // ---------- the season save ----------
+// Module weekend state lives here (above resume) so a reload can restore the
+// sprint grid from the persisted save without racing a TDZ on first call.
+let lastScored = "race";
+let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
+
 function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; }
 // The standalone `apex26.season` save, made safe to race. A save from a LONGER
 // calendar than the one now configured would sit past its own last round and
-// never finish, so a round out of range starts a fresh championship — the same
-// answer the old inline `round >= Tracks.SEASON.length` check gave.
+// never finish — only blank when round > rounds() (calendar shrink). round ===
+// rounds() is a FINISHED championship and must stay readable for standings /
+// champion UI; blanking it wiped the table the moment the player re-opened SEASON.
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
-  if (!s || !(s.round >= 0) || s.round >= rounds()) return blank();
+  const n = rounds();
+  if (!s || !(s.round >= 0) || s.round > n) {
+    sprintOrder = null;
+    return blank();
+  }
   if (!s.pts) s.pts = {};
   if (!s.teamPts) s.teamPts = {};
   if (!s.driverCodes) s.driverCodes = {};
+  // Restore the sprint grid for a mid-weekend reload (stage === "race"). Cleared
+  // when the GP has scored or the save is not mid-weekend — module state alone
+  // used to lose the order across a quit/reload.
+  if (s.stage === "race" && Array.isArray(s.sprintOrder) && s.sprintOrder.length) {
+    sprintOrder = s.sprintOrder.slice();
+  } else {
+    sprintOrder = null;
+    if (s.sprintOrder) delete s.sprintOrder;
+  }
   return s;
 }
 // Is there a championship worth showing STANDINGS for? Not `round > 0` alone:
@@ -213,9 +232,6 @@ function pointsTable() {
 //
 // Returns the stage it SCORED, not the one coming next: buildResults() runs
 // after this and has to title the sheet with the session that just finished.
-let lastScored = "race";
-let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
-
 function award(season, order) {
   const scoring = stage(season);
   const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
@@ -228,9 +244,13 @@ function award(season, order) {
   if (scoring === "sprint") {
     season.stage = "race";
     sprintOrder = order.map((c) => c.driverId);
+    // Persist with the season save so a quit/reload mid-weekend can rebuild the
+    // no-quali GP grid. Cleared when the Grand Prix scores below.
+    season.sprintOrder = sprintOrder.slice();
   } else {
     season.round++;
     delete season.stage;
+    delete season.sprintOrder;
     sprintOrder = null;
   }
   lastScored = scoring;

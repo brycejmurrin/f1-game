@@ -760,6 +760,8 @@ const WGX = (function () {
     let _activeFrameBG = null;                 // frame group draw()/drawChunked bind (main = real cube once live; env = placeholder)
     let _envProbeLive = false, _envFacesMask = 0, _envStr = 0;   // _envStr = carEnvCube once a full cycle is captured
     let _envEncoder = null;                    // the env face's own command encoder (submitted in envFaceEnd)
+    // Saved game-frame fields while a probe face is open (GLX envFaceBegin/End).
+    let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
     const _envView = new Float32Array(16), _envProj = new Float32Array(16),
           _envVP = new Float32Array(16), _envVPGpu = new Float32Array(16), _envInvVP = new Float32Array(16);
     const _envTgt = [0, 0, 0];
@@ -790,11 +792,11 @@ const WGX = (function () {
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let identInstanceBuf = null;
-    let pParticle = null, pParticleAdd = null, particleBGL = null, particleUBO = null, particleVBO = null, _particleCap = 0;
-    // Cached once (static UBO) — only valid for BOTH pipelines because they
-    // share one EXPLICIT layout; from an auto layout this cache would
-    // invalidate every additive spark draw.
-    let _particleBG = null;
+    let pParticle = null, pParticleAdd = null, particleBGL = null;
+    // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
+    // submit; one shared buffer left both draws seeing sparks only.
+    let particleUBO = [null, null], particleVBO = [null, null], _particleCap = [0, 0];
+    let _particleBG = [null, null], _particleFlip = 0;
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
     let _fxPipes = { 1: {}, 2: {} };
@@ -830,6 +832,8 @@ const WGX = (function () {
     let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null;
     let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
     let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pointSampler, pSSR;
+    // Blur dynamic-offset ring (see _buildPost BLUR block). Reset each present().
+    let _blurBGL = null, _blurStride = 256, _blurSlots = 16, _blurWriteSlot = 0;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
     const postScratch = new Float32Array(80);
 
@@ -1255,14 +1259,42 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         }
+        // BLUR uses an EXPLICIT layout with dynamic offsets: queue.writeBuffer is
+        // queue-timeline while draw is encoder-timeline, so H then V (and
+        // times>1) into one UBO region before submit would leave every pass
+        // seeing only the LAST write (WebGPU Fundamentals uniforms lesson).
+        // A 256 B-strided ring + setBindGroup(..., [offset]) gives each pass
+        // its own slot. SSAO (2) + god-ray times=2 (4) need 6 slots/frame.
+        const BLUR_STRIDE = 256;
+        const BLUR_SLOTS = 16;
+        let blurBGL = null;
         if (_Post.BLUR) {
-          pBlur    = fsPipe(_Post.BLUR, SSAO_FORMAT,  null);
-          pBlurHDR = fsPipe(_Post.BLUR, POST_HDR_FORMAT, null);
+          blurBGL = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: _Post.BLUR_UNIFORM_BYTES } },
+          ] });
+          const blurPL = device.createPipelineLayout({ bindGroupLayouts: [blurBGL] });
+          const blurPipe = (fmt) => {
+            const mod = device.createShaderModule({ code: _Post.BLUR });
+            return device.createRenderPipeline({
+              layout: blurPL,
+              vertex: { module: mod, entryPoint: "vs_main" },
+              fragment: { module: mod, entryPoint: "fs_main", targets: [{ format: fmt }] },
+              primitive: { topology: "triangle-list" },
+            });
+          };
+          pBlur = blurPipe(SSAO_FORMAT);
+          pBlurHDR = blurPipe(POST_HDR_FORMAT);
+          _blurBGL = blurBGL;
+          _blurStride = BLUR_STRIDE;
+          _blurSlots = BLUR_SLOTS;
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
-        blurUBO      = device.createBuffer({ size: _Post.BLUR_UNIFORM_BYTES,      usage: _UCD });
+        blurUBO      = device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
@@ -1412,11 +1444,16 @@ const WGX = (function () {
             depthStencil: pDepth,
             ..._fxMS,
           });
-          particleUBO = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
-          // Static layout+UBO — create once; was createBindGroup every drawParticles.
-          _particleBG = device.createBindGroup({
-            layout: particleBGL,   // the explicit shared layout, valid with BOTH pipelines
-            entries: [{ binding: 0, resource: { buffer: particleUBO } }],
+          particleUBO[0] = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
+          particleUBO[1] = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
+          // Static layout — valid for BOTH pipelines (explicit shared layout).
+          _particleBG[0] = device.createBindGroup({
+            layout: particleBGL,
+            entries: [{ binding: 0, resource: { buffer: particleUBO[0] } }],
+          });
+          _particleBG[1] = device.createBindGroup({
+            layout: particleBGL,
+            entries: [{ binding: 0, resource: { buffer: particleUBO[1] } }],
           });
         }
         _fxReady = true;
@@ -1788,35 +1825,35 @@ const WGX = (function () {
             ],
           });
           next.ssaoBlurSrcBG = device.createBindGroup({
-            layout: pBlur.getBindGroupLayout(0),
+            layout: _blurBGL || pBlur.getBindGroupLayout(0),
             entries: [
               { binding: 0, resource: next.ssaoView },
               { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: blurUBO } },
+              { binding: 2, resource: { buffer: blurUBO, offset: 0, size: _Post.BLUR_UNIFORM_BYTES } },
             ],
           });
           next.ssaoBlurDstBG = device.createBindGroup({
-            layout: pBlur.getBindGroupLayout(0),
+            layout: _blurBGL || pBlur.getBindGroupLayout(0),
             entries: [
               { binding: 0, resource: next.ssaoBlurView },
               { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: blurUBO } },
+              { binding: 2, resource: { buffer: blurUBO, offset: 0, size: _Post.BLUR_UNIFORM_BYTES } },
             ],
           });
           next.godrayBlurSrcBG = device.createBindGroup({
-            layout: pBlurHDR.getBindGroupLayout(0),
+            layout: _blurBGL || pBlurHDR.getBindGroupLayout(0),
             entries: [
               { binding: 0, resource: next.godrayView },
               { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: blurUBO } },
+              { binding: 2, resource: { buffer: blurUBO, offset: 0, size: _Post.BLUR_UNIFORM_BYTES } },
             ],
           });
           next.godrayBlurDstBG = device.createBindGroup({
-            layout: pBlurHDR.getBindGroupLayout(0),
+            layout: _blurBGL || pBlurHDR.getBindGroupLayout(0),
             entries: [
               { binding: 0, resource: next.godrayBlurView },
               { binding: 1, resource: linearSampler },
-              { binding: 2, resource: { buffer: blurUBO } },
+              { binding: 2, resource: { buffer: blurUBO, offset: 0, size: _Post.BLUR_UNIFORM_BYTES } },
             ],
           });
           next.godrayBG = device.createBindGroup({
@@ -2625,22 +2662,27 @@ const WGX = (function () {
     }
 
     // Separable 5-tap gaussian (GLX BLUR_FS). `times` = 1 for SSAO, 2 for god-ray.
+    // Each H/V pass gets its own dynamic-offset slot in blurUBO — see _buildPost.
     function _blurSep(pipe, srcView, tmpView, srcBG, tmpBG, texX, texY, times) {
       if (!pipe || !srcView || !tmpView || !srcBG || !tmpBG || !blurUBO) return;
       const n = times || 1;
+      const stride = _blurStride || 256;
+      const slots = _blurSlots || 16;
       for (let i = 0; i < n; i++) {
         const sx = (1 + i) * texX, sy = (1 + i) * texY;
         const s = postScratch;
         s[0] = sx; s[1] = 0; s[2] = 0; s[3] = 0;
-        device.queue.writeBuffer(blurUBO, 0, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        let off = ((_blurWriteSlot++) % slots) * stride;
+        device.queue.writeBuffer(blurUBO, off, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
         let p = encoder.beginRenderPass({ colorAttachments: [{ view: tmpView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-        p.setPipeline(pipe); p.setBindGroup(0, srcBG); p.draw(3, 1, 0, 0); p.end();
+        p.setPipeline(pipe); p.setBindGroup(0, srcBG, [off]); p.draw(3, 1, 0, 0); p.end();
         s[0] = 0; s[1] = sy;
-        device.queue.writeBuffer(blurUBO, 0, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        off = ((_blurWriteSlot++) % slots) * stride;
+        device.queue.writeBuffer(blurUBO, off, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
         p = encoder.beginRenderPass({ colorAttachments: [{ view: srcView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-        p.setPipeline(pipe); p.setBindGroup(0, tmpBG); p.draw(3, 1, 0, 0); p.end();
+        p.setPipeline(pipe); p.setBindGroup(0, tmpBG, [off]); p.draw(3, 1, 0, 0); p.end();
       }
     }
 
@@ -2686,18 +2728,21 @@ const WGX = (function () {
       M4.perspectiveTo(_envProj, Math.PI / 2, 1, 0.4, 900);
       M4.mulTo(_envVP, _envProj, _envView);   // raw GL view-proj
       M4.invertTo(_envInvVP, _envVP);          // for drawSky ray reconstruction (raw, pre-Z01)
+      // Keep probe VP on `frame` until envFaceEnd so drawWorldMeshes culls
+      // propBatches against the face frustum (GLX envFaceBegin parity).
+      const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
+      _envFrame = frame;
+      _envSvVP = svVP; _envSvEye = svEye; _envSvCull = svCull;
+      frame.viewProj = _envVP; frame.eye = eye;
       // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
       // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
       // when envCull is on; keep a tighter main-camera cull when present.
-      const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
-      frame.viewProj = _envVP; frame.eye = eye;
       if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
         frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
       } else {
         frame.cullDist = 0;
       }
       _writeFrame(frame);
-      frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       _envEncoder = device.createCommandEncoder();
       litPass = _envEncoder.beginRenderPass({
@@ -2714,6 +2759,12 @@ const WGX = (function () {
     // Close + submit the face pass. After all six faces the probe goes live: mips
     // are blitted and the main frame group samples the real cube (LIT LOD = rough * maxLod).
     function envFaceEnd(face) {
+      if (_envFrame) {
+        _envFrame.viewProj = _envSvVP;
+        _envFrame.eye = _envSvEye;
+        _envFrame.cullDist = _envSvCull;
+        _envFrame = null;
+      }
       if (!envCubeTex || !litPass || !_envEncoder) return;
       litPass.end();
       device.queue.submit([_envEncoder.finish()]);
@@ -2722,9 +2773,12 @@ const WGX = (function () {
       _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
+        // Remip EVERY completed cycle (GLX generateMipmap parity). Rough paint
+        // samples higher mips; refreshing only mip0 left stale reflections after
+        // the car moved. _rebuildFrameBG stays gated to the first live flip.
+        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
-          _generateMips(envCubeTex, 6);
           envCubeView = envSampleView;   // main frame group now mirrors the real world
           _rebuildFrameBG();
         }
@@ -2855,6 +2909,8 @@ const WGX = (function () {
       const lampArmed = _lampShadowArmed;
       _carShadowArmed = false;
       _lampShadowArmed = false;
+      _blurWriteSlot = 0;
+      _particleFlip = 0;
       // A device lost MID-FRAME used to return here with litPass/encoder still
       // set, and begin() bails before it can clear them — so every later draw()
       // passed its `if (!litPass)` guard and recorded into a pass belonging to a
@@ -3597,29 +3653,27 @@ const WGX = (function () {
       if (!litPass || !pParticle || !data || !(floatCount > 0)) return;
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
-      if (!_particleCap || _particleCap < floatCount) {
+      // Ping-pong slot so smoke + sparks each own a VBO/UBO before submit.
+      const i = _particleFlip++ & 1;
+      if (!_particleCap[i] || _particleCap[i] < floatCount) {
         // NEVER destroy the old VBO here: this frame's litPass may have already
-        // recorded a setVertexBuffer on it (game.js calls drawParticles twice a
-        // frame — alpha smoke then additive sparks — so growth between the two
-        // referenced a destroyed buffer: "used in submit while destroyed", one
-        // invalid command buffer, the whole frame dropped). Retire it instead;
-        // present() destroys retired buffers AFTER the frame's submit.
-        if (particleVBO) _retiredBufs.push(particleVBO);
-        _particleCap = Math.max(floatCount, 2560);
-        particleVBO = device.createBuffer({
-          size: _particleCap * 4,
+        // recorded a setVertexBuffer on it. Retire; present() destroys after submit.
+        if (particleVBO[i]) _retiredBufs.push(particleVBO[i]);
+        _particleCap[i] = Math.max(floatCount, 2560);
+        particleVBO[i] = device.createBuffer({
+          size: _particleCap[i] * 4,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
       }
-      device.queue.writeBuffer(particleVBO, 0, data, 0, floatCount);
+      device.queue.writeBuffer(particleVBO[i], 0, data, 0, floatCount);
       const s = fxScratch;
       s.set(frameVPGpu, 0);
       const eye = frameEye || [0, 0, 0];
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
-      device.queue.writeBuffer(particleUBO, 0, s, 0, 20);
+      device.queue.writeBuffer(particleUBO[i], 0, s, 0, 20);
       litPass.setPipeline(additive && pParticleAdd ? pParticleAdd : pParticle);
-      if (_particleBG) litPass.setBindGroup(0, _particleBG);
-      litPass.setVertexBuffer(0, particleVBO);
+      if (_particleBG[i]) litPass.setBindGroup(0, _particleBG[i]);
+      litPass.setVertexBuffer(0, particleVBO[i]);
       litPass.draw(nVert);
     }
 
@@ -3666,7 +3720,7 @@ const WGX = (function () {
       }
       const bytes = floats9 * 4;
       if (!skidVBO || _skidCap < bytes) {
-        if (skidVBO) skidVBO.destroy();
+        if (skidVBO) _retiredBufs.push(skidVBO);
         _skidCap = Math.max(bytes, 4096);
         skidVBO = device.createBuffer({ size: (_skidCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         dirty = true;
@@ -3712,7 +3766,7 @@ const WGX = (function () {
       if (!nDraw) return;
       const bytes = p * 4;
       if (!glowVBO || _glowCap < bytes) {
-        if (glowVBO) glowVBO.destroy();
+        if (glowVBO) _retiredBufs.push(glowVBO);
         _glowCap = Math.max(bytes, 4096);
         glowVBO = device.createBuffer({ size: (_glowCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
       }
@@ -4149,6 +4203,8 @@ const WGX = (function () {
       drawParticles,
       lampShadowBegin,
       lampShadowEnd,
+      // Active light VP for shadow-caster cull (GLX shadowCullVP parity).
+      get shadowCullVP() { return _shadowLightVP; },
       createTextureArray,
       setMaterialMaps,
       materialMapState,

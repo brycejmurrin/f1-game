@@ -320,7 +320,10 @@ test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
   assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
-  assert.match(wgx, /pBlurHDR = fsPipe\(_Post\.BLUR, POST_HDR_FORMAT/);
+  // Blur pipelines use an explicit dynamic-offset layout (not fsPipe) so H/V
+  // passes do not share one writeBuffer slot before submit.
+  assert.match(wgx, /pBlurHDR\s*=\s*blurPipe\(POST_HDR_FORMAT\)/);
+  assert.match(wgx, /pBlur\s*=\s*blurPipe\(SSAO_FORMAT\)/);
 });
 
 test("TLX present() records gfxBound when a fallback still paints", () => {

@@ -105,12 +105,15 @@ test("state packets are delivered to the game; ping/pong never are", () => {
   const p = pair({ latency: 20 });
   const got = [];
   p.b.onState((bytes) => got.push(new Uint8Array(bytes.buffer || bytes).slice()));
-  p.a.sendState(new Uint8Array([1, 2, 3, 4]));   // type 1 = snapshot
+  // Sync first: unreliable STATE is dropped until synced() so a pre-PONG
+  // snapshot cannot land at offset 0 and warp the rival when the clock lands.
   p.advance(1000);
+  assert.ok(p.b.synced(), "clock must sync before game state is accepted");
+  p.a.sendState(new Uint8Array([1, 2, 3, 4]));   // type 1 = snapshot
+  p.advance(200);
 
   assert.equal(got.length, 1, `exactly one game packet expected, got ${got.length}`);
   assert.deepEqual(Array.from(got[0]), [1, 2, 3, 4]);
-  assert.ok(p.b.synced(), "...while ping/pong still did their job");
 });
 
 test("events are typed, and only their own handler sees them", () => {
@@ -219,6 +222,8 @@ test("a throwing state handler does not kill the session", () => {
   let second = 0;
   p.b.onState(() => { throw new Error("consumer bug"); });
   p.b.onState(() => second++);
+  p.advance(200);   // sync before STATE is accepted
+  assert.ok(p.b.synced());
   p.a.sendState(new Uint8Array([1, 0, 0, 0, 0, 0]));
   p.advance(200);
   assert.equal(second, 1, "the other handler should still run");

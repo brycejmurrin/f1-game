@@ -78,7 +78,9 @@ const GLX = (function () {
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null;
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
+  let _glowCap = 0;      // GPU VBO capacity in floats; orphan only on grow
   let particleProg = null, particleU = null, particleVAO = null, particleVBO = null;
+  let _particleCap = 0;  // GPU VBO capacity in floats; orphan only on grow
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -96,6 +98,10 @@ const GLX = (function () {
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
+  // Saved game-frame fields while a probe face is open — restored in envFaceEnd
+  // so drawWorldMeshes (propBatches cull via frame.viewProj) still sees the
+  // probe frustum. Restoring in envFaceBegin left cull against the main camera.
+  let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
   const _envView = new Float32Array(16), _envProj = new Float32Array(16),
         _envVP = new Float32Array(16), _envInvVP = new Float32Array(16),
         _envTgt = [0, 0, 0];
@@ -261,10 +267,10 @@ const GLX = (function () {
     watchCanvasSize();
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
-      // (Apple GPUs round the request up to 4×) — pure waste on the post path,
-      // which renders offscreen and only blits a resolved image to the screen.
-      // On the memory-tight mobile tier that's ~40-50 MB of IOSurface for nothing.
-      antialias: !IS_MOBILE,   // phones never take the context-level AA path (see GRAPHICS: HIGH note in shadow.js)
+      // (Apple GPUs round the request up to 4×) — pure waste: the post path
+      // renders offscreen with its own MSAA and only blits a resolved image to
+      // the screen. Always false; never pay for unused browser MSAA.
+      antialias: false,
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -909,7 +915,12 @@ const GLX = (function () {
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
-    const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
+    // Keep probe VP / eye / cullDist on `frame` until envFaceEnd so
+    // drawWorldMeshes → makeFrustumPlanes(frame.viewProj) culls propBatches
+    // against the face frustum (chunked draws already read frameViewProj from
+    // begin()). Restoring here made reflections miss off-camera props.
+    _envFrame = frame;
+    _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
     // PerfTry.envCull (default ON; counted reach in docs/PERF-FINDINGS.md): the
     // probe inherits the MAIN camera's
@@ -922,13 +933,18 @@ const GLX = (function () {
     // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-      frame.cullDist = svCull > 0 ? Math.min(svCull, ENV_CULL_M) : ENV_CULL_M;
+      frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
     }
     begin(frame);
-    frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
     return _envInvVP;
   }
   function envFaceEnd(face) {
+    if (_envFrame) {
+      _envFrame.viewProj = _envSvVP;
+      _envFrame.eye = _envSvEye;
+      _envFrame.cullDist = _envSvCull;
+      _envFrame = null;
+    }
     if (!gl || !envTex) return;
     _envActive = false;
     envFacesMask |= 1 << face;
@@ -1436,36 +1452,49 @@ const GLX = (function () {
   // Repack the instances whose cell survives the frustum to the front of the GPU
   // buffer and record how many. Returns the visible count. A batch created
   // without cellSize has no cells and is left whole (always drawn in full).
+  // Skips bufferSubData when the visible cell set (count + cell-index hash) is
+  // unchanged from the previous cull — static prop batches often match.
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
+    const cells = batch.cells;
+    let n = 0, hash = 0;
+    for (let ci = 0; ci < cells.length; ci++) {
+      const c = cells[ci];
+      if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+      hash = (Math.imul(hash, 31) + (ci + 1)) | 0;
+      n += c.idx.length;
+    }
+    batch.visible = n;
+    if (n === batch._cullN && hash === batch._cullHash) return n;
+    batch._cullN = n;
+    batch._cullHash = hash;
+    if (!n) return 0;
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
-    let n = 0;
-    for (const c of batch.cells) {
+    let w = 0;
+    for (let ci = 0; ci < cells.length; ci++) {
+      const c = cells[ci];
       if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
       for (const i of c.idx) {
         // Copy without Float32Array.subarray — that view was a per-instance alloc
         // on Vegas-scale batches (tens of thousands/frame).
-        const so = i * 16, dOff = n * 16;
+        const so = i * 16, dOff = w * 16;
         for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
         if (dc) {
-          const sco = i * 3, dco = n * 3;
+          const sco = i * 3, dco = w * 3;
           dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
         }
-        n++;
+        w++;
       }
     }
-    batch.visible = n;
-    if (n) {
-      // WebGL2 bufferSubData(srcOffset, length) — no .subarray view.
-      gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
-      if (dc) {
-        gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
-      }
+    // WebGL2 bufferSubData(srcOffset, length) — no .subarray view.
+    gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, w * 16);
+    if (dc) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, w * 3);
     }
-    return n;
+    return w;
   }
 
   // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
@@ -1691,7 +1720,13 @@ const GLX = (function () {
     gl.uniform1f(glowU.uStr, str);
     bindVAO(glowVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, glowData.subarray(0, p), gl.DYNAMIC_DRAW);
+    // Allocate capacity once; orphan (bufferData) only when the live float
+    // count outgrows the VBO. Steady-state frames use bufferSubData.
+    if (_glowCap < p) {
+      _glowCap = Math.max(p, 6 * 9 * 16);   // ≥16 lamps worth
+      gl.bufferData(gl.ARRAY_BUFFER, _glowCap * 4, gl.DYNAMIC_DRAW);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p);
     // Additive, depth-tested (halos occlude behind walls) but no depth write.
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
@@ -1720,7 +1755,13 @@ const GLX = (function () {
     gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
     bindVAO(particleVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, floatCount), gl.DYNAMIC_DRAW);
+    // Same grow-once pattern as drawGlow: exact-size bufferData every frame
+    // was orphaning the driver allocation on every smoke/spark upload.
+    if (_particleCap < floatCount) {
+      _particleCap = Math.max(floatCount, 2560);
+      gl.bufferData(gl.ARRAY_BUFFER, _particleCap * 4, gl.DYNAMIC_DRAW);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
@@ -1792,6 +1833,9 @@ const GLX = (function () {
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
+    // Active light VP for shadow-caster cull (lamp frustum while lamp pass is
+    // open, else the sun ortho). game.js cullInstances before castShadowInstanced.
+    get shadowCullVP() { return SHD ? (SHD.castCullVP || SHD.lightVP) : null; },
     carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),
