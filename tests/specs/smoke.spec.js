@@ -296,7 +296,7 @@ test.describe("Apex 26 — HUD", () => {
     // `polling` IS LOAD-BEARING, not decoration. Playwright polls a predicate on
     // requestAnimationFrame by default, and this page is running the game loop
     // under SwiftShader — which starves that poll badly enough that the declared
-    // bound never gets to fire (CLAUDE.md measures a 3 s wait running 109,665 ms).
+    // bound never gets to fire (AGENTS.md measures a 3 s wait running 109,665 ms).
     // Measured here: solo on a quiet box this test took 102.7 s of a 120 s
     // budget, i.e. 14% from failing with zero contention, and it is the test that
     // failed first the moment anything else touched the CPU.

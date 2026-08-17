@@ -53,7 +53,7 @@ window.TopModal = (function () {
        A native dialog closes itself on Escape, which sounds like a free feature
        and is a trap: closing the ELEMENT is not the same as closing the SCREEN.
        The VS FRIEND lobby's own close path stops the camera and tears down a
-       half-built RTCPeerConnection before hiding anything, and CLAUDE.md is
+       half-built RTCPeerConnection before hiding anything, and AGENTS.md is
        explicit that a camera outliving its screen is a privacy bug nothing on
        screen would reveal. A bare Escape would have left both running.
        So: `data-esc-close="<id>"` names the control Escape should press, and

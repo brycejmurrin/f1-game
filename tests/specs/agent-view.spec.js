@@ -1780,7 +1780,7 @@ test.describe("scene()", () => {
 async function renderFrames(page, n = 10) {
   await page.evaluate((count) => new Promise((res) => {
     // load() jump()ed the car; snapCam() is REQUIRED after park()/jump() before
-    // a shot (CLAUDE.md sharp edges) — without it the chase cam spends these
+    // a shot (AGENTS.md sharp edges) — without it the chase cam spends these
     // settle frames converging from its pre-jump position through exponential
     // damping, and ~11 rAF frames under SwiftShader are not always enough. Snap
     // first (no-op if no player/track), then let the frames draw from a camera

@@ -339,12 +339,22 @@ test("live docs and skills cite AGENTS.md as the rule owner, not CLAUDE.md", () 
   const owner = /CLAUDE\.md(?:'s|\s+says|\s+forbids|\s+mandates|\s+recommended|\s+documents|\s+measures|\s+asks|\s+carries the rules)|per CLAUDE\.md|contradicted CLAUDE\.md|\[`CLAUDE\.md`\]|held by a table in `CLAUDE\.md`|see \*\*Logging\*\* in `CLAUDE\.md`|summarised in CLAUDE\.md|from CLAUDE\.md\. Not a description/i;
   const allow = /moved from CLAUDE\.md|CLAUDE\.md is a stub|imports AGENTS\.md|do not edit rules into `?CLAUDE\.md`|@AGENTS\.md|byte-for-byte|advertised \d+ Playwright|CLAUDE\.md must import/;
   const extra = [".cursor/rules/apex-shared.mdc", "tools/README.md"];
+  const jsFiles = [];
+  (function walkJs(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walkJs(rel);
+      else if (e.name.endsWith(".js")) jsFiles.push(rel);
+    }
+  })("js");
   const bad = [];
-  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS, ...extra]) {
+  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS, ...extra, ...jsFiles]) {
     if (doc === "CLAUDE.md") continue;
+    const isJs = doc.startsWith("js" + path.sep) || doc.startsWith("js/");
     read(doc).split("\n").forEach((line, i) => {
       if (allow.test(line)) return;
-      if (owner.test(line)) bad.push(`${doc}:${i + 1}: ${line.trim()}`);
+      if (isJs ? /CLAUDE\.md/.test(line) : owner.test(line))
+        bad.push(`${doc}:${i + 1}: ${line.trim()}`);
     });
   }
   assert.deepEqual(bad, [], "cite AGENTS.md for current rules; leave archive/research alone");

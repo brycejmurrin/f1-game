@@ -71,7 +71,7 @@ async function waitReady(page) {
   // STOP THE RENDER LOOP. This spec opens the garage, which runs a live 3D car
   // preview (renderSetupPreview in game.js) regardless of whether a race is
   // active — every subsequent wait in this file was competing with that for
-  // main-thread time, which is the exact class of flakiness CLAUDE.md documents
+  // main-thread time, which is the exact class of flakiness AGENTS.md documents
   // for a page that renders under SwiftShader ("a page running the game loop
   // starves that poll badly enough that the declared timeout never gets to
   // fire"). Every other layout tool in this repo (tools/layout-audit.mjs, the
