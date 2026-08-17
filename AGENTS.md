@@ -100,15 +100,20 @@ Session shape — this is what controls both wall time and waiting:
 
 ### Software pixels in this container (no real GPU)
 
-A blank `#game` canvas under headless WebGPU is **not** a WGX failure — the
-native swapchain present path stays black on SwiftShader/Lavapipe. Real pixels:
+On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
+screen — that path stays black. WGX routes the visible `#game` through a **2D
+soft-present blit** (final pass → `COPY_SRC` texture → `putImageData` on
+`#game`; never `getCurrentTexture()`, which breaks `mapAsync` device-wide).
+Cache **1342+** uses ephemeral per-frame staging buffers +
+`onSubmittedWorkDone` before readback; `awaitSoftPresent()` resolves only after
+a non-blank visible blit.
 
-| Backend | Command / path | Needs |
-|---------|----------------|-------|
-| **WGX** | `node tools/wgx-capture.mjs <track>` → `artifacts/tmp/wgx-capture/…/frame.png` | Soft-present (`apex26.wgxCapture=1` / auto on software adapters) |
+| Backend | Command / path | Checks |
+|---------|----------------|--------|
+| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
 | **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL` / `--backend three`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
-| **Unified** | `node tools/gfx-probe.mjs --backend webgpu\|three …` | Same soft-present / WebGL2 pins as above |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
 
 Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
 §Measured. Env packages + install: §Cursor Cloud below.
@@ -134,8 +139,9 @@ binding, not a window property. A clean WGX boot writes NO console line and
 leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
 both ABSENCE signals, so confirm with one positive: drive a race and assert
 `canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
-the canvas. SwiftShader is a validation oracle; for WGX **pixels** use
-`wgx-capture.mjs`, not a screenshot of the canvas. Full trap list:
+the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
+`gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
+`wgx-capture.mjs` → `frame.png`. Full trap list:
 `.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
 
 ## Cursor Cloud specific instructions

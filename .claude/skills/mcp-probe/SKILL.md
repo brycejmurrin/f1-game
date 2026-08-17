@@ -44,14 +44,15 @@ Do not attach this skill for a version.json STALE check.
    then `chrome-stop`, then check CPU; see `references/traps.md` §1.
 2. **github.io is tinyfish-only** from this container (egress proxy).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
-4. SwiftShader WebGPU **executes** — real WGX pixels come from
-   `node tools/wgx-capture.mjs <track>` (soft-present / offscreen readback), never
-   from screenshots of the WGX canvas (headless present is blank, and the first
-   `getCurrentTexture()` kills `mapAsync` device-wide). Lavapipe A/B:
+4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
+   2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
+   hidden swapchain canvas. Readback oracle: `node tools/wgx-capture.mjs <track>`
+   → `frame.png` (optional; never call `getCurrentTexture()` on software
+   adapters — it breaks `mapAsync` device-wide). Lavapipe A/B:
    `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:
-   `gfx-probe.mjs --backend three` (WebGL2 pin — three WebGPU dies on
-   SwiftShader). Cloud env packages: `AGENTS.md` §Cursor Cloud;
-   `docs/research/CI-RENDERING-PERFORMANCE.md` §Cursor Cloud.
+   `gfx-probe.mjs --backend three` (WebGL2 pin). Cloud env packages:
+   `AGENTS.md` §Cursor Cloud; `docs/research/CI-RENDERING-PERFORMANCE.md`
+   §Cursor Cloud.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 
 ## Load on demand
