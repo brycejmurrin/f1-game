@@ -38,7 +38,8 @@ suites in the background, inspect logs asynchronously, and continue productive
 tasks without waiting.
 
 ```sh
-node tools/test-bg.mjs smoke api collision   # start; returns immediately
+node tools/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
+node tools/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
 tail -f artifacts/logs/smoke.log             # watch one
 node tools/test-bg.mjs --status              # what is running / how it ended
 node tools/test-bg.mjs --wait                # block until all groups finish
@@ -292,7 +293,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
-| `tooling-fast` | the structural half in ~30 s — load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `paths` | output paths are port-scoped and self-creating |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/float-audit.cjs`) |
