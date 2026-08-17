@@ -15,6 +15,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/car/render-car.mjs`. |
 | **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump. |
+| **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure, live-deploy verification. |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type with the Chrome DevTools MCP — enumerate screens from source, measure each cell, capture. |
 | **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
@@ -33,6 +34,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **lighting-tuner** | Scene lighting — `lightTune`, time-of-day/weather, `lightState`, orbit shots. |
 | **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
 | **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
+| **webgpu-debug** | WebGPU/WGX issues — black screen, WGSL derivative uniformity, GPU validation errors, device-loss ladder, `wgx-validate.mjs` Dawn matrix. |
 | **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
 | **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
 | **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
