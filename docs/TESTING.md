@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 95 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 96 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -874,6 +874,7 @@ what it covers.
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 | `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `tools-runnable.test.mjs` | every tool in `tools/` PARSES (`node --check` / `bash -n` / python compile / JSON) and the MCP-facing entry points answer their help path. The README index guards names in both directions but never says the file runs — a tool with a syntax error is indexed, documented and completely inaccessible, and you find out mid-task. Parse-only for the sweep: these tools launch browsers and hit networks |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
 
 ---
