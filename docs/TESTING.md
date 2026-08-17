@@ -1058,3 +1058,14 @@ desktop stack can LOSE the device seconds in (Chrome reports it as
 `createBuffer failed, size (N) is too large` on a tiny N — that wording means
 device-lost, not size). Validation evidence here is exact; pixel evidence now
 exists in-container; PERFORMANCE truth still needs a real GPU.
+
+**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** A blank headless
+`#game` canvas under WGX is expected on SwiftShader/Lavapipe — use
+`node tools/wgx-capture.mjs` (soft-present readback) or
+`node tools/gfx-probe.mjs --backend webgpu|three`. Lavapipe needs
+`mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
+`/usr/share/vulkan/icd.d/` until that package was installed and the env
+snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
+three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
+`AGENTS.md` §Seeing the game / §Cursor Cloud;
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.

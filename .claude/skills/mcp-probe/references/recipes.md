@@ -63,7 +63,16 @@ validation errors that a mock device cannot model at all
 `rg11b10ufloat-renderable`).
 
 SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
-bind groups match, buffers upload. It is not a visual one.
+bind groups match, buffers upload. It is not a visual one. For **pixels**:
+
+```sh
+node tools/wgx-capture.mjs montreal --lite          # WGX soft-present → frame.png
+node tools/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
+node tools/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
+```
+
+Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
+(and persist the Cloud env snapshot — see `AGENTS.md` §Cursor Cloud).
 
 ---
 
