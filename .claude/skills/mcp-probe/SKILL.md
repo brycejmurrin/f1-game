@@ -24,6 +24,25 @@ python3 tools/probe-mcp.py call tinyfish_fetch_content \
   '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
 ```
 
+**A bare `call` spawns a FRESH Chromium per invocation** — MEASURED
+2026-08-17: `navigate_page` in one call, `list_pages` in the next read
+`about:blank`; every recipe below that chains navigate → evaluate →
+screenshot silently ran against different browsers this way. For ANY
+multi-call chrome flow start the persistent daemon first — `call`
+auto-routes to it (stderr prints `# chrome via daemon :3712`), and a
+follow-up `evaluate_script` against an already-booted race costs ~0.7 s
+instead of a fresh boot+race (~30-60 s under SwiftShader):
+
+```
+python3 tools/probe-mcp.py chrome-start    # one Chromium in tmux, port 3712
+python3 tools/probe-mcp.py call chrome_...    # as many calls as needed
+python3 tools/probe-mcp.py chrome-stop     # ALWAYS before test-bg.mjs
+```
+
+`chrome-stop` is part of the parking rule below, not an optional cleanup — a
+daemon browser left rendering is exactly the ~20% CPU Playwright-starver the
+first trap describes.
+
 Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
@@ -589,6 +608,21 @@ before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
 Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
+
+**Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
+(shell env / `.env` override it), so `ensure` works on a fresh checkout.
+All 16 upstream tools verified working 2026-08-17 except `get_wallet`
+("Wallet is not available for your account yet" — account-gated upstream,
+not a wrapper bug).
+
+**Upstream quirk (measured 2026-08-17): `create_browser_session` returns
+`session_id: "tf-<uuid>"`, but `run_web_automation`/`run_web_automation_async`
+validate `session_id` as a BARE UUID** — pass the id with the `tf-` prefix
+stripped or the call fails `Invalid UUID` without ever reaching the session.
+The completed-run proof: a trivial automation against the deployed
+`version.json` queued, ran, and answered ("The build number is 1297") in
+under a minute; heavier goals from `list_runs` history took 12–20 minutes,
+so poll `get_run` at the interval the queue message suggests, not in a loop.
 
 ---
 
