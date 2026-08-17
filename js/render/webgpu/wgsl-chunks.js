@@ -1598,7 +1598,12 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> DROut {
 @fragment
 fn fs_main(@builtin(position) pos : vec4<f32>) -> @builtin(frag_depth) f32 {
   let c = vec2<i32>(pos.xy);
-  return min(textureLoad(src, c, 0), textureLoad(src, c, 1));
+  // MSAA_COUNT is 4 (or this pass is not created). min of only samples 0 and 1
+  // was correct when the count was 2; after the spec-legal 4× fix it left
+  // samples 2 and 3 out of the resolved depth used by SSAO/godray/SSR.
+  return min(
+    min(textureLoad(src, c, 0), textureLoad(src, c, 1)),
+    min(textureLoad(src, c, 2), textureLoad(src, c, 3)));
 }`,
   };
 })();

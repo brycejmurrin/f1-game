@@ -1038,6 +1038,8 @@ test("every sampleCount WGX requests is one WebGPU actually allows (1 or 4)", as
       && !LEGAL.has(p.desc.multisample.count));
   assert.deepEqual(pipeBad.map((p) => p.desc.multisample.count), [], "illegal pipeline multisample count");
   assert.ok(h.textures.some((t) => t.desc.sampleCount === 4), "desktop must still allocate MS targets");
+  assert.match(CHUNKS_SOURCE, /textureLoad\(src,\s*c,\s*3\)/,
+    "DEPTH_RESOLVE must min all four 4× samples, not just 0 and 1");
 });
 
 test("rg11b10ufloat is only rendered into when the device grants the feature", async () => {
@@ -1076,6 +1078,18 @@ test("rg11b10ufloat is only rendered into when the device grants the feature", a
   assert.deepEqual(asked(rich), [["timestamp-query", "rg11b10ufloat-renderable"]]);
   assert.ok(rich.textures.some((t) => t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE)),
     "the granted feature must actually be used (half the bytes per post pixel)");
+  // Bloom pipelines must write the SAME format as those targets. Godray/blur
+  // already did; bloom down/up shipped on SCENE_FORMAT (rgba16float) and
+  // every bloom draw was a color-format mismatch once the feature was granted.
+  assert.match(WGX_SOURCE, /pBloomDown = fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
+  assert.match(WGX_SOURCE, /pBloomUp\s*= fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
+  const bloomPipeWrong = rich.pipelines.filter((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rgba16float")
+    && /BLOOM/i.test(JSON.stringify(p.desc || {})));
+  // Source invariant is the net; the harness may not label pipelines BLOOM.
+  assert.ok(rich.pipelines.some((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rg11b10ufloat")),
+    "at least one post pipeline must target the granted rg11b10ufloat format");
 
   // Adapter advertises, device withholds — the case a device-side re-derive
   // exists for. Reading the adapter's answer here would allocate the illegal

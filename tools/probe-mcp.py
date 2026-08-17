@@ -399,7 +399,8 @@ class Bridge:
                 if os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no"):
                     raise RuntimeError("PROBE_MCP_FAIL_BACKENDS")
                 out.extend(prefix_tools(backend, getter()))
-            except Exception:
+            except Exception as e:
+                print(f"# {backend} tools() failed, using static catalog: {e}", file=sys.stderr)
                 out.extend(prefix_tools(backend, _static_catalog(backend)))
         return out
 
