@@ -13,5 +13,10 @@ alwaysApply: true
   post-deploy / public-web research). Prefer these over inventing ad-hoc
   workers for the same job.
 - **MCP:** `.mcp.json` → `probe` / `tinyfish` / `chrome-devtools`. Live game or
-  deploy checks: skill `mcp-probe`. Never run Chrome MCP while Playwright is
-  running; never hand a subagent a browser test group.
+  deploy checks: skill `mcp-probe` (thin index — traps/recipes load on demand
+  under `references/`). Never run Chrome MCP while Playwright is running;
+  never hand a subagent a browser test group. Prefer subagent `deploy-research`
+  for tinyfish noise; do not attach fat skills unless the task needs them.
+- **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
+  `test:tooling-fast` before screenshots or browser groups. Path-scoped rules
+  under `.cursor/rules/` (e.g. `render-wgx`, `render-tlx`) attach by globs.
