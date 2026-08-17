@@ -196,9 +196,9 @@ const api = {
   },
   // Get or set the player camera mode (any of the 13 CAM_MODES ids — chase, far,
   // drift, cockpit, hood, overhead, heli, reverse, side, cinematic, low, tcam,
-  // rear). Called with no argument it returns the current mode; with a mode id
-  // ("cockpit"), label, or index it switches and persists. Mirrors the in-game
-  // CAM button / C key.
+  // rear). No-arg returns current; id or index switches and persists. Picker
+  // labels that differ from the id (TV SIDE / T-CAM / REAR CAM) miss. Mirrors
+  // the in-game CAM button / C key.
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
@@ -246,8 +246,8 @@ const api = {
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/game/cam-tune.js), the camera counterpart of lightTune(). With no args
   // it reports every tuned mode plus the knob registry; with a mode id it
-  // returns that mode's six resolved values; with a mode id + an object of
-  // {height,dist,side,pitch,yaw,fov} it applies and persists them and re-snaps
+  // returns that mode's resolved knobs (six geometric + cornerLead); with a
+  // mode id + {height,dist,side,pitch,yaw,fov,cornerLead} it applies, persists, re-snaps
   // the live camera. Pass null as the object to reset that mode.
   //   __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 })
   camTune(mode, obj) {

@@ -7,7 +7,7 @@ import { test, expect } from "../helpers/fixtures.js";
 
 
 test.describe("Apex 26 — player camera modes", () => {
-  test("camera() reports all modes and switches by id, index and label", async ({ page, loadTrack }) => {
+  test("camera() reports all modes and switches by id and index", async ({ page, loadTrack }) => {
     await loadTrack();
     const r = await page.evaluate(() => {
       const init = window.__apex.camera();

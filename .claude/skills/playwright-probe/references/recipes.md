@@ -90,10 +90,11 @@ helped asset fetch; they are not the current harness.
    and compare the eye→target bearing against `physState().head` vs the road
    tangent (`head + probe().angle`).
 7. **There are TWO camera call sites.** The live rig is solved in `render()`;
-   `snapCam()`/`startRace()` go through `snapGameCam()`, and `previewCam()`
-   through its own `camVantage()` call with an empty `extra`. They are meant to
-   frame identically — if you add anything to the camera's inputs, wire all of
-   them, or a snapped/preview shot will silently disagree with the live view.
+   `snapCam()`/`startRace()` go through `snapGameCam()`. `previewCam()` calls
+   the same `camVantage()` solver with a **synthesised car pose** (centreline +
+   `lat`, heading = road tangent) so chase/onboard do not fall back to the
+   road-frame branch. Wire every new camera input through `vantage()` — a
+   snapped/preview shot that skips it will silently disagree with the live view.
 
 ## Custom-harness skeleton
 

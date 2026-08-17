@@ -14,7 +14,8 @@ cams. e.g. `__apex.previewCam("drift", 0.21, 65)`.
 ## Free debug-camera framing hooks
 
 Each returns the resolved `{eye, target, ...}` and sets a debug override
-(`camState().debug === true`). They persist until you call a game `camera()`.
+(`camState().debug === true`). They persist until you call a game `camera()`
+or `snapCam()` (both set `G.dbgCam = null`).
 
 | Hook | Returns | Use |
 |---|---|---|
@@ -37,10 +38,10 @@ do **not** `snapCam()` after `orbit()` — `snapCam()` clears `dbgCam`.
 
 ## Inspectors
 
-- `__apex.camState()` → `{eye, tgt, fov, debug}` — `debug:true` means a `view()`
-  override is active.
+- `__apex.camState()` → `{eye, tgt, fov, roll, debug}` — `debug:true` means a
+  `view()` / free-cam override is active (`roll` is 0 while `dbgCam` is set).
 - `__apex.viewState()` → `{camMode, camIndex, frozen, dbgCamActive, skyOverride,
-  weather, state, eye, tgt, fov, debug}` — the full scene/camera snapshot.
+  weather, state, eye, tgt, fov, roll, debug}` — the full scene/camera snapshot.
 
 ## Quick recipes
 
@@ -48,7 +49,7 @@ do **not** `snapCam()` after `orbit()` — `snapCam()` clears `dbgCam`.
 # one-off via the reusable evaluator (boots headless, prints JSON):
 node tools/apex-eval.mjs monaco "a.camera()"                 # list modes / current
 node tools/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge cinematic
-node tools/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (markings.js)
+node tools/apex-eval.mjs monza  "(a.park(0.0962), a.orbit(0.0962,45,18,45), a.camState())"  # T1 Rettifilo = 0.0962 (markings.js)
 
 # lap tour — chase cam at every 5% of a circuit (20 shots in order):
 node tools/capture/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
@@ -62,10 +63,10 @@ __apex.race("monaco");
 // __apex.trackInfo({what:"corners"}) or __apex.corners() or js/track/markings.js
 __apex.park(0.18);   // stationary + frozen
 __apex.orbit(0.18, 60, 20, 40);             // orbit the chicane (dbgCam — no snapCam after)
-// for a PNG, use the playwright-probe skill's shot.mjs (cam = orbit|eye|cinematic|trackside)
+// for a PNG, use the playwright-probe skill's shot.mjs (cam = park|orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
-__apex.jump(0.035, 60, 0);  // Monza T1 ~0.016–0.042 (markings.js), not 0.1
+__apex.jump(0.0962, 60, 0);  // Monza T1 Rettifilo (markings.js), not the start-straight
 __apex.camera("chase");     // switch to chase mode
 __apex.snapCam();           // snap rig without damping — essential before a screenshot
 ```

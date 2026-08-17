@@ -149,9 +149,11 @@ __apex.orbit(0.116, 45, 15, 35) // orbit a track point
 __apex.camState()
 ```
 
-Always `__apex.snapCam()` after `park()`/`jump()` before judging a frame — the
-camera eases toward its rig target, so without it you are looking at a camera
-still flying to the car.
+Always `__apex.snapCam()` after `park()`/`jump()` before judging a **player**
+camera frame — the rig eases toward its target, so without it you are looking
+at a camera still flying to the car. Do **not** call `snapCam()` after
+`orbit()` / `eyeAt()` / `view()` — those set `dbgCam` instantly, and `snapCam()`
+clears that override.
 
 ---
 

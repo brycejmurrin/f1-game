@@ -143,6 +143,14 @@ deliberately NOT moved — their consumers hardcode the flat paths):
   where layout-audit injects only its fixed, per-viewport measured ones —
   headless Chromium itself reports every `env(safe-area-inset-*)` as 0, so
   both must simulate.
+- **Camera tools (semantics vs capture):** hook contracts live in
+  `.claude/skills/debug-cameras/` + `docs/DEBUG-HOOKS.md` (13 `CAM_MODES`,
+  `orbit`/`view`/`previewCam`, `snapCam` vs `dbgCam`). Capture CLIs do not
+  re-document those semantics — `apex-eval.mjs` evals one expression,
+  `shot.mjs` is one framed PNG (`park|orbit|eye|cinematic|trackside`),
+  `apex-capture.mjs cameras` fans 12 modes (omits `drift`) at `park(0.1)`,
+  `wgx-shot.mjs --cam orbit|eye|park` is the WebGPU sibling. Never
+  `snapCam()` after a free-cam hook.
 - **Surveying a track:** `survey-track.mjs <id>` is the one-stop pass (shots +
   flagged probe). For a one-off framed shot use `.claude/skills/playwright-probe/shot.mjs`;
   for a parallel multi-track screenshot sweep use `apex-capture.mjs`; for a quick

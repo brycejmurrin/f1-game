@@ -132,16 +132,19 @@ its target exponentially, so a `jump()`/`park()` teleport leaves it flying to th
 car for a second or more: empty frames, the car out of shot, or scenery from
 hundreds of metres back. `camState()` read in that window describes the camera's
 current position, not the mode's framing. Waiting longer is not a reliable fix —
-`freeze()` can hold the ease. Sanity numbers once snapped: chase eye ≈ 5.8 m from
-the car, cockpit ≈ 0.36 m, hood ≈ 0.58 m.
+`freeze()` can hold the ease. Sanity numbers once snapped: chase sits ~5.8 m
+behind the car (plus a 0.3×-back side offset); cockpit eye is
+`COCKPIT_EYE_FWD/UP` (−0.20 / 0.82 m); hood is 0.55 m fwd / 0.95 m up.
 
 **Do NOT call it after `orbit()`/`view()`/`dolly()`/`eyeAt()`/`roadside()`/
-`cinematic()`/`sky()`/`previewCam()`.** Every one of those sets `G.dbgCam`, a
+`cinematic()`/`previewCam()`.** Every one of those sets `G.dbgCam`, a
 free-cam override; `snapCam()` unconditionally does `G.dbgCam = null` first, so
 calling it right after one of them **cancels the positioning you just set** and
 silently falls back to whatever the player camera mode was — read the frame back
 and it looks plausible (it's a real render, just the wrong one), so this doesn't
-error, it just quietly invalidates the shot. MEASURED 2026-08-12: two screenshots
+error, it just quietly invalidates the shot. `sky()` is different: it parks the
+car, **clears** `dbgCam`, and sets `G.skyViewOverride`. `snapCam()` does **not**
+clear that override, so a sky shot survives a snap. MEASURED 2026-08-12: two screenshots
 captured with `orbit(0.16,40,20,20); snapCam();` between a "before" and an
 "after" `lightTune()` call showed a wide cityscape in one and a close-up car in
 the other — not because anything in the scene changed, but because the two calls
@@ -163,12 +166,14 @@ off the tangent first if that is what you are testing.
 ### `camera(mode?) → {mode, index, modes?} | false`
 Get or set the **player camera mode**. Mirrors the in-game CAM button / `C` key.
 Called with no argument it returns `{ mode, index, modes }`. Called with a mode
-**id**, **label**, or **index** it switches and persists (to `localStorage`),
-returning `{ mode, index }`; an unknown mode returns `false`.
+**id** (case-insensitive) or **index** it switches and persists (to
+`localStorage`), returning `{ mode, index }`; an unknown mode returns `false`.
+Picker labels that differ from the id (`TV SIDE`, `T-CAM`, `REAR CAM`) do **not**
+match — use `"side"` / `"tcam"` / `"rear"`.
 
 | Mode | Label | Vantage |
 |---|---|---|
-| `chase` | CHASE | Close action cam anchored behind the car at fixed arc-length — car stays a constant readable size at all speeds (default). Aims at the curved centreline ahead, so it looks into the corner |
+| `chase` | CHASE | Close action cam behind the **car** along its heading (default free-world rig). CAMERA TUNER `cornerLead` (def 0) blends toward the old road-frame chase that aimed at the curved centreline |
 | `far` | FAR | Chase cam pulled further back and higher — more road ahead visible, better for race-craft |
 | `drift` | DRIFT | Action chase that swings to the OUTSIDE of a slide so the car's flank faces camera under oversteer; settles directly behind when gripping |
 | `cockpit` | COCKPIT | Driver's-eye onboard; the player car mesh is hidden |
@@ -179,7 +184,7 @@ returning `{ mode, index }`; an unknown mode returns `false`.
 | `side` | TV SIDE | Trackside camera on the OUTSIDE of the upcoming corner, framing the car against the apex |
 | `cinematic` | CINEMATIC | Outside-of-corner orbit that gently breathes its angle (auto-picks the outside of the bend) — not a full disorienting loop |
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
-| `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
+| `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.46 m above the car, looking forward along the curved centreline |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
 
 ```js
@@ -205,8 +210,9 @@ __apex.previewCam("heli", 0.5);          // HELI's broadcast angle at half-dista
 
 ### `camTune(mode?, obj?) → {…} | false`
 The **CAMERA TUNER**'s per-camera-mode framing offsets (`js/game/cam-tune.js`) —
-the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
-`0` = the framing `js/game/cameras.js` ships:
+the camera counterpart of `lightTune()`. Six geometric knobs per mode, all
+defaulting to `0` = the framing `js/game/cameras.js` ships, plus `cornerLead`
+(chase/far only):
 
 | knob | unit | effect |
 |---|---|---|
@@ -227,7 +233,7 @@ ground clamp after tuning.
 
 ```js
 __apex.camTune();                                  // → {defs:[…], tuned:{chase:{…}}}
-__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0}
+__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0, cornerLead:0}
 __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 });   // apply + persist + re-snap
 __apex.camTune("chase", null);                     // reset this camera to shipped framing
 ```
@@ -238,8 +244,9 @@ with RESET CAM / RESET ALL.
 ### `view(opts) → {eye, target, …} | {mode:"chase"} | false`
 Debug **free camera** that overrides the chase cam entirely — instant (no
 damping), uncapped FOV, far plane and fog pushed out — for inspecting whole-track
-layouts and trackside scenery from any angle. Call with no args (or `"chase"`) to
-restore the normal cam.
+layouts and trackside scenery from any angle. Call with no args for the
+**whole-track aerial**. Call `view("chase")` (or `{mode:"chase"}`) to restore
+the normal cam.
 
 The override is also cleared by `camera(mode)` and `snapCam()` — selecting a game
 camera or snapping it leaves the free-cam. So the common sequence
@@ -324,15 +331,23 @@ a dozen screenshots that each showed grass or treetops. `scene().props[].at`
 gives world coords for the same thing and is the faster way to aim when the
 frame is already built: read `at`, then `view({eye, yaw, pitch})` at it.
 
-### `orbit(f, az?, el?, dist?, h?) → {eye, target}`
+### `orbit(f, az?, el?, dist?, h?, opts?) → {eye, target, fov}`
 Orbit the free-cam around a track point at lap-fraction `f`: `az` degrees around
-(0 = from ahead/+s), `el` elevation, `dist` m out, aimed `h` m up. Sweep `az` to
-inspect a spot (prop, berm, suspected gap) from every side. A low or negative `el`
-gives a ground-skimming angle but the eye is floored just above the road, so it
-never sinks under the terrain (which would render the track's underside).
+(0 = from ahead/+s), `el` elevation, `dist` m out, aimed `h` m up. `opts.fov`
+defaults to 55. Sweep `az` to inspect a spot (prop, berm, suspected gap) from
+every side. A low or negative `el` gives a ground-skimming angle but the eye is
+floored just above the road, so it never sinks under the terrain (which would
+render the track's underside).
 ```js
 for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
 ```
+
+### `carOrbit(idx?, az?, el?, dist?, h?, opts?) → {eye, target, fov, carIdx, speed} | false`
+Orbit the free-cam around a car on the grid. `idx` 0 (or negative) is the
+**player** — `cars[]` is team-list order, so raw index 0 is a Mercedes AI.
+`az` 0 is behind the car, 180 is head-on, 90 is off the right side (car heading,
+not track tangent). Defaults: `az` 180, `el` 14, `dist` 25, `h` 1.0, `opts.fov`
+55. Pair with `studio()` for paint / reflection checks.
 
 ### `dolly(f, fwd?, right?, up?, opts?) → {eye, target} | false`
 Track-relative free-cam placed by an **offset from the centreline** at
@@ -737,25 +752,28 @@ OVERTAKE fields, alongside the aero ones:
 | `otT` | seconds of push remaining, 0 when not deployed |
 | `otCool` | seconds until it can arm again |
 
-### `camState() → {eye, tgt, fov, debug}`
+### `camState() → {eye, tgt, fov, roll, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
-(degrees), and `debug` (true when a `view()` free-cam is the active camera). The
-geometry reflects whichever camera is actually being rendered — the `view()`
-free-cam when one is set, otherwise the game camera (chase, cockpit, hood, …).
-For the combined scene+camera snapshot, prefer `viewState()`.
+(degrees), `roll` (radians; `0` while a free-cam is active), and `debug` (true
+when a `view()` / `orbit()` free-cam is the active camera). The geometry
+reflects whichever camera is actually being rendered — the free-cam when one is
+set, otherwise the game camera (chase, cockpit, hood, …). For the combined
+scene+camera snapshot, prefer `viewState()`.
 
-### `viewState() → {camMode, camIndex, frozen, dbgCamActive, skyOverride, weather, state, eye, tgt, fov}`
+### `viewState() → {camMode, camIndex, frozen, dbgCamActive, skyOverride, weather, state, eye, tgt, fov, roll, debug}`
 Combined scene snapshot: camera mode, frozen/debug flags, weather, the game
-state-machine value, and current camera geometry (`eye`, `tgt`, `fov`). The
+state-machine value, and current camera geometry (spreads `camState()`). The
 single call to check "what is the scene doing right now" before taking a
 screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 
-### `garageCam() → {on, spin, az, el, dist}`
+### `garageCam() → {on, spin, az, el, dist, pan, xOn, aeroX}`
 The GARAGE (`#carsetup`) preview camera — **read-only**. `on` is false whenever
 the garage is closed (the rest is then just the parked state). `spin` is the
 auto-turntable toggle; `az`/`el` are radians (az 0 = ahead of the nose, PI =
 behind the wing; el 0 = level, ~1.2 = overhead) and `dist` is the orbit radius in
-metres. The camera is driven by the `#cs-view` chips (`[data-cs-view]`, `hero` |
+metres. `pan` is the rig translation in car-local metres `[x,y,z]`; `xOn` /
+`aeroX` are the garage active-aero switch and flap-travel blend. The camera is
+driven by the `#cs-view` chips (`[data-cs-view]`, `hero` |
 `front` | `side` | `rear` | `top`), the two wing framings in `#cs-wing-views`
 (`wingFront` | `wingRear`), a drag on the canvas, the wheel/pinch, or the `+`/`−`
 chips — this hook is how tests observe the result without going anywhere near

@@ -18,14 +18,19 @@ that overrides them for framing.
 chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear
 ```
 
-Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
+Set by **id** or **index**: `__apex.camera("cockpit")` / `__apex.camera(3)`.
+Labels that differ from the id (`TV SIDE`, `T-CAM`, `REAR CAM`) return `false`.
 All 13 render non-blank. After switching, `__apex.snapCam()` jumps the rig
 without damping (every mode). `camera()` clears any `view()` / debug override.
-Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
+Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock the eye instantly.
 
 - **drift** — swings OUTSIDE a slide so the flank faces camera; settles behind when gripping.
 - **heli/side/cinematic** — corner-aware: auto-pick the OUTSIDE of the upcoming bend.
-- **chase/far/cockpit/hood/tcam** — aim at the *curved* centreline ahead (INTO the corner).
+- **chase/far** — sit behind the **car** along its heading (default). CAMERA TUNER
+  `cornerLead` (def 0) blends toward the old centreline-lead chase.
+- **cockpit/hood** — aim down the **nose**. SETTINGS ▸ COCKPIT turn-chasing is
+  opt-in (default off).
+- **tcam** — still aims at the curved centreline ahead (`aheadPt`).
 
 ## `orbit()` vs `snapCam()`
 
@@ -42,8 +47,9 @@ framing; you get a free-orbit shot.
   override. Re-call `orbit()` / `eyeAt()` / `view()` with the same args. If
   you lost them, re-derive `frac` from `js/track/markings.js` or `__apex.corners()`.
 
-Inspectors: `camState()` → `{eye, tgt, fov, debug}`; `viewState()` is the
-full scene/camera snapshot. Capture → **playwright-probe**.
+Inspectors: `camState()` → `{eye, tgt, fov, roll, debug}`; `viewState()` is the
+full scene/camera snapshot (spreads `camState()`, so it also has `roll`/`debug`).
+Capture → **playwright-probe**.
 
 ## Load on demand
 
