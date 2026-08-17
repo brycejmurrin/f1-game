@@ -1075,7 +1075,7 @@ const api = {
   // optionally forcing time of day ("day" | "night" | "default") and weather
   // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
-  race(trackRef, timeOfDay, weather) {
+  async race(trackRef, timeOfDay, weather) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -1086,10 +1086,10 @@ const api = {
     G.raceLaps = GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
+    await startRace();
     return { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather };
   },
-  tt(trackRef, timeOfDay) {
+  async tt(trackRef, timeOfDay) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -1100,7 +1100,7 @@ const api = {
     G.raceLaps = TT_LAPS;
     G.raceWeather = "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
+    await startRace();
     return { track: Tracks.LIST[i].id, timeTrial: true };
   },
   // ── Career (js/game/career.js + career-ui.js) ──────────────────────────────

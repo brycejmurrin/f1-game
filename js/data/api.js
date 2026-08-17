@@ -36,6 +36,8 @@ const F1API = (function () {
   // caller already handles the empty/null case.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
+  const CACHE_MAX_ENTRIES = 48;
+  const CACHE_MAX_VALUE_CHARS = 512 * 1024;
   const MIN_GAP_MS = 400;
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
@@ -69,8 +71,22 @@ const F1API = (function () {
   }
 
   function writeCache(url, data) {
+    let raw;
+    try { raw = JSON.stringify({ t: Date.now(), data: data }); }
+    catch (e) { return; }
+    if (raw.length > CACHE_MAX_VALUE_CHARS) return;
     try {
-      localStorage.setItem(CACHE_PREFIX + url, JSON.stringify({ t: Date.now(), data: data }));
+      const entries = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || key.indexOf(CACHE_PREFIX) !== 0 || key === CACHE_PREFIX + url) continue;
+        let t = 0;
+        try { t = JSON.parse(localStorage.getItem(key)).t || 0; } catch (e) {}
+        entries.push({ key: key, t: t });
+      }
+      entries.sort(function (a, b) { return a.t - b.t; });
+      while (entries.length >= CACHE_MAX_ENTRIES) localStorage.removeItem(entries.shift().key);
+      localStorage.setItem(CACHE_PREFIX + url, raw);
     } catch (e) {
       Log.warn("data", "apex26: api cache write failed (quota?)", e);
     }

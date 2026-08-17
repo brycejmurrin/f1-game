@@ -186,10 +186,8 @@ if (!gfx) {
   // never reaches here — the probe stays armed and the next boot reverts.
   try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
-// Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
-// the material-array load WITHOUT awaiting it: a pack is optional, the load is
-// feature-detected per backend, and every failure path inside leaves the game
-// on its procedural materials. Boot must never wait on, or fail for, assets.
+// Baked asset pack: boot stays non-blocking, while race builds await models.
+let assetModelsPromise = Promise.resolve(0);
 if (typeof Assets !== "undefined") {
   Assets.init(gfx);
   // Loaded unconditionally at boot. A lazy "only fetch when matTexMix > 0" path
@@ -203,7 +201,7 @@ if (typeof Assets !== "undefined") {
   // network timing — a circuit that asks for a model that has not landed gets
   // nothing placed rather than a differently-built track. The manifest is a
   // single small fetch and resolves to nothing when no models are baked.
-  Assets.loadModels();
+  assetModelsPromise = Assets.loadModels().then((n) => { builtTrackId = null; return n; });
 }
 
 // ---------- rain overlay ----------
@@ -2360,7 +2358,8 @@ function dropRaceWake() {
   raceWake = null;
 }
 
-function startRace() {
+async function startRace() {
+  await assetModelsPromise;
   // Abort any incident takeover left over from the last race, FIRST — while the
   // cars it owns and the track they crashed on are both still current. IncidentSim
   // owns cars by their cars[] INDEX and only releases them via a hand-back inside
@@ -3670,15 +3669,17 @@ function updateCar(c, dt, ranked) {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
-    const samples = [];
+    let sampleCount = 0, samples = c._brakeSamples || (c._brakeSamples = []);
     let kMax = 0;
     for (let d = 12; d < look; d += 14) {
       const ss = wrapS(c.s + d);
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      samples.push({ d, k: kk, bank: Tracks.bankAngle(track, ss) });
+      const sample = samples[sampleCount] || (samples[sampleCount] = { d: 0, k: 0, bank: 0 });
+      sample.d = d; sample.k = kk; sample.bank = Tracks.bankAngle(track, ss); sampleCount++;
     }
+    samples.length = sampleCount;
     const br = AiDrive.brakeDecision({
       traits: aiT, samples, latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
@@ -4761,6 +4762,7 @@ function rescuePlayer(c) {
 // stopped car is not a new kind of physics, it is the existing placement with the
 // speed taken out.
 function retireCar(c, reason) {
+  incidentSim.release(c);
   c.retired = true;
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
@@ -5302,7 +5304,13 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   const _rr = LT.roadRough, _sd = LT.surfDetail;
   if (!hideMeshes.terrain) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
-    gfx.draw(track.meshes.terrain, MAT_IDENT, m);
+    let _tc = track.meshes.terrainChunked;
+    if (_tc === undefined && track.terrainGeo && gfx.createChunkedMesh) {
+      track.terrainGeo._keepPositions = true;
+      _tc = track.meshes.terrainChunked = gfx.createChunkedMesh(track.terrainGeo, 72);
+    }
+    if (_tc && _tc.chunks) gfx.drawChunked(_tc, MAT_IDENT, m);
+    else gfx.draw(track.meshes.terrain, MAT_IDENT, m);
   }
   if (!hideMeshes.road) {
     let m;
@@ -6265,19 +6273,10 @@ function render(dt) {
         : 0));
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
-  // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car every other frame (full refresh every 12 frames). The car-paint clearcoat
-  // samples it for REAL reflections of the surroundings — trees, buildings,
-  // track, sky — including everything behind the camera that SSR can't see.
+  // Live env probe: one 64px face every fourth frame (a full refresh every 24).
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  // Skip it under a free/debug camera (dbgCam): the probe re-draws the whole world
-  // a second time each frame and is anchored to the player car, which isn't the
-  // subject while flying the lighting-tuner free camera — dropping it here removes
-  // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
-  // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
-  // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Skip it under a free camera: the second world draw is its largest load multiplier.
+  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (_frameNo & 3) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -7649,7 +7648,8 @@ $("rs-go").onclick = () => {
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-function openQuali() {
+async function openQuali() {
+  await assetModelsPromise;
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is

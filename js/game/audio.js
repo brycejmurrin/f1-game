@@ -46,6 +46,7 @@ const GameAudio = (function () {
   // upshift) and crossfade idle->accel with load. Falls back to the synth core
   // below if the samples aren't decoded yet (offline / not loaded).
   let engBuf = null, accBuf = null, samplesReady = false;
+  let sampleLoadToken = 0;
   let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
   let usingSamples = false;
   let dbgAnalyser = null;          // taps the engine output so tests can measure pitch
@@ -199,11 +200,23 @@ const GameAudio = (function () {
   // falls back to the synth core. Buffers are cleared on a context rebuild.
   function loadEngineSamples() {
     if (!ctx || samplesReady) return;
+    const loadCtx = ctx;
+    const token = ++sampleLoadToken;
     const grab = (url) => fetch(url)
       .then((r) => r.arrayBuffer())
-      .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+      .then((ab) => new Promise((res, rej) => loadCtx.decodeAudioData(ab, res, rej)));
     Promise.all([grab(SFX_ENGINE), grab(SFX_ACCEL)])
-      .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; Log.debug("audio", "engine samples decoded"); })
+      .then(([e, a]) => {
+        if (ctx !== loadCtx || token !== sampleLoadToken) return;
+        engBuf = e; accBuf = a; samplesReady = true;
+        Log.debug("audio", "engine samples decoded");
+        // A race often starts before network/decode finishes. Replace the
+        // temporary synth voice as soon as the real loops are ready.
+        if (engineOn && !usingSamples) {
+          stopEngine();
+          startEngine();
+        }
+      })
       .catch((err) => {
         // The synth voice takes over, so this is not fatal — which is exactly
         // why it needs saying. Otherwise "the engine sounds different on my
@@ -273,6 +286,7 @@ const GameAudio = (function () {
     const wasTrack = lastTrackIdx;
     const wasEngine = engineOn;
     if (musicOn) stopMusic();
+    sampleLoadToken++;              // invalidate fetch/decode completions from the old context
     engineOn = false;               // old nodes died with the old context
     try { ctx.close(); } catch (e) { /* already closed */ }
     ctx = null;

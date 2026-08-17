@@ -257,8 +257,10 @@
       // box-rows L, scoring gantry over the line
       // ===================================================================
       for (let i = 0; i < 6; i++) {
-        place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
-        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD);          // lit fascia band
+        const k = K(0.0 + i * 0.012);
+        place(k, 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
+        const a = anchor(k, 1, 12);
+        addBox(out, vadd(a.c, a.u, 4.7), [9.4, 1.0, 30.4], FLOOD, [a.r, a.u, a.t]);
       }
       // MAIN GRANDSTAND — the premium pit-straight stand: five distinct named
       // stands (Main/West/North/South/Marina) now replace the old two nearly
@@ -867,8 +869,11 @@
         }
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
-          place(K(0.0 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
-          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80]); // roof fascia glow
+          const k = K(0.0 + i * 0.011);
+          place(k, 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
+          const a = anchor(k, 1, 22);
+          addBox(out, vadd(a.c, a.u, 7.5), [11.4, 1.4, 30.4],
+            [1.0, 0.95, 0.80], [a.r, a.u, a.t]); // roof fascia glow
         }
         // Paddock floodlight masts — taller, with large light pools below
         for (let i = 0; i < 7; i++) {
@@ -929,6 +934,10 @@
         addBox(out, vadd(a.c, a.u, 8), [20, 10, 1.5], WIN_EMI, [a.r, a.u, a.t]);
         // Bright screen face
         addBox(out, vadd(vadd(a.c, a.u, 8), a.r, side * 0.8), [17, 8, 0.8], LED_TEAL, [a.r, a.u, a.t]);
+        // Two slim supports make isolated screens physically read as mounted,
+        // even where no grandstand shell sits directly behind this station.
+        addBox(out, vadd(vadd(a.c, a.u, 2.5), a.t, -7), [1, 5, 1], DARK, [a.r, a.u, a.t]);
+        addBox(out, vadd(vadd(a.c, a.u, 2.5), a.t, 7), [1, 5, 1], DARK, [a.r, a.u, a.t]);
       }
 
       // ===================================================================

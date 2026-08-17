@@ -179,35 +179,22 @@ test("NO relay ships by default, because both free ones were measured dead", () 
     + "must say so — the lobby's failure copy branches on it");
 });
 
-test("a credentials URL ships by default, and yours overrides it", async () => {
-  // The relay is a FETCH URL with expiring credentials, not an embedded
-  // password — that is the difference between this and the Open Relay static
-  // credentials that were retired out from under build 971.
-  //
-  // It exists because two devices on ONE WI-FI could not reach each other:
-  // the only host candidate a browser offers is mDNS-obfuscated, and when
-  // that name will not resolve the sole remaining pair is srflx-to-srflx,
-  // which needs router hairpinning that many do not do.
+test("a credentials URL is opt-in and no account key ships by default", async () => {
   const fresh = load("js/net/transport.js", "NetTransport");
   const seen = [];
   const turnServer = { urls: ["turn:relay.metered.example:443"], username: "u", credential: "c" };
   global.fetch = async (u) => { seen.push(u); return { json: async () => ({ iceServers: [turnServer] }) }; };
   try {
-    // No apex26.turnApi configured: the shipped default is used.
     global.localStorage = { getItem: () => null };
     await fresh.prefetchIce();
-    assert.equal(seen.length, 1, "the default credentials URL is fetched");
-    assert.match(seen[0], /^https:\/\/\S+\/api\/v1\/turn\/credentials\?apiKey=/,
-      "and it is a credentials endpoint, not a bare TURN server");
-    assert.equal(fresh.hasRelay(), true, "once it answers, a relay exists");
+    assert.deepEqual(seen, [], "no repository-owned credentials endpoint may be fetched");
+    assert.equal(fresh.hasRelay(), false, "STUN-only remains the honest default");
 
-    // A player (or a fork) who sets their own must not be moved onto ours.
     const mine = load("js/net/transport.js", "NetTransport");
-    seen.length = 0;
     global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://mine.example/creds" : null) };
     await mine.prefetchIce();
     assert.deepEqual(seen, ["https://mine.example/creds"],
-      "a configured URL wins outright — never a silent fallback to ours");
+      "an explicitly configured credentials endpoint is still supported");
   } finally {
     delete global.fetch; delete global.localStorage;
   }
@@ -313,6 +300,20 @@ test("garbage and truncated codes are rejected with a usable message", async () 
   const truncated = await NetHandshake.decodeCode("APEX1.z.####");
   assert.equal(truncated.ok, false);
   assert.equal(truncated.error, "corrupt_code");
+});
+
+test("oversized invite codes are rejected before base64 decoding", async () => {
+  const originalAtob = globalThis.atob;
+  let decoded = false;
+  globalThis.atob = (...args) => { decoded = true; return originalAtob(...args); };
+  try {
+    const result = await NetHandshake.decodeCode("APEX1.p." + "A".repeat(400000));
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "corrupt_code");
+    assert.equal(decoded, false, "attacker-sized input must be bounded before allocation");
+  } finally {
+    globalThis.atob = originalAtob;
+  }
 });
 
 test("whitespace from a sloppy copy/paste is tolerated", async () => {

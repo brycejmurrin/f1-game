@@ -279,7 +279,15 @@
       } catch (e) {
         // Depth TSL compile must not escape into tick() (full-screen overlay).
         try { Log.warn("gfx", "TLX: shadow pass failed —", e); } catch (_) { /* Log absent */ }
-        S.enabled = false;
+        if (target === carRT) {
+          S.carEnabled = false;
+          S.carArmed = false;
+        } else if (target === lampRT) {
+          S.lampEnabled = false;
+          S.lampArmed = false;
+        } else {
+          S.enabled = false;
+        }
         S.depthPassOn = false;
       }
       // Blocker refresh rides the SUN pass only (GLX shadowEnd): the snap

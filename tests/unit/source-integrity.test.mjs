@@ -35,6 +35,33 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("race announcements expose polite live-region semantics", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html, /<div id="announce"[^>]*role="status"[^>]*aria-live="polite"/,
+    "visual race announcements must also be announced to assistive technology");
+});
+
+test("the grouped circuit picker is not exposed as a flat listbox", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");
+  assert.match(html, /id="sel-tracks"[^>]*role="region"/,
+    "group headings and filter controls cannot be direct children of a listbox");
+  assert.doesNotMatch(menus, /row\.setAttribute\("role", "option"\)/,
+    "circuit buttons must not claim option semantics outside a listbox");
+});
+
+test("TLX shadow failures degrade only the failed shadow pass", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-shadow.js"), "utf8");
+  assert.match(source, /target === carRT[\s\S]*S\.carEnabled = false/);
+  assert.match(source, /target === lampRT[\s\S]*S\.lampEnabled = false/);
+});
+
+test("race and qualifying builds wait for baked model prefetch", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(source, /async function startRace\(\) \{\s*await assetModelsPromise;/);
+  assert.match(source, /async function openQuali\(\) \{\s*await assetModelsPromise;/);
+});
+
 const walk = (dir, ext, out = []) => {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = `${dir}/${e.name}`;

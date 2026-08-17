@@ -61,7 +61,7 @@ function verdict() {
   // forgotten-bump case the guard suite only catches after the fact.
   const since = opt("--since");
   if (since) {
-    const diff = execFileSync("git", ["diff", "--name-only", since, "--", "js/", "css/", "index.html"],
+    const diff = execFileSync("git", ["diff", "--name-only", since, "--", "js/", "css/", "index.html", "sw.js"],
       { cwd: ROOT, encoding: "utf8" }).trim();
     const versionMoved = execFileSync("git", ["diff", "--name-only", since, "--", "version.json"],
       { cwd: ROOT, encoding: "utf8" }).trim() !== "";

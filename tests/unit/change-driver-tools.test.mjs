@@ -99,6 +99,12 @@ test("bump-cache --check on the REAL shell agrees with the load-order guard", ()
   assert.ok(v.tagCount > 100, "the shell has ~160 versioned tags; a collapse means the regex or index.html broke");
 });
 
+test("bump-cache --since treats service-worker edits as shipped asset changes", () => {
+  const source = fs.readFileSync(path.join(ROOT, "tools/bump-cache.mjs"), "utf8");
+  assert.match(source, /"js\/",\s*"css\/",\s*"index\.html",\s*"sw\.js"/,
+    "a sw.js-only change must require the same build bump as other shipped assets");
+});
+
 // ── test-honesty: the suite stays honest ────────────────────────────────────
 
 test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => {

@@ -1349,12 +1349,12 @@
       // ── TIERED PASTEL HILLSIDE TERRACES (Beau Rivage climb, L) ───────────
       // Stepped apartment terraces that rise and set back up the rock face —
       // the signature Monte-Carlo tiered-hillside silhouette above the road.
-      const terraceStack = (a, tiers, baseCol) => {
+      const terraceStack = (a, tiers, baseCol, seed) => {
         const b = [a.r, a.u, a.t];
         let up = 0, back = 0, w = 26;
         for (let i = 0; i < tiers; i++) {
           const c = vadd(vadd(a.c, a.t, back), a.u, up + 4.5);
-          const col = PASTELS[(K(a.c[0] | 0) + i * 3) % PASTELS.length] || baseCol;
+          const col = PASTELS[(seed + i * 3) % PASTELS.length] || baseCol;
           out._mat = MAT.CONCRETE;
           addBox(out, c, [w, 9, 12], col, b);
           // balcony window band + warm glow
@@ -1371,7 +1371,7 @@
       };
       for (const sf of [0.11, 0.16, 0.21]) {
         const k = K(sf), a = anchor(k, -1, 58 + hash(k) * 10);
-        if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
+        if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY, k % PASTELS.length);
       }
 
       // ── DEEP-WATER MARINA PONTOONS + SAILBOATS (s=0.63→0.79, L) ─────────

@@ -38,6 +38,7 @@ const NetSession = (function () {
   const PING = 3, PONG = 4;           // 1 belongs to NetSnapshot (TYPE_SNAPSHOT)
   const PING_BYTES = 13;              // type u8 + id u32 + t0 f64
   const PONG_BYTES = 21;              // + t1 f64
+  const MAX_EVENT_BYTES = 64 * 1024;
 
   const DEFAULTS = {
     pingEveryMs: 500,
@@ -154,6 +155,9 @@ const NetSession = (function () {
     }
 
     function onEventJson(data) {
+      const size = typeof data === "string" ? data.length
+        : data && typeof data.byteLength === "number" ? data.byteLength : Infinity;
+      if (size > MAX_EVENT_BYTES) return;
       let msg;
       try { msg = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(view(data))); }
       catch (e) { return; }            // malformed event: drop, never throw

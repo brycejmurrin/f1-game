@@ -17,14 +17,12 @@ packet is worthless) and "event" (reliable/ordered: lobby, start tick, lap
 times, results). loopback() wires two endpoints IN ONE PAGE with injectable
 latency/jitter/loss so the netcode is testable with no network at all; rtc()
 is the real RTCPeerConnection. Both deliver only on pump(), so latency and
-loss are reproducible rather than wall-clock. A TURN RELAY SHIPS BY DEFAULT (a
-Metered free-tier credentials URL) because without one two devices ON THE SAME
-WI-FI often cannot connect: the only host candidate a browser offers is mDNS-
-obfuscated, and when that name will not resolve the sole remaining pair is
-srflx-to-srflx, which needs router hairpinning many do not do. The key is
-readable in devtools — inherent to client-side TURN, which is why the operator
-documents this exact fetch from a browser — and apex26.turnApi overrides it
-outright. prefetchIce() must be AWAITED BEFORE a connection is built (lobby's
+loss are reproducible rather than wall-clock. No account-owned TURN endpoint
+ships in public source: its API key would be readable and could spend the
+owner's quota. `apex26.turnApi` explicitly opts into a credentials endpoint.
+Without one, two devices even on the same Wi-Fi may fail when mDNS host
+candidates do not resolve and the router cannot hairpin srflx-to-srflx.
+prefetchIce() must be AWAITED BEFORE a connection is built (lobby's
 readyIce()): iceServers are fixed at construction, so a fetch that lands 200
 ms later gathers STUN-only and every wire dump reads relay:0 while the relay
 is demonstrably alive

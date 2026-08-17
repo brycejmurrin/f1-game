@@ -133,6 +133,19 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   }
 });
 
+test("sw.js seeds every icon referenced by the web app manifest", () => {
+  const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(optional, "sw.js must declare an `optional` precache Set");
+  const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  const shell = readFileSync(join(ROOT, "index.html"), "utf8");
+  const manifest = JSON.parse(readFileSync(join(ROOT, "manifest.json"), "utf8"));
+  for (const icon of manifest.icons || []) {
+    assert.ok(seeded.has(icon.src) || shell.includes(icon.src),
+      `${icon.src} is referenced by manifest.json and must work offline`);
+  }
+});
+
 test("HARD_EDGES are ordered in FULL", () => {
   const idx = new Map(MANIFEST.FULL.map((f, i) => [f, i]));
   for (const [before, after] of MANIFEST.HARD_EDGES) {

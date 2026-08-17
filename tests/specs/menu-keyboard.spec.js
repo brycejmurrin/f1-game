@@ -178,6 +178,26 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(active).toBe(picked);
   });
 
+  test("camera picker opens, selects, and closes from the keyboard", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => document.getElementById("btn-cam") && !document.getElementById("btn-cam").hidden,
+      null, { timeout: 20_000 });
+    await page.locator("#btn-cam").focus();
+    await page.keyboard.press("ArrowDown");
+    const first = await focusInfo(page);
+    expect(first.id).not.toBe("btn-cam");
+    expect(await page.locator("#campicker").getAttribute("role")).toBe("dialog");
+    await page.keyboard.press("ArrowRight");
+    expect((await focusInfo(page)).text).not.toBe(first.text);
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#campicker")).toBeHidden();
+    await page.locator("#btn-cam").focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    expect((await focusInfo(page)).id).toBe("btn-cam");
+  });
+
   test("with a race running the arrow keys drive the car, not the menu", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));

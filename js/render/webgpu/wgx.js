@@ -788,7 +788,7 @@ const WGX = (function () {
     let _fxPipes = { 1: {}, 2: {} };
 
     // Blocker map objects.
-    let blockerTex = null, blockerView = null, blockerSampler = null;
+    let blockerTex = null, blockerView = null, blockerSampler = null, blockerFormat = "r16float";
     let blockerUBO = null, blockerBG = null, blockerPipeline = null, blockerG0Layout = null;
 
     // LENS DIRT grime map: a deterministic 256×256 grime texture sampled by the
@@ -868,8 +868,9 @@ const WGX = (function () {
         });
         blockerView = blockerTex.createView();
       } catch (_) {
+        blockerFormat = SCENE_FORMAT;
         blockerTex = device.createTexture({
-          size: [1, 1], format: SCENE_FORMAT,
+          size: [1, 1], format: blockerFormat,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         blockerView = blockerTex.createView();
@@ -1114,7 +1115,7 @@ const WGX = (function () {
         blockerPipeline = device.createRenderPipeline({
           layout: device.createPipelineLayout({ bindGroupLayouts: [blockerG0Layout] }),
           vertex: { module: blockerModule, entryPoint: "vs_main" },
-          fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r16float" }] },
+          fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: blockerFormat }] },
           primitive: { topology: "triangle-list" },
         });
         blockerBG = device.createBindGroup({

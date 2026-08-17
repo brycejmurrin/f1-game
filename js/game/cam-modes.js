@@ -43,6 +43,8 @@ window.CamModes = (function () {
       const build = () => {
         el = document.createElement("div");
         el.id = "campicker";
+        el.setAttribute("role", "dialog");
+        el.setAttribute("aria-label", "Camera mode");
         // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
         // no-orphan rule (css/components.css) widens it across the row instead.
         el.className = "no-orphan-3";
@@ -54,19 +56,43 @@ window.CamModes = (function () {
           b.onclick = (e) => { e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); };
           el.appendChild(b);
         }
+        el.addEventListener("keydown", (e) => {
+          const buttons = Array.from(el.querySelectorAll("button"));
+          const at = buttons.indexOf(document.activeElement);
+          let next = at;
+          if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % buttons.length;
+          else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (at - 1 + buttons.length) % buttons.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = buttons.length - 1;
+          else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); hide(true); return; }
+          else return;
+          e.preventDefault(); e.stopPropagation();
+          buttons[next].focus();
+        });
         document.body.appendChild(el);
       };
       const sync = () => {
         for (const b of el.children) b.classList.toggle("active", +b.dataset.idx === G.camMode);
       };
-      const show = () => { if (!el) build(); sync(); el.hidden = false; };
-      const hide = () => { if (el) el.hidden = true; };
+      const show = () => {
+        if (!el) build();
+        sync(); el.hidden = false;
+        const trigger = $("btn-cam"); if (trigger) trigger.setAttribute("aria-expanded", "true");
+        const active = el.querySelector(".active") || el.querySelector("button"); if (active) active.focus();
+      };
+      const hide = (restoreFocus) => {
+        if (el) el.hidden = true;
+        const trigger = $("btn-cam"); if (trigger) trigger.setAttribute("aria-expanded", "false");
+        if (restoreFocus && trigger) trigger.focus();
+      };
       const visible = () => !!el && !el.hidden;
       return { show, hide, visible };
     })();
     (() => {
       const b = $("btn-cam");
       if (!b) return;
+      b.setAttribute("aria-haspopup", "dialog");
+      b.setAttribute("aria-expanded", "false");
       let holdT = 0, held = false;
       const HOLD_MS = 340;
       b.addEventListener("pointerdown", () => {
@@ -86,6 +112,9 @@ window.CamModes = (function () {
       b.addEventListener("pointercancel", cancelHold);
       b.addEventListener("lostpointercapture", cancelHold);
       b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
+      b.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); camPicker.show(); }
+      });
       // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
       // works unchanged, and a real tap fires it after pointerup anyway. When the
       // hold already opened the picker, swallow that one trailing click.

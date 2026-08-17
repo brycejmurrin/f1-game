@@ -152,6 +152,17 @@ test("a malformed event is dropped rather than thrown", () => {
   assert.equal(b.alive(), true, "a bad event is not a disconnect");
 });
 
+test("oversized event JSON is dropped before decoding or parsing", () => {
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(3) });
+  const b = NetSession.create({ transport: tb });
+  let fired = 0;
+  b.onEvent("x", () => fired++);
+  ta.send("event", `{"t":"x","d":"${"x".repeat(300000)}"}`);
+  b.pump(10);
+  assert.equal(fired, 0, "attacker-sized reliable events must not reach handlers");
+  assert.equal(b.alive(), true, "dropping an oversized event is not a disconnect");
+});
+
 test("silence is detected, and reported once", () => {
   const p = pair({ latency: 20 });
   const closes = [];

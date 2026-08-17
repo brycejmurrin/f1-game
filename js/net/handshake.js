@@ -37,11 +37,9 @@
  *    physics, so peers may legitimately differ there.
  *
  * What this cannot do alone: traverse every NAT. Some symmetric-NAT pairs
- * will never connect P2P without a TURN relay — which is why one ships by
- * default (transport.js's Metered free-tier credentials URL, overridable via
- * apex26.turnApi). Only when that relay's quota or endpoint fails does the
- * unconnectable case return, and then the UI must say so plainly rather than
- * spinning forever.
+ * will never connect P2P without a TURN relay. Public source cannot safely
+ * carry an account-owned credentials URL, so apex26.turnApi is an explicit
+ * operator/player opt-in and the UI reports the STUN-only default plainly.
  */
 "use strict";
 
@@ -52,6 +50,7 @@ const NetHandshake = (function () {
   const NO_TRANSPORT = { ok: false, error: "no_transport",
     message: "WebRTC is unavailable in this browser." };
   const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
+  const MAX_CODE_CHARS = 64 * 1024;
 
   // ---- base64url (no padding) — safe in a URL fragment and in a chat message
   function bytesToB64url(bytes) {
@@ -154,6 +153,7 @@ const NetHandshake = (function () {
   }
   async function decodeCode(code) {
     const trimmed = String(code || "").trim().replace(/\s+/g, "");
+    if (trimmed.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = trimmed.split(".");
     if (parts.length !== 3 || parts[0] !== MAGIC) {
       return { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." };

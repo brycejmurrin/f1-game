@@ -85,7 +85,8 @@ function makeGpuHarness(opts = {}) {
     // bare {}, so create()'s "check every shader module's compilation info" step
     // hit its own "a check that cannot be RUN is skipped, never fatal" rule and
     // was inert in every test — the guard that matters most on Safari.
-    createShaderModule: () => ({
+    createShaderModule: (desc) => ({
+      code: desc && desc.code,
       getCompilationInfo: async () => ({
         messages: opts.shaderError
           ? [{ type: "error", message: "injected WGSL compile error", lineNum: 1, linePos: 1 }]
@@ -274,6 +275,20 @@ function makeGpuHarness(opts = {}) {
     setEncoderFail(v) { failEncoder = !!v; },
   };
 }
+
+test("blocker pipeline target follows the texture fallback format", async () => {
+  const h = makeGpuHarness();
+  h.failNextTexture(3); // shadow, car shadow, then the preferred r16float blocker
+  const gfx = await h.create();
+  assert.ok(gfx, "WGX should degrade when the optional blocker format is unavailable");
+  const fallback = h.textures[2];
+  assert.ok(fallback, "the blocker fallback texture must exist");
+  const blockerPipeline = h.pipelineDescs.find((d) =>
+    d.fragment && d.fragment.module && /BlockerU/.test(d.fragment.module.code || ""));
+  assert.ok(blockerPipeline, "the blocker downsample pipeline must be present");
+  assert.equal(blockerPipeline.fragment.targets[0].format, fallback.desc.format,
+    "render-pass attachment and pipeline target formats must match");
+});
 
 test("post resize keeps old resources valid and cleans partial texture allocation", async () => {
   const h = makeGpuHarness();

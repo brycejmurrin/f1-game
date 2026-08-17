@@ -30,6 +30,14 @@ import vm from "node:vm";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("retiring a car releases IncidentSim authority first", () => {
+  const source = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const body = source.match(/function retireCar\(c, reason\) \{([\s\S]*?)\n\}/);
+  assert.ok(body, "retireCar must exist");
+  assert.match(body[1], /incidentSim\.release\(c\)/,
+    "a retired car must not remain owned and stepped by the side-world simulation");
+});
+
 // The module declares `const RaceControl`, which lands in the context's global
 // LEXICAL scope rather than on the global object — so it is read back by
 // evaluating its name. Same shape as tests/unit/agentview-api-contract.test.mjs.

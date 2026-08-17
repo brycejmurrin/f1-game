@@ -229,8 +229,7 @@ function buildSelect() {
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.setAttribute("aria-label", t.name);
-      row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", i === G.trackIdx ? "true" : "false");
+      if (i === G.trackIdx) row.setAttribute("aria-current", "true");
 
       const nm = document.createElement("span");
       nm.className = "track-row-name";

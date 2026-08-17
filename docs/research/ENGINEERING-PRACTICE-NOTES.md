@@ -160,8 +160,8 @@ So four is roughly where mesh stops working, and this repo caps at exactly four
 more conservative of the two. `netplay.js`'s "the host RELAYS — authority does
 not move; it is a courier" is the right shape.
 
-**"A TURN RELAY SHIPS BY DEFAULT."** This is the claim that looks like
-over-engineering for a fan game, and it is not:
+**"TURN remains necessary."** This can look like over-engineering for a fan
+game, and it is not:
 
 - **Both peers behind symmetric NAT is ~5–10% of connections**, and that case
   cannot be solved by STUN at all — TURN is the only path.
@@ -171,8 +171,9 @@ over-engineering for a fan game, and it is not:
   which needs router hairpinning many home routers do not do. That is a *local*
   failure mode, which is exactly the case a couch-multiplayer game hits most.
 
-So a game that shipped STUN-only would fail for a noticeable minority and would
-fail *worst* in its most common scenario. Keep the relay.
+So STUN-only fails for a noticeable minority and fails *worst* in a common
+scenario. Public source still cannot safely publish an account API key: TURN is
+an explicit `apex26.turnApi` operator/player configuration, not repository quota.
 
 The corollary is `prefetchIce()`: `iceServers` are fixed at construction, so a
 credentials fetch that lands 200 ms late gathers STUN-only and every wire dump

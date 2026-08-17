@@ -266,6 +266,25 @@ test("late navigation refresh is attached to waitUntil through its cache write",
   );
 });
 
+test("a shell-bust navigation never falls back to a stale cached index", async () => {
+  const harness = createHarness({
+    fetchImpl: () => Promise.reject(new Error("offline")),
+    immediateTimeout: true,
+  });
+  harness.stores.set(
+    "apex26-320",
+    new Map([[`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })]]),
+  );
+
+  const event = harness.fetchEvent({
+    method: "GET",
+    mode: "navigate",
+    url: `${ORIGIN}/?b=321`,
+  });
+  const response = await event.responsePromise;
+  assert.equal(response.type, "error", "the version guard must not reload into stale HTML");
+});
+
 test("activation preserves prior caches unless the current generation is complete", async () => {
   const harness = createHarness({ fetchImpl: installFetch() });
   harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));

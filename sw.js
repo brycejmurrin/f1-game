@@ -38,7 +38,7 @@ async function precacheAssetLists() {
   // inline importmap, so the tag parser below never sees it. Seed it as
   // OPTIONAL: TLX is opt-in — install success for GLX users must not depend on
   // ~1 MB of vendor they never run (promote to essential at the Phase D flip).
-  const optional = new Set(["manifest.json",
+  const optional = new Set(["manifest.json", "icons/icon-512.png",
     // The two OPT-IN renderer backends. They have no <script> tag any more —
     // js/game.js injects them at boot only when apex26.gfxBackend selects one
     // (tools/manifest.cjs DEFERRED) — so the tag parser below cannot see them.
