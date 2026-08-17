@@ -53,3 +53,7 @@ Design principles:
 - **No build step** — bump `?v=N` + `version.json` on asset edits.
 - **Debug-hooks first** — assert via `__apex`, not brittle magnitudes.
 - **Headless verify-track** — fast pre-push guard for circuit/track engine edits.
+- **Progressive disclosure** — keep `SKILL.md` short (when / entry / hard
+  don'ts / dispatch). Move war stories and long recipes to
+  `references/*.md` or `docs/` and `Read` them only when the task needs them.
+  Fat always-loaded skills burn tokens; `mcp-probe` is the template.
