@@ -170,6 +170,7 @@ function makeGpuHarness(opts = {}) {
   // the whole reason a WGX refusal costs a page reload, and the old mock — which
   // handed back a fresh context object for any argument and recorded nothing —
   // could not express it, so no test could ever see the cost.
+  const configureCalls = [];
   let claimedBy = null;
   const canvas = {
     clientWidth: 320,
@@ -179,7 +180,10 @@ function makeGpuHarness(opts = {}) {
     getContext: (type) => {
       if (claimedBy && claimedBy !== type) return null;
       claimedBy = type;
-      return { configure() {}, getCurrentTexture: () => canvasTexture };
+      return {
+        configure(desc) { configureCalls.push(desc); },
+        getCurrentTexture: () => canvasTexture,
+      };
     },
   };
   const context = vm.createContext({
@@ -235,7 +239,7 @@ function makeGpuHarness(opts = {}) {
             return device;
           },
         }),
-        getPreferredCanvasFormat: () => "bgra8unorm",
+        getPreferredCanvasFormat: () => opts.preferredFormat || "bgra8unorm",
       },
     },
     GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
@@ -257,6 +261,7 @@ function makeGpuHarness(opts = {}) {
     buffers,
     writes,
     pipelineDescs,
+    configureCalls,
     WGX: context.window.WGX,
     pipelines,
     deviceRequests,
@@ -880,6 +885,20 @@ test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async (
   const gfx = await h.create();
   assert.ok(gfx, "escape hatch must still boot WGX");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+});
+
+test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+    glx: { isMobile: true, mobileTier: true },
+    preferredFormat: "rgba16float",
+  });
+  const gfx = await h.create();
+  assert.ok(gfx, "iPhone-class WebGPU must still boot when preferred format is float");
+  assert.equal(gfx.msaa(), 1);
+  assert.ok(h.configureCalls.length > 0, "canvas must be configured");
+  assert.equal(h.configureCalls[0].format, "bgra8unorm",
+    "visible swapchain must downgrade rgba16float on WGX_LITE");
 });
 
 test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {

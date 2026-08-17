@@ -497,6 +497,13 @@ const WGX = (function () {
     } catch (e) {
       return _fail("preferred canvas format threw: " + ((e && e.message) || e));
     }
+    // WebKit (Safari Mac + every iOS browser) and phones: never configure the
+    // VISIBLE swapchain as rgba16float. WebKit #269582 — IOSurface creation
+    // crashed / painted black through iOS 26.x when the preferred format was
+    // float; trunk fixes are not uniform across OS point releases. HDR stays
+    // in offscreen rgba16float scene/post targets — only the canvas format
+    // downgrades (MDN: extra copy vs a dead canvas).
+    if (WGX_LITE && format === "rgba16float") format = "bgra8unorm";
 
     // Device-lost recovery. An unexpected loss (memory pressure, GPU reset) on
     // this opt-in/experimental path FALLS BACK to WebGL2 rather than reloading
@@ -537,6 +544,11 @@ const WGX = (function () {
     try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
     const _softGpu = _softAdapter;
     if (_softGpu) _outProbeOff = true;
+    // Runtime HDR readback probe (separate from _outProbeOff — that flag also
+    // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
+    // on phones/WebKit). WebKit/iOS mapAsync/f16 copy timing false-triggers the
+    // black-output ladder while the swapchain is fine.
+    const _sceneProbeOn = !_outProbeOff && !WGX_LITE;
     // Software adapters validate WebGPU but the browser never composites the
     // hidden swapchain to the visible canvas (measured: CDP/screenshot black while
     // agentview coverage is healthy). Route the visible #game through a 2D blit
@@ -596,7 +608,7 @@ const WGX = (function () {
       _wgxEscalate("runtime output black (GPU drew nothing)");
     }
     function _queueOutputProbe() {
-      if (_outProbeOff || _lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
+      if (!_sceneProbeOn || _lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
       if (!sceneTex || !encoder || typeof encoder.copyTextureToBuffer !== "function") return;
       try {
         if (!_outProbeBuf) {
@@ -1477,14 +1489,15 @@ const WGX = (function () {
 
     // ── resize (mirror GLX.resize()) ──
     function _configureCanvas() {
-      if (!ctx || !device) return;
+      if (!ctx || !device) return null;
       try {
         ctx.configure({
           device, format, alphaMode: "opaque",
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
         });
+        return null;
       } catch (e) {
-        try { Log.warn("gfx", "WGX canvas configure failed —", e); } catch (_) { /* harness */ }
+        return "canvas configure threw: " + ((e && e.message) || e);
       }
     }
     function _ensureSoftPresent() {
@@ -1566,7 +1579,10 @@ const WGX = (function () {
         canvas.width = w; canvas.height = h;
         // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
         // configured swapchain. Reconfigure on every buffer-size change.
-        if (ctx) _configureCanvas();
+        if (ctx) {
+          const _cfgErr = _configureCanvas();
+          if (_cfgErr) try { Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } catch (_) { /* harness */ }
+        }
         if (_softGpu && _displayCanvas) {
           _displayCanvas.width = w;
           _displayCanvas.height = h;
@@ -4023,7 +4039,8 @@ const WGX = (function () {
         if (!_displayCtx) return _fail("software WebGPU needs a 2D display canvas");
       }
       resize();
-      _configureCanvas();
+      const _bootCfgErr = _configureCanvas();
+      if (_bootCfgErr) return _fail(_bootCfgErr);
     } catch (e) {
       return _fail("context configure threw: " + ((e && e.message) || e));
     }

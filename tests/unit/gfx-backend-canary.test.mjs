@@ -75,6 +75,8 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\("apex26\.gfxBackend", "webgl2"\)/);
   assert.match(wgx, /WGX_LITE/);
   assert.match(wgx, /IS_WEBKIT/);
+  assert.match(wgx, /WGX_LITE && format === "rgba16float"\) format = "bgra8unorm"/);
+  assert.match(wgx, /const _sceneProbeOn = !_outProbeOff && !WGX_LITE/);
   assert.match(wgx, /_canTimestamp = !WGX_LITE/);
   assert.match(wgx, /apex26\.gfxWgxLite/);
   assert.match(wgx, /apex26\.gfxBound/);
