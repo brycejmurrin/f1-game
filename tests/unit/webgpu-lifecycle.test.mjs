@@ -224,6 +224,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    WGX: context.window.WGX,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -842,4 +843,105 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.msaa(), 1);
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
+});
+test("Frustum culling uses WebGPU [0, 1] near/far clip plane extraction", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+
+  // In WebGPU clip space Z in [0, 1]:
+  // Near plane: [row2.x, row2.y, row2.z, row2.w] (i.e. z >= 0)
+  // Far plane: [row3.x - row2.x, row3.y - row2.y, row3.z - row2.z, row3.w - row2.w] (i.e. w - z >= 0)
+  // Identity matrix:
+  const ident = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ]);
+  const planes = gfx.makeFrustumPlanes(ident);
+  assert.equal(planes.length, 6);
+
+  // Near plane (index 4) should have m10=1, m14=0: normal [0, 0, 1], dist 0
+  assert.equal(planes[4][0], 0);
+  assert.equal(planes[4][1], 0);
+  assert.equal(planes[4][2], 1);
+  assert.equal(planes[4][3], 0);
+
+  // Far plane (index 5) should have m15-m14=1, m11-m10=-1: normal [0, 0, -1], dist 1
+  assert.equal(planes[5][0], 0);
+  assert.equal(planes[5][1], 0);
+  assert.equal(planes[5][2], -1);
+  assert.equal(planes[5][3], 1);
+});
+
+test("setMaterialMaps destroys replaced textures and resets maps when null", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+
+  const tex1 = {
+    _wgx: "texarray",
+    texture: { destroyed: false, destroy() { this.destroyed = true; } },
+    view: { label: "albedo1" },
+    layers: 16,
+  };
+  const norm1 = {
+    _wgx: "texarray",
+    texture: { destroyed: false, destroy() { this.destroyed = true; } },
+    view: { label: "norm1" },
+    layers: 16,
+  };
+
+  gfx.setMaterialMaps({ albedo: tex1, normal: norm1, scales: [1, 2, 3] });
+  let state = gfx.materialMapState();
+  assert.equal(state.albedo, true);
+  assert.equal(state.normal, true);
+  assert.equal(tex1.texture.destroyed, false);
+  assert.equal(norm1.texture.destroyed, false);
+
+  const tex2 = {
+    _wgx: "texarray",
+    texture: { destroyed: false, destroy() { this.destroyed = true; } },
+    view: { label: "albedo2" },
+    layers: 16,
+  };
+
+  // Replace albedo, omit normal
+  gfx.setMaterialMaps({ albedo: tex2, scales: [4, 5] });
+  assert.equal(tex1.texture.destroyed, true, "old albedo texture must be destroyed on replacement");
+  assert.equal(norm1.texture.destroyed, true, "old normal texture must be destroyed when omitted");
+  assert.equal(tex2.texture.destroyed, false);
+  state = gfx.materialMapState();
+  assert.equal(state.albedo, true);
+  assert.equal(state.normal, false);
+
+  // Clear all maps
+  gfx.setMaterialMaps(null);
+  assert.equal(tex2.texture.destroyed, true, "active albedo texture must be destroyed when maps cleared");
+  state = gfx.materialMapState();
+  assert.equal(state.albedo, false);
+  assert.equal(state.normal, false);
+  assert.equal(state.layers, 0);
+});
+
+test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 removed", () => {
+  // In WGSL, derivatives (dpdx, dpdy, fwidth) must only be called in uniform control flow.
+  // fw1() inside conditional branches/helper functions caused shader compilation failures on strict compilers.
+  assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 helper must be removed in favor of uniform derivatives");
+  assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
+  assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
+  assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+});
+
+test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {
+  const h = makeGpuHarness();
+  assert.equal(typeof h.WGX.isSupported, "function");
+  assert.equal(typeof h.WGX.isSupported(), "boolean");
+  assert.equal(typeof h.WGX.gpuErrors, "function");
+  const initialErrors = h.WGX.gpuErrors();
+
+  await h.create();
+  assert.equal(typeof h.device.onuncapturederror, "function", "device.onuncapturederror must be wired");
+
+  h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
+  assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
