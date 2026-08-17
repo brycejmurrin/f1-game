@@ -75,10 +75,10 @@ const GLX = (function () {
   let skyProg = null, skyU = null;
   let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
-  let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null;
-  let glowProg = null, glowU = null, glowVAO = null, glowVBO = null;
+  let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null, markBatchCap = 0;
+  let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
-  let particleProg = null, particleU = null, particleVAO = null, particleVBO = null;
+  let particleProg = null, particleU = null, particleVAO = null, particleVBO = null, particleCap = 0;
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -1299,10 +1299,10 @@ const GLX = (function () {
       C[i4] = src[o + 7]; C[i4 + 1] = src[o + 8]; C[i4 + 2] = src[o + 9]; C[i4 + 3] = src[o + 10];
       D[i4] = src[o + 11]; D[i4 + 1] = 0; D[i4 + 2] = 0; D[i4 + 3] = 0;
     }
-    gl.uniform4fv(litU["uLightA[0]"], A.subarray(0, nL * 4));
-    gl.uniform4fv(litU["uLightB[0]"], B.subarray(0, nL * 4));
-    gl.uniform4fv(litU["uLightC[0]"], C.subarray(0, nL * 4));
-    gl.uniform4fv(litU["uLightD[0]"], D.subarray(0, nL * 4));
+    gl.uniform4fv(litU["uLightA[0]"], A, 0, nL * 4);
+    gl.uniform4fv(litU["uLightB[0]"], B, 0, nL * 4);
+    gl.uniform4fv(litU["uLightC[0]"], C, 0, nL * 4);
+    gl.uniform4fv(litU["uLightD[0]"], D, 0, nL * 4);
   }
 
   // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked
@@ -1629,7 +1629,12 @@ const GLX = (function () {
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
-      gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, vertCount * 5), gl.DYNAMIC_DRAW);
+      const nF = vertCount * 5;
+      if (nF > markBatchCap) {
+        markBatchCap = nF;
+        gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW);
+      }
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
     }
     gl.drawArrays(gl.TRIANGLES, 0, vertCount);
     setPolyOffset(null);
@@ -1691,7 +1696,11 @@ const GLX = (function () {
     gl.uniform1f(glowU.uStr, str);
     bindVAO(glowVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, glowData.subarray(0, p), gl.DYNAMIC_DRAW);
+    if (p > glowCap) {
+      glowCap = p;
+      gl.bufferData(gl.ARRAY_BUFFER, glowCap * 4, gl.DYNAMIC_DRAW);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p);
     // Additive, depth-tested (halos occlude behind walls) but no depth write.
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
@@ -1720,7 +1729,11 @@ const GLX = (function () {
     gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
     bindVAO(particleVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, floatCount), gl.DYNAMIC_DRAW);
+    if (floatCount > particleCap) {
+      particleCap = floatCount;
+      gl.bufferData(gl.ARRAY_BUFFER, particleCap * 4, gl.DYNAMIC_DRAW);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);

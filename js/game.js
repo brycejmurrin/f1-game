@@ -1926,7 +1926,8 @@ const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _digM = new Float32Array(16);
 function drawCockpitRig(c, base, dt, paint) {
   const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  const opt = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: nite ? 0.16 : 0 };
+  _cockpitOpts.emissive = nite ? 0.16 : 0;
+  const opt = _cockpitOpts;
   // The actual car around you: body (minus helmet) with the real paint, plus
   // the steering/spinning FRONT wheels (the rears sit right beside the camera
   // in the wide FOV and blob the bottom corners — skipped). Nudged 0.35 m
@@ -1947,7 +1948,8 @@ function drawCockpitRig(c, base, dt, paint) {
   // Queued with the field's decals and flushed after the car loop. The player
   // cockpit is the one queued decal that renders the PLAYER's setup parts.
   queueCarDecals(c.team, base, carDecalNum(c.team, c), true, true);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
+  _cockpitWheelOpts.emissive = nite ? 0.12 : 0;
+  drawPlayerWheels(c, base, dt, _cockpitWheelOpts, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -5286,6 +5288,11 @@ const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
 const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
 const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };
 const _wmPropsDryD = { roughness: 0.85, specular: 0.20 };
+// Pooled frustum planes + draw-opt bags (makeFrustumPlanes(vp, out) / GC).
+const _pbPlanes = [0,0,0,0,0,0].map(() => new Float32Array(4));
+const _cockpitOpts = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
+const _cockpitWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+const _ghostOpts = { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true };
 const _wmGlass = { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 };
 const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
 const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
@@ -5362,7 +5369,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
     if (_pb && _pb.length && gfx.drawInstanced) {
-      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj) : null;
+      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       for (let i = 0; i < _pb.length; i++) {
         if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
         gfx.drawInstanced(_pb[i], m);
@@ -6776,7 +6783,7 @@ function render(dt) {
       // slab ("black on screen when accelerating or braking" in TT). At 35%
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
-      gfx.draw(teamMesh(player.team), tmpMat, { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true });
+      gfx.draw(teamMesh(player.team), tmpMat, _ghostOpts);
       }
     }
   }

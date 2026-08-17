@@ -33,34 +33,16 @@
 // Lavapipe (+ xvfb-run for headed): three.js e2e recipe — real Vulkan ICD, shared
 // ANGLE/Dawn device; still often blank in CI but catches different failure modes.
 // Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
-export const WEBGPU_CHROMIUM_ARGS = [
-  "--headless=new",
-  "--enable-unsafe-webgpu",
-  "--enable-features=Vulkan",
-  "--use-vulkan=swiftshader",
-  "--use-webgpu-adapter=swiftshader",
-  "--no-sandbox",
-];
-
-export const WEBGPU_LAVAPE_CHROMIUM_ARGS = [
-  "--enable-unsafe-webgpu",
-  "--enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE",
-  "--use-angle=vulkan",
-  "--use-vulkan=native",
-  "--disable-vulkan-surface",
-  "--no-sandbox",
-];
-
-export const WEBGPU_LAVAPE_ENV = {
-  VK_ICD_FILENAMES: "/usr/share/vulkan/icd.d/lvp_icd.json",
-};
-
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
 const require = createRequire(import.meta.url);
+const _wgpuArgs = require("./webgpu-chrome-args.cjs");
+export const WEBGPU_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_CHROMIUM_ARGS;
+export const WEBGPU_LAVAPE_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_LAVAPE_CHROMIUM_ARGS;
+export const WEBGPU_LAVAPE_ENV = _wgpuArgs.WEBGPU_LAVAPE_ENV;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

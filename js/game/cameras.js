@@ -209,6 +209,10 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
 // extra — { bankDy (banking lift), deploy (ERS FOV kick), slipLat (lateral
 // slip m/s, for the drift cam), att (the player car, for the onboard chassis
 // attitude above) } — all optional and treated as 0/absent when missing.
+// Pooled vantage return — every rAF used to mint eye/tgt arrays + a result object.
+const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
+const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
+
 function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
   const wrapS = (v) => { const L = track.total; v %= L; return v < 0 ? v + L : v; };
@@ -588,7 +592,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // the chassis too. It is NOT in `onboard` above, which is about which
   // ELEVATION CURVE a mode samples, a different question with a different answer.
   if (onboard || mode === "tcam") onboardAttitude(mode, eye, tgt, extra, s, spN);
-  return { eye, tgt, fov };
+  _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
+  _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
+  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov;
+  return _vantOut;
 }
 
 return { init, vantage, COCKPIT_EYE_FWD, COCKPIT_EYE_UP };

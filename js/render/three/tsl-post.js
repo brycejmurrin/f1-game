@@ -226,11 +226,13 @@
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const res = float(1.0).toVar();
         const d = depthAt(vUV).toVar();
+        // Derivatives BEFORE the sky depth gate — non-uniform If around dFdx/dFdy
+        // is a hard WGSL compile error on TLX-WebGPU (same class as WGX fwidth).
+        const P0 = vec3(ssaoViewPos(vUV)).toVar();
+        const crN0 = cross(dFdx(P0), dFdy(P0)).toVar();
         If(d.lessThan(0.99999), () => {          // sky -> 1.0
-          const P = vec3(ssaoViewPos(vUV)).toVar();
-          // NaN-guarded derivative normal js/render/shaders/post.js + an eye-facing
-          // flip: dFdy's sign differs between the GL and WebGPU backends.
-          const crN = cross(dFdx(P), dFdy(P)).toVar();
+          const P = P0;
+          const crN = crN0;
           const crL = length(crN).toVar();
           const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
           If(N.z.lessThan(0.0), () => { N.assign(N.negate()); });

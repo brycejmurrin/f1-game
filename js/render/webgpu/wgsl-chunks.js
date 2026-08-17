@@ -1011,7 +1011,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let bleed = lights[i].colBleed.w;
     let cd = dot(-Ld, lights[i].dirVol.xyz);
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
-    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/shaders/lit.js)
+    // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: F.params8.x = uLampFog is 0 in
+    // daylight, so the only consumer is gated — skip the accumulate on day frames.
+    // Uniform CF (params8.x), safe for WGSL.
+    if (F.params8.x > 0.0) {
+      lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
+    }
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     var lampSh = 1.0;

@@ -556,6 +556,7 @@ const WGX = (function () {
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softW = 0, _softH = 0;
+    let _softImg = null; // pooled ImageData for soft-present CPU blit
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
       _gpuCanvas = document.createElement("canvas");
@@ -717,6 +718,8 @@ const WGX = (function () {
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
+    const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
+    const _instDrawOpts = { _instanced: true }; // reused; fields overwritten each draw
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
     // Culling frame state.
@@ -1553,7 +1556,10 @@ const WGX = (function () {
         _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
           try {
             const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
-            const img = _displayCtx.createImageData(width, height);
+            if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
+              _softImg = _displayCtx.createImageData(width, height);
+            }
+            const img = _softImg;
             const rowBytes = width * 4;
             for (let y = 0; y < height; y++) {
               img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
@@ -2722,9 +2728,12 @@ const WGX = (function () {
       _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
+        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+        // !_envProbeLive left mip0 updating while higher LODs froze at the first
+        // capture — lacquer roughness LOD stayed at the start-line reflection.
+        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
-          _generateMips(envCubeTex, 6);
           envCubeView = envSampleView;   // main frame group now mirrors the real world
           _rebuildFrameBG();
         }
@@ -3004,9 +3013,8 @@ const WGX = (function () {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
         if (invVP && invVP.length >= 16) {
-          const tmp = new Float32Array(16);
-          tmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
-          _mul4(s.subarray(0, 16), tmp, Z01INV);
+          _grInvTmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
+          _mul4(s.subarray(0, 16), _grInvTmp, Z01INV);
         } else s.set(IDENT, 0);
         s.set(_shadowRendered ? shadowLVPData : IDENT, 16);
         s.set(lampArmed ? lampShadowLVPData : IDENT, 32);
@@ -3504,6 +3512,10 @@ const WGX = (function () {
       mesh.instances = n;
       mesh.visible = n;
       mesh._instPacked = packed;
+      // Always retain CPU copies — castShadowInstanced restores the full set
+      // after the lit pass camera-repacks instBuf.
+      mesh.srcMatrices = matrices;
+      mesh.srcColors = colors && colors.length ? colors : null;
       if (opts && opts.cellSize > 0 && n) {
         const cell = opts.cellSize;
         let reach = opts.radius || 0;
@@ -3528,8 +3540,6 @@ const WGX = (function () {
           if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
         }
         mesh.cells = [...buckets.values()];
-        mesh.srcMatrices = matrices;
-        mesh.srcColors = colors && colors.length ? colors : null;
       }
       return mesh;
     }
@@ -3562,7 +3572,15 @@ const WGX = (function () {
       if (n <= 0) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      const o = Object.assign({}, opts || {}, { _instanced: true });
+      // Reuse a single opts bag — Object.assign every batch was GC on city tracks.
+      const o = _instDrawOpts;
+      if (opts) {
+        for (const k in o) { if (k !== "_instanced") delete o[k]; }
+        for (const k in opts) o[k] = opts[k];
+      } else {
+        for (const k in o) { if (k !== "_instanced") delete o[k]; }
+      }
+      o._instanced = true;
       _writeDraw(slot, IDENT, o);
       litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
@@ -3586,6 +3604,22 @@ const WGX = (function () {
       if (!shadowPass || !batch || !batch.vbuf) return;
       const n = count === undefined ? batch.instances : Math.min(count | 0, batch.instances);
       if (n <= 0) return;
+      // Full-set cast: lit cull may have camera-repacked instBuf — restore from
+      // srcMatrices so casters behind the eye still hit the light frustum.
+      if (count === undefined && batch.srcMatrices && batch._instPacked &&
+          batch.instBuf && batch.instBuf !== identInstanceBuf) {
+        const src = batch.srcMatrices, dst = batch._instPacked, sc = batch.srcColors;
+        for (let i = 0; i < n; i++) {
+          const so = i * 16, dOff = i * 20;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (sc) {
+            dst[dOff + 16] = sc[i * 3]; dst[dOff + 17] = sc[i * 3 + 1]; dst[dOff + 18] = sc[i * 3 + 2];
+          } else {
+            dst[dOff + 16] = dst[dOff + 17] = dst[dOff + 18] = 1;
+          }
+        }
+        device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+      }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
       shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
@@ -4115,16 +4149,11 @@ const WGX = (function () {
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 
-      // ── Cull-test helpers (GLX parity) ──
-      // The agent world view calls GLX.makeFrustumPlanes/aabbInFrustum directly
-      // so its "what is on screen" answer runs the SAME test the draw path runs.
-      // These are the identical Gribb–Hartmann helpers already used above by
-      // drawChunked, exported in GLX's shape (six fresh Float32Array(4) planes,
-      // inside = a*x+b*y+c*z+d >= 0) — GLX allocates a fresh set for exactly
-      // this caller rather than sharing the per-frame scratch, so do the same.
-      makeFrustumPlanes(viewProj) {
-        const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                   new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+      // Cull-test helpers (GLX parity). Optional `out` reuses a caller pool for
+      // the race prop-batch path; omit it for agentview (fresh planes).
+      makeFrustumPlanes(viewProj, out) {
+        const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                          new Float32Array(4), new Float32Array(4), new Float32Array(4)];
         _extractPlanes(viewProj, p);
         return p;
       },
