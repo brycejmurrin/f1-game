@@ -5288,9 +5288,8 @@ const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
 const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
 const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };
 const _wmPropsDryD = { roughness: 0.85, specular: 0.20 };
-// Pooled frustum planes for propBatches cull — makeFrustumPlanes(vp, out).
-const _pbPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                   new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+// Pooled frustum planes + draw-opt bags (makeFrustumPlanes(vp, out) / GC).
+const _pbPlanes = [0,0,0,0,0,0].map(() => new Float32Array(4));
 const _cockpitOpts = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
 const _cockpitWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ghostOpts = { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true };
