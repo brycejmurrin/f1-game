@@ -562,10 +562,14 @@ and counted rather than timed:
 - **`sky.js` sun corona + disc** ran on every NIGHT frame. `coronaDamp` is
   `(1.0 - overcast * 0.92) * (1.0 - nightSky)` and `overcast <= 1` keeps the
   first factor `>= 0.08`, so `coronaDamp == 0` **exactly when** `nightSky == 1`
-  — and all three `c +=` add nothing. SKY_FS draws BEFORE the opaque world by
-  default (`skyLate` is default-OFF), so there is no early-Z relief: 2 `pow`,
-  2 `sqrt` and ~85 ALU on **100 % of the pixels** of every night frame. Every
-  local in the block is dead after it, so the skip is unobservable.
+  — and all three `c +=` add nothing. SKY_FS drew BEFORE the opaque world at
+  the time (`skyLate` has since shipped default-ON), so there was no early-Z
+  relief: 2 `pow`, 2 `sqrt` and ~85 ALU on **100 % of the pixels** of every
+  night frame. Every local in the block is dead after it, so the skip is
+  unobservable. (Late-sky footnote: the reorder only holds if the sky pipeline
+  actually depth-tests — WGX's declared `depthCompare:"always"` and the late
+  sky erased the whole WebGPU world; fixed to `"less-equal"`, pinned by
+  tests/unit/webgpu-lifecycle.test.mjs.)
 - **`sky.js` day gradient band** — an **`atan2`**, one of the costliest GPU
   transcendentals, feeding a `vnoise`, per pixel, whole frame, multiplied by
   `daytime`. `daytime` is exactly 0 on every night frame AND every dawn/dusk

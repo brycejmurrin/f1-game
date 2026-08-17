@@ -313,7 +313,7 @@
           addBox(stage, vadd(a.c, a.u, 11.35), [17.2, 0.7, 379], WHITE, b);
         }, { required: true });
       })();
-      building(K(0.01), -1, 17, 13, 8, 160,
+      building(K(0.01), -1, 17, 13, 8, 130,
         { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Horizontal banding stripe along the pit face (Tilke language).
       // These band the PIT BUILDING emitted just above — but were anchored via
@@ -356,7 +356,7 @@
       // Hospitality villas behind the pit slab (curved white villa blocks —
       // replaces mosque / marquees / Aspire fantasy landmarks).
       for (let i = 0; i < 6; i++) {
-        const s = (0.98 + i * 0.018) % 1;
+        const s = (0.965 + i * 0.024) % 1;
         const hf = hash(i * 11 + 7);
         const hallH = 6 + hf * 3;
         building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,

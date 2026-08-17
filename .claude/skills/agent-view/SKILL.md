@@ -5,6 +5,10 @@ description: Use when the user wants to see or drive Apex 26 without screenshots
 
 # Agent view — perceive and drive the game as text
 
+**Token note:** prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()`
+over loading this whole skill when you only need one tool. Full surface:
+`docs/AGENT-WORLD-API.md` + `docs/DEBUG-HOOKS.md`.
+
 **TL;DR** — Perceive and drive Apex 26 as text, no screenshots. From a shell:
 `node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
 frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +

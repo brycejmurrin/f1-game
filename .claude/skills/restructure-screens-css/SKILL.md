@@ -20,7 +20,7 @@ it rename things?** Renaming is not restructuring.
 ```sh
 node tools/layout-audit.mjs                    # the screen x viewport matrix
 node tools/pick-tests.mjs --staged             # which groups this change needs
-npm run test:tooling-fast                      # 344 structural guards, ~20 s
+npm run test:tooling-fast                      # ~78 no-browser guard suites, ~20 s
 ```
 
 **Record the before-numbers.** A restructure with no before/after count is an
@@ -62,9 +62,9 @@ use the `autofocus` attribute on the descendant element of the dialog that the
 user is expected to immediately interact with."* On a long scrolling sheet, put
 it on `.sheet-body` (the spec's own second example). *Prevents:* focus landing
 on the last focusable element and auto-scrolling the dialog — or the whole
-document — past its own content. **This rule's fix already landed: 16
-`autofocus` attributes now exist across the 17 modal dialogs** (only
-`#results` still lacks one) — re-run `grep -c autofocus index.html` before
+document — past its own content. **This rule's fix already landed: 17
+`autofocus` attributes now exist across the 19 modal dialogs** — re-run
+`grep -c '<dialog' index.html` and `grep -c autofocus index.html` before
 treating this as an open problem, and do not "fix" (remove) an autofocus
 attribute you find; it was added on purpose.
 

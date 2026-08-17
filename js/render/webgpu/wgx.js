@@ -50,7 +50,7 @@
  *     are real (GPUTexture upload) so decals have an atlas.
  *
  * PARITY (2026-08): gpuTimer, createTextureArray/matTexMix, generateMips (env +
- *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 2× with
+ *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 4× with
  *   manual depth resolve, Poisson PCSS, world-space god-ray, applyMaterial*,
  *   road markings, heat haze, SSAO/god-ray separable blur. See
  *   docs/research/WEBGPU-PARITY.md.
@@ -100,14 +100,14 @@ const WGX = (function () {
   const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
   // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
   // first full-size frame if we take the desktop stack (high-performance +
-  // timestamp-query + MSAA 2× rgba16float + 2048 shadows). Same sniff as TLX.
+  // timestamp-query + MSAA 4× rgba16float + 2048 shadows). Same sniff as TLX.
   const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
     (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
   // Loss-escalation ladder, persisted per origin. One device.lost = one rung
   // up + one reload, so every retry is genuinely CHEAPER than the config that
   // just died — never the identical crash again:
-  //   rung 0  full    — desktop stack (MSAA 2, timestamp, 2048 shadows, SSR)
+  //   rung 0  full    — desktop stack (MSAA 4, timestamp, 2048 shadows, SSR)
   //   rung 1  lite    — phone-parity (MSAA 1, 1024 shadows, no SSR/timestamp)
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
@@ -121,7 +121,7 @@ const WGX = (function () {
   } catch (_) { /* blocked storage: sniff-only lite */ }
   const _litePref = _wgxLevel >= 1;
   // Slim stack: every phone, every WebKit, or a previous device.lost on this
-  // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
+  // origin. GRAPHICS: ULTRA must not 4× MSAA a phone WebGPU device — that is
   // the "worked for a second then crashed" path.
   const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
   // Minimal only ever comes from the ladder (a LITE device that still lost
@@ -177,7 +177,17 @@ const WGX = (function () {
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
   const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
-  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
+  // bloom/godray (GLX R11F_G11F_B10F). NOT a const, and not renderable by
+  // default: rg11b10ufloat carries TEXTURE_BINDING and the copy usages in core
+  // WebGPU, but RENDER_ATTACHMENT only arrives with the OPTIONAL
+  // "rg11b10ufloat-renderable" feature. Allocating a target in it without asking
+  // for the feature is a validation error per target — measured on a live device
+  // as "Color format (TextureFormat::RG11B10Ufloat) is not color renderable",
+  // twice, then "WGX unavailable" and a silent fall back to GLX. create()
+  // negotiates the feature and downgrades this to SCENE_FORMAT when the device
+  // withholds it: 8 B/px instead of 4 on two half-res targets and the bloom
+  // chain, which is the cost of having a post chain at all.
+  let POST_HDR_FORMAT = "rg11b10ufloat";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -278,7 +288,15 @@ const WGX = (function () {
   };
   const MAT_TEX_LAYERS = 17;
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
-  const MSAA_COUNT = WGX_LITE ? 1 : 2;
+  // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
+  // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
+  // This read 2 to mirror GLX's 2x WebGL MSAA and every real device rejected it
+  // — "Multisample count (2) is not supported", once per MS pipeline, then
+  // Invalid RenderPipeline / Invalid BindGroupLayout cascading off the first
+  // failure. Unit tests asserting msaa() === 2 passed throughout, because
+  // nothing in them ever asked a GPU.
+  // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
+  let MSAA_COUNT = WGX_LITE ? 1 : 4;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -380,11 +398,50 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
+      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
+      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
+      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
+      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
+      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
+      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Sync signals only — never await requestAdapterInfo() (has hung create()
+      // with no timeout on Dawn/SwiftShader).
+      let _softAdapter = false;
+      try {
+        const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+        const info = adapter.info || null;
+        const blob = info ? JSON.stringify(info).toLowerCase() : "";
+        // Empty adapter.info is the SwiftShader/Dawn software fingerprint on
+        // Chrome 148 (hardware adapters report vendor/device/architecture).
+        const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+        _softAdapter = !!(adapter.isFallbackAdapter
+            || infoEmpty
+            || /HeadlessChrome/i.test(ua)
+            || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+      } catch (_) { /* treat as hardware */ }
+      let _allowSoft = false;
+      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
+      if (_softAdapter && !_allowSoft) {
+        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
+      }
+      // sampleCount 4 resolveTarget frames have also come back blank on
+      // software when the escape hatch is set — force MSAA 1.
+      if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
       // treats the phone timer as absent; Safari Mac is the same GPU.
-      const _canTimestamp = !WGX_LITE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
-      device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
+      const _has = function (name) {
+        return !!(adapter.features && adapter.features.has && adapter.features.has(name));
+      };
+      const _canTimestamp = !WGX_LITE && _has("timestamp-query");
+      // rg11b10ufloat is renderable ONLY with this feature (see POST_HDR_FORMAT).
+      // Asked for on every tier, phones included: it makes the post targets
+      // HALF the bytes, which matters most where memory is tightest.
+      const _canPostHDR = _has("rg11b10ufloat-renderable");
+      const _want = [];
+      if (_canTimestamp) _want.push("timestamp-query");
+      if (_canPostHDR) _want.push("rg11b10ufloat-renderable");
+      device = await adapter.requestDevice(_want.length ? { requiredFeatures: _want } : {});
       // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
       // says so — even when it cannot give a valid one; the failure is signalled
       // by handing back a device whose `lost` promise is ALREADY resolved. So a
@@ -404,7 +461,16 @@ const WGX = (function () {
       device.lost.then(function (info) { _bornLost = (info && info.reason) || "unknown"; });
       await null; await null;
       if (_bornLost) return _fail("device arrived lost (" + _bornLost + ")");
-      var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
+      const _devHas = function (name) {
+        return !!(device.features && device.features.has && device.features.has(name));
+      };
+      var _timestampOk = _canTimestamp && _devHas("timestamp-query");
+      // Re-derived from the DEVICE, not the adapter, and assigned on every
+      // create — an adapter that advertises a feature can still hand back a
+      // device without it, and a later create must not inherit an earlier
+      // device's downgrade.
+      POST_HDR_FORMAT = (_canPostHDR && _devHas("rg11b10ufloat-renderable"))
+        ? "rg11b10ufloat" : SCENE_FORMAT;
     } catch (e) {
       return _fail("device request threw: " + ((e && e.message) || e));
     }
@@ -903,13 +969,21 @@ const WGX = (function () {
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
-      matArraySamp = device.createSampler({
+      // maxAnisotropy 4 matches GLX (js/render/glx.js applies the same cap to the
+      // MAT array) and TLX (anisotropy = 4). The road is the grazing-angle
+      // surface these exist for — trilinear alone smears tarmac aggregate into
+      // mip mush ~20 m ahead of the car. WebGPU only allows it when all three
+      // filters are "linear" (they are); a driver that still rejects the
+      // descriptor falls back to the plain sampler rather than failing create().
+      const _matSampDesc = {
         magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
         addressModeU: "repeat", addressModeV: "repeat",
-        // 4× aniso (GLX EXT_texture_filter_anisotropic cap) — road grazing
-        // stays readable instead of smearing into mip mush ~20 m ahead.
-        maxAnisotropy: 4,
-      });
+      };
+      try {
+        matArraySamp = device.createSampler(Object.assign({ maxAnisotropy: 4 }, _matSampDesc));
+      } catch (_) {
+        matArraySamp = device.createSampler(_matSampDesc);
+      }
       matScaleUBO = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
       const _ident = new Float32Array(20);
@@ -1292,7 +1366,23 @@ const WGX = (function () {
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
       const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
+        // configured swapchain. Drawing into a stale getCurrentTexture() still
+        // "succeeds" (gpuErrors stay 0) but HeadlessChrome/SwiftShader composites
+        // a blank/white canvas — measured 2026-08-17 with present() running
+        // hundreds of times per second and agentview coverage healthy. Reconfigure
+        // on every buffer-size change (no-op cost vs create()).
+        if (ctx) {
+          try {
+            ctx.configure({
+              device, format, alphaMode: "opaque",
+              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            });
+          } catch (_) { /* next begin() drops the frame if the swapchain is lost */ }
+        }
+      }
       width = w; height = h; aspect = w / h;
     }
     function setRenderScale(s) {
@@ -1617,11 +1707,29 @@ const WGX = (function () {
     }
 
     // ── buffer helper: create a GPUBuffer initialised from a typed array ──
+    // Geometry is uploaded with queue.writeBuffer, NOT createBuffer({
+    // mappedAtCreation:true}). mappedAtCreation needs a client-visible mapping
+    // as large as the WHOLE buffer, and Dawn throws when that allocation fails:
+    // measured on a live device as "createBuffer failed, size (208) is too large
+    // for the implementation when mappedAtCreation == true" for EVERY mesh in
+    // the track — a 208-BYTE buffer failing is an exhausted mappable pool, not a
+    // size limit, and the 35 MB chunked scenery buffer is what exhausted it.
+    // (PlayCanvas #6676 and pixijs #10404 are the same failure on real GPUs
+    // under memory pressure.) writeBuffer stages through Dawn's own ring buffer
+    // in bounded chunks, so peak mappable demand no longer tracks mesh size.
     function _mkBuffer(data, usage) {
-      const size = (data.byteLength + 3) & ~3;   // pad to 4 (mappedAtCreation req.)
-      const buf = device.createBuffer({ size, usage, mappedAtCreation: true });
-      new data.constructor(buf.getMappedRange()).set(data);
-      buf.unmap();
+      const size = (data.byteLength + 3) & ~3;   // writeBuffer: size multiple of 4
+      const buf = device.createBuffer({ size, usage: usage | GPUBufferUsage.COPY_DST });
+      if (data.byteLength === size) {
+        device.queue.writeBuffer(buf, 0, data);
+      } else {
+        // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
+        // wants a 4-multiple, so pad through a scratch view rather than round
+        // the count and read past the array.
+        const pad = new Uint8Array(size);
+        pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+        device.queue.writeBuffer(buf, 0, pad);
+      }
       return buf;
     }
 
@@ -1705,9 +1813,10 @@ const WGX = (function () {
     }
 
     // ── Resources (Phase 2) ──
-    // createBuffer({mappedAtCreation}) may throw a synchronous RangeError when
-    // the client-side mapping cannot be allocated — exactly the memory
-    // pressure that precedes a device loss. The mesh family is called LAZILY
+    // createBuffer may still throw a synchronous RangeError when the allocation
+    // cannot be satisfied — writeBuffer removed the mappable-pool failure above,
+    // not plain out-of-memory, which is the pressure that precedes a device
+    // loss. The mesh family is called LAZILY
     // from the render path (gear digits, LED strips mid-race), so a throw here
     // would escape into tick() and paint the full-screen overlay. Every draw
     // path checks .vbuf, so an inert mesh keeps the frame alive instead —
@@ -2967,11 +3076,19 @@ const WGX = (function () {
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
       } catch (_) { return null; /* alloc/copy failed: pack stays procedural */ }
     }
-    function _releaseOwnedMatMaps() {
+    // `keep` is the incoming maps: a caller re-passing a token it already handed
+    // over must not have it destroyed under the new binding (assets.js always
+    // builds fresh arrays, but webbake/__apex/tests need not).
+    function _releaseOwnedMatMaps(keep) {
+      const kept = new Set();
+      if (keep) {
+        if (keep.albedo && keep.albedo.texture) kept.add(keep.albedo.texture);
+        if (keep.normal && keep.normal.texture) kept.add(keep.normal.texture);
+      }
       // Destroy each GPUTexture at most once (albedo/normal may alias).
       const seen = new Set();
       for (const tok of [_matOwnedAlbedo, _matOwnedNormal]) {
-        if (!tok || !tok.texture || seen.has(tok.texture)) continue;
+        if (!tok || !tok.texture || seen.has(tok.texture) || kept.has(tok.texture)) continue;
         seen.add(tok.texture);
         try { tok.texture.destroy(); } catch (_) { /* already invalid */ }
       }
@@ -2982,7 +3099,7 @@ const WGX = (function () {
     // textures and restores the 1×1×N placeholders so bind groups never point
     // at destroyed views — GLX deleteTexture parity for WebGPU.
     function setMaterialMaps(maps) {
-      _releaseOwnedMatMaps();
+      _releaseOwnedMatMaps(maps);
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
       _matAlbedoOn = false;
@@ -3486,7 +3603,14 @@ const WGX = (function () {
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _fail("canvas has no webgpu context");
-      ctx.configure({ device, format, alphaMode: "opaque" });
+      // COPY_SRC lets a future present-readback / software blit path sample the
+      // swapchain; RENDER_ATTACHMENT is the required draw target. Reconfigure
+      // again from resize() whenever canvas.width/height change.
+      ctx.configure({
+        device, format, alphaMode: "opaque",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      resize();   // pick up clientWidth now that the context owns the canvas
     } catch (e) {
       return _fail("context configure threw: " + ((e && e.message) || e));
     }

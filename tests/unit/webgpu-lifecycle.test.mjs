@@ -36,6 +36,7 @@ function makeGpuHarness(opts = {}) {
   const textures = [];
   const buffers = [];
   const writes = [];
+  const pipelines = [];
   let textureCalls = 0;
   let viewCalls = 0;
   let bindGroupCalls = 0;
@@ -46,10 +47,17 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
   const stored = opts.storage || null;
   const session = opts.session || null;
+  // Optional feature negotiation. Default is the historical harness: a
+  // timestamp-query-only device, which is also the tier that must DOWNGRADE
+  // POST_HDR_FORMAT (rg11b10ufloat is renderable only behind its own feature).
+  const adapterFeatures = opts.adapterFeatures || ["timestamp-query"];
+  const deviceFeatures = opts.deviceFeatures || adapterFeatures;
+  const deviceRequests = [];
   let loseDevice = null;
   let failEncoder = false;
   const device = {
@@ -84,7 +92,18 @@ function makeGpuHarness(opts = {}) {
           : [],
       }),
     }),
-    createRenderPipeline: () => pipeline,
+    // The DESCRIPTOR is kept, not just the count: a target format or a
+    // multisample count that WebGPU rejects is invisible to a harness that
+    // throws the descriptor away, and both of those shipped. (The pipeline
+    // half of the sampleCount guard was reading an undefined h.pipelines and
+    // passing vacuously.) Two lineages grew two readers of this — the raw desc
+    // for the depth-compare guards, the wrapped one for the format guards — so
+    // it feeds both rather than renaming one and breaking its tests.
+    createRenderPipeline: (desc) => {
+      pipelineDescs.push(desc);
+      pipelines.push({ desc });
+      return pipeline;
+    },
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -200,9 +219,19 @@ function makeGpuHarness(opts = {}) {
       maxTouchPoints: 0,
       gpu: {
         requestAdapter: async () => ({
-          features: { has: (name) => name === "timestamp-query" },
-          requestDevice: async () => {
-            device.features = { has: (name) => name === "timestamp-query" };
+          features: { has: (name) => adapterFeatures.includes(name) },
+          // Non-empty info = "hardware" for WGX's software-adapter gate.
+          // Real Dawn SwiftShader often reports {}.
+          info: opts.softAdapter
+            ? {}
+            : { vendor: "test", architecture: "test", device: "mock-gpu" },
+          isFallbackAdapter: !!opts.softAdapter,
+          requestDevice: async (desc) => {
+            deviceRequests.push((desc && desc.requiredFeatures) || []);
+            // The DEVICE answer is deliberately separate from the adapter's:
+            // an adapter may advertise a feature and hand back a device without
+            // it, and WGX has to re-derive from the device it actually holds.
+            device.features = { has: (name) => deviceFeatures.includes(name) };
             return device;
           },
         }),
@@ -227,7 +256,10 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    pipelineDescs,
     WGX: context.window.WGX,
+    pipelines,
+    deviceRequests,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -572,7 +604,7 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(gfx.gpuMs(), -1);
   gfx.gpuTimer(true);
   assert.equal(gfx.gpuTimer().on, true);
-  assert.equal(gfx.msaa(), 2);
+  assert.equal(gfx.msaa(), 4);
   const maps = gfx.materialMapState();
   assert.equal(maps.albedo, false);
   assert.equal(maps.layers, 0);
@@ -625,6 +657,31 @@ test("WGX requests timestamp-query when the adapter exposes it", async () => {
   assert.match(WGX_SOURCE, /requiredFeatures/);
   assert.match(WGX_SOURCE, /timestamp-query/);
   assert.match(WGX_SOURCE, /timestampWrites/);
+});
+
+test("depth-testing pipelines never use compare 'always' (skyLate erased the world)", async () => {
+  // PerfTry.skyLate ships ON, so game.js draws the sky AFTER the opaque world
+  // on every backend. GLX's sky sits at depth 1.0 under LEQUAL and is rejected
+  // where the world already wrote; WGX's sky pipeline declared
+  // depthCompare:"always", so the late fullscreen sky triangle overwrote every
+  // world pixel — WebGPU rendered with no road, terrain, or props (only
+  // cars/FX drawn after the sky survived). The invariant that pins the fix:
+  // any pipeline that reads depth without writing it (sky, glow, skid, decal,
+  // particles) exists to be occluded by the world, so "always" is never right
+  // there. (The MS depth-resolve pass legitimately uses "always" — it WRITES
+  // depth via @builtin(frag_depth) — hence the depthWriteEnabled filter.)
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  gfx.drawSky({});
+  const readOnlyDepth = h.pipelineDescs.filter(
+    (d) => d && d.depthStencil && !d.depthStencil.depthWriteEnabled);
+  assert.ok(readOnlyDepth.length >= 1, "the sky pipeline must be among the recorded descriptors");
+  for (const d of readOnlyDepth) {
+    assert.notEqual(d.depthStencil.depthCompare, "always",
+      "a depth-test-only pipeline must respect the world's depth (GLX LEQUAL parity)");
+  }
 });
 
 test("WGX source keeps the proven parity fixes", () => {
@@ -785,24 +842,44 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
   // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
-  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // stack there. WGX cannot: timestamp-query + multisampled rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  // sampleCount must be 1 or 4 in WebGPU (not GLX's 2×).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
-  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  // The adapter probe is shared with rg11b10ufloat-renderable now, so this
+  // pins the GATE (lite skips the timer) rather than the probe's spelling.
+  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && _has\("timestamp-query"\)/);
+  assert.match(WGX_SOURCE, /adapter\.features\.has\(name\)/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
 test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
-  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.msaa(), 4, "desktop keeps MSAA; 4 because WebGPU permits only 1 or 4");
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("software / empty-info adapter refuses create (white-canvas gate)", async () => {
+  const h = makeGpuHarness({ softAdapter: true });
+  const gfx = await h.create();
+  assert.equal(gfx, null);
+  const fail = h.WGX.lastFailure();
+  assert.ok(fail && /software WebGPU adapter/i.test(fail.reason), fail && fail.reason);
+});
+
+test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async () => {
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapter: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "escape hatch must still boot WGX");
+  assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
 });
 
 test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
@@ -928,7 +1005,7 @@ test("clean sessions heal the ladder: minimal steps back to lite after a streak"
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
   // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
-  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took MSAA 2×
+  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took multisampled
   // rgba16float and lost the device after one frame.
   const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
   const gfx = await h.create();
@@ -938,6 +1015,157 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
 });
+
+test("every sampleCount WGX requests is one WebGPU actually allows (1 or 4)", async () => {
+  // The spec (w3.org/TR/webgpu) permits sampleCount 1 or 4 and nothing else.
+  // WGX shipped 2 — mirroring GLX's 2× WebGL MSAA — and every real device
+  // answered "Multisample count (2) is not supported" for each MS pipeline,
+  // then cascaded Invalid RenderPipeline / Invalid BindGroupLayout off it.
+  // The old assertions read msaa() === 2 and passed: they never asked a GPU.
+  // This one checks the descriptors, so a future retune cannot pick 2 or 8.
+  const LEGAL = new Set([1, 4]);
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  gfx.begin({});
+  gfx.present({});
+  assert.ok(LEGAL.has(gfx.msaa()), `msaa() must be 1 or 4, got ${gfx.msaa()}`);
+  const texBad = h.textures.filter((t) => t.desc.sampleCount != null && !LEGAL.has(t.desc.sampleCount));
+  assert.deepEqual(texBad.map((t) => t.desc.sampleCount), [], "illegal texture sampleCount");
+  assert.ok(h.pipelines.length > 0, "harness must record pipeline descriptors");
+  const pipeBad = h.pipelines.filter((p) =>
+    p.desc && p.desc.multisample && p.desc.multisample.count != null
+      && !LEGAL.has(p.desc.multisample.count));
+  assert.deepEqual(pipeBad.map((p) => p.desc.multisample.count), [], "illegal pipeline multisample count");
+  assert.ok(h.textures.some((t) => t.desc.sampleCount === 4), "desktop must still allocate MS targets");
+});
+
+test("rg11b10ufloat is only rendered into when the device grants the feature", async () => {
+  // Fourth defect of the same family, and the one that survived fixing the
+  // other three: rg11b10ufloat carries TEXTURE_BINDING and the copy usages in
+  // core WebGPU, but RENDER_ATTACHMENT needs the OPTIONAL
+  // "rg11b10ufloat-renderable" feature. WGX allocated the bloom/godray targets
+  // in it unconditionally to mirror GLX's R11F_G11F_B10F, and a live device
+  // answered "Color format (TextureFormat::RG11B10Ufloat) is not color
+  // renderable" per target, then "WGX unavailable" — a silent GLX fallback.
+  const RENDERABLE = 1;  // GPUTextureUsage.RENDER_ATTACHMENT in this harness
+  // WGX runs inside a vm context, so its arrays carry THAT realm's prototype
+  // and deepStrictEqual rejects them on identity alone. Copy before comparing.
+  const asked = (h) => h.deviceRequests.map((f) => Array.from(f));
+
+  // WITHOUT the feature: nothing may be rendered into that format.
+  const plain = makeGpuHarness();
+  const gplain = await plain.create();
+  gplain.resize(); gplain.begin({}); gplain.present({});
+  assert.deepEqual(asked(plain), [["timestamp-query"]],
+    "must not ask for a feature the adapter never advertised");
+  const illegal = plain.textures.filter((t) =>
+    t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE));
+  assert.equal(illegal.length, 0, "rg11b10ufloat render target without the feature");
+  const pipeIllegal = plain.pipelines.filter((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rg11b10ufloat"));
+  assert.equal(pipeIllegal.length, 0, "pipeline writes rg11b10ufloat without the feature");
+  // The post chain must still EXIST — downgraded, not dropped.
+  assert.ok(plain.textures.some((t) => t.desc.format === "rgba16float" && (t.desc.usage & RENDERABLE)),
+    "bloom/godray must downgrade to the HDR scene format, not disappear");
+
+  // WITH the feature: ask for it, and use it.
+  const rich = makeGpuHarness({ adapterFeatures: ["timestamp-query", "rg11b10ufloat-renderable"] });
+  const grich = await rich.create();
+  grich.resize(); grich.begin({}); grich.present({});
+  assert.deepEqual(asked(rich), [["timestamp-query", "rg11b10ufloat-renderable"]]);
+  assert.ok(rich.textures.some((t) => t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE)),
+    "the granted feature must actually be used (half the bytes per post pixel)");
+
+  // Adapter advertises, device withholds — the case a device-side re-derive
+  // exists for. Reading the adapter's answer here would allocate the illegal
+  // format again.
+  const liar = makeGpuHarness({
+    adapterFeatures: ["timestamp-query", "rg11b10ufloat-renderable"],
+    deviceFeatures: ["timestamp-query"],
+  });
+  const gliar = await liar.create();
+  gliar.resize(); gliar.begin({}); gliar.present({});
+  const liarBad = liar.textures.filter((t) =>
+    t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE));
+  assert.equal(liarBad.length, 0, "must re-derive the format from the DEVICE, not the adapter");
+});
+
+test("no WGSL derivative sits where control flow can be non-uniform", () => {
+  // 'dpdx must only be called from uniform control flow' is a COMPILE error that
+  // invalidates the whole lit pipeline; WGX then refuses and the game falls back
+  // to WebGL2 with only a console warning. It shipped that way — the material
+  // helpers took fwidth behind material-id branches and early returns, and a
+  // callee that returns early non-uniformly poisons its CALLER too, so the fix
+  // is structural: derivatives at the fs_main entry, footprint passed down.
+  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
+  // Structural, not an allow-list of spellings: two sessions fixed this in
+  // parallel and picked different names, and a list of exact lines would have
+  // called the other one's correct code a regression. The invariant is about
+  // POSITION. Walk every `fn` in the module and require that any body taking a
+  // derivative is an entry point — a helper that takes one is reachable from a
+  // material branch by construction, and a wrapper is the worst case because
+  // the call site then looks like ordinary arithmetic (that is exactly how the
+  // original fw1 shipped, and how it survived the first fix as dead code).
+  const stripped = CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  const fns = [];
+  for (const m of stripped.matchAll(/\bfn\s+(\w+)\s*\(/g)) {
+    let i = stripped.indexOf("{", m.index);
+    if (i < 0) continue;
+    let depth = 0;
+    let end = i;
+    for (; end < stripped.length; end++) {
+      if (stripped[end] === "{") depth++;
+      else if (stripped[end] === "}" && --depth === 0) break;
+    }
+    fns.push({ name: m[1], body: stripped.slice(i, end + 1) });
+  }
+  assert.ok(fns.length > 20, `expected the WGSL module's functions, found ${fns.length}`);
+  const offenders = fns
+    .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
+    .map((f) => f.name);
+  DERIV.lastIndex = 0;
+  assert.deepEqual(offenders, [],
+    "a derivative (or a wrapper around one) lives outside a fragment entry point");
+
+  // Uniform means before the FIRST branch, not merely inside fs_main: an early
+  // `return` or an `if` above the derivative poisons everything after it.
+  for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
+    DERIV.lastIndex = 0;
+    const firstBranch = f.body.search(/\b(if|for|while|loop|switch|return|discard)\b/);
+    for (const d of f.body.matchAll(DERIV)) {
+      assert.ok(firstBranch === -1 || d.index < firstBranch,
+        `${f.name}: ${d[1]} at ${d.index} sits after the first branch at ${firstBranch}`);
+    }
+  }
+  DERIV.lastIndex = 0;
+
+  // …and the footprint must reach every consumer as a parameter.
+  for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
+                    /let fwTrk = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
+                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos\);/,
+                    /roadMarkings\(&albedo, &rough, in\.trk, fwTrk\);/,
+                    // The one the first fix missed: this sits behind `if (detail
+                    // > 0.001)`, so it must READ the hoisted footprint.
+                    /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
+    assert.match(CHUNKS_SOURCE, re, `footprint plumbing changed: ${re}`);
+  }
+});
+
+test("the MAT array sampler asks for anisotropy, like GLX and TLX", () => {
+  // GLX caps the MAT array at aniso 4 and TLX sets anisotropy = 4; WGX asked for
+  // none, so tarmac went to mip mush at grazing angles on the WebGPU backend
+  // alone. WebGPU only allows maxAnisotropy > 1 when all three filters are
+  // "linear", and a rejecting driver must fall back rather than fail create().
+  assert.match(WGX_SOURCE, /maxAnisotropy:\s*4/);
+  const desc = /const _matSampDesc = \{[\s\S]*?\};/.exec(WGX_SOURCE);
+  assert.ok(desc, "the MAT sampler descriptor moved");
+  for (const f of ["magFilter", "minFilter", "mipmapFilter"]) {
+    assert.match(desc[0], new RegExp(`${f}:\\s*"linear"`), `${f} must be linear for maxAnisotropy`);
+  }
+  assert.match(WGX_SOURCE, /catch \(_\) \{\s*matArraySamp = device\.createSampler\(_matSampDesc\);/);
+});
+
 test("setMaterialMaps owns pack textures and destroys them on unload/replace", async () => {
   // GLX deletes prior arrays in setMaterialMaps; WGX used to orphan GPUTexture
   // objects on unload/tier-swap and left materialMapState stale only via flags
@@ -988,13 +1216,47 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   assert.equal(n3.texture.destroyed, true);
 });
 
-test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 removed", () => {
-  // In WGSL, derivatives (dpdx, dpdy, fwidth) must only be called in uniform control flow.
-  // fw1() inside conditional branches/helper functions caused shader compilation failures on strict compilers.
-  assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 helper must be removed in favor of uniform derivatives");
-  assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
-  assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
-  assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+test("WGSL derivative uniform control flow: fw1 is gone for good", () => {
+  // Two sessions fixed this independently and picked different names — fwWpos/
+  // fwTrk on the deploy lineage, fwW/fwT here (via the fw2/fw3 wrappers, so the
+  // hoist is one call rather than four dpdx). The naming is arbitrary; what is
+  // NOT arbitrary is that no scalar fw1 wrapper exists to be called from a
+  // material branch. That was the original bug, and it survived the first fix as
+  // dead code. The plumbing itself is asserted by "no WGSL derivative sits where
+  // control flow can be non-uniform" above; this pins the deletion.
+  assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 must not come back — a wrapper hides the derivative");
+  assert.doesNotMatch(CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""), /\bfw1\s*\(/, "no calls to fw1 may remain");
+});
+
+test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white road)", () => {
+  // The mechanism the hoist above fixes, pinned per-helper: these functions
+  // all early-return on per-fragment values (roadMarkings on trk.z > 0.5 — the
+  // road surface itself), so a derivative INSIDE any of them either
+  // invalidates the whole lit pipeline (enforcing Dawn: WGX silently fell back
+  // to GLX) or executes UNDEFINED values exactly where the returns diverge
+  // (warning-mode Dawn: the entire road + shoulders rendered NaN-white on
+  // phones while grass, walls and cars — hw 0, early return before any
+  // derivative — looked fine). Widths are computed at fs_main top and threaded
+  // in; every pattern width is linear in them, so the chain-rule scaling is
+  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
+                   "applyMaterialNormal", "applyMaterial", "roadMarkings"];
+  for (const name of helpers) {
+    const m = CHUNKS_SOURCE.match(new RegExp("fn " + name + "\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}", ""));
+    assert.ok(m, "helper fn " + name + " exists in wgsl-chunks.js");
+    assert.doesNotMatch(m[0], /dpdx|dpdy|fwidth|fw1\(/,
+      "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
+  }
+});
+
+test("_mkBuffer uses writeBuffer (not mappedAtCreation)", () => {
+  // Dawn's mappable pool exhausts on the ~35 MB chunked scenery buffer and then
+  // fails even 208-byte meshes (measured 2026-08-17; white world with HUD only).
+  // Strip line comments first — the writeBuffer rationale still names the old flag.
+  const code = WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(code, /mappedAtCreation\s*:\s*true/,
+    "_mkBuffer must use queue.writeBuffer, not mappedAtCreation");
+  assert.match(WGX_SOURCE, /queue\.writeBuffer\(buf/, "_mkBuffer must writeBuffer the payload");
 });
 
 test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {
