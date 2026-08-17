@@ -935,6 +935,20 @@ invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
 'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
 "orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
 second run you forgot is indistinguishable from orphans by process count.
+One specific orphan bites the NEXT run: a superseded/killed batch can strand
+its `python3 -m http.server 3456`, and the following direct `npx playwright
+test` then dies instantly with "Process from config.webServer was not able to
+start. Exit code: 1" (measured 2026-08-17). `pgrep -af http.server`, kill it,
+re-run — that error is the port, not the code.
+
+**A waiter is not a work slot.** Starting a browser run and then sitting in a
+blocking wait wastes the whole run's wall time (measured 2026-08-17: 17 idle
+minutes on one `--wait`). Start the run in the BACKGROUND and spend the run
+doing what it permits: docs edits, test/tools edits, log analysis, commit
+prep, subagent audits — everything except `js/`/`css/` edits and the
+`?v=N`/`version.json` bump, which stay queued until the terminal line. Check
+the log for `= run (passed|failed|timedout|interrupted)` when you come back;
+never re-enter a foreground wait just to "keep an eye on it".
 
 **`waitForFunction` on a rendering page.** Playwright polls the predicate on
 `requestAnimationFrame`; a SwiftShader page running the game loop starves the

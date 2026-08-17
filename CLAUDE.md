@@ -21,7 +21,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 113 Playwright
-specs plus 95 `node --test` unit suites
+specs plus 95 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **`npm install` FIRST on a fresh container** — a missing `node_modules`
@@ -33,12 +33,16 @@ and is slow. The rules:
   either strands the other, and browser+browser pairing is the measured
   source of every 120 s timeout class. Pair a browser group only with a
   node-only group.
-- **Browser groups run in the BACKGROUND.** Start with `test-bg.mjs`, watch
-  the log for the terminal line `= run (passed|failed|timedout|interrupted)`
-  — never a looser pattern, never the process table, never `| tail` on a live
-  log. Long queues need a resumable driver + an uncapped waiter (`Monitor`
-  caps at 30 min even with `persistent`); `docs/TESTING.md` §Field notes has
-  the worked example.
+- **Browser groups run in the BACKGROUND — and so do you.** Start with
+ `test-bg.mjs`, watch the log for the terminal line
+ `= run (passed|failed|timedout|interrupted)` — never a looser pattern, never
+ the process table, never `| tail` on a live log. NEVER sit in a blocking
+ wait on a run: spend its wall time on work the run permits (docs, tests,
+ tools, analysis, subagent audits) and come back to the log. Long queues
+ need a resumable driver + an uncapped waiter (`Monitor` caps at 30 min even
+ with `persistent`); `docs/TESTING.md` §Field notes has the worked example.
+ A superseded batch can strand its port-3456 server — "config.webServer was
+ not able to start" on the next run means kill the stale `http.server`.
 - **Run what the change needs**: `test:tiny` after any edit →
   `test:tooling-fast` in the loop → the groups `pick-tests` names. Track or
   scenery edits run `verify-track.cjs <id>` FIRST.
