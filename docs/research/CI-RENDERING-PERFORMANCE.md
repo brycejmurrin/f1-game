@@ -82,6 +82,31 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
 5. **Real GPU + `xvfb-run`** remains the path for hardware WebGL/WebGPU visuals;
    GitHub GPU runners still need driver load — see §1 point 3.
 
+### Cursor Cloud agent environment (2026-08-17)
+
+Cloud Agents here boot a **personal / dashboard-managed** environment (no
+committed `.cursor/environment.json`). The stock image had **no**
+`/usr/share/vulkan/icd.d/` — Lavapipe was missing until:
+
+```sh
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mesa-vulkan-drivers vulkan-tools
+# xvfb usually already present; install if missing
+```
+
+Persist by snapshotting the VM after install and **Save** on the environment
+dashboard (see root `AGENTS.md` §Cursor Cloud). Until Save lands, every new
+agent loses Lavapipe again.
+
+| Want | Do this |
+|------|---------|
+| WGX pixels | `node tools/wgx-capture.mjs montreal --lite` (soft-present; ignore blank MCP canvas) |
+| WGX on Lavapipe | `node tools/wgx-lavapipe-probe.mjs montreal --lite` |
+| TLX pixels | `node tools/gfx-probe.mjs --backend three --lite montreal` |
+| Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
+
+Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:
+`tools/README.md` (`wgx-capture`, `wgx-lavapipe-probe`, `gfx-probe`).
+
 **The stability argument is stronger than the speed one.** The cited report is
 explicit that slow canvas init was the *cause* of its flakiness — timeouts,
 elements not ready, interactions failing — and that the fix removed the need for
