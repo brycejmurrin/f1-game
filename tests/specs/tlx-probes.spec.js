@@ -211,10 +211,33 @@ test.describe("TLX — boot", () => {
     // skids.stamp() runs in render(), not act(). Stop inside the slide window,
     // then freeze() — freeze pauses physics but not rendering, so presented
     // frames stamp. See docs/archive/manual-probes/skid-probe.spec.js and docs/TESTING.md.
+    //
+    // park() FIRST, and the reason is the whole point of this comment. jump()
+    // teleports the player and nothing else, so it lands in the middle of
+    // whatever the AI field is doing at that wall-clock instant — and how far
+    // the field has travelled by then is a function of how many frames the box
+    // rendered while the waitForFunction above was polling. On a slow frame the
+    // player arrives clean and slides; on a fast one it arrives inside the pack,
+    // is hit, and ends the burst at 0.75 m/s (measured: s=588.2958561730244,
+    // x=8.06, byte-identical across runs). skids.stamp()'s gate is
+    // `(skid > 0.25 || offroad) && speed > 10` — a stopped car can never lay a
+    // mark, so that outcome is not a slow assertion, it is an unsatisfiable one,
+    // and the spec burns the full 360 s timeout. Measured flipping with
+    // RENDERER-ONLY commits either way (00bca5b red, 08b96a3 green, both with
+    // identical physics), which is what identifies the setup, not the backend,
+    // as the variable. park() is the shipped hook that shoves the field 600 m
+    // back (js/game/apex.js) and pins state to "race" — the stint is then solo
+    // and the outcome no longer depends on frame pacing.
     await page.evaluate(() => {
+      window.__apex.park(0.1);
       window.__apex.jump(0.1, 70);
       window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 30);
     });
+    // Assert the PREMISE before waiting 60 s on its consequence: a car that is
+    // no longer driving reports that in a second, instead of as a timeout whose
+    // message names the renderer.
+    const drive = await page.evaluate(() => window.__apex.physState());
+    expect(drive.speed).toBeGreaterThan(10);
     await page.evaluate(() => window.__apex.freeze(true));
     // Two presented frames, and a TLX frame on a built Monza under SwiftShader
     // is seconds, not milliseconds — so this bound is generous on purpose.
