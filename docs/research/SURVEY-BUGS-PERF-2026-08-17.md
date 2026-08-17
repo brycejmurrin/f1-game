@@ -1,11 +1,16 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
 **Status (2026-08-17 deferred pass):** Remaining survey items landed on
-`cursor/survey-deferred-tests-8ee4` — pine/tree scale-linear instance reuse,
-collision arc-bucket broadphase, marble cap/rest/far trim, WGX draw-UBO flush
-(already on tip) + god-ray top-6 partial select (GLX+WGX), TLX matCache eviction
-skips `dispose()` on r184 (#33952). Test runners default to sequential with
-per-file/group logging (`tools/tooling-fast.mjs`, `test-bg` concurrent cap 1).
+`cursor/survey-deferred-tests-8ee4` — collision arc-bucket broadphase, marble
+cap/rest/far trim, WGX draw-UBO flush (already on tip) + god-ray top-6 partial
+select (GLX+WGX), TLX matCache eviction skips `dispose()` on r184 (#33952).
+Test runners default to sequential with per-file/group logging
+(`tools/tooling-fast.mjs`, `test-bg` concurrent cap 1).
+
+Pine/tree instance reuse was attempted (unit-Y + `[1,hQ,1]`) and **reverted**:
+even Y-only scale + 0.5 m height bins grew Monza severe clips 20→55 and
+Silverstone float 0→1. Re-parameterise belongs with a dedicated baseline regen
+(SCENE-GRAPH-PLAN §S4), not a silent look change.
 
 Earlier same-day board (items 1–7 + High/Medium follow-ups) shipped via
 `cursor/survey-bugs-perf-8ee4` onto deploy.
