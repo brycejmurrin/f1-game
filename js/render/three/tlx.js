@@ -1379,7 +1379,11 @@ const TLX = (function () {
               continue;
             }
             if (rec.chunked) {
-              if (!chunkedSys) continue;
+              // A 64px blurred cube cannot resolve the city. On software GL
+              // the chunked cull+draw is the fill that made M9 miss 360 s
+              // (measured 2026-08-17: six full Monza presents into the cube
+              // after M5 had already left the GPU process at 387%).
+              if (softwareGL || !chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, null, 0);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
@@ -1388,15 +1392,21 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          const prevSky = scene.backgroundNode;
           try {
             // Feedback-loop guard: the glass we're about to draw is an
             // envSurface that samples the cube — point the shared cube node at
             // the black dummy while envRT is the render target, restore after.
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
-            pinSkyMaterial();
+            // Software GL: the procedural sky is a second full TSL compile+
+            // fill per face. Reflections stay road/terrain; the 64px cube
+            // never resolved the sky disc anyway.
+            if (softwareGL) scene.backgroundNode = null;
+            else pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
+          if (softwareGL) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(null);
           if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws

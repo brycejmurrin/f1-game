@@ -202,6 +202,11 @@ test.describe("TLX — boot", () => {
     expect(night.on).toBe(true);
     expect(night.stars).toBe(1);
     expect(errors).toEqual([]);
+    // Night rebuild leaves the game loop presenting a full SwiftShader frame.
+    // Stop it before Playwright tears the page down — the next test's
+    // beforeEach (new context) otherwise waits on a 387% GPU process and
+    // dies with "timeout while running beforeEach" (measured M9 after M5).
+    await stopRendering(page);
   });
 
   test("M6 FX paths record on a night race (glow halos, blob shadows, decals)", async ({ page }) => {
