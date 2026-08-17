@@ -858,7 +858,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let shaftMul = max(sunShaft, 0.0);
   let shaftDecay = select(0.82, U.fx.w, U.fx.w > 0.0);
   let shaftSpread = select(1.0, U.gradeHi.w, U.gradeHi.w > 0.0);
-  if (shaftMul > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0) {
+  if (shaftMul > 0.0) {
     let toSun = sunUV - in.uv;
     let dist = length(toSun);
     if (dist > 0.005) {

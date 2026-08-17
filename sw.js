@@ -217,6 +217,10 @@ self.addEventListener("fetch", (event) => {
   // fallback should win once it's clearly not going to resolve promptly; the
   // real network response, if it does eventually land, still gets cached.
   const isVersion = url.pathname.endsWith("version.json");
+  // Shell bust navigations (?b= from index.html's version guard) must never
+  // fall back to precached index.html — a slow/dead network would serve the
+  // stale shell, and the one-shot sessionStorage guard blocks a second try.
+  const isShellBust = req.mode === "navigate" && url.searchParams.has("b");
   if (req.mode === "navigate" || isVersion) {
     // version.json is NEVER written to the cache here. index.html fetches it as
     // "version.json?_=<Date.now()>", so every launch would put one more entry
@@ -245,6 +249,7 @@ self.addEventListener("fetch", (event) => {
       // request with the shell's HTML (survivable only because the version
       // guard swallows the parse error).
       if (isVersion) return (await caches.match("version.json")) || Response.error();
+      if (isShellBust) return (await caches.match(req)) || Response.error();
       return (await caches.match(req)) || (await caches.match("index.html")) || Response.error();
     })());
     return;

@@ -245,8 +245,11 @@ const NetNostr = (function () {
     const theirTopic = await roomId(code + (hosting ? "|answer" : "|offer"));
 
     const sockets = [];
+    const socketUrl = new Map();
     let current = send || null;
     const seen = new Set();
+    const rejectedBy = new Set();
+    let lastPubId = null;
 
     return new Promise((resolve) => {
       let done = false, settled = false;
@@ -273,6 +276,10 @@ const NetNostr = (function () {
           let bin = "";
           for (let i = 0; i < sealed.length; i++) bin += String.fromCharCode(sealed[i]);
           frame = await mod.createEvent(mineTopic, btoa(bin));
+          try {
+            const parsed = JSON.parse(frame);
+            if (parsed[1] && parsed[1].id) lastPubId = parsed[1].id;
+          } catch (e) { /* non-fatal — OK tracking just won't fire */ }
         } catch (e) { return; }
         for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) {} } }
       };
@@ -305,6 +312,7 @@ const NetNostr = (function () {
         try { out = await reply(text); } catch (e) { out = null; }
         if (done) return;
         if (!out) {
+          seen.delete("__answering");
           finish({ ok: false, error: "reply_failed", message: "Could not answer that invite." });
           return;
         }
@@ -338,6 +346,7 @@ const NetNostr = (function () {
         let w;
         try { w = new WebSocket(url); } catch (e) { continue; }
         sockets.push(w);
+        socketUrl.set(w, url);
         w.onopen = () => {
           opened++;
           try { w.send(mod.subscribe("s" + Math.floor(Date.now() % 1e6), theirTopic)); } catch (e) {}
@@ -352,10 +361,30 @@ const NetNostr = (function () {
           // listener, which paints a full-screen error overlay over the lobby.
           // NIP-01 frames are arrays anyway, so this is also the shape check.
           if (!Array.isArray(m)) return;
+          if (m[0] === "OK" && lastPubId && m[1] === lastPubId) {
+            const who = socketUrl.get(w) || String(opened);
+            if (m[2] === false && /block|spam|rate|restrict|not permitted|invalid|reject|pow|proof.of.work/i.test(String(m[3] || ""))) {
+              rejectedBy.add(who);
+            }
+            return;
+          }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string") heard(m[2].content);
         };
         w.onerror = () => {};
       }
+
+      setTimeout(() => {
+        if (done) return;
+        const live = sockets.filter((w) => w.readyState === 1).length;
+        if (live && rejectedBy.size >= live && onFail) {
+          try {
+            onFail({ ok: false, error: "all_rejected", advisory: true,
+              message: "Every room relay is refusing this code. It may still connect —"
+                     + " if it does not, use the invite link or QR, which need no"
+                     + " third party." });
+          } catch (e) {}
+        }
+      }, RELAY_CHECK_MS);
 
       // Nothing to publish yet? Mint it now rather than waiting for an arrival.
       if (!current && mintOffer) {

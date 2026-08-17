@@ -292,7 +292,8 @@ const CEILINGS = {
   // -> 8293 PERF-FINDINGS Δprog 5.01% / sand audit (pre-reject, cull hoist, shared player anchor, invert/LED gates).
   // -> 8311 PERF-FINDINGS shadow ribbon chunk: road+terrain castShadowChunked vs
   // sun ortho (~89% tris culled; depth bit-identical) + freeChunkedMesh on reload.
-  "js/game.js": 8311,
+  // -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
+  "js/game.js": 8321,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

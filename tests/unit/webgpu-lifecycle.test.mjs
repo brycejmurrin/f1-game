@@ -683,7 +683,8 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
 test("WGX god-ray and env probe match GLX gates", () => {
   // Volumetric shafts must not require sun.onScreen (GLX post.js).
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
-  assert.match(WGX_SOURCE, /grStr > 0 && sun && sun\.shaft > 0/);
+  assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
+  assert.match(WGX_SOURCE, /!f\.noEnv/);
   // Env probe respects PerfTry.envCull (300 m cap).
   assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
