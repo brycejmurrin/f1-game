@@ -1306,3 +1306,51 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
+
+// ── auto-layout identity: pipelines that SHARE a bind group cannot use "auto" ──
+//
+// `layout: "auto"` mints a fresh GPUBindGroupLayout per pipeline, and WebGPU
+// compares those by IDENTITY, not by shape. So a bind group built from pipeline
+// A is rejected on pipeline B even when the entries are character-for-character
+// the same — and the rejection is not a dropped draw. Dawn invalidates the whole
+// command buffer ("[Invalid CommandBuffer] is invalid due to a previous error"
+// at Queue.Submit), losing every other draw recorded in that pass.
+//
+// Measured on software adapters with tools/wgpu-flag-test.mjs before the fix:
+// 176 (SwiftShader) and 192 (Lavapipe) GPU errors per run, from two twin pairs —
+// sky/skyMS and particle/particleAdd, each a blend-or-MSAA variant sharing one
+// cached bind group. Both now share an explicit pipeline layout; the run is 0/0.
+//
+// The rule this asserts is narrow on purpose: where setPipeline picks between
+// SEVERAL pipelines, none of them may be auto-laid-out, because one bind group
+// has to satisfy all of them.
+function autoLayoutOffenders(src) {
+  const auto = new Set();
+  for (const m of src.matchAll(/(\w+)\s*=\s*device\.createRenderPipeline\(\{\s*(?:\/\/[^\n]*\n\s*)*layout:\s*"auto"/g)) {
+    auto.add(m[1]);
+  }
+  const out = [];
+  for (const m of src.matchAll(/\.setPipeline\(([^;]+)\);/g)) {
+    const expr = m[1];
+    if (!/\?/.test(expr)) continue;                       // a single pipeline can always own its group
+    const named = [...new Set([...expr.matchAll(/\b([A-Za-z_]\w*)\b/g)].map((x) => x[1]))];
+    const offending = named.filter((n) => auto.has(n));
+    if (offending.length) out.push({ expr: expr.trim(), offending });
+  }
+  return out;
+}
+
+test("no pipeline chosen from several is auto-laid-out (one bind group must fit all)", () => {
+  assert.deepEqual(autoLayoutOffenders(WGX_SOURCE), [],
+    "a shared bind group on an auto-layout pipeline invalidates the whole command buffer");
+});
+
+test("the auto-layout guard actually catches the shape it is written for", () => {
+  // A guard that cannot fail is decoration. Put the defect back in a copy: the
+  // sky pair on its shared explicit layout, reverted to "auto".
+  const broken = WGX_SOURCE.replace(/layout: skyLayout,/g, 'layout: "auto",');
+  assert.notEqual(broken, WGX_SOURCE, "fixture must actually mutate the sky pipelines");
+  const found = autoLayoutOffenders(broken);
+  assert.ok(found.some((f) => /skyPipelineMS/.test(f.expr)),
+    "reverting the sky pair to auto must be reported: " + JSON.stringify(found));
+});

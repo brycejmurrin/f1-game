@@ -967,8 +967,26 @@ const WGX = (function () {
       // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
       // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
       // melted world; cars still visible because they draw after the sky).
+      // EXPLICIT layout, shared by both sky pipelines — `layout: "auto"` would
+      // not survive the MSAA twin below. An auto layout is generated PER
+      // PIPELINE and identity-compared, so a bind group made from one pipeline
+      // is invalid on any other pipeline even when the shape is identical: the
+      // MS path set skyBindGroup (built from the non-MS pipeline) on
+      // skyPipelineMS, and Dawn's answer is not a dropped draw but "[Invalid
+      // CommandBuffer] is invalid due to a previous error" at Queue.Submit —
+      // the WHOLE lit-pass command buffer, sky and world and cars together.
+      // Measured on software adapters via tools/wgpu-flag-test.mjs: 176–194 GPU
+      // errors per run and a near-black canvas ([32,30,29] mid-pixel), which
+      // read as "software WebGPU does not composite" for as long as the two
+      // pipelines were separately auto-laid-out. One layout object, one bind
+      // group, valid on both.
+      const skyG0Layout = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: { type: "uniform" } }],
+      });
+      const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [skyG0Layout] });
       skyPipeline = device.createRenderPipeline({
-        layout: "auto",
+        layout: skyLayout,
         vertex: { module: skyModule, entryPoint: "vs_main" },
         fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
         primitive: { topology: "triangle-list" },
@@ -976,7 +994,7 @@ const WGX = (function () {
       });
       if (MSAA_COUNT > 1) {
         skyPipelineMS = device.createRenderPipeline({
-          layout: "auto",
+          layout: skyLayout,
           vertex: { module: skyModule, entryPoint: "vs_main" },
           fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
           primitive: { topology: "triangle-list" },
@@ -985,7 +1003,7 @@ const WGX = (function () {
         });
       }
       skyBindGroup = device.createBindGroup({
-        layout: skyPipeline.getBindGroupLayout(0),
+        layout: skyG0Layout,
         entries: [{ binding: 0, resource: { buffer: skyUBO } }],
       });
 
@@ -1352,8 +1370,18 @@ const WGX = (function () {
             ] }] };
           const pPrim = { topology: "triangle-list", cullMode: "none" };
           const pDepth = { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" };
+          // Shared EXPLICIT layout, for the same reason as the sky pair: these
+          // two differ only in blend, _particleBG is cached once, and drawParticles
+          // picks the ADD twin for sparks — an auto layout is per-pipeline and
+          // identity-compared, so that draw would invalidate the whole lit-pass
+          // command buffer rather than merely misbehave.
+          const partG0 = device.createBindGroupLayout({
+            entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+              buffer: { type: "uniform" } }],
+          });
+          const partLayout = device.createPipelineLayout({ bindGroupLayouts: [partG0] });
           pParticle = device.createRenderPipeline({
-            layout: "auto",
+            layout: partLayout,
             vertex: pVert,
             fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
             primitive: pPrim,
@@ -1364,7 +1392,7 @@ const WGX = (function () {
           // premultiplies when U.eyeAdd.w=1; alpha-blend + alpha=1 would REPLACE
           // the HDR scene instead of adding.
           pParticleAdd = device.createRenderPipeline({
-            layout: "auto",
+            layout: partLayout,
             vertex: pVert,
             fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
             primitive: pPrim,
@@ -1374,7 +1402,7 @@ const WGX = (function () {
           particleUBO = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
           // Static layout+UBO — create once; was createBindGroup every drawParticles.
           _particleBG = device.createBindGroup({
-            layout: pParticle.getBindGroupLayout(0),
+            layout: partG0,
             entries: [{ binding: 0, resource: { buffer: particleUBO } }],
           });
         }
@@ -2433,6 +2461,22 @@ const WGX = (function () {
 
     // ── begin(frame): open the lit pass into the HDR scene target ──
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
+    // Buffers a draw path REPLACED mid-frame. destroy() cannot happen inline:
+    // the open pass has already recorded a reference to the old buffer, and
+    // Dawn's answer at submit is "[Buffer] used in submit while destroyed" —
+    // which invalidates the whole command buffer, so every other draw in that
+    // frame is lost too, not just the one that grew. Destroying AFTER submit is
+    // legal (the implementation keeps the memory alive until the commands
+    // complete), so the reap runs there. The explicit free* APIs are NOT routed
+    // through this: the game calls them on teardown, outside a frame.
+    const _freeAfterSubmit = [];
+    function _deferDestroy(res) { if (res) _freeAfterSubmit.push(res); }
+    function _reapDeferred() {
+      for (let i = 0; i < _freeAfterSubmit.length; i++) {
+        try { _freeAfterSubmit[i].destroy(); } catch (_) { /* already gone */ }
+      }
+      _freeAfterSubmit.length = 0;
+    }
     function begin(frame) {
       if (_lost) return false;
       try {
@@ -3064,6 +3108,7 @@ const WGX = (function () {
       }
       _queueSoftPresent();
       device.queue.submit([encoder.finish()]);
+      _reapDeferred();
       _readSoftPresent();
       _readOutputProbe();
       if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
@@ -3449,7 +3494,10 @@ const WGX = (function () {
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
       if (!_particleCap || _particleCap < floatCount) {
-        if (particleVBO) try { particleVBO.destroy(); } catch (_) { /* grow replaces it */ }
+        // Measured: sparks (the ADD twin) arrive after the alpha batch has
+        // already drawn from this buffer, so the grow lands INSIDE the open lit
+        // pass — 7 dropped submits per run before this was deferred.
+        _deferDestroy(particleVBO);
         _particleCap = Math.max(floatCount, 2560);
         particleVBO = device.createBuffer({
           size: _particleCap * 4,
