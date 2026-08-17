@@ -10,7 +10,24 @@ cd "$ROOT"
 BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"
 export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"
 
-mkdir -p "$BROWSERS_PATH"
+# Fresh environment builds run install as ubuntu without an existing
+# /opt/pw-browsers — mkdir there needs passwordless sudo (CONFIG_CHANGE
+# build 2026-08-17 failed with Permission denied otherwise).
+ensure_browsers_dir() {
+  if [[ -d "$BROWSERS_PATH" ]]; then
+    return 0
+  fi
+  if mkdir -p "$BROWSERS_PATH" 2>/dev/null; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n mkdir -p "$BROWSERS_PATH" \
+      && sudo -n chown "$(id -u):$(id -g)" "$BROWSERS_PATH"; then
+    return 0
+  fi
+  echo "WARN: cannot create $BROWSERS_PATH (need write or passwordless sudo)" >&2
+  return 1
+}
+ensure_browsers_dir
 
 # npm deps first (playwright package provides the installer). Skip browser
 # download during npm install — we place Chromium explicitly below.
