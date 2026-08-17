@@ -484,7 +484,13 @@ const WGX = (function () {
     // readbacks climb the loss ladder (full→lite→minimal) then surrender to GLX.
     let _outProbeBuf = null, _outProbePending = false, _outProbeN = 0, _outBlack = 0;
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
+    let _outProbeOff = false;
+    try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
     function _wgxEscalate(why) {
+      if (_outProbeOff) {
+        try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
+        return;
+      }
       if (_lost) return;
       _lost = true;
       _healReset();
@@ -522,7 +528,7 @@ const WGX = (function () {
       _wgxEscalate("runtime output black (GPU drew nothing)");
     }
     function _queueOutputProbe() {
-      if (_lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
+      if (_outProbeOff || _lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
       if (!sceneTex || !encoder || typeof encoder.copyTextureToBuffer !== "function") return;
       try {
         if (!_outProbeBuf) {
@@ -1787,7 +1793,9 @@ const WGX = (function () {
       try { Log.warn("gfx", "WGX " + what + " alloc failed —", e); } catch (_) { /* harness */ }
       const msg = (e && e.message) || String(e);
       if (/too large|out of memory|device lost|invalid device|destroyed/i.test(msg)) {
-        _wgxEscalate(what + " alloc: " + msg.slice(0, 120));
+        if (_outProbeOff) {
+          try { Log.warn("gfx", "WGX capture mode — suppressed alloc escalate:", msg.slice(0, 80)); } catch (_) { /* harness */ }
+        } else _wgxEscalate(what + " alloc: " + msg.slice(0, 120));
       }
     }
     function createMesh(data) {
