@@ -200,6 +200,12 @@ python3 tools/probe-mcp.py call chrome_<tool> '<json>'
 python3 tools/probe-mcp.py serve   # .mcp.json "probe" entry — every chrome_* + tinyfish_* tool
 ```
 
+A bare `call` spawns a fresh Chromium per invocation and loses all page state
+(measured 2026-08-17). For multi-call flows run
+`python3 tools/probe-mcp.py chrome-start` first — one persistent browser
+behind `127.0.0.1:3712` that `call` auto-routes to — and `chrome-stop` before
+any Playwright run. Details in `.claude/skills/mcp-probe`.
+
 Local agents can also drive chrome-devtools via `tools/chrome-devtools-mcp.sh run`
 over stdio (`tools/cdmcp-cli.py`, `tools/ui-readable-survey-mcp.py`,
 `tools/mcp-cli.mjs`). When writing a custom client, handle **server→client**

@@ -903,8 +903,8 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
-| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry (no Chromium / no TinyFish network) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network) |
 
 ---
 
