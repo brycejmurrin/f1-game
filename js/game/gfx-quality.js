@@ -1,6 +1,7 @@
 /* Apex 26 — GRAPHICS quality presets + the RENDERER cycle. Owns the four
-   presets, their persistence, #pm-gfx, and #pm-renderer (WEBGL2 / THREE /
-   WEBGPU). RENDERER lives here so SETTINGS can show and flip it at
+   presets, their persistence, #pm-gfx, #pm-renderer (WEBGL2 / THREE /
+   WEBGPU), and #pm-renderer-reset (forget the saved pick + crash flags).
+   RENDERER lives here so SETTINGS can show and flip it at
    DOMContentLoaded — js/game.js is an async IIFE that awaits deferred
    backend scripts on an opt-in, and a hidden button wired after that await
    is invisible for the whole load and dead if the IIFE never reaches it.
@@ -124,6 +125,57 @@ function paintRenderer(rb) {
     : ("RENDERER: " + backendLabel(pref));
 }
 
+// Keys the RESET RENDERER button drops. The GRAPHICS preset (apex26.gfxHigh
+// + GameStore gfxPreset) is a quality floor, not a backend pick — leave it.
+// Context-loss latches (envProbeOff / perChunkOff / ctxLostReloads) ARE
+// renderer crash state: GLX/TLX write them on a GPU reset, and leaving them
+// made RESET boot a "clean" WebGL2 with probe and per-chunk lamps still off.
+// Session flags are the iPhone recovery half: gfxClaimFail skips the opt-in
+// for the rest of the tab, and gfxBound is what the label reads after a
+// fallback, so a wipe that left them would reload into the same stuck state.
+const RENDERER_LS_KEYS = [
+  "apex26.gfxBackend", "apex26.gfxBackendProbe",
+  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
+  "apex26.gfxTlxFail",
+  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.tlxForceGL", "apex26.tlxViz",
+];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads"];
+
+function clearRendererStorage() {
+  const removed = [];
+  try {
+    for (const k of RENDERER_LS_KEYS) {
+      if (localStorage.getItem(k) != null) { localStorage.removeItem(k); removed.push(k); }
+    }
+  } catch (_) { /* private mode / blocked storage: in-memory boot still uses the empty pref */ }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* same */ }
+  return removed;
+}
+
+function initReset() {
+  const anchor = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
+  const host = anchor && anchor.parentNode;
+  if (!host || document.getElementById("pm-renderer-reset")) return;
+  // Injected, not written into index.html: same reason PerfTry / CockpitOpts
+  // generate their SETTINGS rows — the shell's DOM-node ratchet counts tags
+  // in the file, and this button mints no new CSS class.
+  const btn = document.createElement("button");
+  btn.id = "pm-renderer-reset";
+  btn.textContent = "RESET RENDERER";
+  btn.title = "Forget the saved renderer pick and the crash/fallback flags, then reload on WebGL2. Use this if THREE or WEBGPU crashed or will not load, especially on iPhone.";
+  host.insertBefore(btn, anchor.nextSibling);
+  btn.onclick = () => {
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    clearRendererStorage();
+    btn.textContent = "RESET RENDERER — RELOADING…";
+    // A settings-driven reload with the crash sentinel armed looks like a
+    // jetsam kill (js/game/perf.js) and would cost a quality strike.
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
+    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+  };
+}
+
 function initRenderer() {
   const rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
   if (!rb) return;
@@ -148,7 +200,7 @@ function initRenderer() {
     // the sniffed baseline instead of a rung a long-dead session earned.
     if (next === "webgpu") {
       try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
-        localStorage.removeItem("apex26.gfxWgxOk"); } catch (_) {}
+        localStorage.removeItem("apex26.gfxWgxOk"); localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) {}
       try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
     }
     rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
@@ -195,6 +247,7 @@ function init() {
   if (!byId(_cur)) _cur = defaultId(_isMobile);
   applyLive();
   initRenderer();
+  initReset();
 
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (!btn) return;      // shell without the button: the tier floor still applied above
@@ -218,5 +271,6 @@ if (typeof document !== "undefined") {
 }
 
 return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
-  nextBackend, backendLabel, readBackend };
+  nextBackend, backendLabel, readBackend, clearRendererStorage,
+  RENDERER_LS_KEYS, RENDERER_SS_KEYS };
 })();

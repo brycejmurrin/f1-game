@@ -409,9 +409,9 @@ most-load-bearing first.
   WGX LIT now classify chrome (`SURFACES.mirror = 27`) and key wet reflections
   off `wetSheen` (porous ground no longer mirrors lamps). WGX FrameU `params9`
   carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` /
-  `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. Remaining WGX sky reductions
-  (overcast grey-shift, twilight horizon bank, azimuthal gradient) are
-  renderer-parity work, not GLX defects.
+  `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. WGX sky now ports the overcast
+  grey-shift, twilight horizon bank, and azimuthal gradient. Remaining honest
+  WGX gap is TAA (still off).
 - **The relational agent policy — FIXED (2026-08-13).** The under-drive was
   never the speed caps: pure feedback steering cannot track road curvature
   at speed (traced: 13.9 m road departure at 55 m/s with steer 0.04). The
