@@ -598,7 +598,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // sheet). Distance-faded (would alias to shimmer) and wetness-faded (the water
   // film levels the surface).
   if (detail > 0.001) {
-    let mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    var mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    // Footprint fade (GLX lit.js): grazing road pixels span metres; without this
+    // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
+    // the car. Distance fade alone misses a near-but-grazing patch.
+    // fwidth(x) = abs(dpdx)+abs(dpdy); WGSL has no fwidth — same magnitude.
+    let mnFpAbs = max(abs(dpdx(in.wpos.x)) + abs(dpdy(in.wpos.x)),
+                      abs(dpdx(in.wpos.z)) + abs(dpdy(in.wpos.z)));
+    mnFade = mnFade * clamp(1.0 - (mnFpAbs - 0.15) / 0.70, 0.0, 1.0);
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
       let e = 0.22;
@@ -678,12 +685,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
   }
-  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm);
-  roadMarkings(&albedo, &rough, in.trk);
-
-  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js,
-  // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
-  // crack lines are dropped). Multiplicative, so it darkens as much as it lightens.
+  // [Block 1b] Procedural ground ALBEDO grain BEFORE applyMaterial/roadMarkings
+  // (GLX lit.js order). Grain-after-markings muddied white line paint.
   var patchM = 0.5;
   if (detail > 0.0) {
     let wp = in.wpos.xz;
@@ -696,6 +699,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
+  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm);
+  roadMarkings(&albedo, &rough, in.trk);
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
@@ -796,7 +801,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
         let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
         let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
-        let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
+        // STATIC map only: biasTerm × (shadowRange/80) — GLX lit.js sampleShadow.
+        // Unscaled, the same absolute push is ~25× too much at SHADOW DISTANCE 16
+        // and barely covers acne at 200. Car map below keeps the unscaled term
+        // (GLX multiplies by uCarBiasScale separately; scaling here would square).
+        let biasTerm = clamp(slopeB, 0.0005, 0.004) + max(F.params2.w, 0.0) * 0.5;
+        let refD = ndc.z - biasTerm * (shRange / 80.0);
         // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
         let aDist = distance(in.wpos, fadeCtr);
         let near = aDist < shRange * 0.80;
@@ -897,7 +907,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Dc = D_GGX(NoHg, ccA);
     let Vc = V_SmithGGX(NoVg, NoLg, ccA);
     let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;
-    var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * clearcoat;
+    // keyMul: GLX includes uKeyMul so KEY LIGHT dims this lobe with the rest of
+    // the direct sun (lit.js). Without it a keyMul of 0 left every clearcoated
+    // car with a full-brightness sun streak on WebGPU.
+    var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * keyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color = color + ccCol;
   }
@@ -1129,9 +1142,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
   // valid "no hot core", so the uploader always packs the resolved value.
   fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
-  // FOG TINT knob (params3.y, -1..1): warm (+) or cool (-) the distance haze.
+  // FOG WARM / COOL white-balance (params3.y; GLX uFogTint asymmetric mix).
   let fTint = F.params3.y;
-  fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
+  fogCol = fogCol * vec3<f32>(
+    1.0 + max(fTint, 0.0) * 0.25 - max(-fTint, 0.0) * 0.12,
+    1.0 - abs(fTint) * 0.02,
+    1.0 - max(fTint, 0.0) * 0.25 + max(-fTint, 0.0) * 0.18);
   // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
   // glows around the lamps at night (mirrors GLX LIT_FS; F.params8.x = uLampFog).
   var lampFogC = vec3<f32>(0.0);
