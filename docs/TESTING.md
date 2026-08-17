@@ -1069,3 +1069,18 @@ snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
 three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
+`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
+spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
+endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
+errors. The leftover debug log still had "http cache … cache hit" followed by
+"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
+no tarball bytes, so every package re-fetched in parallel. The same VM's
+`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
+Envoy, so `apt-get update` cannot repair a snapshot that is missing
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
+(skip npm when `node_modules` is usable, `--no-audit --prefer-offline`,
+retries; do not fail the build on apt 404 when packages are already present).
+Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
+and `cdn.playwright.dev` if a cold snapshot must actually download.

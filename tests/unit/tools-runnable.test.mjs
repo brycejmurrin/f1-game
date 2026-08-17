@@ -70,6 +70,21 @@ test("every shell tool parses (bash -n)", () => {
   assert.deepEqual(broken, [], "a shell tool does not parse");
 });
 
+test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a usable snapshot)", () => {
+  const browsers = fs.readFileSync(path.join(TOOLS, "install-browsers.sh"), "utf8");
+  const cloud = fs.readFileSync(path.join(TOOLS, "cloud-agent-install.sh"), "utf8");
+  assert.match(browsers, /--no-audit/);
+  assert.match(browsers, /--prefer-offline/);
+  assert.match(browsers, /node_modules\/playwright/);
+  assert.match(browsers, /node_modules\/playwright\/cli\.js/);
+  assert.match(browsers, /Exit handler never called/);
+  assert.doesNotMatch(browsers, /^set -e/m);
+  assert.match(cloud, /mesa-vulkan-drivers/);
+  assert.match(cloud, /install-browsers\.sh/);
+  assert.match(cloud, /\/opt\/google\/chrome\/chrome/);
+  assert.doesNotMatch(cloud, /^set -e/m);
+});
+
 test("every python tool parses (compile)", () => {
   const broken = [];
   for (const f of FILES) {
