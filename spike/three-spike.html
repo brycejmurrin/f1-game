@@ -3,7 +3,7 @@
      Standalone: NOT part of index.html / tools/manifest.cjs / the test suite.
      Loads the real track-build pipeline (script list mirrors manifest TRACK_VM —
      hand-copied, can drift; fixed properly if this graduates) + ONE circuit,
-     then renders it with three.js r184 (vendored) via spike/three-spike.js.
+     then renders it with three.js r185.1 (vendored) via spike/three-spike.js.
      Run:  npx serve -l 3456 .   ->  http://localhost:3456/spike/three-spike.html
            ?gl=1 pins the WebGL2 backend (SwiftShader/CI); default auto-picks WebGPU.
            ?track=<id> picks a circuit (default singapore). -->
@@ -56,14 +56,14 @@
 <script src="../js/car/car3d.js"></script>
 <script src="../js/game/lighting.js"></script>
 
-<!-- three.js r184 (vendored) — the only ES-module island -->
+<!-- three.js r185.1 (vendored) — the only ES-module island -->
 <script type="importmap">
 {
   "imports": {
-    "three": "../vendor/three-0.184.0/three.webgpu.min.js",
-    "three/webgpu": "../vendor/three-0.184.0/three.webgpu.min.js",
-    "three/tsl": "../vendor/three-0.184.0/three.tsl.min.js",
-    "three/addons/": "../vendor/three-0.184.0/addons/"
+    "three": "../vendor/three-0.185.1/three.webgpu.min.js",
+    "three/webgpu": "../vendor/three-0.185.1/three.webgpu.min.js",
+    "three/tsl": "../vendor/three-0.185.1/three.tsl.min.js",
+    "three/addons/": "../vendor/three-0.185.1/addons/"
   }
 }
 </script>

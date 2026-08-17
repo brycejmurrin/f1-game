@@ -352,7 +352,7 @@ test.describe("understeer cue — front-axle saturation haptic", () => {
    * half pace the same corner is taken at half the speed and needs a quarter of
    * the lateral acceleration against unchanged grip. The car really is further
    * from the limit, the front really is not saturated, and a cue that fired
-   * anyway would be lying. CLAUDE.md says as much: absolute force constants are
+   * anyway would be lying. AGENTS.md says as much: absolute force constants are
    * "what makes low pace more forgiving".
    *
    * What must not move is the cue's RESPONSE once the front IS at a given point

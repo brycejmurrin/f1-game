@@ -65,6 +65,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 //   * Wide overhead spans read as unsupported because overheadSpan emitted a
 //     deck and no legs, despite `supportGap`/`supportWidth` being in its spec
 //     and its footprint already validated. It now raises them.
+//
+// 2026-08-17 pine S4 remesh: nurburgring 0→8 and hockenheim 0→2 are upper
+// foliage cones on 20–40 m forestEdge pines. clip-audit/--why names
+// pine() → graph.instance replay. The wood trunk still seats; the support
+// chain (0.6 m vertical slack) does not join the top cones once uniform
+// scale stretches a 12 m reference mesh. Silverstone stayed 0 (the Y-only
+// scale attempt that floated it was not this remesh).
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "float-baseline.json"), "utf8"),
 );

@@ -59,7 +59,7 @@ function setHalo(on) {
 }
 
 /* TURN CHASING — does the view glance into the corner, or stay bolted to the
-   car's nose? DEFAULT OFF, and that default is the load-bearing part: CLAUDE.md
+   car's nose? DEFAULT OFF, and that default is the load-bearing part: AGENTS.md
    states that nothing derived from track curvature or the racing line may reach
    the player, and the cockpit camera is the most immersive surface in the game
    to leak it through. Off, the aim is the car's own heading and nothing else —

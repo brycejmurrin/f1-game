@@ -1,7 +1,7 @@
 # Apex 26 — physics
 
 The driving model, the pace discipline, active aero and overtake. Extracted from
-`CLAUDE.md`, which keeps the two things that constrain code elsewhere: the
+the agent brief. `AGENTS.md` keeps the two things that constrain code elsewhere: the
 `vTop()`/`vStd()` rule and the "arc must not reach the driver" channel table.
 
 ---

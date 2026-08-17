@@ -65,6 +65,7 @@ test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
   assert.match(r.stdout, /deploy-check/);
   assert.match(r.stdout, /deploy-js/);
   assert.match(r.stdout, /--format/);
+  assert.match(r.stdout, /--tip/);
   assert.match(r.stdout, /version\.json/);
 });
 
@@ -174,6 +175,42 @@ test("tinyfish-mcp.sh retries the live-build fetch and says the body is capped",
   const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
   assert.match(help.stdout, /BODY IS TRUNCATED/, "the limit belongs in help, not just in a comment");
   assert.match(help.stdout, /--marker/);
+});
+
+test("tinyfish-rpc deploy-summary --tip-build is OK when live matches tip, even if local differs", () => {
+  const r = spawnSync(
+    "python3",
+    [RPC, "deploy-summary", "--local-build", "1286", "--tip-build", "1262"],
+    { encoding: "utf8", input: JSON.stringify(FIXTURE_FETCH) },
+  );
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /live=1262/);
+  assert.match(r.stdout, /tip=1262/);
+  assert.match(r.stdout, /local=1286/);
+  assert.match(r.stdout, /OK/);
+  assert.doesNotMatch(r.stdout, /STALE/);
+});
+
+test("tinyfish-rpc deploy-summary --tip-build reports STALE when live != tip", () => {
+  const r = spawnSync(
+    "python3",
+    [RPC, "deploy-summary", "--local-build", "1262", "--tip-build", "1300"],
+    { encoding: "utf8", input: JSON.stringify(FIXTURE_FETCH) },
+  );
+  assert.equal(r.status, 1, "tip mismatch must be non-zero");
+  assert.match(r.stdout, /live=1262/);
+  assert.match(r.stdout, /tip=1300/);
+  assert.match(r.stdout, /STALE/);
+});
+
+test("tinyfish-mcp.sh help lists --tip for deploy-check", () => {
+  const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--tip/);
+  assert.match(help.stdout, /deploy tip|deploy-branch tip|origin\//);
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /--tip\) FLAG_TIP=1/);
+  assert.match(src, /origin\/\$\{DEPLOY_BRANCH\}:version\.json/);
 });
 
 test("tinyfish-rpc deploy-summary reports OK when builds match", () => {

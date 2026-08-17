@@ -5,7 +5,7 @@
    EXTENSION of the two sacred exceptions (the barrier clamp `xPinned` and the
    car-car collision resolver), not a new authority.
 
-   Safety contract (non-negotiable — read spike/ADOPTION-PLAN.md and CLAUDE.md
+   Safety contract (non-negotiable — read spike/ADOPTION-PLAN.md and AGENTS.md
    Physics):
      - The bespoke world-space-rigid-body model stays the ALWAYS-AVAILABLE
        authority. A takeover is a bounded window (launch → touchdown + settle,

@@ -279,6 +279,33 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   assert.match(drift, /DOC-DRIFT/);
 });
 
+test("do not grow a parallel Cursor skills or agents tree", () => {
+  // Cursor loads .claude/skills and .claude/agents. A second tree under
+  // .cursor/ is the drift this repo already paid for with CLAUDE.md vs AGENTS.md.
+  // Allowlist: a file that is explicitly Cursor-only may live there; none do.
+  for (const rel of [".cursor/skills", ".cursor/agents"]) {
+    assert.equal(
+      fs.existsSync(path.join(ROOT, rel)),
+      false,
+      `${rel} exists — keep skills/agents in .claude/ unless the file is Cursor-only`,
+    );
+  }
+});
+
+test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
+  const file = path.join(ROOT, ".cursor/rules/apex-shared.mdc");
+  const text = fs.readFileSync(file, "utf8");
+  const lines = text.split("\n").length;
+  assert.ok(lines <= 40,
+    `.cursor/rules/apex-shared.mdc is ${lines} lines — keep it a pointer (cap 40)`);
+  assert.match(text, /AGENTS\.md/);
+  assert.match(text, /deploy-research/);
+  assert.match(text, /verify-agent/);
+  assert.match(text, /mcp-probe/);
+  assert.match(text, /tinyfish-mcp\.sh|probe-mcp\.py/);
+  assert.match(text, /does \*\*not\*\* auto-load|does not auto-load/i);
+});
+
 test("wgx-capture pairs with webgpu-debug in tools/README.md", () => {
   const text = fs.readFileSync(path.join(ROOT, "tools/README.md"), "utf8");
   const row = text.split("\n").find((l) => l.includes("wgx-capture.mjs"));

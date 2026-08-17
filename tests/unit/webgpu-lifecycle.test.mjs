@@ -1380,6 +1380,26 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
 
+test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
+  // Same ladder as device.lost: a default-rung boot climbs slim/minimal first.
+  // Start on the minimal rung so the cap's destination is GLX, not a reload.
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  await h.create();
+  for (let i = 0; i < 7; i++) {
+    h.device.onuncapturederror({ error: { message: "synthetic validation error " + i } });
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "seven GPU errors must not surrender");
+  assert.equal(reloads, 0);
+  h.device.onuncapturederror({ error: { message: "synthetic validation error cap" } });
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "eight GPU errors surrender the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /runtime GPU errors/);
+  assert.equal(reloads, 1);
+});
+
 test("pipelines that share a shader module never use layout:'auto'", async () => {
   // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
   // byte-identical — and a pair built from ONE module exists precisely to be

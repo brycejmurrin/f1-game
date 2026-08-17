@@ -142,7 +142,7 @@ test("no test:* group pins a --project that excludes one of the specs it names",
   // --project=render while "logging" was NOT in RENDER_SPECS: the render
   // project is testMatch: RENDER_SPECS, so the spec matched no project and
   // simply never ran. Playwright reports that as a pass — it has nothing to
-  // say about a file it was never asked to run — so the command CLAUDE.md
+  // say about a file it was never asked to run — so the command AGENTS.md
   // tells every agent to run after ANY edit was quietly a third smaller than
   // it looked. The test above only catches a RENDER_SPECS name with no file;
   // nothing caught a file with no matching project.

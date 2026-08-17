@@ -30,7 +30,7 @@ const ELEVATION_TRACKS = [
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 
 // The two launch speeds the gradient probes start from, named because the
-// assertions below compare against them. CLAUDE.md's PACE rule: a speed
+// assertions below compare against them. AGENTS.md's PACE rule: a speed
 // compared against a bare literal goes stale the moment PACE is retuned, and
 // "> 41" against a launch of 40 was a disguised claim that every circuit's
 // start line is flat.
@@ -64,7 +64,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
   // WHOLE CIRCUIT — mugello alone is 637 712 prop verts, 693 752 total. Two of
   // those under SwiftShader at once is the same memory wall that made
   // test:sweeps and test:tooling pass --test-concurrency=1 deliberately
-  // (CLAUDE.md: "four at once reached 5.4 GB and was OOM-killed").
+  // (AGENTS.md: "four at once reached 5.4 GB and was OOM-killed").
   //
   // Measured: in the full 105-test physics run, mugello (test 50) failed with
   // 36 uncaught page errors and sochi (test 51) timed out at 120 s — ADJACENT
@@ -340,7 +340,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       // not assume every circuit's frac 0.0 is flat. Comparing against the
       // launch speed keeps all the discriminating power that matters — the case
       // it exists to catch is half the launch speed, not 0.1 under it — and
-      // CLAUDE.md's PACE rule wants the launch constant here rather than a bare
+      // AGENTS.md's PACE rule wants the launch constant here rather than a bare
       // speed literal in any case.
       // The reference is only meaningful if the car spent real time ON the road:
       // a single on-road step would make flatMax the launch speed and nothing

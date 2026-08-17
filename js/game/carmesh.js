@@ -539,7 +539,7 @@ function getAeroBar(fill) {
 }
 // The per-frame wheel extras — anything that needs live car state and would
 // otherwise cost the caller a draw call per part. Kept here rather than in
-// game.js because that file sits AT its module-size ratchet (CLAUDE.md), and
+// game.js because that file sits AT its module-size ratchet (AGENTS.md), and
 // because the geometry it draws is defined three functions up.
 const _axT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _axM = new Float32Array(16);

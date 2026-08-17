@@ -5,7 +5,7 @@
  * including, immediately, a hook added earlier in this same cleanup pass
  * (`persistState`), which is how this guard came to be written.
  *
- * The gap is not cosmetic. `logLevel` was undocumented while CLAUDE.md tells
+ * The gap is not cosmetic. `logLevel` was undocumented while AGENTS.md tells
  * every agent to use it; the whole `lobby*` family — fifteen hooks that are the
  * only way to drive the multiplayer screens from a test — was invisible to
  * anyone reading the reference rather than the source.

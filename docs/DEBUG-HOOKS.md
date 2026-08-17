@@ -596,7 +596,7 @@ __apex.persistState()   // { ok: true, broken: null, keys: 34, rev: 12, foreign:
 ```
 
 ### `logLevel(spec?, persist?) → {console, buffer, consoleNs, bufferNs}`
-Read or move the two `Log` thresholds (see **Logging** in `CLAUDE.md`). They are
+Read or move the two `Log` thresholds (see **Logging** in `AGENTS.md`). They are
 independent on purpose: the **console** level decides what a human sees (default
 `warn`), the **buffer** level decides what is RETAINED in the 500-entry ring
 (default `info`) and read back with `logs()`. Retention can therefore exceed what

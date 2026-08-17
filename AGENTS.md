@@ -177,6 +177,13 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
+**MCP on Cloud.** Cursor Cloud does not auto-load repo `.mcp.json`. The host
+catalog is not the game's `probe` / `tinyfish` / `chrome-devtools` servers.
+Default Cloud path: `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind
+working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent
+`deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
+Never run Chrome MCP while Playwright is running.
+
 ## Layout
 
 **`js/track/` is the ENGINE, `js/circuits/` is the DATA** (one data file per
@@ -276,13 +283,16 @@ same surface from a shell.
 ## Agent extensions (skills / subagents)
 
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
-  `.claude/skills/README.md`. Live game + deploy MCP: `mcp-probe`.
+  `.claude/skills/README.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
+  `deploy-research` (do not attach `mcp-probe` for a version.json check).
+  Pre-push: `verify-agent`.
 - **Subagents** (isolated context): `.claude/agents/` — index in
   `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
   post-deploy / public-web worker (no Chrome, no Playwright).
 - **Cursor** loads the same Claude paths; thin always-on pointer:
   `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
-  `.cursor/skills/`.
+  `.cursor/skills/` or agents under `.cursor/agents/`. Cloud sessions do not
+  auto-load `.mcp.json` — use the shell wrappers (see §Cursor Cloud).
 
 ## Area references (load on demand)
 
@@ -313,4 +323,5 @@ Before pushing, re-run `test:tooling-fast` AND — when either side touched
 `js/track/`, `js/circuits/` or `tools/` — `test:sweeps`: the per-circuit
 baselines are exact in BOTH directions, and a geometry change green on each
 lineage alone can be red on their union. The container proxy blocks
-`github.io` — verify a live deploy through an MCP fetch, not curl.
+`github.io` — verify a live deploy through an MCP fetch, not curl
+(`./tools/tinyfish-mcp.sh deploy-check --tip`).

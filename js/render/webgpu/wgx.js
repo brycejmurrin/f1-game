@@ -701,7 +701,9 @@ const WGX = (function () {
     // for everything else that went wrong. Log a bounded prefix and keep counting;
     // WGX.gpuErrors() carries the real total for a diagnosis.
     let _bootError = null;
+    let _runtimeReady = false; // set after a successful create() return path
     const GPU_ERR_LOG_CAP = 8;
+    const GPU_ERR_ESCALATE_CAP = 8;
     try {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
@@ -712,6 +714,12 @@ const WGX = (function () {
           if (_gpuErrors === GPU_ERR_LOG_CAP) {
             try { Log.warn("gfx", "WGX: further GPU errors suppressed — read the count from WGX.gpuErrors()"); } catch (_) { /* same: the suppression itself does not depend on announcing it */ }
           }
+        }
+        // After boot, a flood of uncaptured errors means the GPU is drawing
+        // nothing while the UI still says WEBGPU. Climb the same ladder as
+        // device.lost / JS-strike cap — do not keep presenting a dead backend.
+        if (_runtimeReady && !_lost && _gpuErrors >= GPU_ERR_ESCALATE_CAP) {
+          _wgxEscalate("runtime GPU errors (" + _gpuErrors + ")");
         }
       };
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
@@ -4217,6 +4225,7 @@ const WGX = (function () {
     }
 
     const noop = function () {};
+    _runtimeReady = true;
 
     return {
       // ── Lifecycle / capability ──

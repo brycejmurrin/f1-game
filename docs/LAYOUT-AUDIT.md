@@ -351,7 +351,7 @@ only one of them is fixed in `css/`.
   for an afternoon like a button that could not be clicked. Probed on a quiet
   box, every one of those clicks landed in ~200 ms, and re-running the two
   viewports gave 78 cells / 0 findings / 0 skips. **Re-run a skipped cell alone
-  before drawing any conclusion from it** — the same rule CLAUDE.md states for a
+  before drawing any conclusion from it** — the same rule AGENTS.md states for a
   Playwright timeout, for the same reason.
 
   This was folded into the "something to look at" total until 2026-08-12, which

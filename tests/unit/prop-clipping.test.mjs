@@ -62,6 +62,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // Neither is a new defect class and neither is visible. Raised rather than
 // chased: the alternative is re-authoring two circuits' scenery to suit a
 // detector that already documents both of these as false positives.
+//
+// 2026-08-17 pine S4 remesh (scenery-nature.js): geometry is linear in a 12 m
+// reference height so TrackGraph can instance. Tall forestEdge pines (15–40 m
+// on hockenheim / nurburgring / spa) scale their canopy width with height —
+// the old mesh kept width ~2.7 m at every h — and grow into along() prisms
+// and neighbouring crowns. clip-audit --why on hockenheim: addCone (replay
+// pine) × circuit along() prisms. Measured and locked; suzuka shrank 9→8.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );

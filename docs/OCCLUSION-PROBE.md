@@ -255,7 +255,7 @@ what you changed, not against what you fixed last time.
 - After moving it, as the acceptance test: `occl` going to 0 is a number, not an
   opinion, and it costs one `evaluate_script`.
 
-Cheaper instruments first, per `CLAUDE.md`: `__apex` JSON hooks, then
+Cheaper instruments first, per `AGENTS.md`: `__apex` JSON hooks, then
 `render({what:"view"})`, then this. It sits below the character raster in cost
 and far above it in precision, and unlike a screenshot it produces something you
 can put in a commit message.

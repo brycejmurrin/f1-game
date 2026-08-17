@@ -1,4 +1,4 @@
-# Graphics-library migration spike — three.js r184
+# Graphics-library migration spike — three.js r185.1
 
 Standalone evaluation harness: renders one **real** circuit (geometry from the
 unmodified game pipeline) with three.js, to measure feasibility and performance
@@ -17,14 +17,14 @@ single-source shaders for WebGL2 + WebGPU; the repo currently hand-maintains
 | `three-spike.html` | harness page — script tags mirror `tools/manifest.cjs` TRACK_VM (hand copy, may drift) + one circuit (singapore) |
 | `three-spike.js` | the three.js scene: WebGPURenderer (`?gl=1` pins WebGL2), custom TSL lit material (32-lamp loop + FLAT/METAL/GRASS procedural materials ported from `js/render/shaders/lit.js`), 2048² sun shadow, bloom+ACES, 22-car instancing A/B, `window.__spike` hooks |
 | `capture.mjs` | headless capture (playwright library, NOT @playwright/test): screenshots + stats + GLX baseline with wrapped draw-call counter |
-| *(no `vendor/`)* | three.js resolves to the game's own `vendor/three-0.184.0/`, MIT — see below |
+| *(no `vendor/`)* | three.js resolves to the game's own `vendor/three-0.185.1/`, MIT — see below |
 
 ## Vendored libraries (this spike carries none of its own)
 
 This directory used to hold ~11 MB of its own `vendor/` copies. Two of them —
 three.js 0.184.0 and Rapier 0.19.3 — were **byte-identical** (md5) to the copies
 the game itself ships in the repo-root `vendor/`, so `three-spike.html` and the
-`physics/` harnesses now import those directly (`../vendor/three-0.184.0/`,
+`physics/` harnesses now import those directly (`../vendor/three-0.185.1/`,
 `../../vendor/rapier-0.19.3/`) and the duplicates are gone. Nothing about how the
 spikes run changed.
 

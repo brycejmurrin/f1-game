@@ -5,7 +5,7 @@ needs code, it goes there; these files carry layout, palette, theme, metadata,
 and the `scenery(api)` callback (reference: `docs/SCENERY-API.md`).
 
 - **Script-tag order == `Tracks.LIST` == picker order.** Adding a circuit is
-  the full new-file lockstep (root CLAUDE.md) — tag position matters.
+  the full new-file lockstep (root AGENTS.md) — tag position matters.
 - **Frac-keyed tables respect `def._sceneryShift`** — the engine consumes
   them via the compensated idiom; write fracs in the def's own frame and
   never pre-compensate by hand.

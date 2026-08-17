@@ -25,7 +25,7 @@ Prefer shell helpers when MCP tools are missing from the session catalog:
 
 ```sh
 ./tools/tinyfish-mcp.sh ensure
-./tools/tinyfish-mcp.sh deploy-check
+./tools/tinyfish-mcp.sh deploy-check --tip
 ./tools/tinyfish-mcp.sh deploy-js js/<path>.js
 ./tools/tinyfish-mcp.sh fetch --ttl 0 "https://brycejmurrin.github.io/f1-game/…"
 ./tools/tinyfish-mcp.sh search "…"
@@ -36,7 +36,8 @@ python3 tools/probe-mcp.py call tinyfish_search '{"query":"…"}'
 
 ## Recipes
 
-1. **Post-deploy liveness** — `deploy-check` (exit 1 = STALE). Then
+1. **Post-deploy liveness** — `deploy-check --tip` (exit 1 = STALE vs the
+   deploy-branch tip). A behind working tree is not a Pages miss. Then
    `deploy-js` / fetch a changed file at `?v=<live>` and grep a unique marker.
    Matching `version.json` alone is not proof the edit shipped.
 2. **Marker false negatives** — markdown extract escapes `*` `_` backticks.
@@ -58,6 +59,6 @@ python3 tools/probe-mcp.py call tinyfish_search '{"query":"…"}'
 ## Return format
 
 1. One-line verdict (OK / STALE / findings).
-2. Live build vs local `version.json` when relevant.
+2. Live build vs deploy-tip (and local) `version.json` when relevant.
 3. Bullet evidence with URLs.
 4. Anything left unverified — name it, do not invent it.

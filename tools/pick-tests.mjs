@@ -185,7 +185,7 @@ function changedFiles(argv) {
   // Default: everything not yet on the branch point, plus the working tree.
   //
   // THE DEPLOY BRANCH IS THE BASE, not `main`. main is a stale diverged fork
-  // (CLAUDE.md says so and nothing merges into it), so merge-basing against it
+  // (AGENTS.md says so and nothing merges into it), so merge-basing against it
   // returns an ancient commit and the "changed files" set balloons to most of
   // the repo — which reads as "run everything", i.e. the tool silently gives up
   // exactly when it is asked the real question. It is kept as a fallback only
@@ -270,7 +270,7 @@ Each matched path maps to one or more test:<group> scripts (see RULES).`);
   // test-bg.mjs enforces the same cap, so an unbatched paste is now refused
   // rather than silently producing fake failures; this just prints the shape it
   // will accept. (Doing this in the suggester alone would not have been enough:
-  // the rule was in CLAUDE.md and docs/TESTING.md the whole time, and this tool
+  // the rule was in AGENTS.md and docs/TESTING.md the whole time, and this tool
   // still handed out a nine-group command.)
   const batches = [];
   for (let i = 0; i < names.length; i += MAX_GROUPS) batches.push(names.slice(i, i + MAX_GROUPS));

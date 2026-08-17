@@ -88,7 +88,7 @@ test("the vendored tree ships as .js, not .mjs", () => {
   // vendor/ at all (tests/unit/deploy-staging.test.mjs). This is the belt to that
   // braces: `.mjs` has a history of being served as application/octet-stream by
   // static hosts, and a browser REFUSES an octet-stream module script outright.
-  // The repo's other ESM island (vendor/three-0.184.0) is .js already, so
+  // The repo's other ESM island (vendor/three-0.185.1) is .js already, so
   // matching it costs nothing and removes a variable we cannot test from here.
   const stray = [];
   const walk = (dir) => {

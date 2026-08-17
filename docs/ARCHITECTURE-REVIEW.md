@@ -1,7 +1,7 @@
 # Apex 26 — architecture review
 
 A review, not a reference. [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) is the
-module contract and [`CLAUDE.md`](../CLAUDE.md) is the working reference; both
+module contract and [`AGENTS.md`](../AGENTS.md) is the working reference; both
 describe the system as it is meant to be. This describes **how it is actually
 built, what that costs, and what has drifted** — plus the open defect register
 and the deferred backlog, each with its reasoning. Claims here are checked
@@ -77,7 +77,7 @@ covers non-force channels, because auditing forces alone missed most of them:
 rendered position interpolates in world space, the drawn nose angle is the real
 heading, tyre squeal comes from body slip angle, barrier alignment uses the
 barrier's own tangent. This is a **cross-cutting invariant with no guard**,
-spread across two files and a dozen call sites, held by a table in `CLAUDE.md`
+spread across two files and a dozen call sites, held by a table in `AGENTS.md`
 and the habit of asking which column a new `Tracks.curvature()` read belongs
 in. It has held so far. It is exactly the shape of thing that stops holding.
 
@@ -134,7 +134,7 @@ one first.
 
 `js/render/gfx.js` selects a backend; three implement one surface: **GLX**
 (WebGL2, the reference), **WGX** (WebGPU, feature-detected, falls back to GLX),
-**TLX** (three.js r184/TSL, opt-in via `apex26.gfxBackend`). The fallbacks are
+**TLX** (three.js r185.1/TSL, opt-in via `apex26.gfxBackend`). The fallbacks are
 honest, and the two deferred backends (~550 KB nobody-runs code) are excluded
 from the eager load with the three-way agreement asserted by
 `load-order.test.mjs`.

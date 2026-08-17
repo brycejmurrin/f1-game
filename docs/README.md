@@ -5,7 +5,7 @@ Three kinds of docs live here.
 - **Engineering reference** — how the shipped game works today. Read it before
   touching the matching subsystem.
 - **Research** (`research/`) — design notes and investigations still cited from
-  source or from CLAUDE.md. Not a description of current behaviour, but load-bearing.
+  source or from AGENTS.md. Not a description of current behaviour, but load-bearing.
 - **Archive** (`archive/`) — finished plans, superseded designs and build logs.
   Kept for provenance. **Never read these for current structure**; they were
   written against layouts that have since moved.

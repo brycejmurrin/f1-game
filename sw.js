@@ -58,10 +58,10 @@ async function precacheAssetLists() {
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
     "js/render/three/tlx.js",
-    "vendor/three-0.184.0/three.webgpu.min.js",
-    "vendor/three-0.184.0/three.core.min.js",
-    "vendor/three-0.184.0/three.tsl.min.js",
-    "vendor/three-0.184.0/addons/tsl/display/BloomNode.js",
+    "vendor/three-0.185.1/three.webgpu.min.js",
+    "vendor/three-0.185.1/three.core.min.js",
+    "vendor/three-0.185.1/three.tsl.min.js",
+    "vendor/three-0.185.1/addons/tsl/display/BloomNode.js",
     // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
     // someone scans an answer code, so the tag parser below never sees it.
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
@@ -113,7 +113,7 @@ async function precacheAssetLists() {
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
 // immutable URLs — the essentials all carry this project's `?v=N` cache-bust,
-// and the optionals are version-pinned by PATH (vendor/three-0.184.0/…, the
+// and the optionals are version-pinned by PATH (vendor/three-0.185.1/…, the
 // content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
 // revalidation. `cache: "no-store"` here contradicted that and made a cold

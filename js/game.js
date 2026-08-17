@@ -112,7 +112,7 @@ function loadBackendScripts(files) {
   });
 }
 function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.184.0/three.webgpu.min.js", "vendor/three-0.184.0/three.tsl.min.js"]) {
+  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
     const el = document.createElement("link");
     el.rel = "modulepreload";
     el.href = href;
@@ -1467,7 +1467,7 @@ function swapGridSlots(a, b) {
     const t = a[k]; a[k] = b[k]; b[k] = t;
   }
   // The world pose is the authority for a human car (see the physics notes in
-  // CLAUDE.md), so it has to be rebuilt from the new (s, x) — and the render
+  // AGENTS.md), so it has to be rebuilt from the new (s, x) — and the render
   // anchors pinned with it, or the car visibly slides from its old box to its
   // new one over the first frame.
   for (const c of [a, b]) {
@@ -2458,7 +2458,7 @@ function startRace() {
   // that failed on "speed was 43, expected > 50" had nothing in its attachment
   // saying what the car's top speed even was that run. One line makes the whole
   // class of pace/parts/weather failures self-explaining, which is what the
-  // logging section of CLAUDE.md asks for and what nothing here was doing.
+  // logging section of AGENTS.md asks for and what nothing here was doing.
   // (It sits BELOW recomputePlayerMods() so the mods/aeroLoad it reports are
   // this session's, not the previous one's — __apex.race()/tt() reach here
   // with no garage pass to have refreshed them.)
