@@ -198,3 +198,23 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("apex-report: the paste can carry options, and it never triggers a second file", () => {
+  // Two things a phone paste depends on that nothing else asserts.
+  //
+  // The auto-run reads window.__apexReportOpts because a paste has no argument
+  // list — there is no chance to call apexReport({...}) first on a device.
+  //
+  // And diag() SAVES apex-diag.json unless told otherwise, so the report used to
+  // land a second, unasked-for file (measured: one stray per report, even with
+  // download:false passed to the report itself, because that option never
+  // reached the hook doing the saving). On iOS each file is a share sheet or a
+  // tab of raw JSON, so the count matters more than it looks.
+  const src = fs.readFileSync(path.join(TOOLS, "apex-report.js"), "utf8");
+  assert.match(src, /return run\(window\.__apexReportOpts\)/,
+    "the auto-run must honour window.__apexReportOpts");
+  assert.match(src, /api\.diag\(\{\s*download:\s*false\s*\}\)/,
+    "diag() must be called with download:false or the report drags apex-diag.json with it");
+  const saves = src.match(/\.save\(/g) || [];
+  assert.deepEqual(saves, [], "the report writes its own file; no api.save() second path");
+});

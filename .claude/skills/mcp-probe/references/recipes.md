@@ -318,6 +318,21 @@ Prefer `?report=1` for anyone on an iPhone: iOS Safari has no console without a
 Mac on the other end of a cable and Web Inspector switched on, and a tap samples
 the frame the reporter is actually looking at.
 
+**Where iOS Web Inspector IS attached**, the deployed site needs no server at
+all — but set the opts first, because on iOS a download is a share sheet or a tab
+of raw JSON, not a file:
+
+```js
+window.__apexReportOpts = { post: false, download: false };
+fetch("https://raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/apex-report.js")
+  .then(r => r.text()).then(s => (0, eval)(s))
+```
+
+`raw.githubusercontent.com` answers `access-control-allow-origin: *`, so the
+cross-origin fetch from the live page is fine (verified from a page, not just
+curl). The verdict prints; the bundle is on `window.__apexReport`, and Safari's
+console has `copy()` for getting it out.
+
 `pages.yml` stages runtime dirs only, so `tools/` is NOT on the live site: the
 same-origin loader works **only** off a local server, which is also the one that
 serves whatever tree you are debugging. Ask for the LAN URL, not localhost — the

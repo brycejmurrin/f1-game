@@ -240,7 +240,12 @@
     };
 
     if (api) {
-      rep.diag = safe(function () { return api.diag(); }, null);
+      // {download:false} or diag() saves apex-diag.json on its own — a second,
+      // unasked-for file next to this one, and on iOS a share sheet or a tab of
+      // raw JSON. Measured: one stray apex-diag.json per report even with
+      // download:false passed to THIS tool, because that option never reached
+      // the hook doing the saving.
+      rep.diag = safe(function () { return api.diag({ download: false }); }, null);
       rep.build = safe(function () { return rep.diag && rep.diag.build; }, null);
       rep.backend = safe(function () { return rep.diag && rep.diag.env && rep.diag.env.backend; }, null);
       rep.state = safe(function () { return api.info().state; }, null);
@@ -312,6 +317,11 @@
   }
 
   window.apexReport = run;
-  // Pasting it runs it — that is the point of the paste.
-  return run();
+  // Pasting it runs it — that is the point of the paste. The auto-run reads
+  // window.__apexReportOpts because the paste has no argument list: on a phone
+  // there is no chance to call apexReport({...}) first, and the defaults are
+  // wrong there in one specific way — a download on iOS Safari is a share sheet
+  // or a new tab full of JSON, not a file. Set the opts, then paste:
+  //   window.__apexReportOpts = { post: false, download: false }
+  return run(window.__apexReportOpts);
 }());
