@@ -21,7 +21,11 @@
 // evidence here is exact; pixel sign-off needs a real GPU.
 //
 // Usage:
-//   node tools/wgx-validate.mjs [trackId] [--lite] [--frames N]
+//   node tools/wgx-validate.mjs [trackId] [--lite] [--frames N] [--no-rg11b10]
+//
+// --no-rg11b10 spoofs an adapter WITHOUT 'rg11b10ufloat-renderable' (common on
+// phones), forcing the POST_HDR_FORMAT -> rgba16float fallback branch that the
+// container adapter — which HAS the feature — never exercises on its own.
 //
 // PASS (exit 0): WGX binds (no GLX fallback), zero WGSL parse errors, zero GPU
 // validation errors across init + a raced frame. Device-lost AFTER a clean
@@ -39,6 +43,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const track = args.find((a) => !a.startsWith("--")) || "montreal";
 const lite = args.includes("--lite");
+const noRg11b10 = args.includes("--no-rg11b10");
 const framesArg = args.indexOf("--frames");
 const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) || 60) : 60;
 
@@ -77,10 +82,29 @@ try {
   });
   page.on("pageerror", (e) => fail("pageerror: " + String(e).slice(0, 300)));
 
-  await page.addInitScript(([wantLite]) => {
+  await page.addInitScript(([wantLite, dropRg]) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
-  }, [lite]);
+    if (dropRg && navigator.gpu) {
+      // Present the adapter as a phone-class one: same device, but features
+      // reports no 'rg11b10ufloat-renderable', so WGX must take (and Dawn must
+      // validate) the rgba16float post-target fallback.
+      const orig = navigator.gpu.requestAdapter.bind(navigator.gpu);
+      navigator.gpu.requestAdapter = async (opts) => {
+        const a = await orig(opts);
+        if (!a) return a;
+        const feats = new Set();
+        a.features.forEach((f) => { if (f !== "rg11b10ufloat-renderable") feats.add(f); });
+        return new Proxy(a, {
+          get(t, p) {
+            if (p === "features") return feats;
+            const v = t[p];
+            return typeof v === "function" ? v.bind(t) : v;
+          },
+        });
+      };
+    }
+  }, [lite, noRg11b10]);
 
   await page.goto(srv.url + "index.html");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
@@ -118,6 +142,7 @@ try {
   console.log(JSON.stringify({
     ok: failures === 0,
     track, lite, frames,
+    rg11b10Spoofed: noRg11b10,
     backend,
     msaa: state.env && state.env.msaa,
     hdr: state.env && state.env.hdr,
