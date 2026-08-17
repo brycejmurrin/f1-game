@@ -26,7 +26,7 @@
  * want to debug, which is usually the point anyway. The deployed site keeps the
  * download path.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { startStaticServer } from "./harness.mjs";
@@ -51,7 +51,58 @@ function safeName(raw) {
   return /\.json$/.test(clean) && clean.length > 5 ? clean : `apex-report-${Date.now()}.json`;
 }
 
+// `?report=1` on the shell injects a tap-to-send button. The whole console
+// story falls apart on the device that actually has the bug: iOS Safari has no
+// console at all without a Mac on the other end of a cable and Web Inspector
+// enabled, which is a lot to ask of someone reporting a bug. A button also
+// samples at the RIGHT MOMENT — the reporter taps when the cars look wrong,
+// instead of describing it. Injected here rather than shipped in index.html so
+// nothing reaches the deployed page and no cache version moves.
+const BUTTON = `
+<div id="apexReportBtn" role="button" tabindex="0" style="position:fixed;top:8px;right:8px;
+  z-index:2147483647;min-width:132px;min-height:44px;padding:12px 14px;box-sizing:border-box;
+  font:600 14px/1.2 system-ui,sans-serif;text-align:center;color:#fff;background:#c1121f;
+  border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.5);touch-action:manipulation;
+  cursor:pointer;-webkit-user-select:none;user-select:none">SEND REPORT</div>
+<script>
+(function () {
+  var b = document.getElementById("apexReportBtn");
+  var busy = false;
+  b.addEventListener("click", function () {
+    if (busy) return;
+    busy = true;
+    b.textContent = "sampling...";
+    b.style.background = "#555";
+    fetch("/tools/apex-report.js").then(function (r) { return r.text(); })
+      .then(function (s) { return (0, eval)(s); })
+      .then(function (x) {
+        b.textContent = x && x.posted ? "SENT" : (x && x.downloaded ? "DOWNLOADED" : "NOT SENT");
+        b.style.background = x && (x.posted || x.downloaded) ? "#127a2a" : "#c1121f";
+      })
+      .catch(function (e) { b.textContent = "FAILED"; b.title = String((e && e.message) || e); })
+      .then(function () { busy = false; });
+  });
+})();
+</script>
+`;
+
+function shell(req, res, url) {
+  if (!(url.pathname === "/" || url.pathname === "/index.html")) return false;
+  if (!url.searchParams.has("report")) return false;
+  let html;
+  try { html = readFileSync(join(ROOT, "index.html"), "utf8"); } catch { return false; }
+  const out = html.includes("</body>") ? html.replace("</body>", BUTTON + "</body>") : html + BUTTON;
+  const buf = Buffer.from(out, "utf8");
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Length": buf.length,     // rewritten body: the static path's length would be wrong
+    "Cache-Control": "no-store",
+  }).end(buf);
+  return true;
+}
+
 function collect(req, res, url) {
+  if (shell(req, res, url) === true) return true;
   if (url.pathname !== "/apex-report") return false;
 
   if (req.method === "OPTIONS") {           // a probe before POST, and CORS for the odd setup
@@ -140,8 +191,10 @@ console.log(`  this machine : http://127.0.0.1:${port}/`);
 for (const u of lan) console.log(`  from a phone : ${u}`);
 if (!lan.length) console.log("  (no external IPv4 found — a phone will not be able to reach this box)");
 console.log(`  reports      -> ${OUT}`);
-console.log("\nOn the device, open one of those URLs, start a race, then in the console:");
-console.log('  fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))');
+console.log("\nOn the device: add ?report=1 to the URL for a SEND REPORT button —");
+console.log("  no console needed, and it samples when the reporter taps it.");
+if (lan.length) console.log(`  e.g. ${lan[0]}?report=1`);
+console.log('Or, where there is a console:  fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))');
 console.log("\nCtrl-C to stop.");
 
 // startStaticServer unrefs its handle so a forgetful tool can still exit. This

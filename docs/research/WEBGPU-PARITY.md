@@ -499,7 +499,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **refuses** by default → GLX fallback (`gfxWgxFail=software WebGPU adapter…`). Escape: `apex26.gfxWgxAllowSoftware=1` |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`, agentview coverage healthy — **GPUCanvasContext still composites blank/white** (CDP + `createImageBitmap` empty). Not a visual oracle. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`. **Software compositor (2026-08-17):** hidden WebGPU canvas + `#game` 2D blit via `COPY_SRC` readback — SwiftShader/Lavapipe canvas pixels ~`[161,170,171]` after poll (was blank). Bloom mips must match `POST_HDR_FORMAT` (`rg11b10ufloat` when advertised). Gallery: `node tools/wgx-gallery.mjs --lite`; manifest `docs/research/wgx-gallery-manifest.json`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools

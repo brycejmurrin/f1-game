@@ -70,6 +70,10 @@ MCP_ARGS=(
   --chromeArg=--enable-unsafe-webgpu
 )
 # Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
+# Lavapipe WebGPU (three.js e2e): APEX_CHROME_ARGS="--enable-unsafe-webgpu
+#   --enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE --use-angle=vulkan
+#   --use-vulkan=native --disable-vulkan-surface" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+#   xvfb-run -a python3 tools/probe-mcp.py call chrome_navigate_page ...
 if [[ -n "${APEX_CHROME_ARGS:-}" ]]; then
   for _arg in ${APEX_CHROME_ARGS}; do MCP_ARGS+=("--chromeArg=${_arg}"); done
 fi
