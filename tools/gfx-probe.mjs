@@ -214,6 +214,28 @@ async function runProbeAttempt(attemptNum) {
     const pagePath = join(opts.outDir, "page-hud.png");
 
     if (opts.backend === "webgpu") {
+      // Visible #game is the 2D soft-present blit — check it BEFORE capturePixels
+      // (concurrent mapAsync readbacks on SwiftShader can poison the device).
+      await retryStep("soft-present", () => page.evaluate(async () => {
+        if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) {
+          throw new Error("no GLX.awaitSoftPresent on WGX");
+        }
+        await GLX.awaitSoftPresent(60000);
+        const g = document.getElementById("game");
+        const ctx = g && g.getContext("2d");
+        if (!ctx) throw new Error("#game has no 2D display context");
+        const id = ctx.getImageData(0, 0, Math.min(64, g.width), Math.min(64, g.height));
+        let max = 0;
+        for (let i = 0; i < id.data.length; i += 4) {
+          const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
+          if (l > max) max = l;
+        }
+        if (max < 8) throw new Error("visible #game canvas blank after soft-present (maxLuma=" + max + ")");
+      }), { attempts: 2, delayMs: 2000 });
+      await retryStep("screenshot-canvas", () =>
+        page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
+      log("canvas", "visible #game canvas.png saved");
+
       let frameCap = null;
       try {
         frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
@@ -245,27 +267,6 @@ async function runProbeAttempt(attemptNum) {
       } catch (e) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
       }
-
-      // Visible #game is the 2D soft-present blit — what probes/screenshots must show.
-      await retryStep("soft-present", () => page.evaluate(async () => {
-        if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) {
-          throw new Error("no GLX.awaitSoftPresent on WGX");
-        }
-        await GLX.awaitSoftPresent(30000);
-        const g = document.getElementById("game");
-        const ctx = g && g.getContext("2d");
-        if (!ctx) throw new Error("#game has no 2D display context");
-        const id = ctx.getImageData(0, 0, Math.min(64, g.width), Math.min(64, g.height));
-        let max = 0;
-        for (let i = 0; i < id.data.length; i += 4) {
-          const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
-          if (l > max) max = l;
-        }
-        if (max < 8) throw new Error("visible #game canvas blank after soft-present (maxLuma=" + max + ")");
-      }), { attempts: 2, delayMs: 2000 });
-      await retryStep("screenshot-canvas", () =>
-        page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
-      log("canvas", "visible #game canvas.png saved");
     } else {
       await retryStep("screenshot-canvas", () =>
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));

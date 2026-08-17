@@ -921,24 +921,23 @@ test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", a
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
-test("soft-present defers readback when staging buffer is still mapped", () => {
+test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
-  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
-  assert.match(WGX_SOURCE, /_softReadDefer/);
-  assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
-  assert.match(WGX_SOURCE, /function _retireSoftPresent\(/);
-  assert.match(WGX_SOURCE, /function _destroyRetiredSoft\(/);
-  assert.match(WGX_SOURCE, /if \(st === "pending"\) continue/);
-  assert.match(WGX_SOURCE, /if \(buf !== _softBlitBuf\)/);
+  assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
+  assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
+  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
+  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
-    /_retireFlush[\s\S]{0,400}_softBusy = false/,
-    "_softBusy must not clear in _retireFlush — only after putImageData",
+    /function _queueSoftPresent\(/,
+    "persistent soft-present queue removed — use ephemeral _softDisplayEncode",
   );
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
-    /_softBlitPending = false[\s\S]{0,80}mapState !== "unmapped"\) return/,
-    "must not clear pending then drop the copy when the staging buffer is still mapped",
+    /if \(_softGpu && _softBusy\) return false/,
+    "begin() must not drop frames while soft-present readback is in flight",
   );
 });
 
