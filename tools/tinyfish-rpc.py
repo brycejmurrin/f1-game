@@ -43,6 +43,22 @@ def parse_fetch_payload(text: str) -> dict[str, Any]:
     return json.loads(text)
 
 
+def _search_row_text(row: dict[str, Any]) -> str:
+    """Render a SEARCH result as readable text.
+
+    fetch_content rows carry `text`; search rows carry title/snippet/url and NO
+    `text` at all, so the shared unwrap printed nothing but the URL heading —
+    a search whose whole value is the snippets read as a bare link list.
+    """
+    title = (row.get("title") or "").strip()
+    snippet = (row.get("snippet") or "").strip()
+    site = (row.get("site_name") or "").strip()
+    date = (row.get("date") or "").strip()
+    meta = " · ".join(p for p in (site, date) if p)
+    lines = [p for p in (title, meta, snippet) if p]
+    return "\n".join(lines)
+
+
 def result_bodies(rpc: dict[str, Any]) -> list[dict[str, Any]]:
     bodies: list[dict[str, Any]] = []
     for text in content_texts(rpc):
@@ -53,6 +69,10 @@ def result_bodies(rpc: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if isinstance(payload, dict) and "results" in payload:
             for row in payload.get("results") or []:
+                if isinstance(row, dict) and not row.get("text"):
+                    rendered = _search_row_text(row)
+                    if rendered:
+                        row = dict(row, text=rendered)
                 bodies.append(row)
             # Surface top-level errors alongside.
             for err in payload.get("errors") or []:

@@ -212,6 +212,16 @@ emit_rpc() {
   shift || true
   if [[ "$FLAG_JSON" -eq 1 ]]; then
     printf '%s\n' "$raw"
+    # --json must still FAIL on a JSON-RPC error object; printing the error and
+    # exiting 0 is how a broken call reads as a successful one in a pipeline.
+    printf '%s' "$raw" | python3 -c '
+import json, sys
+try:
+    rpc = json.loads(sys.stdin.read() or "{}")
+except json.JSONDecodeError:
+    sys.exit(0)
+sys.exit(1 if isinstance(rpc, dict) and "error" in rpc else 0)
+'
   else
     printf '%s' "$raw" | python3 "$RPC" "$@"
   fi
@@ -295,9 +305,12 @@ cmd_search() {
   local q="${1:?usage: $0 search [--json] <query>}"
   cmd_ensure >/dev/null
   load_session
-  local q_esc raw
-  q_esc="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$q")"
-  raw="$(mcp_post '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":'"${q_esc}"'}}}"')"
+  # The WHOLE request is built by python, not string-pasted: a stray quote in the
+  # hand-assembled body made every search a -32700 Parse error while init and
+  # fetch stayed green, so the helper looked healthy.
+  local body raw
+  body="$(python3 -c 'import json,sys; print(json.dumps({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":sys.argv[1]}}}))' "$q")"
+  raw="$(mcp_post "$body")"
   emit_rpc "$raw" unwrap
 }
 

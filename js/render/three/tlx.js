@@ -938,17 +938,25 @@ const TLX = (function () {
         // after disposing any owned pack textures — GLX deleteTexture parity.
         setMaterialMaps(maps) {
           if (!lit || !lit.setMaterialMaps) return;
-          function releaseOwned() {
+          // A caller re-passing a texture it already handed over must not have
+          // it disposed under the new binding (assets.js always builds fresh
+          // arrays; webbake/__apex/tests need not).
+          function releaseOwned(keep) {
+            const kept = new Set();
+            if (keep) {
+              if (keep.albedo) kept.add(keep.albedo);
+              if (keep.normal) kept.add(keep.normal);
+            }
             const seen = new Set();
             for (const t of [matOwnedAlbedo, matOwnedNormal]) {
-              if (!t || seen.has(t)) continue;
+              if (!t || seen.has(t) || kept.has(t)) continue;
               seen.add(t);
               try { t.dispose(); } catch (_) { /* already disposed */ }
             }
             matOwnedAlbedo = null;
             matOwnedNormal = null;
           }
-          releaseOwned();
+          releaseOwned(maps);
           if (!maps) {
             // Restore placeholder .value bindings and zero scales.
             if (matPlaceAlbedo || matPlaceNormal) {

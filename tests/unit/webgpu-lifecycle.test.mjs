@@ -844,6 +844,20 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.carShadowState().enabled, false);
 });
 
+test("the MAT array sampler asks for anisotropy, like GLX and TLX", () => {
+  // GLX caps the MAT array at aniso 4 and TLX sets anisotropy = 4; WGX asked for
+  // none, so tarmac went to mip mush at grazing angles on the WebGPU backend
+  // alone. WebGPU only allows maxAnisotropy > 1 when all three filters are
+  // "linear", and a rejecting driver must fall back rather than fail create().
+  assert.match(WGX_SOURCE, /maxAnisotropy:\s*4/);
+  const desc = /const _matSampDesc = \{[\s\S]*?\};/.exec(WGX_SOURCE);
+  assert.ok(desc, "the MAT sampler descriptor moved");
+  for (const f of ["magFilter", "minFilter", "mipmapFilter"]) {
+    assert.match(desc[0], new RegExp(`${f}:\\s*"linear"`), `${f} must be linear for maxAnisotropy`);
+  }
+  assert.match(WGX_SOURCE, /catch \(_\) \{\s*matArraySamp = device\.createSampler\(_matSampDesc\);/);
+});
+
 test("setMaterialMaps owns pack textures and destroys them on unload/replace", async () => {
   // GLX deletes prior arrays in setMaterialMaps; WGX used to orphan GPUTexture
   // objects on unload/tier-swap and left materialMapState stale only via flags

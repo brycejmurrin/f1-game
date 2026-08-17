@@ -886,10 +886,21 @@ const WGX = (function () {
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
-      matArraySamp = device.createSampler({
+      // maxAnisotropy 4 matches GLX (js/render/glx.js applies the same cap to the
+      // MAT array) and TLX (anisotropy = 4). The road is the grazing-angle
+      // surface these exist for — trilinear alone smears tarmac aggregate into
+      // mip mush ~20 m ahead of the car. WebGPU only allows it when all three
+      // filters are "linear" (they are); a driver that still rejects the
+      // descriptor falls back to the plain sampler rather than failing create().
+      const _matSampDesc = {
         magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
         addressModeU: "repeat", addressModeV: "repeat",
-      });
+      };
+      try {
+        matArraySamp = device.createSampler(Object.assign({ maxAnisotropy: 4 }, _matSampDesc));
+      } catch (_) {
+        matArraySamp = device.createSampler(_matSampDesc);
+      }
       matScaleUBO = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
       const _ident = new Float32Array(20);
@@ -2915,11 +2926,19 @@ const WGX = (function () {
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
       } catch (_) { return null; /* alloc/copy failed: pack stays procedural */ }
     }
-    function _releaseOwnedMatMaps() {
+    // `keep` is the incoming maps: a caller re-passing a token it already handed
+    // over must not have it destroyed under the new binding (assets.js always
+    // builds fresh arrays, but webbake/__apex/tests need not).
+    function _releaseOwnedMatMaps(keep) {
+      const kept = new Set();
+      if (keep) {
+        if (keep.albedo && keep.albedo.texture) kept.add(keep.albedo.texture);
+        if (keep.normal && keep.normal.texture) kept.add(keep.normal.texture);
+      }
       // Destroy each GPUTexture at most once (albedo/normal may alias).
       const seen = new Set();
       for (const tok of [_matOwnedAlbedo, _matOwnedNormal]) {
-        if (!tok || !tok.texture || seen.has(tok.texture)) continue;
+        if (!tok || !tok.texture || seen.has(tok.texture) || kept.has(tok.texture)) continue;
         seen.add(tok.texture);
         try { tok.texture.destroy(); } catch (_) { /* already invalid */ }
       }
@@ -2930,7 +2949,7 @@ const WGX = (function () {
     // textures and restores the 1×1×N placeholders so bind groups never point
     // at destroyed views — GLX deleteTexture parity for WebGPU.
     function setMaterialMaps(maps) {
-      _releaseOwnedMatMaps();
+      _releaseOwnedMatMaps(maps);
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
       _matAlbedoOn = false;

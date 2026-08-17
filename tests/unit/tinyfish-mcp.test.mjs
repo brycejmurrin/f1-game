@@ -119,6 +119,65 @@ test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   assert.match(r.stdout, /OK/);
 });
 
+test("every JSON-RPC body the helper builds is valid JSON", () => {
+  // A stray `"` at the end of the hand-pasted search body made EVERY search a
+  // -32700 Parse error while init/fetch stayed green, so the helper looked
+  // healthy. Extract each literal body and parse it with the shell placeholders
+  // filled in.
+  const src = fs.readFileSync(SH, "utf8");
+  const bodies = src.match(/\{"jsonrpc":"2\.0"[^\n]*/g) || [];
+  assert.ok(bodies.length >= 3, `expected several RPC bodies, found ${bodies.length}`);
+  for (const raw of bodies) {
+    // Trim the shell assignment tail, then substitute each interpolation:
+    // one already inside quotes becomes a bare token, one standing where a whole
+    // value goes becomes an empty object.
+    // Substitute interpolations FIRST (they consume their own quotes), then cut
+    // the shell tail at the single quote that closes the literal. A body built
+    // inside python (json.dumps) carries python expressions where values go —
+    // stand those in too, so its structure is checked the same way.
+    const body = raw
+      .replace(/(")?'"\$(?:\{[^}]+\}|\w+)"'/g, (_m, quoted) => (quoted ? '"X' : "{}"))
+      .replace(/sys\.argv\[\d+\]/g, '"X"')
+      .split("'")[0]
+      .replace(/\)+\s*$/, "");
+    assert.doesNotThrow(() => JSON.parse(body),
+      `helper builds invalid JSON-RPC: ${body}`);
+  }
+});
+
+test("tinyfish-rpc unwrap renders SEARCH rows (title + snippet), not bare URLs", () => {
+  // search rows carry title/snippet/url and NO `text`, so the shared unwrap used
+  // to print only the URL heading — the snippets are the whole value of a search.
+  const searchRpc = {
+    jsonrpc: "2.0",
+    id: 4,
+    result: {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          query: "webgpu maxAnisotropy",
+          results: [{
+            position: 1,
+            url: "https://www.w3.org/TR/webgpu/",
+            title: "WebGPU - W3C",
+            site_name: "www.w3.org",
+            date: "5 days ago",
+            snippet: "Anisotropic filtering is enabled when maxAnisotropy is > 1.",
+          }],
+        }),
+      }],
+    },
+  };
+  const r = spawnSync("python3", [RPC, "unwrap"], {
+    encoding: "utf8",
+    input: JSON.stringify(searchRpc),
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /WebGPU - W3C/);
+  assert.match(r.stdout, /Anisotropic filtering is enabled/);
+  assert.match(r.stdout, /www\.w3\.org/);
+});
+
 test("mcp-cli.mjs drives chrome via chrome-devtools-mcp.sh, not a hard-coded pw path", () => {
   const src = fs.readFileSync(MCP_CLI, "utf8");
   assert.match(src, /chrome-devtools-mcp\.sh/);
