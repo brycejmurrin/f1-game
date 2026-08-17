@@ -17,10 +17,12 @@
  * convention (y flipped once here; the texture node's flipY re-flips on the
  * GL backend — the same double-flip three's own shadow code relies on).
  *
- * SCOPE — deliberately stubbed (search "TODO M"):
- *   - PCSS blocker search -> penumbra fixed at R=3 (the GLX far radius);
- *     uPcss stays 0. three can't view one depth texture compare-on AND
- *     compare-off (see tlx-shadow.js header)          (TODO M4-PCSS)
+ * PCSS blocker search HAS landed on the WebGPU backend (M4-PCSS closed):
+ * tlx-shadow.js builds the 512² min-of-4 blocker map with sampler-free
+ * textureLoad reads and the sun branch below scales the Poisson radius
+ * R = mix(1.5, 6.0, pen) from the receiver-blocker gap. The WebGL2 fallback
+ * backend has no blocker map (compare-on textures can't be re-read plain in
+ * GLSL) and keeps the fixed R=3 — GLX's own blocker-off radius.
  *
  * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
  * builds the cube target and drives setEnvStr() from the probe-ready state,
@@ -145,16 +147,15 @@
       shadowBias:     uniform(0.001), // SHADOW BIAS
       shadowTexel:    uniform(1 / 2048),
       shadowCtr:      uniform(new THREE.Vector3()),   // gliding fade anchor (frame.shadowCtr)
-      // SHADOW SOFTEN. INTENTIONALLY UNCONSUMED — declared here and uploaded
-      // by updateFrame below purely to keep the uniform block 1:1 with GLX's
-      // uPcssPen, but NO node reads it: TLX has no blocker map (tlx.js pcss()
-      // returns false, see the TODO M4-PCSS note in tlx-shadow.js), so the sun
-      // PCF uses the fixed radius `R = float(3.0)` in the shadow node below
-      // instead of the mix(1.5, 6.0, pen) the blocker search would drive.
-      // Moving the slider changes nothing on this backend — do not read that
-      // silence as "the knob works and is subtle". Wire it up when the blocker
-      // map lands; the knob's TUNE_DEFS help carries the same caveat.
+      // SHADOW SOFTEN (uPcssPen parity). Consumed by the blocker-search branch
+      // below when the shadow system built its WebGPU blocker map
+      // (SHD.blockerTex, tlx-shadow.js header); on the WebGL2 fallback backend
+      // there is no blocker map, the branch is not compiled, and the sun PCF
+      // keeps the fixed radius `R = 3.0` — GLX's own uPcss-off look. pcssOn is
+      // the RUNTIME gate (glx.js uPcss 1:1): updateFrame re-reads
+      // S.pcssEnabled each frame so a live blocker failure degrades cleanly.
       pcssPen:        uniform(80.0),
+      pcssOn:         uniform(0.0),
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
@@ -238,6 +239,7 @@
       if (shadowOn) {
         U.shadowBias.value = k("shadowBias", 0.001);
         U.pcssPen.value = k("pcssPen", 80.0);
+        U.pcssOn.value = SHD.S.pcssEnabled ? 1 : 0;
         // Key-luminance fade: cast shadows dissolve as the key dims toward
         // moonlight, floored by MOON SHADOWS × the clear-night factor
         // (frame.moonGate — clear-night moonK, or above 0.5 the knob itself
@@ -326,9 +328,9 @@
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
      * compiles clean in TSL), texel-grid-anchored IGN dither, car-map
-     * min-combine (ortho — no perspective divide). PCSS blocker search
-     * skipped (TODO M4-PCSS, see tlx-shadow.js header): R fixed at 3.0, the
-     * GLX radius when uPcss is off.
+     * min-combine (ortho — no perspective divide), and the PCSS-lite blocker
+     * search when SHD.blockerTex exists (WebGPU backend, tlx-shadow.js
+     * header) — R fixed at 3.0 otherwise, the GLX radius when uPcss is off.
      * Shadow-map UV convention: three's node system uses WebGPU texture
      * space, so sample at (x, 1-y); on the WebGL backend the texture node's
      * automatic flipY for depth textures flips it back to GL space — the same
@@ -372,9 +374,25 @@
             const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
             // Distance LOD on the same gliding anchor (js/render/shaders/lit.js).
             const nearLod = aDist.lessThan(U.shadowRange.mul(0.80)).toVar();
-            // TODO M4-PCSS: blocker search -> R = mix(1.5, 6.0, pen). Fixed far
-            // radius until the blocker map lands.
-            const R = float(3.0);
+            // PCSS-lite blocker search (js/render/shaders/lit.js): near the
+            // camera the receiver-blocker gap scales the Poisson radius —
+            // crisp at the contact point, soft where the caster is far.
+            // Compiled only when the shadow system built its blocker map
+            // (WebGPU backend, tlx-shadow.js header); gated at runtime on
+            // pcssOn like GLX's uPcss. Fixed R = 3.0 otherwise — GLX's own
+            // blocker-off radius.
+            const R = float(3.0).toVar();
+            if (SHD.blockerTex) {
+              If(nearLod.and(U.pcssOn.greaterThan(0.5)), () => {
+                const bt = float(1.5 / (SHD.blockerSize || 512)).mul(boxK).toVar();
+                const btap = (px, py) =>
+                  texture(SHD.blockerTex, flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
+                const zb = min(min(btap(-1.0, 1.0), btap(1.0, 1.0)),
+                               min(btap(-1.0, -1.0), btap(1.0, -1.0)));
+                const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
+                R.assign(mix(float(1.5), float(6.0), pen));
+              });
+            }
             // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
             // ground, not screen-keyed — no penumbra boil while driving.
             const ign = ignoise(floor(sc.xy.div(t)));

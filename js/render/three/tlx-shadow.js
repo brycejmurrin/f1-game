@@ -28,14 +28,21 @@
  * LessEqualCompare == GLX's LINEAR + COMPARE_REF_TO_TEXTURE), WGSL
  * textureSampleCompare on WebGPU.
  *
- * TODO M4-PCSS: GLX builds a 512² R16F min-of-4 blocker map from the sun
- * depth texture through a COMPARE-OFF sampler object (js/render/glx/shadow.js)
- * for the PCSS-lite penumbra search. three has no per-use sampler override —
- * a texture with compareFunction set is ALWAYS declared sampler2DShadow /
- * textureSampleCompare, so the same depth texture cannot also be read as a
- * plain texture in another pass. Porting PCSS needs either a second
- * depth-in-color caster pass or a three-level sampler hack; skipped for M4 —
- * tlx.js pcss() stays false and tsl-lit uses the fixed near radius (R = 3).
+ * PCSS blocker map (closes TODO M4-PCSS, WebGPU backend only): GLX builds a
+ * 512² R16F min-of-4 blocker map from the sun depth texture through a
+ * COMPARE-OFF sampler object (js/render/glx/shadow.js). three has no per-use
+ * sampler override — a texture with compareFunction set is ALWAYS declared
+ * sampler2DShadow / textureSampleCompare, so the same depth texture cannot
+ * also be SAMPLED as a plain texture. But WGSL textureLoad takes NO sampler
+ * at all and is legal on texture_depth_2d (the WGSL builder's
+ * generateTextureLoad emits it as-is), so on the WebGPU backend the blocker
+ * downsample reads the sun depth with TSL.textureLoad and needs no second
+ * caster pass — refreshed in endPass() only when the SUN map re-rendered,
+ * GLX's snap-cache cadence. The WebGL2 fallback backend keeps pcssEnabled
+ * false (texelFetch on sampler2DShadow is invalid GLSL; the compare-off
+ * route there needs a depth-in-color caster pass — see
+ * docs/research/TLX-PCSS-RESEARCH.md), so tsl-lit keeps the fixed R = 3
+ * radius on that path, which is also GLX's own no-blocker fallback look.
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.shadowSys = (THREE, TSL, ctx) => ({ S, sunTex, … })
@@ -74,7 +81,7 @@
       SIZE: SUN_SIZE,
       enabled: false,
       lightVP: new Float32Array(16),
-      pcssEnabled: false,        // TODO M4-PCSS (see header)
+      pcssEnabled: false,        // true once the WebGPU blocker map builds (header note)
       // True only between a Begin that actually opened a pass and its End —
       // casts gate on THIS, not enabled: on a phone the car/lamp maps
       // are never created, so their Begins no-op but game.js still issues the
@@ -119,6 +126,43 @@
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
+
+    // ── PCSS blocker map (header note): 512² R16F min-of-4 downsample of the
+    // sun depth, WebGPU only — textureLoad is the sampler-free depth read the
+    // WebGL backend cannot express. Guarded end to end: any construction
+    // failure leaves pcssEnabled false and the fixed-R look.
+    const BLOCKER_SIZE = 512;
+    let blockerRT = null, blockerQuad = null;
+    if (sunRT && renderer.backend && renderer.backend.isWebGPUBackend) {
+      try {
+        blockerRT = new THREE.RenderTarget(BLOCKER_SIZE, BLOCKER_SIZE, {
+          format: THREE.RedFormat, type: THREE.HalfFloatType,
+          depthBuffer: false, generateMipmaps: false,
+          minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+        });
+        blockerRT.texture.name = "TLXSunBlocker";
+        const bmat = new THREE.MeshBasicNodeMaterial();
+        bmat.fog = false;
+        // k source texels per dest texel; taps at the block centre ±1 source
+        // texel — texel-exact GLX BLOCKER_FS (its vUV lands on the block
+        // centre and uSrcTexel offsets one source texel with NEAREST).
+        const k = SUN_SIZE / BLOCKER_SIZE;
+        const lo = (k >> 1) - 1, hi = (k >> 1) + 1;
+        bmat.colorNode = TSL.Fn(() => {
+          const ip = TSL.ivec2(TSL.screenCoordinate.xy).mul(TSL.int(k)).toVar();
+          const tap = (x, y) => TSL.textureLoad(sunRT.depthTexture, ip.add(TSL.ivec2(x, y)), TSL.int(0));
+          const d = TSL.min(TSL.min(tap(lo, lo), tap(hi, lo)),
+                            TSL.min(tap(lo, hi), tap(hi, hi)));
+          return TSL.vec4(d, 0.0, 0.0, 1.0);
+        })();
+        blockerQuad = new THREE.QuadMesh(bmat);
+        S.pcssEnabled = true;
+      } catch (e) {
+        try { Log.warn("gfx", "TLX: PCSS blocker setup failed —", e); } catch (_) { /* Log absent */ }
+        blockerRT = null; blockerQuad = null;
+        S.pcssEnabled = false;
+      }
+    }
 
     // ── depth camera: matrices set verbatim from the game's column-major
     // lightVP (proj×view combined), identity view — same manual-matrix trick
@@ -181,6 +225,7 @@
     function endPass() {
       S.depthPassOn = false;
       if (!target) return;
+      const wasSun = target === sunRT;
       for (let i = used; i < pool.length; i++) pool[i].visible = false;
       const prev = renderer.getRenderTarget();
       try {
@@ -192,10 +237,21 @@
         S.enabled = false;
         S.depthPassOn = false;
       }
+      // Blocker refresh rides the SUN pass only (GLX shadowEnd): the snap
+      // cache means once per ~10 m of travel, never per frame. Own guard —
+      // a blocker compile/render failure drops to the fixed-R look without
+      // taking the just-rendered sun map down with it.
+      if (wasSun && S.enabled && S.pcssEnabled && blockerQuad) {
+        try {
+          renderer.setRenderTarget(blockerRT);
+          blockerQuad.render(renderer);
+        } catch (e) {
+          try { Log.warn("gfx", "TLX: PCSS blocker pass failed —", e); } catch (_) { /* Log absent */ }
+          S.pcssEnabled = false;
+        }
+      }
       try { renderer.setRenderTarget(prev); } catch (_) { /* target already unbound */ }
       target = null;
-      // TODO M4-PCSS: this is where GLX refreshes the 512² blocker map from
-      // the just-rendered sun depth (js/render/glx/shadow.js shadowEnd) — see header.
     }
 
     // Prime each target once (empty render) so the depth textures exist on the
@@ -260,7 +316,11 @@
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,
       lampTex: lampRT ? lampRT.depthTexture : null,
-      pcss: false,               // TODO M4-PCSS (see header)
+      // Blocker map for tsl-lit's penumbra search (WebGPU only, header note).
+      // Presence gates the SHADER branch at build; S.pcssEnabled gates the
+      // UNIFORM at runtime so a later blocker failure degrades live.
+      blockerTex: blockerRT ? blockerRT.texture : null,
+      blockerSize: BLOCKER_SIZE,
       shadowBegin,
       castShadow: cast,
       // M7: tlx.js castShadowChunked owns the per-chunk light-frustum cull
