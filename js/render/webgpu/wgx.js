@@ -295,7 +295,8 @@ const WGX = (function () {
   // Invalid RenderPipeline / Invalid BindGroupLayout cascading off the first
   // failure. Unit tests asserting msaa() === 2 passed throughout, because
   // nothing in them ever asked a GPU.
-  const MSAA_COUNT = WGX_LITE ? 1 : 4;
+  // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
+  let MSAA_COUNT = WGX_LITE ? 1 : 4;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -397,6 +398,35 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
+      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
+      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
+      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
+      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
+      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
+      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Sync signals only — never await requestAdapterInfo() (has hung create()
+      // with no timeout on Dawn/SwiftShader).
+      let _softAdapter = false;
+      try {
+        const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+        const info = adapter.info || null;
+        const blob = info ? JSON.stringify(info).toLowerCase() : "";
+        // Empty adapter.info is the SwiftShader/Dawn software fingerprint on
+        // Chrome 148 (hardware adapters report vendor/device/architecture).
+        const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+        _softAdapter = !!(adapter.isFallbackAdapter
+            || infoEmpty
+            || /HeadlessChrome/i.test(ua)
+            || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+      } catch (_) { /* treat as hardware */ }
+      let _allowSoft = false;
+      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
+      if (_softAdapter && !_allowSoft) {
+        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
+      }
+      // sampleCount 4 resolveTarget frames have also come back blank on
+      // software when the escape hatch is set — force MSAA 1.
+      if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
       // treats the phone timer as absent; Safari Mac is the same GPU.
@@ -1336,7 +1366,23 @@ const WGX = (function () {
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
       const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
+        // configured swapchain. Drawing into a stale getCurrentTexture() still
+        // "succeeds" (gpuErrors stay 0) but HeadlessChrome/SwiftShader composites
+        // a blank/white canvas — measured 2026-08-17 with present() running
+        // hundreds of times per second and agentview coverage healthy. Reconfigure
+        // on every buffer-size change (no-op cost vs create()).
+        if (ctx) {
+          try {
+            ctx.configure({
+              device, format, alphaMode: "opaque",
+              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            });
+          } catch (_) { /* next begin() drops the frame if the swapchain is lost */ }
+        }
+      }
       width = w; height = h; aspect = w / h;
     }
     function setRenderScale(s) {
@@ -3557,7 +3603,14 @@ const WGX = (function () {
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _fail("canvas has no webgpu context");
-      ctx.configure({ device, format, alphaMode: "opaque" });
+      // COPY_SRC lets a future present-readback / software blit path sample the
+      // swapchain; RENDER_ATTACHMENT is the required draw target. Reconfigure
+      // again from resize() whenever canvas.width/height change.
+      ctx.configure({
+        device, format, alphaMode: "opaque",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      resize();   // pick up clientWidth now that the context owns the canvas
     } catch (e) {
       return _fail("context configure threw: " + ((e && e.message) || e));
     }

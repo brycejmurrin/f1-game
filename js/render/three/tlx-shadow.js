@@ -152,15 +152,6 @@
     let used = 0;
     let target = null;    // the pass's render target while open
 
-    function beginPass(rt, lightVP, dst) {
-      dst.set(lightVP);
-      shadowCam.projectionMatrix.fromArray(lightVP);
-      shadowCam.projectionMatrixInverse.copy(shadowCam.projectionMatrix).invert();
-      target = rt;
-      used = 0;
-      S.depthPassOn = true;
-    }
-
     function cast(mesh /* {__tlx, geo} */, model /* column-major mat4 */) {
       if (!S.depthPassOn || !mesh || !mesh.geo) return;
       let m = pool[used];
@@ -178,10 +169,64 @@
       used++;
     }
 
+    // Instanced casters (TrackGraph.batches → createInstancedBatch). Separate
+    // pool from discrete Meshes: InstancedMesh.count must match the culled
+    // visible set, and instanceMatrix is already packed on the batch handle.
+    const iPool = [];
+    let iUsed = 0;
+    function castInstanced(batch) {
+      if (!S.depthPassOn || !batch || !batch.geo) return;
+      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      if (!(n > 0)) return;
+      let m = iPool[iUsed];
+      if (!m || (m.userData.tlxInstCap || 0) < batch.instances) {
+        if (m) { castScene.remove(m); try { m.dispose(); } catch (_) { /* */ } }
+        m = new THREE.InstancedMesh(batch.geo, depthMat, batch.instances);
+        m.matrixAutoUpdate = false;
+        m.frustumCulled = false;
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.userData.tlxInstCap = batch.instances;
+        iPool[iUsed] = m;
+        castScene.add(m);
+      }
+      m.geometry = batch.geo;
+      m.material = depthMat;
+      // Copy the (possibly culled/repacked) instance matrices from the live
+      // InstancedMesh the main pass owns, or rebuild from packMatrices.
+      if (batch.imesh && batch.imesh.instanceMatrix) {
+        m.instanceMatrix.array.set(batch.imesh.instanceMatrix.array.subarray(0, n * 16));
+        m.instanceMatrix.needsUpdate = true;
+      } else if (batch.packMatrices) {
+        const src = batch.packMatrices;
+        const tmp = new THREE.Matrix4();
+        for (let i = 0; i < n; i++) {
+          tmp.fromArray(src, i * 16);
+          m.setMatrixAt(i, tmp);
+        }
+        m.instanceMatrix.needsUpdate = true;
+      }
+      m.count = n;
+      m.matrix.identity();
+      m.matrixWorld.identity();
+      m.visible = true;
+      iUsed++;
+    }
+
+    function beginPass(rt, lightVP, dst) {
+      dst.set(lightVP);
+      shadowCam.projectionMatrix.fromArray(lightVP);
+      shadowCam.projectionMatrixInverse.copy(shadowCam.projectionMatrix).invert();
+      target = rt;
+      used = 0;
+      iUsed = 0;
+      S.depthPassOn = true;
+    }
+
     function endPass() {
       S.depthPassOn = false;
       if (!target) return;
       for (let i = used; i < pool.length; i++) pool[i].visible = false;
+      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) iPool[i].visible = false;
       const prev = renderer.getRenderTarget();
       try {
         renderer.setRenderTarget(target);
@@ -263,6 +308,7 @@
       pcss: false,               // TODO M4-PCSS (see header)
       shadowBegin,
       castShadow: cast,
+      castInstanced,
       // M7: tlx.js castShadowChunked owns the per-chunk light-frustum cull
       // (tlx-chunked.js) and feeds each visible chunk through castShadow.
       // This member stays the plain caster as the FALLBACK for the M2

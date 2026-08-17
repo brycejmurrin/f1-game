@@ -220,6 +220,12 @@ function makeGpuHarness(opts = {}) {
       gpu: {
         requestAdapter: async () => ({
           features: { has: (name) => adapterFeatures.includes(name) },
+          // Non-empty info = "hardware" for WGX's software-adapter gate.
+          // Real Dawn SwiftShader often reports {}.
+          info: opts.softAdapter
+            ? {}
+            : { vendor: "test", architecture: "test", device: "mock-gpu" },
+          isFallbackAdapter: !!opts.softAdapter,
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -839,6 +845,7 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   // stack there. WGX cannot: timestamp-query + multisampled rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  // sampleCount must be 1 or 4 in WebGPU (not GLX's 2×).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
@@ -857,6 +864,22 @@ test("desktop harness still takes the full WGX stack (GLX-parity)", async () => 
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("software / empty-info adapter refuses create (white-canvas gate)", async () => {
+  const h = makeGpuHarness({ softAdapter: true });
+  const gfx = await h.create();
+  assert.equal(gfx, null);
+  const fail = h.WGX.lastFailure();
+  assert.ok(fail && /software WebGPU adapter/i.test(fail.reason), fail && fail.reason);
+});
+
+test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async () => {
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapter: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "escape hatch must still boot WGX");
+  assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
 });
 
 test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
@@ -1224,6 +1247,16 @@ test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white roa
     assert.doesNotMatch(m[0], /dpdx|dpdy|fwidth|fw1\(/,
       "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
   }
+});
+
+test("_mkBuffer uses writeBuffer (not mappedAtCreation)", () => {
+  // Dawn's mappable pool exhausts on the ~35 MB chunked scenery buffer and then
+  // fails even 208-byte meshes (measured 2026-08-17; white world with HUD only).
+  // Strip line comments first — the writeBuffer rationale still names the old flag.
+  const code = WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(code, /mappedAtCreation\s*:\s*true/,
+    "_mkBuffer must use queue.writeBuffer, not mappedAtCreation");
+  assert.match(WGX_SOURCE, /queue\.writeBuffer\(buf/, "_mkBuffer must writeBuffer the payload");
 });
 
 test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {

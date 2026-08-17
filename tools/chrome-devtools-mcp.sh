@@ -65,6 +65,8 @@ MCP_ARGS=(
   --chromeArg=--no-sandbox
   --chromeArg=--use-angle=swiftshader
   --chromeArg=--enable-unsafe-swiftshader
+  # Match playwright.config.js: without enable-unsafe-webgpu, HeadlessChrome
+  # exposes navigator.gpu but requestAdapter() returns null → WGX "no adapter".
   --chromeArg=--enable-unsafe-webgpu
 )
 # Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
