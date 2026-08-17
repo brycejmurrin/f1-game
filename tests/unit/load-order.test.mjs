@@ -123,6 +123,26 @@ test("js/game.js BACKEND_FILES equals MANIFEST.DEFERRED, group for group", () =>
   }
 });
 
+test("js/game.js BACKEND_EDGES equals MANIFEST.DEFERRED_EDGES", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const BACKEND_EDGES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare BACKEND_EDGES for the DAG loader");
+  const listed = [...block[1].matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(listed, MANIFEST.DEFERRED_EDGES);
+});
+
+test("DEFERRED_EDGES leave more than one TLX file ready at wave 0", () => {
+  const files = MANIFEST.DEFERRED.three;
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of MANIFEST.DEFERRED_EDGES) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const wave0 = files.filter((f) => preds.get(f).length === 0);
+  assert.ok(wave0.length >= 6, `TLX wave 0 should start the independent IIFEs together, got ${wave0.length}: ${wave0.join(",")}`);
+  assert.ok(!wave0.includes("js/render/three/tlx.js"), "tlx.js must wait for its factories");
+  assert.ok(!wave0.includes("js/render/three/tsl-lit.js"), "tsl-lit.js must wait for tsl-chunks.js");
+});
+
 test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
   const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);

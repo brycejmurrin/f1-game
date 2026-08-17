@@ -46,10 +46,9 @@ const els = {
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch, set on the first world present
-// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
-// order — each group has eval-time dependencies inside it, which the <script>
-// tag order used to enforce and loadBackendScripts() now enforces by awaiting
-// each file before starting the next.
+// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Array order
+// is the documented toposort; loadBackendScripts starts every file whose
+// BACKEND_EDGES predecessors have evaluated (six TLX IIFEs in the first wave).
 const BACKEND_FILES = {
   webgpu: [
     "js/render/webgpu/wgsl-chunks.js",
@@ -69,19 +68,57 @@ const BACKEND_FILES = {
     "js/render/three/tlx.js",
   ],
 };
-// Inject classic (non-module) scripts one at a time, resolving when all have
-// evaluated. `?v=` mirrors the build the shell was served at — the same cache
-// key every tagged asset carries — so a deploy invalidates these too. A load
-// error RESOLVES rather than rejects: the caller's fallback is "the global is
-// missing", which is already the not-supported path.
+// Same pairs as tools/manifest.cjs DEFERRED_EDGES — load-order.test.mjs asserts
+// equality. A load error RESOLVES: missing global is already the fallback.
+const BACKEND_EDGES = [
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"],
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
+  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
+  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
+  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],
+  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],
+  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"],
+  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],
+];
 function loadBackendScripts(files) {
-  return files.reduce((chain, src) => chain.then(() => new Promise((resolve) => {
+  const pending = new Set(files), done = new Set(), inflight = new Set();
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of BACKEND_EDGES) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const inject = (src) => new Promise((resolve) => {
     const el = document.createElement("script");
     el.src = src + "?v=" + (window.__APEX_BUILD || 0);
     el.crossOrigin = "anonymous";
     el.onload = el.onerror = () => resolve();
     document.head.appendChild(el);
-  })), Promise.resolve());
+  });
+  return new Promise((finish) => {
+    const pump = () => {
+      if (!pending.size && !inflight.size) { finish(); return; }
+      for (const src of files) {
+        if (!pending.has(src)) continue;
+        if (!preds.get(src).every((p) => done.has(p))) continue;
+        pending.delete(src);
+        inflight.add(src);
+        inject(src).then(() => { inflight.delete(src); done.add(src); pump(); });
+      }
+    };
+    pump();
+  });
+}
+function preloadThreeVendor() {
+  for (const href of ["vendor/three-0.184.0/three.webgpu.min.js", "vendor/three-0.184.0/three.tsl.min.js"]) {
+    const el = document.createElement("link");
+    el.rel = "modulepreload";
+    el.href = href;
+    el.crossOrigin = "anonymous";
+    document.head.appendChild(el);
+  }
 }
 try {
   let pref = null;
@@ -125,14 +162,14 @@ try {
     //
     // The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs asserts
     // this loader and that manifest name exactly the same files, and that sw.js
-    // precaches them). Order matters — the groups carry eval-time dependencies
-    // (DEFERRED_EDGES) the tag order used to guarantee — so load STRICTLY IN
-    // SEQUENCE rather than in parallel.
+    // precaches them). Eval-time edges (BACKEND_EDGES === DEFERRED_EDGES) are
+    // the only waits — independent IIFEs fetch and evaluate together.
     //
     // No error path is needed beyond this: if a fetch fails, the backend global
     // is simply absent, and Gfx.create already treats that as "unavailable"
     // (`typeof TLX === "undefined"`) and returns null, which falls through to
     // GLX below exactly as an unsupported browser always has.
+    if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {

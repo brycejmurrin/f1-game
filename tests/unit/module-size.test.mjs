@@ -308,7 +308,9 @@ const CEILINGS = {
   // union with the ceiling test's own split-newline metric.
   // -> 8544 collision arc-bucket broadphase (helpers + bucketed pair walks).
   // -> 8547 deploy∪TLX-load∪collision: 8544 plus the frozen env-face gate.
-  "js/game.js": 8547,
+  // -> 8584 TLX/WGX deferred IIFEs load as a DAG (BACKEND_EDGES) plus
+  // modulepreload of the three vendor when the pick is already "three".
+  "js/game.js": 8584,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
