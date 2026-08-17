@@ -298,7 +298,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // view-space position + normal BEFORE the sky early-out (an early conditional
   // return makes everything after it non-uniform).
   let P = ssaoViewPos(in.uv);
-  let N = normalize(cross(dpdx(P), dpdy(P)));
+  // Guarded like GLX: at a depth silhouette the two derivatives can be parallel
+  // or zero, and normalize(0) is NaN — one speckled AO pixel per silhouette
+  // edge. Fall back to eye-facing.
+  let crN = cross(dpdx(P), dpdy(P));
+  let crL = length(crN);
+  let N = select(vec3<f32>(0.0, 0.0, 1.0), crN / crL, crL > 1e-6);
   let dCentre = ssaoDepth(in.uv);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
   // Screen-space radius shrinks with distance so world reach stays ~constant.
@@ -325,7 +330,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   var ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * strength;
 
   // Contact shadows: short view-space march toward the sun sampling depth.
-  if (contact > 0.0 && U.sunVS.z < 0.0) {
+  if (contact > 0.0 && U.sunVS.z < 0.05) {   // sun at/in front of the camera plane
     var sh = 1.0;
     for (var s = 1; s <= 5; s = s + 1) {
       let q  = P + U.sunVS.xyz * (0.04 * f32(s));   // up to ~0.32 m toward the sun
@@ -334,11 +339,24 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       if (quv.x < 0.0 || quv.x > 1.0 || quv.y < 0.0 || quv.y > 1.0) { break; }
       // proj gives NDC (y-up); flip to texture space to sample the scene depth.
       let quvT = vec2<f32>(quv.x, 1.0 - quv.y);
-      let sz = ssaoViewPos(quvT).z;
-      let dz = sz - q.z;
-      if (dz > 0.015 && dz < 0.5) { sh = 1.0 - contact; break; }
+      let B  = ssaoViewPos(quvT);                   // blocker view position
+      let dz = B.z - q.z;
+      // Reject the receiver's OWN near-coplanar surface (GLX parity). On flat
+      // road at a grazing angle the point sampled ahead is almost coplanar with
+      // this pixel, so the raw dz window fires on the road itself — and being
+      // screen-space it SWIMS across the tarmac as the camera moves. A real
+      // grounding occluder (wheel, barrier foot, kerb) rises above the
+      // receiver's tangent plane; the road does not. Bias grows with distance
+      // so a far road pixel, whose whole march projects into a pixel or two,
+      // is not over-rejected.
+      let above = dot(N, B - P);
+      let aboveBias = 0.05 + 0.01 * max(-P.z - 6.0, 0.0);
+      if (dz > 0.015 && dz < 0.5 && above > aboveBias) { sh = 1.0 - contact; break; }
     }
-    ao = ao * sh;
+    // Fade as the sun crosses the camera plane instead of cutting hard at 0, so
+    // a chase-cam yaw cannot flip the whole grounding shadow off in one frame.
+    let front = clamp(-U.sunVS.z * 6.0, 0.0, 1.0);
+    ao = ao * mix(1.0, sh, front);
   }
   return vec4<f32>(vec3<f32>(ao), 1.0);
 }`;
