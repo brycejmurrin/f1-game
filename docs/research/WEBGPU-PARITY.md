@@ -20,13 +20,17 @@ sampled in `fs_main` with `textureSample` (implicit LOD + anisotropy, same
 as GLX `texture()`) before any non-uniform branch; other layers still use
 `textureSampleLevel`. Pack upload is `writeTexture` of raw RGBA8 bytes —
 `copyExternalImageToTexture` into `rgba8unorm` linearises the mean-128
-asphalt scan and breaks `albedo * tex * 2.0`. 2026-08-17 later: a split
-`float32` + `float32x3` at offsets 36/40 of the stride-52 VBO was spec-legal
-but Dawn delivered 0 for both — every fragment read `matId=0` / `trk=0`, so
-asphalt never ran and `roadMarkings` gated off. Packed as one `float32x4`
-(`mat, s, x, hw`) at `@location(3)` on a **dedicated stride-16 GPUBuffer**
-(slot 1). Same-VBO `setVertexBuffer(..., 36)` also delivered 0 — validators
-treat `offset + stride * vertexCount` as past the end of a tightly packed VBO.
+asphalt scan and breaks `albedo * tex * 2.0`. 2026-08-17 later: a 4th
+per-vertex attribute (and even `pos.w` of a packed float32x4) was delivered
+as 0 on the **road** VBO — cars were fine. Every road fragment read
+`matId=0` / `trk=0`, so asphalt never ran and `roadMarkings` gated off.
+`vertex_index` on that ribbon also stayed 0 (`drawIndexed` and large
+`draw`), so a per-vertex storage array always returned the grass skirt at
+slot 0. Interpolators after location 3 are dropped. WGX now uploads a
+world-XZ centerline LUT (`_makeRoadLUT`, magic 12345) on group 2;
+`trkFromWorld` rebuilds `(mat, s, x, hw)` from `wpos` so asphalt + paint
+do not depend on the broken attribute. Vertex colour stays the real
+albedo (packing into RGB greys the grass shoulders).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -513,11 +517,10 @@ No API research left:
   blend already exists on glow.
 - **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
   into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
-- **`trk` / road markings** — packed with `mat` as `@location(3) float32x4`
-  (`mat, s, x, hw`) on a dedicated stride-16 vertex buffer (`mesh.abuf`).
-  A split `float32`+`float32x3` at the tail of stride 52, and a same-VBO
-  bind at byte 36, were both dropped by Dawn (every mesh shaded FLAT, paint
-  vanished). Meshes without `trk` keep a zero-filled extra float[3] in `abuf`.
+- **`trk` / road markings** — `rgba32float` texture `@group(2)` +
+  `textureLoad` at `vertex_index`. A 4th vertex attribute (and packed
+  `pos.w`) was dropped on the road VBO; vertex-stage storage failed
+  validation. The ribbon had been shading FLAT with paint gated off.
 - **Heat haze / car-paint SSR** — composite / SSR-consume ports from
   `js/render/shaders/post.js`.
 

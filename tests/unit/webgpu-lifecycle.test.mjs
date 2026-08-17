@@ -819,11 +819,23 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /-0\.94201624/);
   assert.match(CHUNKS_SOURCE, /lampShadowTex/);
   assert.match(CHUNKS_SOURCE, /aInst0/);
-  assert.match(CHUNKS_SOURCE, /aMatTrk/);
-  assert.match(WGX_SOURCE, /VERTEX_ATTR_LAYOUT/);
-  assert.match(WGX_SOURCE, /arrayStride: 16/);
-  assert.match(WGX_SOURCE, /setVertexBuffer\(1, abuf\)/);
-  assert.match(WGX_SOURCE, /abuf = _mkBuffer\(b\.attr/);
+  assert.match(CHUNKS_SOURCE, /matTrkArr/);
+  assert.match(CHUNKS_SOURCE, /@builtin\(vertex_index\) vid/);
+  assert.match(CHUNKS_SOURCE, /packedRoad/);
+  assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
+  assert.match(WGX_SOURCE, /o\.surfaceId/);
+  assert.match(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
+  assert.match(CHUNKS_SOURCE, /fn trkFromWorld/);
+  assert.match(CHUNKS_SOURCE, /12345/);
+  assert.match(WGX_SOURCE, /_makeRoadLUT/);
+  assert.match(WGX_SOURCE, /out\[0\] = 12345/);
+  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 52/);
+  assert.match(WGX_SOURCE, /_expandPull/);
+  assert.match(WGX_SOURCE, /hasTrk/);
+  assert.match(WGX_SOURCE, /const PIECE = 4095/);
+  assert.match(WGX_SOURCE, /g2Layout/);
+  assert.match(WGX_SOURCE, /read-only-storage/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, attrBG/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
@@ -1260,9 +1272,9 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrk = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
-                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
-                    /roadMarkings\(&albedo, &rough, in\.trk, fwTrk\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.yzw\)\) \+ abs\(dpdy\(in\.matTrk\.yzw\)\);/,
+                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
+                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
