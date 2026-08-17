@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 98 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 98 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -235,7 +235,6 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `foundation` | the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
 | `collision` | car-to-car and wall collision, drift, off-track |
 | `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
-| `barriers` | track wall geometry + the AI-fixes barrier regressions |
 | `debris` | the Rapier debris side-world |
 | `steering` | presets, sliders, steering modes, gamepad |
 
@@ -254,7 +253,6 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 |---|---|
 | `webgl` | instanced draw, GL capability probes, lighting A/B, image grade |
 | `ab` | the lighting A/B pixel comparison alone |
-| `visual` | per-circuit pixel-diff regression (slow) |
 | `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
 | `shimmer` | does baked tarmac crawl under motion |
 | `tlx` | the three.js/TSL backend probes |
@@ -275,7 +273,6 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `modes` | season, time trial, career, qualifying |
-| `career` | career + qualifying alone: the mode axes, the save, the hub, the grid |
 | `net` | multiplayer in a browser: car roles, the per-car input seam, the session, the lobby, the waiting room, and the camera SCAN (a real `getUserMedia` against a Y4M of a real QR that Chromium plays as a webcam) |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `service-worker` | the SW's install/fetch/version behaviour |
@@ -369,12 +366,11 @@ separate processes with separate ports, and the sizing guidance above applies.
 All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
 outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
 six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
-is a real gate. `tracks-visual.spec.js` has none, so it is PARKED: `npm run
-test:visual` SKIPS itself rather than failing 40 circuits on missing
-snapshots, which means a green run today asserts nothing — not "pixels
-verified", just "skipped". Generating baselines on Linux/SwiftShader is still
-outstanding; the suite re-enables itself automatically once the directory
-exists.
+is a real gate. `tests/manual/tracks-visual.spec.js` has none, so it is PARKED
+under `tests/manual/` (playwright `testIgnore`) rather than exposed as a
+`test:visual` npm group — a green run of that suite today would assert nothing.
+Generating baselines on Linux/SwiftShader is still outstanding; move it back
+under `tests/specs/` and add a group only once the snapshot directory exists.
 
 ### Fixtures (`tests/helpers/fixtures.js`)
 
@@ -726,7 +722,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `tracks-walls.spec.js` | barrier geometry on all 40 circuits — the car stays inside a sane corridor |
-| `tracks-visual.spec.js` | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **PARKED, 0 verification value: no baselines committed, suite self-skips** |
+| `tracks-visual.spec.js` (under `tests/manual/`) | per-circuit pixel-diff regression (all 40 circuits × 6 fractions) — **PARKED**: no baselines committed; not an npm gate |
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
@@ -892,7 +888,7 @@ what it covers.
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
 | `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. | guards `tools/select-specs.mjs`, the per-spec selector behind ci.yml's advisory `selected` job. Glob expansion against the real tree, dedupe across groups, the budget cut (every spec lands in selected OR the named skip list — silent truncation would read as "covered"), and that the ADVISORY settings (retries 0, 120 s/test) provably fit more tests than smoke's gate settings — the whole reason the job exists |
-| `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 113 Playwright specs**, with 111 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
+| `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 112 Playwright specs**, with 110 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/helpers/fixtures.js` do |

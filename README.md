@@ -142,7 +142,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** — 113 Playwright specs — plus
+The project ships a **Playwright test suite** — 112 Playwright specs — plus
 98 `node --test` unit suites,
 screens, multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change

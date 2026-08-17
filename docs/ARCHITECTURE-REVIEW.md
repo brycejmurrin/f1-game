@@ -517,7 +517,7 @@ Deferred with reasoning, none lost:
   `tools/assert-audit.mjs` now grades every test in the tree
   asserting/implicit/vacuous and `tests/unit/assert-audit.test.mjs` fails on a
   vacuous body anywhere outside that one allow-listed file.
-- **`tests/specs/tracks-visual.spec.js` baselines were never generated** — the spec
+- **`tests/manual/tracks-visual.spec.js` baselines were never generated** — the spec
   is skip-gated on the snapshot dir existing; generating 40 circuit baselines
   on Linux/SwiftShader is its own operation.
 - **Catalogued dead exports — VERIFIED, and mostly not dead.** The ~60-item

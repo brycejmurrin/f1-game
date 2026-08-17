@@ -7,7 +7,7 @@
   {
     id: "baku",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
-    // TODO: startFrac not GPS-calibrated (defaults to 0)
+    // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
     name: "BAKU",
     gp: "Azerbaijan GP",
     country: "Azerbaijan",

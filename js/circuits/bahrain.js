@@ -7,7 +7,8 @@
   {
     id: "bahrain",
     reverse: false,  // driving direction flipped (manual override of the GPS-trace auto-audit)
-    startFrac: 0.2250, // GPS-derived (OpenF1 2025, conf=0.208)
+    // Bounded only (START-LINES: Not located — OSM pit way is a weak proxy). Keep until a better source.
+    startFrac: 0.2250,
     name: "BAHRAIN",
     gp: "Bahrain GP",
     country: "Bahrain",

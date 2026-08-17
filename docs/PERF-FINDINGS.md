@@ -184,8 +184,10 @@ Two rules fall out of that:
   permanently red"), which is why it is deliberately not in CI. **Do not
   re-bless the goldens to make it green** — that destroys them for the
   environment where they do work.
-- **`test:visual` SILENTLY SKIPS all 40 tests** and reports
-  `= run passed (40/40 done, 0 failed)`. `tests/specs/tracks-visual.spec.js`
+- **`test:visual` was retired** (suite parked under `tests/manual/tracks-visual.spec.js`).
+  Historically it SILENTLY SKIPPED all 40 tests and reported
+  `= run passed (40/40 done, 0 failed)`. The parked spec
+  `tests/manual/tracks-visual.spec.js`
   self-skips when no golden PNGs are committed, and per CLAUDE.md goldens exist
   for the MENUS only. A green line that verifies nothing is more dangerous than
   a red one: the giveaway is that start and finish carry the same timestamp.

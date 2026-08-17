@@ -60,7 +60,7 @@ export const RULES = [
    "load order, docs integrity, api contracts — 4 s, catches the structural slips"],
 
   // ── renderer ────────────────────────────────────────────────────────────
-  // NOT "visual" — tests/specs/tracks-visual.spec.js is PARKED. It has no
+  // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group
   // reports `= run passed (40/40 done, 0 failed)` at 0.0 s per test while
   // asserting nothing. Recommending it here made that vacuous green look like
@@ -114,7 +114,7 @@ export const RULES = [
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
-  [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["career"], ""],
+  [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
