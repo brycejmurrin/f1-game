@@ -1,0 +1,17 @@
+---
+description: Apex 26 shared agent layout — point Cursor at the Claude tree and AGENTS.md
+alwaysApply: true
+---
+
+# Apex 26 — Cursor entry
+
+- **Rules:** read root `AGENTS.md` (canonical). Root `CLAUDE.md` is a stub that
+  imports it; do not edit rules into `CLAUDE.md`.
+- **Skills:** `.claude/skills/*/SKILL.md` (shared with Claude Code). Do not add
+  a parallel `.cursor/skills/` tree unless a skill is Cursor-only.
+- **Subagents:** `.claude/agents/*.md` (e.g. `deploy-research` for tinyfish
+  post-deploy / public-web research). Prefer these over inventing ad-hoc
+  workers for the same job.
+- **MCP:** `.mcp.json` → `probe` / `tinyfish` / `chrome-devtools`. Live game or
+  deploy checks: skill `mcp-probe`. Never run Chrome MCP while Playwright is
+  running; never hand a subagent a browser test group.

@@ -1,5 +1,5 @@
 # Agent working directories (git worktrees created by background agents) and
-# local Claude settings — but keep the shared developer skills tracked.
+# local Claude settings — but keep the shared developer skills + agents tracked.
 .claude/*
 !.claude/skills/
 !.claude/agents/

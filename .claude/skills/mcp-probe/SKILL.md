@@ -745,6 +745,25 @@ Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
 
+## Research recipes (tinyfish — no Chrome)
+
+Use these when the question is the **deployed** artifact or the **public web**.
+For a long fetch/search that would flood the main context, delegate to the
+`deploy-research` subagent (`.claude/agents/deploy-research.md`) instead of
+inlining every page.
+
+| Goal | Command |
+|---|---|
+| Live vs local build | `./tools/tinyfish-mcp.sh deploy-check` |
+| Confirm a marker shipped | `./tools/tinyfish-mcp.sh deploy-js js/<path>.js` then grep the unique string |
+| Raw Pages URL | `./tools/tinyfish-mcp.sh fetch --ttl 0 "https://brycejmurrin.github.io/f1-game/…"` |
+| External grounding | `./tools/tinyfish-mcp.sh search "…"`, then `fetch` the best URLs |
+| Via probe wrapper | `python3 tools/probe-mcp.py call tinyfish_fetch_content '{"urls":["…"]}'` |
+
+Do **not** use tinyfish for the working tree (localhost). Do **not** use Chrome
+DevTools MCP for `github.io` from this container (egress proxy). Pattern
+false-negatives under `format: markdown` — see the `*` escape gotcha above.
+
 **Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
 (shell env / `.env` override it), so `ensure` works on a fresh checkout.
 All 16 upstream tools verified working 2026-08-17 except `get_wallet`
