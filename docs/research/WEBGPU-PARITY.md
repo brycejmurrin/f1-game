@@ -30,7 +30,7 @@ The gaps fall into three kinds:
 
 | Kind | Examples | What it actually is |
 |---|---|---|
-| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Remaining honest gap: TAA (still off). |
+| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
 | **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 

@@ -78,9 +78,9 @@
  *   - the full-res SSR target (8 B/px that GLX does not allocate at all) is
  *     skipped on the mobile tier; the 1×1 placeholder makes the LIT SSR block a
  *     documented no-op.
- * What is NOT covered: post-chain target FORMATS are still the fat ones
- * (SSAO rgba8 vs GLX r8; bloom/godray rgba16float vs GLX R11F_G11F_B10F), so a
- * phone frame still carries roughly 1.5x GLX's discretionary target bytes.
+ * Post-chain target formats match GLX's slim set: SSAO is r8unorm (GLX r8),
+ * bloom/godray are rg11b10ufloat (GLX R11F_G11F_B10F). The HDR scene target
+ * stays rgba16float because LIT writes scene-alpha (the SSR car-paint tag).
  * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
  * which reverts to WebGL2 on jetsam. A live create/device-lost refusal keeps
  * the WEBGPU pick and falls this tab back to GLX (session skip).
@@ -176,7 +176,8 @@ const WGX = (function () {
   const SCENE_FORMAT = "rgba16float";   // HDR scene (core-renderable/blendable)
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
-  const SSAO_FORMAT  = "rgba8unorm";    // AO half-res (composite samples .r)
+  const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
+  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -464,8 +465,11 @@ const WGX = (function () {
       try {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-      } catch (_) { /* no sessionStorage: the frozen-frame rule above applies */ }
+      } catch (_) { /* no sessionStorage: re-arm the canary below */ }
       if (skipped) { try { location.reload(); } catch (_) { /* harness */ } }
+      else {
+        try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* next boot has no canary; RESET is the way back */ }
+      }
     }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
@@ -506,6 +510,11 @@ const WGX = (function () {
           (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
       if (skipped) { try { location.reload(); } catch (_) { /* no location (harness/worker) */ } }
+      else {
+        // Next cold start finds the canary armed and reverts to WebGL2 instead
+        // of replaying this loss (the handler already disarmed the live probe).
+        try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET is the remaining door */ }
+      }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -1049,13 +1058,13 @@ const WGX = (function () {
           pGodray = device.createRenderPipeline({
             layout: device.createPipelineLayout({ bindGroupLayouts: [grG0] }),
             vertex: { module: grMod, entryPoint: "vs_main" },
-            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
+            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: POST_HDR_FORMAT }] },
             primitive: { topology: "triangle-list" },
           });
         }
         if (_Post.BLUR) {
           pBlur    = fsPipe(_Post.BLUR, SSAO_FORMAT,  null);
-          pBlurHDR = fsPipe(_Post.BLUR, SCENE_FORMAT, null);
+          pBlurHDR = fsPipe(_Post.BLUR, POST_HDR_FORMAT, null);
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
@@ -1407,9 +1416,9 @@ const WGX = (function () {
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ssaoBlurTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          next.godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+          next.godrayTex = device.createTexture({ size: [halfW, halfH], format: POST_HDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          next.godrayBlurTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+          next.godrayBlurTex = device.createTexture({ size: [halfW, halfH], format: POST_HDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -1435,7 +1444,7 @@ const WGX = (function () {
           for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
             if (i > 0) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
             if (i > 0 && (bw < 4 || bh < 4)) break;
-            const tex = device.createTexture({ size: [bw, bh], format: SCENE_FORMAT,
+            const tex = device.createTexture({ size: [bw, bh], format: POST_HDR_FORMAT,
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
             const level = { tex, view: null, w: bw, h: bh };
             next.bloomLv.push(level);   // take ownership before createView can throw

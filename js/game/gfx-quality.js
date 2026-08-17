@@ -127,6 +127,9 @@ function paintRenderer(rb) {
 
 // Keys the RESET RENDERER button drops. The GRAPHICS preset (apex26.gfxHigh
 // + GameStore gfxPreset) is a quality floor, not a backend pick — leave it.
+// Context-loss latches (envProbeOff / perChunkOff / ctxLostReloads) ARE
+// renderer crash state: GLX/TLX write them on a GPU reset, and leaving them
+// made RESET boot a "clean" WebGL2 with probe and per-chunk lamps still off.
 // Session flags are the iPhone recovery half: gfxClaimFail skips the opt-in
 // for the rest of the tab, and gfxBound is what the label reads after a
 // fallback, so a wipe that left them would reload into the same stuck state.
@@ -134,8 +137,10 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxBackend", "apex26.gfxBackendProbe",
   "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
   "apex26.gfxTlxFail",
+  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.tlxForceGL", "apex26.tlxViz",
 ];
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads"];
 
 function clearRendererStorage() {
   const removed = [];
@@ -195,7 +200,7 @@ function initRenderer() {
     // the sniffed baseline instead of a rung a long-dead session earned.
     if (next === "webgpu") {
       try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
-        localStorage.removeItem("apex26.gfxWgxOk"); } catch (_) {}
+        localStorage.removeItem("apex26.gfxWgxOk"); localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) {}
       try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
     }
     rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";

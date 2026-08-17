@@ -92,7 +92,7 @@ try {
   // RENDERER button bounce back every refresh.
   let skipClaim = false;
   try { skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* no sessionStorage: try the opt-in as usual */ }
+    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = true; /* cannot persist a skip: never claim the canvas */ }
   // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
   // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
   // with the lower half black. But the menu is DOM over the canvas: it survives a

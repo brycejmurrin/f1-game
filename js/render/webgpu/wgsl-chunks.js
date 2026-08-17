@@ -1300,9 +1300,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    clouds with twilight horizon bank + lightning flash, Mie sun corona +
   //    disc, stars, moon, and city skyglow. Composed from the leaves above.
   //
-  //    SkyU is 240 B (p0–p5); p5.x is CLOUD DEFINITION (uCloudDef), p5.y is
-  //    lightning (uLightning strike flash). The moon sits behind covRay like
-  //    the stars.
+  //    GLX SKY_FS parity: overcast grey-shift (night-gated), twilight horizon
+  //    cloud-bank, and azimuthal gradient variation. SkyU is 240 B (p0–p5);
+  //    p5.x is CLOUD DEFINITION (uCloudDef), p5.y is lightning (uLightning).
+  //    The moon sits behind covRay like the stars.
   //
   //    Uniform block layout MUST match WGX._writeSky() (see wgx.js). vec3s are
   //    padded to vec4 per WGSL's 16-byte alignment.
@@ -1400,9 +1401,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
-    // Overcast grey-shift (GLX SKY_FS): flatten toward a uniform grey lid under
-    // heavy cloud; at night the lid is derived from the authored zenith+horizon
-    // so overcast nights stay a FLATTEN, not a pale brighten.
+    // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
+    // must not paint a pale lid over a night+rain session.
     let nightLid = (U.zenith.xyz + U.horizon.xyz) * 1.25;
     let greyZ = mix(vec3<f32>(0.55, 0.56, 0.58), nightLid, nightSky);
     let greyH = mix(vec3<f32>(0.58, 0.58, 0.60), nightLid, nightSky);
@@ -1422,10 +1422,18 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up)));
     }
     // Golden-hour warm band near the horizon when the sun is low.
-    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up));
+    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up))
+                  * (1.0 - overcast * 0.9);
     let goldenColor = mix(vec3<f32>(0.70, 0.22, 0.04), vec3<f32>(0.92, 0.55, 0.16),
                           clamp(sunE * 2.5, 0.0, 1.0));
     c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+    let lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
+                * (1.0 - smoothstep(0.0, 0.18, up))
+                * smoothstep(0.01, 0.06, up)
+                * (1.0 - overcast * 0.85);
+    let lowColor = mix(vec3<f32>(0.90, 0.26, 0.03), vec3<f32>(1.0, 0.66, 0.12),
+                       clamp(sunE * 3.0, 0.0, 1.0));
+    c = mix(c, lowColor, lowBand * 0.70);
   } else {
     let gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
@@ -1452,7 +1460,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
       // Twilight / day horizon cloud-bank (GLX SKY_FS): distant cumulus on a
       // compressed plane so the low gameplay sky band isn't a plain wash.
-      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 1.4 * 0.0028, cT * 1.4 * 0.0011);
+      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
       let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
       let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
                   * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
