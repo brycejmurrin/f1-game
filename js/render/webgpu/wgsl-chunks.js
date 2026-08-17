@@ -563,8 +563,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrk = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
+  let topNgeo = normalize(in.nrm);
+  let ccDx = dpdx(topNgeo);
+  let ccDy = dpdy(topNgeo);
+  let saaDx = dpdx(topNgeo);
+  let saaDy = dpdy(topNgeo);
 
-  var N = normalize(in.nrm);
+  var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
@@ -614,9 +619,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // Footprint fade (GLX lit.js): grazing road pixels span metres; without this
     // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
     // the car. Distance fade alone misses a near-but-grazing patch.
-    // fwidth(x) = abs(dpdx)+abs(dpdy); WGSL has no fwidth — same magnitude.
-    let mnFpAbs = max(abs(dpdx(in.wpos.x)) + abs(dpdy(in.wpos.x)),
-                      abs(dpdx(in.wpos.z)) + abs(dpdy(in.wpos.z)));
+    // Derived from fwWpos computed in top-level uniform control flow.
+    let mnFpAbs = max(fwWpos.x, fwWpos.z);
     mnFade = mnFade * clamp(1.0 - (mnFpAbs - 0.15) / 0.70, 0.0, 1.0);
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
@@ -631,16 +635,6 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // orange-peel/flake live UNDER the lacquer, so they must not roughen the mirror
   // shell (GLX LIT_FS js/render/shaders/lit.js).
   let Ngeo = N;
-  // Screen-space derivatives of that geometric normal, for the clearcoat lobe's
-  // specular-AA widening in [Block 2] far below. They are taken HERE, at uniform
-  // control flow, because WGSL forbids dpdx/dpdy inside a non-uniform branch:
-  // taking them inside the clearcoat branch is a hard COMPILE ERROR
-  // ("'dpdx' must only be called from uniform control flow") which invalidates
-  // the whole lit pipeline — and WebGPU reports that asynchronously, so the
-  // backend still "initialises" and then draws an all-black world. Ngeo is a
-  // let-binding and never reassigned, so the value is what it was there.
-  let ccDx = dpdx(Ngeo);
-  let ccDy = dpdy(Ngeo);
   // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/render/shaders/lit.js).
   // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
   // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
@@ -756,11 +750,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
   // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
   // every lamp lobe, so on a night track it is the difference between 48 stable
-  // highlights and 48 flickering ones. Placed at function-body top level on
-  // purpose: WGSL requires derivatives in uniform control flow, so this cannot
-  // move inside the material branches above.
-  let saaDx = dpdx(N);
-  let saaDy = dpdy(N);
+  // highlights and 48 flickering ones. Computed using saaDx/saaDy taken in top-level
+  // uniform control flow to guarantee WGSL specification compliance.
   let saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
 

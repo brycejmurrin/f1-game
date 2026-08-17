@@ -458,6 +458,8 @@ drivers WGX was tuned on. The LIT shader already hoists some derivatives
 calls `dpdx`/`dpdy` inside `if (detail > 0.001)` and via `fw1()` from the
 branched `applyMaterial*` helpers. Until those are uniform-CF, WGX cannot
 be a Playwright visual oracle — only an adapter/device + compile-info gate.
+*(Note: As of August 2026, all `dpdx`/`dpdy` derivative evaluation points in `wgsl-chunks.js`
+have been hoisted to the top-level uniform control flow of `fs_main`, resolving WGSL compile errors).*
 
 Do **not** add the extra Vulkan pins to `playwright.config.js`; they break
 headless boot. Do **not** probe WebGPU on a `data:` page.
