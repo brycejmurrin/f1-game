@@ -38,7 +38,7 @@ need_key() {
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     echo "TINYFISH_API_KEY is not set." >&2
     echo "  1. Get a key: https://agent.tinyfish.ai/api-keys" >&2
-    echo "  2. echo 'TINYFISH_API_KEY=tf_...' > $ENV_FILE" >&2
+    echo "  2. echo 'TINYFISH_API_KEY=sk-tinyfish-...' > $ENV_FILE" >&2
     echo "  3. $0 start" >&2
     exit 1
   fi
@@ -94,6 +94,14 @@ is_up() {
 cmd_start() {
   need_key
   need_repo
+  # The tmux pane sources ONLY $ENV_FILE — a key exported in THIS shell passes
+  # need_key yet never reaches the server, which then 401s on every call.
+  # Persist it (the file lives under gitignored scratch/).
+  if [[ ! -f "$ENV_FILE" && -n "${TINYFISH_API_KEY:-}" ]]; then
+    printf 'TINYFISH_API_KEY=%s\n' "$TINYFISH_API_KEY" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    echo "Wrote $ENV_FILE from shell env (the tmux server reads only the file)" >&2
+  fi
   if is_up; then
     echo "Already listening on ${BASE} (healthz ok)"
     return 0
@@ -297,7 +305,7 @@ cmd_search() {
   load_session
   local q_esc raw
   q_esc="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$q")"
-  raw="$(mcp_post '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":'"${q_esc}"'}}}"')"
+  raw="$(mcp_post '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":'"${q_esc}"'}}}')"
   emit_rpc "$raw" unwrap
 }
 

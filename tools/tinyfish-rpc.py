@@ -84,14 +84,27 @@ def cmd_unwrap(args: argparse.Namespace) -> int:
             print(json.dumps(row, indent=2, sort_keys=True))
         else:
             url = row.get("url") or row.get("final_url")
-            if url and len(bodies) > 1:
-                print(f"## {url}")
-            text = row.get("text") or ""
-            if row.get("error"):
-                print(f"ERROR: {row['error']}", file=sys.stderr)
-            sys.stdout.write(text)
-            if text and not text.endswith("\n"):
-                sys.stdout.write("\n")
+            title = row.get("title")
+            snippet = row.get("snippet")
+            if title or snippet:
+                # A search row ({position, site_name, snippet, title, url}) has
+                # an EMPTY text field — printing only text rendered every result
+                # as a bare URL with nothing to judge it by (measured 2026-08-17).
+                pos = row.get("position")
+                print(f"## {f'[{pos}] ' if pos else ''}{title or url}")
+                if url:
+                    print(url)
+                if snippet:
+                    print(snippet)
+            else:
+                if url and len(bodies) > 1:
+                    print(f"## {url}")
+                text = row.get("text") or ""
+                if row.get("error"):
+                    print(f"ERROR: {row['error']}", file=sys.stderr)
+                sys.stdout.write(text)
+                if text and not text.endswith("\n"):
+                    sys.stdout.write("\n")
             if i < len(bodies) - 1:
                 print("---")
     return 0

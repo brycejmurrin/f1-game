@@ -119,6 +119,82 @@ test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   assert.match(r.stdout, /OK/);
 });
 
+test("every mcp_post body in tinyfish-mcp.sh is valid JSON once splices are stubbed", () => {
+  // cmd_search shipped with a stray trailing quote inside its single-quoted
+  // JSON body ('}}}"'), so every search returned -32700 Parse error from the
+  // day the command landed (measured 2026-08-17) — a defect no runtime test
+  // here can see because the suite never hits the live API. Emulate the shell
+  // quoting, replace each '"$var"' splice with a placeholder, and require the
+  // result to parse. Vars named *_esc/*_json/*args splice WHOLE JSON values;
+  // anything else (PROTO) splices into a string's interior.
+  const src = fs.readFileSync(SH, "utf8");
+  const lines = src.split("\n").filter((l) => l.includes("mcp_post '"));
+  assert.ok(lines.length >= 5, `expected the known mcp_post call sites, got ${lines.length}`);
+  for (const line of lines) {
+    const s = line.slice(line.indexOf("mcp_post ") + "mcp_post ".length);
+    let body = "";
+    let inQ = false;
+    let done = false;
+    for (let j = 0; j < s.length && !done; j++) {
+      const c = s[j];
+      if (c === "'") { inQ = !inQ; continue; }
+      if (inQ) { body += c; continue; }
+      if (c === '"') continue; // the wrapper quotes of a '"$var"' splice
+      if (c === "$") {
+        const m = s.slice(j).match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/);
+        if (m) {
+          body += /(_esc|_json|args)$/.test(m[1]) ? '"x"' : "x";
+          j += m[0].length - 1;
+          continue;
+        }
+      }
+      done = true; // left the quoted body — `)`, space, positional arg
+    }
+    assert.doesNotThrow(
+      () => JSON.parse(body),
+      `mcp_post body is not valid JSON in: ${line.trim()}\n→ ${body}`,
+    );
+  }
+});
+
+test("tinyfish-rpc unwrap renders search rows (title + url + snippet, not bare URLs)", () => {
+  // Search rows are {position, site_name, snippet, title, url} with NO text
+  // field — the text-only unwrap printed every result as a naked URL.
+  const fixture = {
+    jsonrpc: "2.0",
+    id: 4,
+    result: {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            query: "monza",
+            results: [
+              {
+                position: 1,
+                site_name: "en.wikipedia.org",
+                snippet: "The Monza Circuit is a 5.793 km race track.",
+                title: "Monza Circuit - Wikipedia",
+                url: "https://en.wikipedia.org/wiki/Monza_Circuit",
+              },
+            ],
+            total_results: 1,
+            page: 1,
+          }),
+        },
+      ],
+    },
+  };
+  const r = spawnSync("python3", [RPC, "unwrap"], {
+    encoding: "utf8",
+    input: JSON.stringify(fixture),
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\[1\] Monza Circuit - Wikipedia/);
+  assert.match(r.stdout, /https:\/\/en\.wikipedia\.org\/wiki\/Monza_Circuit/);
+  assert.match(r.stdout, /5\.793 km/);
+});
+
 test("mcp-cli.mjs drives chrome via chrome-devtools-mcp.sh, not a hard-coded pw path", () => {
   const src = fs.readFileSync(MCP_CLI, "utf8");
   assert.match(src, /chrome-devtools-mcp\.sh/);
