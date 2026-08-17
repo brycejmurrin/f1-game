@@ -174,9 +174,22 @@ export function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
     const verdict = ok ? "PASS" : "FAIL";
     emit(`${verdict}  ${n}/${files.length} ${rel} duration=${fmtDur(dur)} exit=${r.status} ${loadavgLine()}`);
     if (!ok) {
-      const tail = ((r.stdout || "") + (r.stderr || "")).trim().split("\n").slice(-20).join("\n");
-      if (tail) {
-        for (const L of tail.split("\n")) emit(`  | ${L}`);
+      const text = ((r.stdout || "") + (r.stderr || "")).replace(/\r/g, "");
+      const notoks = text.split("\n").filter((L) => /^not ok /.test(L));
+      if (notoks.length) {
+        emit(`  | failed ${notoks.length} subtest(s):`);
+        for (const L of notoks) emit(`  | ${L}`);
+      }
+      // Assertion bodies sit under each `not ok` TAP block. Keep them short
+      // (name/error/expected/actual) so a FAIL is diagnosable without dumping
+      // the whole TAP stream into the sequential log.
+      const detail = text.split("\n").filter((L) =>
+        /^\s+(error:|name: 'AssertionError'|expected:|actual:|operator:)/.test(L));
+      for (const L of detail.slice(0, 40)) emit(`  | ${L.trimEnd()}`);
+      if (detail.length > 40) emit(`  | … ${detail.length - 40} more assertion lines`);
+      if (!notoks.length && !detail.length) {
+        const tail = text.trim().split("\n").slice(-20);
+        for (const L of tail) emit(`  | ${L}`);
       }
     }
     results.push({ file: rel, ok, durationMs: dur, exit: r.status });

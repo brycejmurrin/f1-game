@@ -701,7 +701,7 @@ test("WGX source keeps the proven parity fixes", () => {
   assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);
   assert.match(WGX_SOURCE, /pParticleAdd/);
-  assert.match(WGX_SOURCE, /_grByD/);
+  assert.match(WGX_SOURCE, /_grKeepNearest/);
   assert.doesNotMatch(WGX_SOURCE, /colors\[i \* 3\] \|\| 1/);
 });
 
@@ -812,7 +812,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(WGX_SOURCE, /depthResolveTex/);
   assert.doesNotMatch(WGX_SOURCE, /shadowPipelineInst/);
   assert.match(POST_SOURCE, /li < 6/, "god-ray lamp loop matches GLX GODRAY_FS consumer cap");
-  assert.match(WGX_SOURCE, /Math\.min\(6, total\)/);
+  assert.match(WGX_SOURCE, /_grKeepNearest\(total, 6\)/);
   assert.match(POST_SOURCE, /texture_depth_2d/);
   assert.match(POST_SOURCE, /uLampStr|lampStr/);
   assert.match(POST_SOURCE, /hazeStr|uHazeStr/);

@@ -864,6 +864,11 @@ function step(dt) {
       const t = b.translation();
       const dx = t.x - px, dz = t.z - pz;
       far = dx * dx + dz * dz > MARBLE_FAR_DESPAWN_M * MARBLE_FAR_DESPAWN_M;
+    }
+    if (s.restT > MARBLE_REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
+  }
+
+  // A1: drain the tick's contact-force events, canonicalise the order, and fold
   // real force per car (mirror↔dynamic contacts only).
   drainForces(cars);
 
