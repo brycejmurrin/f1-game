@@ -14,7 +14,9 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/car/render-car.mjs`. |
-| **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump. |
+| **check-changes** | Pre-push validation — `pick-tests`, `test-bg`, `verify-track`, cache bump (one-command form: `tools/verify-change.mjs`). |
+| **test-timeout-triage** | A Playwright test timed out or hangs — machine vs wait vs budget vs bug, `test-solo.mjs` re-runs, the load-inversion case. |
+| **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
 | **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure, live-deploy verification. |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type with the Chrome DevTools MCP — enumerate screens from source, measure each cell, capture. |
 | **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |

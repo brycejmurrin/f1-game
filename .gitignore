@@ -2,6 +2,7 @@
 # local Claude settings — but keep the shared developer skills tracked.
 .claude/*
 !.claude/skills/
+!.claude/agents/
 !.claude/workflows/
 !.claude/hooks/
 !.claude/settings.json
