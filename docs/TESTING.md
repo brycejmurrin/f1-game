@@ -1080,7 +1080,9 @@ no tarball bytes, so every package re-fetched in parallel. The same VM's
 `npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
 Envoy, so `apt-get update` cannot repair a snapshot that is missing
 `mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
-(skip npm when `node_modules` is usable, `--no-audit --prefer-offline`,
-retries; do not fail the build on apt 404 when packages are already present).
+(skip npm only when `node_modules/<pkg>/package.json` exists — hollow
+directories from a crashed reify are not usable — `--no-audit
+--prefer-offline`, retries; do not fail the build on apt 404 when
+packages are already present).
 Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
 and `cdn.playwright.dev` if a cold snapshot must actually download.

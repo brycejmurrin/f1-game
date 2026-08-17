@@ -75,13 +75,14 @@ test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a us
   const cloud = fs.readFileSync(path.join(TOOLS, "cloud-agent-install.sh"), "utf8");
   assert.match(browsers, /--no-audit/);
   assert.match(browsers, /--prefer-offline/);
-  assert.match(browsers, /node_modules\/playwright/);
+  assert.match(browsers, /node_modules\/playwright\/package\.json/);
   assert.match(browsers, /node_modules\/playwright\/cli\.js/);
   assert.match(browsers, /Exit handler never called/);
   assert.doesNotMatch(browsers, /^set -e/m);
   assert.match(cloud, /mesa-vulkan-drivers/);
   assert.match(cloud, /install-browsers\.sh/);
   assert.match(cloud, /\/opt\/google\/chrome\/chrome/);
+  assert.match(cloud, /node_modules\/playwright\/package\.json/);
   assert.doesNotMatch(cloud, /^set -e/m);
 });
 

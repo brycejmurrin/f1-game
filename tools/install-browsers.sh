@@ -36,7 +36,11 @@ ensure_browsers_dir() {
 }
 
 npm_ready() {
-  [[ -d node_modules/playwright && -d node_modules/sharp && -d node_modules/@playwright/test ]]
+  # Directories alone are not enough: the failed-build snapshot left hollow
+  # node_modules/<pkg> folders with no package.json (measured 2026-08-17).
+  [[ -f node_modules/playwright/package.json \
+    && -f node_modules/sharp/package.json \
+    && -f node_modules/@playwright/test/package.json ]]
 }
 
 npm_install_once() {
