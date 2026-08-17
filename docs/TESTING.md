@@ -894,6 +894,19 @@ what it covers.
 The measured history behind the testing gates. CLAUDE.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
 
+**`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
+`test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while
+`test-bg.mjs --status` still said `running`. The log line won the argument and a
+replacement run was started in tmux — so TWO `playwright test` processes then
+shared four cores, load average reached 15.7 against the < 3 guidance, and both
+were writing progress the whole time. `ps -o pid,ppid,lstart -p …` attributed
+them in one command; killing the older tree left the queue clean. Two lessons,
+both already rules that a plausible-looking log line talked me out of: only the
+terminal `= run …` line ends a run, and `pgrep -fa 'playwright test'` BEFORE
+starting anything is the check that makes duplication impossible. (Also: a
+`test-bg` run launched from an ephemeral shell can lose its parent — start long
+queues inside tmux, where the queue survives the shell that spawned it.)
+
 **A total-red run is almost never the code (2026-08-17).** `test:tiny` reported
 `73/73 failed` and the first line of the log said
 `browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.

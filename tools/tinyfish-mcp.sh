@@ -25,6 +25,7 @@ FLAG_JSON=0
 FETCH_FORMAT="markdown"
 FETCH_TTL=""
 FETCH_PURPOSE=""
+DEPLOY_MARKER=""
 
 load_env() {
   if [[ -f "$ENV_FILE" ]]; then
@@ -232,6 +233,7 @@ parse_common_flags() {
   FETCH_FORMAT="markdown"
   FETCH_TTL=""
   FETCH_PURPOSE=""
+  DEPLOY_MARKER=""
   local -a rest=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -246,6 +248,10 @@ parse_common_flags() {
         ;;
       --purpose)
         FETCH_PURPOSE="${2:?--purpose needs a string}"
+        shift 2
+        ;;
+      --marker)
+        DEPLOY_MARKER="${2:?--marker needs an ERE pattern}"
         shift 2
         ;;
       --) shift; rest+=("$@"); break ;;
@@ -314,13 +320,32 @@ cmd_search() {
   emit_rpc "$raw" unwrap
 }
 
+# TinyFish's own fetch times out intermittently — MEASURED 2026-08-17: two
+# consecutive version.json fetches, one "timeout" and one clean, nothing changed
+# in between. It arrives as a SUCCESSFUL JSON-RPC result carrying an errors[]
+# payload, so an unretried caller reports a broken deploy for a blip. The RPC
+# helper exits 3 for exactly that case; anything else is a real answer.
+fetch_live_build() {
+  local args_json raw rc attempt
+  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
+  for attempt in 1 2 3; do
+    raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$args_json"'}}')"
+    LIVE_BUILD_RAW="$raw"
+    LIVE_BUILD="$(printf '%s' "$raw" | python3 "$RPC" live-build 2>/dev/null)"
+    rc=$?
+    [[ "$rc" -ne 3 ]] && return "$rc"
+    [[ "$attempt" -lt 3 ]] && { echo "# TinyFish fetch timed out — retry $attempt/2" >&2; sleep 2; }
+  done
+  return 3
+}
+
 cmd_deploy_check() {
   parse_common_flags "$@"
   cmd_ensure >/dev/null
   load_session
-  local args_json raw
-  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
-  raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$args_json"'}}')"
+  local raw
+  fetch_live_build || true
+  raw="$LIVE_BUILD_RAW"
   if [[ "$FLAG_JSON" -eq 1 ]]; then
     printf '%s\n' "$raw"
     return 0
@@ -347,10 +372,12 @@ cmd_deploy_js() {
   fi
   cmd_ensure >/dev/null
   load_session
-  local ver_args raw live url
-  ver_args="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
-  raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$ver_args"'}}')"
-  live="$(printf '%s' "$raw" | python3 "$RPC" live-build)"
+  local live url
+  if ! fetch_live_build; then
+    echo "deploy-js: could not resolve the live build (see above)" >&2
+    return 3
+  fi
+  live="$LIVE_BUILD"
   url="${DEPLOY_BASE}/${rel}?v=${live}"
   echo "# live=${live}  $url" >&2
   # Re-enter fetch with the resolved URL (preserve --json / --format).
@@ -363,7 +390,31 @@ cmd_deploy_js() {
   if [[ -z "$FETCH_TTL" ]]; then
     fetch_args+=(--ttl 0)
   fi
-  cmd_fetch "${fetch_args[@]}" "$url"
+  if [[ -z "$DEPLOY_MARKER" ]]; then
+    cmd_fetch "${fetch_args[@]}" "$url"
+    return
+  fi
+  # --marker turns this into a TEST: one grep, one verdict, one exit code.
+  # Needed because the body is CAPPED (~6 KB, MEASURED 2026-08-17 on a 200 KB
+  # wgx.js at both --format markdown and html), so eyeballing the output invites
+  # the worst possible conclusion — "the marker is absent, the fix did not
+  # ship" — when the marker was simply past the cap. A miss reports the cap and
+  # the reach explicitly instead.
+  local body bytes
+  body="$(cmd_fetch "${fetch_args[@]}" "$url")"
+  bytes="${#body}"
+  if printf '%s' "$body" | grep -qE -- "$DEPLOY_MARKER"; then
+    echo "MARKER PRESENT  /${DEPLOY_MARKER}/  in ${rel}@${live} (${bytes} B fetched)"
+    return 0
+  fi
+  echo "MARKER ABSENT   /${DEPLOY_MARKER}/  in ${rel}@${live} (${bytes} B fetched)" >&2
+  if [[ "$bytes" -lt 12000 ]]; then
+    echo "  NOT a verdict on the deployed file: TinyFish caps the body, and only" >&2
+    echo "  the first ~${bytes} B of ${rel} came back. A marker deeper in the file" >&2
+    echo "  cannot be seen from here — verify content by git provenance (is the" >&2
+    echo "  commit in the deploy branch?) and use deploy-check for the build id." >&2
+  fi
+  return 1
 }
 
 usage() {
@@ -380,7 +431,8 @@ TinyFish local MCP helper (proxy -> https://agent.tinyfish.ai/mcp)
   $0 fetch [flags] <url>…  fetch_content (free); unwraps body text
   $0 search [--json] <q>   web search (free); unwraps body text
   $0 deploy-check [--json] live version.json vs local version.json
-  $0 deploy-js <path>      fetch shipped asset at live ?v= (e.g. js/log.js)
+  $0 deploy-js [--marker RE] <path>   fetch shipped asset at live ?v=; with
+                           --marker, grep it and exit 0/1 instead of printing
 
 Fetch flags:
   --format markdown|html|json   (default markdown; html keeps more markup)
@@ -390,6 +442,10 @@ Fetch flags:
 
 deploy-check exits 1 when live build != local version.json (STALE Pages).
 deploy-js is the marker-grep path — index.html extracts strip <script> tags.
+The BODY IS CAPPED at roughly 6 KB (measured on a 200 KB wgx.js, both
+--format markdown and html), so it can only see the TOP of a large file.
+--marker says so on a miss rather than letting "absent" read as "did not
+ship"; for deeper content use git provenance plus deploy-check's build id.
 
 Env: TINYFISH_API_KEY in $ENV_FILE or shell.
 Repo: $REPO
