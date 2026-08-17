@@ -200,9 +200,14 @@ function init(gfx) {
       }
     } catch (_) {}
   }
-  _perfTierFloor = _crashStrikes >= 2 ? 4 : (_crashStrikes >= 1 ? 2 : 0);
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
 }
+
+// ONE owner for the strikes -> floor mapping. It used to be spelled out at init
+// and simply missing from cleanRace(), so paying a strike down moved the counter
+// and left the floor where boot had put it. See cleanRace() for what that cost.
+function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 function sentinelArm(on) {
   if (!_gfx || !_gfx.isMobile) return;
@@ -213,6 +218,25 @@ function cleanRace() {
   if (_crashStrikes > 0) {
     _crashStrikes--;
     try { localStorage.setItem(SENT_STRIKES, String(_crashStrikes)); } catch (_) {}
+    // RECOMPUTE THE FLOOR. Paying a strike down used to move the counter and
+    // nothing else, so _perfTierFloor stayed at whatever init() derived for the
+    // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
+    // the gate that sheds SSR (WET MIRROR / the dry sheens) and lamp shadows,
+    // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe. So a single
+    // crash — or one sentinel trip that was never a crash — silently pinned
+    // those features off until the page happened to reload, no matter what the
+    // player set GRAPHICS to. On mobile the one preset switch that DOES force a
+    // reload is ULTRA (it flips the mobileHigh bit, see js/game/gfx-quality.js
+    // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
+    // only work on ULTRA" rather than as a stuck floor.
+    // clearStrikes() has always done this; this path was missed, and the two
+    // now share _floorFromStrikes so they cannot drift apart again.
+    _perfTierFloor = _floorFromStrikes(_crashStrikes);
+    // The floor just dropped. _perfTier may be sitting on the OLD one (the
+    // degrade branch steps from _floorTier(), so it absorbs whatever floor was
+    // live when it fired). Release it to the new floor and let the governor
+    // re-earn any shed from its own measurements.
+    if (_perfTier > _floorTier()) _perfTier = _floorTier();
   }
 }
 
@@ -363,7 +387,7 @@ function tick(dtMs) {
 // __apex.safeMode(false).
 function clearStrikes() {
   _crashStrikes = 0;
-  _perfTierFloor = 0;
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
 
@@ -374,6 +398,17 @@ return {
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
   // GRAPHICS: LOW still sheds env/SSR/shadows via tier() but the lighting
   // tuner stays live unless the device proved it cannot afford the pass.
+  // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
+  // this wrong in a way worth recording. That draft derived the governor tier as
+  // (floor + its own shed count) so the two could be separated cleanly — but the
+  // degrade branch stops once _floorTier() + sheds reaches 4, and _floorTier()
+  // folds in _userTier while this accessor does not. The shed count was therefore
+  // capped at 4 - _userTier, and this returned at most that: measured 2 on
+  // GRAPHICS: MEDIUM (every phone's default) and 0 on LOW, so bloom, SSAO,
+  // god-rays, contact shadows and lamp volumetrics became UNSHEDABLE however
+  // badly the device was missing frames — the opposite of what a low preset is
+  // for. _perfTier is the effective tier and can always climb to 4, so the
+  // tier-4 consumers stay reachable on every preset.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
@@ -386,7 +421,19 @@ return {
   setUserTier: (n) => {
     const t = Math.max(0, Math.min(4, n | 0));
     if (t === _userTier) return;
+    const prev = _userTier;
     _userTier = t;
+    // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
+    // branch steps from _floorTier(), which folds in _userTier, so a shed taken
+    // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted
+    // the preset as its own evidence, exactly what the note below forbids. On a
+    // phone (default MEDIUM) that made GRAPHICS one-way: raising to HIGH left
+    // tier() at 3, so SSR, per-chunk lamps and both shadow maps stayed off until
+    // a reload, and ULTRA only appeared to fix it because it flips the mobileHigh
+    // bit and forces one. Dropping to the new floor on a RAISE gives the device a
+    // clean chance to prove itself; if it still cannot hold the budget the
+    // governor re-sheds within a couple of evaluations, on its own measurements.
+    if (t < prev && _perfTier > _floorTier()) _perfTier = _floorTier();
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed
