@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, Car3D visual recipes, or validating part geometry and physics in Apex 26.
+description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → car-viewer; on-track handling → tune-physics.
 ---
 
 # Garage — parts, livery, and car mesh

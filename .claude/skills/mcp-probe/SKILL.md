@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: Use when driving the LIVE game or the DEPLOYED site interactively with the Chrome DevTools MCP or the tinyfish MCP — booting the working tree to render a 3D frame or poke __apex live (the interactive alternative to writing a scratch/*.mjs), heap/perf/console inspection during a bug hunt, or a post-deploy liveness check that GitHub Pages is serving the expected build. For UI-layout matrix review use survey-ui-matrix (canvas hidden); for a repeatable batch screenshot in CI use playwright-probe.
+description: Use when driving the LIVE working-tree canvas or the DEPLOYED site interactively with Chrome DevTools MCP or tinyfish — poke __apex live, heap/perf/console during an interactive repro. Routine post-deploy version.json STALE check → deploy-research. Batch screenshots → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
 ---
 
 # Probing the live game with the MCPs

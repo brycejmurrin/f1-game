@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved.
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Device/gamepad/touch/tilt bugs → input-controls.
 ---
 
 # Tune the physics

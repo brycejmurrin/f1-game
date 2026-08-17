@@ -1,6 +1,6 @@
 ---
 name: survey-track
-description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, fix floating trees/props, gaps beside the road, terrain channels/steps/sunk water, or do a picture-driven accuracy pass.
+description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → debug-tracks.
 ---
 
 # Survey & update a track

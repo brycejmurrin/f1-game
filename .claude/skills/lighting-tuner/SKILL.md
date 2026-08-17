@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/bloom/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting.
+description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → cross-backend-parity after the tune.
 ---
 
 # Tune and validate scene lighting via __apex probes

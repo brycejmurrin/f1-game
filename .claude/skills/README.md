@@ -17,12 +17,16 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` (no browsers) or `--plan` + batched `test-bg`; `--wait` only when asked. |
 | **test-timeout-triage** | A Playwright test timed out or hangs — machine vs wait vs budget vs bug, `test-solo.mjs` re-runs, the load-inversion case. |
 | **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
-| **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure, live-deploy verification. |
+| **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure. Live version.json → deploy-research. |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type with the Chrome DevTools MCP — enumerate screens from source, measure each cell, capture. |
 | **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
 | **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
 | **career-mode** | DRIVER / MY TEAM career — saves, economy, R&D, quali/reliability weekend flow. |
+| **season-mode** | Standalone Season calendar + weekend format (`season-cal` / `season-ui`); career stays on `Tracks.SEASON`. |
+| **input-controls** | Gamepad / touch / tilt / keyboard / driving-help assists — devices, not forces. |
+| **data-hub** | Data Hub tabs + F1API / `js/data/` — empty/stale/wrong-year tabs. |
+| **ai-racecraft** | AI OT/brake/lane/ERS + driver-rating axes (`ai-drive.js`). |
 | **race-incidents-control** | Debris, incident takeovers, race-control flags, caution/VSC/SC, determinism. |
 | **debug-cameras** | The 13 camera modes + free framing hooks (`view`/`eyeAt`/`orbit`/…). |
 | **debug-tracks** | Track geometry/surface/barrier query hooks + multi-track sweeps. |
@@ -62,7 +66,7 @@ Design principles:
   the project template is thinner. `tests/unit/skill-progressive.test.mjs` holds both.
 - **Description = what + when** — third person, under 1024 chars, must contain
   a trigger (`Use when` / `Use proactively`). Vague descriptions ("helps with
-  documents") fail discovery in a 34-skill library.
+  documents") fail discovery in a 38-skill library.
 - **One command over a ritual** — `verify-change.mjs` composes pick-tests +
   the fast gate + batched groups; skills should name the composer, not restated
   five-step prose.

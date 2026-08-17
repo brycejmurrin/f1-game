@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, or confirm cache bump before shipping Apex 26 changes.
+description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, or confirm cache bump before shipping Apex 26 changes. For Playwright timeouts/hangs use test-timeout-triage; spawn verify-agent for a read-only --fast JSON verdict.
 ---
 
 # Validate changes before committing/pushing

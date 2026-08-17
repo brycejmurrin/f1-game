@@ -1,6 +1,6 @@
 ---
 name: cross-backend-parity
-description: Use when a rendering look/knob/feature differs between WebGL2 (GLX), WebGPU (WGX), and three.js (TLX), when adding or changing a lighting knob, shader effect, material, or Gfx façade member, or when auditing backend drift after a lighting/rendering change.
+description: Use when a rendering look/knob/feature already differs between WebGL2 (GLX), WebGPU (WGX), and three.js (TLX), or when auditing backend drift after a lighting/rendering change. Night-looks-wrong first stop is lighting-tuner; WGX validation defects → webgpu-debug. After adding a knob, mirror it here.
 ---
 
 # Keep GLX / WGX / TLX in parity

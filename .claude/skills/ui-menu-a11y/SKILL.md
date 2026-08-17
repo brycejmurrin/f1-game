@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, or menu/HUD accessibility regressions are being changed or debugged."
+description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, or menu/HUD accessibility regressions are being changed or debugged. Single-screen bug only — full matrix → survey-ui-matrix. In-race driving input → input-controls."
 ---
 
 # Menu / HUD accessibility
@@ -16,10 +16,10 @@ on top, and route Escape/back through the same button path a player would use.
 - iPad/touch layout after `zoom`, `getBoundingClientRect()`, or
   `(pointer: coarse)` changes.
 
-Do **not** use for in-race driving input (unless a menu leaks keys), data-hub
-logic, or renderer/canvas visuals outside menu/HUD layout. Whole-matrix
-review → **survey-ui-matrix**. Restructure decisions →
-**restructure-screens-css**.
+Do **not** use for in-race driving input (unless a menu leaks keys) —
+**input-controls**. Data-hub tab logic → **data-hub**. Renderer/canvas
+visuals outside menu/HUD layout are out. Whole-matrix review →
+**survey-ui-matrix**. Restructure decisions → **restructure-screens-css**.
 
 ## Quick Reference
 
