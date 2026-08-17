@@ -562,7 +562,7 @@ const WGX = (function () {
     // fed by a COPY_SRC present target; keep WebGPU on a hidden canvas.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
-    let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softReadDefer = false, _softW = 0, _softH = 0;
+    let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
     const _softPresentWaiters = [];
@@ -1579,24 +1579,16 @@ const WGX = (function () {
       if (softPresentTex && _softW === width && _softH === height) return;
       try {
         if (softPresentTex) softPresentTex.destroy();
-        if (_softBlitBuf) _softBlitBuf.destroy();
         softPresentTex = device.createTexture({
           size: [width, height], format: LDR_FORMAT,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC |
                  GPUTextureUsage.TEXTURE_BINDING,
         });
         softPresentView = softPresentTex.createView();
-        _softBlitBPR = Math.ceil((width * 4) / 256) * 256;
-        _softBlitBuf = device.createBuffer({
-          size: _softBlitBPR * height,
-          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-        });
-        _softBlitPending = false;
         _softW = width; _softH = height;
       } catch (e) {
         try { Log.warn("gfx", "WGX soft present target failed —", e); } catch (_) { /* harness */ }
         softPresentTex = null; softPresentView = null;
-        if (_softBlitBuf) { try { _softBlitBuf.destroy(); } catch (_) { /* already dead */ } _softBlitBuf = null; }
       }
     }
     function _acquirePresentView() {
@@ -1606,72 +1598,67 @@ const WGX = (function () {
       }
       return ctx.getCurrentTexture().createView();
     }
-    function _queueSoftPresent() {
-      if (!_softGpu || !softPresentTex || !_softBlitBuf || !encoder || _softBlitPending) return;
-      if (_softBlitBuf.mapState !== "unmapped") return;
+    function _softDisplayEncode() {
+      if (!_softGpu || !_displayCtx || !softPresentTex || !encoder) return null;
       try {
+        const w = width, h = height;
+        const bpr = (w * 4 + 255) & ~255;
+        const buf = device.createBuffer({
+          size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
         encoder.copyTextureToBuffer(
           { texture: softPresentTex },
-          { buffer: _softBlitBuf, bytesPerRow: _softBlitBPR, rowsPerImage: height },
-          [width, height, 1]
+          { buffer: buf, bytesPerRow: bpr, rowsPerImage: h },
+          [w, h, 1]
         );
-        _softBlitPending = true;
-      } catch (_) { /* COPY_SRC withheld — visible canvas stays on last frame */ }
+        return { buf, bpr, w, h };
+      } catch (_) { return null; }
+    }
+    function _softDisplayFinish(cap) {
+      if (!cap || !_displayCtx) return;
+      const { buf, bpr, w, h } = cap;
+      const finish = function () {
+        try {
+          buf.mapAsync(GPUMapMode.READ).then(function () {
+            try {
+              const src = new Uint8Array(buf.getMappedRange());
+              let maxPx = 0;
+              if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+                _softImg = _displayCtx.createImageData(w, h);
+              }
+              const img = _softImg;
+              for (let y = 0; y < h; y++) {
+                const s = y * bpr, d = y * w * 4;
+                for (let x = 0; x < w; x++) {
+                  const si = s + x * 4, di = d + x * 4;
+                  const r = src[si], g = src[si + 1], b = src[si + 2];
+                  img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
+                  if ((r + g + b) > maxPx) maxPx = r + g + b;
+                }
+              }
+              if (maxPx >= 8) {
+                _displayCtx.putImageData(img, 0, 0);
+                _softBlitNotify();
+              }
+            } catch (_) { /* 2D blit failed */ }
+            try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
+          }).catch(function () {
+            try { buf.destroy(); } catch (_) { /* device dying */ }
+          });
+        } catch (_) {
+          try { buf.destroy(); } catch (_) { /* device dying */ }
+        }
+      };
+      try {
+        device.queue.onSubmittedWorkDone().then(finish, finish);
+      } catch (_) { finish(); }
     }
     function _softBlitNotify() {
-      _softBusy = false;
       _softBlitGen++;
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
         try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
       }
-    }
-    function _readSoftPresent() {
-      if (!_softGpu || !_softBlitPending || !_softBlitBuf || !_displayCtx) return;
-      if (_softBlitBuf.mapState !== "unmapped") {
-        if (!_softReadDefer) {
-          _softReadDefer = true;
-          try {
-            device.queue.onSubmittedWorkDone().then(function () {
-              _softReadDefer = false;
-              _readSoftPresent();
-            }, function () {
-              _softReadDefer = false;
-              _readSoftPresent();
-            });
-          } catch (_) { _softReadDefer = false; }
-        }
-        return;
-      }
-      _softBlitPending = false;
-      if (typeof _softBlitBuf.mapAsync !== "function") return;
-      _softBusy = true;
-      const doMap = function () {
-        try {
-          _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
-            try {
-              const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
-              if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
-                _softImg = _displayCtx.createImageData(width, height);
-              }
-              const img = _softImg;
-              const rowBytes = width * 4;
-              for (let y = 0; y < height; y++) {
-                img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
-              }
-              _displayCtx.putImageData(img, 0, 0);
-            } catch (_) { /* 2D blit failed */ }
-            try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
-            _softBlitNotify();
-          }).catch(function () { _softBlitNotify(); });
-        } catch (_) { _softBlitNotify(); }
-      };
-      // mapAsync waits behind ALL prior submits — start readback only after THIS
-      // frame's copy is on the GPU queue (measured: first visible blit ~2 s late
-      // when begin() kept submitting while an earlier mapAsync was still pending).
-      try {
-        device.queue.onSubmittedWorkDone().then(doMap, doMap);
-      } catch (_) { doMap(); }
     }
     function awaitSoftPresent(timeoutMs) {
       if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
@@ -2602,17 +2589,6 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
-    // Software present has NO swapchain backpressure — nothing paces the rAF
-    // loop — so on SwiftShader frames submit faster than the GPU retires them
-    // and the queue backlog grows without bound. mapAsync resolves only after
-    // ALL earlier submitted work, so the soft-present blit (and capturePixels)
-    // works once and then waits behind minutes of queued frames — measured as
-    // "second capturePixels() never resolves". Cap the queue at one in-flight
-    // frame: begin() drops the frame while the previous one is still on the
-    // GPU (the visible 2D canvas keeps its last blit, so a dropped frame just
-    // holds the picture a beat longer).
-    let _softBusy = false;
-
     // ── begin(frame): open the lit pass into the HDR scene target ──
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
     function begin(frame) {
@@ -2622,7 +2598,6 @@ const WGX = (function () {
         if (width < 1) resize();
         ensureTargets();
         if (!sceneView) return false;
-        if (_softGpu && _softBusy) return false;   // previous frame still on the GPU
         _drawSlot = 0;
         _fxQuadSlot = 0; _fxDecalSlot = 0;
         _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
@@ -2961,34 +2936,36 @@ const WGX = (function () {
         try { _retiredBufs[i].destroy(); } catch (_) { /* already invalid */ }
       }
       _retiredBufs.length = 0;
-      // _softBusy clears in _softBlitNotify after the 2D putImageData — NOT here.
-      // Clearing on submit alone let begin() queue more frames while mapAsync from
-      // the first soft-present copy was still pending (black canvas for ~60 frames).
     }
     function _capFinish(cap) {
       if (!cap) return;
       const req = _capReq; _capReq = null;
       const { buf, bpr, w, h } = cap;
-      buf.mapAsync(GPUMapMode.READ).then(function () {
-        const src = new Uint8Array(buf.getMappedRange());
-        const out = new Uint8ClampedArray(w * h * 4);
-        const bgra = !!cap.bgra;
-        for (let y = 0; y < h; y++) {
-          const s = y * bpr, d = y * w * 4;
-          for (let x = 0; x < w; x++) {
-            const si = s + x * 4, di = d + x * 4;
-            out[di]     = src[bgra ? si + 2 : si];
-            out[di + 1] = src[si + 1];
-            out[di + 2] = src[bgra ? si : si + 2];
-            out[di + 3] = 255;   // alphaMode "opaque": ignore stored alpha
+      const finish = function () {
+        buf.mapAsync(GPUMapMode.READ).then(function () {
+          const src = new Uint8Array(buf.getMappedRange());
+          const out = new Uint8ClampedArray(w * h * 4);
+          const bgra = !!cap.bgra;
+          for (let y = 0; y < h; y++) {
+            const s = y * bpr, d = y * w * 4;
+            for (let x = 0; x < w; x++) {
+              const si = s + x * 4, di = d + x * 4;
+              out[di]     = src[bgra ? si + 2 : si];
+              out[di + 1] = src[si + 1];
+              out[di + 2] = src[bgra ? si : si + 2];
+              out[di + 3] = 255;   // alphaMode "opaque": ignore stored alpha
+            }
           }
-        }
-        try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
-        req.resolve({ width: w, height: h, data: out });
-      }, function (e) {
-        try { buf.destroy(); } catch (_) { /* device dying */ }
-        req.reject(e);
-      });
+          try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
+          req.resolve({ width: w, height: h, data: out });
+        }, function (e) {
+          try { buf.destroy(); } catch (_) { /* device dying */ }
+          req.reject(e);
+        });
+      };
+      try {
+        device.queue.onSubmittedWorkDone().then(finish, finish);
+      } catch (_) { finish(); }
     }
 
     // ── present(opts): close the lit pass, run the Phase-4 post chain
@@ -3050,13 +3027,13 @@ const WGX = (function () {
       // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
-        _queueSoftPresent();
+        const disp = _softDisplayEncode();
         const cap = _capEncode();
         device.queue.submit([encoder.finish()]);
         _retireFlush();
         _capFinish(cap);
+        _softDisplayFinish(disp);
         encoder = null; currentView = null;
-        _readSoftPresent();
         _readOutputProbe();
         _jsStrikes = 0;   // a presented frame clears the strike count
         if (!_okCounted) { _okCounted = true; _healTick(); }
@@ -3353,12 +3330,12 @@ const WGX = (function () {
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
-      _queueSoftPresent();
+      const disp = _softDisplayEncode();
       const _cap = _capEncode();
       device.queue.submit([encoder.finish()]);
       _retireFlush();
       _capFinish(_cap);
-      _readSoftPresent();
+      _softDisplayFinish(disp);
       _readOutputProbe();
       if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
         try {
