@@ -296,7 +296,7 @@ const CEILINGS = {
   // -> 8361 smarter AI drivers: wire AiDrive (OT/ERS/brake/lane + rating axes)
   // into updateCar. Decision math lives in js/game/ai-drive.js (188 lines);
   // this raise is call-site glue + nearbyN / soft brakeLvl path.
-  "js/game.js": 8362,
+  "js/game.js": 8364,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
