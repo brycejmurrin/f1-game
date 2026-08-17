@@ -317,6 +317,23 @@ const WGX = (function () {
 
   function toF32(a) { return a instanceof Float32Array ? a : new Float32Array(a); }
 
+  // SwiftShader/Lavapipe validate WebGPU but often never composite to the canvas.
+  // Boot must still bind WGX there (wgx-validate, shader checks); runtime probe
+  // escalates to GLX when frames stay black. Hardware adapters get the swapchain
+  // smoke test instead — stale configure after resize reads black for real.
+  function _adapterIsSoftware(ad) {
+    if (!ad) return false;
+    try {
+      const info = ad.info;
+      if (info) {
+        const blob = [info.description, info.device, info.vendor, info.architecture]
+          .filter(Boolean).join(" ").toLowerCase();
+        if (/swiftshader|lavapipe|llvmpipe|software|cpu|mesa/.test(blob)) return true;
+      }
+    } catch (_) { /* info absent on older Dawn builds */ }
+    return false;
+  }
+
   // IEEE-754 half → float32 (runtime output probe reads rgba16float scene texels).
   function _f16to32(h) {
     const s = (h & 0x8000) >> 15, e = (h & 0x7C00) >> 10, f = h & 0x03FF;
@@ -486,6 +503,8 @@ const WGX = (function () {
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
     try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
+    const _softGpu = _adapterIsSoftware(adapter);
+    if (_softGpu) _outProbeOff = true;
     function _wgxEscalate(why) {
       if (_outProbeOff) {
         try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
@@ -1361,6 +1380,14 @@ const WGX = (function () {
     }
 
     // ── resize (mirror GLX.resize()) ──
+    function _configureCanvas() {
+      if (!ctx || !device) return;
+      try {
+        ctx.configure({ device, format, alphaMode: "opaque" });
+      } catch (e) {
+        try { Log.warn("gfx", "WGX canvas configure failed —", e); } catch (_) { /* harness */ }
+      }
+    }
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
@@ -1369,8 +1396,10 @@ const WGX = (function () {
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
       const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      const sizeChanged = canvas.width !== w || canvas.height !== h;
+      if (sizeChanged) { canvas.width = w; canvas.height = h; }
       width = w; height = h; aspect = w / h;
+      if (sizeChanged && ctx) _configureCanvas();
     }
     function setRenderScale(s) {
       s = Math.max(0.5, Math.min(1, s));
@@ -3541,6 +3570,75 @@ const WGX = (function () {
       return null;
     }
 
+    // 4) Swapchain present smoke — the 4×4 offscreen blit above can pass while
+    //    full-size getCurrentTexture() stays black (SwiftShader-Vulkan validates
+    //    but never composites; stale configure after resize does the same on
+    //    real GPUs). Claim the canvas, resize to the live DPR, configure, blit
+    //    one white frame to the swapchain, read back when COPY_SRC is allowed.
+    async function _selfTestPresent() {
+      if (!ctx || width < 1 || height < 1) return null;
+      const canRead = typeof GPUMapMode !== "undefined" &&
+        ((GPUTextureUsage && GPUTextureUsage.COPY_SRC) | 0) > 0 &&
+        ((GPUBufferUsage && GPUBufferUsage.MAP_READ) | 0) > 0;
+      if (!canRead || !blitPipeline) return null;
+      let buf = null, reason = null;
+      const scoped = typeof device.pushErrorScope === "function" &&
+                     typeof device.popErrorScope === "function";
+      if (scoped) device.pushErrorScope("validation");
+      try {
+        let tex;
+        try { tex = ctx.getCurrentTexture(); } catch (_) { throw { _skip: true }; }
+        const tw = Math.min(64, width), th = Math.min(64, height);
+        const src = device.createTexture({
+          size: [1, 1], format: SCENE_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        buf = device.createBuffer({ size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        device.queue.writeBuffer(blitUBO, 0, new Float32Array([1, 0, 0, 0]));
+        const bg = device.createBindGroup({
+          layout: blitPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: src.createView() },
+            { binding: 1, resource: linearSampler },
+            { binding: 2, resource: { buffer: blitUBO } },
+          ],
+        });
+        const enc = device.createCommandEncoder();
+        if (typeof enc.copyTextureToBuffer !== "function" || typeof buf.mapAsync !== "function" ||
+            typeof buf.getMappedRange !== "function") {
+          throw { _skip: true };   // no readback path — runtime output probe handles it
+        }
+        enc.beginRenderPass({ colorAttachments: [{ view: src.createView(),
+          clearValue: { r: 1, g: 1, b: 1, a: 1 }, loadOp: "clear", storeOp: "store" }] }).end();
+        const pass = enc.beginRenderPass({ colorAttachments: [{ view: tex.createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: "clear", storeOp: "store" }] });
+        pass.setPipeline(blitPipeline);
+        pass.setBindGroup(0, bg);
+        pass.draw(3);
+        pass.end();
+        enc.copyTextureToBuffer(
+          { texture: tex, origin: [Math.max(0, (width >> 1) - 2), Math.max(0, (height >> 1) - 2), 0] },
+          { buffer: buf, bytesPerRow: 256, rowsPerImage: 4 },
+          [4, 4, 1]);
+        device.queue.submit([enc.finish()]);
+        src.destroy();
+        await buf.mapAsync(GPUMapMode.READ);
+        const px = new Uint8Array(buf.getMappedRange().slice(0, 4));
+        buf.unmap();
+        if (!(px[0] > 8 || px[1] > 8 || px[2] > 8)) reason = "swapchain smoke test rendered black";
+      } catch (e) {
+        if (e && e._skip) return null;
+        reason = "swapchain smoke test threw: " + (((e && e.message) || String(e)).slice(0, 200));
+      }
+      if (scoped) {
+        const gpuErr = await device.popErrorScope();
+        // Swapchain textures often lack COPY_SRC — readback is best-effort only.
+        if (!reason && gpuErr) return null;
+      }
+      try { if (buf) buf.destroy(); } catch (_) { /* smoke-test temps already invalid */ }
+      return reason;
+    }
+
     // BUDGET. The self-test is AWAITED and game.js awaits Gfx.create(), so every
     // millisecond it spends is a millisecond of blocked boot on a blank screen.
     // Two of its steps carry no bound of their own: forcing the lit pipeline (a
@@ -3596,9 +3694,28 @@ const WGX = (function () {
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _fail("canvas has no webgpu context");
-      ctx.configure({ device, format, alphaMode: "opaque" });
+      resize();
+      _configureCanvas();
     } catch (e) {
       return _fail("context configure threw: " + ((e && e.message) || e));
+    }
+    const PRESENT_TEST_MS = 4000;
+    let _ptTimer = null;
+    let _presentReason = null;
+    if (!_outProbeOff && !_softGpu) {
+      _presentReason = await Promise.race([
+        _selfTestPresent().catch(function (e) {
+          return "swapchain self-test threw: " + (((e && e.message) || String(e)).slice(0, 200));
+        }),
+        new Promise(function (res) {
+          _ptTimer = setTimeout(function () { res(null); }, PRESENT_TEST_MS);
+        }),
+      ]);
+      try { if (_ptTimer !== null) clearTimeout(_ptTimer); } catch (_) { /* timer already fired */ }
+    }
+    if (_presentReason) {
+      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost */ }
+      return _fail(_presentReason);
     }
 
     const noop = function () {};

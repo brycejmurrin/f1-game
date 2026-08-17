@@ -70,7 +70,8 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
   const wgx = read("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,2200}apex26\.gfxClaimFail/);
+  assert.match(wgx, /device\.lost[\s\S]{0,400}_wgxEscalate/);
+  assert.match(wgx, /function _wgxEscalate[\s\S]{0,2500}apex26\.gfxClaimFail/);
   assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\("apex26\.gfxBackend", "webgl2"\)/);
   assert.match(wgx, /WGX_LITE/);
   assert.match(wgx, /IS_WEBKIT/);
