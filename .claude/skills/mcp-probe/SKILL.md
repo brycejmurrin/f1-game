@@ -620,6 +620,58 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
     screen (excludes performance; use traces for that).
   - `click` / `press_key` / `wait_for` on snapshot **uids** (`1_12`, not `1`).
 
+### A/B two trees on two ports — the strongest evidence this setup can give
+
+A source guard proves a renderer **asked** for something; only pixels prove it
+**got** it. Two `serve` roots on two ports turn "I think this fixes it" into a
+measured before/after, in one command, with the browser held constant:
+
+```sh
+npx serve -l 3456 /the/pre-fix/tree &     # control
+npx serve -l 3466 /the/fixed/tree   &     # patch
+for P in 3456 3466; do node tools/mcp-cli.mjs probe \
+  --url http://127.0.0.1:$P/index.html --backend three \
+  --wait 14000 --eval scratch/my-probe.js; done
+```
+
+Measured 2026-08-17 for the transparent-cars fix (`js/render/three/tlx.js` —
+canvas alpha), reading composited alpha by `drawImage`-ing `canvas#game` onto a
+cleared 2d canvas and histogramming the alpha byte:
+
+| tree | `getContextAttributes().alpha` | min alpha | px < 255 |
+| --- | --- | --- | --- |
+| pre-fix `?v=1300` | `true` | 0 | 329160 (**100 %**) |
+| fixed `?v=1306` | `false` | 255 | 0 |
+
+Two things make this readable rather than lucky:
+
+- **Report the identity of what you measured, not just the number.** The probe
+  returns the `game.js?v=` it found alongside the pixels, so the row cannot be
+  silently the same tree twice — the failure mode of every two-port A/B.
+- **A WebGL drawing buffer is cleared after compositing** (no
+  `preserveDrawingBuffer`), so by read time you are usually measuring the CLEAR,
+  not the frame: an alpha canvas clears to 0, an opaque one to 255. Perfect for a
+  canvas-CONFIG question and useless for a "what colour is the car" one. Know
+  which of the two you are asking before you trust the histogram.
+
+### Reproducing the post-death path on purpose (WebGPU + SwiftShader)
+
+`--backend three --tlx-webgpu` cannot render here — it dies inside **three's own**
+buffer upload, the same SwiftShader limit that WGX had to route around:
+
+```
+[gfx] TLX: shadow pass failed — createBuffer failed, size (7692) is too large
+      for the implementation when mappedAtCreation == true
+[gfx] TLX: present failed — Cannot read properties of null (reading 'constructor')
+```
+
+Useless for parity, but it is the only place the **post-only death path** boots
+on demand — `present failed`, repeatedly, with materials that were built while
+post was alive. That is the exact state behind the transparent-cars report, so
+it is where to point a probe when reasoning about what reaches the canvas after
+the post chain gives up. It also means the desktop WebGPU half of any TLX fix
+stays source-guarded only; say so rather than implying it was run.
+
 ### File writes and roots (measured 2026-08-12)
 
 Heap / perf / lighthouse tools validate paths against MCP **roots**. A stdio
