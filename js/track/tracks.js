@@ -375,9 +375,12 @@ const Tracks = (function () {
       const SS = (s) => TrackSpace.wrap01(s + shiftS);
       const remapK = doMirror ? RK : SK;
       const remapS = doMirror ? RS : SS;
-      const remapSide = doMirror ? SIDE : (side) => side;
+      // groundPatch / waterField / groundedSegments stay SHIFT-ONLY even on
+      // lapMirror circuits — those defs authored dressing against the shift
+      // frame; flipping them with RS/RK lifts props off the terrain ribbon
+      // (singapore float-audit: 1 cluster @ frac 0.531 after a full remap).
       for (const name of ["groundPatch", "waterField"]) {
-        const f = api[name]; if (f) w[name] = (k, side, ...r) => f(remapK(k), remapSide(side), ...r);
+        const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
       if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(remapS(frac), ...r);
       // `rawFrac: true` = "this frac is ALREADY final racing space — hands off".
@@ -390,18 +393,21 @@ const Tracks = (function () {
           ? Object.assign({}, spec, { frac: remapS(spec.frac) }) : spec);
       if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
         spec && Array.isArray(spec.points)
-          ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: remapK(pt.k) })) })
+          ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
           : spec);
       // Every CircuitKit method takes a spec keyed on `frac` (circuit-kit.js
-      // routes it through deps.frameAt). LandmarkKit needs nothing — its
-      // helpers take world coordinates and never see a fraction.
+      // routes it through deps.frameAt RAW). Keep SHIFT-ONLY remap here even on
+      // lapMirror circuits — the kit's callers (singapore raceControl beacon via
+      // KOLD, etc.) are authored against shift space. Full RS on the kit moved
+      // the pit tower out from under its roof beacon (float gap ≈ beacon height).
+      // Portal decks still get RS via overheadSpan/frameAt above.
       if (api.circuitKit) {
         const kit = api.circuitKit, wk = {};
         for (const name of Object.keys(kit)) {
           const f = kit[name];
           wk[name] = typeof f === "function"
             ? (spec, ...r) => f(spec && Number.isFinite(spec.frac)
-                ? Object.assign({}, spec, { frac: remapS(spec.frac) }) : spec, ...r)
+                ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec, ...r)
             : f;
         }
         w.circuitKit = wk;

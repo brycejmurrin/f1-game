@@ -560,6 +560,7 @@
           const aaG = clamp(fwGround.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
           If(aaG.greaterThan(0.005), () => {
             const e = 0.22;
+            const p0 = wp.xz;
             const h0 = matBumpHeight(mid, p0);
             const hx = matBumpHeight(mid, p0.add(vec2(e, 0.0)));
             const hz = matBumpHeight(mid, p0.add(vec2(0.0, e)));

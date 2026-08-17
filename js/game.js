@@ -5365,10 +5365,6 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // Shadow path already lazy-builds terrainChunked; reuse that handle.
     let _tMesh = track.meshes.terrain, _tChunked = false;
     if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
-    // Camera/probe terrain chunking — same envCull gate as the road ribbon.
-    // Shadow path already lazy-builds terrainChunked; reuse that handle.
-    let _tMesh = track.meshes.terrain, _tChunked = false;
-    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
       if (track.meshes.terrainChunked === undefined) {
         track.meshes.terrainChunked = null;
         if (track.terrainGeo && gfx.createChunkedMesh) {
@@ -5377,10 +5373,6 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
         }
       }
       const _tc = track.meshes.terrainChunked;
-      if (_tc && _tc.chunks) { _tMesh = _tc; _tChunked = true; }
-    }
-    if (_tChunked) gfx.drawChunked(_tMesh, MAT_IDENT, m);
-    else gfx.draw(_tMesh, MAT_IDENT, m);
       if (_tc && _tc.chunks) { _tMesh = _tc; _tChunked = true; }
     }
     if (_tChunked) gfx.drawChunked(_tMesh, MAT_IDENT, m);
