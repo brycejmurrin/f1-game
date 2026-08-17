@@ -41,10 +41,13 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   assert.match(window, /removeItem\("apex26\.gfxBackendProbe"\)/);
 });
 
-test("RENDERER cycle lives in gfx-quality.js and always names WEBGPU", () => {
+test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
   const src = read("js/game/gfx-quality.js");
   assert.match(src, /getElementById\("pm-renderer"\)/);
   assert.match(src, /WEBGPU \(UNAVAILABLE\)/);
+  assert.match(src, /createElement\("select"\)/);
+  assert.match(src, /pm-renderer-prev/);
+  assert.match(src, /pm-renderer-next/);
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
@@ -143,7 +146,7 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_releaseOwnedMatMaps/);
 });
 
-test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
+test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
@@ -151,6 +154,9 @@ test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
   assert.equal(G.nextBackend("webgl2"), "three");
   assert.equal(G.nextBackend("three"), "webgpu");
   assert.equal(G.nextBackend("webgpu"), "webgl2");
+  assert.equal(G.prevBackend("webgl2"), "webgpu");
+  assert.equal(G.prevBackend("webgpu"), "three");
+  assert.equal(G.prevBackend("three"), "webgl2");
   assert.equal(G.backendLabel("three"), "THREE");
   assert.equal(G.backendLabel("webgpu"), "WEBGPU");
 });
@@ -172,7 +178,7 @@ test("RESET RENDERER is injected next to #pm-renderer, not written into the shel
   assert.match(src, /getElementById\("pm-renderer-reset"\)/);
   assert.match(src, /createElement\("button"\)/);
   assert.match(src, /RESET RENDERER/);
-  assert.match(src, /insertBefore\(btn, anchor\.nextSibling\)/);
+  assert.match(src, /insertBefore\(btn, slot\.nextSibling\)/);
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
@@ -318,4 +324,154 @@ test("TLX present() records gfxBound when a fallback still paints", () => {
   const tlx = read("js/render/three/tlx.js");
   const persist = tlx.slice(tlx.indexOf("const persistFail"), tlx.indexOf("const paintCanvas"));
   assert.match(persist, /apex26\.gfxBound/);
+});
+
+function makePickerDom(byId, hostKids) {
+  const makeEl = (tag) => {
+    const kids = [];
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      textContent: "",
+      title: "",
+      type: "",
+      value: "",
+      hidden: false,
+      onclick: null,
+      parentNode: null,
+      nextSibling: null,
+      children: kids,
+      options: String(tag).toUpperCase() === "SELECT" ? kids : undefined,
+      _listeners: {},
+      setAttribute() {},
+      appendChild(c) { kids.push(c); c.parentNode = this; return c; },
+      addEventListener(type, fn) {
+        (this._listeners[type] || (this._listeners[type] = [])).push(fn);
+      },
+      dispatchEvent(type) {
+        const list = this._listeners[type] || [];
+        for (let i = 0; i < list.length; i++) list[i]();
+      },
+      replaceWith(node) {
+        const host = this.parentNode;
+        if (host && host.children) {
+          const i = host.children.indexOf(this);
+          if (i >= 0) host.children[i] = node;
+        }
+        node.parentNode = host;
+        node.nextSibling = this.nextSibling;
+        if (this._id && byId[this._id] === this) delete byId[this._id];
+      },
+    };
+    Object.defineProperty(el, "id", {
+      get() { return this._id || ""; },
+      set(v) {
+        if (this._id && byId[this._id] === this) delete byId[this._id];
+        this._id = v;
+        if (v) byId[v] = this;
+      },
+    });
+    return el;
+  };
+  const host = {
+    children: hostKids,
+    insertBefore(node, ref) {
+      const i = ref ? hostKids.indexOf(ref) : -1;
+      if (i >= 0) hostKids.splice(i, 0, node);
+      else hostKids.push(node);
+      node.parentNode = host;
+      return node;
+    },
+    replaceChild(node, old) {
+      const i = hostKids.indexOf(old);
+      if (i >= 0) hostKids[i] = node;
+      node.parentNode = host;
+      return old;
+    },
+  };
+  const btn = makeEl("button");
+  btn.id = "pm-renderer";
+  btn.parentNode = host;
+  hostKids.push(btn);
+  return { host, btn, makeEl };
+}
+
+function bootPicker(opts) {
+  const src = read("js/game/gfx-quality.js");
+  const ls = makeStorage(opts.ls || {});
+  const ss = makeStorage(opts.ss || {});
+  const hostKids = [];
+  const byId = {};
+  const { makeEl } = makePickerDom(byId, hostKids);
+  const gfxBtn = makeEl("button");
+  gfxBtn.id = "pm-gfx";
+  gfxBtn.hidden = true;
+  let reloaded = 0;
+  const timers = [];
+  const ctx = vm.createContext({
+    window: { addEventListener() {} },
+    document: {
+      getElementById: (id) => byId[id] || null,
+      createElement: makeEl,
+      readyState: "complete",
+      addEventListener() {},
+    },
+    localStorage: ls,
+    sessionStorage: ss,
+    location: { reload() { reloaded += 1; } },
+    setTimeout: (fn) => { timers.push(fn); return 1; },
+    navigator: { gpu: opts.gpu || undefined },
+    PerfGov: { setUserTier() {}, sentinelArm() {} },
+    GameStore: { store: { get() { return null; }, set() {} } },
+    GLX: { isMobile: true },
+  });
+  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
+  const G = vm.runInContext("GfxQuality", ctx);
+  // readyState is "complete", so the IIFE already called init().
+  return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers };
+}
+
+test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
+  const { byId, hostKids } = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  const sel = byId["pm-renderer"];
+  assert.equal(sel.tagName, "SELECT");
+  assert.equal(sel.value, "webgl2");
+  assert.equal(sel.options.length, 3);
+  assert.equal(sel.options[0].value, "webgl2");
+  assert.equal(sel.options[1].value, "three");
+  assert.equal(sel.options[2].value, "webgpu");
+  assert.ok(byId["pm-renderer-prev"], "‹ steps backward");
+  assert.ok(byId["pm-renderer-next"], "› steps forward");
+  assert.equal(byId["pm-renderer-row"].children.length, 3);
+  assert.ok(hostKids.some((n) => n.id === "pm-renderer-reset"));
+});
+
+test("selecting THREE persists the pick and reloads; WEBGPU without gpu does not", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  const sel = a.byId["pm-renderer"];
+  sel.value = "three";
+  sel.dispatchEvent("change");
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "three");
+  assert.equal(a.reloaded(), 0);
+  a.timers.forEach((fn) => fn());
+  assert.equal(a.reloaded(), 1);
+
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, gpu: undefined });
+  const selB = b.byId["pm-renderer"];
+  selB.value = "webgpu";
+  selB.dispatchEvent("change");
+  assert.equal(b.ls.getItem("apex26.gfxBackend"), "webgl2", "unavailable WEBGPU must not persist");
+  assert.match(selB.options[2].textContent, /UNAVAILABLE/);
+  assert.equal(b.reloaded(), 0);
+});
+
+test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
+  const { byId, ls, timers, reloaded } = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2" },
+    gpu: {},
+  });
+  byId["pm-renderer-prev"].onclick();
+  assert.equal(ls.getItem("apex26.gfxBackend"), "webgpu");
+  assert.equal(ls.getItem("apex26.gfxWgxFail"), null);
+  timers.forEach((fn) => fn());
+  assert.equal(reloaded(), 1);
 });

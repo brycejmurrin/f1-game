@@ -1,9 +1,9 @@
-/* Apex 26 — GRAPHICS quality presets + the RENDERER cycle. Owns the four
+/* Apex 26 — GRAPHICS quality presets + the RENDERER picker. Owns the four
    presets, their persistence, #pm-gfx, #pm-renderer (WEBGL2 / THREE /
-   WEBGPU), and #pm-renderer-reset (forget the saved pick + crash flags).
-   RENDERER lives here so SETTINGS can show and flip it at
-   DOMContentLoaded — js/game.js is an async IIFE that awaits deferred
-   backend scripts on an opt-in, and a hidden button wired after that await
+   WEBGPU), ‹ › step buttons, and #pm-renderer-reset (forget the saved
+   pick + crash flags). RENDERER lives here so SETTINGS can show and flip
+   it at DOMContentLoaded — js/game.js is an async IIFE that awaits deferred
+   backend scripts on an opt-in, and a hidden control wired after that await
    is invisible for the whole load and dead if the IIFE never reaches it.
 
    THE INTERACTION RULE, which is the whole design: a preset sets the FLOOR of
@@ -96,9 +96,11 @@ function syncBootTier() {
 
 function label() { return "GRAPHICS: " + current().label; }
 
-// RENDERER cycle. Always three stops so the WEBGPU label is visible on a
-// phone that has no navigator.gpu — tapping it there flashes UNAVAILABLE
+// RENDERER picker. Always three stops so the WEBGPU label is visible on a
+// phone that has no navigator.gpu — picking it there flashes UNAVAILABLE
 // rather than writing a pref boot will silently ignore. THREE needs no GPU.
+// The control is a <select> plus ‹ › so a tap can jump WEBGL2 ↔ WEBGPU
+// without opening THREE (the one-way cycle forced that path).
 const BACKENDS = ["webgl2", "three", "webgpu"];
 function readBackend() {
   try {
@@ -107,22 +109,82 @@ function readBackend() {
   } catch (_) { return "webgl2"; }
 }
 function backendLabel(v) { return v === "three" ? "THREE" : String(v).toUpperCase(); }
-function nextBackend(cur) {
+function stepBackend(cur, dir) {
+  const n = BACKENDS.length;
   const i = BACKENDS.indexOf(cur);
-  return BACKENDS[(i < 0 ? 0 : i + 1) % BACKENDS.length];
+  return BACKENDS[(((i < 0 ? 0 : i) + dir) % n + n) % n];
 }
+function nextBackend(cur) { return stepBackend(cur, 1); }
+function prevBackend(cur) { return stepBackend(cur, -1); }
 function hasWebGPU() { return typeof navigator !== "undefined" && !!navigator.gpu; }
 function boundIsGlx() {
   try { return sessionStorage.getItem("apex26.gfxBound") === "webgl2"; } catch (_) { return false; }
 }
+function isSelect(el) { return !!(el && el.tagName === "SELECT"); }
 function paintRenderer(rb) {
   if (!rb) return;
   const pref = readBackend();
-  // Preference is what the next tap cycles. Live may be GLX after a
+  // Preference is what the picker shows. Live may be GLX after a
   // device.lost / create refuse — saying WEBGPU then was the lie.
-  rb.textContent = (boundIsGlx() && (pref === "webgpu" || pref === "three"))
+  const fallback = boundIsGlx() && (pref === "webgpu" || pref === "three");
+  if (isSelect(rb)) {
+    rb.value = pref;
+    const opts = rb.options || [];
+    for (let i = 0; i < opts.length; i++) {
+      const opt = opts[i];
+      let t = backendLabel(opt.value);
+      if (fallback && opt.value === pref) t += " (WEBGL2)";
+      opt.textContent = t;
+    }
+    return;
+  }
+  rb.textContent = fallback
     ? ("RENDERER: " + backendLabel(pref) + " (WEBGL2)")
     : ("RENDERER: " + backendLabel(pref));
+}
+function markReloading(rb, next) {
+  const msg = backendLabel(next) + " — RELOADING…";
+  if (isSelect(rb) && rb.options) {
+    const opts = rb.options;
+    for (let i = 0; i < opts.length; i++) {
+      if (opts[i].value === next) { opts[i].textContent = msg; break; }
+    }
+    rb.value = next;
+    return;
+  }
+  if (rb) rb.textContent = "RENDERER: " + msg;
+}
+function applyBackend(next, rb) {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+  if (next === "webgpu" && !hasWebGPU()) {
+    if (isSelect(rb) && rb.options) {
+      const opts = rb.options;
+      for (let i = 0; i < opts.length; i++) {
+        if (opts[i].value === "webgpu") opts[i].textContent = "WEBGPU (UNAVAILABLE)";
+      }
+      rb.value = readBackend();
+    } else if (rb) {
+      rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
+    }
+    setTimeout(() => { paintRenderer(rb); }, 900);
+    return false;
+  }
+  // A tap is a live tab. Disarm any in-flight boot probe so this choice
+  // cannot be reverted by a title-screen refresh before the flyby presents.
+  try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
+  try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
+  // Landing on WEBGPU by hand is the retry signal (browser update, new
+  // device state): reset the WGX loss ladder so the boot re-attempts from
+  // the sniffed baseline instead of a rung a long-dead session earned.
+  if (next === "webgpu") {
+    try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
+      localStorage.removeItem("apex26.gfxWgxOk"); localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) {}
+    try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
+  }
+  markReloading(rb, next);
+  try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
+  setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+  return true;
 }
 
 // Keys the RESET RENDERER button drops. The GRAPHICS preset (apex26.gfxHigh
@@ -153,9 +215,16 @@ function clearRendererStorage() {
   return removed;
 }
 
+function rendererSlot(el) {
+  if (!el) return null;
+  const p = el.parentNode;
+  return (p && p.id === "pm-renderer-row") ? p : el;
+}
+
 function initReset() {
   const anchor = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
-  const host = anchor && anchor.parentNode;
+  const slot = rendererSlot(anchor);
+  const host = slot && slot.parentNode;
   if (!host || document.getElementById("pm-renderer-reset")) return;
   // Injected, not written into index.html: same reason PerfTry / CockpitOpts
   // generate their SETTINGS rows — the shell's DOM-node ratchet counts tags
@@ -164,7 +233,7 @@ function initReset() {
   btn.id = "pm-renderer-reset";
   btn.textContent = "RESET RENDERER";
   btn.title = "Forget the saved renderer pick and the crash/fallback flags, then reload on WebGL2. Use this if THREE or WEBGPU crashed or will not load, especially on iPhone.";
-  host.insertBefore(btn, anchor.nextSibling);
+  host.insertBefore(btn, slot.nextSibling);
   btn.onclick = () => {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
     clearRendererStorage();
@@ -176,37 +245,65 @@ function initReset() {
   };
 }
 
+function replaceNode(old, next) {
+  if (typeof old.replaceWith === "function") { old.replaceWith(next); return true; }
+  const host = old.parentNode;
+  if (host && typeof host.replaceChild === "function") { host.replaceChild(next, old); return true; }
+  return false;
+}
+
+function mountRendererPicker(old) {
+  if (!old || isSelect(old)) return old;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return old;
+  const row = document.createElement("div");
+  const prev = document.createElement("button");
+  const sel = document.createElement("select");
+  const next = document.createElement("button");
+  // Stub hosts (unit harnesses) only implement the bits they assert.
+  // Keep the original button and the one-way click fallback there.
+  if (typeof row.appendChild !== "function" || typeof sel.appendChild !== "function") return old;
+  row.id = "pm-renderer-row";
+  prev.id = "pm-renderer-prev";
+  prev.type = "button";
+  prev.textContent = "‹";
+  if (typeof prev.setAttribute === "function") prev.setAttribute("aria-label", "Previous renderer");
+  sel.id = "pm-renderer";
+  if (typeof sel.setAttribute === "function") sel.setAttribute("aria-label", "Renderer");
+  for (let i = 0; i < BACKENDS.length; i++) {
+    const opt = document.createElement("option");
+    opt.value = BACKENDS[i];
+    opt.textContent = backendLabel(BACKENDS[i]);
+    sel.appendChild(opt);
+  }
+  next.id = "pm-renderer-next";
+  next.type = "button";
+  next.textContent = "›";
+  if (typeof next.setAttribute === "function") next.setAttribute("aria-label", "Next renderer");
+  row.appendChild(prev);
+  row.appendChild(sel);
+  row.appendChild(next);
+  if (!replaceNode(old, row)) return old;
+  return sel;
+}
+
 function initRenderer() {
-  const rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
+  let rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
   if (!rb) return;
+  rb = mountRendererPicker(rb);
   rb.hidden = false;
   paintRenderer(rb);
-  try { window.addEventListener("apex-gfx-live", function () { paintRenderer(rb); }); } catch (_) { /* no window */ }
-  rb.onclick = () => {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
-    const cur = readBackend();
-    const next = nextBackend(cur);
-    if (next === "webgpu" && !hasWebGPU()) {
-      rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
-      setTimeout(() => { paintRenderer(rb); }, 900);
-      return;
-    }
-    // A tap is a live tab. Disarm any in-flight boot probe so this choice
-    // cannot be reverted by a title-screen refresh before the flyby presents.
-    try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-    try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
-    // Landing on WEBGPU by hand is the retry signal (browser update, new
-    // device state): reset the WGX loss ladder so the boot re-attempts from
-    // the sniffed baseline instead of a rung a long-dead session earned.
-    if (next === "webgpu") {
-      try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
-        localStorage.removeItem("apex26.gfxWgxOk"); localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) {}
-      try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
-    }
-    rb.textContent = "RENDERER: " + backendLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
-    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
-  };
+  if (rb._apexRendererWired) return;
+  rb._apexRendererWired = true;
+  try { window.addEventListener("apex-gfx-live", function () { paintRenderer(document.getElementById("pm-renderer")); }); } catch (_) { /* no window */ }
+  if (isSelect(rb) && typeof rb.addEventListener === "function") {
+    rb.addEventListener("change", function () { applyBackend(rb.value, rb); });
+    const prev = document.getElementById("pm-renderer-prev");
+    const next = document.getElementById("pm-renderer-next");
+    if (prev) prev.onclick = function () { applyBackend(prevBackend(readBackend()), rb); };
+    if (next) next.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };
+    return;
+  }
+  rb.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };
 }
 
 function set(id, opts) {
@@ -271,6 +368,6 @@ if (typeof document !== "undefined") {
 }
 
 return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
-  nextBackend, backendLabel, readBackend, clearRendererStorage,
+  nextBackend, prevBackend, applyBackend, backendLabel, readBackend, clearRendererStorage,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS };
 })();
