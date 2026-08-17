@@ -186,7 +186,9 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(400);
+    // Same pattern as M4: a fixed sleep + evaluate races a SwiftShader
+    // present() and turns a 10 s test into a 250 s one (measured).
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().on === true, { polling: 100, timeout: 90_000 });
     const day = await page.evaluate(() => GLX.__tlx.skyState());
     // Day race: the background node is armed each frame, stars flag off.
     expect(day.on).toBe(true);

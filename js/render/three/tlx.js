@@ -1371,6 +1371,27 @@ const TLX = (function () {
           // Chunked records cull against the face frustum with cullDist=0 (no
           // radial cap in the probe pass — GLX frameCullDist stays 0 here).
           const faceVP = _envVP.elements;   // set in envFaceBegin for this face
+          // Software GL: six world presents into a 64px cube miss the 360 s
+          // test budget even after skipping city+sky (measured 2026-08-17:
+          // M9 timed out at 424 s with park() done and ready still false —
+          // each waitForFunction poll sat behind a SwiftShader frame).
+          // Clear the face and count it; the main present still paints the
+          // canvas. Real GPUs keep the full world capture.
+          if (softwareGL) {
+            try {
+              renderer.setRenderTarget(envRT, face & 7);
+              renderer.setClearColor(0x000000, 1);
+              renderer.clear();
+            } catch (_) { /* a probe face must never strand the frame */ }
+            renderer.setRenderTarget(null);
+            drawList.length = 0;
+            _dMatUsed = 0;
+            poolUsed = 0;
+            _envActive = false;
+            envFacesMask |= 1 << (face & 7);
+            if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }
+            return;
+          }
           poolUsed = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
