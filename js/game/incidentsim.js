@@ -379,6 +379,9 @@ const IncidentSim = (function () {
         // px/pz/head/(s,x); AI authority is (s,x)/prog. See report. ──
         if (c.human) {
           c.px = px; c.pz = pz; c.head = head;
+          const L = (G.track && G.track.total) || 1;
+          let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
+          if (fin(ds)) c.prog += ds;
           c.s = tf.s; c.x = tf.x;
           c.speed = speed; c.vLat = 0;
         } else {
