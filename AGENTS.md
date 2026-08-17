@@ -100,7 +100,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and
   `three/` TLX (opt-in `apex26.gfxBackend="three"`)
 - `js/track/` — spline mesh geom graph space surface markings models themes
-  kits geo-paths maps + the scenery split; the 110-member scenery(api)
+  kits geo-paths maps + the scenery split; the 111-member scenery(api)
   contract is frozen by `tests/unit/scenery-api-contract.test.mjs`
 - `js/car/` — car3d, liveries, liverytex, the parts catalog (600 cr budget),
   ghost, teams, driver-ratings
