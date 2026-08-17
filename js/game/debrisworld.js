@@ -942,8 +942,13 @@ function updatePanels(dt, px, pz) {
   if (changed) {
     _panels = _panels.filter((p) => p.live);
     _panelHandles.clear();
-    for (let i = 0; i < _panels.length; i++)
-      _panelHandles.set(_panels[i].body.collider(0).handle, i);
+    for (let i = 0; i < _panels.length; i++) {
+      const b = _panels[i].body;
+      if (b && b.numColliders && b.numColliders() > 0) {
+        const col = b.collider(0);
+        if (col) _panelHandles.set(col.handle, i);
+      }
+    }
   }
 }
 
@@ -1036,7 +1041,7 @@ function hazards() {
     const pr = projectHazard(track, t.x, t.y, t.z, hint);
     const hw = _smp.hw || 6;
     if (Math.abs(t.y - _smp.p[1]) > HAZARD_Y_TOL) return;   // airborne / sunk
-    if (Math.abs(pr.lat) > hw) return;                      // off the racing surface
+    if ((pr.dist != null ? pr.dist : Math.abs(pr.lat)) > hw) return;                      // off the racing surface
     const frac = (((pr.s / total) % 1) + 1) % 1;
     const si = frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2;
     if (out.sectors[si] === 0) secFrac[si] = +frac.toFixed(4);

@@ -489,6 +489,10 @@ const IncidentSim = (function () {
       c.x = clamp(c.x || 0, -(G.smp.hw - 1.5), G.smp.hw - 1.5);
       c.speed = Math.max(fin(c.speed) ? c.speed : 0, 14);
       c.head = Math.atan2(G.smp.t[0], G.smp.t[2]);
+      if (G.worldFromTrack) {
+        const w = G.worldFromTrack(c.s, c.x);
+        if (w) { c.px = w.x; c.pz = w.z; }
+      }
       c.vLat = 0; c.yawRateCur = 0; c.offT = 0; c.stuckT = 0; c.rescueT = 0;
     } catch (e) {}
   }
