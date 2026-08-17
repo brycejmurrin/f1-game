@@ -334,12 +334,12 @@ const WGX = (function () {
   function _extractPlanes(m, planes) {
     const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
           m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
-    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left
-    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right
-    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom
-    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top
-    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near
-    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far
+    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left  (w + x >= 0)
+    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right (w - x >= 0)
+    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom (w + y >= 0)
+    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top    (w - y >= 0)
+    _setPlane(planes[4], m2,    m6,    m10,     m14);     // near   (WebGPU clip space z >= 0)
+    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far    (WebGPU clip space w - z >= 0)
   }
   function _aabbInFrustum(planes, mn, mx) {
     for (let i = 0; i < 6; i++) {
@@ -571,6 +571,7 @@ const WGX = (function () {
     const frameVPGpu = new Float32Array(16);
     const frameInvProjW = new Float32Array(16);
     let frameSunDir = null, frameSunColor = null, frameProjRaw = null,
+      frameTune = null,
         frameSunVS = null, frameUpVS = null, frameHaveProj = false, frameTime = 0,
         frameAmbSky = null, frameAmbGround = null;
 
@@ -617,6 +618,8 @@ const WGX = (function () {
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
+    let matAlbedoTex = null, matNormalTex = null;
+    let matPlaceTex = null, matPlaceView = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
     // Placeholder views stay alive for the device lifetime; pack tokens in
     // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
@@ -892,11 +895,11 @@ const WGX = (function () {
       lampShadowG0BindGroup = device.createBindGroup({
         layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: lampShadowUBO } }],
       });
-      const _matPlace = device.createTexture({
+      matPlaceTex = device.createTexture({
         size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      matPlaceAlbedoView = _matPlace.createView({ dimension: "2d-array" });
+      matPlaceAlbedoView = matPlaceTex.createView({ dimension: "2d-array" });
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
@@ -1170,7 +1173,10 @@ const WGX = (function () {
               { shaderLocation: 1, offset: 12, format: "float32x3" },
               { shaderLocation: 2, offset: 24, format: "float32x2" },
             ] }] },
-          fragment: { module: decalMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+          fragment: { module: decalMod, entryPoint: "fs_main", targets: [{
+            format: SCENE_FORMAT, blend: ALPHA_BLEND,
+            writeMask: GPUColorWrite.RED | GPUColorWrite.GREEN | GPUColorWrite.BLUE,
+          }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
           ..._fxMS,
@@ -1946,6 +1952,7 @@ const WGX = (function () {
       if (f.invProj && f.invProj.length >= 16) { _mul4(frameInvProjW, f.invProj, Z01INV); frameHaveProj = true; }
       else frameHaveProj = false;
       const T = f.tune || null;
+      frameTune = T;
       const ambM = T && T.ambientMul != null ? T.ambientMul : 1;
       const as = f.ambientSky || [0.3,0.32,0.36], ag = f.ambientGround || [0.2,0.19,0.18];
       frameAmbSky = as; frameAmbGround = ag;
@@ -2020,7 +2027,7 @@ const WGX = (function () {
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
-      d[84] = (_envProbeLive && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
+      d[84] = (_envProbeLive && !f.noEnv && T && T.carEnvCube != null) ? T.carEnvCube : 0.0;
       // params5.y: CLOUD SPEED (drives the LIT cloud-shadow dapple drift, same
       // 1.0 fallback as GLX uCloudSpeed).
       d[85] = f.cloudSpeed != null ? f.cloudSpeed : 1.0;
@@ -2558,7 +2565,8 @@ const WGX = (function () {
       // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
-      const haveGR = godrayBG && ((grStr > 0 && sun && sun.shaft > 0) || lampVol > 0);
+      const sunGR = !!shadowView && grStr > 0;
+      const haveGR = godrayBG && (sunGR || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
@@ -2575,7 +2583,7 @@ const WGX = (function () {
         s[52] = sd[0]; s[53] = sd[1]; s[54] = sd[2]; s[55] = 0;
         const sc = frameSunColor || [1, 0.95, 0.85];
         s[56] = sc[0]; s[57] = sc[1]; s[58] = sc[2]; s[59] = 0;
-        s[60] = (sun && sun.shaft > 0) ? grStr : 0;
+        s[60] = sunGR ? grStr : 0;
         s[61] = lampVol;
         s[62] = o.mist != null ? o.mist : 0;
         s[63] = frameTime;
@@ -2669,7 +2677,7 @@ const WGX = (function () {
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
-        const shaftMul = (sun && sun.onScreen && sun.shaft > 0)
+        const shaftMul = (sun && sun.shaft > 0)
           ? ((T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0) * sun.shaft
           : 0.0;
         s[0] = exposure; s[1] = bloomNorm; s[2] = shaftMul; s[3] = flareStr;   // p0
@@ -3268,8 +3276,15 @@ const WGX = (function () {
       const s = fxScratch, o = opts || {};
       s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
       s.set(frameVPGpu, 16);
-      const sd = frameSunDir || [0.3,0.6,0.5], sc = frameSunColor || [1,0.95,0.9];
-      const asky = frameAmbSky || [0.3,0.32,0.36], agr = frameAmbGround || [0.2,0.19,0.18];
+      const sd = frameSunDir || [0.3,0.6,0.5];
+      const Td = frameTune || null;
+      const kM = Td && Td.keyMul != null ? Td.keyMul : 1;
+      const scRaw = frameSunColor || [1,0.95,0.9];
+      const sc = [scRaw[0] * kM, scRaw[1] * kM, scRaw[2] * kM];
+      const ambM = Td && Td.ambientMul != null ? Td.ambientMul : 1;
+      const askyRaw = frameAmbSky || [0.3,0.32,0.36], agrRaw = frameAmbGround || [0.2,0.19,0.18];
+      const asky = [askyRaw[0] * ambM, askyRaw[1] * ambM, askyRaw[2] * ambM];
+      const agr = [agrRaw[0] * ambM, agrRaw[1] * ambM, agrRaw[2] * ambM];
       s[32] = sd[0]; s[33] = sd[1]; s[34] = sd[2]; s[35] = 0;
       s[36] = sc[0]; s[37] = sc[1]; s[38] = sc[2]; s[39] = 0;
       s[40] = asky[0]; s[41] = asky[1]; s[42] = asky[2]; s[43] = 0;
@@ -3589,7 +3604,13 @@ const WGX = (function () {
   // gpuErrors(): how many uncaptured GPU errors the live device has raised. Zero
   // is the only healthy value; a nonzero count on a backend that "initialised
   // fine" is the answer to "why is the screen black / wrong on my phone".
-  return { create, lastFailure: () => _lastFailure, gpuErrors: () => _gpuErrors };
+  // isSupported(): boolean feature detection for WebGPU availability.
+  return {
+    create,
+    lastFailure: () => _lastFailure,
+    gpuErrors: () => _gpuErrors,
+    isSupported: () => typeof navigator !== "undefined" && !!navigator.gpu,
+  };
 })();
 
 // No-build global export.

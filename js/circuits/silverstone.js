@@ -793,7 +793,7 @@
         out._mat = MAT.METAL;
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
-        const beam = vadd([px[kb], api.py[kb], pz[kb]], L.u, H + 0.35);
+        const beam = vadd(L.c, L.u, H + 0.35);
         // Crossbar physically bridging the two masts. The five light boxes
         // below are centred on the centreline (up to ~3.2 m either side)
         // while the masts stand at anchor()'s hw+2.4 — tens of metres further

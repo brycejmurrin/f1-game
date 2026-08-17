@@ -93,8 +93,8 @@ Compare `scratch/captures/survey-track/<id>/before-*.png` vs `after-*.png`; conf
 is now flag-free and the eye shots show props on real ground.
 
 ### 6 · Test & ship
-- Geometry guards: `npx playwright test tests/specs/terrain-over-road.spec.js tests/specs/tracks-walls.spec.js`
-- Visual regression (all circuits): `npm run test:visual`
+- Geometry guards: `node tools/test-bg.mjs circuit`
+- Visual regression (all circuits): `node tools/test-bg.mjs visual`
   — this suite skips when `tests/specs/tracks-visual.spec.js-snapshots/` is absent; if
   baselines exist and your change is **intentional**, regenerate them with:
   `npm run test:update -- tests/specs/tracks-visual.spec.js` (then eyeball

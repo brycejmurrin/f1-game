@@ -8,7 +8,7 @@
 // Output: artifacts/galleries-<port>/track-trace/<track>/
 import { test, expect } from "@playwright/test";
 import path from "path";
-import { galleryDir } from "../../output-paths.js";
+import { galleryDir } from "../../helpers/output-paths.js";
 
 const TRACK  = process.env.TRACK  || "suzuka";
 const FRAMES = parseInt(process.env.FRAMES || "60", 10);

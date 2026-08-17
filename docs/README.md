@@ -53,7 +53,8 @@ at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
 **What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX stays
 opt-in (`apex26.gfxBackend=webgpu`) with GLX as the default. The 2026-08
 parity pass closed the documented gaps (gpuTimer, texture arrays, lamp
-shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial).
+shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial,
+and WGSL uniform control flow derivative hoisting).
 Recipes and remaining sharp edges live in
 [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). The six
 phase/migration build logs are provenance and live in
@@ -62,7 +63,9 @@ phase/migration build logs are provenance and live in
 ### three.js / TLX backend (opt-in)
 
 The third renderer behind the same `Gfx` seam (`js/render/three/`), activated
-via `localStorage apex26.gfxBackend=three`. Evaluation spikes, measured
+via `localStorage apex26.gfxBackend=three`. Built on vendored three.js r184 with
+TSL-based shaders (chunked meshes, lit core, procedural sky, full post chain,
+shadow system, and env cube probe). Evaluation spikes, measured
 criteria and the phased adoption plan live in [`spike/`](../spike/) —
 `spike/README.md` for the criteria table and numbers, `spike/ADOPTION-PLAN.md`
 for the graphics phases and the additive Rapier plan that `js/game/debrisworld.js`

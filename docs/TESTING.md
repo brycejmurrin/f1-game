@@ -33,7 +33,9 @@ prints nothing you can act on. The default reporter is `tests/helpers/live-repor
 one timestamped, immediately-flushed line per test start and end, plus a
 30-second heartbeat naming everything still in flight — so a piped log is
 genuinely tail-able and a hung test is the one with a `> start` line and no end
-line.
+line. Never let foreground test runs block autonomous workflows; invoke test
+suites in the background, inspect logs asynchronously, and continue productive
+tasks without waiting.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
@@ -109,7 +111,7 @@ serializes the agent behind SwiftShader several times over.
 |---|---|
 | in the edit loop | `npm run test:tooling-fast` (~30 s, structural, no browser) |
 | track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `npm run test:tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
 | single spec | `npm test -- tests/<file>.spec.js` |
 | single unit suite | `node --test tests/<file>.test.mjs` |
@@ -853,7 +855,7 @@ what it covers.
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
-| `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the cycle always names WEBGPU, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality |
+| `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |

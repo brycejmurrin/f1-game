@@ -9,7 +9,7 @@
 // under SwiftShader (~24x that per run); this one pays the page load once.
 
 import { test } from "@playwright/test";
-import { galleryDir } from "../../output-paths.js";
+import { galleryDir } from "../../helpers/output-paths.js";
 
 const OUT = galleryDir("all-tracks-buildings");
 

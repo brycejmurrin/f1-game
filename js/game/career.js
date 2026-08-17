@@ -1076,6 +1076,7 @@ function hireDriver(code, years) {
   if (!a) return false;
   career.roster = [{ name: a.name, code: a.code, num: a.num, tier: a.tier,
                      salary: a.ask, left: clamp(years | 0 || 1, 1, 3), pending: null }];
+  if (career.dev) delete career.dev[seasonDriverId(career.team, 1)];
   save();
   return true;
 }

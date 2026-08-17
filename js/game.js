@@ -784,13 +784,23 @@ function netReportQuali(driverId, t) {
 // whose qualifying time never arrived would put them wherever the model
 // guessed, which is the one thing a qualifying session is supposed to stop.
 let qualiNetDone = null;          // the lobby's "now finish starting" callback
+function qualiRivalDriverIds() {
+  const fromNet = netPlay.rivalDriverIds();
+  if (fromNet.length) return fromNet;
+  // Before NetPlay hands off, remotes is empty even though the lobby already
+  // knows who is in the room — read the peer profiles instead of opening the
+  // grid after the first lap while two rivals are still out.
+  if (!netLobby || !netLobby.roomState) return [];
+  const peers = netLobby.roomState().peers || [];
+  return peers.map((p) => p.team + ":" + (p.driver || 0)).filter((id) => id !== ":");
+}
 function qualiNetWaiting() {
   if (!qualiNetDone) return false;
   // EVERY rival, not "a rival". With one peer this is the boolean it always
   // was; with three it stops the grid forming off one arrived lap and two
   // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
   // so somebody who dropped during qualifying stops being waited on.
-  const rivals = netPlay.rivalDriverIds();
+  const rivals = qualiRivalDriverIds();
   if (!rivals.length) return !(qualiPeers.size > 0);
   return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
@@ -813,7 +823,7 @@ function refreshQualiGate() {
   // disabled button. The count is already knowable from the same two things
   // the gate itself reads.
   if (!waiting) { b.textContent = "TO THE GRID"; return; }
-  const rivals = netPlay.rivalDriverIds();
+  const rivals = qualiRivalDriverIds();
   const outstanding = rivals.filter((id) => !(qualiPeers.get(id) > 0));
   const left = outstanding.length;
   // SHOW THE LAP AS IT HAPPENS. "Waiting" with no clock is the same screen
@@ -3585,7 +3595,7 @@ function updateCar(c, dt, ranked) {
   } else c.deploying = false;
 
   // --- overtake mode ---
-  const ahead = ranked[(c.rank || 1) - 2];
+  const ahead = (c.rank || 1) > 1 ? ranked[(c.rank || 1) - 2] : null;
   const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
   // vStd, not a bare c.speed: this is a THRESHOLD, and a threshold compared
   // against real m/s means something different at every OVERALL SPEED setting.

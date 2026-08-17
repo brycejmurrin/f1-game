@@ -429,15 +429,47 @@ existing opt-in and keep GLX untouched.
 | 8 | Instancing family | Memory, not look; GLX already has the consumer | `TrackGraph.batches()` draws on WGX |
 | 9 | Particles / `applyMaterial*` / `trk` / haze / car SSR | Remaining look deltas | Per-feature `__apex` + a rendered lap |
 
-Do **not** flip `apex26.gfxBackend` default. Do **not** delete GLX. Do **not**
-hand a subagent a Playwright browser run of WGX — SwiftShader has no WebGPU;
-`--enable-unsafe-webgpu` does not make the software path a visual oracle.
+Do **not** flip `apex26.gfxBackend` default. Do **not** delete GLX.
+
+**SwiftShader WebGPU — measured 2026-08-17** (Chrome 148 / Playwright Chromium
+149, `scratch/webgpu-swiftshader-probe3.json`). The previous line here
+("SwiftShader has no WebGPU") is false on this box:
+
+| Launch | `navigator.gpu` | Dawn adapter | Game boots | WGX binds |
+|---|---|---|---|---|
+| Suite flags, **headless** (`--use-angle=swiftshader --enable-unsafe-webgpu`) on `http://127.0.0.1` | yes | `google` / `swiftshader`, `requestDevice()` ok | yes | no — see below |
+| Same flags, **headed** under Xvfb | yes | same | yes | no |
+| Extra Dawn/Vulkan pins (`--use-webgpu-adapter=swiftshader` + `VulkanFromANGLE`) **headless** | — | — | **no** (`__apex` never appears, 25 s) | — |
+| `data:` URL (any flags, headless) | **no** | — | n/a | n/a |
+
+SETTINGS ▸ RENDERER (the `<select>` + ‹ ›) does pick WEBGPU and reload. WGX
+scripts load (`typeof WGX === "object"`), then `create()` fails and the seam
+falls back to GLX. The picker label reads `WEBGPU (WEBGL2)`. The recorded
+reason:
+
+```
+apex26.gfxWgxFail = lit shader compile error:
+  'dpdx' must only be called from uniform control flow
+```
+
+That is SwiftShader being a **stricter WGSL compiler** than the hardware
+drivers WGX was tuned on. The LIT shader already hoists some derivatives
+(`ccDx` / `saaDx` comments in `js/render/webgpu/wgsl-chunks.js`) but still
+calls `dpdx`/`dpdy` inside `if (detail > 0.001)` and via `fw1()` from the
+branched `applyMaterial*` helpers. Until those are uniform-CF, WGX cannot
+be a Playwright visual oracle — only an adapter/device + compile-info gate.
+*(Note: As of August 2026, all `dpdx`/`dpdy` derivative evaluation points in `wgsl-chunks.js`
+have been hoisted to the top-level uniform control flow of `fs_main`, resolving WGSL compile errors).*
+
+Do **not** add the extra Vulkan pins to `playwright.config.js`; they break
+headless boot. Do **not** probe WebGPU on a `data:` page.
 
 CI: `tests/unit/webgpu-lifecycle.test.mjs` and
-`tests/unit/backend-surface-parity.test.mjs` are the no-browser gates. A
+`tests/unit/backend-surface-parity.test.mjs` stay the no-browser gates. A
 slice that adds a method must declare it (real or `undefined`) before
-`test:tooling-fast` will pass. Visual sign-off is a headed browser with
-`navigator.gpu`, not the Playwright suite.
+`test:tooling-fast` will pass. A WGX **frame** still needs a headed browser
+whose LIT module compiles; SwiftShader is not that until the `dpdx` sites
+move.
 
 ---
 
@@ -451,8 +483,10 @@ slice that adds a method must declare it (real or `undefined`) before
   arrays; WGX is the native path. This doc is only about WGX.
 - **Compute-shader volumetrics / ReSTIR / etc.** GLX's march is the look we
   are matching. A better algorithm is a different project.
-- **Using WebGPU to make CI faster.** Chrome Linux WebGPU is still
-  GPU-vendor gated; the suite pins SwiftShader. See
+- **Using WebGPU to make CI faster.** The suite already gets a SwiftShader
+  WebGPU adapter under the existing Playwright flags (see §6 table). That
+  does not make frames cheaper: WGX LIT currently fails to compile on that
+  adapter, and even a green compile would still be a CPU rasteriser. See
   [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
 
 ---

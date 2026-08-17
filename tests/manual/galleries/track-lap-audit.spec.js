@@ -13,7 +13,7 @@
 import { test } from "@playwright/test";
 import path from "path";
 import fs from "fs";
-import { galleryDir } from "../../output-paths.js";
+import { galleryDir } from "../../helpers/output-paths.js";
 
 const BASE_OUT  = galleryDir("track-lap-audit");
 const POSITIONS = 25;    // every 4 % of the lap

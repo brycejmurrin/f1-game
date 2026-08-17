@@ -157,7 +157,7 @@ const RaceControl = (() => {
       } else if (desired < caution.level) {
         if (caution.sinceT >= MIN_HOLD) {
           caution.level = desired;
-          caution.sector = desired === 1 ? (dsector >= 0 ? dsector : caution.sector) : -1;
+          caution.sector = desired === 1 ? (dsector >= 0 ? dsector : (hz.worst && hz.worst.sector >= 0 ? hz.worst.sector : 0)) : -1;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
         }
       } else if (desired === 1 && dsector >= 0) {
