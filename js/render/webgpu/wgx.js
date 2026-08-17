@@ -814,7 +814,7 @@ const WGX = (function () {
     let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
-    let identInstanceBuf = null, zeroAttrBG = null;
+    let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
     // submit; one shared buffer left both draws seeing sparks only.
@@ -2212,15 +2212,17 @@ const WGX = (function () {
     // fragment read a grass skirt. The LUT is 32×32 cells × 16 centerline
     // samples; fs_main finds the nearest sample to wpos.xz and rebuilds
     // (mat, s, lateral x, hw). Magic 12345 marks a LUT vs a dummy/attr buffer.
-    function _makeRoadLUT(pos, trk) {
+    function _makeRoadLUT(pos, trk, matArr) {
       const posA = toF32(pos), trkA = toF32(trk);
       const vCount = (posA.length / 3) | 0;
       if (!vCount || trkA.length < vCount * 3) return _makeAttrBG(null);
+      const mat = matArr && matArr.length === vCount ? toF32(matArr) : null;
       const raw = [];
       let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
       for (let i = 0; i < vCount; i++) {
         const hw = trkA[i * 3 + 2], lat = trkA[i * 3 + 1];
         if (hw <= 0.5 || Math.abs(lat) > 0.85) continue;
+        if (mat && mat[i] !== 16) continue;
         const px = posA[i * 3], pz = posA[i * 3 + 2];
         raw.push({ px, pz, s: trkA[i * 3], hw });
         if (px < minX) minX = px; if (px > maxX) maxX = px;
@@ -2241,7 +2243,11 @@ const WGX = (function () {
       const bin = (s, gx, gz) => {
         if (gx < 0 || gz < 0 || gx >= GW || gz >= GH) return;
         const list = cells[gx + gz * GW];
-        if (list.length < SLOT) list.push(s);
+        if (list.length >= SLOT) return;
+        for (let j = 0; j < list.length; j++) {
+          if (list[j].px === s.px && list[j].pz === s.pz) return;
+        }
+        list.push(s);
       };
       for (let i = 0; i < samples.length; i++) {
         const s = samples[i];
@@ -2281,6 +2287,9 @@ const WGX = (function () {
       }
       return _makeAttrBG(out);
     }
+    function _rememberRoadLut(lut) {
+      if (lut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
+    }
     function _drawGeom(pass, mesh, instCount) {
       if (mesh.ibuf) {
         pass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
@@ -2297,7 +2306,8 @@ const WGX = (function () {
     function createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
-      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk) : null;
+      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
+      if (lut) _rememberRoadLut(lut);
       let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       try {
         if (pulled) {
@@ -2374,7 +2384,8 @@ const WGX = (function () {
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
       const b = _interleave(data);
-      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk) : null;
+      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
+      if (lut) _rememberRoadLut(lut);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexFormat = big ? "uint32" : "uint16";
       let vbuf = null, sbuf = null, attrBG = null;
@@ -2890,15 +2901,25 @@ const WGX = (function () {
     function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      pass.setBindGroup(2, attrBG || zeroAttrBG);
+      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+    }
+
+    // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
+    // draws second with negative bias. Push detail-bearing ground draws away.
+    function _litOpts(opts) {
+      const o = opts || {};
+      if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
+        return Object.assign({}, o, { depthBias: [3, 6] });
+      return o;
     }
 
     function draw(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
+      const o = _litOpts(opts);
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      _writeDraw(slot, model, opts);
-      litPass.setPipeline(_litPipeline(opts));
+      _writeDraw(slot, model, o);
+      litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
@@ -2916,10 +2937,11 @@ const WGX = (function () {
 
     function drawChunked(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
+      const o = _litOpts(opts);
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      _writeDraw(slot, model, opts);
-      litPass.setPipeline(_litPipeline(opts));
+      _writeDraw(slot, model, o);
+      litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
@@ -4584,6 +4606,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
+      roadLutReady: () => _roadLutReady,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

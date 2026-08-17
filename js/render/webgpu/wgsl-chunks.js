@@ -550,9 +550,11 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let right = vec2<f32>(tang.y, -tang.x);
   let x = dot(wp.xz - best.xy, right);
   let hw = best.w;
-  let ax = abs(x);
-  let mid = select(select(0.0, 9.0, ax <= hw + 2.4), 16.0, ax <= hw);
-  return select(vec4<f32>(0.0), vec4<f32>(mid, best.z, x, hw), gated && hw > 0.5);
+  let valid = gated && hw > 0.5;
+  // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
+  // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
+  // here (a bad tangent used to tag the ribbon MAT 9 / grass).
+  return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
 }
 ${hash}
 ${vnoise}
@@ -621,21 +623,26 @@ fn vs_main(
     model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
     col = aCol * aInstColor;
   }
-  let wp = model * vec4<f32>(aPos, 1.0);
+  var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  o.nrm  = nm * aNrm;
-  o.col  = col;
-  o.wpos = wp.xyz;
-  // Location 3 interpolator survives on the ribbon; 4–6 do not. Prefer the
-  // per-vertex attribute (small pieces) and fall back to storage[vid].
+  // Location 3 is the only mat+trk path that survives on the road ribbon.
+  // Per-vertex attrs read 0 on large VBOs; for road draws (mat2.z = 16)
+  // reconstruct (s, x, hw) from the centerline LUT in the vertex shader.
   var pulled = aMatTrk;
-  // LUT buffers start with magic 12345 — do not treat them as per-vertex.
   if (matTrkArr[0].x != 12345.0 && pulled.x == 0.0 && pulled.z == 0.0) { pulled = matTrkArr[vid]; }
+  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
+    let wt = trkFromWorld(wp.xyz);
+    if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
+    wp.y = wp.y + 0.08;
+  }
   o.matTrk = pulled;
   o.matId = pulled.x;
   o.trk = pulled.yzw;
   o.vid = f32(vid);
+  o.nrm  = nm * aNrm;
+  o.col  = col;
+  o.wpos = wp.xyz;
   o.clip = F.viewProj * wp;
   return o;
 }
@@ -650,14 +657,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fromWorld = trkFromWorld(in.wpos);
   let fwWorld = abs(dpdx(fromWorld.yzw)) + abs(dpdy(fromWorld.yzw));
   let packedRoad = in.col.x > 1.5 && in.col.x < 40.0;
-  let fromPack = vec4<f32>(floor(in.col.x), in.col.y,
-    in.col.z - floor(in.col.z / 64.0) * 64.0 - 32.0, floor(in.col.z / 64.0));
-  let fromAttr = select(in.matTrk, fromPack, packedRoad);
-  let useWorld = fromWorld.w > 0.5 && fromAttr.w <= 0.5;
-  let pulled = select(fromAttr, fromWorld, useWorld);
-  let vMatId = select(pulled.x, D.mat2.z, pulled.x < 0.5 && pulled.w > 0.5 && D.mat2.z > 0.5);
-  let vTrk = pulled.yzw;
-  let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorld);
+  let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
+  let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
+  let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
+  let vMatId = select(select(in.matTrk.x, floor(in.col.x), packedRoad), D.mat2.z, D.mat2.z > 0.5);
+  let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
   // branches. textureSample gets implicit LOD + anisotropy — the GLX
@@ -681,6 +685,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
   let saaDy = dpdy(topNgeo);
+  // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
+  // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
+  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5 && abs(fromWorld.y) <= fromWorld.z + 2.4) {
+    discard;
+  }
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
@@ -829,7 +838,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, roadPack, roadPackOn);
-  roadMarkings(&albedo, &rough, vTrk, fwTrk);
+  if (i32(vMatId + 0.5) == 16) {
+    roadMarkings(&albedo, &rough, vTrk, fwTrk);
+  }
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 

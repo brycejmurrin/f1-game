@@ -828,6 +828,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /fn trkFromWorld/);
   assert.match(CHUNKS_SOURCE, /12345/);
   assert.match(WGX_SOURCE, /_makeRoadLUT/);
+  assert.match(WGX_SOURCE, /_roadLutBG/);
   assert.match(WGX_SOURCE, /out\[0\] = 12345/);
   assert.match(WGX_SOURCE, /VERTEX_STRIDE = 52/);
   assert.match(WGX_SOURCE, /_expandPull/);
@@ -835,7 +836,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, attrBG/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /roadLutReady/);
+  assert.match(WGX_SOURCE, /function _litOpts/);
+  assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
+  assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
