@@ -6,7 +6,7 @@
  *   TLX  (three.js/TSL)    opt-in via localStorage apex26.gfxBackend="three".
  *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu". Ships the
  *                          GLX draw-API surface (gpuTimer, texture arrays,
- *                          lamp shadows, instancing, particles, MSAA 2×).
+ *                          lamp shadows, instancing, particles, MSAA 4×).
  *                          pcss() returns true (Poisson-8 + blocker search).
  *                          GLX stays the default.
  *

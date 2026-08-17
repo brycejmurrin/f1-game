@@ -151,12 +151,24 @@ fn matTexUV(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>, uv_ptr: ptr<function, vec
   }
   return true;
 }
-fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>) {
+// fwW = screen-space width of wpos per axis (fw1 of each component), computed
+// ONCE at the top of fs_main in UNIFORM control flow and threaded in. WGSL —
+// unlike GLSL — makes a derivative call reached through a non-uniform branch or
+// early return a derivative_uniformity ERROR: Dawn builds that enforce it
+// invalidated the whole lit pipeline (WGX refused, fell back to GLX), and
+// builds that demote it to a warning executed UNDEFINED derivative values
+// exactly where the early returns diverge. Every pattern coordinate below is
+// linear in wpos, so scaling these bases by the chain rule is exact; the only
+// approximation is max(fwW.x, fwW.z) where the true hc is a per-fragment
+// select of one axis — a conservative over-estimate that only widens AA.
+fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwW: vec3<f32>) {
   var uv = vec2<f32>(0.0);
   if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
   let fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (fade <= 0.005) { return; }
-  let fp = max(fw1(uv.x), fw1(uv.y));
+  // uv = (hc, y)/sc wall-like, wpos.xz/sc otherwise (matTexUV); sc > 0 here.
+  let fwHV = max(fwW.x, fwW.z);
+  let fp = select(fwHV, max(fwHV, fwW.y), matWallLike(mid)) / matScale(mid);
   let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) { return; }
   let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, 0.0).xy - 0.5) * 2.0;
@@ -165,7 +177,7 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
   *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
 }
-fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>) {
+fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwW: vec3<f32>) {
   if (mid == 0 || mid == 3 || mid == 15 || mid >= 20) { return; }
   let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) { return; }
@@ -174,7 +186,7 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     let an = abs(N);
     let hc = select(wpos.x, wpos.z, an.x > an.z);
     let y = wpos.y;
-    let fp = max(fw1(hc), fw1(y));
+    let fp = max(max(fwW.x, fwW.z), fwW.y);
     let aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
     if (aaFade <= 0.005) { return; }
     let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N) + vec3<f32>(1e-5, 0.0, 0.0));
@@ -186,7 +198,7 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + (T * (h0 - hx) + vec3<f32>(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
   } else {
     let p = wpos.xz;
-    let fpG = max(fw1(p.x), fw1(p.y));
+    let fpG = max(fwW.x, fwW.z);
     let aaG = clamp(1.0 - (fpG - 0.10) / 0.55, 0.0, 1.0);
     if (aaG <= 0.005) { return; }
     let e = 0.22;
@@ -197,9 +209,9 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
   *N_ptr = N;
-  applyMaterialTexNormal(mid, N_ptr, vd, wpos);
+  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwW);
 }
-fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>) {
+fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwW: vec3<f32>) {
   if (mid == 0) { return; }
   let far = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);
   if (far <= 0.001) { return; }
@@ -214,14 +226,14 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far);
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
     if (wall) {
-      albedo = albedo * (1.0 - smoothstep(max(0.05, fw1(y / 1.25)), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+      albedo = albedo * (1.0 - smoothstep(max(0.05, fwW.y / 1.25), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
     }
     rough = min(1.0, rough + 0.08 * far);
   } else if (mid == 2) {
     let ch = 0.20; let bl = 0.42; let mort = 0.06;
     let row = floor(y / ch); let off = (row % 2.0) * 0.5 * bl;
     let bx = fract((hc + off) / bl); let by = fract(y / ch);
-    let mortAA = max(mort, max(fw1(hc), fw1(y)));
+    let mortAA = max(mort, max(max(fwW.x, fwW.z), fwW.y));
     let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
                     smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
     let bh = svnoise(vec2<f32>(floor((hc + off) / bl), row) * 1.3);
@@ -232,7 +244,7 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   } else if (mid == 3) {
     let pw = 1.6; let ph = 1.4; let mull = 0.11;
     let gx = fract(hc / pw); let gy = fract(y / ph);
-    let mullAA = max(mull, max(fw1(hc / pw), fw1(y / ph)));
+    let mullAA = max(mull, max(max(fwW.x, fwW.z) / pw, fwW.y / ph));
     let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
                   smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far);
@@ -244,7 +256,7 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
-    albedo = albedo * (1.0 - smoothstep(max(0.05, fw1(hc / 0.35)), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+    albedo = albedo * (1.0 - smoothstep(max(0.05, max(fwW.x, fwW.z) / 0.35), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
   } else if (mid == 6) {
     let d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6 + svnoise(wpos.xz * 9.0) * 0.4 * near;
     albedo = albedo * (1.0 + (d - 0.5) * 0.34 * far);
@@ -272,7 +284,8 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = clamp(rough - 0.10 * far, 0.05, 1.0);
   } else if (mid == 12) {
     let ty = fract(y / 0.34);
-    let shadeAA = clamp(1.0 - fw1(ty) * 6.0, 0.0, 1.0);
+    // fw of the pre-fract phase: fract wraps spike the true derivative anyway.
+    let shadeAA = clamp(1.0 - (fwW.y / 0.34) * 6.0, 0.0, 1.0);
     albedo = albedo * (0.88 + sin(ty * 3.14159) * shadeAA * 0.16);
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
     rough = min(1.0, rough + 0.10 * far);
@@ -280,7 +293,7 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     let cell = floor(vec2<f32>(hc, y) * 1.3);
     let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
     let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-    let jointAA = max(0.16, max(fw1(hc * 1.3), fw1(y * 1.3)));
+    let jointAA = max(0.16, max(max(fwW.x, fwW.z), fwW.y) * 1.3);
     let joint = smoothstep(0.0, jointAA, d);
     let block = albedo * (0.80 + hash21(cell) * 0.4);
     let mortar = mix(albedo, vec3<f32>(0.42, 0.40, 0.37), 0.65);
@@ -288,7 +301,7 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.18 * far);
   } else if (mid == 14) {
     let ridgePhase = hc * 7.5;
-    let ridgeAA = clamp(1.0 - fw1(ridgePhase) * 3.0, 0.0, 1.0);
+    let ridgeAA = clamp(1.0 - (max(fwW.x, fwW.z) * 7.5) * 3.0, 0.0, 1.0);
     albedo = albedo * (0.85 + sin(ridgePhase) * ridgeAA * 0.18);
     let rust = smoothstep(0.55, 0.9, svnoise(vec2<f32>(hc * 0.8, y * 0.35) + 5.0));
     albedo = mix(albedo, albedo * vec3<f32>(0.62, 0.42, 0.28), rust * 0.5 * far);
@@ -308,17 +321,22 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   *albedo_ptr = albedo;
   *rough_ptr = rough;
 }
-fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>) {
+// fwTrk = fw1 of trk.x (arc s) and trk.y (lateral x), taken at fs_main top in
+// uniform control flow. The hw gate below made this function run ONLY on road
+// surface fragments — calling fw1 in here put the derivative behind that
+// non-uniform return, which is what painted the whole road NaN-white on
+// warning-mode Dawn builds (and refused WGX outright on enforcing ones).
+fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>, fwTrk: vec2<f32>) {
   let hw = trk.z;
   if (hw <= 0.5) { return; }
   let s = trk.x; let x = trk.y;
   let paint = vec3<f32>(0.95, 0.95, 0.97);
-  let aaX = clamp(fw1(x), 1e-4, 0.30);
+  let aaX = clamp(fwTrk.y, 1e-4, 0.30);
   let dEdge = abs(abs(x) - (hw - 0.10));
   let edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
   let band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
   let ph = fract(s / 7.0);
-  let aaS = clamp(fw1(s) / 7.0, 1e-4, 0.24);
+  let aaS = clamp(fwTrk.x / 7.0, 1e-4, 0.24);
   let dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
   let mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
   let m = max(edge, band * dash) * mip;
@@ -553,11 +571,17 @@ fn vs_main(
 
 @fragment
 fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f32> {
+  // EVERY screen-space derivative of a varying is taken HERE, first thing, in
+  // uniform control flow, then threaded into the material helpers as widths
+  // (see applyMaterialTexNormal / roadMarkings headers for why WGSL forces
+  // this and what shipped broken when it was violated).
+  let fwW = vec3<f32>(fw1(in.wpos.x), fw1(in.wpos.y), fw1(in.wpos.z));
+  let fwTrk = vec2<f32>(fw1(in.trk.x), fw1(in.trk.y));
   var N = normalize(in.nrm);
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
-  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos);
+  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos, fwW);
 
   // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
   //    DrawU/FrameU fields; a 0 value makes each block below a no-op so existing
@@ -604,8 +628,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
     // the car. Distance fade alone misses a near-but-grazing patch.
     // fwidth(x) = abs(dpdx)+abs(dpdy); WGSL has no fwidth — same magnitude.
-    let mnFpAbs = max(abs(dpdx(in.wpos.x)) + abs(dpdy(in.wpos.x)),
-                      abs(dpdx(in.wpos.z)) + abs(dpdy(in.wpos.z)));
+    // (Reuses the fs_main-top fwW bases rather than re-deriving here.)
+    let mnFpAbs = max(fwW.x, fwW.z);
     mnFade = mnFade * clamp(1.0 - (mnFpAbs - 0.15) / 0.70, 0.0, 1.0);
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
@@ -700,8 +724,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
-  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm);
-  roadMarkings(&albedo, &rough, in.trk);
+  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwW);
+  roadMarkings(&albedo, &rough, in.trk, fwTrk);
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 

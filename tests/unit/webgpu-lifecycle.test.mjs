@@ -573,7 +573,7 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(gfx.gpuMs(), -1);
   gfx.gpuTimer(true);
   assert.equal(gfx.gpuTimer().on, true);
-  assert.equal(gfx.msaa(), 2);
+  assert.equal(gfx.msaa(), 4);
   const maps = gfx.materialMapState();
   assert.equal(maps.albedo, false);
   assert.equal(maps.layers, 0);
@@ -810,21 +810,23 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
   // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
-  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // stack there. WGX cannot: timestamp-query + MSAA rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
   assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  // Desktop MSAA is 4, never 2: WebGPU only permits sample counts 1 and 4, and
+  // the old 2 was rejected by every compliant device (all MS pipelines invalid).
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
 test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
-  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.msaa(), 4, "Chrome desktop takes MSAA 4 (WebGPU allows only 1 or 4)");
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
@@ -1012,4 +1014,29 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   gfx.setMaterialMaps(null);
   assert.equal(a3.texture.destroyed, true);
   assert.equal(n3.texture.destroyed, true);
+});
+
+test("derivatives stay in uniform control flow (the WGSL NaN-white road)", () => {
+  // WGSL — unlike GLSL — makes a dpdx/dpdy call reached through a non-uniform
+  // branch or early return a derivative_uniformity ERROR. The material helpers
+  // all early-return on per-fragment values (roadMarkings on trk.z > 0.5 — the
+  // road surface itself), so a derivative INSIDE any of them either invalidates
+  // the whole lit pipeline (enforcing Dawn: WGX silently fell back to GLX) or
+  // executes UNDEFINED values exactly where the returns diverge (warning-mode
+  // Dawn: the entire road + shoulders rendered NaN-white on phones while grass,
+  // walls and cars — hw 0, early return before any derivative — looked fine).
+  // The fix pins this shape: fs_main takes fw1 of wpos/trk FIRST, in uniform
+  // flow, and threads those widths in; every pattern width below is linear in
+  // them. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
+                   "applyMaterialNormal", "applyMaterial", "roadMarkings"];
+  for (const name of helpers) {
+    const m = CHUNKS_SOURCE.match(new RegExp("fn " + name + "\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}", ""));
+    assert.ok(m, "helper fn " + name + " exists in wgsl-chunks.js");
+    assert.doesNotMatch(m[0], /dpdx|dpdy|fw1\(/,
+      "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
+  }
+  // The uniform-flow bases exist and are taken before anything can diverge.
+  assert.match(CHUNKS_SOURCE, /let fwW = vec3<f32>\(fw1\(in\.wpos\.x\), fw1\(in\.wpos\.y\), fw1\(in\.wpos\.z\)\)/);
+  assert.match(CHUNKS_SOURCE, /let fwTrk = vec2<f32>\(fw1\(in\.trk\.x\), fw1\(in\.trk\.y\)\)/);
 });

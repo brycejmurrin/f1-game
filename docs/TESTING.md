@@ -999,3 +999,26 @@ lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
 tree with an 8,409-line game.js). Every worktree brief starts with
 `git checkout -B <branch> <session SHA>` plus a fingerprint check of a
 session-known file.
+
+**WebGPU IS validatable in-container — stop shipping "read-verified" WGSL
+(2026-08-17).** For months every `js/render/webgpu/` change carried a "WGSL is
+not compilable in this container" disclaimer and shipped on read-review alone.
+That belief was FALSE, and it shipped a phone-visible defect: a
+`derivative_uniformity` violation (derivatives called behind `roadMarkings`'s
+`hw > 0.5` early return — the road surface itself) that enforcing Dawn builds
+reject (WGX silently fell back to GLX) and warning-mode phone builds executed
+as undefined values — the entire road + shoulders rendered NaN-white while
+grass, walls and cars looked fine. Two more spec violations sat alongside it:
+MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
+rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
+All three were one-line Dawn errors the moment the code ran on a real device.
+`node tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
+--enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
+--use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
+every WGSL module and validates every pipeline. Know the ceiling: Dawn here
+VALIDATES but does not EXECUTE — readbacks return zeros, WGX-canvas
+screenshots are BLANK (environment, not bug), and the full desktop stack can
+LOSE the device seconds in (Chrome reports it as `createBuffer failed, size
+(N) is too large` on a tiny N — that wording means device-lost, not size).
+Validation evidence here is exact; pixel truth still needs a real GPU.
