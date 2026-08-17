@@ -28,7 +28,9 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
   a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
-  suite uses; measured: `ANGLE (…SwiftShader…)`). It reaches
+  suite uses; measured: `ANGLE (…SwiftShader…)`) **and, since 2026-08-17, WebGPU
+  via SwiftShader too** — see [Probing a specific renderer](#probing-a-specific-renderer)
+  below, which is how all three of that day's WGX blockers were found. It reaches
   `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
   from this container**: MEASURED 2026-08-13, `navigate_page` to
   `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
@@ -44,6 +46,49 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   `version.json` and shipped JS. It cannot see the working tree (only public
   URLs), so it is useless for pre-ship verification. Shell:
   `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
+
+---
+
+## Probing a specific renderer
+
+`node tools/mcp-cli.mjs probe` is the shape a renderer question takes. One
+command, one browser, no heredoc:
+
+```sh
+npx serve -l 3456 .          # the page must be on 127.0.0.1 (see the trap below)
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
+  --eval 'return JSON.stringify({gpuErrors: WGX.gpuErrors ? WGX.gpuErrors() : "n/a"});'
+node tools/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser
+```
+
+Four traps, each of which has cost a run:
+
+- **`navigator.gpu` needs a SECURE CONTEXT.** It is undefined on `about:blank`
+  no matter which Chrome flags are set, and reads exactly like a missing flag —
+  measured across four flag combinations before the origin turned out to be the
+  variable. Probe `http://127.0.0.1`. (The flags are needed too: the wrapper now
+  passes `--enable-unsafe-webgpu`, without which headless Chrome exposes no
+  WebGPU at all and every WGX probe reports "No available adapters".)
+- **Script globals are not `window` properties.** `js/*.js` files assign
+  `const GLX = …` at top level, a lexical binding: `window.GLX` is `undefined`
+  while bare `GLX` works. Same for `Assets`, `Tracks`, `TLX`, `WGX`.
+- **The backend pick lives in `localStorage`, and each invocation gets a fresh
+  profile** — so it must be written and then RELOADED inside one batch. `--backend`
+  does that; setting it as a separate command probes the default and looks like
+  the backend silently ignoring you.
+- **`--backend three` pins three to WebGL2** (`apex26.tlxForceGL=1`, what
+  `tests/specs/tlx-probes.spec.js` sets). TLX auto-picks three's WebGPU backend on
+  Chromium desktop, and under SwiftShader that path dies inside three's own
+  `mappedAtCreation` buffer upload — which reads as a TLX regression and is not
+  one. `--tlx-webgpu` opts in deliberately.
+
+What a clean WGX boot looks like: no `WGX` console line at all,
+`WGX.gpuErrors()` 0, and `sessionStorage["apex26.gfxBound"]` ABSENT — that key
+is written only when WGX refuses and hands the frame back to GLX, so its
+presence (`"webgl2"`) is the failure signal, not the success one.
+
+SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
+bind groups match, buffers upload. It is not a visual one.
 
 ---
 

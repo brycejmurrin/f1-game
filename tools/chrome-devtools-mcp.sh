@@ -42,6 +42,20 @@ detect_chrome() {
 }
 
 CHROME="$(detect_chrome)"
+# WebGPU + software-WebGL flags, both MEASURED on Chrome 148 in this container:
+#
+#   --enable-unsafe-webgpu       WGX could not boot at all without it: headless
+#       Chrome does not expose navigator.gpu by default, so TLX/WGX logged "No
+#       available adapters" and every WebGPU probe was a dead end. With it, the
+#       adapter is google/swiftshader and requestDevice() succeeds — enough to
+#       exercise WGX's validation, lifecycle and bind groups. NOT a visual
+#       oracle (CLAUDE.md): pixels still come from SwiftShader.
+#   --enable-unsafe-swiftshader  silences "Automatic fallback to software WebGL
+#       has been deprecated", which is a warning today and a refusal later.
+#
+# navigator.gpu needs a SECURE CONTEXT: it is undefined on about:blank no matter
+# which flags are set, so a WebGPU probe must navigate to http://127.0.0.1 (or
+# https) FIRST. That cost an afternoon; it is not a flag problem.
 MCP_ARGS=(
   --headless
   --isolated
@@ -50,7 +64,13 @@ MCP_ARGS=(
   --viewport "844x390"
   --chromeArg=--no-sandbox
   --chromeArg=--use-angle=swiftshader
+  --chromeArg=--enable-unsafe-swiftshader
+  --chromeArg=--enable-unsafe-webgpu
 )
+# Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
+if [[ -n "${APEX_CHROME_ARGS:-}" ]]; then
+  for _arg in ${APEX_CHROME_ARGS}; do MCP_ARGS+=("--chromeArg=${_arg}"); done
+fi
 
 local_ok() {
   [[ -f "$BIN" ]] && node "$BIN" --help >/dev/null 2>&1
