@@ -33,7 +33,9 @@ prints nothing you can act on. The default reporter is `tests/helpers/live-repor
 one timestamped, immediately-flushed line per test start and end, plus a
 30-second heartbeat naming everything still in flight — so a piped log is
 genuinely tail-able and a hung test is the one with a `> start` line and no end
-line.
+line. Never let foreground test runs block autonomous workflows; invoke test
+suites in the background, inspect logs asynchronously, and continue productive
+tasks without waiting.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
@@ -109,7 +111,7 @@ serializes the agent behind SwiftShader several times over.
 |---|---|
 | in the edit loop | `npm run test:tooling-fast` (~30 s, structural, no browser) |
 | track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `npm run test:tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
 | single spec | `npm test -- tests/<file>.spec.js` |
 | single unit suite | `node --test tests/<file>.test.mjs` |

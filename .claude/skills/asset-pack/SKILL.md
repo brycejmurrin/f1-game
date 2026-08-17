@@ -107,7 +107,7 @@ vertex-displaced in shader; FLAT is the no-material id.
 5. **Validate**:
    ```sh
    npm run test:tooling-fast
-   npm run test:api
+   node tools/test-bg.mjs api   # in background (non-blocking)
    ```
    For visual confirmation, **lighting-tuner** or **webgl-debug** on a track with
    varied surfaces (street + grass + asphalt).

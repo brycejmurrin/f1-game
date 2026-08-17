@@ -227,6 +227,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    WGX: context.window.WGX,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -936,7 +937,6 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
 });
-
 test("setMaterialMaps owns pack textures and destroys them on unload/replace", async () => {
   // GLX deletes prior arrays in setMaterialMaps; WGX used to orphan GPUTexture
   // objects on unload/tier-swap and left materialMapState stale only via flags
@@ -985,4 +985,27 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   gfx.setMaterialMaps(null);
   assert.equal(a3.texture.destroyed, true);
   assert.equal(n3.texture.destroyed, true);
+});
+
+test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 removed", () => {
+  // In WGSL, derivatives (dpdx, dpdy, fwidth) must only be called in uniform control flow.
+  // fw1() inside conditional branches/helper functions caused shader compilation failures on strict compilers.
+  assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 helper must be removed in favor of uniform derivatives");
+  assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
+  assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
+  assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+});
+
+test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {
+  const h = makeGpuHarness();
+  assert.equal(typeof h.WGX.isSupported, "function");
+  assert.equal(typeof h.WGX.isSupported(), "boolean");
+  assert.equal(typeof h.WGX.gpuErrors, "function");
+  const initialErrors = h.WGX.gpuErrors();
+
+  await h.create();
+  assert.equal(typeof h.device.onuncapturederror, "function", "device.onuncapturederror must be wired");
+
+  h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
+  assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });

@@ -280,6 +280,9 @@ const GameAudio = (function () {
     sfxBus = null;
     musicGain = null;
     currentUrl = null;
+    rainStopping = false;
+    rainPending = null;
+    rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
     engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
@@ -542,6 +545,7 @@ const GameAudio = (function () {
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
     if (dbgAnalyser) { try { dbgAnalyser.disconnect(); } catch (e) {} dbgAnalyser = null; }
+    idleGainRamped = false;
     engineOn = false;
   }
 

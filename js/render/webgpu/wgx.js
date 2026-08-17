@@ -334,12 +334,12 @@ const WGX = (function () {
   function _extractPlanes(m, planes) {
     const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
           m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
-    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left
-    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right
-    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom
-    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top
-    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near
-    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far
+    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left  (w + x >= 0)
+    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right (w - x >= 0)
+    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom (w + y >= 0)
+    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top    (w - y >= 0)
+    _setPlane(planes[4], m2,    m6,    m10,     m14);     // near   (WebGPU clip space z >= 0)
+    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far    (WebGPU clip space w - z >= 0)
   }
   function _aabbInFrustum(planes, mn, mx) {
     for (let i = 0; i < 6; i++) {
@@ -617,6 +617,8 @@ const WGX = (function () {
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
+    let matAlbedoTex = null, matNormalTex = null;
+    let matPlaceTex = null, matPlaceView = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
     // Placeholder views stay alive for the device lifetime; pack tokens in
     // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
@@ -892,11 +894,11 @@ const WGX = (function () {
       lampShadowG0BindGroup = device.createBindGroup({
         layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: lampShadowUBO } }],
       });
-      const _matPlace = device.createTexture({
+      matPlaceTex = device.createTexture({
         size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      matPlaceAlbedoView = _matPlace.createView({ dimension: "2d-array" });
+      matPlaceAlbedoView = matPlaceTex.createView({ dimension: "2d-array" });
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
@@ -3589,7 +3591,13 @@ const WGX = (function () {
   // gpuErrors(): how many uncaptured GPU errors the live device has raised. Zero
   // is the only healthy value; a nonzero count on a backend that "initialised
   // fine" is the answer to "why is the screen black / wrong on my phone".
-  return { create, lastFailure: () => _lastFailure, gpuErrors: () => _gpuErrors };
+  // isSupported(): boolean feature detection for WebGPU availability.
+  return {
+    create,
+    lastFailure: () => _lastFailure,
+    gpuErrors: () => _gpuErrors,
+    isSupported: () => typeof navigator !== "undefined" && !!navigator.gpu,
+  };
 })();
 
 // No-build global export.

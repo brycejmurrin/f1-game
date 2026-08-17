@@ -101,7 +101,7 @@ you don't merge by hand.
 
 4. **Smoke (optional but cheap — catches a broken file):**
    ```sh
-   npm run test:smoke
+   node tools/test-bg.mjs smoke   # in background (non-blocking)
    ```
 
 5. **Commit + push** to the active feature branch (`git branch --show-current`;

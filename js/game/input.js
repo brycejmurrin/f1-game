@@ -1102,7 +1102,11 @@ const Input = (function () {
      css/responsive.css, so there is no route back either. Subscribe instead. */
   function onPointerKindChange(cb) {
     touchControlsNeeded();            // make sure the MQL (and its listener) exists
-    if (typeof cb === "function") _coarseCbs.push(cb);
+    if (typeof cb === "function" && !_coarseCbs.includes(cb)) _coarseCbs.push(cb);
+    return () => {
+      const idx = _coarseCbs.indexOf(cb);
+      if (idx >= 0) _coarseCbs.splice(idx, 1);
+    };
   }
 
   function onScreenRotate() {
