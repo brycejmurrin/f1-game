@@ -28,7 +28,7 @@ function parseArgs(argv) {
   const o = {
     backend: "webgpu",
     track: "montreal",
-    cam: "orbit",
+    cam: "park",
     lite: false,
     iphone: false,
     outDir: null,
@@ -195,43 +195,71 @@ async function runProbeAttempt(attemptNum) {
       __apex.freeze(true);
       if (camMode === "eye") __apex.eyeAt(0.12, 0, 2.5);
       else if (camMode === "orbit") __apex.orbit(0.12, 45, 18, 55);
-      else __apex.snapCam();
       __apex.jump(0.12, 65);
+      if (camMode !== "orbit") __apex.snapCam();
     }, { camMode: opts.cam });
     log("camera", opts.cam);
 
-    log("frames", "step 60");
-    await page.evaluate((n) => {
-      for (let i = 0; i < n; i++) {
-        try { __apex.step(1 / 60); } catch (_) { /* menu / boot edge */ }
-      }
-    }, 60);
-    await sleep(500);
-
-    log("headless", "freeze loop");
-    await page.evaluate(() => { try { __apex.headless(true); } catch (_) {} });
-    await sleep(200);
-
-    if (opts.backend === "webgpu") {
-      await retryStep("canvas-pixels", () => page.evaluate(async () => {
-        if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-          await GLX.awaitSoftPresent(15000);
-        }
-        const c = document.getElementById("game");
-        if (!c || c.width < 8) throw new Error("canvas not sized");
-        const tmp = document.createElement("canvas");
-        tmp.width = c.width; tmp.height = c.height;
-        tmp.getContext("2d").drawImage(c, 0, 0);
-        const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-        if (d[0] + d[1] + d[2] <= 30) throw new Error("canvas still black after awaitSoftPresent");
-        return [d[0], d[1], d[2], d[3]];
-      }), { attempts: 3, delayMs: 2000 });
-    }
+    // Live rAF renders — step() is physics-only and headless() skips render(),
+    // which left soft-present showing a stale / blown-out frame (orbit into
+    // Montreal floodlights read as solid white). wgx-capture.mjs uses this path.
+    log("frames", "rAF 45");
+    await page.evaluate((n) => new Promise((res) => {
+      let i = 0;
+      const tick = () => { if (++i > n) res(); else requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    }), 45);
 
     const canvasPath = join(opts.outDir, "canvas.png");
     const pagePath = join(opts.outDir, "page-hud.png");
-    await retryStep("screenshot-canvas", () =>
-      page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
+
+    if (opts.backend === "webgpu") {
+      const frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
+        if (typeof GLX === "undefined" || !GLX.capturePixels) {
+          throw new Error("no GLX.capturePixels on live backend");
+        }
+        const cap = await Promise.race([
+          GLX.capturePixels(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("capturePixels timeout")), 90000)),
+        ]);
+        const c = document.createElement("canvas");
+        c.width = cap.width; c.height = cap.height;
+        c.getContext("2d").putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+        let sum = 0, max = 0, n = 0;
+        for (let i = 0; i < cap.data.length; i += 401 * 4) {
+          const l = (cap.data[i] + cap.data[i + 1] + cap.data[i + 2]) / 3;
+          sum += l; if (l > max) max = l;
+          n++;
+        }
+        if (max < 8) throw new Error("capturePixels frame blank (maxLuma=" + max + ")");
+        return {
+          png: c.toDataURL("image/png").split(",")[1],
+          width: cap.width, height: cap.height,
+          meanLuma: sum / n, maxLuma: max,
+        };
+      }), { attempts: 2, delayMs: 4000 });
+      writeFileSync(canvasPath, Buffer.from(frameCap.png, "base64"));
+      writeFileSync(join(opts.outDir, "frame.png"), Buffer.from(frameCap.png, "base64"));
+      log("capture", `capturePixels ${frameCap.width}x${frameCap.height} meanLuma=${frameCap.meanLuma.toFixed(1)} maxLuma=${frameCap.maxLuma}`);
+
+      try {
+        await retryStep("soft-present", () => page.evaluate(async () => {
+          if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+            await GLX.awaitSoftPresent(15000);
+          }
+        }), { attempts: 1, delayMs: 0 });
+        await page.locator("#game").screenshot({
+          path: join(opts.outDir, "canvas-soft.png"), type: "png", timeout: 60000,
+        });
+        log("soft-present", "canvas-soft.png saved");
+      } catch (e) {
+        log("soft-present", "skipped (optional present-path probe)", { error: String(e.message || e).slice(0, 120) });
+      }
+    } else {
+      await retryStep("screenshot-canvas", () =>
+        page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
+    }
+
     await retryStep("screenshot-page", () =>
       page.screenshot({ path: pagePath, type: "png", timeout: 60000 }));
 
