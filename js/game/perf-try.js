@@ -71,7 +71,9 @@ const FLAGS = {
     watch: "The LAMP HALOS are the thing to check. The glow is additive with no depth " +
            "write, so it had to move after the sky too (opaque -> sky -> glow); if the " +
            "ordering is wrong the halos vanish against open sky, or the horizon looks " +
-           "clipped. Check a night circuit with floodlights, and the horizon at dusk.",
+           "clipped. Check a night circuit with floodlights, and the horizon at dusk. " +
+           "WGX sky pipelines MUST use depthCompare less-equal (not always) — always + " +
+           "skyLate overwrites the lit world (hall-of-mirrors / melted scenery).",
   },
   // glStateCache: REMOVED after measurement. The audit claimed "~150-250
   // redundant GL calls per frame" from GLX.draw()'s uncached CULL_FACE /

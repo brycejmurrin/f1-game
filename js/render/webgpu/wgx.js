@@ -810,15 +810,20 @@ const WGX = (function () {
         entries: [{ binding: 0, resource: { buffer: drawUBO, offset: 0, size: DRAW_USED_BYTES } }],
       });
 
-      // Sky pipeline — renders into the LIT pass now, so target = SCENE_FORMAT and
-      // it declares the pass's depth attachment (write off, compare always: the
-      // sky fills the background without touching depth).
+      // Sky pipeline — renders into the LIT pass (SCENE_FORMAT). Depth write OFF,
+      // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
+      // early sky paints the clear background, and PerfTry.skyLate (default ON)
+      // still only fills pixels the world left at the far plane — GLX parity
+      // (js/render/shaders/sky.js + glx.js drawSky depthMask false / LEQUAL).
+      // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
+      // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
+      // melted world; cars still visible because they draw after the sky).
       skyPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: skyModule, entryPoint: "vs_main" },
         fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
         primitive: { topology: "triangle-list" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
       });
       if (MSAA_COUNT > 1) {
         skyPipelineMS = device.createRenderPipeline({
@@ -826,7 +831,7 @@ const WGX = (function () {
           vertex: { module: skyModule, entryPoint: "vs_main" },
           fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
           primitive: { topology: "triangle-list" },
-          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
           multisample: { count: MSAA_COUNT },
         });
       }

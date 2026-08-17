@@ -1155,13 +1155,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (mistK > 0.001) {
     let mh = max(F.params3.w, 0.05);
     let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
-    let band = exp(-lowH / (mh * 20.0));
+    // GLX parity (lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
+    // exp(-lowH/(mh*20)) == exp(-lowH*0.05/mh) fell off ~1.8× too slowly and
+    // the extra *0.5 + 0.35 clamp stacked a denser low sheet than GLX's 0.45
+    // ceiling — a washed translucent band over the road on misty day circuits.
+    let band = exp(-lowH * (0.09 / mh));
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
     let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
-    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
+    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
     // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
     let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
-    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
+    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
   }
 
   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
