@@ -30,7 +30,7 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
   suite uses; measured: `ANGLE (…SwiftShader…)`) **and, since 2026-08-17, WebGPU
   via SwiftShader too** — see [Probing a specific renderer](#probing-a-specific-renderer)
-  below, which is how all three of that day's WGX blockers were found. It reaches
+  below, which is how all four of that day's WGX blockers were found. It reaches
   `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
   from this container**: MEASURED 2026-08-13, `navigate_page` to
   `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
@@ -103,6 +103,28 @@ What a clean WGX boot looks like: no `WGX` console line at all,
 `WGX.gpuErrors()` 0, and `sessionStorage["apex26.gfxBound"]` ABSENT — that key
 is written only when WGX refuses and hands the frame back to GLX, so its
 presence (`"webgl2"`) is the failure signal, not the success one.
+
+**Those are all ABSENCE signals — pair them with one positive.** Nothing was
+logged is also what a probe that never reached the renderer looks like, and
+`__apex.info().backend` is the *pick* at menu state, not what bound. Drive a
+race and ask the canvas:
+
+```sh
+node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+  --eval 'await __apex.race("monza"); await __apex.go();
+          await new Promise(r=>setTimeout(r,7000));
+          return String(document.querySelector("canvas").getContext("webgl2") === null);'
+```
+
+`true` proves it: a canvas is bound to one context type for life, so once
+WebGPU has claimed it, `getContext("webgl2")` can only return null. It also
+means the meshes uploaded, the pipelines built and the post targets allocated —
+each of the four 2026-08-17 blockers failed a different one of those stages, and
+the earlier ones masked the later ones, so **expect to find them one boot at a
+time** rather than in a single pass. Two of the four were format/feature
+validation errors that a mock device cannot model at all
+(`sampleCount` 2, and `rg11b10ufloat` as a render target without
+`rg11b10ufloat-renderable`).
 
 SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
 bind groups match, buffers upload. It is not a visual one.
