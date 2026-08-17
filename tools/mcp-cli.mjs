@@ -52,13 +52,120 @@
  * returns whatever it returns; JSON.stringify the result to keep it readable.
  */
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WRAPPER = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
 
-const calls = JSON.parse(process.argv[2] || "[]");
+// ── probe mode ───────────────────────────────────────────────────────────────
+// The raw call-array form below is the general escape hatch; `probe` is the shape
+// every real session actually needed, and each flag is a mistake that cost a run:
+//
+//   --backend three|webgpu   the pick lives in localStorage, and each invocation
+//       gets a FRESH browser profile — so setting it means load, set, RELOAD, in
+//       one batch. Doing it as two commands silently probes the default backend.
+//   --wait                   the boot is async (track build + pack fetch); a
+//       probe that evaluates immediately reads a half-built world.
+//   --console                the scenery/track SUPPRESSED warnings drown the
+//       line you are looking for; this greps instead of printing 40 messages.
+//
+// GOTCHA the preamble cannot fix for you: js/*.js assign `const GLX = …` at
+// script top level, which is a global LEXICAL binding, NOT a window property.
+// `window.GLX` is undefined; bare `GLX` works. Same for Assets / Tracks / TLX.
+// And navigator.gpu needs a SECURE CONTEXT — probe http://127.0.0.1, never
+// about:blank, or WebGPU is missing no matter which Chrome flags are set.
+function parseProbeArgs(argv) {
+  const o = { url: "http://127.0.0.1:3456/index.html", backend: null, wait: 6000,
+              evalSrc: null, console: null, json: false, tlxWebgpu: false, dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const next = () => argv[++i];
+    if (a === "--url") o.url = next();
+    else if (a === "--backend") o.backend = next();
+    else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
+    else if (a === "--wait") o.wait = Number(next());
+    else if (a === "--eval") o.evalSrc = next();
+    else if (a === "--console") {
+      const v = argv[i + 1];
+      o.console = v && !v.startsWith("--") ? (i++, v) : "";
+    } else if (a === "--json") o.json = true;
+    else if (a === "--dry-run") o.dryRun = true;
+    else throw new Error(`probe: unknown flag ${a}`);
+  }
+  return o;
+}
+
+function probeCalls(o) {
+  const calls = [{ name: "new_page", arguments: { url: o.url } }];
+  if (o.backend) {
+    const pick = o.backend === "webgl2" ? "webgl2" : o.backend;
+    // TLX auto-picks three's WebGPU backend on Chromium desktop (js/render/three/
+    // tlx.js), and under SwiftShader that path dies inside three's own buffer
+    // upload — "createBuffer failed … when mappedAtCreation == true", then a
+    // null-mapping TypeError in present. So pin WebGL2 by default, the same pin
+    // tests/specs/tlx-probes.spec.js sets; --tlx-webgpu opts back in on purpose.
+    const tlxPin = o.tlxWebgpu
+      ? `localStorage.setItem("apex26.tlxForceGL", "0");`
+      : `localStorage.setItem("apex26.tlxForceGL", "1");`;
+    calls.push({ name: "evaluate_script", arguments: { function:
+      `async () => { localStorage.setItem("apex26.gfxBackend", ${JSON.stringify(pick)});` +
+      ` localStorage.removeItem("apex26.gfxWgxLevel");` +
+      ` ${pick === "three" ? tlxPin : ""}` +
+      ` try { sessionStorage.clear(); } catch (_) {}` +
+      ` return "pick=" + localStorage.getItem("apex26.gfxBackend"); }` } });
+    calls.push({ name: "navigate_page", arguments: { url: o.url } });
+  }
+  let body = "return JSON.stringify({ ok: true });";
+  if (o.evalSrc) {
+    const src = o.evalSrc === "-"
+      ? fs.readFileSync(0, "utf8")
+      : (fs.existsSync(o.evalSrc) ? fs.readFileSync(o.evalSrc, "utf8") : o.evalSrc);
+    body = src;
+  }
+  calls.push({ name: "evaluate_script", arguments: { function:
+    `async () => { await new Promise(r => setTimeout(r, ${o.wait | 0}));\n${body}\n}` } });
+  if (o.console !== null) calls.push({ name: "list_console_messages", arguments: {} });
+  return calls;
+}
+
+const argv = process.argv.slice(2);
+let calls;
+let consoleGrep = null;
+if (argv[0] === "probe") {
+  const o = parseProbeArgs(argv.slice(1));
+  calls = probeCalls(o);
+  consoleGrep = o.console;
+  // --dry-run prints the call array a real run would send and exits, so the
+  // browser is not on the critical path when what you are debugging is the
+  // batch (an out-of-order set/reload probes the wrong backend, silently).
+  if (o.dryRun) { console.log(JSON.stringify(calls, null, 2)); process.exit(0); }
+} else if (argv[0] === "-h" || argv[0] === "--help" || argv.length === 0) {
+  console.log(`mcp-cli — drive the chrome-devtools MCP server over stdio
+
+  node tools/mcp-cli.mjs '[{"name":"navigate_page","arguments":{"url":"..."}}]'
+  node tools/mcp-cli.mjs '[]'                       handshake + list tools
+  node tools/mcp-cli.mjs probe [flags]              the common shape
+
+probe flags:
+  --url URL          default http://127.0.0.1:3456/index.html (serve the tree first)
+  --backend NAME     webgl2 | three | webgpu — sets the pick, then RELOADS
+  --tlx-webgpu       with --backend three, take three's WebGPU path (default is
+                     the WebGL2 pin the specs use; WebGPU three dies on SwiftShader)
+  --wait MS          settle before evaluating (default 6000; a boot needs ~9000)
+  --eval FILE|SRC|-  body of an async fn; return a string (JSON.stringify it)
+  --console [RE]     print console messages, optionally filtered by regex
+  --json             print the evaluate result raw
+  --dry-run          print the MCP call batch and exit (no browser)
+
+In page code use BARE globals (GLX / Assets / TLX): they are const script
+bindings, so window.GLX is undefined. navigator.gpu needs http://127.0.0.1 —
+it is absent on about:blank whatever the Chrome flags say.`);
+  process.exit(0);
+} else {
+  calls = JSON.parse(argv[0] || "[]");
+}
 
 // Route through the repo wrapper (same as cdmcp-cli.py / .mcp.json). Do not
 // hard-code a Playwright browser path — this box may only ship Google Chrome.
@@ -101,9 +208,19 @@ console.log(`TOOLS (${names.length}):`, names.join(", "));
 
 for (const c of calls) {
   const r = await send("tools/call", { name: c.name, arguments: c.arguments || {} });
-  const out = (r.result?.content || []).map((x) => x.text ?? `[${x.type}]`).join("\n");
+  let out = (r.result?.content || []).map((x) => x.text ?? `[${x.type}]`).join("\n");
+  // A console dump is the one result worth filtering rather than truncating: the
+  // interesting line is routinely message 26 of 44, past any slice().
+  let limit = 2500;
+  if (c.name === "list_console_messages" && consoleGrep !== null) {
+    if (consoleGrep) {
+      const re = new RegExp(consoleGrep, "i");
+      out = out.split("\n").filter((l) => re.test(l)).join("\n") || `(no console line matches /${consoleGrep}/i)`;
+    }
+    limit = 20000;
+  }
   console.log(`\n--- ${c.name} ${JSON.stringify(c.arguments || {}).slice(0, 90)}`);
-  console.log(r.error ? "ERROR: " + JSON.stringify(r.error).slice(0, 300) : out.slice(0, 2500));
+  console.log(r.error ? "ERROR: " + JSON.stringify(r.error).slice(0, 300) : out.slice(0, limit));
 }
 srv.kill();
 process.exit(0);

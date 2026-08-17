@@ -805,8 +805,11 @@
         // whole height and wide enough to clear either mast regardless of
         // this straight's actual half-width. TrackGeom.addBox is the same
         // raw call the lights already use, deliberately bypassing the
-        // road-footprint guard for this overhead cluster.
-        TrackGeom.addBox(out, vadd(beam, L.u, -0.65), [50, 2.0, 1.4],
+        // road-footprint guard for this overhead cluster. Sized 0.1 m inside
+        // the overheadSpan's planes on every shared axis (span top H+0.70,
+        // faces ±0.7): matching them exactly put two same-facing 18 m² faces
+        // at 0.0 mm over the grid — the coplanar sweep's z-fight class.
+        TrackGeom.addBox(out, vadd(beam, L.u, -0.75), [50, 2.0, 1.2],
                          [0.20, 0.21, 0.24], bL);
         for (let i = 0; i < 5; i++)
           TrackGeom.addBox(out, vadd(vadd(beam, L.u, -1.2), L.r, (i - 2) * 1.6),

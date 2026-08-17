@@ -191,8 +191,49 @@ const TLX = (function () {
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
       const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
 
+      // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
+      // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
+      // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
+      // post-only death path in present() keeps those materials while painting
+      // straight to the canvas. On an alpha-composited canvas that tag IS the
+      // compositor's opacity, so from the first post failure onward the painted
+      // bodywork of every car is 35% transparent and the page shows through it,
+      // for the rest of the session. Reported from an iPhone on this backend,
+      // which is exactly where a post present() throw happens — the tag is
+      // written on ALL platforms, but only an alpha canvas turns it into
+      // see-through cars. GLX has never been able to hit this: `alpha: false`
+      // means the compositor ignores whatever it writes to alpha.
+      //
+      // three needs telling TWICE, because the two backends read different
+      // things and neither reads the other's:
+      //   WebGPU backend — honours this parameter (`alpha ? "premultiplied" :
+      //     "opaque"` in its context configure()).
+      //   WebGL backend  — IGNORES it. WebGLBackend.init() hardcodes
+      //     `alpha: !0` in its own getContext attributes. It does honour a
+      //     caller-supplied `context`, so on that path we make the context
+      //     ourselves with GLX's attributes. Only when forceWebGL is set: the
+      //     WebGPU backend reads `parameters.context` too and would try to
+      //     configure a WebGL2 context as a WebGPU one.
+      // Gfx.create() runs before any GLX.init(), so this getContext is the
+      // FIRST on this canvas and its attributes are the ones that take (a
+      // second getContext returns the existing context and silently drops
+      // them).
+      let ownGL = null;
+      if (forceWebGL) {
+        try {
+          ownGL = canvas.getContext("webgl2", {
+            antialias: !isMobile,        // must agree with the renderer's own antialias
+            alpha: false,
+            depth: true,
+            stencil: false,
+            powerPreference: "high-performance",
+          });
+        } catch (_) { ownGL = null; }    // null -> three makes its own, as before
+      }
       const renderer = new THREE.WebGPURenderer({
         canvas,
+        alpha: false,
+        ...(ownGL ? { context: ownGL } : {}),
         // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
         // the context-level AA path". This is NOT the scene target's MSAA
         // (msaa() below is honestly 1: the post chain deliberately has no
@@ -1078,17 +1119,25 @@ const TLX = (function () {
         // after disposing any owned pack textures — GLX deleteTexture parity.
         setMaterialMaps(maps) {
           if (!lit || !lit.setMaterialMaps) return;
-          function releaseOwned() {
+          // A caller re-passing a texture it already handed over must not have
+          // it disposed under the new binding (assets.js always builds fresh
+          // arrays; webbake/__apex/tests need not).
+          function releaseOwned(keep) {
+            const kept = new Set();
+            if (keep) {
+              if (keep.albedo) kept.add(keep.albedo);
+              if (keep.normal) kept.add(keep.normal);
+            }
             const seen = new Set();
             for (const t of [matOwnedAlbedo, matOwnedNormal]) {
-              if (!t || seen.has(t)) continue;
+              if (!t || seen.has(t) || kept.has(t)) continue;
               seen.add(t);
               try { t.dispose(); } catch (_) { /* already disposed */ }
             }
             matOwnedAlbedo = null;
             matOwnedNormal = null;
           }
-          releaseOwned();
+          releaseOwned(maps);
           if (!maps) {
             // Restore placeholder .value bindings and zero scales.
             if (matPlaceAlbedo || matPlaceNormal) {

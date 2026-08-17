@@ -184,6 +184,68 @@ test("probe-mcp help documents the persistent daemon commands", () => {
   assert.match(r.stdout, /test-bg\.mjs|Playwright/);
 });
 
+// ── mcp-cli probe mode + the Chrome flags it depends on ─────────────────────
+const CLI = path.join(ROOT, "tools/mcp-cli.mjs");
+const dryRun = (...args) => {
+  const r = spawnSync("node", [CLI, "probe", "--dry-run", ...args], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+};
+
+test("probe --backend sets the pick BEFORE reloading (order is the whole point)", () => {
+  const calls = dryRun("--backend", "webgpu", "--wait", "9000");
+  const names = calls.map((c) => c.name);
+  assert.deepEqual(names, ["new_page", "evaluate_script", "navigate_page", "evaluate_script"]);
+  // Each invocation gets a fresh profile, so the pick must be written and then
+  // reloaded within ONE batch; splitting it across runs probes the default.
+  assert.match(calls[1].arguments.function, /apex26\.gfxBackend", "webgpu"/);
+  assert.match(calls[3].arguments.function, /setTimeout\(r, 9000\)/);
+  const noBackend = dryRun();
+  assert.deepEqual(noBackend.map((c) => c.name), ["new_page", "evaluate_script"]);
+});
+
+test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {
+  // tlx.js auto-picks three's WebGPU backend on Chromium desktop. Under
+  // SwiftShader that path dies in three's own buffer upload, so the default
+  // pin matches tests/specs/tlx-probes.spec.js rather than handing back a
+  // broken renderer that reads as a TLX regression.
+  assert.match(dryRun("--backend", "three")[1].arguments.function,
+    /apex26\.tlxForceGL", "1"/);
+  assert.match(dryRun("--backend", "three", "--tlx-webgpu")[1].arguments.function,
+    /apex26\.tlxForceGL", "0"/);
+  // The pin is three-only: it must not appear for the other backends.
+  for (const b of ["webgl2", "webgpu"]) {
+    assert.doesNotMatch(dryRun("--backend", b)[1].arguments.function, /tlxForceGL/);
+  }
+});
+
+test("probe --console appends the console dump; --eval carries the body", () => {
+  const calls = dryRun("--console", "WGX", "--eval", "return JSON.stringify({a:1});");
+  assert.equal(calls[calls.length - 1].name, "list_console_messages");
+  assert.match(calls[calls.length - 2].arguments.function, /JSON\.stringify\(\{a:1\}\)/);
+  assert.equal(dryRun("--eval", "return \"x\";").at(-1).name, "evaluate_script");
+});
+
+test("probe rejects an unknown flag instead of silently probing the default", () => {
+  const r = spawnSync("node", [CLI, "probe", "--backendd", "webgpu"], { encoding: "utf8" });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /unknown flag/);
+});
+
+test("the Chrome wrapper passes the flags WebGPU and software WebGL need", () => {
+  // --enable-unsafe-webgpu: headless Chrome does not expose navigator.gpu
+  // without it, so every WGX probe read "No available adapters" and the whole
+  // WebGPU backend was untestable. --enable-unsafe-swiftshader silences the
+  // deprecation warning for the software WebGL path GLX/TLX run on here.
+  const src = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8");
+  assert.match(src, /--chromeArg=--enable-unsafe-webgpu/);
+  assert.match(src, /--chromeArg=--enable-unsafe-swiftshader/);
+  assert.match(src, /APEX_CHROME_ARGS/);
+  // The secure-context trap belongs next to the flags: navigator.gpu is absent
+  // on about:blank whatever is passed, which reads exactly like a bad flag.
+  assert.match(src, /SECURE CONTEXT/);
+});
+
 test("mcp-wrap.py compat shim forwards to probe-mcp serve", () => {
   const wrap = path.join(ROOT, "tools/mcp-wrap.py");
   assert.ok(fs.existsSync(wrap));

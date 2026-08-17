@@ -47,7 +47,9 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
   a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
-  suite uses; measured: `ANGLE (…SwiftShader…)`). It reaches
+  suite uses; measured: `ANGLE (…SwiftShader…)`) **and, since 2026-08-17, WebGPU
+  via SwiftShader too** — see [Probing a specific renderer](#probing-a-specific-renderer)
+  below, which is how all four of that day's WGX blockers were found. It reaches
   `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
   from this container**: MEASURED 2026-08-13, `navigate_page` to
   `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
@@ -57,12 +59,94 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   drive `__apex`, screenshot, take a heap snapshot, read the console. The
   interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
   `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
+- **Both are reachable two ways, and the MCP way needs no shell.** VERIFIED
+  2026-08-17: the `apex-wrap` MCP server is `ready` and advertises 56 tools — 40
+  `chrome_*` and 16 `tinyfish_*` — so `tinyfish_fetch_content`,
+  `tinyfish_search`, `chrome_navigate_page`, `chrome_evaluate_script` and the
+  rest can be called directly as MCP tools. Use the MCP path for one-off calls
+  and the shell wrappers when you want their added logic (`deploy-check`'s build
+  comparison, `deploy-js --marker`'s verdict, `mcp-cli probe`'s
+  set-pick-then-reload batch). The wrappers are not a fallback for a missing MCP;
+  they are where the repo-specific knowledge lives.
 - **tinyfish MCP** (`mcp__tinyfish__*` or `tinyfish_*` via probe) —
   `fetch_content` / `search` / automation over the public web. For us its main
   testing job is the **post-deploy liveness check**: read the live
   `version.json` and shipped JS. It cannot see the working tree (only public
   URLs), so it is useless for pre-ship verification. Shell:
   `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
+  Two measured limits, both server-side — do not try to fix them in the wrapper:
+  the extracted body is **truncated** (6.1 KB back from a 200 KB `wgx.js`, 9.6 KB
+  from an 11 KB `log.js`; identical through the raw MCP tool with `format: html`
+  and a 90 s budget), so a deep code marker is unverifiable from here — use
+  `deploy-js --marker` for a top-of-file verdict and git provenance for the rest.
+  And the upstream fetch **times out intermittently**, arriving as a SUCCESSFUL
+  JSON-RPC result carrying an `errors[]` payload; the wrapper now asks for a
+  60 s `per_url_timeout_ms` and retries the transient case three times.
+
+---
+
+## Probing a specific renderer
+
+`node tools/mcp-cli.mjs probe` is the shape a renderer question takes. One
+command, one browser, no heredoc:
+
+```sh
+npx serve -l 3456 .          # the page must be on 127.0.0.1 (see the trap below)
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
+  --eval 'return JSON.stringify({gpuErrors: WGX.gpuErrors ? WGX.gpuErrors() : "n/a"});'
+node tools/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser
+```
+
+Four traps, each of which has cost a run:
+
+- **`navigator.gpu` needs a SECURE CONTEXT.** It is undefined on `about:blank`
+  no matter which Chrome flags are set, and reads exactly like a missing flag —
+  measured across four flag combinations before the origin turned out to be the
+  variable. Probe `http://127.0.0.1`. (The flags are needed too: the wrapper now
+  passes `--enable-unsafe-webgpu`, without which headless Chrome exposes no
+  WebGPU at all and every WGX probe reports "No available adapters".)
+- **Script globals are not `window` properties.** `js/*.js` files assign
+  `const GLX = …` at top level, a lexical binding: `window.GLX` is `undefined`
+  while bare `GLX` works. Same for `Assets`, `Tracks`, `TLX`, `WGX`.
+- **The backend pick lives in `localStorage`, and each invocation gets a fresh
+  profile** — so it must be written and then RELOADED inside one batch. `--backend`
+  does that; setting it as a separate command probes the default and looks like
+  the backend silently ignoring you.
+- **`--backend three` pins three to WebGL2** (`apex26.tlxForceGL=1`, what
+  `tests/specs/tlx-probes.spec.js` sets). TLX auto-picks three's WebGPU backend on
+  Chromium desktop, and under SwiftShader that path dies inside three's own
+  `mappedAtCreation` buffer upload — which reads as a TLX regression and is not
+  one. `--tlx-webgpu` opts in deliberately.
+
+What a clean WGX boot looks like: no `WGX` console line at all,
+`WGX.gpuErrors()` 0, and `sessionStorage["apex26.gfxBound"]` ABSENT — that key
+is written only when WGX refuses and hands the frame back to GLX, so its
+presence (`"webgl2"`) is the failure signal, not the success one.
+
+**Those are all ABSENCE signals — pair them with one positive.** Nothing was
+logged is also what a probe that never reached the renderer looks like, and
+`__apex.info().backend` is the *pick* at menu state, not what bound. Drive a
+race and ask the canvas:
+
+```sh
+node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+  --eval 'await __apex.race("monza"); await __apex.go();
+          await new Promise(r=>setTimeout(r,7000));
+          return String(document.querySelector("canvas").getContext("webgl2") === null);'
+```
+
+`true` proves it: a canvas is bound to one context type for life, so once
+WebGPU has claimed it, `getContext("webgl2")` can only return null. It also
+means the meshes uploaded, the pipelines built and the post targets allocated —
+each of the four 2026-08-17 blockers failed a different one of those stages, and
+the earlier ones masked the later ones, so **expect to find them one boot at a
+time** rather than in a single pass. Two of the four were format/feature
+validation errors that a mock device cannot model at all
+(`sampleCount` 2, and `rg11b10ufloat` as a render target without
+`rg11b10ufloat-renderable`).
+
+SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
+bind groups match, buffers upload. It is not a visual one.
 
 ---
 

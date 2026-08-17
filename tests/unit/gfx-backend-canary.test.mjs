@@ -316,7 +316,7 @@ test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variati
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
-  assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rgba16float"/);
+  assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
   assert.match(wgx, /pBlurHDR = fsPipe\(_Post\.BLUR, POST_HDR_FORMAT/);
 });
 
@@ -474,4 +474,130 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(ls.getItem("apex26.gfxWgxFail"), null);
   timers.forEach((fn) => fn());
   assert.equal(reloaded(), 1);
+});
+
+/* ── TLX canvas opacity — the "transparent cars on iPhone" guard ─────────
+ *
+ * The defect this pins, end to end:
+ *
+ *   1. The lit fragment writes the SSR car-paint TAG — 0.35 — into ALPHA
+ *      (js/render/three/tsl-lit.js, gated on ctx.ssrTag). It is a CHANNEL for
+ *      the post chain, not an opacity, and the post chain's own passes all
+ *      output alpha 1.0, so the canvas never normally sees it.
+ *   2. present() has a "post-only death" path: when the post chain throws it
+ *      sets post = null and paints the scene STRAIGHT TO THE CANVAS with the
+ *      same lit materials. Nothing rebuilds them, so from that frame on the tag
+ *      is written to the canvas — for the rest of the session.
+ *   3. three's canvas is alpha-composited by default. So the browser reads that
+ *      0.35 as opacity and the painted bodywork of every car goes 35%
+ *      see-through. Only the bodywork: tyres, carbon, glass and wings keep
+ *      alpha = the material's own, which is 1.
+ *
+ * GLX cannot hit this because it asks for `alpha: false` (js/render/glx.js), so
+ * the compositor ignores whatever it writes to alpha. TLX has to say the same
+ * thing, and — the part worth a test — it has to say it TWICE, because three's
+ * two backends read different inputs and neither reads the other's. Those two
+ * vendor behaviours are asserted against the bundled three below, so a three
+ * upgrade that changes either one fails HERE, next to the reason, instead of
+ * turning back into a bug report from a phone.
+ *
+ */
+const TLX = read("js/render/three/tlx.js");
+const GLX = read("js/render/glx.js");
+const TSL_LIT = read("js/render/three/tsl-lit.js");
+const THREE_BUNDLE = read("vendor/three-0.184.0/three.webgpu.min.js");
+
+/** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
+ *  (it spans ~40 lines of comment, so a regex over one line cannot see it). */
+function rendererParams() {
+  const at = TLX.indexOf("new THREE.WebGPURenderer(");
+  assert.notEqual(at, -1, "the renderer construction moved");
+  const open = TLX.indexOf("{", at);
+  let depth = 0;
+  let i = open;
+  for (; i < TLX.length; i++) {
+    if (TLX[i] === "{") depth++;
+    else if (TLX[i] === "}" && --depth === 0) break;
+  }
+  // Comments quote `alpha: false` when explaining it; only code may answer.
+  return TLX.slice(open, i + 1).replace(/^[ \t]*\/\/.*$/gm, "");
+}
+
+test("GLX asks for an opaque canvas — the behaviour TLX has to match", () => {
+  const src = GLX.replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf('getContext("webgl2"');
+  assert.notEqual(at, -1, "GLX's context creation moved");
+  assert.match(src.slice(at, at + 300), /alpha:\s*false/,
+    "GLX dropped `alpha: false` — then the tag can ghost cars on BOTH backends " +
+    "and this whole guard needs rethinking, not updating");
+});
+
+test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
+  // If this ever stops being true the coupling is gone and the two assertions
+  // below are merely tidy rather than load-bearing. Worth knowing which.
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /SSR_TAG\s*\?[\s\S]{0,160}float\(0\.35\)/,
+    "the SSR car-paint alpha tag moved — re-derive whether an alpha canvas can " +
+    "still ghost the cars before touching the guards below");
+});
+
+test("TLX asks for an opaque canvas on the WebGPU backend", () => {
+  assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
+    "TLX must pass alpha:false — three's WebGPU backend turns it into " +
+    'alphaMode "opaque"');
+});
+
+test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {
+  // Makes the assertion above SUFFICIENT for that backend. If three stops
+  // reading the parameter, alpha:false becomes a no-op and cars ghost again on
+  // desktop WebGPU with nothing failing.
+  assert.match(THREE_BUNDLE, /alpha\s*\?\s*"premultiplied"\s*:\s*"opaque"/,
+    "bundled three no longer derives alphaMode from the alpha parameter");
+});
+
+test("TLX supplies its own WebGL2 context, because three hardcodes alpha there", () => {
+  const params = rendererParams();
+  assert.match(params, /context:/,
+    "the WebGL path needs a caller-supplied context: three ignores alpha:false there");
+
+  // The context TLX makes must itself be opaque, and must only be made for the
+  // WebGL path — three's WebGPU backend reads parameters.context too and would
+  // try to configure a WebGL2 context as a WebGPU one.
+  const at = TLX.indexOf('getContext("webgl2"');
+  assert.notEqual(at, -1, "TLX no longer creates its own WebGL2 context");
+  const call = TLX.slice(at, at + 500);
+  assert.match(call, /alpha:\s*false/, "TLX's own context must be opaque");
+  const guard = TLX.slice(Math.max(0, at - 400), at);
+  assert.match(guard, /if\s*\(\s*forceWebGL\s*\)/,
+    "the hand-made WebGL2 context must be gated on forceWebGL");
+});
+
+test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
+  // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
+  //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  // — and unlike TLX's, that line has no ssrTag gate at all, so EVERY WGX frame
+  // carries 0.35 over car paint whether or not anything reads it. What makes
+  // that safe is one word in the context configure, and nothing was checking
+  // it. All three backends now hold the same invariant for the same reason:
+  // GLX `alpha: false`, WGX `alphaMode: "opaque"`, TLX both spellings.
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /\.configure\(\{[^}]*alphaMode:\s*"opaque"/,
+    "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
+
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
+    "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
+});
+
+test("three's WebGL backend still hardcodes an alpha canvas (why we pass a context)", () => {
+  // Makes the assertion above NECESSARY. When three starts honouring the
+  // parameter on this backend, the hand-made context can go — and this is the
+  // test that says so, instead of it sitting there forever as cargo cult.
+  const at = THREE_BUNDLE.indexOf('getContext("webgl2",');
+  assert.notEqual(at, -1, "three's WebGL context creation moved");
+  const attrs = THREE_BUNDLE.slice(Math.max(0, at - 260), at);
+  assert.match(attrs, /alpha:\s*!0/,
+    "bundled three no longer hardcodes alpha:true for WebGL — drop TLX's " +
+    "hand-made context and pass alpha:false alone");
+  assert.match(THREE_BUNDLE.slice(at, at + 60), /getContext\("webgl2",\s*\w+\)/);
 });

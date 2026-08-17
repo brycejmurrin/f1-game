@@ -65,6 +65,26 @@ test.describe("TLX — boot", () => {
     expect(backend).toBeUndefined();   // plain GLX carries no backend id
   });
 
+  test("the canvas is OPAQUE — the tag in alpha can never become opacity", async ({ page }) => {
+    // The source guard (tests/unit/gfx-backend-canary.test.mjs) proves TLX ASKS
+    // for an opaque canvas. It cannot prove it GOT one: getContext returns any
+    // context the canvas already has and silently discards the attributes, so
+    // one earlier probe touching canvas#game would undo the fix with nothing to
+    // see. Only the live context can answer, and the answer is why the painted
+    // bodywork of a car is not 35% see-through (js/render/three/tlx.js).
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
+    const attrs = await page.evaluate(() => {
+      const cv = document.querySelector("canvas#game");
+      const gl = cv && cv.getContext("webgl2");
+      // CI pins tlxForceGL, so this is the WebGL backend. A WebGPU-backed canvas
+      // hands back null here — which is itself the proof it is not WebGL2.
+      return gl ? { got: true, alpha: gl.getContextAttributes().alpha } : { got: false };
+    });
+    expect(attrs.got).toBe(true);
+    expect(attrs.alpha).toBe(false);
+  });
+
   test("track renders a non-blank frame on TLX (M2 world geometry)", async ({ page }) => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
