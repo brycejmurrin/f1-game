@@ -959,7 +959,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          * wetness) — 0 disables the pass.
   //      reflSkyLo : vec4<f32>    off 160   (xyz zenith sky-glow miss fallback,
   //                                          w = upper-screen cutoff, GLX 0.62)
-  //      reflSkyHi : vec4<f32>    off 176   (xyz horizon sky-glow miss fallback, w _pad)
+  //      reflSkyHi : vec4<f32>    off 176   (xyz horizon sky-glow miss fallback,
+  //                                          w = near-fade start in view-space z,
+  //                                          GLX uSsrNear, def -2.5; the low
+  //                                          onboard eye passes -1.0)
   // ════════════════════════════════════════════════════════════════════════
   const SSR = `
 struct SsrU {
@@ -1035,8 +1038,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   if (dot(Nv, upVSn) < -0.25) { Nv = -Nv; }
   let upDot = dot(Nv, upVSn);
   // Up-facing road, foreground-weighted, far-field faded (precision/step speckle).
+  // Near fade: reflSkyHi.w is GLX uSsrNear (def -2.5, x2.8 for the far end, the
+  // same pair tsl-post.js derives). game.js halves it for a low onboard eye —
+  // a cockpit camera sits close enough to the road that a -2.5 start fades out
+  // the whole visible mirror, so the literal made the knob's onboard case dead.
+  let ssrNear = U.reflSkyHi.w;
   let roadMask = smoothstep(0.25, 0.55, upDot)
-               * smoothstep(-2.5, -7.0, P.z)
+               * smoothstep(ssrNear, ssrNear * 2.8, P.z)
                * (1.0 - smoothstep(-22.0, -78.0, P.z));
   if (roadMask <= 0.001) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 

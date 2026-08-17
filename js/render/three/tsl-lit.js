@@ -361,7 +361,13 @@
             const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
             const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
             const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
-            const z = sc.z.sub(biasTerm).toVar();
+            // SHADOW DISTANCE bias scaling (lit.js parity). biasTerm is clamped in
+            // absolute depth units, but a shadow texel's world size sweeps 12.5x
+            // across the SHADOW DISTANCE range — unscaled, the same push is ~25x
+            // too much at the near end and barely covers acne at the far end.
+            // STATIC map only: the car branch below multiplies the SAME biasTerm
+            // by carBiasScale, so scaling the shared term would square it there.
+            const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
             // SHADOW DISTANCE kernel compensation (js/render/shaders/lit.js).
             const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
             // Distance LOD on the same gliding anchor (js/render/shaders/lit.js).
@@ -523,15 +529,26 @@
           });
         }).Else(() => {
           const p = wp.xz;
-          const e = 0.22;
-          const h0 = matBumpHeight(mid, p);
-          const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
-          const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
-          const amt = select(mid.equal(8.0), float(0.16),
-                      select(mid.equal(10.0), float(0.14),
-                      select(mid.equal(16.0), float(0.025), float(0.07))));
-          N.assign(normalize(N.add(
-            vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).div(e)))));
+          // Ground/road gets the SAME grazing-angle guard as the wall branch
+          // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
+          // the road — the one horizontal surface viewed almost edge-on at
+          // 80 m/s — kept full relief where a pixel spans many times the 0.22
+          // probe epsilon and the 3-tap gradient aliases into crawling moire.
+          // The fade only ever REDUCES bump, so head-on grass/sand/rock are
+          // unchanged.
+          const fpG = max(fwidth(p.x), fwidth(p.y));
+          const aaG = clamp(fpG.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
+          If(aaG.greaterThan(0.005), () => {
+            const e = 0.22;
+            const h0 = matBumpHeight(mid, p);
+            const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
+            const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
+            const amt = select(mid.equal(8.0), float(0.16),
+                        select(mid.equal(10.0), float(0.14),
+                        select(mid.equal(16.0), float(0.025), float(0.07))));
+            N.assign(normalize(N.add(
+              vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).mul(aaG).div(e)))));
+          });
         });
       });
       return N;

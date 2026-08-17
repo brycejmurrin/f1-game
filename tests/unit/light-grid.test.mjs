@@ -480,3 +480,35 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
   expectRange("pc-fov", cam.fovMin, cam.fovMax);
   expectRange("sp-vol", 0, 100);
 });
+
+test("god-ray lamp arrays are sized to the ONE bound the beam march walks", () => {
+  // The uploader picks the shadow-mapped lamp's slot out of ITS OWN nearest-N
+  // ordering and hands that index to the march as uLampShadowIdx. If the two
+  // Ns disagree, a lamp sorting past the march's bound gets an index the loop
+  // can never equal and its beam shadow silently stops being carved — while the
+  // extra slots are packed and uploaded every frame with no reader. So the
+  // GLSL array size, the loop bound, the JS cap and the scratch lengths all
+  // have to be the same number.
+  const shd = read("js/render/shaders/post.js");
+  const post = read("js/render/glx/post.js");
+
+  const N = Number((shd.match(/#define GR_MAX_LIGHTS (\d+)/) || [])[1]);
+  assert.ok(N > 0, "GR_MAX_LIGHTS not found in GODRAY_FS");
+
+  // The beam march must be bounded by the define, never by a literal that can
+  // drift away from it.
+  assert.match(shd, /for \(int li = 0; li < GR_MAX_LIGHTS; li\+\+\)/,
+    "the lamp beam loop must use GR_MAX_LIGHTS, not a literal");
+
+  const cap = Number((post.match(/grNL = Math\.min\((\d+), total\)/) || [])[1]);
+  assert.equal(cap, N, `uploader caps at ${cap} but the march walks ${N}`);
+
+  // Scratch buffers are handed straight to uniform{1,2,3}fv — WebGL2 rejects an
+  // upload longer than the declared array rather than truncating it.
+  for (const [name, comps] of [["_grPos", 3], ["_grCol", 3], ["_grRad", 1],
+                               ["_grDir", 3], ["_grCone", 2], ["_grVolW", 1]]) {
+    const len = Number((post.match(new RegExp(`${name} = new Float32Array\\((\\d+)\\)`)) || [])[1]);
+    assert.equal(len, N * comps,
+      `${name} is ${len} floats; GR_MAX_LIGHTS ${N} x ${comps} components needs ${N * comps}`);
+  }
+});

@@ -50,9 +50,12 @@ const GLXPost = (function () {
     let msFBO = null, msColorRB = null, msDepthRB = null;
 
     // God-ray lamp-selection scratch (present() only) — no per-frame allocation.
-    const _grPos = new Float32Array(36), _grCol = new Float32Array(36),
-          _grRad = new Float32Array(12), _grDir = new Float32Array(36),
-          _grCone = new Float32Array(24), _grVolW = new Float32Array(12), _grSel = [];
+    // Sized for GR_MAX_LIGHTS = 6 (shaders/post.js GODRAY_FS). These are handed
+    // straight to uniform3fv/1fv/2fv, so they must not exceed the declared array
+    // length — WebGL2 rejects an over-long upload rather than truncating it.
+    const _grPos = new Float32Array(18), _grCol = new Float32Array(18),
+          _grRad = new Float32Array(6), _grDir = new Float32Array(18),
+          _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
     const _grByD = (a, b) => a.d - b.d;   // hoisted comparator (was a per-frame closure)
 
     // Build the post-processing programs + pick a colour format. Returns true if
@@ -455,10 +458,13 @@ const GLXPost = (function () {
         gl.uniform1f(godrayU.uTime, F.time);
         gl.uniform1f(godrayU.uCloudCover, F.cloud);
         gl.uniform1f(godrayU.uCloudSpeed, F.cloudSpeed);
-        // Lamp volumetrics: upload the nearest-12 lamps to the eye (GR_MAX_LIGHTS
-        // slots) + the haze gate. The beam march in GODRAY_FS only reads the
-        // nearest 6 of them (shaders/post.js "nearest-6 lamps for beams" loop);
-        // slots 6-11 are uploaded headroom with no consumer today.
+        // Lamp volumetrics: upload the nearest GR_MAX_LIGHTS (6) lamps to the eye
+        // + the haze gate. This used to sort and upload 12 while the beam march
+        // in GODRAY_FS read 6, which cost double the packing and uploads AND
+        // broke the beam shadow: grLampIdx below is a position in THIS ordering,
+        // so the mapped lamp sorting 7th-12th produced an index the march's
+        // `li == uLampShadowIdx` test could never reach and the lamp's shadow
+        // silently stopped being carved into its own beam.
         let grNL = 0, grLampIdx = -1;
         const frameLights = F.lights, frameEye = F.eye;
         if (lampVol > 0 && frameLights) {
@@ -471,7 +477,7 @@ const GLXPost = (function () {
           }
           _grSel.length = total;
           _grSel.sort(_grByD);
-          grNL = Math.min(12, total);
+          grNL = Math.min(6, total);   // == GR_MAX_LIGHTS, the beam march's bound
           for (let i = 0; i < grNL; i++) {
             const o = _grSel[i].o;
             // Map the frame.lights record that has this frame's spot-shadow map
