@@ -715,8 +715,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
-    let absorb = mix(clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0),
-                     clamp(1.0 - 0.42 * F.params6.x, 0.0, 1.0), porous);
+    // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
+    // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
+    // at wetDark 1.0 porous sat at 0.58 against the road's 0.42 — verges and
+    // gravel traps reading 38% BRIGHTER than the tarmac they border, which is
+    // the flooded-canal-with-pale-banks silhouette inverted. As a FRACTION of
+    // the road's own absorption the two saturate together and porous stays
+    // strictly darker across the whole range, with no clip order to get wrong.
+    // GLX carries the fixed form in js/render/shaders/lit.js.
+    let absorbRoad = clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0);
+    let absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo = albedo * mix(1.0, absorb, wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
     wetSheen = wet * (1.0 - porous);
@@ -724,6 +732,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     rough = mix(rough, 0.06, puddle);
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
   }
+
+  // SPECULAR ANTI-ALIASING (GLX lit.js parity). Widen roughness by how fast the
+  // normal is changing in SCREEN space, so a thin bright GGX lobe on a geometry
+  // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
+  // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
+  // every lamp lobe, so on a night track it is the difference between 48 stable
+  // highlights and 48 flickering ones. Placed at function-body top level on
+  // purpose: WGSL requires derivatives in uniform control flow, so this cannot
+  // move inside the material branches above.
+  let saaDx = dpdx(N);
+  let saaDy = dpdy(N);
+  let saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
 
   let a = rough * rough;
 
