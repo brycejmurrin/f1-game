@@ -277,14 +277,37 @@
       const text = JSON.stringify(rep, null, 1);
       const file = "apex-report-" + (rep.build || "nobuild") + "-" +
                    (rep.backend || "nobackend") + "-" + stamp() + ".json";
-      let downloaded = false;
-      if (wantDownload) downloaded = download(file, text);
-      window.__apexReport = rep;   // for a copy/paste when a download is awkward
-      const summary = { file: file, bytes: text.length, downloaded: downloaded,
-                        verdict: rep.verdict,
-                        hint: "full object on window.__apexReport; re-run: apexReport()" };
-      try { console.log("apex-report", summary, rep); } catch (e) { /* no console */ }
-      return summary;
+      window.__apexReport = rep;   // for a copy/paste when neither path below fits
+
+      // Prefer handing the bundle to a collector over making the DEVICE hold a
+      // file: on a phone a download is the worst part of this. A relative URL
+      // resolves under the page's own directory, so it finds
+      // tools/report-server.mjs when the tree is served locally and 404s
+      // harmlessly on the deployed site, where the download is the answer.
+      // Cross-origin is deliberately not attempted: an https page cannot POST
+      // to a plain-http laptop anyway (mixed content), so a `post` that is not
+      // same-origin only produces a confusing console error.
+      const target = o.post === undefined ? "apex-report" : o.post;
+      const finish = function (posted) {
+        let downloaded = false;
+        if (!posted && wantDownload) downloaded = download(file, text);
+        const summary = { file: file, bytes: text.length, posted: posted || false,
+                          downloaded: downloaded, verdict: rep.verdict,
+                          hint: "full object on window.__apexReport; re-run: apexReport()" };
+        try { console.log("apex-report", summary, rep); } catch (e) { /* no console */ }
+        return summary;
+      };
+      if (!target) return finish(false);
+      return fetch(target + "?file=" + encodeURIComponent(file), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: text,
+      }).then(function (r) {
+        if (!r || !r.ok) return finish(false);
+        return r.json().then(function (j) {
+          return finish((j && j.saved) || true);
+        }, function () { return finish(true); });
+      }, function () { return finish(false); });   // no collector listening: download
     });
   }
 

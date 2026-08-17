@@ -122,12 +122,17 @@ export function shutdown() {
  * Serve `root` over HTTP from THIS process (async, unlike `python -m
  * http.server`, which serialises requests). Returns { port, url, close }.
  */
-export async function startStaticServer(root, { port = 0 } = {}) {
+export async function startStaticServer(root, { port = 0, host = "127.0.0.1", route = null } = {}) {
   const base = resolve(root);
   const prefix = base + sep;
   const server = createServer((req, res) => {
     try {
       const url = new URL(req.url || "/", "http://127.0.0.1");
+      // A caller-owned route gets first refusal — it is how a tool adds a
+      // non-static endpoint (a POST collector) without reimplementing the MIME
+      // table and the path-escape check below. Returning true claims the
+      // request; anything else falls through to the static path.
+      if (route && route(req, res, url) === true) return;
       const rel = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
       const file = normalize(join(base, rel));
       if (!file.startsWith(prefix) && file !== base) { res.writeHead(403).end("forbidden"); return; }
@@ -148,7 +153,10 @@ export async function startStaticServer(root, { port = 0 } = {}) {
   });
   await new Promise((ok, fail) => {
     server.once("error", fail);
-    server.listen(port, "127.0.0.1", ok);
+    // host defaults to loopback: a test server must not appear on the LAN just
+    // because it exists. A tool that WANTS to be reachable from a phone passes
+    // "0.0.0.0" deliberately (tools/report-server.mjs).
+    server.listen(port, host, ok);
   });
   // Unref'd: a tool that forgets to close must still be able to exit on its own.
   server.unref();

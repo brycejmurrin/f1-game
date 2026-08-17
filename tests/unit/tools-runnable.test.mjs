@@ -17,7 +17,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -127,4 +127,60 @@ test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Chrome:/);
   assert.match(r.stdout, /Bin:/);
+});
+
+test("report-server: collects a POSTed bundle, and a hostile name cannot escape", async () => {
+  // The one tool here that is a SERVER and takes a filename from the network,
+  // so parse-only is not enough: the name arrives from the page, and the whole
+  // point of the collector is that a phone never has to hold a file. Two things
+  // are asserted — a bundle lands under artifacts/reports, and a traversal name
+  // lands there TOO rather than wherever it asked for.
+  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });          // gitignored: absent in a fresh clone
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "reportsrv-"));
+  fs.writeFileSync(path.join(dir, "index.html"), "<html></html>\n");  // the tool refuses a root without one
+
+  const proc = spawn(process.execPath,
+    [path.join(TOOLS, "report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    // Take the port from what it PRINTS: the URLs are the tool's actual output
+    // contract (they are what you type into a phone), and --port 0 keeps
+    // parallel suites from colliding on a fixed number.
+    const port = await new Promise((ok, fail) => {
+      let buf = "";
+      const t = setTimeout(() => fail(new Error("no URL printed in 15s: " + buf)), 15000);
+      proc.stdout.on("data", (d) => {
+        buf += d;
+        const m = buf.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
+        if (m) { clearTimeout(t); ok(Number(m[1])); }
+      });
+      proc.on("exit", (c) => { clearTimeout(t); fail(new Error(`exited ${c}: ${buf}`)); });
+    });
+    const base = `http://127.0.0.1:${port}`;
+
+    const help = await fetch(`${base}/apex-report`);
+    assert.equal(help.status, 200);
+    assert.match(await help.text(), /collector/);
+
+    const body = JSON.stringify({ build: 1, backend: "three", verdict: ["ok"] });
+    const post = (name) => fetch(`${base}/apex-report?file=${encodeURIComponent(name)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body });
+
+    const good = await post("apex-report-1-three-x.json");
+    assert.equal(good.status, 200);
+    assert.equal((await good.json()).saved, "artifacts/reports/apex-report-1-three-x.json");
+
+    const evil = await post("../../../../etc/pwned.json");
+    assert.equal((await evil.json()).saved, "artifacts/reports/pwned.json",
+      "a traversal name must be reduced to its basename");
+
+    // The collector writes under the SERVED root, so the files are in the temp dir.
+    const landed = fs.readdirSync(path.join(dir, "artifacts", "reports")).sort();
+    assert.deepEqual(landed, ["apex-report-1-three-x.json", "pwned.json"]);
+    assert.equal(fs.existsSync(path.join(dir, "index.html")), true);
+  } finally {
+    proc.kill("SIGKILL");
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
