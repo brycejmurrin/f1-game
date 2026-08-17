@@ -255,15 +255,14 @@ test("probe rejects an unknown flag instead of silently probing the default", ()
 });
 
 test("the Chrome wrapper passes the flags WebGPU and software WebGL need", () => {
-  // --enable-unsafe-webgpu: headless Chrome does not expose navigator.gpu
-  // without it, so every WGX probe read "No available adapters" and the whole
-  // WebGPU backend was untestable. --enable-unsafe-swiftshader silences the
-  // deprecation warning for the software WebGL path GLX/TLX run on here.
+  // Flags live in tools/webgpu-chrome-args.cjs — chrome-devtools-mcp.sh and
+  // harness.mjs must stay in sync or MCP reads "no adapter" while wgx-shot passes.
   const src = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8");
-  assert.match(src, /--chromeArg=--enable-unsafe-webgpu/);
-  assert.match(src, /--chromeArg=--enable-unsafe-swiftshader/);
+  assert.match(src, /webgpu-chrome-args\.cjs/);
   assert.match(src, /APEX_CHROME_ARGS/);
-  // The secure-context trap belongs next to the flags: navigator.gpu is absent
-  // on about:blank whatever is passed, which reads exactly like a bad flag.
   assert.match(src, /SECURE CONTEXT/);
+  const argsMod = fs.readFileSync(path.join(ROOT, "tools/webgpu-chrome-args.cjs"), "utf8");
+  assert.match(argsMod, /--enable-unsafe-webgpu/);
+  assert.match(argsMod, /--use-webgpu-adapter=swiftshader/);
+  assert.match(argsMod, /--enable-unsafe-swiftshader/);
 });
