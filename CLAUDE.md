@@ -28,6 +28,11 @@ and is slow. The rules:
   reads as ~18 scattered `Cannot find module` suites inside an otherwise
   green run (measured 344/18 -> 439/0, no source change).
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps it to seconds.
+- **Background test execution rule**: Always run long or browser-based test
+  suites in the background using `tools/test-bg.mjs` rather than blocking the
+  interactive process. Fast unit tests (`test:tooling-fast`) run synchronously;
+  browser tests (`test:tiny`, `test:smoke`, etc.) should run backgrounded and
+  be checked asynchronously.
 - **ONE Playwright process at a time, ONE browser group per batch.** Two
   processes share one HTTP server and oversubscribe the 4 cores; killing
   either strands the other, and browser+browser pairing is the measured
@@ -38,13 +43,15 @@ and is slow. The rules:
   — never a looser pattern, never the process table, never `| tail` on a live
   log. Long queues need a resumable driver + an uncapped waiter (`Monitor`
   caps at 30 min even with `persistent`); `docs/TESTING.md` §Field notes has
-  the worked example.
+  the worked example. Always keep browser test runs non-blocking in background
+  to prevent session blocking and timeout stranding.
 - **Run what the change needs**: `test:tiny` after any edit →
   `test:tooling-fast` in the loop → the groups `pick-tests` names. Track or
   scenery edits run `verify-track.cjs <id>` FIRST.
 - **A timeout on a busy box measures the machine, not the code** — re-run
   that spec ALONE before believing it. Check `/proc/loadavg` (< 3) and for a
-  live `playwright test` process before starting anything.
+  live `playwright test` process before starting anything. Never let a single
+  browser timeout block ongoing work; inspect `artifacts/logs/*.log` asynchronously.
 - While a run is in flight: **don't edit `js/` or `css/`** (the server serves
   the working tree), **never bump `?v=N`/`version.json`** (bump is the LAST
   edit before commit), and **never hand a subagent a browser run** — give a

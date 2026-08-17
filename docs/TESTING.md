@@ -33,7 +33,9 @@ prints nothing you can act on. The default reporter is `tests/helpers/live-repor
 one timestamped, immediately-flushed line per test start and end, plus a
 30-second heartbeat naming everything still in flight — so a piped log is
 genuinely tail-able and a hung test is the one with a `> start` line and no end
-line.
+line. Never let foreground test runs block autonomous workflows; invoke test
+suites in the background, inspect logs asynchronously, and continue productive
+tasks without waiting.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
