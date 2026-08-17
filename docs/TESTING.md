@@ -1069,6 +1069,8 @@ cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
 cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
 lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
 `stopRendering` at the end of M4 so the next spec is not starved. Solo
-verdict after those cuts: M4 10.0 s, M5 313.1 s, M9 278.9 s, `= run passed
-(3/3)`. M5/M9 stay near the `test.slow()` 360 s budget because they still
-pay a first-frame SwiftShader present; do not widen assertion tolerances.
+verdict after those cuts, M4 still presenting: M4 10.0 s, M5 313.1 s,
+M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
+M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
+`test.slow()` 360 s budget because the env-probe wait is fill-bound on
+SwiftShader even with a quiet GPU; do not widen assertion tolerances.
