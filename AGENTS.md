@@ -98,6 +98,21 @@ Session shape — this is what controls both wall time and waiting:
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
 
+### Software pixels in this container (no real GPU)
+
+A blank `#game` canvas under headless WebGPU is **not** a WGX failure — the
+native swapchain present path stays black on SwiftShader/Lavapipe. Real pixels:
+
+| Backend | Command / path | Needs |
+|---------|----------------|-------|
+| **WGX** | `node tools/wgx-capture.mjs <track>` → `artifacts/tmp/wgx-capture/…/frame.png` | Soft-present (`apex26.wgxCapture=1` / auto on software adapters) |
+| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL` / `--backend three`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
+| **Unified** | `node tools/gfx-probe.mjs --backend webgpu\|three …` | Same soft-present / WebGL2 pins as above |
+
+Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
+§Measured. Env packages + install: §Cursor Cloud below.
+
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
 device passed every assertion while FOUR separate defects made the real backend
 refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
@@ -119,8 +134,42 @@ binding, not a window property. A clean WGX boot writes NO console line and
 leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
 both ABSENCE signals, so confirm with one positive: drive a race and assert
 `canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
-the canvas. SwiftShader is a validation oracle, never a visual one. Full trap
-list: `.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
+the canvas. SwiftShader is a validation oracle; for WGX **pixels** use
+`wgx-capture.mjs`, not a screenshot of the canvas. Full trap list:
+`.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
+
+## Cursor Cloud specific instructions
+
+Personal/dashboard env for this repo (not `.cursor/environment.json`). Persist
+system packages via snapshot + Save on the environment dashboard — an `apt-get`
+in a live agent does **not** survive the next cold boot unless the snapshot is
+saved.
+
+**Packages for software WebGPU / headed probes** (idempotent in `install`):
+
+- `mesa-vulkan-drivers` — Lavapipe ICD at `/usr/share/vulkan/icd.d/lvp_icd.json`
+- `vulkan-tools` — `vulkaninfo` sanity
+- `xvfb` — headed Lavapipe / X11 display (`DISPLAY=:1` already common here)
+
+**Fresh-agent bootstrap** (after packages; matches Verification §1):
+
+```sh
+bash tools/cloud-agent-install.sh
+# equivalent manual steps when the script is not the dashboard install:
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+npm install --ignore-scripts --no-audit --prefer-offline
+npx playwright install chromium-headless-shell
+npx playwright install chromium
+```
+
+The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
+handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
+when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
+full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
+`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
+`mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
+flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
 ## Layout
 
@@ -232,10 +281,11 @@ same surface from a shell.
 ## Area references (load on demand)
 
 Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
-(`.claude/skills/bake-lighting` lands a COPY VALUES export). Career:
-`docs/CAREER.md`. Multiplayer: `docs/MULTIPLAYER.md`. Scenery:
-`docs/SCENERY-API.md`. Testing: `docs/TESTING.md`. WGX/WGSL
-(`js/render/webgpu/`): `docs/research/WEBGPU-PARITY.md`.
+(`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
+(GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
+`docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
+`docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
+`docs/research/WEBGPU-PARITY.md`.
 
 Two WGSL rules the language enforces and a mock device cannot: `sampleCount` is
 1 or 4 ONLY, and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is

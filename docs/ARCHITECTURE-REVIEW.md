@@ -185,6 +185,13 @@ Four decisions that solve their problem unusually well:
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-08-17 parallel survey** (new candidates, not yet worked): see
+[`research/SURVEY-BUGS-PERF-2026-08-17.md`](research/SURVEY-BUGS-PERF-2026-08-17.md)
+— WGX shared-`writeBuffer` before submit, career finished-season `trackIdx =
+-1`, Singapore `lapMirror` portal supports, VSC/SC player pace, net contact vs
+`predict()`, GLX env-probe frustum restore, TLX `fwidth` in non-uniform TSL
+`If`. Items below remain the standing register until a fix wave absorbs them.
+
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
   failing — it wants a geometry fix, not a wider tolerance. It spent part of

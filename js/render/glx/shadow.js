@@ -221,6 +221,13 @@ const GLXShadow = (function () {
       if (!S.depthPassOn || !batch || !batch.instances) return;
       const n = count === undefined ? batch.instances : Math.min(count, batch.instances);
       if (n <= 0) return;
+      // Full-set cast (default): the lit pass may have camera-repacked ibo to
+      // only the visible slice — restore srcMatrices so casters behind the eye
+      // that still hit the light frustum are present (TLX/WGX same contract).
+      if (count === undefined && batch.srcMatrices && batch.ibo) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.srcMatrices);
+      }
       bindVAO(batch.vao);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
       gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);

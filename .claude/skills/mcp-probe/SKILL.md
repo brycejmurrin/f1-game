@@ -1,13 +1,13 @@
 ---
 name: mcp-probe
-description: Use when driving the LIVE game or the DEPLOYED site interactively with the Chrome DevTools MCP or the tinyfish MCP — booting the working tree to render a 3D frame or poke __apex live (the interactive alternative to writing a scratch/*.mjs), heap/perf/console inspection during a bug hunt, or a post-deploy liveness check that GitHub Pages is serving the expected build. For UI-layout matrix review use survey-ui-matrix (canvas hidden); for a repeatable batch screenshot in CI use playwright-probe.
+description: Use when driving the LIVE working-tree canvas or the DEPLOYED site interactively with Chrome DevTools MCP or tinyfish — poke __apex live, heap/perf/console during an interactive repro. Routine post-deploy version.json STALE check → deploy-research. Batch screenshots → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
 ---
 
 # Probing the live game with the MCPs
 
 Two upstream MCP servers sit alongside the Playwright suite: **Chrome DevTools MCP**
 (working tree, canvas-visible) and **tinyfish** (deployed GitHub Pages / public
-web). The test suite is 112 Playwright specs + 99 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
+web). The test suite is 112 Playwright specs + 100 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
 
 ## Entry
 
@@ -40,9 +40,13 @@ wrappers for `deploy-check` / `deploy-js --marker` / `mcp-cli probe` batching.
 2. **github.io is tinyfish-only** from this container (egress proxy).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — real WGX pixels come from
-   `node tools/wgx-capture.mjs <track>` (offscreen mode), never from
-   screenshots of the WGX canvas (headless present is blank, and the first
-   `getCurrentTexture()` kills `mapAsync` device-wide).
+   `node tools/wgx-capture.mjs <track>` (soft-present / offscreen readback), never
+   from screenshots of the WGX canvas (headless present is blank, and the first
+   `getCurrentTexture()` kills `mapAsync` device-wide). Lavapipe A/B:
+   `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:
+   `gfx-probe.mjs --backend three` (WebGL2 pin — three WebGPU dies on
+   SwiftShader). Cloud env packages: `AGENTS.md` §Cursor Cloud;
+   `docs/research/CI-RENDERING-PERFORMANCE.md` §Cursor Cloud.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 
 ## Load on demand

@@ -37,9 +37,9 @@ try {
   const errs = [];
   page.on("pageerror", (e) => errs.push(String(e).split("\n")[0]));
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex != null, { timeout: 10_000, polling: 100 });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000, polling: 100 });
   await sleep(1500);
 
   const rows = await page.evaluate(({ fracs, lats }) => {

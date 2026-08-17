@@ -78,13 +78,15 @@ const WRAPPER = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
 // about:blank, or WebGPU is missing no matter which Chrome flags are set.
 function parseProbeArgs(argv) {
   const o = { url: "http://127.0.0.1:3456/index.html", backend: null, wait: 6000,
-              evalSrc: null, console: null, json: false, tlxWebgpu: false, dryRun: false };
+              evalSrc: null, console: null, json: false, tlxWebgpu: false, lite: false,
+              dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
     if (a === "--url") o.url = next();
     else if (a === "--backend") o.backend = next();
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
+    else if (a === "--lite") o.lite = true;
     else if (a === "--wait") o.wait = Number(next());
     else if (a === "--eval") o.evalSrc = next();
     else if (a === "--console") {
@@ -97,24 +99,37 @@ function parseProbeArgs(argv) {
   return o;
 }
 
+function backendInitScript(pick, o) {
+  const lines = [
+    `localStorage.setItem("apex26.gfxBackend", ${JSON.stringify(pick)});`,
+    `localStorage.removeItem("apex26.gfxWgxLevel");`,
+    `localStorage.removeItem("apex26.gfxWgxFail");`,
+    `localStorage.removeItem("apex26.gfxBackendProbe");`,
+    `localStorage.removeItem("apex26.gfxTlxFail");`,
+    `try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) {}`,
+    `try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) {}`,
+  ];
+  if (pick === "webgpu") {
+    lines.push(`localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");`);
+    lines.push(`sessionStorage.setItem("apex26.wgxCapture", "1");`);
+    if (o.lite) lines.push(`localStorage.setItem("apex26.gfxWgxLite", "1");`);
+    else lines.push(`localStorage.removeItem("apex26.gfxWgxLite");`);
+  } else if (pick === "three") {
+    const tlxPin = o.tlxWebgpu
+      ? `localStorage.setItem("apex26.tlxForceGL", "0");`
+      : `localStorage.setItem("apex26.tlxForceGL", "1");`;
+    lines.push(tlxPin);
+  }
+  return lines.join("\n");
+}
+
 function probeCalls(o) {
   const calls = [{ name: "new_page", arguments: { url: o.url } }];
   if (o.backend) {
     const pick = o.backend === "webgl2" ? "webgl2" : o.backend;
-    // TLX auto-picks three's WebGPU backend on Chromium desktop (js/render/three/
-    // tlx.js), and under SwiftShader that path dies inside three's own buffer
-    // upload — "createBuffer failed … when mappedAtCreation == true", then a
-    // null-mapping TypeError in present. So pin WebGL2 by default, the same pin
-    // tests/specs/tlx-probes.spec.js sets; --tlx-webgpu opts back in on purpose.
-    const tlxPin = o.tlxWebgpu
-      ? `localStorage.setItem("apex26.tlxForceGL", "0");`
-      : `localStorage.setItem("apex26.tlxForceGL", "1");`;
+    const init = backendInitScript(pick, o);
     calls.push({ name: "evaluate_script", arguments: { function:
-      `async () => { localStorage.setItem("apex26.gfxBackend", ${JSON.stringify(pick)});` +
-      ` localStorage.removeItem("apex26.gfxWgxLevel");` +
-      ` ${pick === "three" ? tlxPin : ""}` +
-      ` try { sessionStorage.clear(); } catch (_) {}` +
-      ` return "pick=" + localStorage.getItem("apex26.gfxBackend"); }` } });
+      `async () => { ${init} return "pick=" + localStorage.getItem("apex26.gfxBackend"); }` } });
     calls.push({ name: "navigate_page", arguments: { url: o.url } });
   }
   let body = "return JSON.stringify({ ok: true });";
@@ -151,6 +166,7 @@ if (argv[0] === "probe") {
 probe flags:
   --url URL          default http://127.0.0.1:3456/index.html (serve the tree first)
   --backend NAME     webgl2 | three | webgpu — sets the pick, then RELOADS
+  --lite             with --backend webgpu, force WGX_LITE (phone/WebKit stack)
   --tlx-webgpu       with --backend three, take three's WebGPU path (default is
                      the WebGL2 pin the specs use; WebGPU three dies on SwiftShader)
   --wait MS          settle before evaluating (default 6000; a boot needs ~9000)

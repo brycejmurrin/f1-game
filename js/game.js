@@ -524,12 +524,9 @@ function deployTaper(c) {
 }
 function isErsDeploying(c) {
   if (!c) return false;
-  // OVERTAKE deploys for FREE (see the deploy block), so it counts as deploying
-  // on a flat battery too — gating this on energy would drop the ERS lamp, the
-  // engine note and the tail-light flash for exactly the 4 s the car is at its
-  // loudest. BOOST alone still needs charge.
-  if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
-  return DEPLOY_A * deployTaper(c) > 0.4;
+  // Live flag from the deploy block — covers human BOOST, AI wantBoost, and
+  // free OVERTAKE. Do not re-derive from boostOn alone: AI never sets boostOn.
+  return !!c.deploying;
 }
 function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
 function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
@@ -1191,6 +1188,10 @@ const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its o
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
+// Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
+// Props dominate the cost; freezing the map for a 12 m eye cell is the night twin
+// of the sun snap cache (cars already one-frame lag on AI mats).
+let _lampShBest = -1, _lampShSX = null, _lampShSZ = null;
 const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
@@ -1585,7 +1586,9 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
-        aiBrakeT: 0, lane,
+        // lanePref is the grid home line; adaptLane biases around it and must
+        // not accumulate forever into ±0.85 under pack traffic.
+        lane, lanePref: lane,
       });
     });
   });
@@ -1927,7 +1930,8 @@ const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _digM = new Float32Array(16);
 function drawCockpitRig(c, base, dt, paint) {
   const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
-  const opt = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: nite ? 0.16 : 0 };
+  _cockpitOpts.emissive = nite ? 0.16 : 0;
+  const opt = _cockpitOpts;
   // The actual car around you: body (minus helmet) with the real paint, plus
   // the steering/spinning FRONT wheels (the rears sit right beside the camera
   // in the wide FOV and blob the bottom corners — skipped). Nudged 0.35 m
@@ -1948,7 +1952,8 @@ function drawCockpitRig(c, base, dt, paint) {
   // Queued with the field's decals and flushed after the car loop. The player
   // cockpit is the one queued decal that renders the PLAYER's setup parts.
   queueCarDecals(c.team, base, carDecalNum(c.team, c), true, true);
-  drawPlayerWheels(c, base, dt, { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: nite ? 0.12 : 0, doubleSided: true }, true, 0.30, 1.4);
+  _cockpitWheelOpts.emissive = nite ? 0.12 : 0;
+  drawPlayerWheels(c, base, dt, _cockpitWheelOpts, true, 0.30, 1.4);
   // Roll the wheel about the (car-local) column axis by the smoothed steering —
   // works identically for tilt / buttons / touch (steerVis is the resolved,
   // damped steering whatever the input mode). A second, slower damping stage
@@ -2123,6 +2128,7 @@ function loadTrack(idx) {
   // silhouette until the camera moved a cell (~16 m).
   _shadowSnapX = _shadowSnapZ = _shadowBox = null;
   _shadowSunX = _shadowSunY = _shadowSunZ = null;
+  _lampShBest = -1; _lampShSX = _lampShSZ = null;
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
@@ -2199,8 +2205,10 @@ function loadTrack(idx) {
 let flybyBuildTimer = 0;
 function scheduleFlybyTrack() {
   clearTimeout(flybyBuildTimer);
+  // Never hand loadTrack a negative index (exhausted career/season calendar).
+  if (!(trackIdx >= 0)) return;
   flybyBuildTimer = setTimeout(() => {
-    if (state === "menu") loadTrack(trackIdx);
+    if (state === "menu" && trackIdx >= 0) loadTrack(trackIdx);
   }, 120);
 }
 
@@ -2634,7 +2642,7 @@ function endRace(forcedOrder) {
     // SEASON save with career's standings. KEEP the settlement: prize money,
     // salary, the bonus, the brief and the wage bill all resolve here, and
     // buildResults() is where the economy is legible as it moves.
-    if (isCareer()) { if (settles) { Career.save(); careerSettlement = Career.settleRound(order, player); } }
+    if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
     else store.set("season", season);   // the sprint's points AND its stage, one write
   }
   dbgCam = null;
@@ -3257,12 +3265,15 @@ function update(dt) {
   }
 }
 
-// Shift a car along the track. AI prog and s advance together. Player prog is
-// derived from Δs each frame after collisions, so only move s here — otherwise
-// the push is counted twice (shiftLong.prog + next-tick ds).
+// Shift a car along the track. Both s and prog advance together so multi-pass
+// pairContact (which keys on prog) sees the push immediately — skipping human
+// prog left penLong stale across relaxation passes. _prevS advances by the same
+// d so the next updateCar's human ds = s − _prevS does not double-count the push
+// into prog (AI prog is speed*dt anyway; keeping _prevS locked is harmless).
 function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
-  if (!c.human) c.prog += d;
+  c.prog += d;
+  if (c._prevS != null) c._prevS = wrapS(c._prevS + d);
 }
 
 // Collision masses AND separation shares for one pair.
@@ -3284,7 +3295,7 @@ function shiftLong(c, d) {
 // Returns a shared scratch object; every call site destructures it immediately,
 // so nothing aliases across a pair and the relaxation loop stays allocation-free.
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
-const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
 const LCAR = 4.8, WCAR = 2.0;
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
@@ -3303,24 +3314,33 @@ function sepShares(a, b) {
 // resolveCollisions so each phys step does not allocate a nested function.
 // Exact cheap-reject before wrap: |dProg| in (LCAR, L-LCAR) cannot contact.
 function pairContact(a, b) {
-  let dProg = a.prog - b.prog;
+  // Net remotes draw from delayed sample() but contact must use predict()
+  // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
+  const aProg = a._nOk ? a._nProg : a.prog;
+  const bProg = b._nOk ? b._nProg : b.prog;
+  const aX = a._nOk ? a._nX : a.x;
+  const bX = b._nOk ? b._nX : b.x;
+  const aSp = a._nOk ? a._nSpd : a.speed;
+  const bSp = b._nOk ? b._nSpd : b.speed;
+  let dProg = aProg - bProg;
   if (!Number.isFinite(dProg)) return null;
   const L = track.total;
   const adProg = dProg < 0 ? -dProg : dProg;
   if (adProg > LCAR && adProg < L - LCAR) return null;
   dProg = ((dProg + L / 2) % L + L) % L - L / 2;
   if (Math.abs(dProg) > LCAR) return null;
-  const dX = a.x - b.x;
+  const dX = aX - bX;
   if (!Number.isFinite(dX)) return null;
   const penLong = LCAR - Math.abs(dProg);
   const penLat = WCAR - Math.abs(dX);
   if (penLong <= 0 || penLat <= 0) return null;
   const { iA, iB, iSum, sA, sB } = sepShares(a, b);
-  const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+  const closing = (dProg >= 0 ? bSp - aSp : aSp - bSp) > 0.5;
   const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
   const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
   _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat;
   _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB;
+  _ct.aSp = aSp; _ct.bSp = bSp;
   _ct.sideContact = penLat < penLong && !forceRear;
   return _ct;
 }
@@ -3375,7 +3395,7 @@ function resolveCollisions(ranked, dt) {
         if (incidentSim.owns(b)) continue;
         const ct = pairContact(a, b);
         if (!ct) continue;
-        const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact } = ct;
+        const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
         if (sideContact) {
           // side-by-side contact: separate laterally, scrub a little speed. Mark
           // both cars "in contact" so the AI eases off steering this way and
@@ -3388,7 +3408,7 @@ function resolveCollisions(ranked, dt) {
           // side contact was draining speed without separating the cars.
           if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
           a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
-          if (last) collideFx(a, b, Math.abs(a.speed - b.speed) * 0.02 + 0.18);
+          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
         } else {
           // rear-end: separate along the track and nudge speeds together (gentle,
           // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
@@ -3396,15 +3416,23 @@ function resolveCollisions(ranked, dt) {
           const corr = Math.max(penLong - 0.05, 0) * 0.4;
           shiftLong(a, sgn * corr * sA);
           shiftLong(b, -sgn * corr * sB);
-          const relV = sgn >= 0 ? b.speed - a.speed : a.speed - b.speed;   // >0 means the rear car is closing
+          const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
           if (relV > 0) {
-            const jImp = 0.5 * relV / iSum;   // soft momentum exchange (was 1.15)
-            if (sgn >= 0) {
-              b.speed = Math.max(0, b.speed - iB * jImp);
-              a.speed += iA * jImp * 0.8;
-            } else {
-              a.speed = Math.max(0, a.speed - iA * jImp);
-              b.speed += iB * jImp * 0.8;
+            // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
+            // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
+            // Rapier resolves in preStep — applying jImp here then promoting is a
+            // double resolve. Safe: owns() cars are already skipped above; below
+            // threshold / inactive, notifyCar no-ops and this exchange stays the
+            // resolver (C3 event-scoping).
+            if (!(incidentSim.active() && relV >= 15)) {
+              const jImp = 0.5 * relV / iSum;
+              if (sgn >= 0) {
+                b.speed = Math.max(0, b.speed - iB * jImp);
+                a.speed += iA * jImp * 0.8;
+              } else {
+                a.speed = Math.max(0, a.speed - iA * jImp);
+                b.speed += iB * jImp * 0.8;
+              }
             }
             a.contactT = b.contactT = 0.22;
             if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
@@ -3513,10 +3541,11 @@ function updateCar(c, dt, ranked) {
     vmax *= 1 + bandFactor;
   }
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
-  // racing speed — the AI used to blast through a caution at full tilt. Cautions
-  // are a race setting (off by default), so a normal race is unchanged. A
-  // fraction of the pace-scaled top speed, so it rides OVERALL SPEED like the rest.
-  if (!c.human && raceCtl) {
+  // racing speed — humans used to keep race pace while the AI was capped.
+  // Cautions default ON (RaceControl store default true); a race with them
+  // disabled never hits lvl≥2. Fraction of pace-scaled top speed, so it rides
+  // OVERALL SPEED like the rest.
+  if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
     if (lvl >= 2) vmax = Math.min(vmax, VMAX * PACE * (lvl === 3 ? 0.45 : 0.6));
   }
@@ -3631,7 +3660,7 @@ function updateCar(c, dt, ranked) {
                           blockerGap: blocker ? blockerGap : gapAhead * (c.speed || 1),
                           gapAhead: gapAhead * (c.speed || 1),
                           roomL, roomR, speed: c.speed,
-                          aheadSpeed: ahead ? ahead.speed : (blocker ? blocker.speed : c.speed),
+                          aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
                           kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
                           street: !!track.street,
                         }));
@@ -3914,6 +3943,7 @@ function updateCar(c, dt, ranked) {
     // freer side so midfield trains fan out instead of locking one line forever.
     c.lane = AiDrive.adaptLane(c.lane, {
       traits: aiT, nearby: nearbyN, roomL, roomR,
+      baseLane: c.lanePref != null ? c.lanePref : c.lane,
     }, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
@@ -4315,7 +4345,12 @@ function updateCar(c, dt, ranked) {
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     // Awareness scales how much they yield (AiDrive.contactGive).
     const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT);
-    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
+    // Same off-track lateral fade the player gets via surfMu — AI used to keep
+    // full STEER_VMAX authority on grass, skating wide while the human path
+    // was already grip-thinned. Continuous in |x| past the edge (player idiom).
+    const aiOffDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
+    const aiSurfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, aiOffDepth);
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * aiSurfMu * dt;
     // Debris side-world (A2): AI cars don't run the slip model, so estimate a
     // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
@@ -4716,7 +4751,8 @@ function updateCar(c, dt, ranked) {
     if (c.rescueT > 4) {
       Tracks.sample(track, c.s, smp);
       c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
-      c.speed = Math.max(c.speed, 14);
+      // Pace-scaled restore floor (same shape as coast()); never above vTop().
+      c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
       c.rescueT = 0; c.offT = 0; c.stuckT = 0;
     }
   }
@@ -4735,7 +4771,8 @@ function rescuePlayer(c) {
   c.x = 0; c.xVis = 0;
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   c.vLat = 0; c.yawRateCur = 0;
-  c.speed = Math.max(c.speed, 16);
+  // Pace-scaled restore floor (same shape as coast()); never above vTop().
+  c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(PACE, 0.05)));
   c.px = smp.p[0]; c.pz = smp.p[2];
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
@@ -4819,9 +4856,12 @@ function onTTLap(lapTime) {
 function coast(c, dt) {
   // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
   // RAISES a car that finished slower than 24 m/s, and 24 sits above vTop() below
-  // pace ~0.55. Pace-scale the floor, and never speed the car up.
+  // pace ~0.55. Pace-scale the floor, and never speed the car up. If already
+  // below the floor (finished crawling), keep scrubbing toward 0 — the old
+  // Math.min(speed, max(floor, …)) left cars stuck at their finish speed.
   const floor = 24 * Math.max(PACE, 0.05);
-  c.speed = Math.min(c.speed, Math.max(floor, c.speed - 20 * dt));
+  const next = c.speed - 20 * dt;
+  c.speed = c.speed > floor ? Math.max(floor, next) : Math.max(0, next);
   c.s = wrapS(c.s + c.speed * dt);
   c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
@@ -5286,11 +5326,30 @@ const _wmPropsWetN = { emissive: 0, roughness: 0.55, specular: 0.38 };
 const _wmPropsWetD = { roughness: 0.55, specular: 0.38 };
 const _wmPropsDryN = { emissive: 0, roughness: 0.85, specular: 0.20 };
 const _wmPropsDryD = { roughness: 0.85, specular: 0.20 };
+// Pooled frustum planes + draw-opt bags (makeFrustumPlanes(vp, out) / GC).
+const _pbPlanes = [0,0,0,0,0,0].map(() => new Float32Array(4));
+const _cockpitOpts = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
+const _cockpitWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+const _ghostOpts = { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true };
 const _wmGlass = { roughness: 0.13, specular: 0.82, metalness: 0.12, clearcoat: 1.0 };
 const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
 const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
 const _wmGateWet = { roughness: 0.32, metalness: 0.35, specular: 0.65 };
 const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
+// Instanced prop shadow cast: cull to the active light frustum (sun ortho or
+// lamp cone via gfx.shadowCullVP) before castShadowInstanced — shared by the
+// snap-cached sun pass and the per-frame lamp pass.
+function _castPropBatchesShadow() {
+  const _pb = track.meshes.propBatches;
+  if (!_pb || !gfx.castShadowInstanced) return;
+  const planes = (gfx.shadowCullVP && gfx.makeFrustumPlanes)
+    ? gfx.makeFrustumPlanes(gfx.shadowCullVP) : null;
+  for (let i = 0; i < _pb.length; i++) {
+    if (planes && gfx.cullInstances) {
+      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes));
+    } else gfx.castShadowInstanced(_pb[i]);
+  }
+}
 function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
@@ -5302,7 +5361,22 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   const _rr = LT.roadRough, _sd = LT.surfDetail;
   if (!hideMeshes.terrain) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
-    gfx.draw(track.meshes.terrain, MAT_IDENT, m);
+    // Camera/probe terrain chunking — same envCull gate as the road ribbon.
+    // Shadow path already lazy-builds terrainChunked; reuse that handle.
+    let _tMesh = track.meshes.terrain, _tChunked = false;
+    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
+      if (track.meshes.terrainChunked === undefined) {
+        track.meshes.terrainChunked = null;
+        if (track.terrainGeo && gfx.createChunkedMesh) {
+          track.terrainGeo._keepPositions = true;
+          track.meshes.terrainChunked = gfx.createChunkedMesh(track.terrainGeo, 72);
+        }
+      }
+      const _tc = track.meshes.terrainChunked;
+      if (_tc && _tc.chunks) { _tMesh = _tc; _tChunked = true; }
+    }
+    if (_tChunked) gfx.drawChunked(_tMesh, MAT_IDENT, m);
+    else gfx.draw(_tMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.road) {
     let m;
@@ -5337,7 +5411,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
         }
       }
       const _rc = track.meshes.roadChunked;
-      if (_rc && _rc.chunks) { _roadMesh = _rc; _roadChunked = true; }
+      if (_rc && _rc.chunks && _rc.chunks.length) { _roadMesh = _rc; _roadChunked = true; }
     }
     if (_roadChunked) gfx.drawChunked(_roadMesh, MAT_IDENT, m);
     else gfx.draw(_roadMesh, MAT_IDENT, m);
@@ -5362,7 +5436,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
     if (_pb && _pb.length && gfx.drawInstanced) {
-      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj) : null;
+      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       for (let i = 0; i < _pb.length; i++) {
         if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
         gfx.drawInstanced(_pb[i], m);
@@ -5850,8 +5924,9 @@ function render(dt) {
       // see frame.moonGate above).
       if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
-        const _pb = track.meshes.propBatches;
-        if (_pb && gfx.castShadowInstanced) for (let i = 0; i < _pb.length; i++) gfx.castShadowInstanced(_pb[i]);
+        // Cull instanced props to the light ortho before cast — same frustum
+        // castShadowChunked already uses (shadowCullVP || sun lightVP).
+        _castPropBatchesShadow();
       }
       gfx.shadowEnd();
     }
@@ -6187,6 +6262,13 @@ function render(dt) {
       if (flBest >= 0) {
         const o = flBest * 15;
         const rad = L[o + 6];
+        // Snap: 12 m eye cell + same flood index → keep previous lamp map
+        // (props are static for that cell; AI cars already one-frame lag).
+        const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
+        if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
+          // Map from last rebuild still bound; skip the 512² props pass.
+        } else {
+        _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus
         // margin for the soft skirt), capped where 512² texel density and
         // perspective-depth precision still hold up; far = the lamp radius
@@ -6227,9 +6309,10 @@ function render(dt) {
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
-        const _lpb = track.meshes.propBatches;
-        if (_lpb && gfx.castShadowInstanced) for (let i = 0; i < _lpb.length; i++) gfx.castShadowInstanced(_lpb[i]);
+        // Lamp pass: cull against the lamp perspective frustum (castCullVP).
+        _castPropBatchesShadow();
         gfx.lampShadowEnd();
+        } // end lamp-shadow snap rebuild
       }
     }
   }
@@ -6779,7 +6862,7 @@ function render(dt) {
       // slab ("black on screen when accelerating or braking" in TT). At 35%
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
-      gfx.draw(teamMesh(player.team), tmpMat, { emissive: 0.80, roughness: 0.20, metalness: 0.08, specular: 0.35, alpha: 0.35, noAlphaWrite: true });
+      gfx.draw(teamMesh(player.team), tmpMat, _ghostOpts);
       }
     }
   }
@@ -7311,11 +7394,18 @@ $("mb-season").onclick = () => {
   // Re-read the STANDALONE save. In career `season` is an alias of the career
   // championship (see openCareer), so without this a player who opened a career
   // and then pressed SEASON would carry on the career's points here. resume()
-  // also repairs it: a save left past the last round of a calendar the player has
-  // since SHORTENED would otherwise sit on a round it can never race.
+  // also repairs it: a save left PAST the last round of a calendar the player
+  // has since SHORTENED blanks; round === rounds() (finished) stays readable.
   season = SeasonCal.resume(store.get("season", null));
   store.set("season", season);
-  trackIdx = SeasonCal.trackIndex(season.round);
+  // Finished championship: trackIndex(rounds()) is -1 — park the flyby on the
+  // last raced circuit instead of crashing loadTrack.
+  let ti = SeasonCal.trackIndex(season.round);
+  if (ti < 0) {
+    const last = SeasonCal.rounds() - 1;
+    ti = last >= 0 ? SeasonCal.trackIndex(last) : 0;
+  }
+  trackIdx = ti;
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();

@@ -16,14 +16,15 @@
 
      pace         raw one-lap speed. The one that feeds AI top speed and
                   qualifying, and the one weighted heaviest in overall().
-     craft        wheel-to-wheel: making and defending a position.
-     awareness    staying out of trouble — incidents and penalties.
+     craft        wheel-to-wheel: OT fire, late-brake, lane adapt, pass/defend.
+     awareness    incidents/penalties PLUS follow gap, yield, stuck, ERS bank,
+                  street OT scale (see js/game/ai-drive.js).
      consistency  NOT a level, a VARIANCE: it narrows the random band around a
                   driver's pace, so a low-consistency driver is not slower on
                   average, just less predictable. That is what makes a rookie
                   feel different from a veteran of the same raw speed.
-     experience   races started, roughly. Ages slowly, damps development, and in
-                  career decides who is still improving and who is declining.
+     experience   races started; damps development; also steers smoothing /
+                  unstuck panic / OT hesitation in the AI loop.
 
    Ratings are read through DriverRatings.get(code, tier, dev) — callers pass the
    career's per-driver development delta as `dev` (Career.devFor(teamId, seat)),

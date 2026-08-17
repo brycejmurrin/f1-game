@@ -344,7 +344,7 @@ const Tracks = (function () {
     // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
     // scenery stay mutually consistent on the reversed centreline (cosmetic only).
 
-    // ── SHIFT-ONLY remaps ────────────────────────────────────────────────────
+    // ── Origin-shift / lapMirror remaps for the six leftover emitters ─────────
     // Six more entry points take a node index or a lap fraction and are absent
     // from the lists above, so they never moved with the rest: `groundPatch`
     // (35 circuits), `overheadSpan` (16), `circuitKit` (16), `groundedSegments`
@@ -352,28 +352,37 @@ const Tracks = (function () {
     // Miami's Turnpike overpass and Singapore's kit-built pit building were the
     // last two required models left in the road after the origin move.
     //
-    // These apply the ORIGIN SHIFT ONLY — no side flip, no reverse/mirror
-    // remap. That is deliberate and conservative: the same emitters are
-    // unremapped on the four reversed circuits (monaco, kyalami, paul_ricard,
-    // singapore) TODAY, so giving them the full treatment here would silently
-    // move already-shipped geometry on circuits this change has no business
-    // touching. Whether that latent gap is a bug worth closing is a separate
-    // question with its own before/after pass; this keeps every circuit without
-    // a shift bit-for-bit identical.
+    // Default: ORIGIN SHIFT ONLY — no side flip, no reverse/mirror remap. That
+    // is deliberate and conservative: the same emitters are unremapped on the
+    // reverse-only circuits (monaco, kyalami, paul_ricard) TODAY, so giving
+    // them the full treatment here would silently move already-shipped geometry.
+    //
+    // Exception: `sceneryLapMirror` circuits (singapore). Their racing anchors
+    // already get mirror+shift via sceneryNode/sceneryFrac, and portal decks
+    // via shift-only overheadSpan/frameAt landed ~half a lap from hand supports
+    // that went through anchor(). For those defs only, apply the full RS/RK
+    // remap so every fraction-keyed helper agrees with the standard group.
     //
     // `frameAt` is wrapped at the API BOUNDARY rather than at its definition on
     // purpose. models/ and the kits hold the RAW frameAt and resolve fractions
     // the caller already handed them, so shifting it at source would apply the
     // shift twice to everything routed through the wrapped calls below.
     const shiftS = TrackSpace.sceneryOriginDelta(def);
-    if (shiftS) {
+    const doMirror = !!(def.reverse && def.sceneryLapMirror);
+    if (doMirror || shiftS) {
       const shiftK = Math.round(shiftS * n);
       const SK = (k) => (((Math.round(k) + shiftK) % n) + n) % n;
       const SS = (s) => TrackSpace.wrap01(s + shiftS);
+      const remapK = doMirror ? RK : SK;
+      const remapS = doMirror ? RS : SS;
+      // groundPatch / waterField / groundedSegments stay SHIFT-ONLY even on
+      // lapMirror circuits — those defs authored dressing against the shift
+      // frame; flipping them with RS/RK lifts props off the terrain ribbon
+      // (singapore float-audit: 1 cluster @ frac 0.531 after a full remap).
       for (const name of ["groundPatch", "waterField"]) {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
-      if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(SS(frac), ...r);
+      if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(remapS(frac), ...r);
       // `rawFrac: true` = "this frac is ALREADY final racing space — hands off".
       // Monaco's tunnel derives k from the raw racing arrays and builds its
       // walls off px/py/pz directly (deliberately unremapped); shifting only
@@ -381,14 +390,17 @@ const Tracks = (function () {
       // caller knows which space its frac is in; the wrapper cannot.
       if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
         spec && Number.isFinite(spec.frac) && !spec.rawFrac
-          ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec);
+          ? Object.assign({}, spec, { frac: remapS(spec.frac) }) : spec);
       if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
         spec && Array.isArray(spec.points)
           ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
           : spec);
       // Every CircuitKit method takes a spec keyed on `frac` (circuit-kit.js
-      // routes it through deps.frameAt). LandmarkKit needs nothing — its
-      // helpers take world coordinates and never see a fraction.
+      // routes it through deps.frameAt RAW). Keep SHIFT-ONLY remap here even on
+      // lapMirror circuits — the kit's callers (singapore raceControl beacon via
+      // KOLD, etc.) are authored against shift space. Full RS on the kit moved
+      // the pit tower out from under its roof beacon (float gap ≈ beacon height).
+      // Portal decks still get RS via overheadSpan/frameAt above.
       if (api.circuitKit) {
         const kit = api.circuitKit, wk = {};
         for (const name of Object.keys(kit)) {

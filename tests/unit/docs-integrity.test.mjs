@@ -39,10 +39,14 @@ const LIVE_DOCS = [];
   }
 })("docs");
 LIVE_DOCS.push("CLAUDE.md", "AGENTS.md", "README.md");
-const SKILL_DOCS = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
-  .filter((e) => e.isDirectory())
-  .map((e) => path.join(".claude/skills", e.name, "SKILL.md"))
-  .filter((p) => fs.existsSync(path.join(ROOT, p)));
+const SKILL_DOCS = [];
+(function walkSkills(dir) {
+  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = path.join(dir, e.name);
+    if (e.isDirectory()) walkSkills(rel);
+    else if (e.name.endsWith(".md")) SKILL_DOCS.push(rel);
+  }
+})(".claude/skills");
 
 // Illustrative placeholders in fenced examples — these name no real file on
 // purpose ("npm test -- tests/foo.spec.js"). Keep this list SHORT; a real path
@@ -285,7 +289,7 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   const units = ls("tests/unit", /\.test\.mjs$/).length;
 
   let sawSpecCount = false;
-  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md", ...SKILL_DOCS]) {
     const text = read(doc);
     const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
     if (claimed.length) sawSpecCount = true;

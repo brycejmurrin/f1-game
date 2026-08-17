@@ -15,6 +15,7 @@ Three kinds of docs live here.
 | Doc | Covers |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
+| [RENDERERS.md](RENDERERS.md) | Three backends behind one seam: GLX / WGX / TLX boot flow, frame pipeline, safety prefs, parity snapshot. |
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | Standing assessment + defect register: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and what is deferred. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (AGENTS.md has the short list). |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability. |
@@ -44,31 +45,20 @@ Three kinds of docs live here.
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 
-### WebGPU backend (opt-in)
+### Renderers (GLX / WGX / TLX)
 
-`js/render/webgpu/*` is **DEFERRED** — no `<script>` tag; `js/game.js` injects it
-at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
+Boot flow, shared frame pipeline, safety prefs, and the live parity snapshot
+live in **[RENDERERS.md](RENDERERS.md)**. Module contracts and the GLX API
+sketch stay in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX stays
-opt-in (`apex26.gfxBackend=webgpu`) with GLX as the default. The 2026-08
-parity pass closed the documented gaps (gpuTimer, texture arrays, lamp
-shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial,
-and WGSL uniform control flow derivative hoisting).
-Recipes and remaining sharp edges live in
-[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). The six
-phase/migration build logs are provenance and live in
-[`archive/webgpu/`](archive/webgpu/).
-
-### three.js / TLX backend (opt-in)
-
-The third renderer behind the same `Gfx` seam (`js/render/three/`), activated
-via `localStorage apex26.gfxBackend=three`. Built on vendored three.js r184 with
-TSL-based shaders (chunked meshes, lit core, procedural sky, full post chain,
-shadow system, and env cube probe). Evaluation spikes, measured
-criteria and the phased adoption plan live in [`spike/`](../spike/) —
-`spike/README.md` for the criteria table and numbers, `spike/ADOPTION-PLAN.md`
-for the graphics phases and the additive Rapier plan that `js/game/debrisworld.js`
-and `js/game/incidentsim.js` implement.
+`js/render/webgpu/*` and `js/render/three/*` are **DEFERRED** — no `<script>`
+tag; `js/game.js` injects them only when `apex26.gfxBackend` is `webgpu` or
+`three`, with GLX fallback on any failure. GLX stays the default. WGX recipes
+and remaining sharp edges (TAA still off) live in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). WebGPU phase/migration
+build logs are provenance under [`archive/webgpu/`](archive/webgpu/). TLX
+evaluation spikes and the phased adoption plan live in [`spike/`](../spike/)
+(`spike/README.md`, `spike/ADOPTION-PLAN.md`).
 
 ## Research (cited, but not a description of behaviour)
 
@@ -83,7 +73,7 @@ sit in this table was indexed by nothing and moved to
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. |
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
 | [research/ENGINEERING-PRACTICE-NOTES.md](research/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method for Phase 4 extractions, and the state of the no-build bet. |
-| [research/CI-RENDERING-PERFORMANCE.md](research/CI-RENDERING-PERFORMANCE.md) | Why the Playwright suite is slow under SwiftShader, what llvmpipe/xvfb/GPU runners would change, why sharding is the wrong first move, and the (now shipped everywhere) state of WebGPU. External findings, not measurements — flagged as such. |
+| [research/CI-RENDERING-PERFORMANCE.md](research/CI-RENDERING-PERFORMANCE.md) | SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, and why sharding is the wrong first speedup. Part 1 external; Part 2 + §Measured grounded. |
 | [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Interactive Chrome DevTools MCP recipes (heap / perf insights / a11y snapshots) measured on the live shell — not a substitute for the suite. |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. |
@@ -92,6 +82,7 @@ sit in this table was indexed by nothing and moved to
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/game/steer-tuning.js`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
+| [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey (physics / GLX / WGX / TLX / track / net / UI / career) plus Context7 + tinyfish deploy-check: ranked open bugs and perf opportunities with file evidence. Not a fix log — act from the priority board. |
 
 The four workflows' verbatim per-agent output now lives together in
 [`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,

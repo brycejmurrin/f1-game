@@ -110,12 +110,12 @@
     return dx * dx + dy * dy + dz * dz;
   }
 
-  // GLX's shape: SIX FRESH planes per call, not the per-frame scratch above.
-  // GLX allocates a fresh set for exactly this caller so a held result cannot
-  // be rewritten by the next frame's cull; WGX copied that, and so does this.
-  function makeFrustumPlanes(viewProj) {
-    const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-               new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+  // GLX's shape: SIX planes per call. Pass `out` (6×Float32Array(4)) to reuse a
+  // caller pool — the race prop-batch path must not allocate every frame.
+  // Without `out`, allocate fresh so a held agentview result cannot be rewritten.
+  function makeFrustumPlanes(viewProj, out) {
+    const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
     _extractPlanes(viewProj, p);
     return p;
   }

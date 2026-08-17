@@ -170,6 +170,7 @@ function makeGpuHarness(opts = {}) {
   // the whole reason a WGX refusal costs a page reload, and the old mock — which
   // handed back a fresh context object for any argument and recorded nothing —
   // could not express it, so no test could ever see the cost.
+  const configureCalls = [];
   let claimedBy = null;
   const canvas = {
     clientWidth: 320,
@@ -179,7 +180,10 @@ function makeGpuHarness(opts = {}) {
     getContext: (type) => {
       if (claimedBy && claimedBy !== type) return null;
       claimedBy = type;
-      return { configure() {}, getCurrentTexture: () => canvasTexture };
+      return {
+        configure(desc) { configureCalls.push(desc); },
+        getCurrentTexture: () => canvasTexture,
+      };
     },
   };
   const context = vm.createContext({
@@ -222,10 +226,18 @@ function makeGpuHarness(opts = {}) {
           features: { has: (name) => adapterFeatures.includes(name) },
           // Non-empty info = "hardware" for WGX's software-adapter gate.
           // Real Dawn SwiftShader often reports {}.
-          info: opts.softAdapter
-            ? {}
-            : { vendor: "test", architecture: "test", device: "mock-gpu" },
-          isFallbackAdapter: !!opts.softAdapter,
+          info: opts.softAdapterNonEnum
+            ? (() => {
+                const o = {};
+                Object.defineProperty(o, "vendor", { value: "google", enumerable: false });
+                Object.defineProperty(o, "architecture", { value: "swiftshader", enumerable: false });
+                Object.defineProperty(o, "device", { value: "", enumerable: false });
+                return o;
+              })()
+            : (opts.softAdapter
+              ? {}
+              : { vendor: "test", architecture: "test", device: "mock-gpu" }),
+          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -235,7 +247,7 @@ function makeGpuHarness(opts = {}) {
             return device;
           },
         }),
-        getPreferredCanvasFormat: () => "bgra8unorm",
+        getPreferredCanvasFormat: () => opts.preferredFormat || "bgra8unorm",
       },
     },
     GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
@@ -257,6 +269,7 @@ function makeGpuHarness(opts = {}) {
     buffers,
     writes,
     pipelineDescs,
+    configureCalls,
     WGX: context.window.WGX,
     pipelines,
     deviceRequests,
@@ -736,6 +749,20 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
   const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
   assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+  // Sparse asphalt cracks ported from GLX lit.js (were dropped in WGX Block 1b).
+  assert.match(CHUNKS_SOURCE, /Sparse cracks \(GLX lit\.js\)/);
+  assert.match(CHUNKS_SOURCE, /crAA = max\(0\.075, 0\.015 \+ max\(fwWpos\.x, fwWpos\.z\) \* 0\.9\)/);
+  // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
+  assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
+  assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
+  // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
+  assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
+  assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
+  assert.doesNotMatch(
+    CHUNKS_SOURCE,
+    /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
+    "markings mip must not reuse the clamped aaX (phone bare-ribbon death)",
+  );
 });
 
 test("WGX god-ray and env probe match GLX gates", () => {
@@ -880,6 +907,43 @@ test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async (
   const gfx = await h.create();
   assert.ok(gfx, "escape hatch must still boot WGX");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+});
+
+test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
+  // Chrome Lavapipe headed: adapter.info stringifies as "{}" but .architecture is
+  // "swiftshader". Missing this misclassified hardware and skipped soft-present.
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapterNonEnum: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "non-enumerable swiftshader arch must still boot with allowSoftware");
+  assert.equal(gfx.msaa(), 1);
+  assert.match(WGX_SOURCE, /infoBlob = \[dev, ven, arch, desc\]/,
+    "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
+});
+
+test("soft-present exposes awaitSoftPresent and paces _softBusy until blit lands", () => {
+  assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
+  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
+  assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
+  assert.doesNotMatch(
+    WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /_retireFlush[\s\S]{0,400}_softBusy = false/,
+    "_softBusy must not clear in _retireFlush — only after putImageData",
+  );
+});
+
+test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {
+  const h = makeGpuHarness({
+    ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+    glx: { isMobile: true, mobileTier: true },
+    preferredFormat: "rgba16float",
+  });
+  const gfx = await h.create();
+  assert.ok(gfx, "iPhone-class WebGPU must still boot when preferred format is float");
+  assert.equal(gfx.msaa(), 1);
+  assert.ok(h.configureCalls.length > 0, "canvas must be configured");
+  assert.equal(h.configureCalls[0].format, "bgra8unorm",
+    "visible swapchain must downgrade rgba16float on WGX_LITE");
 });
 
 test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
@@ -1351,18 +1415,32 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
+test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
+  // H then V (and times>1) into one uniform region before submit left every
+  // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.
+  assert.match(WGX_SOURCE, /hasDynamicOffset:\s*true/,
+    "blur bind group layout must advertise dynamic offsets");
+  assert.match(WGX_SOURCE, /_blurWriteSlot/,
+    "each H/V pass must allocate a distinct blurUBO slot");
+  assert.match(WGX_SOURCE, /setBindGroup\(0,\s*\w+,\s*\[off\]\)/,
+    "blur draws must pass the slot offset to setBindGroup");
+});
+
 test("drawParticles never destroys the VBO mid-frame (retire, flush after submit)", () => {
   // game.js calls drawParticles twice per frame (alpha smoke, then additive
   // sparks). Growth between the two used to destroy a buffer the frame's pass
   // had already recorded: "used in submit while destroyed", one invalid
   // command buffer, the whole frame dropped. The old buffer must be RETIRED
-  // and destroyed only after the frame's submit.
+  // and destroyed only after the frame's submit. Dual ping-pong slots
+  // (particleVBO[i]) also keep smoke/sparks from sharing one writeBuffer target.
   const draw = WGX_SOURCE.match(/function drawParticles\([\s\S]*?\n    \}/);
   assert.ok(draw, "drawParticles exists");
-  assert.doesNotMatch(draw[0], /particleVBO\.destroy\(\)/,
+  assert.doesNotMatch(draw[0], /particleVBO(?:\[\w+\])?\.destroy\(\)/,
     "drawParticles must not destroy the old VBO in-frame — push it to _retiredBufs");
-  assert.match(draw[0], /_retiredBufs\.push\(particleVBO\)/,
+  assert.match(draw[0], /_retiredBufs\.push\(particleVBO/,
     "grown-over VBO must be retired for the post-submit flush");
+  assert.match(draw[0], /_particleFlip/,
+    "smoke + sparks must ping-pong distinct VBO/UBO slots before submit");
   assert.match(WGX_SOURCE, /_retireFlush\(\)/,
     "present must flush retired buffers after submit");
 });

@@ -777,19 +777,34 @@ const TLX = (function () {
 
       function cullInstances(batch, planes) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
+        let sig = 0;
+        for (let pi = 0; pi < 6; pi++) {
+          const p = planes[pi];
+          sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+        }
+        if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
+        if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
         const src = batch.srcMatrices, dst = batch.packMatrices;
         const sc = batch.srcColors, dc = batch.packColors;
         let n = 0;
         for (const c of batch.cells) {
           if (!TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
           for (const i of c.idx) {
-            dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
-            if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
+            // No src.subarray — per-instance views were GC on Vegas-scale batches
+            // (GLX/WGX already element-copy; design E mirrored here).
+            const so = i * 16, dOff = n * 16;
+            for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+            if (dc) {
+              const sco = i * 3, dco = n * 3;
+              dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+            }
             n++;
           }
         }
         batch.visible = n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
+        batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
+        batch._cullSig0 = sig; batch._cullN0 = n;
         return n;
       }
 
@@ -1339,6 +1354,12 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
+        // Active light VP for instanced shadow cull (GLX shadowCullVP).
+        get shadowCullVP() {
+          if (!shadowSys) return null;
+          const S = shadowSys.S;
+          return S.castCullVP || S.lightVP;
+        },
         // M9 env probe. game.js issues one face per ~2 frames on a live race
         // (gated on LT.carEnvCube>0.001, tier<1, no debug/paused cam):
         //   const inv = envFaceBegin(face, eye, frame);

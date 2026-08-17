@@ -330,9 +330,11 @@ const GLXChunked = (function () {
     // per frame); this is for occasional callers — the agent world view asking
     // "which scenery chunks are actually on screen" — where one allocation is
     // free and sharing the scratch with an in-flight draw would be a bug.
-    function makeFrustumPlanes(viewProj) {
-      const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                 new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+    // Optional `out` (array of 6 Float32Array(4)) reuses a caller pool — the
+    // race prop-batch path must never call the allocating form every frame.
+    function makeFrustumPlanes(viewProj, out) {
+      const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
       _extractPlanes(viewProj, p);
       return p;
     }

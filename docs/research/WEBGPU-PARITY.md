@@ -10,6 +10,9 @@ screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
+Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
+(`matTexLod`) are ported to match GLX `lit.js` (were the main “bare tarmac”
+deltas once matTex/markings already shipped).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -151,11 +154,15 @@ Do not re-port these. They are the Phase 2–4b ceiling:
 - FX into the open lit pass: blob shadow, skid, glow, decal
 - Boot self-test + pixel readback; any proven failure returns `null` → GLX
 
-The install rule is load-bearing and must stay: every GLX name WGX does not
-implement is listed as `undefined` on the returned object
-(`js/render/webgpu/wgx.js`). Omitting a name keeps GLX's own function, which
-closes over a null `gl` and throws mid-frame. Gated by
-`tests/unit/backend-surface-parity.test.mjs`.
+The install rule is load-bearing and must stay: every GLX name the game may
+call through `gfx` must appear on the WGX return object
+(`js/render/webgpu/wgx.js`) — as a real function when implemented, or as
+explicit `undefined` when still absent. Omitting a name keeps GLX's own
+function, which closes over a null `gl` and throws mid-frame. The 2026-08
+parity names (`gpuTimer`, texture arrays, lamp shadows, instancing,
+`drawParticles`, …) are real functions and remain listed for that reason.
+Gated by `tests/unit/backend-surface-parity.test.mjs`. Overview:
+[RENDERERS.md](../RENDERERS.md).
 
 ---
 

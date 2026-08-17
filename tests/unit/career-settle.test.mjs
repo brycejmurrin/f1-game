@@ -227,3 +227,93 @@ test("the budget ladder raises the fitted cap, three rungs then stops", () => {
   assert.equal(Career.state().budgetCost, null, "at the ceiling there is nothing left to buy");
   assert.equal(Career.upgradeBudget(), false, "and the fourth rung is refused");
 });
+
+// ── settleRound idempotency, money floor, exhausted-calendar clamps ───────────
+// SEASON + seasonIndex stubs: trackIndex/seasonDone need a real calendar length.
+function loadWithSeason(n) {
+  const stored = new Map();
+  const SEASON = [];
+  for (let i = 0; i < n; i++) SEASON.push({ id: "t" + i, name: "T" + i });
+  const LIST = SEASON.slice();
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    GameStore: {
+      CAREER_V: 3,
+      store: {
+        get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+        set: (k, v) => stored.set(k, v),
+      },
+      seasonDriverId: (teamId, i) => teamId + ":" + i,
+      migrateCareer: (c) => c,
+    },
+    Teams: {
+      POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      LIST: [
+        { id: "custom", tier: 2, custom: true, color: 0xff2222,
+          drivers: [{ name: "You", code: "YOU", num: 99 }] },
+        { id: "haas", tier: 4, color: 0xffffff,
+          drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
+      ],
+    },
+    Parts: { getFactorySetup: () => ({}) },
+    Tracks: {
+      LIST, SEASON,
+      seasonIndex: (round) => {
+        const t = SEASON[round];
+        return t ? LIST.indexOf(t) : -1;
+      },
+    },
+  });
+  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
+    { filename: "js/game/career.js" });
+  return vm.runInContext("Career", ctx);
+}
+
+test("settleRound is idempotent: a second call for the same raced round pays nothing", () => {
+  const Career = loadWithSeason(3);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  career.money = 10_000;
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = mk("custom");
+  const order = [player, mk("haas"), mk("haas")];
+  const first = Career.settleRound(order, player);
+  assert.ok(first, "first settle pays");
+  const moneyAfter = career.money;
+  const rows = career.results.length;
+  const second = Career.settleRound(order, player);
+  assert.equal(second, null, "second settle is a no-op");
+  assert.equal(career.money, moneyAfter, "money not re-paid");
+  assert.equal(career.results.length, rows, "no second results row");
+});
+
+test("settleRound floors money at zero after wage settlement", () => {
+  const Career = loadWithSeason(3);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  career.money = 0;
+  // Inflate the roster wage so the round's income cannot cover it.
+  career.roster = [{ code: "X", salary: 1_000_000 }];
+  const mk = (id) => ({ team: { id }, retired: true, cuts: 0, penalty: 0, gridPos: 20, dnf: "engine" });
+  const player = mk("custom");
+  const order = [mk("haas"), mk("haas"), player];
+  Career.settleRound(order, player);
+  assert.equal(career.money, 0, "balance never goes permanently negative");
+});
+
+test("objective is null and trackIndex clamps once the season is done", () => {
+  const Career = loadWithSeason(2);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 2;                          // === SEASON.length → done
+  assert.equal(Career.seasonDone(), true);
+  assert.equal(Career.objective(), null, "no phantom brief after the last race");
+  assert.equal(Career.trackIndex(), 1, "clamps to last valid LIST index, never -1");
+  assert.notEqual(Career.trackIndex(), -1);
+});

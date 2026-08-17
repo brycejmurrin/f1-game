@@ -58,6 +58,58 @@ const F1API = (function () {
 
   /* ---------- cache ---------- */
 
+  // Drop expired apex26.api.* entries. Windowed OpenF1 URLs are unique per
+  // time range and would otherwise fill the ~5 MiB origin quota forever.
+  // maxAge defaults to TTL_HISTORIC (7 d) — anything older is dead weight.
+  function purgeExpiredCache(maxAge) {
+    if (maxAge == null) maxAge = TTL_HISTORIC;
+    let removed = 0;
+    try {
+      if (typeof localStorage === "undefined" || localStorage == null) return 0;
+      const n = localStorage.length;
+      if (typeof n !== "number") return 0;
+      const now = Date.now();
+      const doomed = [];
+      for (let i = 0; i < n; i++) {
+        const key = localStorage.key(i);
+        if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
+        try {
+          const obj = JSON.parse(localStorage.getItem(key));
+          if (!obj || typeof obj.t !== "number" || (now - obj.t) > maxAge) doomed.push(key);
+        } catch (e) { doomed.push(key); }
+      }
+      for (let i = 0; i < doomed.length; i++) {
+        try { localStorage.removeItem(doomed[i]); removed++; } catch (e) { /* ignore */ }
+      }
+    } catch (e) { /* no storage */ }
+    return removed;
+  }
+
+  // On quota pressure: purge expired, then drop oldest remaining api keys
+  // until the write fits (or nothing left to drop).
+  function purgeOldestCache(count) {
+    let removed = 0;
+    try {
+      const entries = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
+        let t = 0;
+        try {
+          const obj = JSON.parse(localStorage.getItem(key));
+          if (obj && typeof obj.t === "number") t = obj.t;
+        } catch (e) { /* corrupt → treat as oldest */ }
+        entries.push({ key: key, t: t });
+      }
+      entries.sort(function (a, b) { return a.t - b.t; });
+      const n = Math.min(count || 8, entries.length);
+      for (let i = 0; i < n; i++) {
+        try { localStorage.removeItem(entries[i].key); removed++; } catch (e) { /* ignore */ }
+      }
+    } catch (e) { /* no storage */ }
+    return removed;
+  }
+
   function readCache(url) {
     try {
       const raw = localStorage.getItem(CACHE_PREFIX + url);
@@ -69,10 +121,23 @@ const F1API = (function () {
   }
 
   function writeCache(url, data) {
+    const key = CACHE_PREFIX + url;
+    const payload = JSON.stringify({ t: Date.now(), data: data });
+    // Periodic age sweep on every write — cheap relative to a failed quota
+    // surprise mid-session, and keeps windowed blobs from living forever.
+    purgeExpiredCache();
     try {
-      localStorage.setItem(CACHE_PREFIX + url, JSON.stringify({ t: Date.now(), data: data }));
+      localStorage.setItem(key, payload);
+      return;
     } catch (e) {
       Log.warn("data", "apex26: api cache write failed (quota?)", e);
+    }
+    purgeExpiredCache();
+    purgeOldestCache(16);
+    try {
+      localStorage.setItem(key, payload);
+    } catch (e2) {
+      Log.warn("data", "apex26: api cache write still failing after purge", e2);
     }
   }
 
@@ -117,8 +182,10 @@ const F1API = (function () {
   }
 
   function request(url, ttl) {
+    // ttl <= 0: bypass cache read (still write on success) so live AUTO can
+    // refresh every 30 s instead of being stuck behind TTL_LATEST (10 min).
     const hit = readCache(url);
-    if (hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
+    if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
 
     const job = queue
       .then(function () {
@@ -330,9 +397,9 @@ const F1API = (function () {
     });
   }
 
-  function weather(sessionKey) {
+  function weather(sessionKey, ttl) {
     const url = OPENF1 + "/weather?session_key=" + encodeURIComponent(sessionKey);
-    return request(url, sessionTtl(sessionKey)).then(function (list) {
+    return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
       const w = a[a.length - 1] || {};
@@ -346,9 +413,9 @@ const F1API = (function () {
     });
   }
 
-  function positions(sessionKey) {
+  function positions(sessionKey, ttl) {
     const url = OPENF1 + "/position?session_key=" + encodeURIComponent(sessionKey);
-    return request(url, sessionTtl(sessionKey)).then(function (list) {
+    return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
       const latest = {}; // driver_number -> latest sample
@@ -374,9 +441,9 @@ const F1API = (function () {
 
   // Gap to leader per driver — OpenF1 tracks it separately from /position,
   // which carries running order but not the timed gap the LIVE gap bars need.
-  function intervals(sessionKey) {
+  function intervals(sessionKey, ttl) {
     const url = OPENF1 + "/intervals?session_key=" + encodeURIComponent(sessionKey);
-    return request(url, sessionTtl(sessionKey)).then(function (list) {
+    return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
       const latest = {}; // driver_number -> latest sample
@@ -405,9 +472,9 @@ const F1API = (function () {
     });
   }
 
-  function sessionDrivers(sessionKey) {
+  function sessionDrivers(sessionKey, ttl) {
     const url = OPENF1 + "/drivers?session_key=" + encodeURIComponent(sessionKey);
-    return request(url, sessionTtl(sessionKey)).then(function (list) {
+    return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
       return a.map(function (d) {

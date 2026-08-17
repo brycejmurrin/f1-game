@@ -150,6 +150,14 @@ fn matTexUV(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>, uv_ptr: ptr<function, vec
   }
   return true;
 }
+// Baked pack is 256² (assets/pack/manifest.json). textureSampleLevel(..., 0)
+// locked every layer to mip 0 — at range tarmac read as a flat smear vs GLX's
+// implicit LOD. Footprint from fwWpos (hoisted in fs_main) picks a mip without
+// needing derivative-bearing textureSample inside a matId branch.
+fn matTexLod(fwUv: vec2<f32>) -> f32 {
+  let fp = max(fwUv.x, fwUv.y) * 256.0;
+  return clamp(log2(max(fp, 1e-4)), 0.0, 8.0);
+}
 fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
   var uv = vec2<f32>(0.0);
   if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
@@ -161,7 +169,7 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   let fp = max(fwUv.x, fwUv.y);
   let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) { return; }
-  let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, 0.0).xy - 0.5) * 2.0;
+  let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)).xy - 0.5) * 2.0;
   let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
   let B = cross(*N_ptr, T);
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
@@ -306,7 +314,9 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   }
   var tuv = vec2<f32>(0.0);
   if (matTexUV(mid, nrm, wpos, &tuv)) {
-    let t = textureSampleLevel(matAlbedoTex, matSamp, tuv, mid, 0.0);
+    let scT = matScale(mid);
+    let fwUvT = select(fwWpos.xz, vec2<f32>(select(fwWpos.x, fwWpos.z, an.x > an.z), fwWpos.y), matWallLike(mid)) / max(scT, 1e-4);
+    let t = textureSampleLevel(matAlbedoTex, matSamp, tuv, mid, matTexLod(fwUvT));
     let k = F.params8.w * far;
     albedo = mix(albedo, albedo * t.rgb * 2.0, k);
     rough = clamp(mix(rough, t.a, k * 0.8), 0.04, 1.0);
@@ -319,14 +329,23 @@ fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f
   if (hw <= 0.5) { return; }
   let s = trk.x; let x = trk.y;
   let paint = vec3<f32>(0.95, 0.95, 0.97);
-  let aaX = clamp(fwTrk.y, 1e-4, 0.30);
+  // UNCLAMPED lateral footprint drives minification fade. GLX clamps first then
+  // feeds the same value into mip — when fw hits the 0.30 AA ceiling, mip is
+  // exactly 0 and every edge/centre line vanishes. That ceiling is routine on
+  // phone WGX (lite DPR 1.5 + chase grazing), which is why WebGPU tarmac reads
+  // as a bare ribbon while WebGL2 on the same device still shows paint.
+  let fwX = max(fwTrk.y, 1e-4);
+  let aaX = min(fwX, 0.30);
   let dEdge = abs(abs(x) - (hw - 0.10));
   let edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
   let band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
   let ph = fract(s / 7.0);
-  let aaS = clamp(fwTrk.x / 7.0, 1e-4, 0.24);
+  let fwS = max(fwTrk.x, 1e-4);
+  let aaS = min(fwS / 7.0, 0.24);
   let dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
-  let mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  // Soft knee on the RAW footprint: still gone by ~0.65 m/px, but a saturated
+  // AA clamp (fwX==0.30) keeps ~64% amplitude instead of erasing the paint.
+  let mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   let m = max(edge, band * dash) * mip;
   *albedo_ptr = mix(*albedo_ptr, paint, m);
   *rough_ptr = mix(*rough_ptr, 0.55, m);
@@ -696,9 +715,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
   }
-  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js,
-  // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
-  // crack lines are dropped). Multiplicative, so it darkens as much as it lightens.
+  // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js):
+  // coarse+fine value-noise grain + repair-patch tint/roughness + sparse crack lines.
+  // Multiplicative, so it darkens as much as it lightens. Crack ridge AA uses the
+  // hoisted fwWpos footprint (GLX uses fwidth(cr)) — a dpdx(cr) here would sit
+  // AFTER the non-uniform matId bump branch and re-open the NaN-white-road class.
   var patchM = 0.5;
   if (detail > 0.0) {
     let wp = in.wpos.xz;
@@ -708,6 +729,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     patchM = vnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
+    // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
+    let crackFade = clamp(1.0 - (in.dist - 18.0) / 45.0, 0.0, 1.0);
+    let cr = abs(vnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+    let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
+    let crack = (1.0 - smoothstep(0.015, crAA, cr))
+              * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + vec2<f32>(7.7)));
+    albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
@@ -983,7 +1011,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let bleed = lights[i].colBleed.w;
     let cd = dot(-Ld, lights[i].dirVol.xyz);
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
-    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/shaders/lit.js)
+    // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: F.params8.x = uLampFog is 0 in
+    // daylight, so the only consumer is gated — skip the accumulate on day frames.
+    // Uniform CF (params8.x), safe for WGSL.
+    if (F.params8.x > 0.0) {
+      lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
+    }
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     var lampSh = 1.0;

@@ -45,18 +45,9 @@ import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from ".
 // the exemption: a threshold that migrates to a new line must be re-justified.
 const ALLOWED = [
   // ── relative closing speed between two cars in contact ──
-  {
-    file: "js/game.js",
-    expr: "(dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5",
-    code: "const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;",
-    // A RELATIVE speed between two touching cars, with 0.5 m/s as the noise
-    // floor on it — "are these two converging?", a direction test with
-    // hysteresis against 60 Hz jitter, not a fraction of anyone's envelope. The
-    // geometry it serves (LCAR/WCAR/SLOP, penLong/penLat) is absolute metres.
-    // Appears twice, byte-identical: the collision pass and the relaxation pass
-    // deliberately share one rule (see the "Match the relaxation pass" comment).
-    why: "relative closing speed + a 60 Hz noise floor — a direction test, not a magnitude threshold",
-  },
+  // (Was: (dProg >= 0 ? b.speed - a.speed : …) > 0.5 — now uses hoisted
+  // aSp/bSp on _ct, so the .speed-literal scanner no longer sees it. The
+  // 0.5 m/s noise floor remains a relative closing-direction test.)
 
   // ── AI traffic / stuck detection ──
   {

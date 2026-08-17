@@ -1,6 +1,6 @@
 # UI-matrix probes, routes, diagnosis, mistakes
 
-Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. The SKILL.md index is the setup + axes only.
+Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in SKILL.md.
 
 ## 3. The probe — four questions, each with its trap
 

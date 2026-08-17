@@ -104,6 +104,8 @@ const NetPlay = (function () {
     // passed — today `{lap, time, best, code}` from js/game.js, so `code` and
     // not `driverId` is what tells two reporters apart. Give this a driverId
     // before anything gameplay-facing starts reading it.
+    // Cap: a long session must not retain every lap forever.
+    const PEER_LAPS_CAP = 64;
     let peerLaps = [];
     let peerResult = null;                // the host's classification, if sent
     const eventLog = [];                  // recent inbound events, for status()
@@ -377,7 +379,10 @@ const NetPlay = (function () {
           // same driverId — unbound, the same spoof paints a lap-in-progress
           // over another driver's name on the host's waiting screen.
           if (name === EV.QLIVE && d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d);
-          if (name === EV.LAP && d) peerLaps.push(d);
+          if (name === EV.LAP && d) {
+            peerLaps.push(d);
+            if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
+          }
           if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
@@ -397,6 +402,7 @@ const NetPlay = (function () {
         // circuit as an obstacle nobody is driving.
         G.setCarRole(r.car, false, false);
         r.car.netInput = null;
+        r.car._nOk = false;
         remotes.delete(G.wireId(r.car));
       }
       if (reason && gone.length && G.announce) G.announce("RIVAL DISCONNECTED", 2);
@@ -725,10 +731,26 @@ const NetPlay = (function () {
       }
 
       // Draw each rival where it was INTERP_DELAY_MS ago, blended between the
-      // two packets bracketing that moment.
+      // two packets bracketing that moment. Contact uses predict() instead —
+      // sample is delayMs in the past (~5–8 m at race speed), and resolving
+      // against the drawn pose is a phantom hit one end / a miss the other
+      // (docs/MULTIPLAYER.md; NetSnapshot.createInterp). Dual fields: pose
+      // stays the delayed draw; _nProg/_nX/_nSpd carry the live contact pose.
       for (const r of remotes.values()) {
         const st = r.interp.sample(now);
         if (st) poseRemote(r.car, st);
+        const pred = r.interp.predict(now);
+        const c = r.car;
+        if (pred) {
+          const total = (G.track && G.track.total) || 0;
+          const lap = Number.isFinite(pred.lap) ? pred.lap : 0;
+          c._nOk = true;
+          c._nProg = lap * total + pred.s;
+          c._nX = pred.x;
+          c._nSpd = pred.speed;
+        } else {
+          c._nOk = false;
+        }
       }
     }
 

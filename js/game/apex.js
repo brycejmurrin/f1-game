@@ -79,7 +79,8 @@ function simCareerRound() {
 
   // The championship award, exactly as endRace() does it — settleRound() reads
   // the standings it leaves behind, so a shortcut here would settle against a
-  // season that never happened.
+  // season that never happened. settleRound() persists itself; do NOT save
+  // beforehand or a crash mid-settle leaves a half-written championship on disk.
   order.forEach((car, i) => {
     const pts = car.retired ? 0 : (Teams.POINTS[i] || 0);   // a DNF scores nothing
     car.finPos = i + 1;
@@ -88,7 +89,6 @@ function simCareerRound() {
     season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
   });
   season.round++;
-  Career.save();
   const settled = Career.settleRound(order, G.player);
   if (!settled) return null;
   return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
@@ -1456,10 +1456,15 @@ const api = {
       tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
       // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
       // tell VER-from-LIN without opening driver-ratings.js.
-      craft: +(c.craft != null ? c.craft : 0).toFixed(3),
-      awareness: +(c.awareness != null ? c.awareness : 0).toFixed(3),
-      experience: +(c.experience != null ? c.experience : 0).toFixed(3),
+      // Defaults match AiDrive.traits mid-grid fallback (0.75), not 0.
+      craft: +(c.craft != null ? c.craft : 0.75).toFixed(3),
+      awareness: +(c.awareness != null ? c.awareness : 0.75).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3),
       lane: +(c.lane != null ? c.lane : 0).toFixed(3),
+      // AI intent peek — kinematic cars only. stuckT > AiDrive.stuckThreshold
+      // is what flips unstuck; deploying is the live ERS/OT thrust flag.
+      stuckT: c.human ? null : +(c.stuckT || 0).toFixed(2),
+      deploying: c.human ? null : !!c.deploying,
       ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,

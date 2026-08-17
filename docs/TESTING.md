@@ -876,7 +876,7 @@ what it covers.
 | `terrain-normals.test.mjs` | the terrain ribbon must be shaded by its own shape: `TrackMesh.buildTerrain` normals are unit length, point up, and carry real tilt spread on both a street and an open circuit. `buildTerrain` shipped `nrm.push(0, 1, 0)` for every vertex — an embankment, a banked verge and a flat runoff all took identical sun — and nothing caught it, because a constant normal throws nothing and changes no vertex count |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
-| `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/` |
+| `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/`; previously-fat skills stay split (index ≤180 + the named reference file) |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |
@@ -1074,3 +1074,29 @@ M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
 M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
 `test.slow()` 360 s budget because the env-probe wait is fill-bound on
 SwiftShader even with a quiet GPU; do not widen assertion tolerances.
+
+**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** A blank headless
+`#game` canvas under WGX is expected on SwiftShader/Lavapipe — use
+`node tools/wgx-capture.mjs` (soft-present readback) or
+`node tools/gfx-probe.mjs --backend webgpu|three`. Lavapipe needs
+`mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
+`/usr/share/vulkan/icd.d/` until that package was installed and the env
+snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
+three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
+`AGENTS.md` §Seeing the game / §Cursor Cloud;
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
+`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
+spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
+endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
+errors. The leftover debug log still had "http cache … cache hit" followed by
+"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
+no tarball bytes, so every package re-fetched in parallel. The same VM's
+`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
+Envoy, so `apt-get update` cannot repair a snapshot that is missing
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
+(skip npm when `node_modules` is usable, `--no-audit --prefer-offline`,
+retries; do not fail the build on apt 404 when packages are already present).
+Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
+and `cdn.playwright.dev` if a cold snapshot must actually download.

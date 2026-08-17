@@ -23,7 +23,7 @@ Use this for:
 Do **not** use this for:
 
 - One-off Grand Prix, standalone Season, or Time Trial unless career state leaks
-  into them.
+  into them (standalone Season → **season-mode**).
 - Generic parts physics; use this only for the economy/cap that buys and fits
   parts in career.
 - Race-control/debris incidents except the reliability retirement plan surface.
@@ -40,7 +40,7 @@ Do **not** use this for:
 | Season shape | `career.season` matches standalone `apex26.season` so standings/HUD/results share code |
 | Economy | Credits buy research; fitting owned parts is free but capped by budget level |
 | Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
-| Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; may be unwired in UI (always `budgetLvl` 0 today) |
+| Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; `Career.upgradeBudget()` lives on `Career` in `js/game/career.js` (the UI in `career-ui.js` only calls it) |
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |

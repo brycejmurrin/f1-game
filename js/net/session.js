@@ -148,6 +148,11 @@ const NetSession = (function () {
       }
       // Anything else is the game's: hand over the bytes plus the sender's
       // clock translated onto ours, which is what the interp buffer wants.
+      // Until the first good PONG, offset is 0 and peerToLocal is a no-op —
+      // snapshots land on the wrong timeline and the rival warps once sync
+      // arrives. Drop unreliable STATE until then (events stay on the
+      // reliable channel and are not clock-stamped the same way).
+      if (!synced()) return;
       for (const fn of stateHandlers) {
         try { fn(data, now); } catch (e) { /* a consumer bug is not a disconnect */ }
       }

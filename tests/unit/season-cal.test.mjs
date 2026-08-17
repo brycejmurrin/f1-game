@@ -250,15 +250,39 @@ test("a sprint order recorded in a season cannot grid a later Grand Prix", () =>
 
 // ── the save ──────────────────────────────────────────────────────────────────
 
-test("resume repairs a partial save and restarts one the calendar has outgrown", () => {
+test("resume repairs a partial save; finished stays; only past-calendar blanks", () => {
   const { S } = load({ seasonCfg: { trackIds: ["monza", "monaco"] } });
   S.engage("season");
   assert.deepEqual(S.resume(null), S.blank());
-  assert.equal(S.resume({ round: 5 }).round, 0, "a 5th round of a 2-round season is not racable");
+  // round === rounds() is a finished championship — keep standings readable.
+  const done = S.resume({ round: 2, pts: { d0: 100 }, teamPts: { t0: 100 }, driverCodes: {} });
+  assert.equal(done.round, 2, "finished championship is not wiped on re-entry");
+  assert.equal(done.pts.d0, 100);
+  assert.equal(S.resume({ round: 5 }).round, 0, "past a shortened calendar blanks");
   const partial = S.resume({ round: 1, pts: { d0: 25 } });
   assert.equal(partial.round, 1);
   assert.equal(Object.keys(partial.teamPts).length, 0, "the missing halves are filled, not thrown away");
   assert.equal(partial.pts.d0, 25, "…and the ones that were there are not touched");
+});
+
+test("sprintOrder persists on the season save and restores on resume", () => {
+  const { S } = load({ seasonCfg: { sprint: true, quali: false } });
+  S.engage("season");
+  const season = S.blank();
+  S.award(season, field(3));
+  assert.deepEqual(season.sprintOrder, ["d0", "d1", "d2"], "award writes sprintOrder onto the save");
+  assert.ok(S.grid(field(3)), "live module state grids the GP");
+  // Simulate a reload: wipe module state by blanking via an out-of-range resume,
+  // then restore the mid-weekend save.
+  S.resume({ round: 99 });
+  assert.equal(S.grid(field(3)), null, "module state alone is gone after a blanking resume");
+  const back = S.resume(season);
+  assert.equal(back.stage, "race");
+  assert.deepEqual(back.sprintOrder, ["d0", "d1", "d2"]);
+  assert.ok(S.grid(field(3)), "restored sprintOrder rebuilds the GP grid");
+  S.award(back, field(3));
+  assert.equal(back.sprintOrder, undefined, "GP score clears the persisted order");
+  assert.equal(S.grid(field(3)), null, "…and the module state");
 });
 
 test("resume keeps a mid-weekend stage, so a reload cannot re-pay a sprint", () => {

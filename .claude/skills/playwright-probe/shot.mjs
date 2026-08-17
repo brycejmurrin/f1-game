@@ -81,7 +81,7 @@ try {
     viewport: { width: 1280, height: 720 },
   });
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex != null, { timeout: 10_000, polling: 100 });
 
   // Prefer models resident BEFORE the track build so bakedModel() emits.
   const modelInfo = await page.evaluate(async () => {
@@ -97,7 +97,7 @@ try {
   await page.evaluate((id) => window.__apex.race(id), safeTrackId);
   await page.waitForFunction(
     () => window.__apex.info().track != null,
-    { timeout: 20_000 }
+    { timeout: 20_000, polling: 100 }
   );
   await sleep(1200);
 
