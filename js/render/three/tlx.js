@@ -633,6 +633,22 @@ const TLX = (function () {
       }
 
       const drawList = [];          // {geo, matrix, material} in submission order
+      // Model matrices are COPIED into this per-frame pool at draw() time.
+      // game.js reuses scratch Float32Arrays across draws (_wheelWorld is
+      // written four times per car per frame), and drawList is only flushed at
+      // present() — holding the caller's reference collapsed all four wheels
+      // onto the LAST wheel's transform (measured: the player car rendered
+      // with one visible wheel). GLX consumes the matrix inside draw(), so the
+      // aliasing was invisible there; a deferred list must copy.
+      const _dMats = [];
+      let _dMatUsed = 0;
+      function poolModelMat(model) {
+        if (!model) return null;
+        let m = _dMats[_dMatUsed] || (_dMats[_dMatUsed] = new Float32Array(16));
+        _dMatUsed++;
+        m.set(model);
+        return m;
+      }
       const _instMat = new THREE.Matrix4();
       const _instColor = new THREE.Color();
       const _instAlive = new Set();   // InstancedMesh objects shown this frame
@@ -956,6 +972,65 @@ const TLX = (function () {
         return g;
       }
 
+      /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
+       * pack layer into `data` via a throwaway WebGL2 context — byte-parity
+       * with GLX's texSubImage3D upload; see createTextureArray for why a 2d
+       * canvas cannot do this. Falls back to the 2d round-trip only when
+       * WebGL2 itself is unavailable (better a colour-shifted pack than none).
+       * Returns the number of layers written. */
+      function readbackTextureLayers(size, images, n, data) {
+        let filled = 0;
+        const page = size * size * 4;
+        const cv = (typeof OffscreenCanvas !== "undefined")
+          ? new OffscreenCanvas(size, size)
+          : Object.assign(document.createElement("canvas"), { width: size, height: size });
+        const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+        if (gl) {
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+          gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+          const tex = gl.createTexture();
+          const fbo = gl.createFramebuffer();
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          for (let i = 0; i < n; i++) {
+            const img = images[i];
+            if (!img) continue;
+            try {
+              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+              gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+              if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
+              gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array(data.buffer, data.byteOffset + i * page, page));
+              filled++;
+            } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
+          }
+          gl.deleteFramebuffer(fbo);
+          gl.deleteTexture(tex);
+          const lose = gl.getExtension("WEBGL_lose_context");
+          if (lose) { try { lose.loseContext(); } catch (_) {} }
+          if (filled) return filled;
+        }
+        // A canvas is bound to one context type for life — the 2d fallback
+        // needs its own.
+        const cv2 = (typeof OffscreenCanvas !== "undefined")
+          ? new OffscreenCanvas(size, size)
+          : Object.assign(document.createElement("canvas"), { width: size, height: size });
+        const c2d = cv2.getContext("2d", { willReadFrequently: true });
+        if (!c2d) return filled;
+        for (let i = 0; i < n; i++) {
+          const img = images[i];
+          if (!img) continue;
+          try {
+            c2d.clearRect(0, 0, size, size);
+            c2d.drawImage(img, 0, 0, size, size);
+            data.set(c2d.getImageData(0, 0, size, size).data, i * page);
+            filled++;
+          } catch (_) { /* ditto */ }
+        }
+        return filled;
+      }
+
       function resize() {
         // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
         // writes the backing store, so reading it back here fed the previous frame's
@@ -1072,11 +1147,22 @@ const TLX = (function () {
 
         // ── Baked material arrays — the GLX.createTextureArray counterpart ──
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
-        // DataArrayTexture, so each ImageBitmap is drawn once into a scratch
-        // canvas and read back; GLX can hand the bitmap straight to
+        // DataArrayTexture, so each ImageBitmap is read back once through a
+        // scratch WebGL2 context; GLX can hand the bitmap straight to
         // texSubImage3D, which is why this readback lives here and not in
         // js/render/assets.js. Returns null on any failure — the caller then
         // keeps the procedural look.
+        //
+        // WHY WEBGL AND NOT A 2D CANVAS: drawImage()+getImageData() is
+        // colour-MANAGED — the 2d canvas converts the PNG's tagged pixels into
+        // its own working space, and on the shipped pack that conversion
+        // recentres every texel toward mid-grey (MEASURED 2026-08-17, asphalt
+        // layer 16: raw upload meanR 106.5, 2d round-trip meanR 128.2). The
+        // shader blends `albedo * tex.rgb * 2.0`, so 128 is exactly a no-op:
+        // the whole pack silently disappeared on this backend while
+        // materialMapState() reported it live. A WebGL upload with
+        // UNPACK_COLORSPACE_CONVERSION/PREMULTIPLY off + readPixels returns
+        // the same bytes GLX samples.
         createTextureArray(size, images, layers) {
           if (!size || !images) return null;
           try {
@@ -1086,20 +1172,7 @@ const TLX = (function () {
             // mid-grey albedo (×2.0 in the shader) / flat tangent normal.
             data.fill(128);
             for (let i = 3; i < data.length; i += 4) data[i] = 255;
-            const cv = (typeof OffscreenCanvas !== "undefined")
-              ? new OffscreenCanvas(size, size)
-              : Object.assign(document.createElement("canvas"), { width: size, height: size });
-            const c2d = cv.getContext("2d", { willReadFrequently: true });
-            if (!c2d) return null;
-            let filled = 0;
-            for (let i = 0; i < n; i++) {
-              const img = images[i];
-              if (!img) continue;
-              c2d.clearRect(0, 0, size, size);
-              c2d.drawImage(img, 0, 0, size, size);
-              data.set(c2d.getImageData(0, 0, size, size).data, i * size * size * 4);
-              filled++;
-            }
+            const filled = readbackTextureLayers(size, images, n, data);
             if (!filled) return null;
             const t = new THREE.DataArrayTexture(data, size, size, n);
             t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
@@ -1248,6 +1321,7 @@ const TLX = (function () {
           renderer.setRenderTarget(null);
           if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws
+          _dMatUsed = 0;
           poolUsed = 0;
           _envActive = false;
           envFacesMask |= 1 << (face & 7);
@@ -1366,6 +1440,7 @@ const TLX = (function () {
           // (menus, no-track) keeps the flat fogColor clear above.
           scene.backgroundNode = null;
           drawList.length = 0;
+          _dMatUsed = 0;
           return true;
         },
         // M5: update the sky uniforms from whatever frameSky carries and arm
@@ -1380,7 +1455,7 @@ const TLX = (function () {
           scene.backgroundNode = sky.node;
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, false) });
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false) });
         },
         // M7: a chunked mesh records the WHOLE handle; present() culls it per
         // chunk against the frame's final camera. The M2 fallback shape
@@ -1388,9 +1463,9 @@ const TLX = (function () {
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
-            drawList.push({ geo: null, chunked: mesh, m: model, mat: materialFor(opts, true) });
+            drawList.push({ geo: null, chunked: mesh, m: poolModelMat(model), mat: materialFor(opts, true) });
           } else if (mesh.geo) {
-            drawList.push({ geo: mesh.geo, m: model, mat: materialFor(opts, true) });
+            drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true) });
           }
         },
         // ── M6 FX paths — each appends a draw-list record; blend/offset/mask
@@ -1599,6 +1674,7 @@ const TLX = (function () {
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
           drawList.length = 0;
+          _dMatUsed = 0;
           // Armed shadow flags clear AFTER the main render (GLX clears them
           // in the post-chain present; game.js re-arms every frame it runs
           // the car/lamp passes). The lit uniforms latched the armed state at
