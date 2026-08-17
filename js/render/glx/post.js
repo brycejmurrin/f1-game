@@ -56,7 +56,26 @@ const GLXPost = (function () {
     const _grPos = new Float32Array(18), _grCol = new Float32Array(18),
           _grRad = new Float32Array(6), _grDir = new Float32Array(18),
           _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
-    const _grByD = (a, b) => a.d - b.d;   // hoisted comparator (was a per-frame closure)
+    // Partial select nearest-K (match WGX): avoid sorting the full floodlight list.
+    function _grKeepNearest(total, k) {
+      const n = Math.min(k, total);
+      for (let i = 1; i < n; i++) {
+        const cur = _grSel[i];
+        let j = i - 1;
+        while (j >= 0 && _grSel[j].d > cur.d) { _grSel[j + 1] = _grSel[j]; j--; }
+        _grSel[j + 1] = cur;
+      }
+      for (let i = n; i < total; i++) {
+        const cur = _grSel[i];
+        if (cur.d >= _grSel[n - 1].d) continue;
+        let j = n - 2;
+        while (j >= 0 && _grSel[j].d > cur.d) j--;
+        const insertAt = j + 1;
+        for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
+        _grSel[insertAt] = cur;
+      }
+      return n;
+    }
 
     // Build the post-processing programs + pick a colour format. Returns true if
     // the whole chain is usable; on any failure the caller leaves post disabled.
@@ -476,8 +495,7 @@ const GLXPost = (function () {
             const e = _grSel[i]; if (e) { e.d = d; e.o = o; } else _grSel[i] = { d: d, o: o };
           }
           _grSel.length = total;
-          _grSel.sort(_grByD);
-          grNL = Math.min(6, total);   // == GR_MAX_LIGHTS, the beam march's bound
+          grNL = _grKeepNearest(total, 6);   // == GR_MAX_LIGHTS, the beam march's bound
           for (let i = 0; i < grNL; i++) {
             const o = _grSel[i].o;
             // Map the frame.lights record that has this frame's spot-shadow map

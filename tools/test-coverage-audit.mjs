@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
@@ -22,6 +23,15 @@ export function auditCoverage(testFiles, scripts) {
   const covered = new Set();
   for (const [name, command] of Object.entries(scripts)) {
     if (!name.startsWith("test:") || name === "test:headless" || name === "test:render") continue;
+    // test:tooling-fast is `node tools/tooling-fast.mjs` — the file list lives
+    // on TOOLING_FAST_FILES, not as inline paths in package.json.
+    if (name === "test:tooling-fast" || /tooling-fast\.mjs\b/.test(command)) {
+      for (const token of TOOLING_FAST_FILES) {
+        const pattern = path.basename(token);
+        const regex = globRegex(pattern);
+        testFiles.filter((file) => regex.test(file)).forEach((file) => covered.add(file));
+      }
+    }
     for (const token of command.match(/tests\/[^\s"']+\.(?:spec\.js|test\.(?:mjs|cjs))/g) || []) {
       const pattern = path.basename(token);
       const regex = globRegex(pattern);

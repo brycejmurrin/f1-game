@@ -20,9 +20,9 @@
 //   1 fast (inline, ~30 s): tooling-fast when the change warrants it;
 //     verify-track.cjs per changed circuit; graph-parity when js/track/graph.js
 //     moved; bump-cache --check. Any red here stops before browsers spin up.
-//   2 groups (background via test-bg.mjs): pick-tests selection, browser
-//     groups serialized ONE per batch (paired with node-only groups up to the
-//     core cap) — the AGENTS.md rule, enforced instead of quoted.
+//   2 groups (background via test-bg.mjs): pick-tests selection, ONE group per
+//     batch (browser OR node) — sequential by default; AGENTS.md one-browser-
+//     per-batch rule, enforced instead of quoted.
 //   3 verdict: batch outcomes read from the logs' terminal lines. A timeout
 //     outcome comes back labelled with the triage command (test-solo.mjs),
 //     because a timeout on a busy box measures the machine, not the code.
@@ -43,7 +43,15 @@ const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
 const JSON_OUT = flag("--json");
-const say = (...a) => { if (!JSON_OUT) console.log(...a); };
+const say = (...a) => { if (!JSON_OUT) console.log(`[verify-change]`, ...a); };
+const loadavgLine = () => {
+  try {
+    const [a, b, c] = os.loadavg().map((n) => n.toFixed(2));
+    return `loadavg=${a} ${b} ${c}`;
+  } catch (_) {
+    return "loadavg=?";
+  }
+};
 
 const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
@@ -76,21 +84,12 @@ const browserGroups = groups.filter(isBrowser);
 // run the same 78 suites twice.
 const nodeGroups = groups.filter((g) => !isBrowser(g) && g !== "tooling-fast");
 
-// ONE browser group per batch (the measured source of the 120 s timeout class
-// is browser+browser pairing), padded with node-only groups up to the cap.
-const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
-const WORKERS = +(process.env.WORKERS || 2);
-const CAP = Math.max(1, Math.floor(CORES / WORKERS));
+// ONE group per batch (browser OR node). Pairing node groups with a browser
+// batch used to look cheap and still contended for CPU on SwiftShader boxes;
+// sequential is the AGENTS.md default test-bg mode too.
 const batches = [];
-{
-  const nodesLeft = [...nodeGroups];
-  for (const b of browserGroups) {
-    const batch = [b];
-    while (batch.length < CAP && nodesLeft.length) batch.push(nodesLeft.shift());
-    batches.push(batch);
-  }
-  while (nodesLeft.length) batches.push(nodesLeft.splice(0, CAP));
-}
+for (const b of browserGroups) batches.push([b]);
+for (const n of nodeGroups) batches.push([n]);
 
 const circuits = files
   .map((f) => (f.match(/^js\/circuits\/([a-z0-9_]+)\.js$/) || [])[1])
@@ -117,17 +116,30 @@ if (flag("--plan")) {
   process.exit(0);
 }
 
+say(`plan: files=${files.length} batches=${batches.length} ` +
+  `browser=${browserGroups.length} node=${nodeGroups.length} ` +
+  `toolingFast=${wantsToolingFast} verifyTrack=[${circuits.join(",")}] ` +
+  `graphParity=${wantsGraphParity} ${loadavgLine()}`);
+if (batches.length) {
+  say(`batch plan (${batches.length}):`);
+  batches.forEach((b, i) => say(`  ${i + 1}/${batches.length}: ${b.join(" ")}`));
+}
+
 // ── phase 1: fast, inline ────────────────────────────────────────────────────
 const phases = [];
 const run = (name, cmd, args) => {
-  say(`\n[verify] ${name}: ${cmd} ${args.join(" ")}`);
+  const t0 = Date.now();
+  say(`phase1 START ${name}: ${cmd} ${args.join(" ")} at=${new Date(t0).toISOString()} ${loadavgLine()}`);
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
   const ok = r.status === 0;
-  phases.push({ name, ok, exit: r.status });
+  const dur = Date.now() - t0;
+  phases.push({ name, ok, exit: r.status, durationMs: dur });
+  say(`phase1 ${ok ? "PASS" : "FAIL"} ${name} duration=${(dur / 1000).toFixed(1)}s exit=${r.status} ${loadavgLine()}`);
   if (!ok) say((r.stdout || "").slice(-2000) + (r.stderr || "").slice(-2000));
   return ok;
 };
 
+say(`── phase 1: fast gate ${loadavgLine()}`);
 let fastOk = true;
 for (const id of plan.fast.verifyTrack) {
   fastOk = run(`verify-track ${id}`, "node", ["tools/verify-track.cjs", id]) && fastOk;
@@ -141,18 +153,20 @@ if (plan.fast.toolingFast) {
 {
   // Advisory unless it can prove staleness: a mid-session tree legitimately
   // has edits ahead of the bump (the bump is the LAST edit before commit).
+  say(`phase1 START cache-check (advisory)`);
   const r = spawnSync("node", ["tools/bump-cache.mjs", "--check", "--json"], { cwd: ROOT, encoding: "utf8" });
   const cache = (() => { try { return JSON.parse(r.stdout); } catch (_) { return { consistent: false }; } })();
   phases.push({ name: "cache-check", ok: cache.consistent, advisory: true, detail: cache });
+  say(`phase1 ${cache.consistent ? "PASS" : "STALE"} cache-check (advisory)`);
 }
 
 const finish = (verdict, extra = {}) => {
   const out = { verdict, phases, batches, notRun: extra.notRun || [], ...extra };
   if (JSON_OUT) console.log(JSON.stringify(out, null, 2));
   else {
-    say(`\n[verify] verdict: ${verdict}`);
-    if (out.notRun.length) say(`[verify] not run: ${out.notRun.join(", ")}`);
-    if (plan.sweepsBeforeDeployPush) say("[verify] deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/deploy-merge)");
+    say(`verdict: ${verdict} ${loadavgLine()}`);
+    if (out.notRun.length) say(`not run: ${out.notRun.join(", ")}`);
+    if (plan.sweepsBeforeDeployPush) say("deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/deploy-merge)");
   }
   process.exit(verdict === "pass" ? 0 : verdict === "fail" ? 1 : 2);
 };
@@ -180,10 +194,13 @@ const groupOutcome = (g) => {
   return "unknown";
 };
 
+say(`── phase 2: ${batches.length} sequential batch(es) via test-bg ${loadavgLine()}`);
+
 if (!flag("--wait")) {
   // Start batch 1 only; the agent comes back for the rest. Anything more here
   // would be this tool quietly holding a terminal, which is the failure mode
   // the AGENTS.md background rule exists to kill.
+  say(`starting batch 1/${batches.length}: ${batches[0].join(" ")}`);
   const r = spawnSync("node", ["tools/test-bg.mjs", ...batches[0]], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
   finish(r.status === 0 ? "partial" : "fail", {
     started: batches[0],
@@ -196,9 +213,17 @@ if (!flag("--wait")) {
 
 const results = {};
 let allOk = true;
-for (const batch of batches) {
+for (let i = 0; i < batches.length; i++) {
+  const batch = batches[i];
+  say(`batch START ${i + 1}/${batches.length}: ${batch.join(" ")} at=${new Date().toISOString()} ${loadavgLine()}`);
+  const t0 = Date.now();
   const started = spawnSync("node", ["tools/test-bg.mjs", ...batch], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
-  if (started.status !== 0) { allOk = false; for (const g of batch) results[g] = "refused"; continue; }
+  if (started.status !== 0) {
+    allOk = false;
+    for (const g of batch) results[g] = "refused";
+    say(`batch FAIL ${i + 1}/${batches.length}: refused to start`);
+    continue;
+  }
   const waited = spawnSync("node", ["tools/test-bg.mjs", "--wait"], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
   for (const g of batch) {
     const o = groupOutcome(g);
@@ -210,6 +235,9 @@ for (const batch of batches) {
       if (/timedout|timeout/i.test(o)) results[g] += "  → triage: node tools/test-solo.mjs <spec> (a timeout on a busy box measures the machine)";
     }
   }
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  say(`batch END ${i + 1}/${batches.length}: ${batch.join(" ")} duration=${dur}s ` +
+    `${batch.map((g) => `${g}=${results[g]}`).join(" ")} ${loadavgLine()}`);
   if (waited.status !== 0 && !flag("--keep-going")) break;
 }
 

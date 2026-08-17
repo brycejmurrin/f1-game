@@ -500,7 +500,9 @@ test("god-ray lamp arrays are sized to the ONE bound the beam march walks", () =
   assert.match(shd, /for \(int li = 0; li < GR_MAX_LIGHTS; li\+\+\)/,
     "the lamp beam loop must use GR_MAX_LIGHTS, not a literal");
 
-  const cap = Number((post.match(/grNL = Math\.min\((\d+), total\)/) || [])[1]);
+  const capMatch = post.match(/grNL = Math\.min\((\d+), total\)/)
+    || post.match(/grNL = _grKeepNearest\(total, (\d+)\)/);
+  const cap = Number((capMatch || [])[1]);
   assert.equal(cap, N, `uploader caps at ${cap} but the march walks ${N}`);
 
   // Scratch buffers are handed straight to uniform{1,2,3}fv — WebGL2 rejects an

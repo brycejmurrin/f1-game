@@ -306,7 +306,9 @@ const CEILINGS = {
   // -> 8470 deploy∪TLX-load: their 8467 plus park()/frozen env-probe cadence
   // (one cube face per frame when physics is frozen). Re-measured on the
   // union with the ceiling test's own split-newline metric.
-  "js/game.js": 8470,
+  // -> 8544 collision arc-bucket broadphase (helpers + bucketed pair walks).
+  // -> 8547 deploy∪TLX-load∪collision: 8544 plus the frozen env-face gate.
+  "js/game.js": 8547,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

@@ -3297,6 +3297,37 @@ function shiftLong(c, d) {
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
 const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
 const LCAR = 4.8, WCAR = 2.0;
+// Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
+// contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
+const COL_BUCKET_M = LCAR;
+const _colBuckets = [];   // sparse: bucketId → car[]
+const _colBucketIds = []; // compact list of occupied bucket ids this pass
+
+function _colClearBuckets() {
+  for (let i = 0; i < _colBucketIds.length; i++) {
+    const id = _colBucketIds[i];
+    const arr = _colBuckets[id];
+    if (arr) arr.length = 0;
+  }
+  _colBucketIds.length = 0;
+}
+
+function _colFillBuckets(ranked) {
+  _colClearBuckets();
+  const L = track.total || 1;
+  const nB = Math.max(1, Math.ceil(L / COL_BUCKET_M) | 0);
+  for (let i = 0; i < ranked.length; i++) {
+    const c = ranked[i];
+    const prog = c._nOk ? c._nProg : c.prog;
+    let b = Math.floor((((prog % L) + L) % L) / COL_BUCKET_M) % nB;
+    if (b < 0) b += nB;
+    let arr = _colBuckets[b];
+    if (!arr) { arr = _colBuckets[b] = []; }
+    if (arr.length === 0) _colBucketIds.push(b);
+    arr.push(c);
+  }
+  return nB;
+}
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
 const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
@@ -3370,6 +3401,107 @@ function collideFx(a, b, impact) {
 // track, transfer speed rear->front). Mass-weighted, several relaxation passes
 // to settle clusters, then a hard min-separation pass so cars can never render
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
+function _colResolvePair(a, b, last, rubScrub) {
+  if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+  const ct = pairContact(a, b);
+  if (!ct) return;
+  const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
+  if (sideContact) {
+    // side-by-side contact: separate laterally, scrub a little speed. Mark
+    // both cars "in contact" so the AI eases off steering this way and
+    // stops fighting the push (the cause of the side-by-side vibration).
+    const sgn = dX >= 0 ? 1 : -1;
+    const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
+    a.x += sgn * corr * sA;
+    b.x -= sgn * corr * sB;
+    // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+    // side contact was draining speed without separating the cars.
+    if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
+    a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
+    if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+  } else {
+    // rear-end: separate along the track and nudge speeds together (gentle,
+    // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+    const sgn = dProg >= 0 ? 1 : -1;
+    const corr = Math.max(penLong - 0.05, 0) * 0.4;
+    shiftLong(a, sgn * corr * sA);
+    shiftLong(b, -sgn * corr * sB);
+    const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
+    if (relV > 0) {
+      // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
+      // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
+      // Rapier resolves in preStep — applying jImp here then promoting is a
+      // double resolve. Safe: owns() cars are already skipped above; below
+      // threshold / inactive, notifyCar no-ops and this exchange stays the
+      // resolver (C3 event-scoping).
+      if (!(incidentSim.active() && relV >= 15)) {
+        const jImp = 0.5 * relV / iSum;
+        if (sgn >= 0) {
+          b.speed = Math.max(0, b.speed - iB * jImp);
+          a.speed += iA * jImp * 0.8;
+        } else {
+          a.speed = Math.max(0, a.speed - iA * jImp);
+          b.speed += iB * jImp * 0.8;
+        }
+      }
+      a.contactT = b.contactT = 0.22;
+      if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+      // Debris hook (render-only side-world): closing speed = severity.
+      if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+      // Incident sim (R3/C3 + C1): a hard closing contact queues a
+      // candidate. Only clears the R3 threshold for a real shunt (see
+      // incidentsim); below it the cheap (prog,x) plane above stays the
+      // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
+      if (last) incidentSim.notifyCar(a, b, relV);
+    }
+  }
+}
+
+function _colSepPair(a, b, SLOP) {
+  if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+  const ct = pairContact(a, b);
+  if (!ct) return;
+  const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
+  if (sideContact) {
+    const c = Math.max(penLat - SLOP, 0) * 0.6;
+    if (c <= 0) return;
+    const sgn = dX >= 0 ? 1 : -1;
+    a.x += sgn * c * sA;
+    b.x -= sgn * c * sB;
+  } else {
+    const c = Math.max(penLong - SLOP, 0) * 0.6;
+    if (c <= 0) return;
+    const sgn = dProg >= 0 ? 1 : -1;
+    shiftLong(a, sgn * c * sA);
+    shiftLong(b, -sgn * c * sB);
+  }
+}
+
+// Walk each occupied bucket against itself and the next bucket (mod nB).
+// Bucket width = LCAR → any contacting pair is co-bucketed or adjacent.
+// Each unordered pair is visited once (within-bucket i<j; across only b→b+1).
+function _colForBucketPairs(nB, fn) {
+  for (let bi = 0; bi < _colBucketIds.length; bi++) {
+    const id = _colBucketIds[bi];
+    const A = _colBuckets[id];
+    if (!A || !A.length) continue;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      for (let j = i + 1; j < A.length; j++) fn(a, A[j]);
+    }
+    // Forward neighbour only — each undirected cross edge is visited once,
+    // including the wrap edge (nB-1 → 0).
+    if (nB < 2) continue;
+    const id2 = (id + 1) % nB;
+    const B = _colBuckets[id2];
+    if (!B || !B.length) continue;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      for (let j = 0; j < B.length; j++) fn(a, B[j]);
+    }
+  }
+}
+
 function resolveCollisions(ranked, dt) {
   const PASSES = 4;
   // Snapshot the player's road coords so the writeback at the end can tell
@@ -3379,71 +3511,28 @@ function resolveCollisions(ranked, dt) {
   // 1/60 step (identical there: 0.995^1), but the headless harness steps at
   // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
   const rubScrub = Math.pow(0.995, (dt || 1 / 60) * 60);
+  // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
+  // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
+  const useBuckets = ranked.length > 12;
+  let nB = 0;
+  if (useBuckets) nB = _colFillBuckets(ranked);
+  else if (Log.enabled("phys", "debug")) {
+    Log.debug("phys", "resolveCollisions all-pairs n=" + ranked.length);
+  }
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
-    const fwd = (pass & 1) === 0;
-    for (let ii = 0; ii < ranked.length; ii++) {
-      const i = fwd ? ii : ranked.length - 1 - ii;
-      const a = ranked[i];
-      // Incident-sim takeover owns this car's contacts in Rapier — the (prog,x)
-      // plane must not fight the 6-DoF body.
-      if (incidentSim.owns(a)) continue;
-      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
-      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
-      for (let j = i + 1; j < ranked.length; j++) {
-        const b = ranked[j];
-        if (incidentSim.owns(b)) continue;
-        const ct = pairContact(a, b);
-        if (!ct) continue;
-        const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
-        if (sideContact) {
-          // side-by-side contact: separate laterally, scrub a little speed. Mark
-          // both cars "in contact" so the AI eases off steering this way and
-          // stops fighting the push (the cause of the side-by-side vibration).
-          const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
-          a.x += sgn * corr * sA;
-          b.x -= sgn * corr * sB;
-          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
-          // side contact was draining speed without separating the cars.
-          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
-          a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
-          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
-        } else {
-          // rear-end: separate along the track and nudge speeds together (gentle,
-          // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
-          const sgn = dProg >= 0 ? 1 : -1;
-          const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, sgn * corr * sA);
-          shiftLong(b, -sgn * corr * sB);
-          const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
-          if (relV > 0) {
-            // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
-            // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
-            // Rapier resolves in preStep — applying jImp here then promoting is a
-            // double resolve. Safe: owns() cars are already skipped above; below
-            // threshold / inactive, notifyCar no-ops and this exchange stays the
-            // resolver (C3 event-scoping).
-            if (!(incidentSim.active() && relV >= 15)) {
-              const jImp = 0.5 * relV / iSum;
-              if (sgn >= 0) {
-                b.speed = Math.max(0, b.speed - iB * jImp);
-                a.speed += iA * jImp * 0.8;
-              } else {
-                a.speed = Math.max(0, a.speed - iA * jImp);
-                b.speed += iB * jImp * 0.8;
-              }
-            }
-            a.contactT = b.contactT = 0.22;
-            if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
-            // Debris hook (render-only side-world): closing speed = severity.
-            if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
-            // Incident sim (R3/C3 + C1): a hard closing contact queues a
-            // candidate. Only clears the R3 threshold for a real shunt (see
-            // incidentsim); below it the cheap (prog,x) plane above stays the
-            // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-            if (last) incidentSim.notifyCar(a, b, relV);
-          }
+    if (useBuckets) {
+      // Re-bucket each pass: shiftLong moves prog, so adjacency can change.
+      if (pass > 0) nB = _colFillBuckets(ranked);
+      _colForBucketPairs(nB, (a, b) => _colResolvePair(a, b, last, rubScrub));
+    } else {
+      const fwd = (pass & 1) === 0;
+      for (let ii = 0; ii < ranked.length; ii++) {
+        const i = fwd ? ii : ranked.length - 1 - ii;
+        const a = ranked[i];
+        if (incidentSim.owns(a)) continue;
+        for (let j = i + 1; j < ranked.length; j++) {
+          _colResolvePair(a, ranked[j], last, rubScrub);
         }
       }
     }
@@ -3453,27 +3542,15 @@ function resolveCollisions(ranked, dt) {
   // steering separation now keeps cars spaced, so collisions rarely fire and a
   // tighter boundary no longer causes the old vibration).
   const SLOP = 0.05;
-  for (let i = 0; i < ranked.length; i++) {
-    const a = ranked[i];
-    if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
-    for (let j = i + 1; j < ranked.length; j++) {
-      const b = ranked[j];
-      if (incidentSim.owns(b)) continue;
-      const ct = pairContact(a, b);
-      if (!ct) continue;
-      const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
-      if (sideContact) {
-        const c = Math.max(penLat - SLOP, 0) * 0.6;
-        if (c <= 0) continue;
-        const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * c * sA;
-        b.x -= sgn * c * sB;
-      } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.6;
-        if (c <= 0) continue;
-        const sgn = dProg >= 0 ? 1 : -1;
-        shiftLong(a, sgn * c * sA);
-        shiftLong(b, -sgn * c * sB);
+  if (useBuckets) {
+    nB = _colFillBuckets(ranked);
+    _colForBucketPairs(nB, (a, b) => _colSepPair(a, b, SLOP));
+  } else {
+    for (let i = 0; i < ranked.length; i++) {
+      const a = ranked[i];
+      if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
+      for (let j = i + 1; j < ranked.length; j++) {
+        _colSepPair(a, ranked[j], SLOP);
       }
     }
   }

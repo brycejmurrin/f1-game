@@ -665,10 +665,17 @@ const TLX = (function () {
             // use the cache simply runs over cap for the rest of the frame:
             // exceeding a soft cap costs some variants, disposing a material
             // that drawList still points at costs the object on screen.
+            //
+            // Do NOT call dispose() here on three r184: Material.dispose()
+            // frees shared texture bindings (three #33952, fixed only in r186).
+            // Dropping the Map entry lets the material stay alive for any
+            // drawList still holding it this frame; the TLX destroy() path
+            // disposes the whole cache when the backend tears down. Quantised
+            // emissive (above) already keeps eviction rare — this is the
+            // safety net when a race still blows past 64 keys.
             for (const [k, v] of matCache) {
               if (v && v.__tlxFrame === _matFrame) continue;
               matCache.delete(k);
-              if (v) v.dispose();
               break;
             }
           }

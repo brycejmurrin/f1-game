@@ -44,7 +44,7 @@ ensure_apt_pkgs || true
 if ! bash "$ROOT/tools/install-browsers.sh"; then
   if [[ -x /opt/google/chrome/chrome ]]; then
     echo "WARN: Playwright browsers missing; system Chrome is present at /opt/google/chrome/chrome"
-    if [[ -d node_modules/playwright && -d node_modules/sharp ]]; then
+    if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]]; then
       echo "OK: cloud-agent install complete (npm ready, browsers deferred)"
       exit 0
     fi
