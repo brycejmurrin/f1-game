@@ -551,6 +551,11 @@ const WGX = (function () {
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
     const _softGpu = _softAdapter || _outProbeOff;
     if (_softGpu) _outProbeOff = true;
+    // Soft-present writes a persistent rgba8unorm COPY_SRC target, not the
+    // swapchain. FXAA + the tonemap blit must target THAT format — a
+    // bgra8unorm pipeline into rgba8unorm is a validation error and the
+    // catch path then ACES-blits HDR over the already-composited frame.
+    const presentFormat = _softGpu ? LDR_FORMAT : format;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
     // on phones/WebKit). WebKit/iOS mapAsync/f16 copy timing false-triggers the
@@ -1041,7 +1046,7 @@ const WGX = (function () {
       blitPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: blitModule, entryPoint: "vs_main" },
-        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format }] },
+        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format: presentFormat }] },
         primitive: { topology: "triangle-list" },
       });
 
@@ -1093,6 +1098,20 @@ const WGX = (function () {
         size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
+      // GLX dummy is explicit 128-grey (identity under albedo*tex*2). An
+      // uninitialized WebGPU texture is undefined — often 0, which crushes
+      // every layer, or garbage that washes the road.
+      {
+        const bpr = 256;
+        const placePx = new Uint8Array(bpr * MAT_TEX_LAYERS);
+        for (let i = 0; i < MAT_TEX_LAYERS; i++) {
+          placePx[i * bpr] = placePx[i * bpr + 1] = placePx[i * bpr + 2] = 128;
+          placePx[i * bpr + 3] = 255;
+        }
+        device.queue.writeTexture(
+          { texture: matPlaceTex }, placePx,
+          { bytesPerRow: bpr, rowsPerImage: 1 }, [1, 1, MAT_TEX_LAYERS]);
+      }
       matPlaceAlbedoView = matPlaceTex.createView({ dimension: "2d-array" });
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
@@ -1308,7 +1327,7 @@ const WGX = (function () {
           _blurSlots = BLUR_SLOTS;
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
-        pFXAA      = fsPipe(_Post.FXAA,       format,        null);
+        pFXAA      = fsPipe(_Post.FXAA,       presentFormat, null);
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
         blurUBO      = device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
@@ -2050,8 +2069,13 @@ const WGX = (function () {
   return vec4<f32>(p[vi], 0.0, 1.0);
 }
 @fragment fn fs_main(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
-  let dim = vec2<f32>(textureDimensions(src));
-  return textureSampleLevel(src, samp, pos.xy / dim, 0.0);
+  // dest pixel → UV over the FULL source. pos is dest-framebuffer pixels;
+  // textureDimensions(src) is the PARENT mip. Dividing by src size (the old
+  // formula) only read the top-left quadrant, so every MAT/env mip was a
+  // zoomed corner — tarmac went to a washed smear vs GLX generateMipmap.
+  let srcSize = vec2<f32>(textureDimensions(src));
+  let dstSize = max(floor(srcSize * 0.5), vec2<f32>(1.0));
+  return textureSampleLevel(src, samp, pos.xy / dstSize, 0.0);
 }`;
           const mod = device.createShaderModule({ code });
           pipe = device.createRenderPipeline({
@@ -3493,6 +3517,26 @@ const WGX = (function () {
       _lampShadowArmed = true;
     }
 
+    // Byte-exact layer upload (GLX texSubImage3D parity). copyExternalImageToTexture
+    // into rgba8unorm converts sRGB → linear, so a mean-normalised 128-grey
+    // asphalt scan lands at ~0.22 and `albedo * tex * 2.0` crushes or — on
+    // implementations that encode the other way — washes the road vs WebGL2.
+    function _matLayerBytes(img, size) {
+      if (!img) return null;
+      if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) return img;
+      if (typeof ImageData !== "undefined" && img instanceof ImageData) return img.data;
+      try {
+        const cv = (typeof OffscreenCanvas !== "undefined")
+          ? new OffscreenCanvas(size, size)
+          : Object.assign(document.createElement("canvas"), { width: size, height: size });
+        const c2d = cv.getContext("2d", { alpha: true, colorSpace: "srgb" })
+          || cv.getContext("2d", { alpha: true })
+          || cv.getContext("2d");
+        if (!c2d) return null;
+        c2d.drawImage(img, 0, 0, size, size);
+        return c2d.getImageData(0, 0, size, size).data;
+      } catch (_) { return null; }
+    }
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
       const n = layers || MAT_TEX_LAYERS;
@@ -3503,13 +3547,15 @@ const WGX = (function () {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         let filled = 0;
+        const bpr = size * 4;
         for (let i = 0; i < n; i++) {
           const img = images[i];
           if (!img) continue;
           try {
-            if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) {
-              device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, img,
-                { bytesPerRow: size * 4, rowsPerImage: size }, [size, size, 1]);
+            const bytes = _matLayerBytes(img, size);
+            if (bytes && bytes.length >= bpr * size) {
+              device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, bytes,
+                { bytesPerRow: bpr, rowsPerImage: size }, [size, size, 1]);
             } else {
               device.queue.copyExternalImageToTexture(
                 { source: img, flipY: false },

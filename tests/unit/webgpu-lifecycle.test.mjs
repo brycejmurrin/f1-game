@@ -755,9 +755,25 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
   assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
   assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
+  // max(ddx,ddy) LOD is the grazing smear; GLX aniso needs a geometric mean.
+  assert.match(CHUNKS_SOURCE, /log2\(sqrt\(sx \* sy\)\)/);
+  assert.doesNotMatch(
+    CHUNKS_SOURCE,
+    /fn matTexLod\([\s\S]{0,200}?let fp = max\(fwUv\.x, fwUv\.y\)/,
+    "matTexLod must not key off max(fwUv) alone (grazing mip mush)",
+  );
   // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
   assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
   assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
+  // ASPHALT pack is hoisted to fs_main (uniform CF) so textureSample can use
+  // implicit LOD + anisotropy — GLX texture() parity. Must sit BEFORE the
+  // front_facing branch (that is already non-uniform).
+  const roadSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, roadUv, 16)");
+  const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff) { N = -N; }");
+  assert.ok(roadSample > 0 && ffBranch > roadSample,
+    "asphalt textureSample must be hoisted before the front_facing branch");
+  assert.match(CHUNKS_SOURCE, /if \(mid == 16 && roadPackOn\)/);
+  assert.match(CHUNKS_SOURCE, /albedo \* roadPack\.rgb \* 2\.0/);
   assert.doesNotMatch(
     CHUNKS_SOURCE,
     /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
@@ -1248,6 +1264,31 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
     assert.match(CHUNKS_SOURCE, re, `footprint plumbing changed: ${re}`);
   }
+});
+
+test("MAT array upload is byte-exact like GLX texSubImage3D, not sRGB-converted", () => {
+  // copyExternalImageToTexture into rgba8unorm linearises sRGB. The pack is
+  // mean-normalised to 128 so albedo*tex*2 is a no-op — a linearised 128
+  // (~0.22) crushes tarmac vs WebGL2. writeTexture of 2D-canvas bytes matches
+  // GLX's raw RGBA8 upload.
+  assert.match(WGX_SOURCE, /function _matLayerBytes\(/);
+  assert.match(WGX_SOURCE, /device\.queue\.writeTexture\(\{ texture: tex, origin: \[0, 0, i\] \}/);
+  assert.match(WGX_SOURCE, /placePx\[i \* bpr\] = placePx\[i \* bpr \+ 1\] = placePx\[i \* bpr \+ 2\] = 128/);
+  assert.match(WGX_SOURCE, /const presentFormat = _softGpu \? LDR_FORMAT : format/);
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*presentFormat/);
+});
+
+test("MAT/env mip blit UVs cover the full parent mip, not the top-left quadrant", () => {
+  // _generateMips used pos.xy / textureDimensions(src). pos is DEST pixels;
+  // src dim is the parent mip — that UV range is 0..0.5 and every generated
+  // mip was a zoomed corner. GLX generateMipmap box-filters the whole image.
+  assert.match(WGX_SOURCE, /let dstSize = max\(floor\(srcSize \* 0\.5\), vec2<f32>\(1\.0\)\)/);
+  assert.match(WGX_SOURCE, /textureSampleLevel\(src, samp, pos\.xy \/ dstSize, 0\.0\)/);
+  assert.doesNotMatch(
+    WGX_SOURCE,
+    /let dim = vec2<f32>\(textureDimensions\(src\)\);\s*return textureSampleLevel\(src, samp, pos\.xy \/ dim/,
+    "mip blit must not divide dest pixels by the parent mip size",
+  );
 });
 
 test("the MAT array sampler asks for anisotropy, like GLX and TLX", () => {

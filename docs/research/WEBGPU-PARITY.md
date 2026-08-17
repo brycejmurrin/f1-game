@@ -11,8 +11,16 @@ MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
-(`matTexLod`) are ported to match GLX `lit.js` (were the main “bare tarmac”
-deltas once matTex/markings already shipped).
+(`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`
+had been sampling `pos.xy / parentSize` (dest pixels over src dim) so every
+MAT/env mip was a zoomed top-left corner — tarmac read as a washed smear vs
+GLX `generateMipmap`. Blit UVs now use dest size; `matTexLod` uses a geometric
+mean so chase-grazing no longer jumps to mip 8. ASPHALT (MAT 16) is now
+sampled in `fs_main` with `textureSample` (implicit LOD + anisotropy, same
+as GLX `texture()`) before any non-uniform branch; other layers still use
+`textureSampleLevel`. Pack upload is `writeTexture` of raw RGBA8 bytes —
+`copyExternalImageToTexture` into `rgba8unorm` linearises the mean-128
+asphalt scan and breaks `albedo * tex * 2.0`.
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 

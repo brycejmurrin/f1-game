@@ -155,10 +155,15 @@ fn matTexUV(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>, uv_ptr: ptr<function, vec
 // implicit LOD. Footprint from fwWpos (hoisted in fs_main) picks a mip without
 // needing derivative-bearing textureSample inside a matId branch.
 fn matTexLod(fwUv: vec2<f32>) -> f32 {
-  let fp = max(fwUv.x, fwUv.y) * 256.0;
-  return clamp(log2(max(fp, 1e-4)), 0.0, 8.0);
+  // Geometric mean, not max(): max(ddx,ddy) at chase grazing is the
+  // foreshortened axis and jumps to mip 7–8 (flat smear). GLX texture() +
+  // aniso 4 tracks the minor axis. textureSampleLevel cannot use aniso, so
+  // the LOD itself has to stay closer to that minor axis.
+  let sx = max(fwUv.x, 1e-6) * 256.0;
+  let sy = max(fwUv.y, 1e-6) * 256.0;
+  return clamp(log2(sqrt(sx * sy)) - 0.35, 0.0, 8.0);
 }
-fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, roadNrm: vec4<f32>, roadPackOn: bool) {
   var uv = vec2<f32>(0.0);
   if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
   let fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
@@ -169,13 +174,19 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   let fp = max(fwUv.x, fwUv.y);
   let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) { return; }
-  let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)).xy - 0.5) * 2.0;
+  // ASPHALT (16) uses the fs_main-hoisted textureSample (implicit LOD + aniso,
+  // GLX texture() parity). textureSampleLevel cannot use aniso and was the
+  // washed-ribbon look vs WebGL2.
+  let nrmSample = select(
+    textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)),
+    roadNrm, mid == 16 && roadPackOn);
+  let dxy = (nrmSample.xy - 0.5) * 2.0;
   let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
   let B = cross(*N_ptr, T);
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
   *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
 }
-fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, roadNrm: vec4<f32>, roadPackOn: bool) {
   if (mid == 0 || mid == 3 || mid == 15 || mid >= 20) { return; }
   let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) { return; }
@@ -209,9 +220,9 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
   *N_ptr = N;
-  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos);
+  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos, roadNrm, roadPackOn);
 }
-fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>, roadPack: vec4<f32>, roadPackOn: bool) {
   if (mid == 0) { return; }
   let far = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);
   if (far <= 0.001) { return; }
@@ -313,7 +324,12 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.10 * far);
   }
   var tuv = vec2<f32>(0.0);
-  if (matTexUV(mid, nrm, wpos, &tuv)) {
+  if (mid == 16 && roadPackOn) {
+    // Racing surface: implicit-LOD sample hoisted in fs_main (GLX texture()).
+    let k = F.params8.w * far;
+    albedo = mix(albedo, albedo * roadPack.rgb * 2.0, k);
+    rough = clamp(mix(rough, roadPack.a, k * 0.8), 0.04, 1.0);
+  } else if (matTexUV(mid, nrm, wpos, &tuv)) {
     let scT = matScale(mid);
     let fwUvT = select(fwWpos.xz, vec2<f32>(select(fwWpos.x, fwWpos.z, an.x > an.z), fwWpos.y), matWallLike(mid)) / max(scT, 1e-4);
     let t = textureSampleLevel(matAlbedoTex, matSamp, tuv, mid, matTexLod(fwUvT));
@@ -582,6 +598,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrk = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
+  // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
+  // branches. textureSample gets implicit LOD + anisotropy — the GLX
+  // texture() path. textureSampleLevel (used for other MAT ids, which cannot
+  // hoist a constant layer) cannot use aniso and smeared tarmac at chase.
+  let roadSc = matScale(16);
+  var roadPack = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+  var roadNrmPack = vec4<f32>(0.5, 0.5, 1.0, 1.0);
+  var roadPackOn = false;
+  if (F.params8.w > 0.001 && roadSc > 0.0) {
+    let roadUv = in.wpos.xz / roadSc;
+    roadPack = textureSample(matAlbedoTex, matSamp, roadUv, 16);
+    roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
+    roadPackOn = true;
+  }
   let topNgeo = normalize(in.nrm);
   // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
   // N is written inside applyMaterialNormal, which is non-uniform in matId, and
@@ -597,7 +627,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
-  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos, fwWpos);
+  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos, fwWpos, roadNrmPack, roadPackOn);
 
   // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
   //    DrawU/FrameU fields; a 0 value makes each block below a no-op so existing
@@ -739,7 +769,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
-  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwWpos);
+  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwWpos, roadPack, roadPackOn);
   roadMarkings(&albedo, &rough, in.trk, fwTrk);
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
