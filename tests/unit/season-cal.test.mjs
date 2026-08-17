@@ -296,3 +296,13 @@ test("shuffled returns a permutation and leaves its input alone", () => {
   assert.deepEqual(ids, before, "the caller's array is not the working copy");
   assert.deepEqual(out.slice().sort(), before.slice().sort());
 });
+
+test("shuffled is deterministic when given an explicit seed", () => {
+  const { S } = load();
+  const ids = S.presetIds("full");
+  const run1 = S.shuffled(ids, 42);
+  const run2 = S.shuffled(ids, 42);
+  const run3 = S.shuffled(ids, 99);
+  assert.deepEqual(run1, run2, "identical seeds must produce identical permutations");
+  assert.notDeepEqual(run1, run3, "different seeds should produce different permutations");
+});

@@ -745,7 +745,7 @@ what it covers.
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
-| `scenery-api-contract.test.mjs` | freezes the 110-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
@@ -855,7 +855,7 @@ what it covers.
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
-| `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the cycle always names WEBGPU, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality |
+| `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |

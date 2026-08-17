@@ -2156,7 +2156,7 @@ const Tracks = (function () {
         // the ribbon (long runs, distant landmarks). mugello and shanghai each
         // hand-rolled this during the grounding sweep; it falls back to the same
         // closed form tools/float-audit.cjs does, so engine and audit agree.
-        groundUnder,
+        groundUnder, frameAt,
         addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
@@ -2345,14 +2345,9 @@ const Tracks = (function () {
     // deck ((b.s + _sceneryShift) % 1) — reading b.s raw put Suzuka's four pillar
     // pairs at racing frac 0.817 while the deck they support is at 0.437.
     // Same omission class as the bankZones fix (ed5a310f).
-    // NOTE (measured, suzuka — the only def with `bridges`): none of these eight
-    // boxes actually SHIPS. They sit at hw+0.7 with half-extent 0.8, and rejBox
-    // expands a footprint by the road half-width before testing the centreline
-    // node, so 0.7 < 0.8 + hw always hits and the guarded addBox culls every one.
-    // Only the blockAt() solid records below survive — and those were landing
-    // two thirds of a lap from the deck until this shift went in. Making the
-    // pillars visible needs a wider lateral offset or a RAW.addBox (as the
-    // crossover deck itself uses); that is a separate, reviewable change.
+    // NOTE (measured, suzuka — the only def with `bridges`): pillars at hw+0.7
+    // with half-extent 0.8 were always culled by rejBox (0.7 < hw+0.8). Emit
+    // through RAW so the supports beside the raised deck actually ship.
     const brs = def.bridges;
     if (brs) for (const b of brs) {
       const kc = Math.round(TrackSpace.wrap01(b.s + (def._sceneryShift || 0)) * n) % n;
@@ -2363,10 +2358,10 @@ const Tracks = (function () {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const tg = [track.tx[k], 0, track.tz[k]];
         for (const side of [-1, 1]) {
-          const o = side * (hw[k] + 0.7);
-          addBox(out, [px[k] + r[0] * o, deckY / 2 - 0.3, pz[k] + r[2] * o],
+          const o = side * (hw[k] + 2.0);
+          RAW.addBox(out, [px[k] + r[0] * o, deckY / 2 - 0.3, pz[k] + r[2] * o],
                  [1.6, deckY + 0.4, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
-          blockAt(k, side, 0.7, 1);   // solid pillar at the deck edge
+          blockAt(k, side, 2.0, 1);   // solid pillar at the deck edge
         }
       }
     }
