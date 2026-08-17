@@ -303,7 +303,8 @@ const CEILINGS = {
   // _castPropBatchesShadow (light-frustum cull before castShadowInstanced).
   // -> 8475 merge(deploy): survey∪soft-present∪render-audit (split-newline).
   // -> 8467 merge-conflict cleanup (dedupe terrain chunk block).
-  "js/game.js": 8467,
+  // -> 8545 collision arc-bucket broadphase (helpers + bucketed pair walks).
+  "js/game.js": 8545,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

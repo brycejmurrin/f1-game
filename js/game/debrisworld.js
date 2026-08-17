@@ -126,12 +126,13 @@ const FORCE_SEV_SCALE = 500; // N per +1 severity when a real hit overrides a hi
 const SPALL_MIN = 600;       // N — a mirror ploughing a dynamic body this hard spalls
 const SPALL_COOL_S = 0.4;    // min seconds between spall bursts per car
 // A2 marble tuning
-const MARBLE_CAP_DESKTOP = 24, MARBLE_CAP_MOBILE = 8;
-const MARBLE_REST_DESPAWN_S = 12;  // marbles linger far longer than impact shards
+const MARBLE_CAP_DESKTOP = 16, MARBLE_CAP_MOBILE = 6;
+const MARBLE_REST_DESPAWN_S = 6;   // was 12 — shorter rest so idle step() fires more often
 const MARBLE_MIN_SPEED = 8;        // m/s — no marbles when crawling
 const MARBLE_LOCK_GATE = 0.90;     // axFrac ≥ this = braking lock-up
 const MARBLE_SLIP_GATE = 0.09;     // rad — |slip| ≥ this = a real slide
 const MARBLE_REF_SCALE = 0.025;    // marble mesh reference half-extent (draw scaling)
+const MARBLE_FAR_DESPAWN_M = 180;  // tighter than FAR_DESPAWN_M — cosmetic grit only
 // A3 furniture tuning
 const FURN_CAP_DESKTOP = 24, FURN_CAP_MOBILE = 12;
 const FURN_WAKE_M = 14;      // arc distance (m) within which a car keeps the world stepping so cones can be punted
@@ -852,8 +853,8 @@ function step(dt) {
     }
     if (s.restT > REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
   }
-  // A2: marbles despawn on a LONGER rest (they should linger as off-line
-  // texture) or far distance — same pool discipline as debris.
+  // A2: marbles despawn on rest (MARBLE_REST_DESPAWN_S) or a tighter far
+  // cull than impact shards — keeps the Rapier idle fast-path reachable.
   for (const s of _marbles) {
     if (!s.live) continue;
     const b = s.body;
@@ -862,12 +863,7 @@ function step(dt) {
     if (p) {
       const t = b.translation();
       const dx = t.x - px, dz = t.z - pz;
-      far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
-    }
-    if (s.restT > MARBLE_REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
-  }
-
-  // A1: drain the tick's contact-force events, canonicalise the order, and fold
+      far = dx * dx + dz * dz > MARBLE_FAR_DESPAWN_M * MARBLE_FAR_DESPAWN_M;
   // real force per car (mirror↔dynamic contacts only).
   drainForces(cars);
 

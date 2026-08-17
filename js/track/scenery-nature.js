@@ -123,9 +123,16 @@ const SceneryNature = (function () {
     // (windswept — each tier offset sideways, increasing with height), SPARSE
     // (thinner 3-tier, gappy — storm-thinned or younger tree).
     //   opts: { tiers, lean, sparse, snow, deadTop }
+    //
+    // SCENE-GRAPH-PLAN.md §S4: trunk radius and sink used to be AFFINE in h
+    // (`0.35 + h*0.02`, fixed −0.5 m), so every height minted its own model
+    // (Spa: 1779 pines → 1779 models, reuse 1.00×). Fix: unit-height
+    // scale-linear mesh + `place.s = [hQ,hQ,hQ]` (h quantised to 0.5 m),
+    // j/lean in integer key bins, NODE_COLOR foliage. Canopy radii are
+    // proportional to h (match old absolute width at h=12).
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
-      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      const a = anchor(k, side, dist);
       if (onTrack(a.c[0], a.c[2], 3)) {
         Log.warn("scenery", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
@@ -133,39 +140,39 @@ const SceneryNature = (function () {
       ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
-      const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
       const sparse = opts.sparse != null ? !!opts.sparse : vr > 0.82;   // ~18% thinner 3-tier trees
       const lean = opts.lean != null ? opts.lean
         : (!sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0);              // ~27% windswept lean
       const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
         : (sparse ? 3 : 4);
-      // Graph form: the silhouette is recorded ONCE per distinct parameter set in
-      // canonical space (origin = the anchor, axes = the track basis) and replayed
-      // through the guarded emitters. Geometry and guard decisions are unchanged;
-      // what is new is that the build now knows this is a pine and where it stands.
-      // The key carries every value that changes the shape — h and j are continuous,
-      // so reuse here is whatever genuinely repeats. See docs/research/
-      // SCENE-GRAPH-PLAN.md §S4: pine's dimensions are AFFINE in h (the trunk's
-      // 0.35 + h*0.02 radius, its +0.5 m sink), not linear, so it cannot yet
-      // collapse to one model plus a per-node scale. Re-parameterising it is a
-      // deliberate look change and belongs with the detail pass, not here.
+      // Integer bins — never put floats in the key (0.45 → "0.449999…").
+      // Height leaves the key via place.s; only silhouette variants remain.
+      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15, H_REF = 12;
+      const hQ = Math.max(H_BIN, Math.round(h / H_BIN) * H_BIN);
+      const jBin = Math.round(j / J_BIN);
+      const jQ = jBin * J_BIN;
+      const leanBin = Math.round((lean * side) / L_BIN);
+      const leanS = leanBin * L_BIN;
+      // Match old trunk radius at h=12: 0.35+0.24=0.59. Sink 0.04 equals old
+      // −0.5 m after ×h at h=12.5.
+      const TRUNK_K = 0.59 / H_REF, SINK_K = 0.04;
+      const NC = TrackGraph.NODE_COLOR;
       ctx.instance(
-        `pine|${h}|${j}|${lean}|${sparse ? 1 : 0}|${side}|${col.join(",")}`,
-        { o: a.c, r: a.r, u: a.u, t: a.t },
+        `pine|${jBin}|${leanBin}|${sparse ? 1 : 0}|${tiers}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t, s: [hQ, hQ, hQ], col },
         (rec) => {
+          // Unit-height canonical mesh; place.s brings it to hQ.
           rec.mat(MAT.WOOD);
-          // Trunk starts 0.5 m BELOW the anchor: anchor() samples the terrain at one
-          // point, so on a slope a flat-based trunk floats on the downhill side.
-          rec.cyl([0, -0.5, 0], 0.35 + h * 0.02, h * 0.4 + 0.5, [0.30, 0.22, 0.13], 6);
+          rec.cyl([0, -SINK_K, 0], TRUNK_K, 0.4 + SINK_K, [0.30, 0.22, 0.13], 6);
           rec.mat(MAT.FOLIAGE);
-          let y = h * 0.3;
+          let y = 0.3;
           for (let i = 0; i < tiers; i++) {
-            const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
-            // tilt away from the road
-            rec.cone([lean ? lean * (y / h) * 1.6 * side : 0, y, 0],
-                     w, h * 0.32, i === 0 ? c2 : col, 7);
-            y += h * (sparse ? 0.24 : 0.18) * j;
+            const w = (sparse ? 2.3 : 2.7) / H_REF * jQ * (1 - i * (sparse ? 0.24 : 0.21));
+            // lean lateral matches old lean*(y/h)*1.6 exactly at h=H_REF
+            rec.cone([leanS ? leanS * y * 1.6 / H_REF : 0, y, 0],
+                     w, 0.32, NC, 7);
+            y += (sparse ? 0.24 : 0.18) * jQ;
           }
         },
         { kind: "pine", k, side, h });
@@ -181,6 +188,10 @@ const SceneryNature = (function () {
     //           spread, deadChance }
     // "round" reproduces the pre-existing crown exactly, so the 57 direct calls
     // and the generic roadside scatter are unchanged until a circuit asks.
+    // Living crowns go through ctx.instance with quantised h/j/lean (same §S4
+    // pattern as pine). Dead trees stay inline — angled branch bases need a
+    // per-stub up-vector the recorder cannot express. Canopy radii that were
+    // affine in h (`a + b*h`) are rebased to scale-linear matching at h=12.
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
@@ -218,57 +229,52 @@ const SceneryNature = (function () {
       }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
-      const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
-      out._mat = MAT.WOOD;
-      // Trunk reaches well into the crown (0.55h): the skirt cone is nearly flat,
-      // so from road level its top surface backface-culls and the crown would
-      // otherwise appear to start at the SECOND cone — a floating canopy with a
-      // see-through band above a too-short trunk (Albert Park eucalyptus rows).
-      addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b);   // sunk base — no slope float
-      out._mat = MAT.FOLIAGE;
-      // Close the crown's UNDERSIDE: a shallow inverted skirt from the widest
-      // ring down to the trunk, faces oriented downward (ref sits above), so
-      // low/flat viewpoints see a shaded canopy bottom instead of a culled hole.
-      {
-        const usR = (3.5 + h * 0.135) * j;
-        const ringY = h * 0.34, apexY = h * 0.20;
-        const usCol = [col[0] * 0.5, col[1] * 0.52, col[2] * 0.5];
-        const uref = vadd(a.c, a.u, h * 0.7);
-        const apex = vadd(a.c, a.u, apexY);
-        for (let i = 0; i < 9; i++) {
-          const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
-          const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
-          emit(out, [ring(a0), ring(a1), apex], usCol, uref);
-        }
-      }
-      // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
-      // squat dome — a full, billowing crown that reads clearly as a deciduous
-      // tree rather than the narrow pointed cone-stack of conifer() (the two used
-      // to look near-identical). Top two layers are inverted/short cones so the
-      // crown rounds off instead of tapering to a spike, and lean into `a.r`
-      // increasingly with height on asymmetric instances.
-      if (crown === "vase") {
-        // Eucalyptus / elm: narrow at the fork, spreading upward and outward.
-        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9, b);
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9, b);
-      } else if (crown === "weeping") {
-        // Willow: a high dome with the mass hanging BELOW it.
-        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9, b);
-        addFrustum(out, vadd(a.c, a.u, h * 0.24), (1.4 + h * 0.05) * j * sp,
-          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9, b);
-      } else if (crown === "columnar") {
-        // Poplar / lombardy: a tall narrow spire, almost no spread.
-        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6, b);
-      } else {
-        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9, b);   // wide skirt
-        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9, b);   // widest bulge
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
-      }
+      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15, H_REF = 12;
+      const hQ = Math.max(H_BIN, Math.round(h / H_BIN) * H_BIN);
+      const jBin = Math.round(j / J_BIN);
+      const jQ = jBin * J_BIN;
+      const leanBin = Math.round(lean / L_BIN);
+      const leanQ = leanBin * L_BIN;
+      const spBin = Math.round(sp * 10);
+      const spQ = spBin / 10;
+      // Unit-height scale-linear mesh (same §S4 pattern as pine). Affine canopy
+      // radii `a + b*h` become `(a/H_REF + b)` at unit height; place.s → hQ.
+      const TRUNK_K = 0.4 / H_REF, SINK_K = 0.04;
+      const lin = (a0, b0) => (a0 / H_REF + b0);
+      const NC = TrackGraph.NODE_COLOR;
+      ctx.instance(
+        `tree|${crown}|${jBin}|${leanBin}|${spBin}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t, s: [hQ, hQ, hQ], col },
+        (rec) => {
+          rec.mat(MAT.WOOD);
+          rec.cyl([0, -SINK_K, 0], TRUNK_K, 0.55 + SINK_K, [0.32, 0.23, 0.13], 6);
+          rec.mat(MAT.FOLIAGE);
+          // Underside frustum closes the canopy hole (replaces raw emit() fan).
+          {
+            const usR = lin(3.5, 0.135) * jQ;
+            rec.frustum([0, 0.20, 0], TRUNK_K * 1.2, usR, 0.14, NC, 9);
+          }
+          if (crown === "vase") {
+            rec.cone([0, 0.34, 0], lin(2.1, 0.07) * jQ * spQ, 0.28, NC, 8);
+            rec.cone([0, 0.56, 0], lin(3.4, 0.15) * jQ * spQ, 0.28, NC, 9);
+            rec.cone([leanQ / H_REF, 0.78, 0], lin(4.0, 0.17) * jQ * spQ, 0.24, NC, 9);
+          } else if (crown === "weeping") {
+            rec.cone([0, 0.62, 0], lin(3.6, 0.15) * jQ * spQ, 0.30, NC, 9);
+            rec.frustum([0, 0.24, 0], lin(1.4, 0.05) * jQ * spQ,
+              lin(3.9, 0.16) * jQ * spQ, 0.40, NC, 9);
+          } else if (crown === "columnar") {
+            rec.cone([0, 0.30, 0], lin(1.5, 0.05) * jQ * spQ, 0.36, NC, 7);
+            rec.cone([0, 0.56, 0], lin(1.2, 0.04) * jQ * spQ, 0.34, NC, 7);
+            rec.cone([0, 0.80, 0], lin(0.8, 0.03) * jQ * spQ, 0.26, NC, 6);
+          } else {
+            rec.cone([0, 0.28, 0], lin(3.3, 0.13) * jQ * spQ, 0.30, NC, 9);
+            rec.cone([0, 0.46, 0], lin(3.7, 0.14) * jQ * spQ, 0.26, NC, 9);
+            rec.cone([leanQ / H_REF, 0.66, 0], lin(2.9, 0.10) * jQ * spQ, 0.26, NC, 8);
+            rec.cone([leanQ * 1.6 / H_REF, 0.82, 0], lin(1.7, 0.06) * jQ * spQ, 0.22, NC, 7);
+          }
+        },
+        { kind: "tree", k, side, h });
       out._mat = 0;
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
@@ -1041,7 +1047,7 @@ const SceneryNature = (function () {
     // barriers" contract ~0.9 m optimistic at h=16.
     const canopyR = (kind, h) => {
       const jMax = 1.15;                                  // per-instance jitter ceiling
-      if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
+      if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier (absolute; scale-linear mesh matches at h=12)
       if (kind === "fir")  return (2.1 + h * 0.06) * 1.15 + 0.4;   // conifer(): +15% jitter on the base tier
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       // The five species emitters added for the identity pass. Each figure is
@@ -1053,12 +1059,11 @@ const SceneryNature = (function () {
       if (kind === "acacia")        return h * 0.575 + 0.8;     // flat-topped thorn, spread = h*1.15
       if (kind === "plane")         return 4.2 + h * 0.12 + 0.6;  // pollarded avenue crown
       // tree() crown forms: vase spreads WIDER than round, columnar much
-      // narrower. The roadside scatter's fence guard uses this, so it has to
-      // track the actual widest cone in each form.
-      if (kind === "vase")          return (4.0 + h * 0.17) * jMax + 0.4;
-      if (kind === "weeping")       return (3.9 + h * 0.16) * jMax + 0.4;
-      if (kind === "columnar")      return (1.5 + h * 0.05) * jMax + 0.4;
-      return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
+      // narrower. Radii match the scale-linear rebases (a+b*h → (a/12+b)*h).
+      if (kind === "vase")          return (4.0 / 12 + 0.17) * h * jMax + 0.4;
+      if (kind === "weeping")       return (3.9 / 12 + 0.16) * h * jMax + 0.4;
+      if (kind === "columnar")      return (1.5 / 12 + 0.05) * h * jMax + 0.4;
+      return (3.7 / 12 + 0.14) * h * jMax + 0.4;         // tree(): widest bulge cone
     };
     // Queued, then flushed after def.scenery() returns. A track file is written
     // in whatever order reads well — imola plants its treelines at the top and

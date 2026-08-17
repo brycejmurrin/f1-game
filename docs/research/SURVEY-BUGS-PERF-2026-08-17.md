@@ -1,12 +1,14 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
-**Status (same session):** Priority-board items 1–7 and most High/Medium
-follow-ups were implemented on `cursor/survey-bugs-perf-8ee4` (WGX blur/particle
-rings, career/season, VSC/SC + shiftLong, Singapore remappers, net predict
-contact, GLX env/terrain/shadow/AA, TLX fwidth, live TTL, TURN TTL, ScrollFade,
-focus trap, …). Remaining deferred: pine re-parameterize for reuse, Rapier
-marble CPU, collision broadphase, WGX per-draw UBO batching, TLX three≥r186
-dispose leak, god-ray light partial-select.
+**Status (2026-08-17 deferred pass):** Remaining survey items landed on
+`cursor/survey-deferred-tests-8ee4` — pine/tree scale-linear instance reuse,
+collision arc-bucket broadphase, marble cap/rest/far trim, WGX draw-UBO flush
+(already on tip) + god-ray top-6 partial select (GLX+WGX), TLX matCache eviction
+skips `dispose()` on r184 (#33952). Test runners default to sequential with
+per-file/group logging (`tools/tooling-fast.mjs`, `test-bg` concurrent cap 1).
+
+Earlier same-day board (items 1–7 + High/Medium follow-ups) shipped via
+`cursor/survey-bugs-perf-8ee4` onto deploy.
 
 Read-only fleet audit of the working tree at deploy tip `46554737`
 (local/live `version.json` **1325** after fetch; tinyfish deploy-check was
