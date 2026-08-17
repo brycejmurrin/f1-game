@@ -647,6 +647,30 @@ test("WGX ground mist matches GLX band/strength", () => {
   assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
 });
 
+test("WGX LIT keeps high-severity GLX parity sites", () => {
+  // Clearcoat sun lobe must take KEY LIGHT (lit.js uKeyMul).
+  assert.match(CHUNKS_SOURCE, /shadow \* keyMul \* clearcoat/);
+  // Static shadow bias tracks SHADOW DISTANCE (lit.js biasTerm * range/80).
+  assert.match(CHUNKS_SOURCE, /biasTerm \* \(shRange \/ 80\.0\)/);
+  // FOG TINT asymmetric warm/cool (not the linear ±0.16 shortcut).
+  assert.match(CHUNKS_SOURCE, /max\(fTint, 0\.0\) \* 0\.25/);
+  // Road micro-normal footprint fade (grazing crawl guard).
+  assert.match(CHUNKS_SOURCE, /mnFpAbs/);
+  // Detail grain before roadMarkings so paint stays crisp.
+  const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
+  const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
+  assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+});
+
+test("WGX god-ray and env probe match GLX gates", () => {
+  // Volumetric shafts must not require sun.onScreen (GLX post.js).
+  assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
+  assert.match(WGX_SOURCE, /grStr > 0 && sun && sun\.shaft > 0/);
+  // Env probe respects PerfTry.envCull (300 m cap).
+  assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
+  assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+});
+
 test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {
   assert.match(
     WGX_SOURCE,

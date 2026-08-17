@@ -2326,10 +2326,16 @@ const WGX = (function () {
       M4.perspectiveTo(_envProj, Math.PI / 2, 1, 0.4, 900);
       M4.mulTo(_envVP, _envProj, _envView);   // raw GL view-proj
       M4.invertTo(_envInvVP, _envVP);          // for drawSky ray reconstruction (raw, pre-Z01)
-      // Upload the face's frame (viewProj gets the Z01 remap inside _writeFrame). No
-      // radial cull for the probe — it must capture the full surroundings.
+      // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
+      // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
+      // when envCull is on; keep a tighter main-camera cull when present.
       const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
-      frame.viewProj = _envVP; frame.eye = eye; frame.cullDist = 0;
+      frame.viewProj = _envVP; frame.eye = eye;
+      if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
+        frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
+      } else {
+        frame.cullDist = 0;
+      }
       _writeFrame(frame);
       frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
@@ -2524,10 +2530,11 @@ const WGX = (function () {
       }
 
       // ── 1) GODRAY (half-res) — world-space march through depth + sun/lamp
-      //    shadow maps (GLX GODRAY_FS). CPU gates on sun-on-screen or lampVol.
+      // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
+      // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
-      const haveGR = godrayBG && ((grStr > 0 && sun && sun.onScreen && sun.shaft > 0) || lampVol > 0);
+      const haveGR = godrayBG && ((grStr > 0 && sun && sun.shaft > 0) || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
