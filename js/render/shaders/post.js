@@ -279,7 +279,13 @@ uniform float uStr;
 uniform float uTime;
 uniform float uCloudCover;
 uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY/LIT; 0 = frozen)
-#define GR_MAX_LIGHTS 12
+// 6, not 12: the beam march below is the ONLY consumer of these arrays and it
+// has walked 6 since the nested-loop cost cut. The extra 6 slots were uploaded
+// every frame with nothing reading them, and they were worse than free — the
+// CPU picked the shadow-mapped lamp's slot out of a 12-long ordering, so a lamp
+// that sorted 7th-12th got an index the march can never equal and its beam
+// shadow vanished. One bound, one meaning.
+#define GR_MAX_LIGHTS 6
 uniform int uNumLights;
 uniform vec3 uLightPos[GR_MAX_LIGHTS];
 uniform vec3 uLightCol[GR_MAX_LIGHTS];
@@ -384,7 +390,7 @@ void main() {
       // Bit-identical: p, groundY and the value are unchanged, and the branch
       // it moved into already existed, so no new divergence.
       float hLamp = exp(-max(p.y - groundY, 0.0) * 0.07);
-      for (int li = 0; li < 6; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
+      for (int li = 0; li < GR_MAX_LIGHTS; li++) {   // nearest-6 lamps for beams (was 12) — nearest-sorted
         if (li >= uNumLights) break;
         vec3 LP = uLightPos[li] - p;
         float rad = uLightRad[li];

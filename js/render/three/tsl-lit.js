@@ -338,80 +338,92 @@
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
-      const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
-      const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
-      If(sc.z.lessThan(1.0), () => {
-        // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
-        const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
-        const aDist = length(wp.sub(fadeCtr)).toVar();
-        const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
-          .oneMinus().toVar();
-        // Thin UV border safety feather (js/render/shaders/lit.js).
-        const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
-          .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
-        edgeFade.mulAssign(ef.x.mul(ef.y));
-        If(edgeFade.greaterThan(0.0), () => {
-          const t = float(U.shadowTexel).toVar();
-          // Slope-scale bias: tan(acos(c)) as sqrt(1-c²)/c (js/render/shaders/lit.js).
-          const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
-          const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
-          const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
-          const z = sc.z.sub(biasTerm).toVar();
-          // SHADOW DISTANCE kernel compensation (js/render/shaders/lit.js).
-          const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
-          // Distance LOD on the same gliding anchor (js/render/shaders/lit.js).
-          const nearLod = aDist.lessThan(U.shadowRange.mul(0.80)).toVar();
-          // TODO M4-PCSS: blocker search -> R = mix(1.5, 6.0, pen). Fixed far
-          // radius until the blocker map lands.
-          const R = float(3.0);
-          // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
-          // ground, not screen-keyed — no penumbra boil while driving.
-          const ign = ignoise(floor(sc.xy.div(t)));
-          const ang = ign.mul(6.2831853);
-          const cr = cos(ang).toVar(), sr = sin(ang).toVar();
-          const rk = t.mul(R).mul(boxK).toVar();
-          // mat2(cr,-sr,sr,cr) * v == (cr*x + sr*y, -sr*x + cr*y), scaled rk.
-          const rot = (px, py) => vec2(
-            cr.mul(px).add(sr.mul(py)),
-            sr.negate().mul(px).add(cr.mul(py))).mul(rk);
-          const tap = (px, py) =>
-            texture(SHD.sunTex, flipUV(sc.xy.add(rot(px, py)))).compare(z);
-          // 4 Poisson taps always; 4 more near the camera (js/render/shaders/lit.js).
-          const s = tap(-0.94201624, -0.39906216)
-            .add(tap(0.94558609, -0.76890725))
-            .add(tap(-0.09418410, -0.92938870))
-            .add(tap(0.34495938, 0.29387760)).toVar();
-          const sh = float(1.0).toVar();
-          If(nearLod, () => {
-            s.addAssign(tap(-0.91588581, 0.45771432)
-              .add(tap(-0.81544232, -0.87912464))
-              .add(tap(-0.38277543, 0.27676845))
-              .add(tap(0.97484398, 0.75648379)));
-            sh.assign(s.mul(0.125));
-          }).Else(() => {
-            sh.assign(s.mul(0.25));
-          });
-          // Dynamic CAR map min-combine (js/render/shaders/lit.js): ortho, so no
-          // perspective divide; same bias; fixed tight 4-tap PCF.
-          if (carShadowOn) {
-            If(U.carShadowOn.greaterThan(0.5), () => {
-              const cc = U.carLightVP.mul(vec4(wp, 1.0));
-              const cs = cc.xyz.mul(0.5).add(0.5).toVar();
-              If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
-                .and(cs.y.greaterThan(0.0)).and(cs.y.lessThan(1.0))
-                .and(cs.z.lessThan(1.0)), () => {
-                const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
-                const ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
-                const ctap = (px, py) =>
-                  texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
-                const csh = ctap(-ct, -ct).add(ctap(ct, -ct))
-                  .add(ctap(-ct, ct)).add(ctap(ct, ct)).mul(0.25);
-                sh.assign(min(sh, csh));
-              });
+      // GLX parity (js/render/shaders/lit.js sampleShadow): uShadowStr <= 0
+      // collapses the whole function to 1.0 — mix(1, sh, 0) is identity — so
+      // skip every PCF / car-map tap on overcast-night frames where the CPU
+      // already drove strength to 0 via the key-luminance fade.
+      If(U.shadowStr.greaterThan(0.0), () => {
+        const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
+        const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
+        If(sc.z.lessThan(1.0), () => {
+          // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
+          const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
+          const aDist = length(wp.sub(fadeCtr)).toVar();
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
+            .oneMinus().toVar();
+          // Thin UV border safety feather (js/render/shaders/lit.js).
+          const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
+            .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
+          edgeFade.mulAssign(ef.x.mul(ef.y));
+          If(edgeFade.greaterThan(0.0), () => {
+            const t = float(U.shadowTexel).toVar();
+            // Slope-scale bias: tan(acos(c)) as sqrt(1-c²)/c (js/render/shaders/lit.js).
+            const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
+            const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
+            const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
+            // SHADOW DISTANCE bias scaling (lit.js parity). biasTerm is clamped in
+            // absolute depth units, but a shadow texel's world size sweeps 12.5x
+            // across the SHADOW DISTANCE range — unscaled, the same push is ~25x
+            // too much at the near end and barely covers acne at the far end.
+            // STATIC map only: the car branch below multiplies the SAME biasTerm
+            // by carBiasScale, so scaling the shared term would square it there.
+            const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
+            // SHADOW DISTANCE kernel compensation (js/render/shaders/lit.js).
+            const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
+            // Distance LOD on the same gliding anchor (js/render/shaders/lit.js).
+            const nearLod = aDist.lessThan(U.shadowRange.mul(0.80)).toVar();
+            // TODO M4-PCSS: blocker search -> R = mix(1.5, 6.0, pen). Fixed far
+            // radius until the blocker map lands.
+            const R = float(3.0);
+            // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
+            // ground, not screen-keyed — no penumbra boil while driving.
+            const ign = ignoise(floor(sc.xy.div(t)));
+            const ang = ign.mul(6.2831853);
+            const cr = cos(ang).toVar(), sr = sin(ang).toVar();
+            const rk = t.mul(R).mul(boxK).toVar();
+            // mat2(cr,-sr,sr,cr) * v == (cr*x + sr*y, -sr*x + cr*y), scaled rk.
+            const rot = (px, py) => vec2(
+              cr.mul(px).add(sr.mul(py)),
+              sr.negate().mul(px).add(cr.mul(py))).mul(rk);
+            const tap = (px, py) =>
+              texture(SHD.sunTex, flipUV(sc.xy.add(rot(px, py)))).compare(z);
+            // 4 Poisson taps always; 4 more near the camera (js/render/shaders/lit.js).
+            const s = tap(-0.94201624, -0.39906216)
+              .add(tap(0.94558609, -0.76890725))
+              .add(tap(-0.09418410, -0.92938870))
+              .add(tap(0.34495938, 0.29387760)).toVar();
+            const sh = float(1.0).toVar();
+            If(nearLod, () => {
+              s.addAssign(tap(-0.91588581, 0.45771432)
+                .add(tap(-0.81544232, -0.87912464))
+                .add(tap(-0.38277543, 0.27676845))
+                .add(tap(0.97484398, 0.75648379)));
+              sh.assign(s.mul(0.125));
+            }).Else(() => {
+              sh.assign(s.mul(0.25));
             });
-          }
-          // Clamped: SHADOW DARKNESS extrapolates above t=1 (js/render/shaders/lit.js).
-          res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+            // Dynamic CAR map min-combine (js/render/shaders/lit.js): ortho, so no
+            // perspective divide; same bias; fixed tight 4-tap PCF.
+            if (carShadowOn) {
+              If(U.carShadowOn.greaterThan(0.5), () => {
+                const cc = U.carLightVP.mul(vec4(wp, 1.0));
+                const cs = cc.xyz.mul(0.5).add(0.5).toVar();
+                If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
+                  .and(cs.y.greaterThan(0.0)).and(cs.y.lessThan(1.0))
+                  .and(cs.z.lessThan(1.0)), () => {
+                  const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
+                  const ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+                  const ctap = (px, py) =>
+                    texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
+                  const csh = ctap(-ct, -ct).add(ctap(ct, -ct))
+                    .add(ctap(-ct, ct)).add(ctap(ct, ct)).mul(0.25);
+                  sh.assign(min(sh, csh));
+                });
+              });
+            }
+            // Clamped: SHADOW DARKNESS extrapolates above t=1 (js/render/shaders/lit.js).
+            res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+          });
         });
       });
       return res;
@@ -517,15 +529,26 @@
           });
         }).Else(() => {
           const p = wp.xz;
-          const e = 0.22;
-          const h0 = matBumpHeight(mid, p);
-          const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
-          const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
-          const amt = select(mid.equal(8.0), float(0.16),
-                      select(mid.equal(10.0), float(0.14),
-                      select(mid.equal(16.0), float(0.025), float(0.07))));
-          N.assign(normalize(N.add(
-            vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).div(e)))));
+          // Ground/road gets the SAME grazing-angle guard as the wall branch
+          // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
+          // the road — the one horizontal surface viewed almost edge-on at
+          // 80 m/s — kept full relief where a pixel spans many times the 0.22
+          // probe epsilon and the 3-tap gradient aliases into crawling moire.
+          // The fade only ever REDUCES bump, so head-on grass/sand/rock are
+          // unchanged.
+          const fpG = max(fwidth(p.x), fwidth(p.y));
+          const aaG = clamp(fpG.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
+          If(aaG.greaterThan(0.005), () => {
+            const e = 0.22;
+            const h0 = matBumpHeight(mid, p);
+            const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
+            const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
+            const amt = select(mid.equal(8.0), float(0.16),
+                        select(mid.equal(10.0), float(0.14),
+                        select(mid.equal(16.0), float(0.025), float(0.07))));
+            N.assign(normalize(N.add(
+              vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).mul(aaG).div(e)))));
+          });
         });
       });
       return N;
@@ -1383,6 +1406,20 @@
         m.blendEquationAlpha = THREE.AddEquation;
         m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
         m.blendDstAlpha = THREE.OneFactor;
+      } else {
+        // PLAIN OPAQUE — and it must say so explicitly. three defaults every
+        // material to NormalBlending and applies it from `material.blending`
+        // regardless of `transparent`; that flag only picks the render LIST.
+        // So an opaque draw still goes through SrcAlpha/OneMinusSrcAlpha, which
+        // was harmless only while opaque alpha was always 1. It stopped being 1
+        // when the SSR car-paint tag (M8) began writing 0.35 into alpha: cars
+        // rendered at 35% opacity and you could see the track through them.
+        // Reported from an iPhone on the three backend, and worst on a DRY
+        // race, where SSR never runs — so the tag was ghosting the cars while
+        // nothing consumed it.
+        // GLX's equivalent draw has blending OFF entirely (js/render/glx.js),
+        // which writes colour AND the alpha tag verbatim. Match that.
+        m.blending = THREE.NoBlending;
       }
       return m;
     }

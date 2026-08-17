@@ -760,6 +760,16 @@ function capRadius2(buf, count, CAP) {
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
+const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
+// Ranked-set cache: skip the O(count·log CAP) rebuild when the eye/fwd have not
+// moved enough to change membership. Fade still uses geometric g (not yaw).
+const _RANK_EYE_EPS2 = 0.25;   // 0.5 m eye motion → rebuild
+const _RANK_FWD_EPS2 = 1e-4;   // unnormalized fwd delta (yaw/aim change)
+let _rankSrc = null, _rankCap = -1, _rankCount = -1;
+let _rankEyeX = NaN, _rankEyeY = NaN, _rankEyeZ = NaN;
+let _rankFwdX = NaN, _rankFwdZ = NaN;
+let _rankGRef = 1, _rankDEdge = 1, _rankTrunc = false;
+let _rankReach = NaN, _rankBias = NaN, _rankFade = NaN;
 // How many lights this frame may end up carrying. Named because BOTH movers need
 // the same answer — setFrameLights culls down to it, and appendCarTailLights has
 // to evict against it to make room. appendCarTailLights used to measure its room
@@ -780,7 +790,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
   const src = srcSet || track._lights;
-  if (!src || !src.length) { frame.lights = null; return; }
+  // Empty set / not a lit session (caller usually gates, but count===0 is free).
+  if (!src || !src.length) { frame.lights = null; _rankSrc = null; return; }
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull, against the same budget (see lampCap).
   const CAP = lampCap(cars.length, mobileTier);
@@ -802,22 +813,28 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // lamp on its own stagger. A >1 s gap since the last copy means the floods
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
-  if (tNow - _lampLastT > 1.0) _lampWarmT0 = tNow;
+  if (tNow - _lampLastT > 1.0) { _lampWarmT0 = tNow; _rankSrc = null; }
   _lampLastT = tNow;
-  const fl = (o) => {
+  // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
+  // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
+  const flick = LT.lampFlicker || 0;
+  const warmK = LT.lampWarmup != null ? LT.lampWarmup : 1;
+  const warmDone = !(warmK > 0) || (tNow - _lampWarmT0) >= 8 * warmK;
+  const skipFl = !(flick > 0) && warmDone;
+  const fl = skipFl ? () => _flSteady : (o) => {
     const x = Math.sin((o + 13) * 91.17) * 43758.5453;
     const hsh = x - Math.floor(x);
-    const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;
+    const amp = hsh > 0.90 ? flick : flick * 0.2;
     // Fast flicker (the odd aging tube) + a slow BREATHE every lamp carries
     // (mains/arc drift, ~±1.5% at the default knob). Both scale with the LAMP
     // FLICKER knob so 0 still means rock-steady.
     let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
-              + LT.lampFlicker * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
+              + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
     // LAMP WARM-UP knob scales the strike-to-full duration (def 1 = the 4+hsh*4 s
     // ramp). 0 = instant on (wu pinned to 1, no dip/warmth); higher = a longer,
     // more staggered warm-up. WARM-UP DIP sets how dim the strike starts, WARM-UP
     // WARMTH how orange it glows before settling.
-    const warmDur = (4 + hsh * 4) * (LT.lampWarmup != null ? LT.lampWarmup : 1);
+    const warmDur = (4 + hsh * 4) * warmK;
     const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
     const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
     f *= (1 - dip) + dip * wu;
@@ -834,6 +851,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // it could snap off the nearest floods instead), and the CAP reservation was
   // silently ignored. 24+-lamp tracks now take the sorted heap path below.
   if (count + 5 <= CAP) {
+    _rankSrc = null;   // dense path doesn't use the ranked cache
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
     for (let i = 0; i < src.length; i += 15) {
@@ -860,116 +878,136 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // multiplier), so they win the nearest-CAP budget from farther out and the
   // lit zone reaches further down the road on a dense track.
   const reach = LT.lampReach != null ? LT.lampReach : 1;
-  const buf = _lightCullBuf;
-  for (let i = 0; i < count; i++) {
-    const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
-    let d = dx * dx + dy * dy + dz * dz;
-    // Behind-camera penalty RAMPED in over ~14° past the camera plane (was a hard
-    // sign test ×6.25: the instant a lamp crossed the plane its rank leapt several
-    // places in ONE frame, stepping its pool's brightness — and a fast chase-cam
-    // yaw flipped the half-space for many lamps at once, a whole-field shudder).
-    const b = dx * fx + dz * fz;
-    if (b < 0) {
-      const dl2 = dx * dx + dz * dz || 1;
-      const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
-      // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
-      // nearest-N rank (def 5.25 = as-shipped forward push).
-      d *= 1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25) * Math.min(1, ratio2);
-    } else if (reach > 1) {
-      const dl2 = dx * dx + dz * dz || 1;
-      const ratio2 = (b * b) / (flen2 * dl2);
-      // SQUARED divisor, because `d` here is a SQUARED distance: dividing it by
-      // k shortens the ranked LINEAR distance only by sqrt(k), so the plain
-      // `d /= 1 + (reach-1)*ratio2` this replaced delivered sqrt(reach) — a
-      // slider reading 4 bought 2x reach, not 4x, and measured as a barely
-      // visible +44% at Singapore 0.55. Squaring makes the knob mean what its
-      // label says: a dead-ahead lamp (ratio2 = 1) ranks as if `reach` times
-      // nearer, so REACH 4 really is 4x. Still an exact no-op at the shipped
-      // default of 1, and untouched for lamps to the side (ratio2 -> 0).
-      const k = 1 + (reach - 1) * ratio2;
-      d /= k * k;
-    }
-    const e = buf[i];
-    // g = the TRUE squared distance, kept alongside the biased rank distance d.
-    // Ranking wants the bias (that is what buys forward reach); the brightness
-    // fade must not have it — see the cullF block after the heap.
-    const g = dx * dx + dy * dy + dz * dz;
-    if (e) { e.d = d; e.g = g; e.o = o; } else buf[i] = { d: d, g: g, o: o };
-  }
-  buf.length = count;
-  // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
-  // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
-  const heap = _lightHeap; heap.length = 0;
-  for (let i = 0; i < count; i++) {
-    const e = buf[i];
-    if (heap.length < CAP) {
-      let ci = heap.length; heap.push(e);
-      while (ci > 0) { const pi = (ci - 1) >> 1; if (heap[pi].d < heap[ci].d) { const t = heap[pi]; heap[pi] = heap[ci]; heap[ci] = t; ci = pi; } else break; }
-    } else if (e.d < heap[0].d) {
-      heap[0] = e;
-      let pi = 0;
-      for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && heap[l].d > heap[lg].d) lg = l; if (rr < CAP && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
-    }
-  }
-  // Sort just those 32 ascending so the tail fade eases the farthest of the set.
-  // (Comparator hoisted to module scope — this runs every lit frame.)
-  heap.sort(_byDistAsc);
-  // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
-  // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
-  // visible stepping as the set shifted at speed). Fading by closeness to the set
-  // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
-  // membership changes are invisible.
-  const dEdge = heap[heap.length - 1].d || 1;
-  // The boundary fade only makes sense when lamps were actually culled — if the
-  // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
-  // path for its sorting), there is no set boundary, and fading "the farthest
-  // of the set" would black out a real lamp that used to be lit.
-  const truncated = count > CAP;
-  // ── THE FADE MUST NOT KNOW WHICH WAY THE CAMERA POINTS ────────────────────
-  // This was `(dEdge - e.d) / (dEdge * 0.35)`, and BOTH terms carry camera yaw:
-  // e.d is the behind-biased rank distance, and dEdge is the biased edge of a set
-  // whose composition changes as the camera turns. So a lamp that never moved
-  // changed brightness when the player merely looked somewhere else. Measured on
-  // bahrain/night with the eye pinned and only the aim yawing ±60°
-  // (scratch harness, cap forced to 12 so the cull engages): a lamp 81 m ahead
-  // swung 2.35× — DIMMEST looking straight down the road, because that is when
-  // the most lamps compete and dEdge shrinks — and one at 208 m swung 23.5×.
-  // That is the reported "road section in front of me gets darker when I turn".
-  //
-  // Fade on the lamp's own GEOMETRIC distance g against gRef, a radius built from
-  // the CAP-th nearest lamp by TRUE distance. capRadius2 has no camera direction
-  // in it at all, so the steady-state brightness of every lamp is now a function
-  // of where the camera IS and nothing else. (Temporal smoothing was considered
-  // and rejected: a yaw that is held converges to the same wrong value, so it
-  // turns the step into a ramp without removing the artifact.)
-  //
-  // gRef is scaled by the MAXIMUM rank advantage the bias can grant, so the reach
-  // the bias buys is still fully lit rather than being faded to black the moment
-  // it exceeds the unbiased radius: a behind lamp's d is at most (1+behindBias)·g,
-  // and an ahead lamp under REACH ABOVE 1 has d ≥ g/reach², so no member of the
-  // set can sit beyond gRef.
-  //
-  // edgeGuard keeps the one property the old form did have — a lamp must be at
-  // zero by the time it is dropped, or membership churn pops. It still measures
-  // against the true boundary, but over a NARROWER shell than the old 35%, so the
-  // residual yaw dependence is confined to lamps near the set boundary.
-  //
-  // THIS WIDTH IS THE YAW-COUPLING DIAL — DO NOT WIDEN IT. dEdge is the one term
-  // left that moves with the camera, so every lamp inside the shell inherits that
-  // movement. Measured on bahrain/night, eye pinned, aim swept ±60°, worst
-  // stationary-lamp brightness swing (scratch harness, wrapping setFrameLights):
-  //   old 0.35 form  5.01x / 2.99x / 2.86x / 2.77x / 2.55x
-  //   0.20           5.01x / 2.67x / 2.52x / 2.39x / 2.13x   <- gives the fix back
-  //   0.08           2.07x / 1.07x / 1.01x / 1.00x / 1.00x
-  // 0.20 was tried specifically to give appendCarTailLights' eviction more cover
-  // (it drops the last nT records by ARRAY POSITION, not by brightness, whenever a
-  // rival comes inside tailRange) and it cost almost the whole decoupling. That
-  // eviction is worth fixing at its source — the CAP reserve, lampCap() — not by
-  // widening a band whose width IS the artifact.
+  const bias = LT.lampBehindBias != null ? LT.lampBehindBias : 5.25;
   const fade = LT.lampCullFade != null ? LT.lampCullFade : 0.35;   // LAMP CULL FADE knob
-  const gRef = truncated
-    ? capRadius2(buf, count, CAP) * (1 + (LT.lampBehindBias != null ? LT.lampBehindBias : 5.25)) * (reach * reach)
-    : 1;
+  const heap = _lightHeap;
+  const edx = eye[0] - _rankEyeX, edy = eye[1] - _rankEyeY, edz = eye[2] - _rankEyeZ;
+  const fdx = fx - _rankFwdX, fdz = fz - _rankFwdZ;
+  const reuseRank = _rankSrc === src && _rankCap === CAP && _rankCount === count
+    && _rankReach === reach && _rankBias === bias && _rankFade === fade
+    && heap.length > 0
+    && (edx * edx + edy * edy + edz * edz) < _RANK_EYE_EPS2
+    && (fdx * fdx + fdz * fdz) < _RANK_FWD_EPS2;
+  let gRef, dEdge, truncated;
+  if (reuseRank) {
+    // Membership + geometric fade terms unchanged — only re-tint with scale/flicker.
+    gRef = _rankGRef; dEdge = _rankDEdge; truncated = _rankTrunc;
+  } else {
+    const buf = _lightCullBuf;
+    for (let i = 0; i < count; i++) {
+      const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
+      let d = dx * dx + dy * dy + dz * dz;
+      // Behind-camera penalty RAMPED in over ~14° past the camera plane (was a hard
+      // sign test ×6.25: the instant a lamp crossed the plane its rank leapt several
+      // places in ONE frame, stepping its pool's brightness — and a fast chase-cam
+      // yaw flipped the half-space for many lamps at once, a whole-field shudder).
+      const b = dx * fx + dz * fz;
+      if (b < 0) {
+        const dl2 = dx * dx + dz * dz || 1;
+        const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
+        // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
+        // nearest-N rank (def 5.25 = as-shipped forward push).
+        d *= 1 + bias * Math.min(1, ratio2);
+      } else if (reach > 1) {
+        const dl2 = dx * dx + dz * dz || 1;
+        const ratio2 = (b * b) / (flen2 * dl2);
+        // SQUARED divisor, because `d` here is a SQUARED distance: dividing it by
+        // k shortens the ranked LINEAR distance only by sqrt(k), so the plain
+        // `d /= 1 + (reach-1)*ratio2` this replaced delivered sqrt(reach) — a
+        // slider reading 4 bought 2x reach, not 4x, and measured as a barely
+        // visible +44% at Singapore 0.55. Squaring makes the knob mean what its
+        // label says: a dead-ahead lamp (ratio2 = 1) ranks as if `reach` times
+        // nearer, so REACH 4 really is 4x. Still an exact no-op at the shipped
+        // default of 1, and untouched for lamps to the side (ratio2 -> 0).
+        const k = 1 + (reach - 1) * ratio2;
+        d /= k * k;
+      }
+      const e = buf[i];
+      // g = the TRUE squared distance, kept alongside the biased rank distance d.
+      // Ranking wants the bias (that is what buys forward reach); the brightness
+      // fade must not have it — see the cullF block after the heap.
+      const g = dx * dx + dy * dy + dz * dz;
+      if (e) { e.d = d; e.g = g; e.o = o; } else buf[i] = { d: d, g: g, o: o };
+    }
+    buf.length = count;
+    // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
+    // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
+    heap.length = 0;
+    for (let i = 0; i < count; i++) {
+      const e = buf[i];
+      if (heap.length < CAP) {
+        let ci = heap.length; heap.push(e);
+        while (ci > 0) { const pi = (ci - 1) >> 1; if (heap[pi].d < heap[ci].d) { const t = heap[pi]; heap[pi] = heap[ci]; heap[ci] = t; ci = pi; } else break; }
+      } else if (e.d < heap[0].d) {
+        heap[0] = e;
+        let pi = 0;
+        for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && heap[l].d > heap[lg].d) lg = l; if (rr < CAP && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
+      }
+    }
+    // Sort just those 32 ascending so the tail fade eases the farthest of the set.
+    // (Comparator hoisted to module scope — this runs every lit frame.)
+    heap.sort(_byDistAsc);
+    // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
+    // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
+    // visible stepping as the set shifted at speed). Fading by closeness to the set
+    // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
+    // membership changes are invisible.
+    dEdge = heap[heap.length - 1].d || 1;
+    // The boundary fade only makes sense when lamps were actually culled — if the
+    // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
+    // path for its sorting), there is no set boundary, and fading "the farthest
+    // of the set" would black out a real lamp that used to be lit.
+    truncated = count > CAP;
+    // ── THE FADE MUST NOT KNOW WHICH WAY THE CAMERA POINTS ────────────────────
+    // This was `(dEdge - e.d) / (dEdge * 0.35)`, and BOTH terms carry camera yaw:
+    // e.d is the behind-biased rank distance, and dEdge is the biased edge of a set
+    // whose composition changes as the camera turns. So a lamp that never moved
+    // changed brightness when the player merely looked somewhere else. Measured on
+    // bahrain/night with the eye pinned and only the aim yawing ±60°
+    // (scratch harness, cap forced to 12 so the cull engages): a lamp 81 m ahead
+    // swung 2.35× — DIMMEST looking straight down the road, because that is when
+    // the most lamps compete and dEdge shrinks — and one at 208 m swung 23.5×.
+    // That is the reported "road section in front of me gets darker when I turn".
+    //
+    // Fade on the lamp's own GEOMETRIC distance g against gRef, a radius built from
+    // the CAP-th nearest lamp by TRUE distance. capRadius2 has no camera direction
+    // in it at all, so the steady-state brightness of every lamp is now a function
+    // of where the camera IS and nothing else. (Temporal smoothing was considered
+    // and rejected: a yaw that is held converges to the same wrong value, so it
+    // turns the step into a ramp without removing the artifact.)
+    //
+    // gRef is scaled by the MAXIMUM rank advantage the bias can grant, so the reach
+    // the bias buys is still fully lit rather than being faded to black the moment
+    // it exceeds the unbiased radius: a behind lamp's d is at most (1+behindBias)·g,
+    // and an ahead lamp under REACH ABOVE 1 has d ≥ g/reach², so no member of the
+    // set can sit beyond gRef.
+    //
+    // edgeGuard keeps the one property the old form did have — a lamp must be at
+    // zero by the time it is dropped, or membership churn pops. It still measures
+    // against the true boundary, but over a NARROWER shell than the old 35%, so the
+    // residual yaw dependence is confined to lamps near the set boundary.
+    //
+    // THIS WIDTH IS THE YAW-COUPLING DIAL — DO NOT WIDEN IT. dEdge is the one term
+    // left that moves with the camera, so every lamp inside the shell inherits that
+    // movement. Measured on bahrain/night, eye pinned, aim swept ±60°, worst
+    // stationary-lamp brightness swing (scratch harness, wrapping setFrameLights):
+    //   old 0.35 form  5.01x / 2.99x / 2.86x / 2.77x / 2.55x
+    //   0.20           5.01x / 2.67x / 2.52x / 2.39x / 2.13x   <- gives the fix back
+    //   0.08           2.07x / 1.07x / 1.01x / 1.00x / 1.00x
+    // 0.20 was tried specifically to give appendCarTailLights' eviction more cover
+    // (it drops the last nT records by ARRAY POSITION, not by brightness, whenever a
+    // rival comes inside tailRange) and it cost almost the whole decoupling. That
+    // eviction is worth fixing at its source — the CAP reserve, lampCap() — not by
+    // widening a band whose width IS the artifact.
+    gRef = truncated
+      ? capRadius2(buf, count, CAP) * (1 + bias) * (reach * reach)
+      : 1;
+    _rankSrc = src; _rankCap = CAP; _rankCount = count;
+    _rankEyeX = eye[0]; _rankEyeY = eye[1]; _rankEyeZ = eye[2];
+    _rankFwdX = fx; _rankFwdZ = fz;
+    _rankGRef = gRef; _rankDEdge = dEdge; _rankTrunc = truncated;
+    _rankReach = reach; _rankBias = bias; _rankFade = fade;
+  }
   const _cullBand = gRef * fade;
   const _guardBand = dEdge * 0.08;
   out.length = 0;

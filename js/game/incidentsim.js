@@ -50,8 +50,9 @@
 
    Created with the G ctx façade from game.js (IncidentSim.create(G)); must load
    AFTER js/game/debrisworld.js and BEFORE js/game.js (see index.html /
-   tools/manifest.cjs). Reuses DebrisWorld's Rapier world — inert (owns() is a
-   cheap Set read) whenever DebrisWorld is disabled or every flag is off. */
+   tools/manifest.cjs). Reuses DebrisWorld's Rapier world — inert (owns() is an
+   O(1) `_incidentOwned` flag read) whenever DebrisWorld is disabled or every
+   flag is off. */
 const IncidentSim = (function () {
   "use strict";
 
@@ -132,11 +133,10 @@ const IncidentSim = (function () {
     return (_r2 || _r3 || _c1) && typeof DebrisWorld !== "undefined" &&
            DebrisWorld.active() && DebrisWorld.rapierReady();
   }
-  // The one call game.js guards its per-car early-outs with. Plain Set read.
+  // The one call game.js guards its per-car early-outs with. O(1) flag —
+  // updateCar / collision loops hit this every tick per car; never indexOf.
   function owns(c) {
-    if (!_owned.size || !c) return false;
-    const i = G.cars ? G.cars.indexOf(c) : -1;
-    return i >= 0 && _owned.has(i);
+    return !!(c && c._incidentOwned);
   }
 
   function setFlags(o) {
@@ -171,11 +171,14 @@ const IncidentSim = (function () {
     return true;
   }
 
-  // Full reset (tests): abort every takeover back to bespoke, zero counters.
+  // Full reset (tests / before makeCars): abort every takeover back to bespoke,
+  // clear ownership flags, zero counters. handbackCar clears each flag; the
+  // cars[] sweep catches any stray after a field rebuild dropped an index.
   function reset() {
     for (const inc of _incidents.slice())
       for (const i of inc.cars.slice()) handbackCar(inc, i, true);
     _incidents = []; _owned.clear(); _cand.length = 0;
+    if (G && G.cars) for (const c of G.cars) if (c) c._incidentOwned = false;
     _seq = 0; _tick = 0; _promoted = 0; _handbacks = 0; _fallbacks = 0; _lastKind = ""; _forced = 0;
     return status();
   }
@@ -317,6 +320,7 @@ const IncidentSim = (function () {
       good.set(i, snapOf(c));
       settle.set(i, 0);
       _owned.add(i);
+      c._incidentOwned = true;
       // EXPLICIT lap/ghost invalidation: the involved car's current timed lap is
       // no longer clean (game.js reads this flag at the start/finish line).
       c.incidentInvalidLap = true;
@@ -488,6 +492,8 @@ const IncidentSim = (function () {
 
   function finishCar(inc, i) {
     _owned.delete(i);
+    const c = G.cars && G.cars[i];
+    if (c) c._incidentOwned = false;
     inc.cars = inc.cars.filter((k) => k !== i);
     inc.snap.delete(i); inc.good.delete(i); inc.settle.delete(i);
   }

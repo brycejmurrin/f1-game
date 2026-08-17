@@ -1094,6 +1094,10 @@ function renderPosOf(c, cS, renderX) {
 // residual height/orientation jitter at speed. AI cars (no world position)
 // fall back to the arc interpolation unchanged.
 const _pa = { world: false, cS: 0, cX: 0 };
+// Per-render player (s,x) + body sample/bank — trackFrom/sample/banking once for cam/shadow/body.
+let _plCS = 0, _plCX = 0, _plOk = false, _plBodyOk = false;
+const _smpPlayer = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _bankPlayer = { dy: 0, roll: 0 };
 function playerAnchor(c) {
   if (c.human && c.px != null) {
     const wx = (c.rPrevPx === undefined) ? c.px : c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
@@ -1835,8 +1839,10 @@ function cameraFollowsBank(mode) {
 // so the player matrix must be resolved here instead of reusing last frame's
 // pooled transform (which trails by speed × frame time on slower devices).
 function currentCarGroundMat(c, out, dt) {
-  const pa = playerAnchor(c);   // player: (s,x) from the drawn world point; AI: arc interp
-  const cS = pa.cS, cX = pa.cX;
+  // Player (s,x) already resolved once this frame for the camera — reuse it.
+  let cS, cX;
+  if (_plOk && c.isPlayer) { cS = _plCS; cX = _plCX; }
+  else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
   // Predict the same damping step the later body loop will apply, without
   // mutating xVis twice. Shadow and body therefore share one lateral position.
   const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
@@ -1847,6 +1853,12 @@ function currentCarGroundMat(c, out, dt) {
     let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
     l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
   const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
+  if (c.isPlayer) {   // stash for body draw (env probe may clobber smp2)
+    const S = _smpPlayer, p = smp2.p, t = smp2.t, r = smp2.r;
+    S.p[0] = p[0]; S.p[1] = p[1]; S.p[2] = p[2]; S.t[0] = t[0]; S.t[1] = t[1]; S.t[2] = t[2];
+    S.r[0] = r[0]; S.r[1] = r[1]; S.r[2] = r[2]; S.hw = smp2.hw;
+    _bankPlayer.dy = bankC ? bankC.dy : 0; _bankPlayer.roll = bankC ? bankC.roll : 0; _plBodyOk = true;
+  }
   const rp = renderPosOf(c, cS, renderX);   // player: exact world position
   tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
   tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
@@ -2106,6 +2118,8 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.floor);
       gfx.freeMesh(track.meshes.road);
       gfx.freeMesh(track.meshes.terrain);
+      if (track.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.roadChunked);
+      if (track.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.terrainChunked);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
       if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
@@ -3521,6 +3535,9 @@ function updateCar(c, dt, ranked) {
       if (o === c) continue;
       let dprog = o.prog - c.prog;
       if (!Number.isFinite(dprog)) continue;
+      // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
+      const ad = dprog < 0 ? -dprog : dprog;
+      if (ad > 34.1 && ad < L - 34.1) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
       if (dprog < -13 || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
       const dx = o.x - c.x;
@@ -3908,6 +3925,9 @@ function updateCar(c, dt, ranked) {
       const o = ranked[k];
       let dp = o.prog - c.prog;
       if (!Number.isFinite(dp)) continue;
+      // Cheap reject before wrap — pairContact form (PERF-FINDINGS).
+      const adp0 = dp < 0 ? -dp : dp;
+      if (adp0 > 6.5 && adp0 < Ltrk - 6.5) continue;
       dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
       const adp = Math.abs(dp);
       if (adp > 6.5) continue;
@@ -5335,6 +5355,7 @@ function render(dt) {
   let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu") {
     // slow flyby
+    _plOk = false; _plBodyOk = false;
     const s = wrapS((performance.now() * 0.012) % track.total);
     Tracks.sample(track, s, smp);
     eyeT = [smp.p[0] + smp.r[0] * 26 , smp.p[1] + 17, smp.p[2] + smp.r[2] * 26];
@@ -5346,8 +5367,9 @@ function render(dt) {
     // derives it from the drawn WORLD position, shared with currentCarGroundMat
     // and the body loop, so camera and car move as one (no fore/aft slide, no
     // backwards jolt, no height/orientation jitter). Pre-jump/menu → arc interp.
-    const pa = playerAnchor(player);
-    const pS = pa.cS, px = pa.cX;
+    // Resolve once per frame; shadow + body reuse _plCS/_plCX (no second trackFrom).
+    { const pa = playerAnchor(player); _plCS = pa.cS; _plCX = pa.cX; _plOk = true; _plBodyOk = false; }
+    const pS = _plCS, px = _plCX;
     Tracks.sample(track, pS, smp);
     // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
     // is a much smaller coupling than the body had — (s, x) is now an exact
@@ -5527,8 +5549,10 @@ function render(dt) {
   }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
-  M4.invertTo(_mInvProj, _mProj);   // for view-space reconstruction in SSAO
-  M4.invertTo(_mInvVP, _mVP);       // for world-space reconstruction in god-rays
+  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO only — both post
+  // consumers shed at autoTier>=4 (see po.ssao/godray below).
+  M4.invertTo(_mInvVP, _mVP);
+  if (PerfGov.autoTier() < 4) M4.invertTo(_mInvProj, _mProj);
   // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
   {
     const sd = frame.sunDir || [0, 1, 0];
@@ -5726,8 +5750,24 @@ function render(dt) {
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       gfx.shadowBegin(_mLVP);
-      gfx.castShadow(track.meshes.terrain, MAT_IDENT);
-      gfx.castShadow(track.meshes.road, MAT_IDENT);
+      // Shadow ribbons: chunk + frustum-cull against the ±shadow-box ortho
+      // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
+      // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
+      // Lazy-build shares roadChunked with the lamp draw path.
+      const _castRibbonSh = (geo, key, plain) => {
+        if (track.meshes[key] === undefined) {
+          track.meshes[key] = null;
+          if (geo && gfx.createChunkedMesh) {
+            geo._keepPositions = true;
+            track.meshes[key] = gfx.createChunkedMesh(geo, 72);
+          }
+        }
+        const ch = track.meshes[key];
+        if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
+        else gfx.castShadow(plain, MAT_IDENT);
+      };
+      _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
+      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map at NIGHT — directional sun shadows are invisible under the dim
       // moonlight, so this is the biggest night saving. Gate on the KEY's actual
@@ -6251,54 +6291,49 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    // Interpolate between the last two physics steps so the car renders smoothly
-    // between fixed steps (no judder on high-refresh). PLAYER derives (s,x) from
-    // its drawn WORLD position (playerAnchor) so its height/orientation sample
-    // the same smooth s as the camera; AI uses the arc interp.
-    const pa = playerAnchor(c);
-    const cS = pa.cS, cX = pa.cX;
-    Tracks.sample(track, cS, smp2);
-    // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
-    // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
-    // car at the 4 m node rate (~21 Hz at speed): a visible width/length pulse
-    // against a road mesh built at exact nodes (see worldFromTrack's comment on
-    // this exact hazard). Normalize in place: smp2 is a scratch every consumer
-    // re-samples before reading, so nothing downstream sees raw values.
-    { const t = smp2.t, r = smp2.r;
-      let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
-      l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
-    // Smooth RENDERED lateral position. Physics c.x stays exact (used for walls,
-    // collisions, racing-line assist). Only the mesh position is low-passed so
-    // Frenet-projection noise doesn't appear as visible left-right wobble.
-    // Player rate 30 (≈0.1 s lag) is fast enough to feel instant but cuts the
-    // per-frame projection noise; AI rate 16 kills the harsher collision jitter.
+    // Player: reuse frame-cached (s,x). AI: arc interp. Cull before banking when possible.
+    let cS, cX;
+    if (c.isPlayer && _plOk) { cS = _plCS; cX = _plCX; }
+    else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
     if (c.xVis === undefined) c.xVis = cX;
     else c.xVis = damp(c.xVis, cX, c.isPlayer ? 30 : 16, dt);
     let renderX = c.xVis;
-    // The player is placed from its own world position below; xVis is kept up to
-    // date only because the surface/bank lookup and the AI path still read it.
     const rp = renderPosOf(c, cS, renderX);
-    // banking: sit the car ON the banked surface (raise it by the local lift)
-    // instead of the flat centreline, so it doesn't float/sink in the corner.
-    const bankC = Tracks.banking(track, cS, renderX, _bankScratch);
-    tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
-    tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
-    tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
-    // Behind-camera cull: AI cars strictly behind the view direction are never
-    // visible in ANY camera mode (no mirrors), so skip all their draws (mesh +
-    // shadow + brake rings + rain light). ~half the field sits behind you
-    // mid-race. Uses the real camera forward, so reverse/side cams are correct.
-    // Near-eye cull: a car whose origin is within ~3.4 m of the camera eye has
-    // geometry reaching THROUGH the near plane (nose is 2.95 m long) — it can
-    // only render as screen-filling clipped black fragments. Grid starts put
-    // the chase eye ~5.5 m behind the player, right at the next row's nose,
-    // and the launch concertina closes the rest ("black clipping at the start
-    // even in chase"). Skip the car entirely until there's real separation.
-    if (!c.isPlayer) {
-      const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
-      if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
-      const dy = tmpP[1] - camEye[1];
-      if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
+    let bankC;
+    if (c.isPlayer && _plBodyOk) {
+      // Shadow already sampled/banked the player — restore (env probe may clobber smp2).
+      const S = _smpPlayer, p = smp2.p, t = smp2.t, r = smp2.r;
+      p[0] = S.p[0]; p[1] = S.p[1]; p[2] = S.p[2]; t[0] = S.t[0]; t[1] = S.t[1]; t[2] = S.t[2];
+      r[0] = S.r[0]; r[1] = S.r[1]; r[2] = S.r[2]; smp2.hw = S.hw; bankC = _bankPlayer;
+      tmpP[0] = rp.world ? rp.x : p[0] + r[0] * renderX;
+      tmpP[1] = p[1] + bankC.dy;
+      tmpP[2] = rp.world ? rp.z : p[2] + r[2] * renderX;
+    } else {
+      Tracks.sample(track, cS, smp2);
+      // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
+      // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
+      // car at the 4 m node rate (~21 Hz at speed): a visible width/length pulse
+      // against a road mesh built at exact nodes (see worldFromTrack's comment on
+      // this exact hazard). Normalize in place: smp2 is a scratch every consumer
+      // re-samples before reading, so nothing downstream sees raw values.
+      { const t = smp2.t, r = smp2.r;
+        let l = Math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) || 1; t[0] /= l; t[1] /= l; t[2] /= l;
+        l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) || 1; r[0] /= l; r[1] /= l; r[2] /= l; }
+      // XZ before banking — hoist behind-camera / near-eye cull past sample+bank.
+      tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
+      tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
+      tmpP[1] = smp2.p[1];
+      // Behind-camera cull: AI cars strictly behind the view are never visible
+      // (no mirrors). Near-eye: origin within ~3.4 m fills the near plane — skip.
+      // Local player is never culled. Y without bank is fine for the near-eye test.
+      if (!c.isPlayer) {
+        const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
+        if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
+        const dy = tmpP[1] - camEye[1];
+        if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
+      }
+      bankC = Tracks.banking(track, cS, renderX, _bankScratch);
+      tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
     }
     // yaw the forward/right around up by yawVis (interpolated, like position)
     const yv = yawVisInterp(c);
@@ -6484,16 +6519,20 @@ function render(dt) {
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
     const _ledDeploy = isErsDeploying(c);
     if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
-      const W = _ringWorld;
-      W.set(tmpMat);
-      // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
-      W[12] += W[4] * 0.50 - W[8] * 2.615;
-      W[13] += W[5] * 0.50 - W[9] * 2.615;
-      W[14] += W[6] * 0.50 - W[10] * 2.615;
-      // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
-      // stays full-bright regardless — a rain light must not dim with battery.
-      _rainLightOpts.emissive = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
-      gfx.draw(getRainLight(), W, _rainLightOpts);
+      // Rivals: 40 m gate like brake rings. Player always draws.
+      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
+      if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < 40 * 40) {
+        const W = _ringWorld;
+        W.set(tmpMat);
+        // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
+        W[12] += W[4] * 0.50 - W[8] * 2.615;
+        W[13] += W[5] * 0.50 - W[9] * 2.615;
+        W[14] += W[6] * 0.50 - W[10] * 2.615;
+        // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
+        // stays full-bright regardless — a rain light must not dim with battery.
+        _rainLightOpts.emissive = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
+        gfx.draw(getRainLight(), W, _rainLightOpts);
+      }
     }
     // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
     if (c.isPlayer && isErsDeploying(c)) {
@@ -8169,8 +8208,10 @@ $("cz-logo-clear").onclick = () => {
 // Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
 // before they land uses the hand-drawn vector crest, so this drops those cached
 // textures once the images arrive and the cars repaint with the real emblems.
-// liverytex.js kicks off the load itself at eval time — game.js only subscribes.
-if (typeof LiveryTex !== "undefined" && LiveryTex.loadLogos) {
+// Prefetch is deferred off module-eval sand — ensureLogos() (also kicked by the
+// first buildAtlas) starts the loads; we only subscribe for cache invalidation.
+if (typeof LiveryTex !== "undefined" && LiveryTex.ensureLogos) {
+  LiveryTex.ensureLogos();
   LiveryTex.onLogosReady(() => {
     for (const t of Teams.LIST) invalidateDecalTextures(t.id);
     _spMeshKey = "";   // force the garage turntable to repaint too

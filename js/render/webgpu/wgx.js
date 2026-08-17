@@ -1949,7 +1949,8 @@ const WGX = (function () {
       // night — without this fade WebGPU kept full-strength terrain/road sun
       // shadows under moonlight, and prop shadows POPPED when the day↔night
       // key crossed the game.js cast gate instead of fading through dusk in
-      // lockstep with it.
+      // lockstep with it. Packed into params2.y; wgsl-chunks early-outs all
+      // PCF/blocker taps when this fades to <= 0 (GLX uShadowStr parity).
       const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
@@ -2433,7 +2434,22 @@ const WGX = (function () {
       }
 
       const T = o.tune || null;
-      const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
+      // MEASURE THE TARGETS WE ARE ACTUALLY SAMPLING, not the size we asked for.
+      // width/height are the size resize() last computed; _texW/_texH are the
+      // size ensureTargets() last managed to ALLOCATE. They agree on every frame
+      // that allocation succeeded — but its failure path deliberately keeps
+      // rendering through the previous target set and retries after a 1 s
+      // cooldown, so on a device under memory pressure (the only device that
+      // reaches that path) they disagree for up to ~60 frames. Every texel below
+      // then describes a texture that is not the one bound: the SSAO/god-ray
+      // blur steps march the wrong distance, the bloom bright-pass reads mip 0 at
+      // the wrong rate, the composite's sharpen taps land off-pixel, and FXAA
+      // edge-detects against a stride that is not its source's. All of it is
+      // silent — nothing errors, the frame just degrades exactly when the device
+      // could least afford noise. The || fallback covers the pre-first-alloc
+      // frame, where _texW is still 0.
+      const tw = _texW || width, th = _texH || height;
+      const halfW = Math.max(1, tw >> 1), halfH = Math.max(1, th >> 1);
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
@@ -2441,18 +2457,29 @@ const WGX = (function () {
       //    pass NEXT frame (frame binding 6, 1-frame lag). Skipped when dry; the
       //    LIT wet-gate (wet=0) no-ops any stale content, so no clear is needed.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
-      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01) {
+      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
+      // on wetness ALONE kept dispatching the 24-step march on a shed device for
+      // every wet lap — the pass ran, the LIT block multiplied its result by a
+      // params4.w of 0, and the whole cost was thrown away. That is the shed the
+      // player asked for not actually being taken.
+      const _ssrStr = o.reflect != null ? o.reflect : 0;
+      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01 && _ssrStr > 0.001) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
         s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
         const up = frameUpVS || [0, 1, 0];
         s[32] = up[0]; s[33] = up[1]; s[34] = up[2]; s[35] = 0;
         const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
-        s[36] = 1 / width; s[37] = 1 / height; s[38] = ssrThick; s[39] = 1.0;   // texel, thick, strength
+        s[36] = 1 / tw; s[37] = 1 / th; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
         const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
         const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
-        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = 0.62;   // reflSkyLo + upper-screen cutoff
-        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = 0;      // reflSkyHi
+        // ssrTopUV / ssrNear are CAMERA-AWARE (game.js widens both for a low
+        // onboard eye). The literals here reproduced only the chase-cam pair, so
+        // cockpit and hood views got a mirror clipped to the chase geometry.
+        const topUV = (o.ssrTopUV != null) ? o.ssrTopUV : 0.62;
+        const ssrNear = (o.ssrNear != null) ? o.ssrNear : -2.5;
+        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;   // reflSkyLo + upper-screen cutoff
+        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear; // reflSkyHi + near fade start
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
@@ -2568,7 +2595,7 @@ const WGX = (function () {
       if (bloomAmt > 0) {
         // Downsample: mip0 bright-pass gates the scene; mips 1..N plain downsample.
         for (let i = 0; i < nLv; i++) {
-          const src = i === 0 ? { w: width, h: height } : bloomLv[i - 1];
+          const src = i === 0 ? { w: tw, h: th } : bloomLv[i - 1];
           const s = postScratch;
           s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = 0;
           device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
@@ -2595,8 +2622,18 @@ const WGX = (function () {
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
-        // SCREEN SUN-SHAFT knob scales the composite shaft gate (GLX folds
-        // sunShaftMul into uSunShaft the same way). Default 1.0 = as-shipped.
+        // SCREEN SUN-SHAFT knob. NOT at GLX parity, and the difference is
+        // load-bearing: GLX has a SEPARATE 8-tap radial screen shaft that reads
+        // the bright pass, and uSunShaft scales ONLY that — the volumetric
+        // god-ray texture is added unscaled (`c += texture(uGodray, vUV).rgb`).
+        // WGX has no screen shaft, so p0.z lands on the god-ray texture instead.
+        // Consequence for the player: turning SCREEN SUN-SHAFT down to 0 on
+        // WebGPU removes the VOLUMETRIC shafts, which on WebGL2 that knob cannot
+        // touch. sunShaftDecay and sunShaftSpread have no WGX consumer at all.
+        // Fixing this means porting the screen-shaft block from
+        // js/render/shaders/post.js and widening CompositeU past its 256 B —
+        // do not "fix" it by dropping the multiply, which would leave the knob
+        // with no authority over anything here.
         const shaftMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
         s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? shaftMul : 0.0; s[3] = flareStr;   // p0
         s[4] = sunUVx; s[5] = sunUVy;
@@ -2615,7 +2652,7 @@ const WGX = (function () {
         s[16] = gsh[0]; s[17] = gsh[1]; s[18] = gsh[2];
         s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
         s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2]; s[23] = 0;                        // gradeHi
-        s[24] = 1 / width; s[25] = 1 / height; s[26] = 0; s[27] = 0;                      // texel
+        s[24] = 1 / tw; s[25] = 1 / th; s[26] = 0; s[27] = 0;                            // texel
         // imgFx (off 112): chromatic aberration, sharpen, speed-blur, bloom knee.
         s[28] = (T && T.chromAb != null) ? T.chromAb : 0.0;
         s[29] = (T && T.sharpen != null) ? T.sharpen : 0.0;
@@ -2668,7 +2705,7 @@ const WGX = (function () {
       // ── 5) FXAA (full-res) -> swapchain.
       {
         const s = postScratch;
-        s[0] = 1 / width; s[1] = 1 / height; s[2] = 0; s[3] = 0;
+        s[0] = 1 / tw; s[1] = 1 / th; s[2] = 0; s[3] = 0;
         device.queue.writeBuffer(fxaaUBO, 0, s, 0, _Post.FXAA_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });

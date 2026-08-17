@@ -742,94 +742,104 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // min-depth read of blockerTex (findBlocker above) scales the PCF step with
   // the receiver-blocker gap, so contact edges stay crisp while the body
   // softens. Far field drops to 4-tap. pcssPen=0 skips the blocker search.
+  //
+  // GLX parity (js/render/shaders/lit.js sampleShadow + composite):
+  //   * params2.y (shadowStrength) <= 0 → skip all PCF/blocker/car taps (return
+  //     unshadowed). wgx.js packs the key-luminance-faded strength into this
+  //     slot the same way GLX drives uShadowStr to 0 on overcast nights.
+  //   * NoL / clearcoat gate — back-faces throw the result away (litNoL *= NoL)
+  //     except clearcoat on Ngeo, so skip the taps when they cannot contribute.
   var shadow = 1.0;
-  if (F.params2.x > 0.5) {
-    let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
-    let ndc = sc.xyz / sc.w;
-    let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    // Distance + border fade (GLX sampleShadow parity, js/render/shaders/lit.js).
-    // Fade from eye XZ + look-target Y (yaw-invariant). The box still recentres
-    // in sBox/4 = 16 m snaps; an unfaded BOX-anchored border jumped 16 m while
-    // driving, and a look-biased fade origin swept on yaw. UV border fade stays
-    // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
-    let shRange = max(F.shadowCtr.w, 1.0);
-    // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
-    let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
-    var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
-    let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
-           * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
-    edgeFade = edgeFade * ef.x * ef.y;
-    if (edgeFade > 0.0 && ndc.z <= 1.0) {
-      // Slope-scale bias (GLX parity, js/render/shaders/lit.js sampleShadow):
-      // a constant-only bias can't cover grazing sun angles on walls / banked
-      // kerbs — acne that shimmers while driving — and raising the constant
-      // knob to hide it peter-pans flat ground instead. Same clamp band, and
-      // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
-      let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
-      let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
-      let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
-      // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
-      let aDist = distance(in.wpos, fadeCtr);
-      let near = aDist < shRange * 0.80;
-      let boxK = min(1.0, 80.0 / shRange);
-      var R = 3.0;
-      if (near && F.params4.x > 0.0) {
-        let bt = (1.5 / 512.0) * boxK;
-        let zb = findBlocker(suv, bt);
-        let pen = clamp((refD - zb) * F.params4.x, 0.0, 1.0);
-        R = mix(1.5, 6.0, pen);
-      }
-      let ign = ignoise(floor(suv / max(F.params2.z, 1e-6)));
-      let ang = ign * 6.2831853;
-      let cr = cos(ang); let sr = sin(ang);
-      let k = F.params2.z * R * boxK;
-      let rot0 = vec2<f32>(cr, -sr) * k;
-      let rot1 = vec2<f32>(sr, cr) * k;
-      var s = textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.94201624 + rot1 * -0.39906216, refD)
-            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.94558609 + rot1 * -0.76890725, refD)
-            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.09418410 + rot1 * -0.92938870, refD)
-            + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.34495938 + rot1 *  0.29387760, refD);
-      var sh : f32;
-      if (near) {
-        s = s + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.91588581 + rot1 *  0.45771432, refD)
-              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.81544232 + rot1 * -0.87912464, refD)
-              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.38277543 + rot1 *  0.27676845, refD)
-              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.97484398 + rot1 *  0.75648379, refD);
-        sh = s * 0.125;
-      } else {
-        sh = s * 0.25;
-      }
-      // Dynamic CAR shadows (GLX parity): min-combine the per-frame car-only
-      // map — cars can't live in the snap-cached static map, so without this
-      // they cast nothing. Same slope/constant bias; params6.y arms it only on
-      // frames where wgx ran the car caster pass; carLightVP is the Z01-remapped
-      // matrix the car map was rasterised with.
-      if (F.params6.y > 0.5) {
-        let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
-        let cn = cc.xyz / cc.w;
-        let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
-        if (cuv.x > 0.0 && cuv.x < 1.0 && cuv.y > 0.0 && cuv.y < 1.0 && cn.z <= 1.0) {
-          let crefD = cn.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;
-          let ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
-          let csh = ( textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct, -ct), crefD)
-                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct, -ct), crefD)
-                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct,  ct), crefD)
-                    + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct,  ct), crefD) ) * 0.25;
-          sh = min(sh, csh);
+  if (NoL > 0.0 || clearcoat > 0.001) {
+    if (F.params2.x > 0.5 && F.params2.y > 0.0) {
+      let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
+      let ndc = sc.xyz / sc.w;
+      let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+      // Distance + border fade (GLX sampleShadow parity, js/render/shaders/lit.js).
+      // Fade from eye XZ + look-target Y (yaw-invariant). The box still recentres
+      // in sBox/4 = 16 m snaps; an unfaded BOX-anchored border jumped 16 m while
+      // driving, and a look-biased fade origin swept on yaw. UV border fade stays
+      // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
+      let shRange = max(F.shadowCtr.w, 1.0);
+      // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
+      let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
+      var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
+      let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
+             * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
+      edgeFade = edgeFade * ef.x * ef.y;
+      if (edgeFade > 0.0 && ndc.z <= 1.0) {
+        // Slope-scale bias (GLX parity, js/render/shaders/lit.js sampleShadow):
+        // a constant-only bias can't cover grazing sun angles on walls / banked
+        // kerbs — acne that shimmers while driving — and raising the constant
+        // knob to hide it peter-pans flat ground instead. Same clamp band, and
+        // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
+        let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
+        let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
+        let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
+        // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
+        let aDist = distance(in.wpos, fadeCtr);
+        let near = aDist < shRange * 0.80;
+        let boxK = min(1.0, 80.0 / shRange);
+        var R = 3.0;
+        if (near && F.params4.x > 0.0) {
+          let bt = (1.5 / 512.0) * boxK;
+          let zb = findBlocker(suv, bt);
+          let pen = clamp((refD - zb) * F.params4.x, 0.0, 1.0);
+          R = mix(1.5, 6.0, pen);
         }
+        let ign = ignoise(floor(suv / max(F.params2.z, 1e-6)));
+        let ang = ign * 6.2831853;
+        let cr = cos(ang); let sr = sin(ang);
+        let k = F.params2.z * R * boxK;
+        let rot0 = vec2<f32>(cr, -sr) * k;
+        let rot1 = vec2<f32>(sr, cr) * k;
+        var s = textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.94201624 + rot1 * -0.39906216, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.94558609 + rot1 * -0.76890725, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.09418410 + rot1 * -0.92938870, refD)
+              + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.34495938 + rot1 *  0.29387760, refD);
+        var sh : f32;
+        if (near) {
+          s = s + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.91588581 + rot1 *  0.45771432, refD)
+                + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.81544232 + rot1 * -0.87912464, refD)
+                + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 * -0.38277543 + rot1 *  0.27676845, refD)
+                + textureSampleCompareLevel(shadowTex, shadowSamp, suv + rot0 *  0.97484398 + rot1 *  0.75648379, refD);
+          sh = s * 0.125;
+        } else {
+          sh = s * 0.25;
+        }
+        // Dynamic CAR shadows (GLX parity): min-combine the per-frame car-only
+        // map — cars can't live in the snap-cached static map, so without this
+        // they cast nothing. Same slope/constant bias; params6.y arms it only on
+        // frames where wgx ran the car caster pass; carLightVP is the Z01-remapped
+        // matrix the car map was rasterised with.
+        if (F.params6.y > 0.5) {
+          let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
+          let cn = cc.xyz / cc.w;
+          let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
+          if (cuv.x > 0.0 && cuv.x < 1.0 && cuv.y > 0.0 && cuv.y < 1.0 && cn.z <= 1.0) {
+            let crefD = cn.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;
+            let ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+            let csh = ( textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct, -ct), crefD)
+                      + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct, -ct), crefD)
+                      + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct,  ct), crefD)
+                      + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct,  ct), crefD) ) * 0.25;
+            sh = min(sh, csh);
+          }
+        }
+        // Clamped like GLX: SHADOW DARKNESS reaches 2.0 and mix() extrapolates
+        // above t=1 — unclamped, sh~0 went NEGATIVE (negative light -> psychedelic
+        // grade output in shadowed areas).
+        shadow = max(0.0, mix(1.0, sh, F.params2.y * edgeFade));   // params2.y = shadow strength
       }
-      // Clamped like GLX: SHADOW DARKNESS reaches 2.0 and mix() extrapolates
-      // above t=1 — unclamped, sh~0 went NEGATIVE (negative light -> psychedelic
-      // grade output in shadowed areas).
-      shadow = max(0.0, mix(1.0, sh, F.params2.y * edgeFade));   // params2.y = shadow strength
     }
+    // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
+    // applied outside the depth-map gate, so broken cloud still shades the ground
+    // even where/when the sun shadow map is off — but still inside the NoL gate,
+    // matching lit.js (cloudShadow is skipped on back-faces too).
+    // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
+    // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
+    shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
   }
-  // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
-  // applied outside the depth-map gate, so broken cloud still shades the ground
-  // even where/when the sun shadow map is off.
-  // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
-  // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
-  shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
   let litNoL = NoL * keyMul * shadow;
   // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
   // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read

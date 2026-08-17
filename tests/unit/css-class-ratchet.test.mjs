@@ -95,7 +95,7 @@ const CLASS_CEILING = 537;
 const NODE_CEILING = 1152;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
-// +1 2026-08-13: the <script> tag for js/game/perf-try.js (default-off renderer
+// +1 2026-08-13: the <script> tag for js/game/perf-try.js (renderer
 // A/B switches, measurable only on real hardware — see the file header).
 // +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
