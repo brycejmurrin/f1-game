@@ -562,7 +562,7 @@ const WGX = (function () {
     // fed by a COPY_SRC present target; keep WebGPU on a hidden canvas.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
-    let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softW = 0, _softH = 0;
+    let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softReadDefer = false, _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
     const _softPresentWaiters = [];
@@ -1607,8 +1607,22 @@ const WGX = (function () {
     }
     function _readSoftPresent() {
       if (!_softGpu || !_softBlitPending || !_softBlitBuf || !_displayCtx) return;
+      if (_softBlitBuf.mapState !== "unmapped") {
+        if (!_softReadDefer) {
+          _softReadDefer = true;
+          try {
+            device.queue.onSubmittedWorkDone().then(function () {
+              _softReadDefer = false;
+              _readSoftPresent();
+            }, function () {
+              _softReadDefer = false;
+              _readSoftPresent();
+            });
+          } catch (_) { _softReadDefer = false; }
+        }
+        return;
+      }
       _softBlitPending = false;
-      if (_softBlitBuf.mapState !== "unmapped") return;
       if (typeof _softBlitBuf.mapAsync !== "function") return;
       _softBusy = true;
       const doMap = function () {
