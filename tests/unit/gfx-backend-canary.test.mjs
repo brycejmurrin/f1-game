@@ -126,6 +126,22 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
 });
 
+test("TLX material-map ownership keeps placeholders and reports pack state", () => {
+  // Placeholders are always bound so nodes stay complete; materialMapState must
+  // key off owned pack textures, and unload must dispose those without killing
+  // the placeholders (GLX deleteTexture parity).
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /matPlaceAlbedo/);
+  assert.match(tlx, /matOwnedAlbedo/);
+  assert.match(tlx, /albedo: !!matOwnedAlbedo/);
+  assert.doesNotMatch(tlx, /albedo: !!\(matMaps && matMaps\.albedo\)/);
+  assert.match(tlx, /t\.dispose\(\)/);
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /_matOwnedAlbedo/);
+  assert.match(wgx, /matPlaceAlbedoView/);
+  assert.match(wgx, /_releaseOwnedMatMaps/);
+});
+
 test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });

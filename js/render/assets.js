@@ -14,10 +14,10 @@
  *     pure-procedural look. Nothing here throws into the caller and nothing
  *     here is awaited by the boot path.
  *  2. THE BACKEND MAY NOT SUPPORT IT. Material arrays need
- *     `gfx.createTextureArray`, which GLX (WebGL2) and TLX (three) implement
- *     and WGX (WebGPU) does not — WGX has not ported the procedural material
- *     system either (js/render/webgpu/wgsl-chunks.js), so there is nothing
- *     there for a baked map to augment. Feature-detected, never assumed.
+ *     `gfx.createTextureArray` + `setMaterialMaps`. GLX (WebGL2), TLX (three),
+ *     and WGX (WebGPU) all implement them; a future/broken backend without the
+ *     pair is feature-detected and left on the pure-procedural look. Never
+ *     assumed.
  *  3. THE KNOB IS THE OFF-SWITCH. The lit shader's uMatTexMix is a LIGHTING
  *     TUNER knob shipped at 1.0 (TUNE_DEFS matTexMix), so a present pack is ON
  *     by default. `matTexMix` 0 / `__apex.matTex(0)` is the A/B off-switch that

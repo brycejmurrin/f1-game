@@ -376,7 +376,7 @@ does exactly that kind of pixel comparison.
 |---|---|---|
 | 0 | `MAT` ids for road/terrain | **was already done** — `mesh.js:412-424`, `:713` |
 | 1 | `tools/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
-| 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX and TLX |
+| 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX, TLX, and WGX |
 | 3 | Tune `matTexMix` per profile, bake into `light-presets.js` | **open** — needs a human eye on a real screen |
 | 4 | KTX2 container + vendored transcoder | **open** — the 561 KB PNG pack is far under budget, so this is not yet needed |
 | 5 | `bake-model` | **shipped**, round-tripped in test; no circuit consumes a baked model yet |
@@ -475,10 +475,10 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
 
 ### Deliberately not done
 
-- **WGX (WebGPU) gets nothing.** `wgsl-chunks.js:147` lists the per-material
-  `applyMaterial*` bump/tint as still deferred — WGX has no procedural material
-  system for a baked map to augment. `Assets.supported` is false there and the
-  backend renders as it does today.
+- **WGX baked pack — done.** WGX now has `createTextureArray` / `setMaterialMaps`
+  / `materialMapState`, WGSL `texture_2d_array` sampling, and ownership-aware
+  release on unload/replace (same contract as GLX). Remaining WGX deltas are
+  look/VRAM (aniso, phone post formats, TAA resolve) — see `WEBGPU-PARITY.md`.
 - **`bake-material`** (real CC0 scans → a layer) **is implemented** (2026-08).
   Needs `sharp` (`npm i -D sharp`) and network for `fetch`. It mean-normalises
   Diffuse albedo, packs `nor_gl` + `arm` exactly like `assets/pack/webbake.js`,

@@ -299,8 +299,9 @@ const TLX = (function () {
       // present) while three is retained-mode. Bridge: draw() appends a
       // (geometry, matrix) record; present() materialises records into a
       // pooled set of THREE.Mesh objects IN SUBMISSION ORDER (GLX semantics:
-      // caller order is draw order) and renders once. InstancedMesh batching
-      // of repeated geometries lands with the lit material (M3+).
+      // caller order is draw order) and renders once. Repeated geometries stay
+      // discrete Mesh draws today — THREE.InstancedMesh batching is a separate
+      // look/perf pass (kept off this lifecycle fix).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
@@ -438,7 +439,12 @@ const TLX = (function () {
       // shared-node .value trick the env cube uses. Guarded: if the placeholder
       // cannot be built, ctx.matMaps stays null and tsl-lit compiles the baked
       // path out entirely, leaving TLX exactly as it renders today.
+      // matPlace* are NEVER disposed (nodes always have a complete texture);
+      // matOwned* are the pack textures Assets handed over — freed on replace
+      // or unload so a tier swap cannot leak a full pack (GLX parity).
       let matMaps = null;
+      let matPlaceAlbedo = null, matPlaceNormal = null;
+      let matOwnedAlbedo = null, matOwnedNormal = null;
       try {
         const grey = (v) => {
           const d = new Uint8Array(17 * 4);
@@ -452,8 +458,10 @@ const TLX = (function () {
         // Mid-grey albedo (the shader's ×2.0 makes it a no-op) and a flat
         // tangent normal (0.5, 0.5) — a placeholder that changes nothing even
         // if it were sampled with the knob up before a pack lands.
-        matMaps = { albedo: grey([128, 128, 128]), normal: grey([128, 128, 255]) };
-      } catch (_) { matMaps = null; }
+        matPlaceAlbedo = grey([128, 128, 128]);
+        matPlaceNormal = grey([128, 128, 255]);
+        matMaps = { albedo: matPlaceAlbedo, normal: matPlaceNormal };
+      } catch (_) { matMaps = null; matPlaceAlbedo = matPlaceNormal = null; }
 
       // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
       // Guarded: a missing/broken factory keeps the unlit material — the
@@ -926,23 +934,42 @@ const TLX = (function () {
         },
         // Swap the loaded arrays onto tsl-lit's shared texture nodes (a .value
         // assignment, never a material rebuild) and push the per-layer world
-        // scales. A falsy `maps` zeroes the scales, which is what actually
-        // turns the feature back off — the placeholder textures stay bound.
+        // scales. A falsy `maps` zeroes the scales AND restores the placeholders
+        // after disposing any owned pack textures — GLX deleteTexture parity.
         setMaterialMaps(maps) {
           if (!lit || !lit.setMaterialMaps) return;
-          const prevA = matMaps && matMaps.albedo, prevN = matMaps && matMaps.normal;
-          lit.setMaterialMaps(maps || null);
-          if (maps && matMaps) {
-            // Track what the nodes now point at, and drop the textures we
-            // displaced — a tier switch would otherwise leak a full pack.
-            if (maps.albedo) { matMaps.albedo = maps.albedo; if (prevA && prevA !== maps.albedo) prevA.dispose(); }
-            if (maps.normal) { matMaps.normal = maps.normal; if (prevN && prevN !== maps.normal) prevN.dispose(); }
+          function releaseOwned() {
+            const seen = new Set();
+            for (const t of [matOwnedAlbedo, matOwnedNormal]) {
+              if (!t || seen.has(t)) continue;
+              seen.add(t);
+              try { t.dispose(); } catch (_) { /* already disposed */ }
+            }
+            matOwnedAlbedo = null;
+            matOwnedNormal = null;
           }
+          releaseOwned();
+          if (!maps) {
+            // Restore placeholder .value bindings and zero scales.
+            if (matPlaceAlbedo || matPlaceNormal) {
+              lit.setMaterialMaps({
+                albedo: matPlaceAlbedo, normal: matPlaceNormal,
+              });
+            } else {
+              lit.setMaterialMaps(null);
+            }
+            return;
+          }
+          if (maps.albedo) matOwnedAlbedo = maps.albedo;
+          if (maps.normal) matOwnedNormal = maps.normal;
+          lit.setMaterialMaps(maps);
         },
         materialMapState() {
           const sc = (lit && lit.uniforms && lit.uniforms.matTexScale && lit.uniforms.matTexScale.array) || [];
           return {
-            albedo: !!(matMaps && matMaps.albedo), normal: !!(matMaps && matMaps.normal),
+            // Pack ownership — NOT "placeholder exists" (placeholders are always
+            // bound so a naïve matMaps.albedo check stayed true after unload).
+            albedo: !!matOwnedAlbedo, normal: !!matOwnedNormal,
             layers: Array.from(sc).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
             scales: Array.from(sc),
           };
@@ -1156,9 +1183,9 @@ const TLX = (function () {
         // M5: update the sky uniforms from whatever frameSky carries and arm
         // the background node for this frame's render. game.js may call this
         // twice per frame (env-probe pass with a swapped invViewProj, then
-        // the main pass with the restored one — js/game.js/3759); the env
-        // face is skipped on TLX until M9 (envFaceBegin -> null), and even
-        // when it lands, the LAST update before render owns the uniforms.
+        // the main pass with the restored one — js/game.js); the LAST update
+        // before render owns the uniforms. Env-probe faces use setEnvCube's
+        // dummy-cube guard while rendering into the probe (M9 landed).
         drawSky(frameSky) {
           if (!sky || !frameSky) return;
           sky.update(frameSky);

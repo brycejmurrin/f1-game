@@ -843,3 +843,53 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
 });
+
+test("setMaterialMaps owns pack textures and destroys them on unload/replace", async () => {
+  // GLX deletes prior arrays in setMaterialMaps; WGX used to orphan GPUTexture
+  // objects on unload/tier-swap and left materialMapState stale only via flags
+  // (views still bound). Observe destruction the way the audit remediation asks.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const placeholders = h.textures.filter((t) =>
+    Array.isArray(t.desc.size) && t.desc.size[0] === 1 && t.desc.size[1] === 1
+      && t.desc.size[2] === 17 && t.desc.mipLevelCount == null);
+  assert.ok(placeholders.length >= 1, "init must allocate the 1×1×17 placeholder");
+
+  const px = new Uint8Array([128, 128, 128, 255]);
+  const images = [px];
+  const albedo = gfx.createTextureArray(1, images, 17);
+  const normal = gfx.createTextureArray(1, images, 17);
+  assert.ok(albedo && albedo.texture && normal && normal.texture);
+  const scales = new Float32Array(17);
+  scales[1] = 4;
+  gfx.setMaterialMaps({ albedo, normal, scales });
+  let st = gfx.materialMapState();
+  assert.equal(st.albedo, true);
+  assert.equal(st.normal, true);
+  assert.equal(st.layers, 1);
+  assert.equal(albedo.texture.destroyed, false);
+
+  gfx.setMaterialMaps(null);
+  assert.equal(albedo.texture.destroyed, true, "unload must destroy owned albedo");
+  assert.equal(normal.texture.destroyed, true, "unload must destroy owned normal");
+  for (const p of placeholders) {
+    assert.equal(p.destroyed, false, "placeholder must survive unload");
+  }
+  st = gfx.materialMapState();
+  assert.equal(st.albedo, false);
+  assert.equal(st.normal, false);
+  assert.equal(st.layers, 0);
+
+  const a2 = gfx.createTextureArray(1, images, 17);
+  const n2 = gfx.createTextureArray(1, images, 17);
+  gfx.setMaterialMaps({ albedo: a2, normal: n2, scales });
+  const a3 = gfx.createTextureArray(1, images, 17);
+  const n3 = gfx.createTextureArray(1, images, 17);
+  gfx.setMaterialMaps({ albedo: a3, normal: n3, scales });
+  assert.equal(a2.texture.destroyed, true, "replace must destroy previous albedo");
+  assert.equal(n2.texture.destroyed, true, "replace must destroy previous normal");
+  assert.equal(a3.texture.destroyed, false);
+  gfx.setMaterialMaps(null);
+  assert.equal(a3.texture.destroyed, true);
+  assert.equal(n3.texture.destroyed, true);
+});

@@ -609,6 +609,10 @@ const WGX = (function () {
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
+    // Placeholder views stay alive for the device lifetime; pack tokens in
+    // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
+    let matPlaceAlbedoView = null, matPlaceNormalView = null;
+    let _matOwnedAlbedo = null, _matOwnedNormal = null;
     let matScaleUBO = null, matScaleData = new Float32Array(20);
     let _matAlbedoOn = false, _matNormalOn = false;
     const _matScales = new Float32Array(MAT_TEX_LAYERS);
@@ -878,8 +882,10 @@ const WGX = (function () {
         size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      matAlbedoView = _matPlace.createView({ dimension: "2d-array" });
-      matNormalView = matAlbedoView;
+      matPlaceAlbedoView = _matPlace.createView({ dimension: "2d-array" });
+      matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
+      matAlbedoView = matPlaceAlbedoView;
+      matNormalView = matPlaceNormalView;
       matArraySamp = device.createSampler({
         magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
         addressModeU: "repeat", addressModeV: "repeat",
@@ -2872,20 +2878,46 @@ const WGX = (function () {
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
       } catch (_) { return null; /* alloc/copy failed: pack stays procedural */ }
     }
+    function _releaseOwnedMatMaps() {
+      // Destroy each GPUTexture at most once (albedo/normal may alias).
+      const seen = new Set();
+      for (const tok of [_matOwnedAlbedo, _matOwnedNormal]) {
+        if (!tok || !tok.texture || seen.has(tok.texture)) continue;
+        seen.add(tok.texture);
+        try { tok.texture.destroy(); } catch (_) { /* already invalid */ }
+      }
+      _matOwnedAlbedo = null;
+      _matOwnedNormal = null;
+    }
+    // Adopt (or clear) baked material arrays. Frees any previously-owned pack
+    // textures and restores the 1×1×N placeholders so bind groups never point
+    // at destroyed views — GLX deleteTexture parity for WebGPU.
     function setMaterialMaps(maps) {
+      _releaseOwnedMatMaps();
+      matAlbedoView = matPlaceAlbedoView;
+      matNormalView = matPlaceNormalView;
+      _matAlbedoOn = false;
+      _matNormalOn = false;
+      _matScales.fill(0);
+      matScaleData.fill(0);
       if (!maps) {
-        _matAlbedoOn = false; _matNormalOn = false;
-        _matScales.fill(0); matScaleData.fill(0);
         if (matScaleUBO) device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
+        _rebuildFrameBG();
         return;
       }
-      if (maps.albedo && maps.albedo.view) { matAlbedoView = maps.albedo.view; _matAlbedoOn = true; }
-      if (maps.normal && maps.normal.view) { matNormalView = maps.normal.view; _matNormalOn = true; }
+      if (maps.albedo && maps.albedo.view) {
+        matAlbedoView = maps.albedo.view;
+        _matAlbedoOn = true;
+        _matOwnedAlbedo = maps.albedo;
+      }
+      if (maps.normal && maps.normal.view) {
+        matNormalView = maps.normal.view;
+        _matNormalOn = true;
+        _matOwnedNormal = maps.normal;
+      }
       const sc = maps.scales;
-      _matScales.fill(0);
       if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) _matScales[i] = +sc[i] > 0 ? +sc[i] : 0;
       if (!_matAlbedoOn) _matScales.fill(0);
-      matScaleData.fill(0);
       matScaleData.set(_matScales);
       if (matScaleUBO) device.queue.writeBuffer(matScaleUBO, 0, matScaleData);
       _rebuildFrameBG();

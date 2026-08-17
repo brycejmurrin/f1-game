@@ -63,7 +63,7 @@ closes over a null `gl` and throws mid-frame. Gated by
 ## 3. Gap inventory (verified against current source)
 
 `docs/ARCHITECTURE.md` lists four reduced items plus baked arrays. The live
-surface is larger — several GLX features landed after WGX was frozen.
+surface is larger — several GLX features landed after the first WGX cut.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
@@ -421,7 +421,7 @@ existing opt-in and keep GLX untouched.
 |---|---|---|---|
 | 1 | `gpuTimer` + `requestDevice({requiredFeatures})` | Lets every later slice be measured | `webgpu-lifecycle` + `__apex.gpuTimer()` on a WebGPU page |
 | 2 | Shared `generateMips` + env-cube LOD + `createTexture` mips | One helper, three call sites | Env probe: roughness blur visible vs LOD 0 |
-| 3 | `createTextureArray` / `setMaterialMaps` / LIT array sample | Ships ON in GLX; WGX currently looks procedural | `assets.js` `supported()` true on WGX; `matTexMix` A/B |
+| 3 | `createTextureArray` / `setMaterialMaps` / LIT array sample | **Shipped** on WGX (API + WGSL + ownership lifecycle) | `assets.js` `supported()` true on WGX; `matTexMix` A/B; lifecycle destroy on unload |
 | 4 | PCSS Poisson kernel | Shader-only; blocker already live | Night + dusk driven lap vs GLX, same `uPcssPen` |
 | 5 | Lamp-fog uniform + world-space god-ray + blur | Night identity (Singapore / Vegas; Monza is `night:false`) | `lightState().numLights > 0` + visual |
 | 6 | Lamp shadow pass | Feeds §5 and LIT PCF | `lampShadowState().enabled` |
@@ -464,7 +464,7 @@ slice that adds a method must declare it (real or `undefined`) before
 - `js/render/webgpu/wgx.js` — backend, `requestDevice({requiredFeatures})`, MSAA 2×
 - `js/render/webgpu/wgsl-chunks.js` — LIT Poisson-8 PCSS, `params8.x` lamp-fog, env LOD
 - `js/render/webgpu/wgsl-post.js` — world-space god-ray, SSAO denoise, composite FX
-- `js/render/gfx.js` — seam contract; WGX marked frozen
+- `js/render/gfx.js` — seam contract; WGX is deferred opt-in (not the default)
 - `js/render/glx.js` / `js/render/glx/post.js` / `js/render/glx/shadow.js` —
   MSAA blit, timer, arrays, lamp shadows, instancing
 - `js/render/shaders/lit.js` / `post.js` / `fx.js` — the GLSL to match
