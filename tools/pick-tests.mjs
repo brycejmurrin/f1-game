@@ -202,6 +202,25 @@ function changedFiles(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
+
+  // --help must answer without consulting git. On a clean deploy tip,
+  // changedFiles() is empty and the default prose is "no changed files" —
+  // which does not contain `group`/`test:`, so the MCP smoke in
+  // tools-runnable.test.mjs fails even though the selector itself is fine.
+  // That smoke used to pass accidentally whenever the working tree had diffs.
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(`Usage: node tools/pick-tests.mjs [options] [paths…]
+  (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
+  --staged      only staged files
+  --since <ref> files changed since <ref>
+  --bg          print tools/test-bg.mjs batch commands only
+  --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
+  --help        this message
+
+Each matched path maps to one or more test:<group> scripts (see RULES).`);
+    process.exit(0);
+  }
+
   const files = changedFiles(argv);
 
   // --json short-circuits BEFORE any prose path, deliberately. The two early
