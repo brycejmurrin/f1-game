@@ -249,12 +249,12 @@ function create(G) {
   // Infinity on a circuit with no zones at all.
   function ahead(s) {
     const track = G.track;
-    if (!zones.length || !track) return Infinity;
+    if (!zones.length || !track || !track.total) return Infinity;
     if (at(s)) return 0;
+    const L = track.total;
     let best = Infinity;
     for (const z of zones) {
-      let d = z.start - s;
-      if (d < 0) d += track.total;
+      let d = ((z.start - s) % L + L) % L;
       if (d < best) best = d;
     }
     return best;
