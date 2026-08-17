@@ -17,8 +17,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const track = process.argv.find((a) => !a.startsWith("--")) || "montreal";
-const lite = process.argv.includes("--lite");
+const args = process.argv.slice(2);
+const track = args.find((a) => !a.startsWith("--")) || "montreal";
+const lite = args.includes("--lite");
 
 const inner = `
 import { createRequire } from "node:module";
