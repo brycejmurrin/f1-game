@@ -48,6 +48,40 @@ change wall-clock for `npm run test:tiny` and `test:render`? That is one CI job
 and one afternoon, and the payoff is the difference between a 40-minute suite
 and a ~13-minute one.
 
+### Measured in this container (2026-08-17, mcp-probe + `wgpu-flag-test.mjs`)
+
+Three software paths matter for Apex probing; they are **not interchangeable**:
+
+| Preset | WebGPU binds? | Canvas pixels (headless) | Montreál lite wall-clock | Notes |
+|--------|---------------|--------------------------|--------------------------|-------|
+| **SwiftShader** (`WEBGPU_CHROMIUM_ARGS`) | yes | `[160,170,171,255]` | ~11 s (`gfx-probe`) | Default for harness, MCP, Playwright. Needs `sessionStorage apex26.wgxCapture=1` so WGX soft-presents to a 2D canvas — native swapchain is blank in CI. |
+| **Lavapipe headless** (`WEBGPU_LAVAPE_*` + `--headless=new`) | yes | `[161,170,172,255]` | ~11 s (same wait loop) | Second Vulkan software stack (Mesa `lvp_icd.json`). Same validation signal as SwiftShader; upstream three.js e2e direction. MCP: override via `APEX_CHROME_ARGS` + `VK_ICD_FILENAMES` (measured non-black `[64,34,13,255]`). |
+| **Lavapipe + Xvfb headed** | yes | `[0,0,0,0]` | ~2.3 min | WGX lifecycle OK (`gpuErrors: 0`, `render({what:"view"}).coveragePct` populated) but **canvas `drawImage`/screenshot stays black** — not a visual oracle. |
+| **llvmpipe (WebGL2 only)** | n/a | GLX path renders | **9.5 s vs 25.8 s** SwiftShader on same montreal boot | Drop `--use-angle=swiftshader`; renderer string `ANGLE (Mesa, llvmpipe …)`. Does **not** expose `navigator.gpu`. Helps default GLX + TLX (`tlxForceGL=1`), not WGX probes. |
+
+Commands that produced the table:
+
+```sh
+node tools/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
+node tools/gfx-probe.mjs --backend webgpu --lite montreal
+node tools/wgx-lavapipe-probe.mjs montreal --lite
+APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
+  node tools/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
+```
+
+**Takeaways for probe tooling:**
+
+1. **Keep SwiftShader as the default WebGPU preset** — simplest, documented in
+   `tools/webgpu-chrome-args.cjs`, matches Playwright harness.
+2. **Lavapipe headless is a viable A/B** for WGX lifecycle (adapter/device/shaders)
+   when you want a second software Vulkan stack; swap flags only, not game code.
+3. **Do not use Lavapipe+Xvfb for MCP screenshots** — use `wgx-capture.mjs` /
+   soft-present readback / `render({what:"view"})` instead.
+4. **For Playwright CI speed**, measure dropping the SwiftShader pin for the
+   **WebGL2** suite (`llvmpipe`); that is independent of WebGPU backend choice.
+5. **Real GPU + `xvfb-run`** remains the path for hardware WebGL/WebGPU visuals;
+   GitHub GPU runners still need driver load — see §1 point 3.
+
 **The stability argument is stronger than the speed one.** The cited report is
 explicit that slow canvas init was the *cause* of its flakiness — timeouts,
 elements not ready, interactions failing — and that the fix removed the need for
