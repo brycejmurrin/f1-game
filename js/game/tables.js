@@ -23,7 +23,7 @@ const IDLE_RPM = 5000, MAX_RPM = 15000;   // F1 V6 turbo: idle ~5k, rev limit 15
 const DIFF = {
   easy:   { ai: 0.86, band: 0.18 },
   normal: { ai: 0.92, band: 0.08 },
-  hard:   { ai: 0.99, band: 0.03 },
+  hard:   { ai: 0.99, band: 0.02 },  // was 0.03 — smarter OT/ERS/brake cuts rubber-band need
 };
 
 // Thirteen player camera modes, cycled with the CAM button / C key and persisted.

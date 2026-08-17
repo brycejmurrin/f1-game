@@ -176,6 +176,28 @@ test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live dae
   }
 });
 
+test("tools/list still advertises both catalogs when a backend ensure() throws", () => {
+  // The cloud host (apex-wrap) lists tools ONCE. A throw from tinyfish.ensure()
+  // used to empty the whole catalog for the session. FAIL_BACKENDS forces that
+  // path; the static fallback must still name chrome_* and tinyfish_*.
+  const env = { ...process.env, PROBE_MCP_FAIL_BACKENDS: "1" };
+  const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  const tools = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  const r = spawnSync("python3", [PROBE, "serve"], {
+    encoding: "utf8",
+    input: `${init}\n${tools}\n`,
+    env,
+    timeout: 15000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const lines = r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+  const listed = JSON.parse(lines[1]);
+  const names = (listed.result.tools || []).map((t) => t.name);
+  assert.ok(names.includes("chrome_navigate_page"), names.slice(0, 8));
+  assert.ok(names.includes("tinyfish_fetch_content"), names.slice(0, 8));
+  assert.ok(names.length >= 50, `fallback catalog too small: ${names.length}`);
+});
+
 test("probe-mcp help documents the persistent daemon commands", () => {
   const r = spawnSync("python3", [PROBE, "help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);

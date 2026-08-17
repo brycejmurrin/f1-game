@@ -5,9 +5,9 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 
 # Probing the live game with the MCPs
 
-Interactive instruments beside the Playwright suite: **Chrome DevTools MCP**
+Two upstream MCP servers sit alongside the Playwright suite: **Chrome DevTools MCP**
 (working tree, canvas-visible) and **tinyfish** (deployed GitHub Pages / public
-web). Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
+web). The test suite is 112 Playwright specs + 99 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
 
 ## Entry
 

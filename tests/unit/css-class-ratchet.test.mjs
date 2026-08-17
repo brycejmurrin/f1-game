@@ -2,7 +2,7 @@
  * the distinct CSS class tokens across css/, and the DOM node count of the
  * single-file shell.
  *
- * WHY THIS FILE EXISTS AT ALL. `.claude/skills/restructure-screens-css/SKILL.md`
+ * WHY THIS FILE EXISTS AT ALL. `.claude/skills/restructure-screens-css/references/rules.md`
  * rule 11 says to "ratchet the distinct-class count the way module-size.test.mjs
  * ratchets game.js". docs/archive/research/UI-REMODEL-DECISION-2026-08.md
  * prescribed it concretely ("start at 538"). It was never installed — and
@@ -92,7 +92,7 @@ const CLASS_CEILING = 537;
 // 1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
 // the deploy branch and the season branch each raised this in parallel and both
 // numbers are stale the moment they meet.
-const NODE_CEILING = 1152;
+const NODE_CEILING = 1153;  // +1 ai-drive.js script tag
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for js/game/perf-try.js (renderer

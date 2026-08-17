@@ -50,10 +50,19 @@ Output paths: batch/test under `artifacts/`, human-reviewed captures under
 `scratch/` (see `CLAUDE.md`).
 
 Design principles:
-- **No build step** — bump `?v=N` + `version.json` on asset edits.
+- **No build step** — bump `?v=N` + `version.json` on asset edits (`tools/bump-cache.mjs`).
 - **Debug-hooks first** — assert via `__apex`, not brittle magnitudes.
 - **Headless verify-track** — fast pre-push guard for circuit/track engine edits.
 - **Progressive disclosure** — keep `SKILL.md` short (when / entry / hard
   don'ts / dispatch). Move war stories and long recipes to
   `references/*.md` or `docs/` and `Read` them only when the task needs them.
   Fat always-loaded skills burn tokens; `mcp-probe` is the template.
+  Official cap is 500 lines
+  (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices);
+  the project template is thinner. `tests/unit/skill-progressive.test.mjs` holds both.
+- **Description = what + when** — third person, under 1024 chars, must contain
+  a trigger (`Use when` / `Use proactively`). Vague descriptions ("helps with
+  documents") fail discovery in a 34-skill library.
+- **One command over a ritual** — `verify-change.mjs` composes pick-tests +
+  the fast gate + batched groups; skills should name the composer, not restated
+  five-step prose.

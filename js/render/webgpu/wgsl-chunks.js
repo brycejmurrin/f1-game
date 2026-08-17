@@ -564,6 +564,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrk = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let topNgeo = normalize(in.nrm);
+  // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
+  // N is written inside applyMaterialNormal, which is non-uniform in matId, and
+  // a dpdx after that branch is the NaN-white-road class. Geometric N is the
+  // uniform stand-in — SAA/clearcoat under-count orange-peel vs GLX; that is
+  // a look gap, not a compile defect.
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
@@ -1598,7 +1603,12 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> DROut {
 @fragment
 fn fs_main(@builtin(position) pos : vec4<f32>) -> @builtin(frag_depth) f32 {
   let c = vec2<i32>(pos.xy);
-  return min(textureLoad(src, c, 0), textureLoad(src, c, 1));
+  // MSAA_COUNT is 4 (or this pass is not created). min of only samples 0 and 1
+  // was correct when the count was 2; after the spec-legal 4× fix it left
+  // samples 2 and 3 out of the resolved depth used by SSAO/godray/SSR.
+  return min(
+    min(textureLoad(src, c, 0), textureLoad(src, c, 1)),
+    min(textureLoad(src, c, 2), textureLoad(src, c, 3)));
 }`,
   };
 })();
