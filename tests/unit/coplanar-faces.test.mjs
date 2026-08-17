@@ -52,6 +52,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // anchor) moved neither. Recorded here so the caps stop lying about the tree;
 // the underlying same-facing pairs are a real open defect on that lineage.
 //
+// silverstone 15 -> 16 (2026-08-17): owed by 4f109f76, which made the pit-straight
+// gantry beam sceneryShift-safe — `vadd(L.c, L.u, H + 0.35)` in place of a raw
+// `frac`-keyed `px[kb]/py[kb]/pz[kb]` read. That read placed the beam ~2/3 of a
+// lap from its anchor (the standing hazard of the 7a173519 rotation), so the new
+// count is the beam sitting where it belongs and meeting the gantry it belongs
+// to. Measured 16 on `origin/claude/f1-game-project-26h3ng` at 84b2edaf in an
+// isolated worktree with nothing else merged, so the commit shipped the geometry
+// fix and left this cap behind — CI on that branch has been red since. Not drift
+// and not a merge interaction: the WGX branch that found it changes no file the
+// audit loads.
+//
 // vegas 66 -> 67 (2026-08-08): the street-barrier chord-cut fix splits apex
 // spans into two single-node panels that follow the curve, and the new joint
 // abuts two same-height panel tops — the identical seam class every existing

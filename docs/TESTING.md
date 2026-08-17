@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 95 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 96 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -766,7 +766,7 @@ what it covers.
 | `chunked-index-ranges.test.mjs` | the equivalence proof behind the concatenated chunk index buffer: `createChunkedMesh` gives each spatial chunk a `(byteOffset, count)` RANGE into one shared IBO instead of a buffer of its own, so `drawChunked`/`castShadowChunked` can merge adjacent visible chunks into a single `drawElements` (measured ~76-87% fewer scenery draws). "Same triangles, same order, fewer calls" is an equivalence claim, so it is tested as one — against a stub GL context that records the real uploads: the ranges tile the buffer with no gap, overlap or misaligned offset, the buffer holds exactly the source indices with the same multiplicities, and merging ANY run of consecutive chunks reproduces the per-chunk index sequence byte for byte. Carries its own anti-vacuity assertions, because a single-chunk fixture — or one under the 2000-triangle chunking floor — would satisfy every other assertion while proving nothing |
 | `material-shimmer.spec.js` | does baked tarmac CRAWL when the car moves |
 | `tlx-probes.spec.js` | the three.js/TSL backend behind `apex26.gfxBackend="three"` |
-| `webgpu-lifecycle.test.mjs` | WGX resource lifecycle |
+| `webgpu-lifecycle.test.mjs` | WGX resource lifecycle — plus the two invariants a MOCK device cannot enforce: every `sampleCount` is 1 or 4 (WebGPU allows nothing else; WGX shipped 2 and no real device accepted it) and no WGSL derivative sits where control flow may be non-uniform (`dpdx` behind a material branch is a COMPILE error, and WGX then silently falls back to GLX) |
 | `assets-pack.test.mjs` | the baked pack on disk: licence allow-list, md5, size budget |
 | `import-models.test.mjs` | the AX26 model-import output and its determinism |
 | `import-models-workflow.test.mjs` | workflow-dispatch inputs stay out of executable shell text; HTTPS URL and non-deploy branch validation |
@@ -905,8 +905,9 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
-| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `tools-runnable.test.mjs` | every tool in `tools/` PARSES (`node --check` / `bash -n` / python compile / JSON) and the MCP-facing entry points answer their help path. The README index guards names in both directions but never says the file runs — a tool with a syntax error is indexed, documented and completely inaccessible, and you find out mid-task. Parse-only for the sweep: these tools launch browsers and hit networks |
+| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
 
 ---
 
@@ -925,6 +926,33 @@ what it covers.
 
 The measured history behind the testing gates. CLAUDE.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
+
+**`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
+`test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while
+`test-bg.mjs --status` still said `running`. The log line won the argument and a
+replacement run was started in tmux — so TWO `playwright test` processes then
+shared four cores, load average reached 15.7 against the < 3 guidance, and both
+were writing progress the whole time. `ps -o pid,ppid,lstart -p …` attributed
+them in one command; killing the older tree left the queue clean. Two lessons,
+both already rules that a plausible-looking log line talked me out of: only the
+terminal `= run …` line ends a run, and `pgrep -fa 'playwright test'` BEFORE
+starting anything is the check that makes duplication impossible. (Also: a
+`test-bg` run launched from an ephemeral shell can lose its parent — start long
+queues inside tmux, where the queue survives the shell that spawned it.)
+
+**A total-red run is almost never the code (2026-08-17).** `test:tiny` reported
+`73/73 failed` and the first line of the log said
+`browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
+`npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
+right flag for the install step and leaves the browser absent. The specs launch
+Playwright's headless SHELL, not the `/opt/google/chrome` this box also ships,
+so nothing browser-driven can pass until
+`npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
+FIRST failure's message before forming any hypothesis about a red run: when EVERY
+test in a group fails, the cause is upstream of the code under test — a missing
+browser, a missing `node_modules`, a dead dev server, a syntax error in a file
+every page loads. Bisecting the diff for a fault the harness is reporting
+verbatim is pure waste.
 
 **Watcher anchoring.** Anchor on the reporter's terminal line
 `= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s

@@ -41,8 +41,14 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 Session shape — this is what controls both wall time and waiting:
 
 1. `npm install` FIRST on a fresh container (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
-   keeps it to seconds). "Cannot find module" means a missing install, not a
-   pre-existing breakage.
+   keeps it to seconds), **then `npx playwright install
+   chromium-headless-shell`** — that skip flag leaves the BROWSER absent, and
+   the specs launch the headless shell, not the `/opt/google/chrome` this box
+   ships. "Cannot find module" means a missing `npm install`;
+   `browserType.launch: Executable doesn't exist …chromium_headless_shell`
+   means a missing browser. Either reads as a total-red run that looks like a
+   boot regression (measured 2026-08-17: 73/73 of `test:tiny`), and the cure is
+   seconds. Read the FIRST failure's message before believing any red run.
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the
    browser tests a single time, at the end, just before the cache bump. Do not
@@ -82,6 +88,30 @@ Session shape — this is what controls both wall time and waiting:
 4. Pixel screenshot — visual sign-off only, never an assertion source. For
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
+
+**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
+device passed every assertion while FOUR separate defects made the real backend
+refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
+WGSL compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable
+pool; `rg11b10ufloat` is not a render target without its optional feature). Each
+hid the one after it, so they came out one boot at a time — and none was
+findable without a live device:
+
+```sh
+npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+`probe` writes the backend pick and RELOADS in one batch (`--backend
+webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
+`--console RE` greps the dump, `--dry-run` shows the batch. In page code use
+BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
+binding, not a window property. A clean WGX boot writes NO console line and
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
+both ABSENCE signals, so confirm with one positive: drive a race and assert
+`canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
+the canvas. SwiftShader is a validation oracle, never a visual one. Full trap
+list: `.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
 
 ## Layout
 
@@ -181,7 +211,15 @@ same surface from a shell.
 Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
 (`.claude/skills/bake-lighting` lands a COPY VALUES export). Career:
 `docs/CAREER.md`. Multiplayer: `docs/MULTIPLAYER.md`. Scenery:
-`docs/SCENERY-API.md`. Testing: `docs/TESTING.md`.
+`docs/SCENERY-API.md`. Testing: `docs/TESTING.md`. WGX/WGSL
+(`js/render/webgpu/`): `docs/research/WEBGPU-PARITY.md`.
+
+Two WGSL rules the language enforces and a mock device cannot: `sampleCount` is
+1 or 4 ONLY, and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is
+uniform — in practice the first statements of `fs_main`, passed down as a
+parameter, because a callee that returns early non-uniformly poisons its caller
+too. Breaking either does not throw: WGX refuses and the game falls back to GLX
+with one console warning.
 
 ## Git branch & deploy
 
