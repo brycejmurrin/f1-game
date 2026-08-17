@@ -1073,26 +1073,34 @@ struct SsrU {
 ${fullscreenTri}
 ${POST_VS}
 
-// Reconstruct view-space position from the depth buffer at a texture-space uv.
-// Depth is already 0..1 in WebGPU (no *2-1 window->NDC remap); integer LOD 0i +
-// the non-filtering depthSamp are required for texture_depth_2d.
-fn ssrDepth(uv : vec2<f32>) -> f32 {
+// SSR marches in GL y-UP uv space (identical to js/render/shaders/post.js and
+// tsl-post.js). POST_VS emits WebGPU texture-space uv (y-DOWN); convert at the
+// boundary. Staying in y-down for the march flipped dpy vs GLX, so reconstructed
+// road normals / reflection rays skewed and the wet mirror sampled the UPPER
+// screen onto the tarmac ("road painted upside down"). Depth stays WebGPU 0..1
+// with the WebGPU-convention invProj wgx uploads — only the XY uv convention
+// switches.
+fn ssrTexUV(uvGl : vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(uvGl.x, 1.0 - uvGl.y);
+}
+fn ssrDepth(uvTex : vec2<f32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(depthTex));
-  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  let px = clamp(vec2<i32>(uvTex * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
   return textureLoad(depthTex, px, 0);
 }
-fn ssrViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = ssrDepth(uv);
-  let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
+fn ssrViewPos(uvGl : vec2<f32>) -> vec3<f32> {
+  let d = ssrDepth(ssrTexUV(uvGl));
+  // GL NDC from GL uv (y-up); depth already 0..1 for WebGPU invProj.
+  let ndc = vec3<f32>(uvGl.x * 2.0 - 1.0, uvGl.y * 2.0 - 1.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
   return v.xyz / v.w;
 }
 
-// Project a view-space point to a texture-space uv (y-down).
+// Project a view-space point to GL y-UP uv (GLX: cp.xy/cp.w * 0.5 + 0.5).
 fn ssrProjUV(p : vec3<f32>) -> vec3<f32> {
   let cp = U.proj * vec4<f32>(p, 1.0);
   let ndc = cp.xy / cp.w;
-  return vec3<f32>(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5), cp.w);
+  return vec3<f32>(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, cp.w);
 }
 
 @fragment
@@ -1102,27 +1110,28 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let strength   = U.p0.w;
   let carReflect = U.upVS.w;
   let yCut       = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
+  let uvGl       = ssrTexUV(in.uv); // WebGPU y-down -> GL y-up
 
   let dC = ssrDepth(in.uv);
   // Cheap early-outs: sky (far plane), upper screen, both paths off.
-  // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
-  // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.
-  if (dC >= 0.9999 || (1.0 - in.uv.y) >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
+  // yCut is GLX's uSsrTopUV — keep uvGl.y < yCut (bottom 62% of the frame).
+  if (dC >= 0.9999 || uvGl.y >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
 
   let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
   let carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
 
-  let P = ssrViewPos(in.uv);
+  let P = ssrViewPos(uvGl);
   // View-space normal from depth finite differences (cheap; the road mask +
   // thickness test reject the noisy silhouette cases). No dpdx/dpdy so this is
   // safe below the early returns above.
   // 3-TEXEL baseline (GLX build 746): at phone resolution a 1-texel step at a
   // grazing road angle is quantization-dominated and the normal turns to noise.
+  // Offsets are in GL y-up space so +nT.y moves UP the screen — matching GLX.
   let nT = texel * 3.0;
-  let dpx = ssrViewPos(in.uv + vec2<f32>(nT.x, 0.0)) - P;
-  let dpy = ssrViewPos(in.uv + vec2<f32>(0.0, nT.y)) - P;
+  let dpx = ssrViewPos(uvGl + vec2<f32>(nT.x, 0.0)) - P;
+  let dpy = ssrViewPos(uvGl + vec2<f32>(0.0, nT.y)) - P;
   // upVS is the ROAD PLANE's normal (game.js builds it from r x t), not world-up:
   // on a gradient the two differ by the slope, and reflect() doubles that error.
   let upVSn = normalize(U.upVS.xyz);
@@ -1172,7 +1181,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   var stepLen = 0.40;
   pos = pos + R * (stepLen * ign);           // sub-step start offset per pixel
   var found = false;
-  var hitUV = vec2<f32>(0.0);
+  var hitUV = vec2<f32>(0.0);               // GL y-up
   var hitEdge = 0.0;
   for (var i = 0; i < 24; i = i + 1) {
     prevPos = pos;
@@ -1219,7 +1228,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // the glossy-here/matte-there patching. Hold cover constant and blend the
   // content by the hit's own screen-edge confidence.
   let conf = select(0.0, clamp(hitEdge, 0.0, 1.0), found);
-  var reflCol = mix(skyRefl, textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb, conf);
+  var reflCol = mix(skyRefl, textureSampleLevel(sceneTex, sceneSamp, ssrTexUV(hitUV), 0.0).rgb, conf);
   // Road: constant cover; car: confidence-scaled (falls through to lit env on miss).
   let cover = select(0.60, conf, carDom);
   // Soft-clip the reflected HDR colour before it's substituted (caps the mirror
@@ -1231,8 +1240,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // depth-derivative noise, and this term swings the amount across 0.55..0.97.
   let fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
   var amt = ssrGate * select(0.55 + 0.42 * fres, 0.50 + 0.45 * fres, carDom);
-  // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
-  amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
+  // Seam fade at the cutoff (GL y-up, same as the gate).
+  amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, uvGl.y));
   amt = clamp(amt * cover, 0.0, select(0.80, 0.85, carDom));
   return vec4<f32>(reflCol, amt);
 }`;
