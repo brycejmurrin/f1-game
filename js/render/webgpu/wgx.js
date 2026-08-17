@@ -2690,7 +2690,9 @@ const WGX = (function () {
         s[16] = gsh[0]; s[17] = gsh[1]; s[18] = gsh[2];
         s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
         s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2];
-        s[23] = (T && T.sunShaftSpread != null) ? T.sunShaftSpread : 1.0;                 // gradeHi.w = shaftSpread
+        // GLX: uShaftSpread = sqrt(max(0.05, sunShaftMul)) — not a separate knob.
+        const _shaftSpreadMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
+        s[23] = Math.sqrt(Math.max(0.05, _shaftSpreadMul));                              // gradeHi.w = shaftSpread
         // texel.xy = full-res; zw = half-res AO texel (0 = skip bilateral upsample)
         s[24] = 1 / tw; s[25] = 1 / th;
         s[26] = haveAO ? (1 / halfW) : 0; s[27] = haveAO ? (1 / halfH) : 0;
