@@ -66,8 +66,11 @@ empty `__apex.logs()` gfx filter — WGX's first live frames in this repo.
 SwiftShader is a **validation and lifecycle** oracle, not a visual one: it
 proves the shaders compile, the bind groups match and the buffers upload. It
 says nothing about how the result looks. Note also that three's WebGPU backend
-(TLX auto-picks it on Chromium desktop) still dies here inside its own
-`mappedAtCreation` upload — probe TLX with the WebGL2 pin, as the specs do.
+(TLX auto-picks it on Chromium desktop) still paints a **blank visible canvas**
+on software adapters — TLX now auto-pins WebGL2 there (same adapter sniff as
+WGX); WGX uses a hand-written 2D readback compositor when
+`apex26.gfxWgxAllowSoftware=1`. Probe TLX with `tlx-shot.mjs` or the WebGL2
+pin in specs when you need pixels.
 
 ---
 

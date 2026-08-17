@@ -187,11 +187,34 @@ const TLX = (function () {
       // Unset pin: WebKit (Safari Mac + every iOS browser) → WebGL2. three's
       // getFallback fires only when navigator.gpu is ABSENT; Safari 26 exposes
       // it (user-enabled) and then WebGPURenderer paints black / throws.
-      // Chromium desktop keeps auto-pick. `apex26.tlxForceGL` "1"/"0" overrides.
+      // Software WebGPU (SwiftShader/Lavapipe/headless) is the same: three's
+      // WebGPURenderer validates and presents with gpuErrors=0 while the visible
+      // canvas stays blank — WGX carries a hand-written 2D readback compositor;
+      // three does not, so pin WebGL2 there too (measured 2026-08-17). Pin "0"
+      // still opts into WebGPU for real-device testing. `apex26.tlxForceGL`
+      // "1"/"0" overrides the auto rules below.
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
+      let _softWebGpu = false;
+      if (typeof navigator !== "undefined" && navigator.gpu && _glPin !== "0") {
+        try {
+          const _pref = isMobile ? "low-power" : "high-performance";
+          let _ad = await navigator.gpu.requestAdapter({ powerPreference: _pref });
+          if (!_ad) _ad = await navigator.gpu.requestAdapter();
+          if (_ad) {
+            const info = _ad.info || null;
+            const blob = info ? JSON.stringify(info).toLowerCase() : "";
+            const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+            _softWebGpu = !!(_ad.isFallbackAdapter || infoEmpty
+              || /HeadlessChrome/i.test(ua)
+              || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+          }
+        } catch (_) { /* treat as hardware */ }
+      }
+      const forceWebGL = _glPin === "1" ? true
+        : _glPin === "0" ? false
+        : !!(isMobile || isWebKit || _softWebGpu);
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
@@ -259,7 +282,8 @@ const TLX = (function () {
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
-          "(forceWebGL", forceWebGL, "pin", _glPin, "isMobile", isMobile + ")");
+          "(forceWebGL", forceWebGL, "pin", _glPin, "softWebGpu", _softWebGpu,
+          "isMobile", isMobile + ")");
       } catch (_) { /* logging must never cost the backend its boot */ }
 
       // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx.js webglcontextlost) ──
@@ -1684,7 +1708,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, softWebGpu: _softWebGpu,
             };
           },
           materialCacheSize() { return matCache.size; },

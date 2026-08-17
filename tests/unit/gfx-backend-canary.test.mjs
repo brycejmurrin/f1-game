@@ -51,10 +51,11 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
-test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
+test("TLX pins WebKit (Safari Mac + iOS) and software WebGPU to three's WebGL2 backend", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!\(isMobile \|\| isWebKit\)/);
+  assert.match(src, /_softWebGpu/);
+  assert.match(src, /forceWebGL = _glPin === "1" \? true[\s\S]{0,120}_softWebGpu\)/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
 });
 
