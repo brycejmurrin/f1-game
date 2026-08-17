@@ -56,7 +56,7 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 |--------|---------------|--------------------------|--------------------------|-------|
 | **SwiftShader** (`WEBGPU_CHROMIUM_ARGS`) | yes | `[160,170,171,255]` | ~11 s (`gfx-probe`) | Default for harness, MCP, Playwright. Needs `sessionStorage apex26.wgxCapture=1` so WGX soft-presents to a 2D canvas — native swapchain is blank in CI. |
 | **Lavapipe headless** (`WEBGPU_LAVAPE_*` + `--headless=new`) | yes | `[161,170,172,255]` | ~11 s (same wait loop) | Second Vulkan software stack (Mesa `lvp_icd.json`). Same validation signal as SwiftShader; upstream three.js e2e direction. MCP: override via `APEX_CHROME_ARGS` + `VK_ICD_FILENAMES` (measured non-black `[64,34,13,255]`). |
-| **Lavapipe + Xvfb headed** | yes | `[0,0,0,0]` | ~2.3 min | WGX lifecycle OK (`gpuErrors: 0`, `render({what:"view"}).coveragePct` populated) but **canvas `drawImage`/screenshot stays black** — not a visual oracle. |
+| **Lavapipe + Xvfb headed** | yes | `[161,170,172,255]` (after soft-present blit) | ~2.3 min | Fixed 2026-08-17: headed Lavapipe reports non-enumerable `adapter.info.architecture=swiftshader` that `JSON.stringify` hid, so WGX skipped soft-present. Now reads fields directly + `wgxCapture` forces the 2D blit path. |
 | **llvmpipe (WebGL2 only)** | n/a | GLX path renders | **9.5 s vs 25.8 s** SwiftShader on same montreal boot | Drop `--use-angle=swiftshader`; renderer string `ANGLE (Mesa, llvmpipe …)`. Does **not** expose `navigator.gpu`. Helps default GLX + TLX (`tlxForceGL=1`), not WGX probes. |
 
 Commands that produced the table:
