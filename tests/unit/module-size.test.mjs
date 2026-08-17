@@ -292,8 +292,8 @@ const CEILINGS = {
   // -> 8293 PERF-FINDINGS Δprog 5.01% / sand audit (pre-reject, cull hoist, shared player anchor, invert/LED gates).
   // -> 8311 PERF-FINDINGS shadow ribbon chunk: road+terrain castShadowChunked vs
   // sun ortho (~89% tris culled; depth bit-identical) + freeChunkedMesh on reload.
-  // -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
-  "js/game.js": 8321,
+  // -> 8333 perf-hunt: S3 propBatches draw/free/shadow + envCull road chunk.
+  "js/game.js": 8333,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -316,7 +316,7 @@ const CEILINGS = {
   // record the placement constraint, which is real: quoting the api literal's
   // opening text in that comment moved hooks-documented.test.mjs's slice point
   // and invented a hook called `for`.
-  "js/game/apex.js": 3106,
+  "js/game/apex.js": 3109,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

@@ -244,6 +244,16 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
+      // S3: GPU batches for nodes that skipped the props fuse. Glass stays fused
+      // (reflective material). Fall back to empty if the backend has no consumer.
+      track.meshes.propBatches = null;
+      if (track.graph && G.createInstancedBatch) {
+        const { batches } = track.graph.batches();
+        if (batches.length) {
+          track.meshes.propBatches = batches.map((b) =>
+            G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
+        }
+      }
       const glassGeo = safe("glass", _props.glass);
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
@@ -701,35 +711,50 @@ const Tracks = (function () {
       diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions", center: c, size });
       return false;
     };
+    // `_dryRun` / `_absorbOnly` honour graph.instance's prefer-instance path:
+    // dry = guard only (no cull tally — the real pass tallies); absorbOnly =
+    // terrain seating without triangles for GPU-instanced full nodes.
     const addBox = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      if (rejRad(c, rad, h, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
       RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { _culled++; return false; }
+      if (rejRad(c, rad, h, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
       RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
-      if (rejRad(c, __M.max(rB, rT), h, basis)) { _culled++; return false; }
+      if (rejRad(c, __M.max(rB, rT), h, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbUp(c, __M.max(rB, rT), h); return true; }
       RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
       absorbUp(c, __M.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("pyramid", c, sz);
-      if (rejBox(c, sz, basis)) { _culled++; return false; }
+      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
+      if (o._dryRun) return true;
+      if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
@@ -753,7 +778,10 @@ const Tracks = (function () {
     // behind a stand's shell, and testing each one is pure cost. RAW.* returns
     // nothing, so wrap to report the primitive as landed; routing these through
     // GUARDED instead would silently start culling geometry that ships today.
-    const rawOk = (fn) => (...args) => { fn(...args); return true; };
+    const rawOk = (fn) => (o, ...rest) => {
+      if (o && (o._dryRun || o._absorbOnly)) return true;
+      fn(o, ...rest); return true;
+    };
     const UNGUARDED = {
       addBox: rawOk(RAW.addBox), addCyl: rawOk(RAW.addCyl), addCone: rawOk(RAW.addCone),
       addFrustum: rawOk(RAW.addFrustum), addPrism: rawOk(RAW.addPrism), addPyramid: rawOk(RAW.addPyramid),
@@ -763,10 +791,16 @@ const Tracks = (function () {
     // note()). opts.buf targets a different accumulator than the props soup:
     // window panes route their unlit half to glassBuf so it draws with the
     // reflective material. opts.unguarded picks the RAW set above.
-    const instance = (key, place, build, meta, opts) =>
-      graph.instance(key, place, build, meta,
-                     opts && opts.unguarded ? UNGUARDED : GUARDED,
-                     (opts && opts.buf) || out);
+    // Default props soup sets `_preferInstance` so full nodes skip the fuse
+    // (S3); glass/alt buffers keep fusing — batches() has no material tag yet.
+    const instance = (key, place, build, meta, opts) => {
+      const buf = (opts && opts.buf) || out;
+      const emit = opts && opts.unguarded ? UNGUARDED : GUARDED;
+      if (buf === out) buf._preferInstance = true;
+      const n = graph.instance(key, place, build, meta, emit, buf);
+      if (buf === out) buf._preferInstance = false;
+      return n;
+    };
 
     // Per-segment driving boundary (lateral limit from the centreline on each
     // side). Initialised to the default runoff, then TIGHTENED wherever a solid
