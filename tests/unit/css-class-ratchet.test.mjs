@@ -2,7 +2,7 @@
  * the distinct CSS class tokens across css/, and the DOM node count of the
  * single-file shell.
  *
- * WHY THIS FILE EXISTS AT ALL. `.claude/skills/restructure-screens-css/SKILL.md`
+ * WHY THIS FILE EXISTS AT ALL. `.claude/skills/restructure-screens-css/references/rules.md`
  * rule 11 says to "ratchet the distinct-class count the way module-size.test.mjs
  * ratchets game.js". docs/archive/research/UI-REMODEL-DECISION-2026-08.md
  * prescribed it concretely ("start at 538"). It was never installed — and

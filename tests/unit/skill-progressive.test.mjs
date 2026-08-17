@@ -69,12 +69,20 @@ test("every skill: name matches folder, description has a trigger, body ≤ 500 
   assert.deepEqual(fat, [], "SKILL.md over the official 500-line cap — split into references/");
 });
 
-test("the two previously-fat skills stay split (index + references/)", () => {
-  // Measured 2026-08-17: survey-ui-matrix 389, agent-view 298. Both now
-  // follow the mcp-probe shape. A revert that pastes the catalog back into
-  // SKILL.md would pass the 500-line ceiling and still burn tokens.
-  for (const [name, ref] of [["survey-ui-matrix", "references/probes.md"],
-                             ["agent-view", "references/surface.md"]]) {
+test("previously-fat skills stay split (index + references/)", () => {
+  // Measured 2026-08-17 then split: survey-ui-matrix 389, agent-view 298,
+  // playwright-probe 200, restructure-screens-css 209, multiplayer-debug 193,
+  // career-mode 176. A revert that pastes the catalog back into SKILL.md
+  // would pass the 500-line ceiling and still burn tokens.
+  const splits = [
+    ["survey-ui-matrix", "references/probes.md"],
+    ["agent-view", "references/surface.md"],
+    ["playwright-probe", "references/recipes.md"],
+    ["restructure-screens-css", "references/rules.md"],
+    ["multiplayer-debug", "references/workflow.md"],
+    ["career-mode", "references/workflow.md"],
+  ];
+  for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
     assert.ok(skill.split("\n").length <= 180, `${name} SKILL.md grew back past 180`);
     assert.match(skill, new RegExp(ref.replace(".", "\\.")));

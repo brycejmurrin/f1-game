@@ -349,6 +349,29 @@ class TinyfishBackend:
         return resp.get("result") or resp
 
 
+def _static_catalog(backend: str) -> list[dict[str, Any]]:
+    """Frozen names so tools/list never returns empty.
+
+    Cloud hosts call tools/list ONCE at session start (capabilities.tools.listChanged
+    is False). If either backend's ensure() throws — tinyfish not built, chrome
+    wrapper missing — the host caches an empty catalog for the whole session.
+    Measured 2026-08-17: apex-wrap advertised 0 tools while the CLI list-tools
+    traceback was `tinyfish ensure failed: Missing build at scratch/tinyfish-mcp-server`.
+    The MOCK_* lists are the measured upstream names; advertising them statically
+    lets the host route chrome_* / tinyfish_* even when the backend is down.
+    `call` still ensure()s and fails with a useful error.
+    """
+    names = MOCK_CHROME if backend == "chrome" else MOCK_TINYFISH
+    return [
+        {
+            "name": n,
+            "description": f"{backend} {n} (static catalog — live backend unavailable at list time)",
+            "inputSchema": {"type": "object"},
+        }
+        for n in names
+    ]
+
+
 def prefix_tools(backend: str, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     pref = CHROME_PREFIX if backend == "chrome" else TINYFISH_PREFIX
     out: list[dict[str, Any]] = []
@@ -368,9 +391,17 @@ class Bridge:
         self.tinyfish = TinyfishBackend()
 
     def all_tools(self) -> list[dict[str, Any]]:
-        chrome = prefix_tools("chrome", self.chrome.tools())
-        tiny = prefix_tools("tinyfish", self.tinyfish.tools())
-        return chrome + tiny
+        # NEVER let one backend's ensure() empty the whole catalog — see
+        # _static_catalog. A throw here is how apex-wrap shipped 0 tools.
+        out: list[dict[str, Any]] = []
+        for backend, getter in (("chrome", self.chrome.tools), ("tinyfish", self.tinyfish.tools)):
+            try:
+                if os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no"):
+                    raise RuntimeError("PROBE_MCP_FAIL_BACKENDS")
+                out.extend(prefix_tools(backend, getter()))
+            except Exception:
+                out.extend(prefix_tools(backend, _static_catalog(backend)))
+        return out
 
     def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         backend, tool = route(name)
