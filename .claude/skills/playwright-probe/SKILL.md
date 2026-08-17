@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, or Playwright headless probes. For hook catalogs use agent-view; for camera semantics use debug-cameras; for a live canvas use mcp-probe. A blank WGX canvas in-container is expected (webgpu-debug); live version.json is deploy-research or mcp-probe deploy-check.
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, or Playwright headless probes. For hook catalogs use agent-view; for camera semantics use debug-cameras; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. Live version.json is deploy-research or mcp-probe deploy-check.
 ---
 
 # Headless Playwright probing (parallel)

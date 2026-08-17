@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Diagnose WGX soft-present blit on Lavapipe/Xvfb vs headless.
+// Diagnose WGX soft-present: visible #game 2D blit vs capturePixels readback
+// across SwiftShader / Lavapipe / Lavapipe+Xvfb. Prefer gfx-probe.mjs for the
+// primary visible-canvas gate; this tool is a low-level A/B diagnostic.
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

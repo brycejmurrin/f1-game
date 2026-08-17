@@ -113,8 +113,8 @@ try {
 
   await page.addInitScript(([wantLite, dropRg]) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
-    // Soft-adapter gate refuses Dawn SwiftShader by default (blank canvas).
-    // This tool intentionally validates/captures on software — allow it.
+    // Soft-adapter gate refuses Dawn SwiftShader by default (native swapchain
+    // never composites). This tool intentionally validates/captures on software.
     localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
     if (dropRg && navigator.gpu) {

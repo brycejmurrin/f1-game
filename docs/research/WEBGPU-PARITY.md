@@ -78,7 +78,7 @@ unrecoverable even by `unconfigure()`. A device that ever touched its
 swapchain can render but never read back — which is exactly what "doesn't
 execute" looked like from outside.
 
-The way past both (2026-08-17, cache 1342): on software adapters WGX
+The way past both (2026-08-17, cache 1342+): on software adapters WGX
 soft-presents — the final pass renders into a per-frame `COPY_SRC` texture
 instead of the swapchain, `getCurrentTexture()` is never called, and each frame
 is 2D-blitted onto visible `#game` via ephemeral staging buffers
@@ -552,7 +552,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **refuses** by default → GLX fallback (`gfxWgxFail=software WebGPU adapter…`). Escape: `apex26.gfxWgxAllowSoftware=1` |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools

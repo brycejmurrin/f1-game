@@ -1051,7 +1051,7 @@ every WGSL module and validates every pipeline. The ceiling, corrected
 2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
-found). **Software compositor (2026-08-17, cache 1342):** WGX soft-presents
+found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
 `node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback

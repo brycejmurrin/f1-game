@@ -74,7 +74,7 @@ that SSAO/god-ray blur axes differ and both particle layers survive.
 WGX generates mips once when `_envProbeLive` flips; GLX remips every full
 6-face cycle. Later cycles leave stale higher mips for rough paint samples.
 
-### 1.3 ~~Soft-present staging destroy vs in-flight `mapAsync`~~ (Fixed 2026-08-17, cache 1342)
+### 1.3 ~~Soft-present staging destroy vs in-flight `mapAsync`~~ (Fixed 2026-08-17, cache 1342+)
 
 Was: persistent staging buffer + `_softBusy` gate in `begin()` starved frames;
 resize could destroy buffer mid-readback. Now: ephemeral per-frame staging in

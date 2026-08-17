@@ -1389,7 +1389,7 @@ test("pipelines that share a shader module never use layout:'auto'", async () =>
   // compatible" and dropped the whole frame's command buffer. Invisible in
   // this container (software adapters force MSAA 1; the mock validates
   // nothing) — found 2026-08-17 by the first real pixel capture
-  // (tools/wgx-capture.mjs), which is the primary oracle for this class.
+  // (tools/wgx-capture.mjs / gfx-probe.mjs on software adapters).
   // This test pins the structural rule the fixes follow, using only the
   // descriptors the harness already records.
   const h = makeGpuHarness();

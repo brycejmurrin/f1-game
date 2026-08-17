@@ -25,7 +25,7 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**The ceiling, corrected 2026-08-17 (cache 1342):** SwiftShader-Dawn EXECUTES
+**The ceiling, corrected 2026-08-17 (cache 1342+):** SwiftShader-Dawn EXECUTES
 shader work here. Two narrower limits remain: the **native swapchain** never
 composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
@@ -66,9 +66,9 @@ node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval 'a.diag({downl
 
 Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
-`render({what:"view"})` is the cheap scene truth; for REAL pixels run
-`node tools/wgx-capture.mjs <track>` (offscreen capture — the WGX canvas
-itself still screenshots blank in-container).
+`render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
+`node tools/gfx-probe.mjs --backend webgpu <track>` (`#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs <track>`.
 
 ## Load on demand
 

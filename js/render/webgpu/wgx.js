@@ -2890,18 +2890,12 @@ const WGX = (function () {
     }
 
     // ── capturePixels(): read the NEXT presented frame back as RGBA ──────────
-    // Source: the SOFT-PRESENT texture on software adapters (COPY_SRC by
-    // construction, and the swapchain is never touched there — headless
-    // SwiftShader permanently breaks mapAsync on a device the moment
-    // getCurrentTexture() is FIRST called, bisected 2026-08-17), else the
-    // swapchain texture (configured with COPY_SRC; re-acquiring inside the
-    // same task returns this frame's texture per spec). present() appends one
-    // copyTextureToBuffer to the frame's own encoder, then maps the staging
-    // buffer after submit. This is the container's real pixel oracle for WGX:
-    // SwiftShader-Dawn EXECUTES draws; only the headless canvas
-    // PRESENT/screenshot path shows blank. One request in flight; resolves
-    // {width, height, data:Uint8ClampedArray} already swizzled to RGBA
-    // whatever the source format.
+    // Source: softPresentTex on software adapters (COPY_SRC; swapchain never
+    // touched — first getCurrentTexture() breaks mapAsync device-wide), else
+    // the swapchain texture. present() encodes copyTextureToBuffer on the
+    // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
+    // readback oracle — visible #game is the soft-present 2D blit; prefer
+    // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
     let _capReq = null;
     function capturePixels() {
       if (_lost) return Promise.reject(new Error("device lost"));
