@@ -747,6 +747,14 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
   assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
   assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
+  // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
+  assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
+  assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
+  assert.doesNotMatch(
+    CHUNKS_SOURCE,
+    /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
+    "markings mip must not reuse the clamped aaX (phone bare-ribbon death)",
+  );
 });
 
 test("WGX god-ray and env probe match GLX gates", () => {
