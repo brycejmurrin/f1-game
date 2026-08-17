@@ -65,9 +65,8 @@ Commands:
 
 ```sh
 npm run test:tooling-fast
-npm run test:debris
 node --test tests/unit/race-control.test.mjs
-node tools/test-bg.mjs debris
+node tools/test-bg.mjs debris   # in background (non-blocking)
 ```
 
 Deep references:

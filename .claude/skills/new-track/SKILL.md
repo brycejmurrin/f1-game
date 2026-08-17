@@ -129,8 +129,8 @@ in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline)
 6. **Tests**:
    ```sh
    node tools/verify-track.cjs <id>
-   npm run test:circuit      # walls + autopilot + elevation across circuits
-   npm run test:barriers     # barrier geometry (tracks-walls.spec.js)
+   node tools/test-bg.mjs circuit   # in background: walls + autopilot + elevation across circuits
+   node tools/test-bg.mjs barriers  # in background: barrier geometry (tracks-walls.spec.js)
    ```
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation

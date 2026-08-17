@@ -132,11 +132,11 @@ Write **relative / directional** checks that survive retuning:
 - "heading barely changes off-track with zero steer".
 - "reverses then recovers to forward after a spin".
 
-Re-run after any change:
+Re-run in the background (non-blocking) after any change:
 ```sh
-npm run test:physics      # physics + elevation + longitudinal regression
-npm run test:behaviour    # collision + drift + offtrack + collision-ai-fixes
-npm run test:steering     # presets + sliders + steering modes
+node tools/test-bg.mjs physics      # in background: physics + elevation + longitudinal regression
+node tools/test-bg.mjs behaviour    # in background: collision + drift + offtrack + collision-ai-fixes
+node tools/test-bg.mjs steering     # in background: presets + sliders + steering modes
 ```
 There is also a standalone Playwright probe worth running for grip work:
 `node tools/check-physics.mjs <grip|bank|roadfollow|steer>` (each subcommand

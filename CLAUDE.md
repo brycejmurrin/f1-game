@@ -29,10 +29,11 @@ and is slow. The rules:
   green run (measured 344/18 -> 439/0, no source change).
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps it to seconds.
 - **Background test execution rule**: Always run long or browser-based test
-  suites in the background using `tools/test-bg.mjs` rather than blocking the
-  interactive process. Fast unit tests (`test:tooling-fast`) run synchronously;
-  browser tests (`test:tiny`, `test:smoke`, etc.) should run backgrounded and
-  be checked asynchronously.
+  suites in the background using `node tools/test-bg.mjs <groups>` rather than
+  blocking the interactive process. Fast unit tests (`npm run test:tooling-fast`)
+  run synchronously in seconds; browser tests (`tiny`, `smoke`, `circuit`, etc.)
+  should run backgrounded and be checked asynchronously via `tools/test-bg.mjs --status`
+  and log inspection. Never block interactive shell commands on browser tests.
 - **ONE Playwright process at a time, ONE browser group per batch.** Two
   processes share one HTTP server and oversubscribe the 4 cores; killing
   either strands the other, and browser+browser pairing is the measured

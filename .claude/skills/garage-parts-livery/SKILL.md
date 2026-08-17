@@ -95,7 +95,7 @@ The **shark fin** has two slots: `fin` (plate colour, defaults to `c2`) and
 Commands:
 
 ```sh
-npm run test:parts                              # parts physics + garage specs
+node tools/test-bg.mjs parts                       # parts physics + garage specs in background
 node tools/audit-parts.mjs [--cats=engine,aero] # every option + factory preset PNGs
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 python3 -m http.server 3456                       # for carview.html / render tools
@@ -135,8 +135,8 @@ Related skills: **`car-viewer`**, **`career-mode`**, **`tune-physics`**, **`debu
    ```
    Or interactively: `tools/carview.html?team=mclaren&aero=extreme`.
 
-7. **Test and ship.** Run `npm run test:parts` for catalog/physics/visual recipes;
-   run `npm run test:career` when you changed research locks or garage ownership UI.
+7. **Test and ship.** Run `node tools/test-bg.mjs parts` for catalog/physics/visual recipes;
+   run `node tools/test-bg.mjs career` when you changed research locks or garage ownership UI.
    Bump `?v=N` + `version.json` via **`bump-cache`** before commit.
 
 ## Common Mistakes

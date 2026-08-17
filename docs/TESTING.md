@@ -86,8 +86,8 @@ narrow is a missed regression, one that is too wide costs minutes.
 
 | When | Run |
 |---|---|
-| after any edit | `npm run test:tiny` — page loads, `__apex` responds. If this is red nothing else is worth running |
-| in the edit loop | `npm run test:tooling-fast` (~30 s, structural) then the groups `pick-tests` named |
+| after any edit | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds (run in background, non-blocking) |
+| in the edit loop | `npm run test:tooling-fast` (~30 s, structural) then the groups `pick-tests` named (`node tools/test-bg.mjs <groups>`) |
 | before pushing | those groups + `npm run test:sweeps` if you touched geometry |
 | single spec | `npm test -- tests/<file>.spec.js` |
 | single unit suite | `node --test tests/<file>.test.mjs` |

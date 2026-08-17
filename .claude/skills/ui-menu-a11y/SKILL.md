@@ -55,7 +55,7 @@ Relevant specs in `test:ui`:
 | `tests/specs/ui-button-touch.spec.js` | Escape/back ladder (incl. pause settings → `#pm-settings-close`), touch controls, dialog cancel paths |
 | `tests/specs/ui-scale.spec.js` | UI-size/zoom and coarse-pointer layout regressions |
 | `tests/specs/hud-layout.spec.js` | HUD safe-area, touch landscape, control docking |
-| `tests/specs/ui-audit.spec.js` | The screen gallery — every menu at four viewports (portrait, landscape, iPad, desktop). A capture harness: it asserts nothing, so read its PNGs, do not read its pass count. `npm run test:gallery` |
+| `tests/specs/ui-audit.spec.js` | The screen gallery — every menu at four viewports (portrait, landscape, iPad, desktop). A capture harness: it asserts nothing, so read its PNGs, do not read its pass count. `node tools/test-bg.mjs gallery` |
 
 Deep references:
 
