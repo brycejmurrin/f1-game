@@ -876,13 +876,13 @@ const WGX = (function () {
       lampShadowG0BindGroup = device.createBindGroup({
         layout: shadowG0Layout, entries: [{ binding: 0, resource: { buffer: lampShadowUBO } }],
       });
-    matPlaceTex = device.createTexture({
-      size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    matPlaceView = matPlaceTex.createView({ dimension: "2d-array" });
-    matAlbedoView = matPlaceView;
-    matNormalView = matPlaceView;
+      matPlaceTex = device.createTexture({
+        size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      matPlaceView = matPlaceTex.createView({ dimension: "2d-array" });
+      matAlbedoView = matPlaceView;
+      matNormalView = matPlaceView;
       matArraySamp = device.createSampler({
         magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
         addressModeU: "repeat", addressModeV: "repeat",
@@ -3525,7 +3525,13 @@ const WGX = (function () {
   // gpuErrors(): how many uncaptured GPU errors the live device has raised. Zero
   // is the only healthy value; a nonzero count on a backend that "initialised
   // fine" is the answer to "why is the screen black / wrong on my phone".
-  return { create, lastFailure: () => _lastFailure, gpuErrors: () => _gpuErrors };
+  // isSupported(): boolean feature detection for WebGPU availability.
+  return {
+    create,
+    lastFailure: () => _lastFailure,
+    gpuErrors: () => _gpuErrors,
+    isSupported: () => typeof navigator !== "undefined" && !!navigator.gpu,
+  };
 })();
 
 // No-build global export.
