@@ -81,35 +81,16 @@ test("the default diff base is the DEPLOY branch, which pages.yml names", () => 
     "tools/pick-tests.mjs DEPLOY_BRANCH disagrees with .github/workflows/pages.yml");
 });
 
-test("a PARKED suite is never recommended as a gate", () => {
-  // tests/specs/tracks-visual.spec.js ships no golden baselines and self-skips
-  // all 40 circuits, so `npm run test:visual` prints
-  // `= run passed (40/40 done, 0 failed)` at 0.0 s per test while asserting
-  // NOTHING. pick-tests used to name it for every js/render/{glx,gfx} change,
-  // which is how that vacuous green kept getting mistaken for renderer
-  // verification (measured 2026-08-14, on a chunked-draw change).
-  //
-  // This is deliberately conditional on the baselines being ABSENT rather than
-  // a flat "never recommend visual": generating them is a supported operation
-  // the spec documents, and the moment it happens this test fails and says to
-  // put the group back. A bare exclusion would silently outlive its reason —
-  // the same failure mode as the suite it is guarding.
-  const spec = fs.readFileSync(path.join(ROOT, "tests/specs/tracks-visual.spec.js"), "utf8");
-  const snapDir = path.join(ROOT, "tests/specs/tracks-visual.spec.js-snapshots");
-  const haveBaselines = fs.existsSync(snapDir)
-    && fs.readdirSync(snapDir).some((f) => f.endsWith(".png"));
-  const selfSkips = /test\.skip\(!HAVE_BASELINES/.test(spec);
-
-  const mentionsVisual = RULES.some(([, groups]) => groups.includes("visual"));
-  if (!haveBaselines && selfSkips) {
-    assert.equal(mentionsVisual, false,
-      "tools/pick-tests.mjs recommends test:visual, but tracks-visual.spec.js "
-      + "still has no committed baselines and self-skips — the group would "
-      + "report a green that asserts nothing");
-  } else {
-    assert.equal(mentionsVisual, true,
-      "tracks-visual.spec.js can now actually assert (baselines committed, or "
-      + "the HAVE_BASELINES skip removed) — put \"visual\" back in the "
-      + "js/render/{glx,gfx} rule in tools/pick-tests.mjs and delete this branch");
-  }
+test("parked tracks-visual lives under tests/manual and is never a gate", () => {
+  // No golden baselines: the suite self-skips every circuit and used to report
+  // vacuous green via a dedicated npm group. It now lives under tests/manual/
+  // (playwright testIgnore) so pick-tests and package.json cannot recommend it.
+  const manualVisual = path.join(ROOT, "tests", "manual", "tracks-visual.spec.js");
+  assert.ok(fs.existsSync(manualVisual),
+    "tracks-visual.spec.js must live under tests/manual/");
+  assert.equal(RULES.some(([, groups]) => groups.includes("visual")), false,
+    "tools/pick-tests.mjs must not recommend a visual group");
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.ok(!pkg.scripts["test:visual"],
+    "package.json must not expose test:visual while baselines are absent");
 });

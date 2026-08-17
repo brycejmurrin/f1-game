@@ -1486,7 +1486,7 @@ const api = {
   // it, do not mutate it.
   // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
   // accumulates real frame dt, so two runs of the same frozen scene render
-  // different pixels — the reason tests/specs/tracks-visual.spec.js could never hold a
+  // different pixels — the reason tests/manual/tracks-visual.spec.js could never hold a
   // baseline. Setting it makes a capture reproducible; it keeps advancing from
   // the value you set unless the scene is also headless().
   renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },
