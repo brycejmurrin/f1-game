@@ -59,14 +59,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // barrier hanging over the racing surface (the props-over-road failure this
 // baseline's +1 paid for). A deliberate trade, not drift.
 //
-// silverstone 15 -> 16 (2026-08-17): the start-gantry crossbar fix (4f109f76)
-// seats the beam on the mast anchors (`vadd(L.c, L.u, ...)`) instead of a raw
-// sceneryShift-uncompensated `px[kb]` read that hung it tens of metres away.
-// Bridging the masts means the beam's underside now abuts two same-height
-// mast caps — the same seam class as vegas's panel joints. The +1 pays for a
-// gantry that actually spans the grid; measured identically on the deploy
-// head alone and on the WGX-fix merge (this tree), so it is that commit's
-// deliberate trade, not a merge interaction.
+// silverstone 16 -> 15 (2026-08-17, same day as the 15 -> 16 raise): the +1
+// from the start-gantry crossbar fix (4f109f76) was not the mast-cap seam the
+// raise recorded — measured with --why before/after, it was the crossbar
+// sharing the typed overheadSpan's exact planes at the same frac (top at
+// clearance+thickness = H+0.70, front/back at ±depth/2 = ±0.7): two
+// same-facing ~18 m² faces at 0.0 mm over the start grid. Sizing the crossbar
+// 0.1 m inside the span on those axes ([50,2.0,1.2] centred 0.75 below the
+// beam) removes the pair outright, so the baseline goes back down instead of
+// carrying a real z-fight as a recorded trade.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
