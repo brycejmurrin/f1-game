@@ -363,7 +363,13 @@
           }
           _grSel.length = total;
           _grSel.sort(_grByD);
-          grNL = Math.min(12, total);
+          // 6, not 12 — the TSL beam march is bounded at 6 (tsl-post.js Loop
+          // end: int(6)). grLampIdx below is a position in THIS ordering, so a
+          // mapped floodlight sorting 7th-12th produced a lampShadowIdx the
+          // march can never equal: its beam glowed straight through cars and
+          // walls instead of being carved by them, on any dense floodlit
+          // section. Same defect GLX carried until glx/post.js was cut to 6.
+          grNL = Math.min(6, total);
           for (let i = 0; i < grNL; i++) {
             const oi = _grSel[i].o;
             // Map the record holding this frame's spot-shadow map to its slot

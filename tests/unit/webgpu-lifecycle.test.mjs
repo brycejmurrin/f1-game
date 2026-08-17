@@ -631,6 +631,37 @@ test("WGX source keeps the proven parity fixes", () => {
   assert.doesNotMatch(WGX_SOURCE, /colors\[i \* 3\] \|\| 1/);
 });
 
+// PerfTry.skyLate (default ON) draws sky after the opaque world. Sky VS puts
+// the FS-tri at depth 1.0; with less-equal + depthWrite off that only fills
+// far-plane holes (GLX LEQUAL parity). depthCompare "always" was correct for
+// sky-FIRST and catastrophic for skyLate: late sky overwrote the lit buffer
+// (hall-of-mirrors / melted scenery; cars still visible because they draw after).
+
+test("WGX ground mist matches GLX band/strength", () => {
+  // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).
+  assert.match(CHUNKS_SOURCE, /exp\(-lowH \* \(0\.09 \/ mh\)\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /mh \* 20\.0/);
+  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
+});
+
+test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {
+  assert.match(
+    WGX_SOURCE,
+    /skyPipeline = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "less-equal"/,
+    "skyPipeline must depth-test less-equal",
+  );
+  assert.match(
+    WGX_SOURCE,
+    /skyPipelineMS = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "less-equal"/,
+    "skyPipelineMS must depth-test less-equal",
+  );
+  assert.doesNotMatch(
+    WGX_SOURCE,
+    /skyPipeline(?:MS)? = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "always"/,
+    "sky pipelines must not use always (breaks skyLate)",
+  );
+});
+
 test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
