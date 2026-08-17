@@ -226,10 +226,18 @@ function makeGpuHarness(opts = {}) {
           features: { has: (name) => adapterFeatures.includes(name) },
           // Non-empty info = "hardware" for WGX's software-adapter gate.
           // Real Dawn SwiftShader often reports {}.
-          info: opts.softAdapter
-            ? {}
-            : { vendor: "test", architecture: "test", device: "mock-gpu" },
-          isFallbackAdapter: !!opts.softAdapter,
+          info: opts.softAdapterNonEnum
+            ? (() => {
+                const o = {};
+                Object.defineProperty(o, "vendor", { value: "google", enumerable: false });
+                Object.defineProperty(o, "architecture", { value: "swiftshader", enumerable: false });
+                Object.defineProperty(o, "device", { value: "", enumerable: false });
+                return o;
+              })()
+            : (opts.softAdapter
+              ? {}
+              : { vendor: "test", architecture: "test", device: "mock-gpu" }),
+          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -899,6 +907,18 @@ test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async (
   const gfx = await h.create();
   assert.ok(gfx, "escape hatch must still boot WGX");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+});
+
+test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
+  // Chrome Lavapipe headed: adapter.info stringifies as "{}" but .architecture is
+  // "swiftshader". Missing this misclassified hardware and skipped soft-present.
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapterNonEnum: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "non-enumerable swiftshader arch must still boot with allowSoftware");
+  assert.equal(gfx.msaa(), 1);
+  assert.match(WGX_SOURCE, /infoBlob = \[dev, ven, arch, desc\]/,
+    "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {

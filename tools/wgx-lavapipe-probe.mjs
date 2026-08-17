@@ -50,6 +50,15 @@ await page.evaluate(() => { __apex.jump(0.12, 65); __apex.snapCam(); });
 await page.evaluate((n) => new Promise((res) => {
   let i = 0; const t = () => (++i > n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
 }), 40);
+await page.waitForFunction(() => {
+  const c = document.getElementById("game");
+  if (!c || c.width < 8) return false;
+  const tmp = document.createElement("canvas");
+  tmp.width = c.width; tmp.height = c.height;
+  tmp.getContext("2d").drawImage(c, 0, 0);
+  const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+  return d[0] + d[1] + d[2] > 30;
+}, null, { polling: 100, timeout: 90000 });
 const out = await page.evaluate(async () => {
   const c = document.getElementById("game");
   const tmp = document.createElement("canvas");

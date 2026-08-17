@@ -418,14 +418,19 @@ const WGX = (function () {
       try {
         const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
         const info = adapter.info || null;
-        const blob = info ? JSON.stringify(info).toLowerCase() : "";
-        // Empty adapter.info is the SwiftShader/Dawn software fingerprint on
-        // Chrome 148 (hardware adapters report vendor/device/architecture).
-        const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+        // GPUAdapterInfo fields are NOT JSON-enumerable — Chrome returns "{}" from
+        // stringify while .vendor/.architecture hold "google"/"swiftshader" on
+        // Lavapipe Xvfb (measured 2026-08-17). Read the properties directly.
+        const dev = info && info.device;
+        const ven = info && info.vendor;
+        const arch = info && info.architecture;
+        const desc = info && info.description;
+        const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
+        const infoEmpty = !info || !(dev || ven || arch);
         _softAdapterLocal = !!(adapter.isFallbackAdapter
             || infoEmpty
             || /HeadlessChrome/i.test(ua)
-            || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+            || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
       let _allowSoft = false;
@@ -542,7 +547,9 @@ const WGX = (function () {
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
     try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
-    const _softGpu = _softAdapter;
+    // wgxCapture probes must soft-present even when adapter sniffing misses (headed
+    // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
+    const _softGpu = _softAdapter || _outProbeOff;
     if (_softGpu) _outProbeOff = true;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
