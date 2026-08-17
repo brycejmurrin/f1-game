@@ -10,6 +10,9 @@ screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
+Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
+(`matTexLod`) are ported to match GLX `lit.js` (were the main “bare tarmac”
+deltas once matTex/markings already shipped).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
