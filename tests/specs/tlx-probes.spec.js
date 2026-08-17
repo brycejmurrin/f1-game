@@ -110,7 +110,10 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(600);
+    // Same wait as the sibling "shadow-state hooks" test: a fixed 600 ms
+    // evaluate races a SwiftShader frame that can still be inside present(),
+    // so the test timeout fires before carShadowState() is even readable.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState && GLX.carShadowState().arms > 0, { polling: 100, timeout: 90_000 });
     const st = await page.evaluate(() => ({
       car: GLX.carShadowState(),
       lamp: GLX.lampShadowState(),

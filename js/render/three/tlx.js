@@ -51,9 +51,10 @@
  * (or localStorage apex26.tlxViz) paints bisect views.
  *
  * M4 STATUS: the three-map shadow subsystem is live (tlx-shadow.js,
- * TLXShaders.shadowSys): static sun map (2048²/1024² mobile, snap-cached by
- * game.js), per-frame car map (1024², desktop) and nearest-floodlight spot
- * map (512², desktop), sampled in tsl-lit via hardware-compare depth taps.
+ * TLXShaders.shadowSys): static sun map (2048²/1024² mobile/512² software-GL,
+ * snap-cached by game.js), per-frame car map (1024² desktop / 256² software-GL)
+ * and nearest-floodlight spot map (512² / 256² software-GL), sampled in tsl-lit
+ * via hardware-compare depth taps.
  * Armed flags clear in present() like GLX's post present. PCSS blocker map
  * is live on the WebGPU backend (sampler-free textureLoad downsample,
  * tlx-shadow.js); the WebGL2 fallback keeps the fixed-R look and pcss()
@@ -279,6 +280,20 @@ const TLX = (function () {
           return fam + "|" + attrs + "|" + idx + "|" + inst;
         };
       }
+      // SwiftShader / llvmpipe / WARP: the WebGL2 context already exists
+      // after init() (three claimed the canvas). Used to shrink shadow maps
+      // — see tlx-shadow.js. Real GPUs keep the authored 2048/1024/512.
+      function detectSoftwareGL() {
+        try {
+          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          if (!gl) return false;
+          const ext = gl.getExtension("WEBGL_debug_renderer_info");
+          const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
+            + " " + (gl.getParameter(gl.RENDERER) || "");
+          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+        } catch (_) { return false; }
+      }
+      const softwareGL = detectSoftwareGL();
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
@@ -370,6 +385,11 @@ const TLX = (function () {
       // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
+      // Game code writes matrixWorld on every pooled mesh. Auto-update would
+      // walk the whole graph on each renderer.render() (shadow primes + env
+      // faces + present) for no result.
+      scene.matrixAutoUpdate = false;
+      scene.matrixWorldAutoUpdate = false;
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
@@ -426,7 +446,7 @@ const TLX = (function () {
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
-          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile });
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile, softwareGL });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
@@ -957,6 +977,21 @@ const TLX = (function () {
         }
       }
 
+      function pinSkyMaterial() {
+        try {
+          const store = renderer._background;
+          if (!store) return;
+          const data = (typeof store.get === "function") ? store.get(scene) : store;
+          const mesh = data && (data.backgroundMesh || data.mesh || data.box);
+          const m = mesh && mesh.material;
+          if (m && !m.userData.tlxSkyPin) {
+            m.lights = false;
+            m.customProgramCacheKey = () => "tlx-sky";
+            m.userData.tlxSkyPin = 1;
+          }
+        } catch (_) { /* three internals: a miss just means the next present retries */ }
+      }
+
       function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
@@ -1358,6 +1393,7 @@ const TLX = (function () {
             // envSurface that samples the cube — point the shared cube node at
             // the black dummy while envRT is the render target, restore after.
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
+            pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
@@ -1496,6 +1532,11 @@ const TLX = (function () {
           if (!sky || !frameSky) return;
           sky.update(frameSky);
           scene.backgroundNode = sky.node;
+          // three lazily builds a NodeMaterial around backgroundNode. Pin it
+          // so getForRenderCacheKey does not hash child-node ids (the same
+          // compile-storm the mesh materials hit). Harmless if the mesh is
+          // not born yet — present() retries.
+          pinSkyMaterial();
         },
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false) });
@@ -1662,6 +1703,7 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
+            pinSkyMaterial();
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
           };
@@ -1801,7 +1843,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL,
             };
           },
           materialCacheSize() { return matCache.size; },

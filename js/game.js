@@ -6277,7 +6277,10 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Every-other-frame on a live race (12 frames / cube). park() freezes
+  // physics for shots/tests — then one face per frame so a parked M9 cube
+  // goes ready in 6 presents, not 12 (SwiftShader is seconds-per-frame).
+  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 1) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,

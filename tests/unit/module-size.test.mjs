@@ -299,7 +299,11 @@ const CEILINGS = {
   // this raise is call-site glue + nearbyN / soft brakeLvl path.
   // -> 8377 deploy∪perf-hunt∪WGX-present: AiDrive + energy short-circuit +
   // propBatches/envCull + WGX software-present merge (split-newline count).
-  "js/game.js": 8377,
+  // -> 8380 park()/frozen env-probe cadence: one cube face per frame when
+  // physics is frozen (shots + TLX M9) so a SwiftShader cube goes ready in 6
+  // presents, not 12. The gate lives next to the every-other-frame live-race
+  // rule it amends — splitting them would hide why frozen skips the skip.
+  "js/game.js": 8380,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
