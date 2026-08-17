@@ -1485,9 +1485,15 @@ function driverSkill(team, d, di) {
   const roll = simRnd();
   const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
   // The pace-skill scalar PLUS the racecraft axes (0..1) the driving loop reads
-  // for attack/defence (see updateCar). Still exactly ONE simRnd() draw — the
-  // stream-position contract reliability.js and career.spec.js depend on.
-  return { skill: DriverRatings.skill(r, roll), craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100 };
+  // for attack/defence/OT/ERS/lane (see updateCar + js/game/ai-drive.js). Still
+  // exactly ONE simRnd() draw — the stream-position contract reliability.js and
+  // career.spec.js depend on.
+  return {
+    skill: DriverRatings.skill(r, roll),
+    craft: (r.craft || 75) / 100,
+    awareness: (r.awareness || 75) / 100,
+    experience: (r.experience || 75) / 100,
+  };
 }
 
 // The pace an AI car gets from running a DEVELOPED build instead of its team's
@@ -1578,7 +1584,7 @@ function makeCars() {
         retired: false, dnf: null, dnfAt: null, dnfWhy: null,
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
-        ...driverSkill(team, d, di),   // skill + craft + awareness
+        ...driverSkill(team, d, di),   // skill + craft + awareness + experience
         aiBrakeT: 0, lane,
       });
     });
@@ -2131,6 +2137,10 @@ function loadTrack(idx) {
       if (track.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.roadChunked);
       if (track.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.terrainChunked);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
+      if (track.meshes.propBatches && gfx.freeInstancedBatch) {
+        for (let i = 0; i < track.meshes.propBatches.length; i++) gfx.freeInstancedBatch(track.meshes.propBatches[i]);
+        track.meshes.propBatches = null;
+      }
       if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
@@ -3217,8 +3227,12 @@ function update(dt) {
       if (!c.finished && !c.retired) { allHumansDone = false; break; }
     }
     if (anyHuman && allHumansDone) resultT = 2.2;
-    else if (cars.some((c) => c.finished)) resultT = 3.5;
-    else if (raceT > 360 * lapsTarget) resultT = 0.1;
+    else {
+      let anyFin = false;
+      for (let i = 0; i < cars.length; i++) if (cars[i].finished) { anyFin = true; break; }
+      if (anyFin) resultT = 3.5;
+      else if (raceT > 360 * lapsTarget) resultT = 0.1;
+    }
   }
   if (resultT > 0) {
     resultT -= dt;
@@ -3271,6 +3285,11 @@ function shiftLong(c, d) {
 // so nothing aliases across a pair and the relaxation loop stays allocation-free.
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
 const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+const LCAR = 4.8, WCAR = 2.0;
+// Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
+// the human path does not allocate a closure every physics step (~60/s).
+const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
+const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 function sepShares(a, b) {
   const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1;
   const netA = netPlay.owns(a), netB = netPlay.owns(b);
@@ -3278,6 +3297,32 @@ function sepShares(a, b) {
   _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
   _sep.sB = netB ? 0 : (netA ? 1 : iB / _sep.iSum);
   return _sep;
+}
+
+// Wrap-aware (prog, x) overlap + rear-vs-side decision. Hoisted out of
+// resolveCollisions so each phys step does not allocate a nested function.
+// Exact cheap-reject before wrap: |dProg| in (LCAR, L-LCAR) cannot contact.
+function pairContact(a, b) {
+  let dProg = a.prog - b.prog;
+  if (!Number.isFinite(dProg)) return null;
+  const L = track.total;
+  const adProg = dProg < 0 ? -dProg : dProg;
+  if (adProg > LCAR && adProg < L - LCAR) return null;
+  dProg = ((dProg + L / 2) % L + L) % L - L / 2;
+  if (Math.abs(dProg) > LCAR) return null;
+  const dX = a.x - b.x;
+  if (!Number.isFinite(dX)) return null;
+  const penLong = LCAR - Math.abs(dProg);
+  const penLat = WCAR - Math.abs(dX);
+  if (penLong <= 0 || penLat <= 0) return null;
+  const { iA, iB, iSum, sA, sB } = sepShares(a, b);
+  const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
+  const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
+  const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
+  _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat;
+  _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB;
+  _ct.sideContact = penLat < penLong && !forceRear;
+  return _ct;
 }
 
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -3306,48 +3351,7 @@ function collideFx(a, b, impact) {
 // to settle clusters, then a hard min-separation pass so cars can never render
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
 function resolveCollisions(ranked, dt) {
-  const LCAR = 4.8, WCAR = 2.0, PASSES = 4;
-  // One kernel for both passes below: the wrap-aware overlap test on the
-  // (prog, x) plane plus the rear-vs-side contact decision. The two passes used
-  // to restate these lines each, under a comment ordering them kept in step by
-  // hand — sharing the kernel is what makes that instruction unnecessary.
-  function pairContact(a, b) {
-    let dProg = a.prog - b.prog;
-    if (!Number.isFinite(dProg)) return null;   // never let a corrupt car spread NaN
-    const L = track.total;
-    // Cheap reject BEFORE the wrap. This runs for every ordered pair on every
-    // relaxation pass — 20 cars is 190 pairs x 5 passes = ~950 calls per physics
-    // step — and in the overwhelmingly common frame NONE of them are in contact,
-    // so the two float modulos below were being spent almost entirely to prove
-    // "not touching".
-    //
-    // The test is EXACT, not a conservative pre-filter. Both prog values live in
-    // [0, L), so dProg is in (-L, L) and the wrap maps it into [-L/2, L/2).
-    // Working through both signs, |wrapped| <= LCAR holds iff |dProg| <= LCAR
-    // (near side) or |dProg| >= L - LCAR (wrapped across the start line). So
-    // rejecting strictly between those two bounds discards exactly the pairs the
-    // old `Math.abs(dProg) > LCAR` check discarded after wrapping — same pairs,
-    // same order, no behaviour change, and the surviving few still wrap below.
-    const adProg = dProg < 0 ? -dProg : dProg;
-    if (adProg > LCAR && adProg < L - LCAR) return null;
-    dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-    if (Math.abs(dProg) > LCAR) return null;
-    const dX = a.x - b.x;
-    if (!Number.isFinite(dX)) return null;
-    const penLong = LCAR - Math.abs(dProg);
-    const penLat = WCAR - Math.abs(dX);
-    if (penLong <= 0 || penLat <= 0) return null;
-    const { iA, iB, iSum, sA, sB } = sepShares(a, b);
-    // Closing into a nest at the lateral slop must be rear-end. Least-
-    // penetration alone picks "side" once |dx|≈WCAR (tiny penLat, deep
-    // penLong), then scrubs speed forever with corr≈0 — the stuck feel.
-    // Only when the PLAYER is the rear car closing: applying this to every
-    // player↔AI touch (e.g. grid pack with throttle held) drained the field.
-    const closing = (dProg >= 0 ? b.speed - a.speed : a.speed - b.speed) > 0.5;
-    const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
-    const forceRear = nestEdge && ((dProg >= 0 && b.human) || (dProg < 0 && a.human));
-    _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat; _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB; _ct.sideContact = penLat < penLong && !forceRear; return _ct;
-  }
+  const PASSES = 4;
   // Snapshot the player's road coords so the writeback at the end can tell
   // whether this pass actually shoved it (see there for why that matters).
   const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
@@ -3520,10 +3524,14 @@ function updateCar(c, dt, ranked) {
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
   // in our lane, and a "stuck" timer. Shared by the braking and steering logic
   // so the AI can pick the open side, commit to a pass, and dig itself out when
-  // wedged — instead of grinding to a halt against a car or wall.
+  // wedged — instead of grinding to a halt against a car or wall. Rating axes
+  // (js/game/ai-drive.js) scale how quickly they dig out and how much space they
+  // leave when following.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
+  let nearbyN = 0;                         // cars in the sep window — adaptive lane density
+  const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -3555,6 +3563,7 @@ function updateCar(c, dt, ranked) {
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
+      if (Math.abs(dprog) < 6.5) nearbyN++;
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
       if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < 4) { towCar = o; towGap = dprog; }   // wake giver
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
@@ -3563,7 +3572,7 @@ function updateCar(c, dt, ranked) {
     const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
-    unstuckActive = c.stuckT > 0.7;
+    unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
   }
 
   // --- electric deploy ---
@@ -3571,8 +3580,14 @@ function updateCar(c, dt, ranked) {
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
+  // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
   const wantBoost = (c.human ? c.boostOn
-    : (Math.abs(Tracks.curvature(track, wrapS(c.s + 60))) < 0.006 && c.energy > 0.25))
+    : (c.energy > 0.02 && AiDrive.wantBoost({
+        traits: aiT, energy: c.energy, otActive: c.otT > 0,
+        kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
+        towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
+        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0,
+      })))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
@@ -3611,7 +3626,15 @@ function updateCar(c, dt, ranked) {
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
               && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && simRnd() < 1 - Math.exp(-0.7 * dt));
+                      : (c.otArmed && AiDrive.otShouldFire(simRnd(), dt, {
+                          traits: aiT,
+                          blockerGap: blocker ? blockerGap : gapAhead * (c.speed || 1),
+                          gapAhead: gapAhead * (c.speed || 1),
+                          roomL, roomR, speed: c.speed,
+                          aheadSpeed: ahead ? ahead.speed : (blocker ? blocker.speed : c.speed),
+                          kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
+                          street: !!track.street,
+                        }));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
@@ -3645,18 +3668,26 @@ function updateCar(c, dt, ranked) {
     // caller (and every physics spec built on one) exactly as it was.
     throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
   } else {
-    // AI: brake for upcoming curvature
+    // AI: multi-sample brake target (compound corners) + soft pedal + craft
+    // late-brake when a pass is on — see js/game/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
+    const samples = [];
     let kMax = 0;
-    for (let d = 12; d < look; d += 14) kMax = Math.max(kMax, Math.abs(Tracks.curvature(track, wrapS(c.s + d))));
-    // Bank sampled mid-LOOKAHEAD (the corner being braked for), via the same
-    // wrap-safe helper the grip model uses — not a raw node read at the car.
-    const bankMu = 1 + Math.sin(Tracks.bankAngle(track, wrapS(c.s + look * 0.5))) * 0.8;
-    // gripMult(): the AI's lateral authority is weather-cut (see the c.x +=
-    // step below), so its corner-speed decision must budget for the same wet
-    // grip — otherwise it carries dry entry speed and runs wide in the rain.
-    const vCorner = Math.sqrt(LAT_MAX * bankMu * gripMult() / Math.max(kMax, 1e-5)) * c.skill;
-    braking = c.speed > vCorner + 2;
+    for (let d = 12; d < look; d += 14) {
+      const ss = wrapS(c.s + d);
+      const kk = Tracks.curvature(track, ss);
+      const ak = Math.abs(kk);
+      if (ak > kMax) kMax = ak;
+      samples.push({ d, k: kk, bank: Tracks.bankAngle(track, ss) });
+    }
+    const br = AiDrive.brakeDecision({
+      traits: aiT, samples, latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      speed: c.speed, blocker: !!blocker, blockerGap,
+      blockerSpeed: blocker ? blocker.speed : 0,
+      roomL, roomR,
+    });
+    braking = br.braking;
+    brakeLvl = br.brakeLvl;
     // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
     // what lets a following car CLOSE and pull out to pass instead of queueing.
     // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
@@ -3669,12 +3700,14 @@ function updateCar(c, dt, ranked) {
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram. On
     // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
+    // Awareness pads the follow gap (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - (track.street ? 12 : 6), -6, 8));
-      if (c.speed > blocker.speed + 3) braking = true;
+      const follow = (track.street ? 12 : 6) + AiDrive.followPad(aiT);
+      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
+      if (c.speed > blocker.speed + 3) { braking = true; brakeLvl = 1; }
     }
     // when wedged in/stopped, power out instead of braking
-    if (unstuckActive) braking = false;
+    if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
 
   // --- active aero (X-mode / Z-mode) ---
@@ -3748,7 +3781,7 @@ function updateCar(c, dt, ranked) {
     : true;
   if (braking) {
     if (c.speed > 0) {
-      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl : 1) * dt);
+      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl : brakeLvl) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -3877,6 +3910,11 @@ function updateCar(c, dt, ranked) {
     steer = inp ? (inp.steer ?? 0) : Input.steer();
   }
   else {
+    // Adaptive preferred lane: under traffic density, slowly bias toward the
+    // freer side so midfield trains fan out instead of locking one line forever.
+    c.lane = AiDrive.adaptLane(c.lane, {
+      traits: aiT, nearby: nearbyN, roomL, roomR,
+    }, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
     // field fans out across the track rather than collapsing onto one line.
@@ -3891,15 +3929,16 @@ function updateCar(c, dt, ranked) {
     let overtake = 0;
     // PERMANENT circuits: a decisive, CRAFT-scaled pull-out that clears the box and
     // uses the tow. STREET circuits keep the gentler baseline move — tight barriers
-    // punish an over-committed line (it clipped the wall on Monaco). Defend and tow
-    // are permanent-only for the same reason.
+    // punish an over-committed line (it clipped the wall on Monaco) — further
+    // scaled by awareness so careful drivers don't wall. Defend and tow are
+    // permanent-only for the same reason.
     const otEnh = !track.street;
     if (blocker && blocker.speed < c.speed + (otEnh ? 5 : 4) && blockerGap < (otEnh ? 16 : 14)) {
       const side = roomR >= roomL ? 1 : -1;
       const need = side > 0 ? roomR : roomL;
       overtake = side * (otEnh
-        ? lerp(0.8, 2.6, clamp(1 - blockerGap / 16, 0, 1)) * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, c.craft || 0.75)
-        : lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1));
+        ? lerp(0.8, 2.6, clamp(1 - blockerGap / 16, 0, 1)) * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, aiT.craft)
+        : lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1) * AiDrive.streetOtScale(aiT));
     }
     // Defending: a car of similar-or-better pace close behind, a corner ahead, and
     // clean air in front → take the inside line to cover the obvious passing spot,
@@ -3909,15 +3948,15 @@ function updateCar(c, dt, ranked) {
     if (chaser && !blocker && chaserGap < 12 && chaser.speed > c.speed - 3 && Math.abs(kA) > 0.004 && !track.street) {
       const coverSide = -Math.sign(kA);
       const coverRoom = coverSide > 0 ? roomR : roomL;   // don't cover INTO a close barrier
-      defend = coverSide * lerp(0.2, 1.1, c.craft || 0.75) * clamp(1 - chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
+      defend = coverSide * lerp(0.2, 1.1, aiT.craft) * clamp(1 - chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
     // own lane sign so a piled-up group fans out BOTH ways instead of all diving
-    // the same direction (and off the track).
+    // the same direction (and off the track). Experience softens the panic pull.
     const freer = roomR - roomL;
     const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
-    const unstuck = unstuckActive ? unstuckSide * 2.6 : 0;
+    const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT) : 0;
     // Proactive lateral separation: drive toward a minimum side-by-side gap so
     // the field settles into clean, non-overlapping spacing instead of pulling
     // onto one line, overlapping, and bouncing (the side-to-side vibration).
@@ -3959,9 +3998,9 @@ function updateCar(c, dt, ranked) {
     steer = clamp(err * 0.9, -1, 1);
     // Low-pass the AI steering command itself so it can't reverse frame to frame
     // (the residual "switchiness"). A sustained turn-in passes through; a
-    // one-frame flip is filtered. Used for both motion and the visual yaw below.
+    // one-frame flip is filtered. Experience raises the damp rate (smoother).
     if (c.steerSm === undefined) c.steerSm = steer;
-    c.steerSm = damp(c.steerSm, steer, 9, dt);
+    c.steerSm = damp(c.steerSm, steer, AiDrive.steerDamp(aiT), dt);
     steer = c.steerSm;
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
@@ -4192,9 +4231,8 @@ function updateCar(c, dt, ranked) {
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
-    const tyre = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
-    const Fyf = tyre(CS_FRONT, slipF, muF) * sp;
-    const Fyr = tyre(csR, slipR, muR) * sp;
+    const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
+    const Fyr = _tyreSat(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
     // --- UNDERSTEER CUE. The car's defining failure mode is washing wide, and
     // until now the only feedback was visual (a nose that will not point where
@@ -4275,7 +4313,8 @@ function updateCar(c, dt, ranked) {
     // While rubbing another car (contactT>0) the AI goes compliant: it stops
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
-    const give = (c.contactT > 0) ? 0.4 : 1;
+    // Awareness scales how much they yield (AiDrive.contactGive).
+    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT);
     c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * dt;
     // Debris side-world (A2): AI cars don't run the slip model, so estimate a
     // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
@@ -5166,7 +5205,7 @@ function renderSetupPreview(dt) {
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  gfx.begin({
+  if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
     // lights one face and leaves the other on ambient — the same badge came out
@@ -5178,7 +5217,7 @@ function renderSetupPreview(dt) {
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
-  });
+  }) === false) return;
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
@@ -5283,7 +5322,13 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // same expression but is only assigned under _floodActive, so it is unset by
     // day). Without the tier/latch terms this built a second GPU copy of the road
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
-    if (LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1) {
+    // Prefer per-chunk road when lamp knobs ask for it, OR whenever envCull is
+    // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
+    // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
+    // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
+    const _wantRoadChunk = (LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3);
+    if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
         if (track.roadGeo && gfx.createChunkedMesh) {
@@ -5315,6 +5360,14 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     const _lit = floodEmit > 0;
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
+    const _pb = track.meshes.propBatches;
+    if (_pb && _pb.length && gfx.drawInstanced) {
+      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj) : null;
+      for (let i = 0; i < _pb.length; i++) {
+        if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
+        gfx.drawInstanced(_pb[i], m);
+      }
+    }
     gfx.drawChunked(track.meshes.props, MAT_IDENT, m);
   }
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
@@ -5795,7 +5848,11 @@ function render(dt) {
       // saving only goes when MOON SHADOWS is active and the sky is clear — or,
       // above 0.5, the knob itself forces the gate open regardless of weather;
       // see frame.moonGate above).
-      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+      if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
+        gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+        const _pb = track.meshes.propBatches;
+        if (_pb && gfx.castShadowInstanced) for (let i = 0; i < _pb.length; i++) gfx.castShadowInstanced(_pb[i]);
+      }
       gfx.shadowEnd();
     }
     // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
@@ -6005,7 +6062,6 @@ function render(dt) {
     const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
-    let floodScale;
     if (_floodActive) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
@@ -6024,20 +6080,16 @@ function render(dt) {
       // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
       // on top of the twilight ramp above.
       const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-      // TWILIGHT WARMTH knob scales the amber cast of the "just switched on" floods
-      // (def 1 = as-shipped 0.14 red boost / 0.22 blue cut).
-      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);   // 1 at twilight → 0 deep night
-      floodScale = [lvl * (1 + warmth * 0.14) * _ltr, lvl * _ltg, lvl * (1 - warmth * 0.22) * _ltb];
+      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);
+      _floodRGB[0] = lvl * (1 + warmth * 0.14) * _ltr;
+      _floodRGB[1] = lvl * _ltg;
+      _floodRGB[2] = lvl * (1 - warmth * 0.22) * _ltb;
     } else {
-      // DAYTIME LAMPS: pools lit under a blue sky. No twilight warmth ramp (the
-      // "just switched on" amber glow is a dusk cue) — neutral white scaled by
-      // DAYTIME LAMPS × LAMP LEVEL, still honouring LAMP TEMPERATURE.
       const lvl = _floodDayLvl * LT.lampLevel;
-      floodScale = [lvl * _ltr, lvl * _ltg, lvl * _ltb];
+      _floodRGB[0] = lvl * _ltr; _floodRGB[1] = lvl * _ltg; _floodRGB[2] = lvl * _ltb;
     }
-    // camera forward (xz) for the ahead-biased light cull — sign only, no normalize
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
-    setFrameLights(camEye, floodScale, _lightFwd);
+    setFrameLights(camEye, _floodRGB, _lightFwd);
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
     // alongside the globally-culled frame.lights, so GLXChunked can bind each
     // chunk its own nearest-32 instead of every chunk sharing this one set.
@@ -6175,6 +6227,8 @@ function render(dt) {
           if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
+        const _lpb = track.meshes.propBatches;
+        if (_lpb && gfx.castShadowInstanced) for (let i = 0; i < _lpb.length; i++) gfx.castShadowInstanced(_lpb[i]);
         gfx.lampShadowEnd();
       }
     }
@@ -6236,12 +6290,14 @@ function render(dt) {
       gfx.envFaceEnd(_envFace);
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  let _b;
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
-    gfx.begin(frame);
+    _b = gfx.begin(frame);
     frame.fogDensity = bf;
-  } else gfx.begin(frame);
+  } else _b = gfx.begin(frame);
+  if (_b === false) return;
   // _mInvVP still holds this frame's inverse (computed once, right after _mVP,
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.

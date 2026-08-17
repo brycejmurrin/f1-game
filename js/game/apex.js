@@ -1454,6 +1454,12 @@ const api = {
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
       tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
+      // tell VER-from-LIN without opening driver-ratings.js.
+      craft: +(c.craft != null ? c.craft : 0).toFixed(3),
+      awareness: +(c.awareness != null ? c.awareness : 0).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0).toFixed(3),
+      lane: +(c.lane != null ? c.lane : 0).toFixed(3),
       ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
@@ -1486,7 +1492,7 @@ const api = {
   // it, do not mutate it.
   // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
   // accumulates real frame dt, so two runs of the same frozen scene render
-  // different pixels — the reason tests/specs/tracks-visual.spec.js could never hold a
+  // different pixels — the reason tests/manual/tracks-visual.spec.js could never hold a
   // baseline. Setting it makes a capture reproducible; it keeps advancing from
   // the value you set unless the scene is also headless().
   renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },
@@ -1725,10 +1731,13 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
+
+  // perf() — thin governor snapshot (alias of renderScale report + tier parts).
+  perf() { return this.renderScale(); },
 
   // uiScale(v) / hudScale(v) — the two size sliders (SETTINGS ▸ DISPLAY), as
   // percentages. No arg reads the RESOLVED value (the device default when

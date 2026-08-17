@@ -16,7 +16,7 @@ Three kinds of docs live here.
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | Standing assessment + defect register: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and what is deferred. |
-| [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (CLAUDE.md has the short list). |
+| [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (AGENTS.md has the short list). |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability. |
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. |
 | [PARTS.md](PARTS.md) | The 12-category upgrade catalog: measured ERS and aero tables, SIGNATURE options, the visual recipe registry. |
@@ -37,7 +37,6 @@ Three kinds of docs live here.
 | [research/MENU-REVIEW-2026-08.md](research/MENU-REVIEW-2026-08.md) | Every menu, page and pop-up reviewed in one pass — 1990 measured cells across 40 screens x 10 viewport shapes x 4 UI sizes — with an explicit verdict each: leave, change, or blocked and why. Records that 19 screens need nothing, separates deep scroll into long-by-nature / constrained-by-physics / genuinely improvable, names `<details name>` as the mechanism for the third group and the `<summary>`-with-toggles blocker on audioset, and lists the six layout predictions that measurement reversed. |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the 40 chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP (script wall), clean heap cycles, track-switch heaps, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is, and the two rules governing the component restructure: size for the PHONE at arm's length (the hardest legibility case, and the one this codebase got backwards), and collapse a primitive only when it passes the three-places-plus-generic test. |
-| [research/UI-CSS-RESEARCH-2026-08.md](research/UI-CSS-RESEARCH-2026-08.md) | Why the menus still feel wrong after a year of fixes: the token ladder is declared but not adopted (126 font-sizes below the 14px floor; four files read zero spacing tokens), plus a root-caused first-paint bug where the circuit map overflows its card by 90px and hides all four track facts. Records the Baseline status of every modern CSS feature considered, why `@container scroll-state()` is the eventual home for ScrollFade, and that `deviceScaleFactor: 3` puts phantom duplicate UI in MCP screenshots. |
 | [PARALLEL-WORK.md](PARALLEL-WORK.md) | Where to spend concurrency: read-only agent fan-out is free, worktrees isolate FILES but not CPU, and the browser suite is serial on 4 cores — the bottleneck every plan has to respect. Written after parallelism produced ten confident, entirely fake test failures. |
 | [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md) | The screen x viewport grid: which mechanism owns which layout decision, what the probe measures, and how to read the results. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, and — the part worth reading — which classes are defined in more than one file. |
@@ -74,14 +73,13 @@ and `js/game/incidentsim.js` implement.
 ## Research (cited, but not a description of behaviour)
 
 The docs that survive here (the table below is the
-authoritative list) are cited from source, from `CLAUDE.md` or from
+authoritative list) are cited from source, from `AGENTS.md` or from
 each other — that citation is what keeps them live. Everything else that used to
 sit in this table was indexed by nothing and moved to
 [`archive/research/`](archive/research/).
 
 | Doc | Topic |
 |---|---|
-| [research/physics-redesign.md](research/physics-redesign.md) | Cartesian-vs-Frenet physics migration plan. |
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. |
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. |
 | [research/ENGINEERING-PRACTICE-NOTES.md](research/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method for Phase 4 extractions, and the state of the no-build bet. |
@@ -117,8 +115,10 @@ once their fix/restructure items landed; their raw evidence sits in
 |---|---|
 | [archive/superpowers/](archive/superpowers/) | 16 dated plans and specs from individual 2026-07 work sessions. Written against the pre-reorganisation flat `js/` layout, so their paths no longer resolve — expected, not rot. Their checkboxes are unchecked against work that shipped; read them for intent, never for status. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan, maintainability review and four phase build logs. |
-| [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept verbatim as reusable probe patterns; see `CLAUDE.md` and `docs/TESTING.md` for what each found. |
-| [archive/research/](archive/research/) | Twelve investigations kept for provenance — no live doc depends on them for current structure, though two research docs cite them as historical companions (ASSET-API-RESEARCH.md → RENDERING-IMPROVEMENTS.md, SCENE-GRAPH-PLAN.md → EXTERNAL-MODEL-SOURCES.md): steering/tilt physics, circuit-briefing design + UI, rendering improvements, external model sources, longer-horizon physics, multiplayer research + the 4-player plan (both shipped), UI layout research, the driving-test review and the 2026-rules fidelity gap list. |
+| [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept verbatim as reusable probe patterns; see `AGENTS.md` and `docs/TESTING.md` for what each found. |
+| [archive/tracks/](archive/tracks/) | Spent track-campaign notes: `HANDOFF-STARTFRAC.md` (superseded by `tracks/START-LINES.md`) and `RESEARCH-LEDGER.md` (40/40 complete). |
+| [archive/workflows/](archive/workflows/) | Spent multi-agent orchestration scripts kept for provenance (`audit-verify-restructure.js`). Live workflows remain under `.claude/workflows/`. |
+| [archive/research/](archive/research/) | Provenance investigations — no live doc depends on them for current structure. Includes shipped `physics-redesign.md`, implemented `UI-CSS-RESEARCH-2026-08.md`, the F1-25 product-research cluster, UI campaign set, and the 2026-08 audit records below. |
 | [archive/research/AUDIT-SYNTHESIS-2026-08.md](archive/research/AUDIT-SYNTHESIS-2026-08.md) | The 21-agent audit workflow's synthesized execution plan — FIX-NOW (landed) / RESTRUCTURE / DEFER over 35 verified findings; drove the post-cleanup hardening. Archived once its restructure items landed. |
 | [archive/research/TOTAL-AUDIT-2026-08.md](archive/research/TOTAL-AUDIT-2026-08.md) | The whole-tree audit: 197 adversarially-verified findings over every source file and doc — headlined by the curvature-sign trio in the track engine and the jump()/IncidentSim authority bug; drove the campaign fix waves. Archived once Batch A/B/C worked off. |
 | [archive/research/CAMPAIGN-2026-08.md](archive/research/CAMPAIGN-2026-08.md) | The 2026 cleanup & hardening campaign plan of record: wave status, W2 execution order and gates, the design-ticket register, and which dated record owns which piece. Archived once the campaign completed. |
@@ -129,6 +129,8 @@ once their fix/restructure items landed; their raw evidence sits in
 | [archive/research/UI-LAYOUT-CRITIQUE-2026-08.md](archive/research/UI-LAYOUT-CRITIQUE-2026-08.md) | Every menu measured at 852×393: vertical budget per screen and the height-blind container-query finding. |
 | [archive/research/UI-REMODEL-DECISION-2026-08.md](archive/research/UI-REMODEL-DECISION-2026-08.md) | Remodel decision after 380-cell survey: NO for correctness, YES for maintainability — with deferred triggers. |
 | [archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md](archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md) | Layout coordinate-space analysis: which vh queries are wrong under `zoom`, migration order, and trap fixes. |
+| [archive/research/UI-CSS-RESEARCH-2026-08.md](archive/research/UI-CSS-RESEARCH-2026-08.md) | Token-adoption / first-paint research — recommendations implemented; kept as provenance. |
+| [archive/research/physics-redesign.md](archive/research/physics-redesign.md) | Cartesian-vs-Frenet migration plan — executed; kept as provenance. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap. Its helpers (`grandstandEx`, `landmarkKit`, `circuitKit`, `sceneryTheme`) are all in the frozen 111-member contract now. |
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register — the not-fixed backlog as recorded at the time, kept as provenance for what was found and what has since been worked off. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives and measurements, verbatim. The standing review distilled from it lives at [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md). |

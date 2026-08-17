@@ -490,10 +490,14 @@ const NetTransport = (function () {
     // Drain everything the browser has handed us since the last call. No
     // scheduling here — RTC has already applied the real network's latency.
     ep.pump = function () {
-      if (!inbox.length) return 0;
-      const batch = inbox; inbox = [];
-      for (const m of batch) ep._emit("message", m.channel, m.data);
-      return batch.length;
+      const count = inbox.length;
+      if (!count) return 0;
+      for (let i = 0; i < count; i++) {
+        const m = inbox[i];
+        ep._emit("message", m.channel, m.data);
+      }
+      inbox.length = 0;
+      return count;
     };
     ep.close = function () {
       if (ep.status === "closed") return;

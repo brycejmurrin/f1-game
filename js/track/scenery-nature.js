@@ -205,8 +205,12 @@ const SceneryNature = (function () {
         for (let i = 0; i < 3; i++) {
           const bh = hash(k * 11 + i * 3.1 + dist);
           const ang = (i / 3 + bh * 0.4) * 6.2832;
-          const out2 = vadd(vadd([0, 0, 0], a.r, Math.cos(ang)), a.t, Math.sin(ang));
-          const bu = [a.u[0] * 0.7 + out2[0] * 0.7, a.u[1] * 0.7, a.u[2] * 0.7 + out2[2] * 0.7];
+          const ca = Math.cos(ang), sa = Math.sin(ang);
+          const bu = [
+            a.u[0] * 0.7 + (a.r[0] * ca + a.t[0] * sa) * 0.7,
+            a.u[1] * 0.7 + (a.r[1] * ca + a.t[1] * sa) * 0.7,
+            a.u[2] * 0.7 + (a.r[2] * ca + a.t[2] * sa) * 0.7
+          ];
           addCyl(out, vadd(top, a.u, i * 0.25), 0.09, 1.6 + bh * 1.4, [0.30, 0.24, 0.17], 4, [a.r, bu, a.t]);
         }
         out._mat = 0;

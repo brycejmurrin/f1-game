@@ -9,8 +9,7 @@
 > fleet's entire scenery mass (9.67 M vertices) collapses to 24,585**, while
 > `pine` sits at 1.00× for a structural reason that changes the S4 plan.
 
-Companion to [`../archive/research/EXTERNAL-MODEL-SOURCES.md`](../archive/research/EXTERNAL-MODEL-SOURCES.md), which asked "where do models come
-from". This asks the prior question: **why can't we afford detailed models
+Companion to the model and scenery research indexed in `docs/README.md`. This asks the prior question: **why can't we afford detailed models
 today, and what has to change first.**
 
 Answer: the cost of detail currently scales with the number of *placements*, not

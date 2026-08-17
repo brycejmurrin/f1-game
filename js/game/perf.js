@@ -229,8 +229,8 @@ function cleanRace() {
     // reload is ULTRA (it flips the mobileHigh bit, see js/game/gfx-quality.js
     // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
     // only work on ULTRA" rather than as a stuck floor.
-    // clearStrikes() has always done this; this path was missed, and the two
-    // now share _floorFromStrikes so they cannot drift apart again.
+    // clearStrikes() recomputes the floor the same way; both paths then release
+    // `_perfTier` to the new floor so they cannot drift apart again.
     _perfTierFloor = _floorFromStrikes(_crashStrikes);
     // The floor just dropped. _perfTier may be sitting on the OLD one (the
     // degrade branch steps from _floorTier(), so it absorbs whatever floor was
@@ -388,6 +388,11 @@ function tick(dtMs) {
 function clearStrikes() {
   _crashStrikes = 0;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
+  // Same latch release as cleanRace(): lifting the floor alone left `_perfTier`
+  // sitting on evidence earned under the old floor, so tier() stayed high after
+  // __apex.safeMode(false) until a reload. Drop to the new floor so the device
+  // can prove itself again (governor may re-shed if frames still miss).
+  if (_perfTier > _floorTier()) _perfTier = _floorTier();
   try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
 

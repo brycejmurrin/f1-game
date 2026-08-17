@@ -8,7 +8,7 @@
     id: "interlagos",
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     sceneryCoordinates: "racing",
-    // TODO: startFrac not GPS-calibrated (defaults to 0)
+    // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
     name: "INTERLAGOS",
     gp: "São Paulo GP",
     country: "Brazil",

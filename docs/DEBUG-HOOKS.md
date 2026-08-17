@@ -1549,7 +1549,7 @@ Reset all `meshToggle()` overrides, restoring every mesh to its default visibili
 state. Companion to `meshToggle()` — call this between tests so toggled meshes
 don't bleed into later screenshots.
 
-### `renderScale(v?) → {scale, fps, floorMs, auto, tier, tierFloor, crashStrikes}`
+### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, userTier, tierFloor, crashStrikes}`
 Adaptive-resolution control. No arg: report the current state. A number pins the
 3D render scale (clamped `0.5–1`) and disables the auto-governor — a big
 fill-rate win (softer 3D; the HUD stays crisp). `true` re-enables the
@@ -1557,10 +1557,19 @@ auto-governor. `floorMs` is the governor's derived per-device budget (the
 observed floor of frame intervals, not a hardcoded 16.7 ms) — it rises to match
 an external cap like iOS Low Power Mode's 30 fps `requestAnimationFrame`
 throttle instead of judging that device against a 60 fps target it cannot
-reach; see `docs/research/PLATFORM-INPUT-NOTES.md` §9c.
+reach; see `docs/research/PLATFORM-INPUT-NOTES.md` §9c. `autoTier` / `userTier`
+split the governor's measured ladder from the GRAPHICS preset floor.
 ```js
+__apex.renderScale();      // full governor snapshot
 __apex.renderScale(0.6);   // pin 60% 3D scale
 __apex.renderScale(true);  // hand back to the auto governor
+```
+
+### `perf() → same as renderScale()`
+Thin alias of the `renderScale()` report — scale / fps / tier / autoTier /
+userTier / strikes — for agents that want a perf-named hook.
+```js
+__apex.perf();
 ```
 
 ### `safeMode(v?) → {strikes, tierFloor, tier}`

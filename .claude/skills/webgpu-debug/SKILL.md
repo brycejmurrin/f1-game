@@ -15,6 +15,7 @@ must degrade to GLX, never to a dead canvas.
 ## 1. Real Dawn validation in-container — ALWAYS the first probe
 
 ```sh
+node tools/wgx-validate.mjs --static             # no browser: sky/MSAA/bloom/fw1
 node tools/wgx-validate.mjs                      # full stack (MSAA 4, HDR)
 node tools/wgx-validate.mjs --lite               # the PHONE stack (MSAA 1)
 node tools/wgx-validate.mjs --no-rg11b10         # spoof a phone-class adapter:
@@ -29,12 +30,19 @@ matrix (full/lite × with/without rg11b10) after ANY wgsl or pipeline change —
 the container adapter HAS `rg11b10ufloat-renderable`, so without `--no-rg11b10`
 the fallback branch is never exercised.
 
-**The ceiling (do not chase pixels here):** this environment VALIDATES but does
-not EXECUTE. WGX canvas screenshots are BLANK, readbacks return zeros, and
-SwiftShader may lose the device seconds after a clean init — all environment
-limits, not bugs. `deviceLostHint: true` after a clean init is a note, not a
-failure. Scene truth is `__apex.render({what:"view"})`; pixel sign-off needs a
-real GPU (deployed site + `mcp-probe`, or a phone).
+**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES shader work
+here. Two narrower limits remain: headless canvas PRESENT is blank
+(screenshots show DOM only), and the FIRST `getCurrentTexture()` call
+permanently breaks `mapAsync` on that device ("A valid external Instance
+reference no longer exists"). Real pixels: `node tools/wgx-capture.mjs <track>`
+— on software adapters WGX soft-presents (final pass into a COPY_SRC texture,
+never the swapchain, one frame in flight, 2D-blitted onto `#game`) and the
+tool writes the `GLX.capturePixels()` readback as `frame.png`. That capture found the bloom
+format, sky-MSAA layout, particle layout, and particle-VBO retire bugs in one
+afternoon — prefer it over reasoning from absence. Still true: SwiftShader is
+not a PERFORMANCE oracle, software adapters force MSAA 1 (MSAA-only paths need
+the source guards in `webgpu-lifecycle.test.mjs`), and `deviceLostHint: true`
+after a clean init is a note, not a failure.
 
 ## 2. The three shipped defect classes (2026-08-17) — check these first
 
@@ -59,7 +67,12 @@ real GPU (deployed site + `mcp-probe`, or a phone).
    compliant device. `rg11b10ufloat` is color-renderable only behind the
    optional `rg11b10ufloat-renderable` feature — `create()` requests it when
    the adapter has it, else `POST_HDR_FORMAT` downgrades to `rgba16float`.
-   Any new render-target format needs the same feature audit.
+   Any new render-target format needs the same feature audit. Bloom down/up
+   pipelines must target `POST_HDR_FORMAT` (not `SCENE_FORMAT`) or a granted
+   `rg11b10ufloat` feature becomes a color-format mismatch and bloom drops.
+   `DEPTH_RESOLVE` must min samples 0–3 (the 4× leftover mined only 0 and 1).
+   SAA/clearcoat derivatives stay on geometric N (`topNgeo`) — GLX uses
+   post-bump `dFdx(N)`, which is illegal in WGSL after a material branch.
 
 ## 3. Backend and error state from the page
 
@@ -113,6 +126,7 @@ node tools/apex-eval.mjs montreal "a.diag({download:false}).env" --raw \
 ```
 
 For a real browser session use the `mcp-probe` skill (set
-`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload). Remember
-`render({what:"view"})` is the scene truth in headless; screenshots of the WGX
-canvas are blank in-container (see §1 ceiling).
+`localStorage.setItem("apex26.gfxBackend","webgpu")` before reload).
+`render({what:"view"})` is the cheap scene truth; for REAL pixels run
+`node tools/wgx-capture.mjs <track>` (offscreen capture — the WGX canvas
+itself still screenshots blank in-container; see §1 ceiling, corrected).

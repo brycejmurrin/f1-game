@@ -2405,6 +2405,9 @@ const AgentView = (function () {
           "survey({stations,lats,reachM,limit,profile})":
             "IS ANYTHING BROKEN — floating/buried props, props over the line, "
             + "terrain through the road, holes and cliffs",
+          "perf()":
+            "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/userTier/strikes "
+            + "(alias of renderScale report)",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":

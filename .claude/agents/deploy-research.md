@@ -1,7 +1,9 @@
 ---
 name: deploy-research
 description: Public-web and post-deploy research via tinyfish. Use proactively for live version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright.
+model: inherit
 readonly: true
+is_background: true
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -17,9 +19,9 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 ## Required skill
 
-Follow `.claude/skills/mcp-probe/SKILL.md` — especially **tinyfish MCP** and
-**Research recipes**. Prefer shell helpers when MCP tools are missing from the
-session catalog:
+Follow `.claude/skills/mcp-probe/SKILL.md` (thin index) and, when needed,
+`.claude/skills/mcp-probe/references/recipes.md` (tinyfish section). Prefer
+shell helpers when MCP tools are missing from the session catalog:
 
 ```sh
 ./tools/tinyfish-mcp.sh ensure

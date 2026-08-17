@@ -1038,6 +1038,8 @@ test("every sampleCount WGX requests is one WebGPU actually allows (1 or 4)", as
       && !LEGAL.has(p.desc.multisample.count));
   assert.deepEqual(pipeBad.map((p) => p.desc.multisample.count), [], "illegal pipeline multisample count");
   assert.ok(h.textures.some((t) => t.desc.sampleCount === 4), "desktop must still allocate MS targets");
+  assert.match(CHUNKS_SOURCE, /textureLoad\(src,\s*c,\s*3\)/,
+    "DEPTH_RESOLVE must min all four 4× samples, not just 0 and 1");
 });
 
 test("rg11b10ufloat is only rendered into when the device grants the feature", async () => {
@@ -1076,6 +1078,18 @@ test("rg11b10ufloat is only rendered into when the device grants the feature", a
   assert.deepEqual(asked(rich), [["timestamp-query", "rg11b10ufloat-renderable"]]);
   assert.ok(rich.textures.some((t) => t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE)),
     "the granted feature must actually be used (half the bytes per post pixel)");
+  // Bloom pipelines must write the SAME format as those targets. Godray/blur
+  // already did; bloom down/up shipped on SCENE_FORMAT (rgba16float) and
+  // every bloom draw was a color-format mismatch once the feature was granted.
+  assert.match(WGX_SOURCE, /pBloomDown = fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
+  assert.match(WGX_SOURCE, /pBloomUp\s*= fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
+  const bloomPipeWrong = rich.pipelines.filter((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rgba16float")
+    && /BLOOM/i.test(JSON.stringify(p.desc || {})));
+  // Source invariant is the net; the harness may not label pipelines BLOOM.
+  assert.ok(rich.pipelines.some((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rg11b10ufloat")),
+    "at least one post pipeline must target the granted rg11b10ufloat format");
 
   // Adapter advertises, device withholds — the case a device-side re-derive
   // exists for. Reading the adapter's answer here would allocate the illegal
@@ -1127,6 +1141,26 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   DERIV.lastIndex = 0;
   assert.deepEqual(offenders, [],
     "a derivative (or a wrapper around one) lives outside a fragment entry point");
+
+  // Same walk on the post chain — SSAO already hoists; a helper-side dpdx
+  // there would slip through a CHUNKS_SOURCE-only ratchet.
+  const postStripped = POST_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  const postFns = [];
+  for (const m of postStripped.matchAll(/\bfn\s+(\w+)\s*\(/g)) {
+    let i = postStripped.indexOf("{", m.index);
+    if (i < 0) continue;
+    let depth = 0, end = i;
+    for (; end < postStripped.length; end++) {
+      if (postStripped[end] === "{") depth++;
+      else if (postStripped[end] === "}" && --depth === 0) break;
+    }
+    postFns.push({ name: m[1], body: postStripped.slice(i, end + 1) });
+  }
+  const postOff = postFns
+    .filter((f) => { DERIV.lastIndex = 0; return DERIV.test(f.body) && !/^fs_main/.test(f.name); })
+    .map((f) => f.name);
+  assert.deepEqual(postOff, [],
+    "wgsl-post.js: a derivative lives outside a fragment entry point: " + postOff.join(","));
 
   // Uniform means before the FIRST branch, not merely inside fs_main: an early
   // `return` or an `if` above the derivative poisons everything after it.
@@ -1271,4 +1305,64 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
 
   h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
+});
+
+test("pipelines that share a shader module never use layout:'auto'", async () => {
+  // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
+  // byte-identical — and a pair built from ONE module exists precisely to be
+  // used interchangeably with ONE bind group (sky + skyMS, particle alpha +
+  // additive). Both pairs shipped that way: every MSAA-4 sky draw and every
+  // additive spark draw raised "created with a default layout, and is not
+  // compatible" and dropped the whole frame's command buffer. Invisible in
+  // this container (software adapters force MSAA 1; the mock validates
+  // nothing) — found 2026-08-17 by the first real pixel capture
+  // (tools/wgx-capture.mjs), which is the primary oracle for this class.
+  // This test pins the structural rule the fixes follow, using only the
+  // descriptors the harness already records.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize(); gfx.begin({}); gfx.present({});
+  const byModule = new Map();
+  for (const p of h.pipelines) {
+    const mod = p.desc && p.desc.vertex && p.desc.vertex.module;
+    if (!mod) continue;
+    if (!byModule.has(mod)) byModule.set(mod, []);
+    byModule.get(mod).push(p.desc);
+  }
+  const shared = [...byModule.values()].filter((g) => g.length > 1);
+  assert.ok(shared.length >= 2, "expected shared-module pipeline groups (lit variants, sky pair)");
+  for (const group of shared) {
+    const autos = group.filter((d) => d.layout === "auto");
+    assert.equal(autos.length, 0,
+      `${group.length} pipelines share one shader module and ${autos.length} use layout:"auto" — ` +
+      `give the group one explicit createPipelineLayout so a single bind group is valid with all of them`);
+  }
+});
+
+test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () => {
+  // The bloom mip textures are POST_HDR_FORMAT (rg11b10ufloat when granted);
+  // the pipelines were SCENE_FORMAT for months. The mismatch only exists when
+  // the feature is granted AND the perf tier lets bloom run — no container
+  // run reaches that pair (software forces MSAA 1 and low tiers), so this is
+  // pinned at the source. Real-device confirmation lives in wgx-capture runs.
+  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_DOWN,\s*POST_HDR_FORMAT/,
+    "pBloomDown must target POST_HDR_FORMAT (the bloom mip texture format)");
+  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_UP,\s*POST_HDR_FORMAT/,
+    "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
+});
+
+test("drawParticles never destroys the VBO mid-frame (retire, flush after submit)", () => {
+  // game.js calls drawParticles twice per frame (alpha smoke, then additive
+  // sparks). Growth between the two used to destroy a buffer the frame's pass
+  // had already recorded: "used in submit while destroyed", one invalid
+  // command buffer, the whole frame dropped. The old buffer must be RETIRED
+  // and destroyed only after the frame's submit.
+  const draw = WGX_SOURCE.match(/function drawParticles\([\s\S]*?\n    \}/);
+  assert.ok(draw, "drawParticles exists");
+  assert.doesNotMatch(draw[0], /particleVBO\.destroy\(\)/,
+    "drawParticles must not destroy the old VBO in-frame — push it to _retiredBufs");
+  assert.match(draw[0], /_retiredBufs\.push\(particleVBO\)/,
+    "grown-over VBO must be retired for the post-submit flush");
+  assert.match(WGX_SOURCE, /_retireFlush\(\)/,
+    "present must flush retired buffers after submit");
 });

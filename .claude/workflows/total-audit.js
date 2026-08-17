@@ -17,8 +17,8 @@ export const meta = {
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const KNOWN = (A.known || []).map((k, i) => `${i + 1}. ${k}`).join('\n') || '(none supplied this run)'
 
-const COMMON = `Repo: /home/user/f1-game (check \`git branch --show-current\` if you need the branch — do not assume). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. Browser test runs may be in flight in the main session — never touch artifacts/logs or test processes.
-Project shape: no-build IIFE modules, one global per file, load order in tools/manifest.cjs; CLAUDE.md is the engineering reference; docs/ splits into reference / research / archive. tests/ per-file semantics are OUT OF SCOPE (a dedicated audit is running) — do not audit test files.
+const COMMON = `Repo: current workspace (check \`git branch --show-current\` if you need the branch — do not assume). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. Browser test runs may be in flight in the main session — never touch artifacts/logs or test processes.
+Project shape: no-build IIFE modules, one global per file, load order in tools/manifest.cjs; AGENTS.md is the engineering reference (CLAUDE.md is a stub that imports it); docs/ splits into reference / research / archive. tests/ per-file semantics are OUT OF SCOPE (a dedicated audit is running) — do not audit test files.
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants of them:
 ${KNOWN}`
 
@@ -72,7 +72,7 @@ const R1 = [
   { k: 'tools-1',      scope: 'every tools/ file whose basename starts with a through m, plus tools/README.md rows for them. Emphasis: does each tool still run against the current layout; stale ROOT assumptions; index truth.' },
   { k: 'tools-2',      scope: 'every tools/ file whose basename starts with n through z, plus their tools/README.md rows. Same emphases.' },
   { k: 'docs-ref',     scope: 'every docs/*.md at the top level (the engineering reference). For EACH factual claim naming a file, symbol, count or behaviour, verify it against the source it describes; report every falsehood as drift with both sides cited.' },
-  { k: 'docs-idx',     scope: 'docs/research/ (all files), docs/archive/ INDEX-level only (does docs/README.md describe what is actually there; are "cited from source" claims true — grep for the citations), CLAUDE.md, README.md, and every .claude/skills/*/SKILL.md. Emphasis: broken paths, false citations, stale commands.' },
+  { k: 'docs-idx',     scope: 'docs/research/ (all files), docs/archive/ INDEX-level only (does docs/README.md describe what is actually there; are "cited from source" claims true — grep for the citations), AGENTS.md, CLAUDE.md stub, README.md, and every .claude/skills/*/SKILL.md. Emphasis: broken paths, false citations, stale commands.' },
   { k: 'meta',         scope: 'spike/ (both READMEs + html), assets/ (pack manifests/licences, not binaries), package.json, playwright.config.js, .github/workflows/, tools/manifest.cjs cross-checked against index.html script tags. Emphasis: scripts that reference missing files, CI truth, licence hygiene.' },
 ]
 
@@ -86,7 +86,7 @@ Read every in-scope file IN FULL (large files too — read them in chunks until 
 ${RUBRIC}`
 
 const refutePrompt = (batch, who) => `${COMMON}
-You are ADVERSARIAL SKEPTIC ${who}. Below are findings from one auditor. For EACH, open the cited file at the cited line YOURSELF and try to REFUTE it. Refute (refuted=true) if: the claim misreads the code; the cited line does not say what is claimed; the behaviour is a deliberate, documented choice (check CLAUDE.md and docs/ before deciding); it duplicates a KNOWN finding above; or it is immaterial style noise no maintainer would act on. Default to refuted=true when uncertain — only findings that survive hostile reading matter. Return one verdict PER finding, index-aligned.
+You are ADVERSARIAL SKEPTIC ${who}. Below are findings from one auditor. For EACH, open the cited file at the cited line YOURSELF and try to REFUTE it. Refute (refuted=true) if: the claim misreads the code; the cited line does not say what is claimed; the behaviour is a deliberate, documented choice (check AGENTS.md and docs/ before deciding); it duplicates a KNOWN finding above; or it is immaterial style noise no maintainer would act on. Default to refuted=true when uncertain — only findings that survive hostile reading matter. Return one verdict PER finding, index-aligned.
 FINDINGS: ${'$'}{JSON.stringify(batch)}`
 
 async function verifyBatch(fresh, round) {
