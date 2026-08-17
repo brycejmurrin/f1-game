@@ -157,7 +157,7 @@ test("tinyfish-mcp.sh retries the live-build fetch and says the body is capped",
   assert.match(src, /MARKER ABSENT/);
   assert.match(src, /NOT a verdict on the deployed file/);
   const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
-  assert.match(help.stdout, /BODY IS CAPPED/, "the cap belongs in help, not just in a comment");
+  assert.match(help.stdout, /BODY IS TRUNCATED/, "the limit belongs in help, not just in a comment");
   assert.match(help.stdout, /--marker/);
 });
 

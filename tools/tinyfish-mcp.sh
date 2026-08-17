@@ -395,11 +395,12 @@ cmd_deploy_js() {
     return
   fi
   # --marker turns this into a TEST: one grep, one verdict, one exit code.
-  # Needed because the body is CAPPED (~6 KB, MEASURED 2026-08-17 on a 200 KB
-  # wgx.js at both --format markdown and html), so eyeballing the output invites
-  # the worst possible conclusion — "the marker is absent, the fix did not
-  # ship" — when the marker was simply past the cap. A miss reports the cap and
-  # the reach explicitly instead.
+  # Needed because the body is TRUNCATED for anything large — MEASURED
+  # 2026-08-17: 6.1 KB came back from a 200 KB wgx.js (both --format markdown
+  # and html), 9.6 KB from an 11 KB log.js. So the reach is a few thousand bytes,
+  # not a documented constant, and eyeballing the output invites the worst
+  # possible conclusion — "the marker is absent, the fix did not ship" — when the
+  # marker was simply past where the body stopped. A miss says so explicitly.
   local body bytes
   body="$(cmd_fetch "${fetch_args[@]}" "$url")"
   bytes="${#body}"
@@ -409,7 +410,7 @@ cmd_deploy_js() {
   fi
   echo "MARKER ABSENT   /${DEPLOY_MARKER}/  in ${rel}@${live} (${bytes} B fetched)" >&2
   if [[ "$bytes" -lt 12000 ]]; then
-    echo "  NOT a verdict on the deployed file: TinyFish caps the body, and only" >&2
+    echo "  NOT a verdict on the deployed file: TinyFish truncates, and only" >&2
     echo "  the first ~${bytes} B of ${rel} came back. A marker deeper in the file" >&2
     echo "  cannot be seen from here — verify content by git provenance (is the" >&2
     echo "  commit in the deploy branch?) and use deploy-check for the build id." >&2
@@ -442,8 +443,9 @@ Fetch flags:
 
 deploy-check exits 1 when live build != local version.json (STALE Pages).
 deploy-js is the marker-grep path — index.html extracts strip <script> tags.
-The BODY IS CAPPED at roughly 6 KB (measured on a 200 KB wgx.js, both
---format markdown and html), so it can only see the TOP of a large file.
+The BODY IS TRUNCATED for large files — measured 2026-08-17: 6.1 KB back from a
+200 KB wgx.js (markdown and html alike), 9.6 KB from an 11 KB log.js. It can only
+see the TOP of a big file, so a deep marker is unverifiable from here.
 --marker says so on a miss rather than letting "absent" read as "did not
 ship"; for deeper content use git provenance plus deploy-check's build id.
 
