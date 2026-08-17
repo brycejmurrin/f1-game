@@ -19,11 +19,23 @@
 //      spawns it detached) so renderers and crashpad go with it.
 //
 // Usage:
-//   import { startStaticServer, launchChromium, shutdown } from "./harness.mjs";
+//   import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./harness.mjs";
 //   const srv = await startStaticServer(ROOT);
 //   let browser;
-//   try { browser = await launchChromium({ args: [...] }); … }
+//   try { browser = await launchChromium({ args: [...WEBGPU_CHROMIUM_ARGS] }); … }
 //   finally { await shutdown(); }
+//
+// WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
+// plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
+// --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
+export const WEBGPU_CHROMIUM_ARGS = [
+  "--headless=new",
+  "--enable-unsafe-webgpu",
+  "--enable-features=Vulkan",
+  "--use-vulkan=swiftshader",
+  "--use-webgpu-adapter=swiftshader",
+  "--no-sandbox",
+];
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";

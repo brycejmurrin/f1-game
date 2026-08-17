@@ -43,6 +43,22 @@ def parse_fetch_payload(text: str) -> dict[str, Any]:
     return json.loads(text)
 
 
+def _search_row_text(row: dict[str, Any]) -> str:
+    """Render a SEARCH result as readable text.
+
+    fetch_content rows carry `text`; search rows carry title/snippet/url and NO
+    `text` at all, so the shared unwrap printed nothing but the URL heading —
+    a search whose whole value is the snippets read as a bare link list.
+    """
+    title = (row.get("title") or "").strip()
+    snippet = (row.get("snippet") or "").strip()
+    site = (row.get("site_name") or "").strip()
+    date = (row.get("date") or "").strip()
+    meta = " · ".join(p for p in (site, date) if p)
+    lines = [p for p in (title, meta, snippet) if p]
+    return "\n".join(lines)
+
+
 def result_bodies(rpc: dict[str, Any]) -> list[dict[str, Any]]:
     bodies: list[dict[str, Any]] = []
     for text in content_texts(rpc):
@@ -53,6 +69,10 @@ def result_bodies(rpc: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if isinstance(payload, dict) and "results" in payload:
             for row in payload.get("results") or []:
+                if isinstance(row, dict) and not row.get("text"):
+                    rendered = _search_row_text(row)
+                    if rendered:
+                        row = dict(row, text=rendered)
                 bodies.append(row)
             # Surface top-level errors alongside.
             for err in payload.get("errors") or []:
@@ -110,6 +130,32 @@ def cmd_unwrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def upstream_error(rpc: dict) -> str | None:
+    """The upstream fetch's own error, if TinyFish reported one.
+
+    A timeout comes back as a SUCCESSFUL JSON-RPC result whose payload is
+    {"results": [], "errors": [{"url": ..., "error": "timeout"}]} — so a caller
+    that only checks for a parse failure blames its own regex for a transient
+    network event. Measured 2026-08-17: two consecutive version.json fetches,
+    one timeout and one clean, no change in between.
+    """
+    for row in result_bodies(rpc):
+        err = row.get("error")
+        if err:
+            return str(err)
+        text = row.get("text") or ""
+        if '"errors"' in text and '"results": []' in text.replace("\n", ""):
+            try:
+                payload = json.loads(text)
+            except Exception:
+                continue
+            errs = payload.get("errors") or []
+            if errs and not payload.get("results"):
+                first = errs[0]
+                return f"{first.get('error', 'error')} ({first.get('url', '?')})"
+    return None
+
+
 def cmd_deploy_summary(args: argparse.Namespace) -> int:
     rpc = load_rpc(sys.stdin.read())
     bodies = result_bodies(rpc)
@@ -119,6 +165,10 @@ def cmd_deploy_summary(args: argparse.Namespace) -> int:
         if live is not None:
             break
     if live is None:
+        why = upstream_error(rpc)
+        if why:
+            print(f"deploy-check: TinyFish could not fetch it — {why}; retry", file=sys.stderr)
+            return 3
         print("deploy-check: could not parse live build from TinyFish response", file=sys.stderr)
         print(json.dumps(rpc)[:2000], file=sys.stderr)
         return 2
@@ -146,6 +196,10 @@ def cmd_live_build(args: argparse.Namespace) -> int:
         if live is not None:
             print(live)
             return 0
+    why = upstream_error(rpc)
+    if why:
+        print(f"tinyfish-rpc: TinyFish could not fetch it — {why}; retry", file=sys.stderr)
+        return 3
     print("tinyfish-rpc: could not parse live build", file=sys.stderr)
     return 2
 

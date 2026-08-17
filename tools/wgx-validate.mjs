@@ -32,7 +32,7 @@
 // init is reported as an environment note, not a failure — but any validation
 // error is fatal.
 
-import { startStaticServer, launchChromium, shutdown } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./harness.mjs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,15 +47,6 @@ const noRg11b10 = args.includes("--no-rg11b10");
 const framesArg = args.indexOf("--frames");
 const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) || 60) : 60;
 
-const WEBGPU_ARGS = [
-  "--headless=new",
-  "--enable-unsafe-webgpu",
-  "--enable-features=Vulkan",
-  "--use-vulkan=swiftshader",
-  "--use-webgpu-adapter=swiftshader",
-  "--no-sandbox",
-];
-
 let failures = 0;
 const fail = (msg) => { failures += 1; console.error("FAIL:", msg); };
 
@@ -67,7 +58,7 @@ try {
   const browser = await launchChromium({
     executablePath: chromium.executablePath(),
     headless: true,
-    args: WEBGPU_ARGS,
+    args: WEBGPU_CHROMIUM_ARGS,
   });
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 
@@ -84,6 +75,9 @@ try {
 
   await page.addInitScript(([wantLite, dropRg]) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
+    // Soft-adapter gate refuses Dawn SwiftShader by default (blank canvas).
+    // This tool intentionally validates/captures on software — allow it.
+    localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
     if (dropRg && navigator.gpu) {
       // Present the adapter as a phone-class one: same device, but features
