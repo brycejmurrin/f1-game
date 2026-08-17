@@ -7,6 +7,8 @@ single Claude tree to avoid drift).
 | Agent | Use when |
 |---|---|
 | **deploy-research** | Post-deploy liveness, shipped-JS marker checks, public-web / track reference research via tinyfish. Read-only; no Chrome or Playwright. |
+| **verify-agent** | Run `tools/verify-change.mjs` against the current tree and report the JSON verdict. Read-only; never edits source, never starts a second Playwright process, one `test-solo` re-run per timeout. |
+| **track-surveyor** | Survey + improve ONE circuit: writes only that `js/circuits/<id>.js`, verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
 
 Skills (workflows) live in `.claude/skills/`. Canonical rules live in
 `AGENTS.md`. New agents must be listed here and remain trackable
