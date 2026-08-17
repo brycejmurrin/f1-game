@@ -298,8 +298,10 @@ Do **not** use tinyfish for the working tree (localhost). Do **not** use Chrome
 DevTools MCP for `github.io` from this container (egress proxy). Pattern
 false-negatives under `format: markdown` — see the `*` escape gotcha above.
 
-**Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
-(shell env / `.env` override it), so `ensure` works on a fresh checkout.
+**Setup is explicit:** run `tools/tinyfish-mcp.sh setup` once, then provide
+`TINYFISH_API_KEY` through the shell or the proxy's gitignored `.env`. `ensure`
+starts and initializes an existing build; it fails with setup guidance when the
+build or credential is absent. No reusable credential lives in tracked source.
 All 16 upstream tools verified working 2026-08-17 except `get_wallet`
 ("Wallet is not available for your account yet" — account-gated upstream,
 not a wrapper bug).

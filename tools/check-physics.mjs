@@ -1,8 +1,8 @@
-import { chromium } from "playwright";
+import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
 
-const EXEC = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
-const BASE = "http://localhost:3456";
 const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-webgpu"];
+const POLL = { polling: 100, timeout: 8000 };
+let BASE = "http://127.0.0.1/";
 
 async function checkBank(browser) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 506 } });
@@ -10,9 +10,9 @@ async function checkBank(browser) {
   const errs = [];
   page.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
   await page.goto(BASE + "/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, POLL);
   await page.evaluate(() => window.__apex.race("zandvoort", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, POLL);
   await page.evaluate(() => window.__apex.go());
   // drive a few seconds, sample banking grip exposure + stability
   await page.evaluate(() => { window.__apex.jump(0.0, 45, 0); window.__apex.setInput({ steer: 0.3, throttle: true }); });
@@ -41,7 +41,7 @@ async function checkGrip(browser) {
   // advances to race settings, where #rs-go starts the race.
   await page.locator("#cs-done").click();
   await page.locator("#rs-go").click();
-  await page.waitForFunction(() => window.__apex && window.__apex.info().track != null);
+  await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
   await page.evaluate(() => window.__apex.go());
   await page.evaluate(() => window.__apex.jump(0.0, 50, 0));
 
@@ -72,9 +72,9 @@ async function checkRoadfollow(browser) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 506 } });
   const page = await ctx.newPage();
   await page.goto(BASE + "/");
-  await page.waitForFunction(() => window.__apex != null);
+  await page.waitForFunction(() => window.__apex != null, POLL);
   await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null);
+  await page.waitForFunction(() => window.__apex.info().track != null, POLL);
   await page.evaluate(() => window.__apex.go());
   const res = await page.evaluate(() => {
     const out = [];
@@ -106,7 +106,7 @@ async function checkSteer(browser) {
     // #sel-go opens the GARAGE (a step); #cs-done advances to race settings.
     await page.locator("#cs-done").click();
     await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex && window.__apex.info().track != null);
+    await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
 
     const corners = await page.evaluate(() => window.__apex.corners());
     const frac = corners.length ? corners[0] : 0.15;
@@ -144,6 +144,12 @@ if (!CHECKS[which]) {
   console.error(`usage: node tools/check-physics.mjs <${Object.keys(CHECKS).join("|")}>`);
   process.exit(1);
 }
-const browser = await chromium.launch({ ...(EXEC ? { executablePath: EXEC } : {}), args: LAUNCH_ARGS });
-await CHECKS[which](browser);
-await browser.close();
+const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const srv = await startStaticServer(ROOT);
+BASE = srv.url.replace(/\/?$/, "");
+try {
+  const browser = await launchChromium({ args: LAUNCH_ARGS });
+  await CHECKS[which](browser);
+} finally {
+  await shutdown();
+}

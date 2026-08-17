@@ -6,8 +6,11 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 # Surveying the whole UI across the whole matrix
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
-viewport × scale × pointer. Batch instrument: `tools/layout-audit.mjs`. This
-skill is the **interactive** one (Chrome DevTools MCP, canvas hidden).
+viewport × scale × pointer. Batch instrument: `tools/layout-audit.mjs`.
+Title-path recipe (six screens at iPhone landscape, with shots):
+`node tools/ui-survey.mjs` / `npm run ui:survey` — a layout-audit alias;
+`tools/ui-mcp-survey.mjs` is a forwarder to that file. This skill is the
+**interactive** one (Chrome DevTools MCP, canvas hidden).
 
 Single known bug → **ui-menu-a11y**. Restructure decisions →
 **restructure-screens-css**.

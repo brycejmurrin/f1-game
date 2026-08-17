@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,9 +89,18 @@ test("probe-mcp serve handshake (mock) advertises prefixed tools", () => {
     method: "tools/list",
     params: {},
   });
+  const failedCall = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "chrome_list_pages",
+      arguments: { __probeMockError: true },
+    },
+  });
   const r = spawnSync("python3", [PROBE, "serve"], {
     encoding: "utf8",
-    input: `${init}\n${tools}\n`,
+    input: `${init}\n${tools}\n${failedCall}\n`,
     env,
     timeout: 15000,
   });
@@ -110,6 +120,10 @@ test("probe-mcp serve handshake (mock) advertises prefixed tools", () => {
   assert.ok(names.includes("tinyfish_fetch_content"), names);
   assert.ok(names.includes("tinyfish_search"), names);
   assert.ok(names.length >= 50, `expected full catalog, got ${names.length}`);
+  const failed = JSON.parse(lines[2]);
+  assert.equal(failed.result.isError, true,
+    "stdio MCP must preserve tool-level isError instead of inventing a JSON-RPC error");
+  assert.equal(failed.error, undefined);
 });
 
 test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live daemon", async () => {
@@ -160,6 +174,19 @@ test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live dae
     ).json();
     assert.match(res.content[0].text, /"mock": true/);
 
+    const failedResponse = await fetch(`http://127.0.0.1:${port}/call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "chrome_list_pages",
+        arguments: { __probeMockError: true },
+      }),
+    });
+    assert.equal(failedResponse.status, 200,
+      "an MCP tool error is a successful transport response, not an HTTP failure");
+    const failedResult = await failedResponse.json();
+    assert.equal(failedResult.isError, true);
+
     // The CLI — NOT in mock mode — must prefer the live daemon over spawning
     // its own Chromium (which would hang this test for a browser launch).
     const cli = spawnSync("python3", [PROBE, "call", "chrome_list_pages", "{}"], {
@@ -171,6 +198,19 @@ test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live dae
     assert.equal(cli.status, 0, cli.stderr);
     assert.match(cli.stderr, /via daemon/);
     assert.match(cli.stdout, /mock/);
+
+    const failedCli = spawnSync(
+      "python3",
+      [PROBE, "call", "chrome_list_pages", '{"__probeMockError":true}'],
+      {
+        encoding: "utf8",
+        cwd: ROOT,
+        env: { ...process.env, PROBE_CHROME_PORT: String(port), PROBE_MCP_MOCK: "" },
+        timeout: 20000,
+      },
+    );
+    assert.notEqual(failedCli.status, 0, "shell CLI must fail when MCP returns isError");
+    assert.match(failedCli.stdout, /"isError": true/);
   } finally {
     daemon.kill("SIGKILL");
   }
@@ -224,6 +264,45 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
   assert.match(calls[3].arguments.function, /setTimeout\(r, 9000\)/);
   const noBackend = dryRun();
   assert.deepEqual(noBackend.map((c) => c.name), ["new_page", "evaluate_script"]);
+  assert.equal(noBackend[0].arguments.url, "http://127.0.0.1:3456/",
+    "the documented `npx serve` redirects /index.html, so probes must use the root URL");
+});
+
+test("mcp-cli exits non-zero when an MCP tool returns isError", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-cli-"));
+  const wrapper = path.join(dir, "mock-mcp.mjs");
+  fs.writeFileSync(wrapper, `#!/usr/bin/env node
+process.stdin.setEncoding("utf8");
+let buf = "";
+process.stdin.on("data", chunk => {
+  buf += chunk;
+  let i;
+  while ((i = buf.indexOf("\\n")) >= 0) {
+    const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+    if (!line) continue;
+    const msg = JSON.parse(line);
+    if (msg.id == null) continue;
+    let result = {};
+    if (msg.method === "initialize") result = { serverInfo: { name: "mock", version: "1" } };
+    else if (msg.method === "tools/list") result = { tools: [{ name: "fail" }] };
+    else if (msg.method === "tools/call") result = { isError: true, content: [{ type: "text", text: "mock failure" }] };
+    process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");
+  }
+});
+`);
+  fs.chmodSync(wrapper, 0o755);
+  try {
+    const r = spawnSync("node", [CLI, '[{"name":"fail","arguments":{}}]'], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...process.env, APEX_MCP_WRAPPER: wrapper },
+      timeout: 15000,
+    });
+    assert.notEqual(r.status, 0, `tool error must propagate to the shell:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /mock failure/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {

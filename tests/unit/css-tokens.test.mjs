@@ -102,3 +102,16 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
     "the two panes will stack at full height instead of becoming bounded scroll regions. " +
     "Declare it beside the sheet's --sheet-w (620px matches #sel-inner / #cr-inner / #ss-inner).");
 });
+
+test("stacked season setup has one reachable vertical scroll owner", () => {
+  const css = stripComments(fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8"));
+  const body = css.match(/#ss-inner:not\(\[data-pair="on"\]\)\s*>\s*#ss-body\s*\{([^}]*)\}/);
+  assert.ok(body, "stacked #ss-inner needs an explicit #ss-body layout branch");
+  assert.match(body[1], /overflow-y\s*:\s*auto\b/,
+    "the stacked season body must scroll instead of overflowing into #ss-inner's clip");
+
+  const panes = css.match(/#ss-inner:not\(\[data-pair="on"\]\)\s*>\s*#ss-body\s*>\s*\.pane\s*\{([^}]*)\}/);
+  assert.ok(panes, "stacked season panes need a local overflow override");
+  assert.match(panes[1], /overflow\s*:\s*visible\b/,
+    "natural-height child panes must not contain wheel chaining away from #ss-body");
+});

@@ -28,8 +28,7 @@
 //     png, but has NO png demuxer and NO raw/pgm muxer. So we go webm --ffmpeg-->
 //     png frames, then decode the pngs in a second Chromium page (canvas 2D).
 
-import { createRequire } from "node:module";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -38,18 +37,15 @@ import {
   renameSync,
   rmSync,
 } from "node:fs";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import {
   assertSafePathToken,
   resolveContainedChild,
   resolveRepoDefault,
 } from "../output-paths.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "../harness.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const [trackArg = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
 const track = assertSafePathToken(trackArg, "track");
@@ -83,22 +79,17 @@ function ffmpeg() {
   ];
   return cands.find((p) => p === "ffmpeg" || existsSync(p)) || "ffmpeg";
 }
-const chrome = () => ["/opt/pw-browsers/chromium"].find(existsSync);   // undefined on mac → Playwright's bundled chromium
-const freePort = () => new Promise((res, rej) => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); s.on("error", rej); });
 
-const PORT = await freePort();
-const server = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
-process.on("exit", () => { try { server.kill(); } catch {} });
-await sleep(700);
-
+const srv = await startStaticServer(ROOT);
+try {
 // ── record a driven clip ─────────────────────────────────────────────────────
-const browser = await chromium.launch({ executablePath: chrome(), args: ["--use-angle=swiftshader"] });
+const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
 const ctx = await browser.newContext({
   viewport: { width: 844, height: 390 },
   recordVideo: { dir: videoDir, size: { width: 844, height: 390 } },
 });
 const pg = await ctx.newPage();
-await pg.goto(`http://127.0.0.1:${PORT}/`);
+await pg.goto(srv.url);
 await pg.waitForFunction(() => window.__apex != null, { timeout: 20000 });
 await pg.evaluate((t) => window.__apex.race(t), track);
 await pg.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 20000 });
@@ -111,7 +102,7 @@ await ctx.close(); await browser.close();   // video is flushed on context close
 
 // ── extract frames (webm → png; ffmpeg has no png demuxer, only encoder) ──────
 const webm = readdirSync(videoDir).find((f) => f.endsWith(".webm"));
-if (!webm) { console.error("no video recorded — recordVideo failed"); process.exit(1); }
+if (!webm) throw new Error("no video recorded — recordVideo failed");
 renameSync(resolveContainedChild(videoDir, webm, "recorded video"), clipPath);
 rmSync(videoDir, { recursive: true, force: true });
 // Fail LOUDLY here: an unchecked spawn error used to fall through to a
@@ -119,18 +110,16 @@ rmSync(videoDir, { recursive: true, force: true });
 const FF = ffmpeg();
 const ff = spawnSync(FF, ["-i", clipPath, join(vdir, "f_%04d.png")], { stdio: "ignore" });
 if (ff.error || ff.status !== 0) {
-  console.error(`ffmpeg failed (${FF}): ${ff.error ? ff.error.message : `exit ${ff.status}`} — no frames extracted`);
-  process.exit(1);
+  throw new Error(`ffmpeg failed (${FF}): ${ff.error ? ff.error.message : `exit ${ff.status}`} — no frames extracted`);
 }
 const pngs = readdirSync(vdir).filter((f) => /^f_\d+\.png$/.test(f)).sort();
 if (pngs.length === 0) {
-  console.error(`ffmpeg (${FF}) extracted 0 frames from ${clipPath} — nothing to score`);
-  process.exit(1);
+  throw new Error(`ffmpeg (${FF}) extracted 0 frames from ${clipPath} — nothing to score`);
 }
 
 // ── decode pngs → gray arrays in a second Chromium page ───────────────────────
 const W = 150, H = 70;
-const b2 = await chromium.launch({ executablePath: chrome(), args: ["--use-angle=swiftshader"] });
+const b2 = await launchChromium({ args: ["--use-angle=swiftshader"] });
 const p2 = await b2.newPage();
 await p2.setContent("<canvas id=c></canvas>");
 await p2.evaluate(({ w, h }) => { const c = document.getElementById("c"); c.width = w; c.height = h; window.__cx = c.getContext("2d", { willReadFrequently: true }); }, { w: W, h: H });
@@ -155,3 +144,6 @@ console.log(`  flicker (hard-flip %/frame):  mean ${mean.toFixed(2)}   p90 ${p90
 console.log(`  → for A/B, compare p90 (stable typical-frame floor); mean & max are dominated by scene-change spikes`);
 console.log(`  clip: ${clipPath}`);
 console.log(`  frames: ${join(vdir, "f_*.png")}`);
+} finally {
+  await shutdown();
+}

@@ -1201,6 +1201,7 @@ const TLX = (function () {
         },
 
         // resources
+        chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;

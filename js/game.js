@@ -305,7 +305,18 @@ function syncCustomTeam() {
 }
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
-let trackIdx = store.get("track", 0);
+function storedTrackIndex() {
+  const id = store.get("trackId", null);
+  const stable = typeof id === "string" ? Tracks.LIST.findIndex((t) => t.id === id) : -1;
+  return stable >= 0 ? stable : store.get("track", 0); // legacy positional save
+}
+let trackIdx = storedTrackIndex();
+function restoreFreePlaySelection() {
+  trackIdx = storedTrackIndex(); teamIdx = store.get("team", 2); driverIdx = store.get("driver", 0);
+  if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+  if (!(teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
+  if (!(driverIdx >= 0 && driverIdx < Teams.LIST[teamIdx].drivers.length)) driverIdx = 0;
+}
 let difficulty = store.get("difficulty", "normal");
 // RELIABILITY — "off" | "low" | "real" (js/game/reliability.js). A standing
 // preference like difficulty, so it persists. Ships OFF: store.get returns the
@@ -2200,7 +2211,7 @@ function loadTrack(idx) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3 });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2379,50 +2390,48 @@ function launchFlyingLap() {
   announce("QUALIFYING LAP", 1.6);
 }
 
-// SCREEN WAKE LOCK, held for the duration of a race. Without it the system
-// idle timer runs during a Grand Prix same as any other page, and tilt
-// steering sends NO input events by construction (orientation is a sensor
-// read, not user input) — so on a phone driving by tilt the screen dims and
-// locks mid-race with nothing the player did wrong. js/net/lobby.js already
-// holds one for the same reason while the VS FRIEND waiting room is open;
-// this is that shape, copied rather than reinvented. Browsers release the
-// lock on every hide (spec), so it is re-acquired on return by the
-// visibilitychange handler below rather than a second listener here.
+// SCREEN WAKE LOCK for a race; browsers release it whenever the page hides.
 let raceWake = null;
+let raceWakePending = null;
 let raceWakeWanted = false;
 function holdRaceWake() {
   raceWakeWanted = true;
   try {
-    if (!navigator.wakeLock || raceWake) return;
-    navigator.wakeLock.request("screen").then((l) => {
-      raceWake = l;
-      l.addEventListener("release", () => { raceWake = null; });
-    }).catch(() => {});
+    if (!navigator.wakeLock || raceWake || raceWakePending) return;
+    const pending = navigator.wakeLock.request("screen");
+    raceWakePending = pending;
+    pending.then((lock) => {
+      if (raceWakePending === pending) raceWakePending = null;
+      if (!raceWakeWanted || document.hidden) {
+        try { lock.release(); } catch (e) { Log.info("game", "late wake-lock release failed"); }
+        return;
+      }
+      raceWake = lock;
+      // An old sentinel may release after a replacement exists: compare identity.
+      lock.addEventListener("release", () => { if (raceWake === lock) raceWake = null; });
+    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
 function dropRaceWake() {
   raceWakeWanted = false;
-  try { if (raceWake) raceWake.release(); } catch (e) { /* already released is fine */ }
+  const held = raceWake;
   raceWake = null;
+  try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
 }
 
 function startRace() {
-  // Abort any incident takeover left over from the last race, FIRST — while the
-  // cars it owns and the track they crashed on are both still current. IncidentSim
-  // owns cars by their cars[] INDEX and only releases them via a hand-back inside
-  // the race loop, so quitting to the menu mid-takeover left an index owned; after
-  // makeCars() below that index is a completely different car, which would never
-  // drive (updateCar early-outs on owns()) and — if the same track reloaded, with
-  // DebrisWorld's generation unchanged — could be posed onto the stale crash site.
+  // Completed seasons are readable, never raceable (also guarded by award()).
+  if (flow === "season" && !SeasonCal.canRace(season)) {
+    state = "menu"; $("race-settings").hidden = true;
+    buildSelect(); els.select.hidden = false;
+    return false;
+  }
+  // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
   loadTrack(trackIdx);
   makeCars();
-  // A qualifying lap is a time trial with the rest of the field simulated: one
-  // car on track, the existing lap-timing and validity path, and no new game
-  // state. ONE lap, STANDING from the line (see launchFlyingLap and the lights-out
-  // branch in update()). The AI field is built BEFORE cars is
-  // narrowed, so the classification can still see every car.
+  // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
@@ -2447,7 +2456,7 @@ function startRace() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
-  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars));
+  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -3427,7 +3436,7 @@ function collideFx(a, b, impact) {
   // burst at the car's world position (collideFx has no world coords here).
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
-  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
+  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) { void e; } }
   Input.rumble(0.4 + impact * 0.6, 120);
 }
 
@@ -4032,7 +4041,7 @@ function updateCar(c, dt, ranked) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   if (c.onKerb) {
-    c.speed -= 6 * dt;                       // slight scrub (raw contact only)
+    c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * dt);
     if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   }
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
@@ -4044,7 +4053,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { void e; } } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -5477,7 +5486,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
     // Camera/probe terrain chunking — same envCull gate as the road ribbon.
     // Shadow path already lazy-builds terrainChunked; reuse that handle.
-    let _tMesh = track.meshes.terrain, _tChunked = false;
+    let _tMesh = track.meshes.terrain || track.meshes.terrainChunked, _tChunked = !!(_tMesh && _tMesh.chunks && _tMesh.chunks.length);
     if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
       if (track.meshes.terrainChunked === undefined) {
         track.meshes.terrainChunked = null;
@@ -5505,7 +5514,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // second copy of the geometry costs nothing while the knob is off.
     // _keepPositions is REQUIRED: createChunkedMesh nulls its source arrays, and
     // debrisworld.js + __apex.geo() both still read track.roadGeo.
-    let _roadMesh = track.meshes.road, _roadChunked = false;
+    let _roadMesh = track.meshes.road || track.meshes.roadChunked, _roadChunked = !!(_roadMesh && _roadMesh.chunks && _roadMesh.chunks.length);
     // RESOLVED per-chunk state, not the raw knob (frame.perChunkLights holds the
     // same expression but is only assigned under _floodActive, so it is unset by
     // day). Without the tier/latch terms this built a second GPU copy of the road
@@ -5514,8 +5523,8 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
     // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
     // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = (LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
-      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3);
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
@@ -6005,10 +6014,10 @@ function render(dt) {
       // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
       // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
       // Lazy-build shares roadChunked with the lamp draw path.
-      const _castRibbonSh = (geo, key, plain) => {
+      const _castRibbonSh = (geo, key, plain, allow = true) => {
         if (track.meshes[key] === undefined) {
           track.meshes[key] = null;
-          if (geo && gfx.createChunkedMesh) {
+          if (allow && geo && gfx.createChunkedMesh) {
             geo._keepPositions = true;
             track.meshes[key] = gfx.createChunkedMesh(geo, 72);
           }
@@ -6018,7 +6027,7 @@ function render(dt) {
         else gfx.castShadow(plain, MAT_IDENT);
       };
       _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
-      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road);
+      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road, gfx.chunkedTrackCoords !== false);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map at NIGHT — directional sun shadows are invisible under the dim
       // moonlight, so this is the biggest night saving. Gate on the KEY's actual
@@ -7477,27 +7486,23 @@ applyResMode();
 
 $("mb-race").onclick = () => {
   setFlow("gp"); session = "race";
+  restoreFreePlaySelection();
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
-// Guarded, unlike its neighbours, and deliberately: a merge that took the
-// other side of index.html once dropped this button's markup, and an
-// unguarded handler assignment on a null element threw during boot and took
-// the ENTIRE game down — menu, renderer and all — for one missing optional
-// screen. Cheap insurance against a whole-app outage.
+// Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
-  // Two drivers, no server: the lobby does the whole handshake by having the
-  // players paste codes to each other. It starts the race itself once both
-  // sides agree on the setup, so there is no select screen in between.
-  // flow/session are the authority now; seasonMode/timeTrial are derived views.
+  // The peer-to-peer lobby starts the race once both sides agree.
   setFlow("gp"); session = "race";
+  restoreFreePlaySelection();
   netLobby.open();
   if (soundOn) GameAudio.uiSelect();
 };
 $("mb-tt").onclick = () => {
   setFlow("gp"); session = "tt";
+  restoreFreePlaySelection();
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
@@ -7505,11 +7510,7 @@ $("mb-tt").onclick = () => {
 };
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
-  // Re-read the STANDALONE save. In career `season` is an alias of the career
-  // championship (see openCareer), so without this a player who opened a career
-  // and then pressed SEASON would carry on the career's points here. resume()
-  // also repairs it: a save left PAST the last round of a calendar the player
-  // has since SHORTENED blanks; round === rounds() (finished) stays readable.
+  // Replace any career alias with the repaired standalone save; finished stays readable.
   season = SeasonCal.resume(store.get("season", null));
   store.set("season", season);
   // Finished championship: trackIndex(rounds()) is -1 — park the flyby on the
@@ -7525,19 +7526,16 @@ $("mb-season").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
-// CAREER. Unlike the other three entry points this one does not go to #select:
-// the calendar decides where you race, so the hub replaces that whole screen.
-// A save with no career yet opens the hub in its new-career state.
+// Career's calendar is fixed, so its hub replaces the circuit picker.
 function openCareer() {
   setFlow("career"); session = "race";
   const c = Career.data() || Career.load();
   if (c) {
     season = c.season;               // the SAME object — see endRace()
     trackIdx = Career.trackIndex();
-    // Career owns WHO you drive for; the garage's team/driver pickers do not apply
-    // while a contract is running, so point the existing indices at the contract.
+    // Point the shared car UI at the contract without overwriting GP preferences.
     const ti = Teams.LIST.findIndex((t) => t.id === c.team);
-    if (ti >= 0) { teamIdx = ti; store.set("team", ti); }
+    if (ti >= 0) teamIdx = ti;
     driverIdx = c.seat;
     recomputePlayerMods();
   }
@@ -7617,6 +7615,7 @@ $("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 // that is not being rendered. Disabled rather than hidden — the same rule the
 // mode-dependent driving controls follow, so the grid never reflows under a
 // thumb mid-tap.
+const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race";
   $("pm-hidehud").disabled = !inRace;
@@ -7624,7 +7623,7 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  syncSettingsAvailability();
+  syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
 function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; }
@@ -7821,11 +7820,10 @@ function openRaceSettings(from) {
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  // The garage is a STEP now, not a side door. #select asks where you race and
-  // nothing else; START goes on to the garage, and the garage's DONE carries on
-  // to the race settings. In the VS FRIEND room it is skipped — the room has
-  // its own GARAGE button because each player owns their own car, and the host
-  // coming here is only editing the shared race.
+  if (els.selGo.dataset.seasonComplete === "1") {
+    buildStandings(); $("standings").hidden = false; return;
+  }
+  // Solo flows go through the garage; VS FRIEND owns a separate garage step.
   if (netRoom) { openRaceSettings("select"); return; }
   openGarage("select");
 };
@@ -8495,10 +8493,12 @@ syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
-// `apex26.track` is a POSITIONAL index into Tracks.LIST, so a reordered or
-// shortened circuit list would leave it dangling and crash loadTrack on the
-// undefined def. Clamp it the same way teamIdx/driverIdx are clamped above.
+// Clamp a legacy positional selection before migrating it to stable identity.
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+// Stable ID is authoritative; keep the legacy index for an older cached build.
+if (Tracks.LIST[trackIdx]) {
+  store.set("trackId", Tracks.LIST[trackIdx].id); store.set("track", trackIdx);
+}
 { const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot

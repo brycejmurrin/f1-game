@@ -110,8 +110,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     }
     console.log("\nci.yml's smoke settings (retries 1, 240 s) are RIGHT for smoke — a");
     console.log("deploy gate should absorb an infra blip rather than block on it. They are");
-    console.log("wrong for an advisory selector, where a retry only doubles the cost of the");
-    console.log("news it exists to deliver. Selection is not the same job as gating and");
-    console.log("should not inherit its settings.");
+    console.log("wrong for the change-aware selected gate, where a retry only doubles the");
+    console.log("cost before a failure reports. Selection is not the same job as smoke and");
+    console.log("should not inherit smoke's settings.");
   }
 }

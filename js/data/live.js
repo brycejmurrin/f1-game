@@ -1,6 +1,26 @@
 const DataLive = (function () {
   "use strict";
 
+  function mergePositionBatch(state, batch) {
+    const values = batch && (Array.isArray(batch.values) ? batch.values : (Array.isArray(batch) ? batch : []));
+    (values || []).forEach((p) => { if (p && p.num != null) state.positions.set(p.num, p); });
+    if (batch && batch.cursor && (!state.positionCursor || batch.cursor > state.positionCursor)) {
+      state.positionCursor = batch.cursor;
+    }
+    return Array.from(state.positions.values()).sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99));
+  }
+
+  function mergeIntervalBatch(state, batch) {
+    if (batch) {
+      const values = batch.values && typeof batch.values === "object" ? batch.values : batch;
+      Object.keys(values || {}).forEach((k) => { state.intervals[k] = values[k]; });
+      if (batch.cursor && (!state.intervalCursor || batch.cursor > state.intervalCursor)) {
+        state.intervalCursor = batch.cursor;
+      }
+    }
+    return state.intervals;
+  }
+
   function create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
@@ -15,11 +35,11 @@ const DataLive = (function () {
     let armAuto = null;
 
     function stopLiveAuto() {
-      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
     }
 
-    // Re-arm auto-refresh if AUTO is on and the interval is not running. The
-    // hub stops the interval whenever the player leaves this tab (hub.js
+    // Re-arm auto-refresh if AUTO is on and the timer is not running. The
+    // hub stops the timer whenever the player leaves this tab (hub.js
     // showTab) — but it re-shows the tab from a CACHED node without calling
     // back into this module, so nothing here ever ran again and the player
     // came back to an AUTO button still lit over a permanently disarmed
@@ -121,6 +141,10 @@ const DataLive = (function () {
       const autoBtn = el("button", "dh-livebtn" + (liveOpts.auto ? " dh-active" : ""), "AUTO");
       autoBtn.type = "button";
       autoBtn.title = "Auto-refresh every 30s";
+      // This toolbar mixes an action and a toggle. State the toggle explicitly
+      // so AriaState does not infer that neighbouring REFRESH is aria-pressed.
+      autoBtn.setAttribute("data-aria-toggle", "");
+      autoBtn.setAttribute("aria-pressed", liveOpts.auto ? "true" : "false");
       const stamp = el("span", "dh-live-updated", "");
       bar.appendChild(refreshBtn);
       bar.appendChild(autoBtn);
@@ -130,7 +154,19 @@ const DataLive = (function () {
       const dataEl = el("div", "dh-tabbody");
       rightPane.appendChild(dataEl);
 
+      let refreshPromise = null;
+      let scheduleAuto = null;
+      const liveState = {
+        positionCursor: null, intervalCursor: null,
+        positions: new Map(), intervals: Object.create(null),
+      };
+
       function refresh() {
+        // Coalesce manual clicks and AUTO ticks onto the batch already running.
+        // F1API serializes its network work, so overlapping four-request batches
+        // otherwise grow a queue faster than a throttled API can drain it.
+        if (refreshPromise) return refreshPromise;
+        if (liveOpts.auto) stopLiveAuto();
         const myGen = ++liveRefreshGen;
         clear(dataEl);
         dataEl.appendChild(spinner());
@@ -143,11 +179,19 @@ const DataLive = (function () {
         // otherwise a 30 s loop silently re-serves the same payload. ttl:0
         // bypasses the read (api.js request) while still writing on success.
         const ttl = 0;
-        Promise.all([
+        const positionReq = F1API.livePositions
+          ? F1API.livePositions(meta.sessionKey, liveState.positionCursor)
+          : F1API.positions(meta.sessionKey, ttl);
+        const intervalReq = F1API.liveIntervals
+          ? F1API.liveIntervals(meta.sessionKey, liveState.intervalCursor)
+          : F1API.intervals(meta.sessionKey, ttl);
+        refreshPromise = Promise.all([
           F1API.weather(meta.sessionKey, ttl).catch(catchLive),
-          F1API.positions(meta.sessionKey, ttl).catch(catchLive),
-          F1API.sessionDrivers(meta.sessionKey, ttl).catch(catchLive),
-          F1API.intervals(meta.sessionKey, ttl).catch(catchLive)
+          positionReq.catch(catchLive),
+          // Driver identity is stable during a session; retain the API module's
+          // normal TTL rather than forcing a redundant network fetch every tick.
+          F1API.sessionDrivers(meta.sessionKey).catch(catchLive),
+          intervalReq.catch(catchLive)
         ]).then(res => {
           if (myGen !== liveRefreshGen) return;
           clear(dataEl);
@@ -155,8 +199,8 @@ const DataLive = (function () {
             dataEl.appendChild(emptyMsg(gateErr.message));
             return;
           }
-          const positions = res[1];
-          const gaps = res[3];
+          const positions = mergePositionBatch(liveState, res[1]);
+          const gaps = mergeIntervalBatch(liveState, res[3]);
           if (positions && gaps) {
             positions.forEach(p => {
               if (p.num !== null && p.num !== undefined && Object.prototype.hasOwnProperty.call(gaps, p.num)) {
@@ -168,28 +212,44 @@ const DataLive = (function () {
           const fetchedAt = lastFetchedAt(meta.sessionKey);
           stamp.textContent = "updated " + new Date(fetchedAt || Date.now())
             .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        }).finally(() => {
+          refreshPromise = null;
+          // Settlement-driven scheduling: the 30 seconds starts after this
+          // batch finishes, never while it is still occupying F1API's queue.
+          if (liveOpts.auto && armAuto === scheduleAuto && dataEl.isConnected) scheduleAuto();
         });
         // No rejection arm: every input above is pre-caught by catchLive
         // (which always returns null), so Promise.all cannot reject.
+        return refreshPromise;
       }
 
       refreshBtn.addEventListener("click", refresh);
       autoBtn.addEventListener("click", () => {
         liveOpts.auto = !liveOpts.auto;
         autoBtn.classList.toggle("dh-active", liveOpts.auto);
+        autoBtn.setAttribute("aria-pressed", liveOpts.auto ? "true" : "false");
         stopLiveAuto();
         resumeLiveAuto();
       });
       // From here on, resuming means THIS body. Set before the sentinel goes
       // in, or a picker-change rebuild would re-arm the replaced body instead.
-      armAuto = () => {
+      scheduleAuto = () => {
         stopLiveAuto();
+        if (!liveOpts.auto || armAuto !== scheduleAuto) return;
+        // An in-flight batch owns scheduling through its finally arm above.
+        if (refreshPromise) return;
         // Skip the fetch while the tab is hidden — OpenF1's free tier is rate-
         // limited (export.js sleeps 3-5s between calls), and a backgrounded hub
-        // otherwise keeps spending requests forever. Keep the timer so it resumes
-        // on its own when the tab is visible again.
-        liveTimer = setInterval(() => { if (dataEl.isConnected && !document.hidden) refresh(); }, LIVE_REFRESH);
+        // otherwise keeps spending requests forever. Recheck periodically so it
+        // resumes on its own when the tab is visible again.
+        liveTimer = setTimeout(() => {
+          liveTimer = null;
+          if (!liveOpts.auto || armAuto !== scheduleAuto || !dataEl.isConnected) return;
+          if (document.hidden) { scheduleAuto(); return; }
+          refresh();
+        }, LIVE_REFRESH);
       };
+      armAuto = scheduleAuto;
       const sentinel = makeSentinel();
       if (sentinel) bar.appendChild(sentinel);
       // ...and directly too, not only via the sentinel: the FIRST render
@@ -319,5 +379,5 @@ const DataLive = (function () {
 
     return { loadLive, stopLiveAuto };
   }
-  return { create };
+  return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch };
 })();

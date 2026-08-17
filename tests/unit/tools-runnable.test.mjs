@@ -145,6 +145,64 @@ test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => 
   assert.match(r.stdout, /Bin:/);
 });
 
+test("chrome-devtools-mcp.sh help exits 0 without requiring Chromium", () => {
+  // help used to run after detect_chrome() at script load, so a Mac without
+  // /opt/pw-browsers died before printing usage. Detect belongs in run/verify.
+  const r = spawnSync("bash", [path.join(TOOLS, "chrome-devtools-mcp.sh"), "help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 30000 });
+  const text = `${r.stdout}\n${r.stderr}`;
+  assert.equal(r.status, 0, text);
+  assert.match(text, /clone/);
+  assert.match(text, /status/);
+});
+
+test("self-booting capture/physics tools use harness.mjs, not a subprocess server", () => {
+  // These were the last holdouts: python -m http.server / npx serve + a
+  // sleep, or a pinned /opt/pw-browsers path. harness.mjs is the
+  // teardown-safe server+Chromium pair every other tool uses.
+  const files = [
+    "survey-track.mjs",
+    "capture/shot.mjs",
+    "measure-props-over-road.mjs",
+    "car/carshot.mjs",
+    "career-economy.mjs",
+    "check-physics.mjs",
+    "net/rtc-e2e.mjs",
+    "net/rtc-e2e-3p.mjs",
+    "net/rtc-e2e-room.mjs",
+    "profile-gameloop.mjs",
+    "capture/apex-capture.mjs",
+    "capture/motion-capture.mjs",
+    "lighting/ab-lighting.mjs",
+    "quick-validate.mjs",
+  ];
+  const bad = [];
+  for (const rel of files) {
+    const src = fs.readFileSync(path.join(TOOLS, rel), "utf8");
+    if (!/from ["']\.\.\/harness\.mjs["']|from ["']\.\/harness\.mjs["']/.test(src))
+      bad.push(`${rel}: missing harness.mjs import`);
+    if (/spawn\(\s*["']python3["']/.test(src) || /spawn\(\s*["']npx["']/.test(src))
+      bad.push(`${rel}: still spawns a subprocess server`);
+    if (/chromium-1194/.test(src))
+      bad.push(`${rel}: pinned chromium-1194 path`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test("no tool pins a Linux-only Chromium path as executablePath", () => {
+  // rtc-e2e used to die on a Mac with executablePath: "/opt/pw-browsers/chromium".
+  // The ladder lives in harness.mjs; everyone else must go through it.
+  const pinned = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    if (f.rel === "harness.mjs") continue;
+    const src = fs.readFileSync(f.abs, "utf8");
+    if (/executablePath:\s*["']\/opt\/pw-browsers\/chromium/.test(src))
+      pinned.push(f.rel);
+  }
+  assert.deepEqual(pinned, []);
+});
+
 test("report-server: collects a POSTed bundle, and a hostile name cannot escape", async () => {
   // The one tool here that is a SERVER and takes a filename from the network,
   // so parse-only is not enough: the name arrives from the page, and the whole
@@ -165,28 +223,36 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
     // Take the port from what it PRINTS: the URLs are the tool's actual output
     // contract (they are what you type into a phone), and --port 0 keeps
     // parallel suites from colliding on a fixed number.
-    const port = await new Promise((ok, fail) => {
+    const printedURL = await new Promise((ok, fail) => {
       let buf = "";
       const t = setTimeout(() => fail(new Error("no URL printed in 15s: " + buf)), 15000);
       proc.stdout.on("data", (d) => {
         buf += d;
-        const m = buf.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
-        if (m) { clearTimeout(t); ok(Number(m[1])); }
+        const m = buf.match(/http:\/\/127\.0\.0\.1:\d+\/\?report=1&token=[A-Za-z0-9_%.-]+/);
+        if (m) { clearTimeout(t); ok(new URL(m[0])); }
       });
       proc.on("exit", (c) => { clearTimeout(t); fail(new Error(`exited ${c}: ${buf}`)); });
     });
-    const base = `http://127.0.0.1:${port}`;
+    const base = printedURL.origin;
+    const token = printedURL.searchParams.get("token");
+    const authorised = (pathname) => {
+      const url = new URL(pathname, base);
+      url.searchParams.set("token", token);
+      return url;
+    };
 
-    const help = await fetch(`${base}/apex-report`);
+    assert.equal((await fetch(`${base}/apex-report`)).status, 403,
+      "the LAN collector must not accept unauthenticated reads");
+    const help = await fetch(authorised("/apex-report"));
     assert.equal(help.status, 200);
     assert.match(await help.text(), /collector/);
 
     // ?report=1 is the console-free path for a phone (iOS Safari has no console
     // without a Mac and a cable). It must be opt-in: an injected button in every
     // local page would end up in a screenshot review or a golden.
-    const plain = await fetch(`${base}/`);
+    const plain = await fetch(authorised("/"));
     assert.equal(await plain.text(), "<html><body>hi</body></html>\n", "plain shell must be byte-identical");
-    const injected = await fetch(`${base}/?report=1`);
+    const injected = await fetch(authorised("/?report=1"));
     const html = await injected.text();
     assert.match(html, /id="apexReportBtn"/);
     assert.match(html, /apexReportBtn[\s\S]*<\/body>/, "the button belongs inside body");
@@ -194,8 +260,11 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
       "a rewritten body needs its own Content-Length");
 
     const body = JSON.stringify({ build: 1, backend: "three", verdict: ["ok"] });
-    const post = (name) => fetch(`${base}/apex-report?file=${encodeURIComponent(name)}`,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const post = (name) => {
+      const url = authorised("/apex-report");
+      url.searchParams.set("file", name);
+      return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    };
 
     const good = await post("apex-report-1-three-x.json");
     assert.equal(good.status, 200);
@@ -213,4 +282,67 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
     proc.kill("SIGKILL");
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
+  assert.equal(fs.existsSync(path.join(TOOLS, "aerial-survey.mjs")), false,
+    "aerial-survey.mjs must be gone — its N/E/S/W obliques live on survey-track --oblique");
+  const src = fs.readFileSync(path.join(TOOLS, "survey-track.mjs"), "utf8");
+  assert.match(src, /--oblique/);
+  assert.match(src, /oblique\$\{name\}/);
+  assert.match(src, /dirs = \{ N: 0, E:/);
+  const { parseSurveyTrackArgs } = await import("../../tools/survey-track.mjs");
+  const mid = parseSurveyTrackArgs(["monaco", "--oblique", "0.1,0.5"]);
+  assert.equal(mid.id, "monaco");
+  assert.equal(mid.label, "survey");
+  assert.deepEqual(mid.fracs, [0.1, 0.5]);
+  assert.equal(mid.oblique, true);
+  const front = parseSurveyTrackArgs(["--oblique", "monaco", "0.1,0.5"]);
+  assert.deepEqual(front.fracs, [0.1, 0.5]);
+  const labeled = parseSurveyTrackArgs(["monaco", "before", "0.1,0.5", "--oblique"]);
+  assert.equal(labeled.label, "before");
+  assert.deepEqual(labeled.fracs, [0.1, 0.5]);
+});
+
+test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
+  // locator.screenshot waits for element stability; a continuously-animating
+  // WebGL canvas never settles, so orbit/eye shots timed out (~30 s). survey-track
+  // already uses page.screenshot({ clip: canvas box }) for the same reason.
+  const src = fs.readFileSync(path.join(TOOLS, "capture", "shot.mjs"), "utf8");
+  assert.match(src, /boundingBox\(\)/);
+  assert.match(src, /timeout:\s*60000/);
+  const callers = [...src.matchAll(/(\w+)\.screenshot\(/g)].map((m) => m[1]);
+  assert.ok(callers.length && callers.every((n) => n === "page"),
+    `screenshot callers must be page, got: ${callers.join(",")}`);
+  assert.match(src, /from ["']\.\.\/harness\.mjs["']/);
+});
+
+test("ui-survey.mjs is a layout-audit recipe, not a second Playwright probe", async () => {
+  const src = fs.readFileSync(path.join(TOOLS, "ui-survey.mjs"), "utf8");
+  assert.match(src, /layout-audit\.mjs/);
+  assert.match(src, /ios-iphone-landscape/);
+  assert.doesNotMatch(src, /from ["']\.\/harness\.mjs["']/,
+    "the alias must not boot its own Chromium — layout-audit already does");
+  const { buildLayoutAuditArgs } = await import("../../tools/ui-survey.mjs");
+  const def = buildLayoutAuditArgs([]);
+  assert.ok(def.some((a) => a.startsWith("--screens=title,select,garage")));
+  assert.ok(def.includes("--viewports=ios-iphone-landscape"));
+  assert.ok(def.includes("--jobs=1"));
+  const over = buildLayoutAuditArgs(["--screens=title", "--viewports=desktop-1280x800", "--jobs=4"]);
+  assert.equal(over.filter((a) => a.startsWith("--screens=")).length, 1);
+  assert.ok(over.includes("--screens=title"));
+  assert.ok(over.includes("--viewports=desktop-1280x800"));
+  assert.ok(over.includes("--jobs=4"));
+  assert.ok(!over.includes("--jobs=1"));
+});
+
+test("wgx-gallery.mjs imports runWgxShot instead of spawning wgx-shot", () => {
+  const src = fs.readFileSync(path.join(TOOLS, "wgx-gallery.mjs"), "utf8");
+  assert.match(src, /from ["']\.\/wgx-shot\.mjs["']/);
+  assert.match(src, /runWgxShot/);
+  assert.doesNotMatch(src, /spawnSync/);
+  const shot = fs.readFileSync(path.join(TOOLS, "wgx-shot.mjs"), "utf8");
+  assert.match(shot, /export async function runWgxShot/);
+  assert.doesNotMatch(shot, /locator\(["']#game["']\)\.screenshot/);
+  assert.match(shot, /page\.screenshot\(\s*\{\s*path[^}]*clip/);
 });

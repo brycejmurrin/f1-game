@@ -27,27 +27,18 @@
 //   modes    -> scratch/captures/apex-capture/modes
 // A frame under ~5 KB is flagged blank:true.
 
-import { createRequire } from "node:module";
-import { existsSync, mkdirSync, createReadStream, statSync } from "node:fs";
+import { mkdirSync, createReadStream, statSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { launchChromium } from "../harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
-
 const [cmd = "modes", ...rest] = process.argv.slice(2);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAND = { width: 844, height: 390 };
 const IDENTITY_VP = { width: 960, height: 540 };
-
-function chromePath() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined; // playwright bundled
-}
 
 function freePort() {
   return new Promise((res, rej) => {
@@ -113,8 +104,7 @@ async function startStaticServer() {
 }
 
 async function launchBrowser() {
-  return chromium.launch({
-    executablePath: chromePath(),
+  return launchChromium({
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
   });
 }

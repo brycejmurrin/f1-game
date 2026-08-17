@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// select-specs — per-SPEC change-aware selection for the advisory CI job.
+// select-specs — per-SPEC change-aware selection for the blocking CI gate.
 //
 // tools/pick-tests.mjs answers "which GROUPS does this change need" for a
 // human with a 4-core box and no deadline. A CI job has a budget, and
@@ -12,10 +12,9 @@
 // runs out), and cut off when the next spec's declared tests would blow the
 // budget.
 //
-// ADVISORY BY DESIGN — the caller reports, it never gates. That is also why
-// the cut is by declared-test count and not by any promise of importance:
-// a selector that silently drops the expensive spec must SAY so, and the
-// output names every spec it skipped and why.
+// BUDGETED, NOT SILENT — the CI caller gates on every spec this selects. The
+// cut is by declared-test count, so a spec outside the budget must be NAMED;
+// skipped/excluded output is part of the gate's honesty contract.
 //
 //   node tools/select-specs.mjs --since <ref>            # spec list, one per line
 //   node tools/select-specs.mjs --since <ref> --json
@@ -31,17 +30,17 @@ import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// The advisory job's settings, per select-budget's table: a retry only doubles
-// the cost of the news the job exists to deliver.
-export const ADVISORY = { retries: 0, perTestTimeoutSec: 120 };
+// The selected gate's settings, per select-budget's table. It has no retry so a
+// failure reports promptly while smoke retains the retry used for deploy safety.
+export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 120 };
 
 /** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
  *  THE COST MODEL'S BLIND SPOT, measured on CI run 31233088772: the selector
  *  billed every test at ~80 s, but 8 of the 10 specs it picked declare their
  *  own test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout —
  *  so a "14-minute" selection signed up for 3-7 minutes per test and failed
- *  the job. A spec that reserves more than the advisory per-test budget
- *  cannot be billed at advisory rates and is excluded by name. */
+ *  the job. A spec that reserves more than the selected gate's per-test budget
+ *  cannot be billed at those rates and is excluded by name. */
 export function maxDeclaredTimeout(file) {
   let ast;
   try {
@@ -81,14 +80,14 @@ export function specsOf(scriptNames, scripts) {
 
 /** Cut the spec list to what fits `budgetMin` surviving one timeout. */
 export function fit(specs, budgetMin) {
-  const m = { ...MEASURED, ...ADVISORY };
+  const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const counted = [], overBudgetSpecs = [];
   for (const file of specs) {
     const tests = declaredTests(file);
     if (tests == null) continue;
     const own = maxDeclaredTimeout(file);
-    if (own > ADVISORY.perTestTimeoutSec * 1000) {
+    if (own > SELECTED_GATE.perTestTimeoutSec * 1000) {
       overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
       continue;
     }
@@ -159,7 +158,7 @@ export function specsImporting(changed, root = ROOT) {
 // test has no history to select on, and a test that failed last time is the
 // single best predictor of failing again. Playwright's own CI guidance is the
 // ordering half — run the changed specs FIRST so the likeliest failure reports
-// first, since an advisory job's value is entirely in how early it speaks.
+  // first, since the gate should report the likeliest failure as early as possible.
 //
 // Priority, highest first:
 //   0  the spec file itself is in the diff (you just edited it)
@@ -228,10 +227,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec, so nothing is selected and the GATES own this push.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
-  console.error(`budget fits ${r.testsFit} tests (retries ${ADVISORY.retries}, ` +
-    `${ADVISORY.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
+  console.error(`budget fits ${r.testsFit} tests (retries ${SELECTED_GATE.retries}, ` +
+    `${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
   for (const s of r.overBudgetSpecs) console.error(
-    `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > advisory ${ADVISORY.perTestTimeoutSec}s): ${s.file}`);
+    `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.selected) console.log(s.file);
 }

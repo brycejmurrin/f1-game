@@ -57,7 +57,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const WRAPPER = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
+const WRAPPER = process.env.APEX_MCP_WRAPPER || path.join(ROOT, "tools/chrome-devtools-mcp.sh");
 
 // ── probe mode ───────────────────────────────────────────────────────────────
 // The raw call-array form below is the general escape hatch; `probe` is the shape
@@ -77,7 +77,7 @@ const WRAPPER = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
 // And navigator.gpu needs a SECURE CONTEXT — probe http://127.0.0.1, never
 // about:blank, or WebGPU is missing no matter which Chrome flags are set.
 function parseProbeArgs(argv) {
-  const o = { url: "http://127.0.0.1:3456/index.html", backend: null, wait: 6000,
+  const o = { url: "http://127.0.0.1:3456/", backend: null, wait: 6000,
               evalSrc: null, console: null, json: false, tlxWebgpu: false, lite: false,
               dryRun: false };
   for (let i = 0; i < argv.length; i++) {
@@ -164,7 +164,7 @@ if (argv[0] === "probe") {
   node tools/mcp-cli.mjs probe [flags]              the common shape
 
 probe flags:
-  --url URL          default http://127.0.0.1:3456/index.html (serve the tree first)
+  --url URL          default http://127.0.0.1:3456/ (serve the tree first)
   --backend NAME     webgl2 | three | webgpu — sets the pick, then RELOADS
   --lite             with --backend webgpu, force WGX_LITE (phone/WebKit stack)
   --tlx-webgpu       with --backend three, take three's WebGPU path (default is
@@ -222,6 +222,7 @@ const tools = await send("tools/list", {});
 const names = (tools.result?.tools || []).map((t) => t.name);
 console.log(`TOOLS (${names.length}):`, names.join(", "));
 
+let toolFailed = false;
 for (const c of calls) {
   const r = await send("tools/call", { name: c.name, arguments: c.arguments || {} });
   let out = (r.result?.content || []).map((x) => x.text ?? `[${x.type}]`).join("\n");
@@ -236,7 +237,9 @@ for (const c of calls) {
     limit = 20000;
   }
   console.log(`\n--- ${c.name} ${JSON.stringify(c.arguments || {}).slice(0, 90)}`);
+  const failed = Boolean(r.error || r.result?.isError);
+  if (failed) toolFailed = true;
   console.log(r.error ? "ERROR: " + JSON.stringify(r.error).slice(0, 300) : out.slice(0, limit));
 }
 srv.kill();
-process.exit(0);
+process.exit(toolFailed ? 1 : 0);

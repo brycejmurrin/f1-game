@@ -276,54 +276,42 @@ test.describe("UI scale", () => {
     });
   });
 
-  // SETTINGS column count is a property of sheet OWN width (container queries
-  // at 340 / 490), not of data-density. A compact override used to force 2
-  // columns whenever the sheet was short — on the landscape play shape that
-  // left every UI SIZE ≥100% stuck at two columns despite own width ~750
-  // clearing the three-column threshold. Portrait still walks 1→2→3 as own
-  // width crosses those stops when the player zooms out.
-  test("SETTINGS columns follow sheet width across UI SIZE", async ({ page }) => {
+  test("SETTINGS categories adapt to sheet width and expose one panel", async ({ page }) => {
     await page.setViewportSize(LANDSCAPE);
     await boot(page);
-    const samples = [];
-    for (const pct of [50, 100, 115, 150]) {
-      const row = await page.evaluate(async (p) => {
-        window.__apex.uiScale(p);
-        document.getElementById("pmsettings").hidden = true;
-        document.getElementById("overlay").hidden = false;
-        document.getElementById("mb-settings")?.click();
-        // SheetShape reclassifies on the style mutation; give layout a tick.
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        const sheet = document.getElementById("pmsettings-inner");
-        const groups = sheet.querySelector(".pm-groups");
-        const zoom = sheet.currentCSSZoom || 1;
-        const r = sheet.getBoundingClientRect();
-        const ownW = r.width / zoom;
-        const cols = getComputedStyle(groups).gridTemplateColumns.split(" ").filter(Boolean).length;
-        return { pct: p, cols, ownW, density: sheet.dataset.density };
-      }, pct);
-      samples.push(row);
-      if (row.ownW >= 490) {
-        expect(row.cols, `landscape @${pct}% ownW=${row.ownW.toFixed(0)} dens=${row.density} must be 3 cols`).toBe(3);
-      }
-    }
-    // Zoomed out on portrait: own width grows and should reach 3 cols.
-    await page.setViewportSize({ width: 390, height: 844 });
-    const portrait = await page.evaluate(async () => {
-      window.__apex.uiScale(50);
-      document.getElementById("pmsettings").hidden = true;
-      document.getElementById("overlay").hidden = false;
-      document.getElementById("mb-settings")?.click();
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const sheet = document.getElementById("pmsettings-inner");
-      const groups = sheet.querySelector(".pm-groups");
-      const zoom = sheet.currentCSSZoom || 1;
-      const ownW = sheet.getBoundingClientRect().width / zoom;
-      const cols = getComputedStyle(groups).gridTemplateColumns.split(" ").filter(Boolean).length;
-      return { cols, ownW };
+    await page.locator("#mb-settings").click();
+    await page.locator("#pm-tab-display").click();
+    await expect(page.locator("#pm-tab-display")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#pm-panel-display")).toBeVisible();
+    await expect(page.locator("#pm-panel-controls")).toBeHidden();
+    const wide = await page.evaluate(() => {
+      const layout = getComputedStyle(document.getElementById("pm-settings-body"));
+      const tabs = getComputedStyle(document.getElementById("pm-category-tabs"));
+      return { layoutCols: layout.gridTemplateColumns.split(" ").length,
+        tabCols: tabs.gridTemplateColumns.split(" ").length };
     });
-    expect(portrait.ownW, "portrait @50% should clear the 3-col threshold").toBeGreaterThanOrEqual(490);
-    expect(portrait.cols, `portrait @50% ownW=${portrait.ownW.toFixed(0)}`).toBe(3);
+    expect(wide.layoutCols).toBe(2);
+    expect(wide.tabCols).toBe(1);
+    await page.locator("#pm-tab-display").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#pm-tab-display")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#pm-tab-performance")).toBeFocused();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const narrow = await page.evaluate(() => {
+      const layout = getComputedStyle(document.getElementById("pm-settings-body"));
+      const tabs = getComputedStyle(document.getElementById("pm-category-tabs"));
+      return { layoutCols: layout.gridTemplateColumns.split(" ").length,
+        tabCols: tabs.gridTemplateColumns.split(" ").length };
+    });
+    expect(narrow.layoutCols).toBe(1);
+    expect(narrow.tabCols).toBe(4);
+
+    await page.locator("#pm-tab-display").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#pm-tab-performance")).toBeFocused();
+    await expect(page.locator("#pm-panel-performance")).toBeVisible();
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one

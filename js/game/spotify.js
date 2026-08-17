@@ -265,7 +265,9 @@ window.SpotifyMusic = (function () {
       try {
         const el = document.getElementById("audioset");
         if (!el) return;
-        if (typeof syncAudioPanel === "function") syncAudioPanel();
+        // Spotify's own render() and onChange subscribers already received the
+        // redirect result. syncAudioPanel was a private function in another
+        // IIFE, so the old typeof-guarded call was permanently dead.
         el.hidden = false;
         const wrap = document.getElementById("as-sp-wrap");
         if (wrap && wrap.scrollIntoView) wrap.scrollIntoView({ block: "center" });

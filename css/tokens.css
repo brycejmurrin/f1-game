@@ -502,20 +502,29 @@ html, body {
      of height; a browser-chosen font scale silently overflows every one of
      them, and it is orientation-dependent, so it only bites in landscape. */
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
-  -webkit-user-select: none; user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* iOS: no long-press callout sheet over the canvas/buttons, and no root
-     rubber-band / scroll chaining (Safari 26's floating tab bar collapses on
-     root scroll gestures, which reads as the whole game bouncing). */
-  -webkit-touch-callout: none;
+  /* No root rubber-band / scroll chaining (Safari 26's floating tab bar
+     collapses on root scroll gestures, which reads as the whole game bouncing). */
   overscroll-behavior: none;
-  touch-action: none;
+  touch-action: auto;
 }
 
 #game {
   position: fixed; inset: 0;
   width: 100%; height: 100%;
   display: block;
+  /* Driving owns its gestures; menus retain native pan, selection and pinch
+     zoom instead of inheriting a page-wide interaction lock. */
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.in-race .touchbtn,
+body.in-race #hud,
+body.in-race #pausebtn {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
 }
 
 h1, h2, .hud-value, .bigbtn {

@@ -98,10 +98,22 @@ async function installPickerApi(page, options = {}) {
       window.__life.positionCalls.push({ sessionKey, resolve: d.resolve });
       return d.promise;
     };
+    F1API.livePositions = (sessionKey, cursor) => {
+      if (!config.deferLive) return Promise.resolve({ values: [], cursor: cursor || null });
+      const d = deferred();
+      window.__life.positionCalls.push({ sessionKey, cursor, resolve: d.resolve });
+      return d.promise;
+    };
     F1API.intervals = (sessionKey) => {
       if (!config.deferLive) return Promise.resolve(null);
       const d = deferred();
       window.__life.intervalCalls.push({ sessionKey, resolve: d.resolve });
+      return d.promise;
+    };
+    F1API.liveIntervals = (sessionKey, cursor) => {
+      if (!config.deferLive) return Promise.resolve({ values: {}, cursor: cursor || null });
+      const d = deferred();
+      window.__life.intervalCalls.push({ sessionKey, cursor, resolve: d.resolve });
       return d.promise;
     };
     F1API.fastestLap = (sessionKey, num) => {
@@ -111,8 +123,13 @@ async function installPickerApi(page, options = {}) {
       return d.promise;
     };
     if (config.captureInterval) {
-      window.setInterval = (fn) => { window.__life.interval = fn; return 1; };
-      window.clearInterval = () => {};
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      const nativeClearTimeout = window.clearTimeout.bind(window);
+      window.setTimeout = (fn, ms, ...args) => {
+        if (ms === 30000) { window.__life.interval = fn; return 987654; }
+        return nativeSetTimeout(fn, ms, ...args);
+      };
+      window.clearTimeout = (id) => { if (id !== 987654) nativeClearTimeout(id); };
     }
   }, options);
 }
@@ -269,42 +286,29 @@ test("LIVE and TELEMETRY picker requests do not invalidate each other", async ({
   await expect(page.locator(".dh-pick-select").nth(1)).not.toHaveText("loading…");
 });
 
-test("newest LIVE refresh owns data and timestamp", async ({ page }) => {
+test("LIVE refreshes coalesce and AUTO schedules only after settlement", async ({ page }) => {
   await dataReady(page);
   await installPickerApi(page, { deferLive: true, captureInterval: true });
   await openLive(page);
   await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(1);
 
   await page.getByRole("button", { name: /REFRESH/ }).click();
-  await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
+  expect(await page.evaluate(() => window.__life.weatherCalls.length)).toBe(1);
   await page.getByRole("button", { name: "AUTO", exact: true }).click();
-  await page.evaluate(() => window.__life.interval());
-  await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(3);
+  expect(await page.getByRole("button", { name: /REFRESH/ }).getAttribute("aria-pressed")).toBeNull();
+  await expect(page.getByRole("button", { name: "AUTO", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.evaluate(() => {
     const life = window.__life;
-    life.weatherCalls[2].resolve(null);
-    life.positionCalls[2].resolve([{ num: 44, pos: 1 }]);
-    life.intervalCalls[2].resolve(null);
-    life.driverCalls[2].resolve([{ num: 44, code: "NEW", name: "Newest Driver" }]);
+    life.weatherCalls[0].resolve(null);
+    life.positionCalls[0].resolve([{ num: 44, pos: 1 }]);
+    life.intervalCalls[0].resolve(null);
+    life.driverCalls[0].resolve([{ num: 44, code: "NEW", name: "Newest Driver" }]);
   });
   const liveData = page.locator(".dh-split-R").first();
   await expect(liveData).toContainText("Newest Driver");
-  const newestStamp = await page.locator(".dh-live-updated").textContent();
-
-  await page.waitForTimeout(1100);
-  await page.evaluate(() => {
-    const life = window.__life;
-    [1, 0].forEach((i) => {
-      life.weatherCalls[i].resolve(null);
-      life.positionCalls[i].resolve([{ num: i + 1, pos: 1 }]);
-      life.intervalCalls[i].resolve(null);
-      life.driverCalls[i].resolve([{ num: i + 1, code: "OLD", name: "Stale Driver " + i }]);
-    });
-  });
-
-  await expect(liveData).toContainText("Newest Driver");
-  await expect(liveData).not.toContainText("Stale Driver");
-  await expect(page.locator(".dh-live-updated")).toHaveText(newestStamp);
+  await expect.poll(() => page.evaluate(() => typeof window.__life.interval)).toBe("function");
+  await page.evaluate(() => window.__life.interval());
+  await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
 });
 
 test("deselecting every telemetry driver synchronously restores the empty state", async ({ page }) => {

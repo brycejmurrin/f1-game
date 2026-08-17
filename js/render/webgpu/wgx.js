@@ -2252,6 +2252,10 @@ const WGX = (function () {
         _allocFail("createChunkedMesh", e);
         return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
       }
+      // Release only after the complete chunk upload succeeds. A failed upload
+      // can then fall back to createMesh without finding its source nulled.
+      if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
+      if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
@@ -4243,6 +4247,7 @@ const WGX = (function () {
       mobileTier: MOBILE_TIER,
 
       // ── Resources (Phase 2) ──
+      chunkedTrackCoords: true,
       createMesh,
       createTexMesh,                 // Phase 4 (textured decals)
       createChunkedMesh,

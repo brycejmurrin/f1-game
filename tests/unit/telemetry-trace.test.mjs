@@ -97,6 +97,7 @@ test("F1API.locationData drops origin rows and unparseable timestamps", async ()
   const api = vm.createContext({
     window: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     fetch: async () => ({ ok: true, json: async () => rows }),
+    setTimeout, clearTimeout, AbortController,
     console,
   });
   api.window = api;

@@ -1805,6 +1805,7 @@ const GLX = (function () {
     }),
     freeTexture,
     drawDecal,
+    chunkedTrackCoords: true,
     createChunkedMesh: (data, cellSize) => CHK.createChunkedMesh(data, cellSize),
     freeMesh,
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),

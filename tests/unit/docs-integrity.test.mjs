@@ -520,6 +520,23 @@ test("every tool named in tools/README.md exists on disk", () => {
   assert.deepEqual(ghosts, [], "tools/README.md documents a tool that does not exist on disk");
 });
 
+test("tools/README documents live test-infra knobs and stays two-column in the runner section", () => {
+  // SPLIT=N and FLOOR_SLACK are load-bearing: an agent who only reads the index
+  // will not know test-shards can fan a group across Playwright shards, or that
+  // fixture-consumer-audit fails when FLOOR lags actual adoption by more than 5.
+  const index = read("tools/README.md");
+  assert.match(index, /SPLIT=N/, "test-shards SPLIT fan-out must be indexed");
+  assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
+  const specs = index.split("\n").find((l) => l.includes("**select-specs.mjs**")) || "";
+  const recall = index.split("\n").find((l) => l.includes("**select-recall.mjs**")) || "";
+  assert.ok(specs, "select-specs row missing");
+  assert.ok(recall, "select-recall row missing");
+  assert.doesNotMatch(specs, /\|\s*check-changes\s*\|/,
+    "select-specs sits in the two-column runner table; do not leak the paired-skill column");
+  assert.doesNotMatch(recall, /\|\s*check-changes\s*\|/,
+    "select-recall sits in the two-column runner table; do not leak the paired-skill column");
+});
+
 test("the tools index lists every tool", () => {
   // Underscore-prefixed scripts are transient agent scratch by convention
   // (.gitignore: tools/_*.mjs) and are deliberately not indexed.

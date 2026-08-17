@@ -224,3 +224,29 @@ test.describe("Season — sprint weekends", () => {
     expect(myPts(s)).toBe(8);
   });
 });
+
+test.describe("Season — completed championship", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("shows a terminal screen and opens final standings instead of another race", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.season", JSON.stringify({
+        round: 1,
+        pts: { "ferrari:0": 25 },
+        teamPts: { ferrari: 25 },
+        driverCodes: { "ferrari:0": "LEC" },
+      }));
+    });
+    await boot(page, { trackIds: ["monza"] });
+    await page.locator("#mb-season").click();
+    await expect(page.locator("#select-title")).toHaveText("SEASON COMPLETE");
+    await expect(page.locator("#sel-go")).toHaveText("VIEW FINAL STANDINGS");
+    await expect(page.locator("#sel-customise")).toHaveText("START NEW SEASON");
+
+    await page.locator("#sel-go").click();
+    await expect(page.locator("#standings")).toBeVisible();
+    await expect(page.locator("#standings-title")).toHaveText("FINAL CHAMPIONSHIP");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.season")).round)).toBe(1);
+    await expect(page.locator("#race-settings")).toBeHidden();
+  });
+});

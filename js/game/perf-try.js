@@ -251,11 +251,10 @@ function paint(btn, k) {
 
 function initUI() {
   if (typeof document === "undefined") return;
-  // Anchor on #pm-res's own section rather than a positional selector: the
-  // DISPLAY group has no id, and hunting it by heading text would break the
-  // first time the heading is renamed.
-  const anchor = document.getElementById("pm-res");
-  const host = anchor && anchor.parentNode;
+  // Performance experiments have their own Settings category. Keeping them
+  // out of DISPLAY means the ordinary rendering controls stay short and the
+  // deliberately specialist switches are not mistaken for daily settings.
+  const host = document.getElementById("pm-panel-performance");
   if (!host) return;
 
   const head = document.createElement("h3");

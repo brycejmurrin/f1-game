@@ -82,3 +82,13 @@ test("the undocumented list does not name a hook that no longer exists", () => {
   assert.deepEqual(gone, [],
     "these hooks are gone from js/game/apex.js — drop them from UNDOCUMENTED");
 });
+
+test("openf1 and jolpica guard a missing path instead of fetching garbage", () => {
+  const src = read("js/game/apex.js");
+  for (const name of ["openf1", "jolpica"]) {
+    const m = src.match(new RegExp(name + "\\(path\\) \\{[\\s\\S]*?\\n  \\},"));
+    assert.ok(m, name + " body not found");
+    assert.match(m[0], /error:\s*"missing_path"/);
+    assert.match(m[0], /ok:\s*false/);
+  }
+});

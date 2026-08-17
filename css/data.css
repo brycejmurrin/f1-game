@@ -135,6 +135,21 @@
   color: #fff;
   font-weight: 800;
 }
+/* On a narrow upright card, hiding half the destinations beyond a sideways
+   gesture makes the hub's information architecture undiscoverable. All six
+   labels fit comfortably in two equal columns, so trade one extra tab row for
+   a complete overview. Landscape keeps the single horizontal strip because
+   its scarce axis is height, not width. */
+@media (orientation: portrait) and (max-width: 480px) {
+  .dh-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: hidden;
+    overscroll-behavior-x: auto;
+    touch-action: pan-y;
+  }
+  .dh-tab { width: 100%; min-width: 0; padding-inline: 8px; }
+}
 
 .dh-content {
   flex: 1 1 auto;

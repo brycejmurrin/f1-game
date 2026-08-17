@@ -1,6 +1,7 @@
 ---
 name: webgpu-debug
 description: Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate.
+paths: js/render/webgpu/**
 ---
 
 # Debug WebGPU / WGX renderer issues
@@ -68,7 +69,9 @@ Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
 `node tools/gfx-probe.mjs --backend webgpu <track>` (`#game` after
-`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs <track>`.
+`awaitSoftPresent`). Multi-track gallery: `node tools/wgx-gallery.mjs` (imports
+`runWgxShot` from `wgx-shot.mjs` — do not spawn wgx-shot as a subprocess).
+Readback oracle: `node tools/wgx-capture.mjs <track>`.
 
 ## Load on demand
 

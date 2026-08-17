@@ -77,10 +77,6 @@ const KNOWN_EXTERNAL_READS = {
   "js/game/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
-    "syncAudioPanel",               // KNOWN DEAD HOOK: defined inside audio-panel.js's IIFE
-                                    // (local, not global), so spotify.js's typeof guard is
-                                    // always false and this call never fires. Phase-0 finding;
-                                    // fixing it is a js/ edit and out of Phase-0 scope.
   ],
   "js/game/perf.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/game/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,

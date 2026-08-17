@@ -309,6 +309,29 @@ test("post resize keeps old resources valid and cleans partial texture allocatio
   );
 });
 
+test("chunked uploads release production source channels and preserve debug sources", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const make = (debug) => {
+    const quads = 1001, pos = [], nrm = [], col = [], idx = [], mat = [], trk = [];
+    for (let q = 0, v = 0; q < quads; q++, v += 4) {
+      const x = q * 0.1;
+      pos.push(x,0,0, x+1,0,0, x+1,0,1, x,0,1);
+      idx.push(v,v+1,v+2, v,v+2,v+3);
+      for (let i = 0; i < 4; i++) { nrm.push(0,1,0); col.push(1,1,1); mat.push(1); trk.push(x,0,6); }
+    }
+    return { pos, nrm, col, idx, mat, trk, _keepPositions: true, _keepFullGeometry: debug };
+  };
+  const prod = make(false);
+  gfx.createChunkedMesh(prod, 72);
+  assert.ok(prod.pos && prod.idx, "collision/probe channels stay resident");
+  for (const key of ["nrm", "col", "mat", "trk"]) assert.equal(prod[key], null);
+
+  const debug = make(true), refs = { ...debug };
+  gfx.createChunkedMesh(debug, 72);
+  for (const key of ["pos", "nrm", "col", "idx", "mat", "trk"]) assert.equal(debug[key], refs[key]);
+});
+
 test("bloom texture is cleaned when its createView allocation fails", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();

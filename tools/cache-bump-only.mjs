@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Strip the cache-bust query so two versions of one tag compare equal. */
-const stripV = (line) => line.replace(/\?v=\d+/g, "?v=");
+const stripV = (line) => line.replace(/\?v=[A-Za-z0-9._-]+/g, "?v=");
 
 /**
  * @param {string} diff  unified diff of index.html (any context width)

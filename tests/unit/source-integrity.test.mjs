@@ -82,6 +82,19 @@ test("every css/ file has balanced braces outside comments", () => {
     "becomes UNLAYERED — which beats every layer, silently");
 });
 
+test("Spotify dialog has an accessible name", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html,
+    /<dialog id="spotifypanel"[^>]*aria-labelledby="dlg-spotify"[^>]*>[\s\S]*?<h2 id="dlg-spotify">SPOTIFY<\/h2>/,
+    "#spotifypanel must reference its visible heading");
+});
+
+test("Data Export actions are not announced as toggles", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/data/export.js"), "utf8");
+  assert.match(src, /gatherBtn\.setAttribute\("data-aria-action",\s*""\)/);
+  assert.match(src, /dlBtn\.setAttribute\("data-aria-action",\s*""\)/);
+});
+
 /* A SELECTOR THAT MATCHES NOTHING IS THE THIRD WAY A STYLESHEET LIES.
  * The first two are above: a file that does not parse, and a brace that ends a
  * layer early. This one is quieter than either — the file parses, the braces
@@ -225,4 +238,22 @@ test("tools/layout-audit.mjs knows about every screen in the shell", () => {
     "a screen exists in index.html that tools/layout-audit.mjs never opens, so the " +
     "layout survey silently does not cover it. Add it to SCREENS there — or, if it " +
     "genuinely cannot be surveyed, say why here rather than leaving the gap unstated");
+});
+
+test("Settings uses labelled category tabs with matching panels", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  for (const id of ["controls", "display", "performance", "more"]) {
+    assert.match(html, new RegExp(`id="pm-tab-${id}"[^>]*role="tab"[\\s\\S]{0,180}aria-controls="pm-panel-${id}"`));
+    assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="tabpanel"[\\s\\S]{0,180}aria-labelledby="pm-tab-${id}"`));
+  }
+  assert.match(html, /id="pm-category-tabs"[^>]*role="tablist"/);
+});
+
+test("Circuit filters are not nested in a listbox and circuits expose button state", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");
+  assert.match(html, /id="sel-tracks"[^>]*role="group"/);
+  assert.doesNotMatch(html, /id="sel-tracks"[^>]*role="listbox"/);
+  assert.match(menus, /row\.setAttribute\("aria-pressed"/);
+  assert.doesNotMatch(menus, /row\.setAttribute\("role", "option"\)/);
 });
