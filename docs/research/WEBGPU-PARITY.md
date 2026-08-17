@@ -16,6 +16,59 @@ See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 Companion provenance (do not treat as current structure): the original
 migration plan and four phase build logs under `docs/archive/webgpu/`.
 
+### First live boot (2026-08-17) — and the four bugs it found
+
+Until this date nothing had ever run WGX against a real WebGPU device in this
+container, because headless Chrome does not expose `navigator.gpu` without
+`--enable-unsafe-webgpu`. Every WGX assertion in the suite runs against a mock
+device, and all four of the following passed those tests while making the
+backend unusable on any real one:
+
+| Bug | Symptom on a real device | Fix |
+|---|---|---|
+| `MSAA_COUNT = 2` | "Multisample count (2) is not supported" per MS pipeline, then Invalid RenderPipeline / Invalid BindGroupLayout cascading off it. WebGPU allows 1 or 4 only. | `MSAA_COUNT = WGX_LITE ? 1 : 4` |
+| `fwidth` in the material helpers | `'dpdx' must only be called from uniform control flow` — a COMPILE error that invalidates the lit pipeline, so WGX refused and the game fell back to WebGL2 with a console warning. | footprint taken at the `fs_main` entry, passed down as a parameter |
+| `createBuffer({mappedAtCreation:true})` for geometry | Every mesh failed once the 35 MB chunked scenery buffer exhausted the mappable pool — including a 208-BYTE buffer. Empty world, no error state. | `queue.writeBuffer` (+ `COPY_DST`), which stages in bounded chunks |
+| `POST_HDR_FORMAT = "rg11b10ufloat"` for the bloom/godray targets | "Color format (TextureFormat::RG11B10Ufloat) is not color renderable", then `WGX unavailable`. The format is core for sampling and copies, but RENDER_ATTACHMENT needs the OPTIONAL `rg11b10ufloat-renderable` feature. | request the feature when the adapter has it; re-derive from the DEVICE and downgrade to `rgba16float` when it does not |
+
+Each was hidden by the one before it, so they surfaced one boot at a time —
+budget for that shape rather than expecting a single fix. All four invariants
+are now gated by `tests/unit/webgpu-lifecycle.test.mjs` ("every sampleCount…",
+"no WGSL derivative sits where control flow can be non-uniform",
+"rg11b10ufloat is only rendered into when the device grants the feature").
+That last one needed the harness to start KEEPING pipeline descriptors:
+`createRenderPipeline` discarded them, so the pipeline half of the sampleCount
+guard had been reading an undefined `h.pipelines` and passing vacuously.
+Reproduce the live boot with:
+
+```sh
+npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+A clean boot prints no `WGX` console line, `WGX.gpuErrors()` is 0, and
+`sessionStorage["apex26.gfxBound"]` is ABSENT (that key is written only when
+WGX refuses and hands the frame to GLX). Those are all *absence* signals, so
+pair them with one positive check — drive a race and assert
+`canvas.getContext("webgl2") === null`, since a canvas claimed for WebGPU can
+never hand back a WebGL2 context:
+
+```sh
+node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+  --eval 'await __apex.race("monza"); await __apex.go();
+          await new Promise(r=>setTimeout(r,7000));
+          return String(document.querySelector("canvas").getContext("webgl2") === null);'
+```
+
+Measured 2026-08-17 after the fourth fix: `true`, on a Monza race, with an
+empty `__apex.logs()` gfx filter — WGX's first live frames in this repo.
+
+SwiftShader is a **validation and lifecycle** oracle, not a visual one: it
+proves the shaders compile, the bind groups match and the buffers upload. It
+says nothing about how the result looks. Note also that three's WebGPU backend
+(TLX auto-picks it on Chromium desktop) still dies here inside its own
+`mappedAtCreation` upload — probe TLX with the WebGL2 pin, as the specs do.
+
 ---
 
 ## 1. Verdict
@@ -32,7 +85,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
-| **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.
@@ -67,7 +120,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
-| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 2` (1 on mobile); color `resolveTarget` + manual MS-depth resolve | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
 | **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
 | **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
@@ -306,7 +359,7 @@ WebGPU color path is the same idea and is **core**
 const sceneMS = device.createTexture({
   size: [w, h],
   format: "rgba16float",
-  sampleCount: 2,                       // match GLX's cap; query is not per-format the GL way
+  sampleCount: 4,                       // 1 or 4 are the ONLY legal values — see below
   usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
 // lit pass:
@@ -326,7 +379,7 @@ solved this with a manual resolver).
 
 WGX needs the resolved depth for SSAO (and for a world-space god-ray). Recipe:
 
-1. Allocate `depthMS` at `sampleCount: 2`, format `depth24plus`, usage
+1. Allocate `depthMS` at `sampleCount: 4`, format `depth24plus`, usage
    `RENDER_ATTACHMENT | TEXTURE_BINDING`.
 2. Lit pass uses `depthMS` as the depth attachment (`storeOp: "store"` this
    time — we will read it).
@@ -339,7 +392,7 @@ WGX needs the resolved depth for SSAO (and for a world-space god-ray). Recipe:
 fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) f32 {
   let c = vec2<i32>(pos.xy);
   var d = 1.0;
-  for (var i = 0; i < 2; i++) {
+  for (var i = 0; i < 4; i++) {
     d = min(d, textureLoad(depthMS, c, i));   // closest surface, matches GL blit
   }
   return d;
@@ -350,11 +403,17 @@ fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) f32 {
    binding from `texture_depth_2d` to `texture_2d<f32>` and read `.r`. That
    is cheaper than fighting depth-as-color view rules.
 
-5. `msaa()` returns `2` when the MS targets exist, `1` on mobile / alloc fail
-   — same policy as GLX.
+5. `msaa()` returns `4` when the MS targets exist, `1` on mobile / alloc fail
+   — the same *policy* as GLX, not the same number.
 
-`sampleCount: 4` is widely supported but GLX caps at 2× after
-`getInternalformatParameter`. Stay at 2× unless a driven A/B says 4× is free.
+**`sampleCount` is 1 or 4 and nothing else** — the spec says so and Dawn
+enforces it. This section originally read "match GLX's 2× cap, stay at 2×
+unless a driven A/B says 4× is free", WGX implemented exactly that, and every
+real device answered `Multisample count (2) is not supported` once per MS
+pipeline, then cascaded into Invalid RenderPipeline / Invalid BindGroupLayout
+off the first failure. There is no A/B to run: 2× is not a tuning choice on
+this API, and the GLX cap does not transfer. A mock device will happily accept
+2 forever (see §0).
 
 ### 4.8 Instancing
 
@@ -432,44 +491,26 @@ existing opt-in and keep GLX untouched.
 Do **not** flip `apex26.gfxBackend` default. Do **not** delete GLX.
 
 **SwiftShader WebGPU — measured 2026-08-17** (Chrome 148 / Playwright Chromium
-149, `scratch/webgpu-swiftshader-probe3.json`). The previous line here
-("SwiftShader has no WebGPU") is false on this box:
+with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 
-| Launch | `navigator.gpu` | Dawn adapter | Game boots | WGX binds |
-|---|---|---|---|---|
-| Suite flags, **headless** (`--use-angle=swiftshader --enable-unsafe-webgpu`) on `http://127.0.0.1` | yes | `google` / `swiftshader`, `requestDevice()` ok | yes | no — see below |
-| Same flags, **headed** under Xvfb | yes | same | yes | no |
-| Extra Dawn/Vulkan pins (`--use-webgpu-adapter=swiftshader` + `VulkanFromANGLE`) **headless** | — | — | **no** (`__apex` never appears, 25 s) | — |
-| `data:` URL (any flags, headless) | **no** | — | n/a | n/a |
+| Check | Result |
+|---|---|
+| `navigator.gpu` + adapter | yes (`google` / often-empty `adapter.info`) |
+| Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
+| LIT `dpdx` CF | hoisted; lifecycle unit test guards |
+| `create()` on software | **refuses** by default → GLX fallback (`gfxWgxFail=software WebGPU adapter…`). Escape: `apex26.gfxWgxAllowSoftware=1` |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`, agentview coverage healthy — **GPUCanvasContext still composites blank/white** (CDP + `createImageBitmap` empty). Not a visual oracle. |
 
-SETTINGS ▸ RENDERER (the `<select>` + ‹ ›) does pick WEBGPU and reload. WGX
-scripts load (`typeof WGX === "object"`), then `create()` fails and the seam
-falls back to GLX. The picker label reads `WEBGPU (WEBGL2)`. The recorded
-reason:
-
-```
-apex26.gfxWgxFail = lit shader compile error:
-  'dpdx' must only be called from uniform control flow
-```
-
-That is SwiftShader being a **stricter WGSL compiler** than the hardware
-drivers WGX was tuned on. The LIT shader already hoists some derivatives
-(`ccDx` / `saaDx` comments in `js/render/webgpu/wgsl-chunks.js`) but still
-calls `dpdx`/`dpdy` inside `if (detail > 0.001)` and via `fw1()` from the
-branched `applyMaterial*` helpers. Until those are uniform-CF, WGX cannot
-be a Playwright visual oracle — only an adapter/device + compile-info gate.
-*(Note: As of August 2026, all `dpdx`/`dpdy` derivative evaluation points in `wgsl-chunks.js`
-have been hoisted to the top-level uniform control flow of `fs_main`, resolving WGSL compile errors).*
-
-Do **not** add the extra Vulkan pins to `playwright.config.js`; they break
-headless boot. Do **not** probe WebGPU on a `data:` page.
+Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
+headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools
+MCP wrapper must pass `--enable-unsafe-webgpu` (same as Playwright); without
+it `requestAdapter()` is null → `gfxWgxFail=no adapter`.
 
 CI: `tests/unit/webgpu-lifecycle.test.mjs` and
 `tests/unit/backend-surface-parity.test.mjs` stay the no-browser gates. A
 slice that adds a method must declare it (real or `undefined`) before
-`test:tooling-fast` will pass. A WGX **frame** still needs a headed browser
-whose LIT module compiles; SwiftShader is not that until the `dpdx` sites
-move.
+`test:tooling-fast` will pass. Reconfigure the WebGPU canvas context on every
+`canvas.width/height` change (swapchain invalidate).
 
 ---
 
@@ -485,9 +526,8 @@ move.
   are matching. A better algorithm is a different project.
 - **Using WebGPU to make CI faster.** The suite already gets a SwiftShader
   WebGPU adapter under the existing Playwright flags (see §6 table). That
-  does not make frames cheaper: WGX LIT currently fails to compile on that
-  adapter, and even a green compile would still be a CPU rasteriser. See
-  [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
+  does not make frames cheaper: even a green LIT compile is still a CPU
+  rasteriser. See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
 
 ---
 
@@ -495,7 +535,7 @@ move.
 
 ### This repo (read for this note)
 
-- `js/render/webgpu/wgx.js` — backend, `requestDevice({requiredFeatures})`, MSAA 2×
+- `js/render/webgpu/wgx.js` — backend, `requestDevice({requiredFeatures})`, MSAA 1\|4
 - `js/render/webgpu/wgsl-chunks.js` — LIT Poisson-8 PCSS, `params8.x` lamp-fog, env LOD
 - `js/render/webgpu/wgsl-post.js` — world-space god-ray, SSAO denoise, composite FX
 - `js/render/gfx.js` — seam contract; WGX is deferred opt-in (not the default)

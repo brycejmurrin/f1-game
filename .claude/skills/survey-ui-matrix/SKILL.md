@@ -5,6 +5,10 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 
 # Surveying the whole UI across the whole matrix
 
+**Token note:** this skill is long — for a single menu bug use `ui-menu-a11y`
+instead. Read §traps only when a measurement looks wrong; prefer
+`tools/layout-audit.mjs` for batch matrix work.
+
 A layout bug in this app is never "on a screen" — it is in a **cell of a matrix**:
 screen x viewport x scale x pointer. `tools/layout-audit.mjs` measures that matrix
 in Playwright and is the batch instrument. **This skill is the INTERACTIVE one**:
@@ -269,10 +273,13 @@ if (o) { o.hidden = false; o.style.removeProperty('display'); }
 document.body.classList.remove('in-race');
 ```
 
-**There are 27 screen roots.** Seventeen `<dialog>`, three `<div class="screen">`,
-seven bare overlays. Sweeping the seven or eight you can reach from the title in
-two clicks is the easy half and is NOT the survey — the defects this session found
-were on the shapes and screens nobody had opened.
+**The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
+The authoritative enumeration is `SCREENS` in `tools/layout-audit.mjs` (37
+cells at last count); `index.html` currently holds 19 `<dialog>` roots (was 17
+when this skill was written — re-run `grep -c '<dialog' index.html`). Sweeping
+the seven or eight you can reach from the title in two clicks is the easy half
+and is NOT the survey — the defects this session found were on the shapes and
+screens nobody had opened.
 
 | root | route |
 |---|---|
@@ -281,6 +288,7 @@ were on the shapes and screens nobody had opened.
 | `#carsetup` | `mb-race`, `sel-go` |
 | `#race-settings` | `mb-race`, `sel-go`, `cs-done` |
 | `#career` | `mb-career` |
+| `#season-setup` | `mb-season` (SEASON setup screen — `season-ui.js`) |
 | `#pmsettings` | `mb-settings` |
 | `#howtoplay` | `mb-help` |
 | `#vsfriend` | `mb-vs` |

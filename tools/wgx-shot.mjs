@@ -40,7 +40,7 @@ try {
   await page.addInitScript((wantLite) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
     localStorage.removeItem("apex26.gfxWgxLevel");
-    localStorage.removeItem("apex26.gfxWgxLite");
+    localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
     sessionStorage.setItem("apex26.wgxCapture", "1");
   }, lite);

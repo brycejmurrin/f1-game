@@ -58,8 +58,8 @@ Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools → **Perfo
 ## Interpreting GC spikes on night tracks
 
 The light-upload path was a known GC source but is **fixed**: `js/render/glx.js`
-allocates its per-lamp uniform arrays (`_luPos`, `_luCol`, `_luRad`, `_luDir`,
-`_luCone`, `_luBleed`) **once at module scope** and writes into them each frame,
+allocates its per-lamp uniform arrays (pooled as `_luA`/`_luB`/`_luC`/`_luD`,
+`js/render/glx.js` ~125) **once at module scope** and writes into them each frame,
 and `js/game/lighting.js`'s per-frame selection buffers (`_tlSel`,
 `_lightCullBuf`, `_lightHeap`, …) are pooled objects reused in place — see the
 "fresh objects here were per-car-per-frame GC churn" comment near

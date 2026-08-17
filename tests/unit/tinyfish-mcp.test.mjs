@@ -109,6 +109,73 @@ test("tinyfish-rpc deploy-summary reports STALE when live != local", () => {
   assert.match(r.stdout, /STALE/);
 });
 
+// A TinyFish upstream timeout is a SUCCESSFUL JSON-RPC result carrying an
+// errors[] payload — measured 2026-08-17, two consecutive version.json fetches,
+// one timeout and one clean, nothing changed between them. Reporting that as
+// "could not parse" points the reader at our regex; reporting it as STALE would
+// be worse, because deploy-check is a gate. Exit 3 means "transient, retry".
+const FIXTURE_TIMEOUT = {
+  jsonrpc: "2.0",
+  id: 3,
+  result: { content: [{ type: "text", text: JSON.stringify({
+    results: [],
+    errors: [{ url: "https://brycejmurrin.github.io/f1-game/version.json", error: "timeout" }],
+  }, null, 2) }] },
+};
+
+test("tinyfish-rpc calls an upstream timeout transient (exit 3), not a parse failure", () => {
+  for (const cmd of [["live-build"], ["deploy-summary", "--local-build", "1293"]]) {
+    const r = spawnSync("python3", [RPC, ...cmd], {
+      encoding: "utf8", input: JSON.stringify(FIXTURE_TIMEOUT),
+    });
+    assert.equal(r.status, 3, `${cmd[0]}: transient must be its own exit code, got ${r.status}`);
+    assert.match(r.stderr, /timeout/, cmd[0]);
+    assert.match(r.stderr, /retry/, cmd[0]);
+    assert.doesNotMatch(r.stdout, /STALE/, `${cmd[0]}: a blip must never read as a stale deploy`);
+  }
+});
+
+test("tinyfish-rpc still reports a genuine parse failure as exit 2", () => {
+  const junk = { jsonrpc: "2.0", id: 3, result: { content: [{ type: "text", text: "no build here" }] } };
+  const r = spawnSync("python3", [RPC, "live-build"], {
+    encoding: "utf8", input: JSON.stringify(junk),
+  });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /could not parse/);
+});
+
+test("tinyfish-mcp.sh asks for a per-URL timeout budget rather than eating the default", () => {
+  // fetch_content accepts per_url_timeout_ms (max 110000) and its default is
+  // short enough that github.io timed out twice in one session. Asking for the
+  // budget is the root-cause fix; the retry loop is the belt.
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /FETCH_TIMEOUT_MS="60000"/);
+  assert.match(src, /--timeout-ms\)/);
+  assert.match(src, /per_url_timeout_ms/);
+  // The version.json fetch behind deploy-check/deploy-js needs it too — that is
+  // the one that actually timed out.
+  assert.match(src, /version\.json.*per_url_timeout_ms/s);
+  const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.match(help.stdout, /--timeout-ms/);
+});
+
+test("tinyfish-mcp.sh retries the live-build fetch and says the body is capped", () => {
+  const src = fs.readFileSync(SH, "utf8");
+  // The retry loop exists and is bounded (a gate that hangs is its own bug).
+  assert.match(src, /fetch_live_build\(\) \{/);
+  assert.match(src, /for attempt in 1 2 3/);
+  assert.match(src, /rc" -ne 3/, "only the transient exit code may be retried");
+  // deploy-js --marker: a verdict plus the cap caveat, so ABSENT cannot be
+  // misread as "the fix did not ship" when the marker is simply past the cap.
+  assert.match(src, /--marker\)/);
+  assert.match(src, /MARKER PRESENT/);
+  assert.match(src, /MARKER ABSENT/);
+  assert.match(src, /NOT a verdict on the deployed file/);
+  const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.match(help.stdout, /BODY IS TRUNCATED/, "the limit belongs in help, not just in a comment");
+  assert.match(help.stdout, /--marker/);
+});
+
 test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   const r = spawnSync(
     "python3",
