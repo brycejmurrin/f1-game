@@ -94,11 +94,10 @@ is now flag-free and the eye shots show props on real ground.
 
 ### 6 · Test & ship
 - Geometry guards: `node tools/test-bg.mjs circuit`
-- Visual regression (all circuits): `node tools/test-bg.mjs visual`
-  — this suite skips when `tests/specs/tracks-visual.spec.js-snapshots/` is absent; if
-  baselines exist and your change is **intentional**, regenerate them with:
-  `npm run test:update -- tests/specs/tracks-visual.spec.js` (then eyeball
-  `tests/specs/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
+- Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
+  baselines). Do not treat it as a gate; prefer `verify-track` + foundation /
+  scenery specs for geometry changes. If you intentionally generate goldens:
+  `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
 - **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
   See the **bump-cache** skill / `sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`.
 - Commit with a message that says the *why*, and push. Pick the test group with

@@ -11,6 +11,7 @@ The regression suite lives one directory up in `tests/specs/*.spec.js` and
 | Suite | What it does |
 |---|---|
 | `blank-scan.spec.js` | one test per circuit: 25 frames round the lap, fail if any PNG is suspiciously small (camera inside scenery / staring into a void) |
+| `tracks-visual.spec.js` | per-circuit pixel-diff (all 40 × 6 fractions) — **PARKED**: no golden baselines committed; self-skips rather than asserting. Generate with `--update-snapshots` when ready to gate |
 | `inspect.spec.js` | one test per circuit: the same 25 frames composited into a 5×5 contact sheet, for the on-track intrusions a blank scan cannot see — a roof over the racing line renders a perfectly bright frame |
 | `galleries/track-trace.spec.js` | a driven-lap frame trace for one circuit |
 | `galleries/track-lap-audit.spec.js` | per-lap audit sheet |

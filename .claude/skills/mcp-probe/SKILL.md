@@ -6,7 +6,7 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 # Probing the live game with the MCPs
 
 Two upstream MCP servers sit alongside the Playwright suite. Neither replaces
-it — the suite is 113 Playwright specs + 95 `node --test` unit suites,
+it — the suite is 112 Playwright specs + 96 `node --test` unit suites,
 parallelised, asserted, retried, CI-gated. These are **interactive** instruments:
 one call at a time for the question you can't be bothered to write a
 `scratch/*.mjs` for, and for the one thing the suite never checks — the

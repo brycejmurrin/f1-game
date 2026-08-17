@@ -1,17 +1,18 @@
 # Apex 26 cleanup survey — index
 
-Branch: cursor/project-cleanup-survey-d0fd
-Deploy tip base: 4922e7cc
-Started: 2026-08-17T11:49Z
+Branch: `cursor/project-cleanup-survey-d0fd`  
+Status: **all 10 partitions complete** → see **`11-PRIORITIES.md`**
 
-## Agent partitions (in flight)
-01 docs | 02 tests | 03 js/game | 04 track/circuits | 05 render
-06 tools | 07 css/html | 08 car/net/data | 09 comments | 10 agent-config
-
-## Quick local signals
-- docs/research md: 22
-- docs/archive/research: 25
-- TODO/FIXME seed hits: 80
-- unit tests: 96
-- browser specs: 113
-- tools scripts: 97
+| # | Domain | File |
+|---|---|---|
+| 01 | docs / archive / research | `01-docs.md` |
+| 02 | tests | `02-tests.md` |
+| 03 | js/game | `03-js-game.md` |
+| 04 | track + circuits | `04-track-circuits.md` |
+| 05 | render backends | `05-render.md` |
+| 06 | tools | `06-tools.md` |
+| 07 | css + html | `07-css-html.md` |
+| 08 | car / net / data | `08-car-net-data.md` |
+| 09 | comments | `09-comments.md` |
+| 10 | agent config | `10-agent-config.md` |
+| **11** | **cross-cutting priorities** | **`11-PRIORITIES.md`** |
