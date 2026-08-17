@@ -1,6 +1,6 @@
 ---
 name: cross-backend-parity
-description: Use when a rendering look/knob/feature differs between WebGL2 (GLX), WebGPU (WGX), and three.js (TLX), when adding or changing a lighting knob, shader effect, material, or Gfx façade member, or when auditing backend drift after a lighting/rendering change.
+description: Use when a rendering look/knob/feature already differs between WebGL2 (GLX), WebGPU (WGX), and three.js (TLX), or when auditing backend drift after a lighting/rendering change. Night-looks-wrong first stop is lighting-tuner; WGX validation defects → webgpu-debug. After adding a knob, mirror it here.
 ---
 
 # Keep GLX / WGX / TLX in parity
@@ -28,10 +28,9 @@ mirrored — or explicitly recorded as a gap — in the other two.
    uploads it. Grep the knob name across ALL of `js/render/` before calling a
    change complete; the shipped failure mode is a slider that works on one
    backend and silently does nothing on the others.
-4. **WGX changes**: validate with real Dawn in-container —
-   `node tools/wgx-validate.mjs` (full matrix: `--lite`, `--no-rg11b10`); the
-   `webgpu-debug` skill has the defect classes (derivative uniformity, sample
-   counts, renderable formats).
+4. **WGX changes**: `node tools/wgx-validate.mjs --static` first (no browser).
+   Full Dawn (`wgx-validate.mjs`, `--lite`, `--no-rg11b10`) is parent-session
+   only — never a subagent. Defect classes: **webgpu-debug**.
 5. **TLX sharp edges**: TSL values need `.toVar()` BEFORE conditional use;
    `ColorManagement.enabled = false` (the look is calibrated without sRGB
    re-encode); the backend loads via dynamic `import()` only at `TLX.create()`.

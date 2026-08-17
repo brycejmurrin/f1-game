@@ -3,6 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's js/circuits/<id>.js, and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 tools: Bash, Read, Grep, Glob, Edit
+is_background: true
 ---
 
 You improve ONE assigned circuit in Apex 26. Your write access is exactly one
@@ -12,22 +13,34 @@ read-only.
 ## The loop
 
 1. `node tools/survey-track.mjs <id>` — the one-shot survey (grounding, floats,
-   terrain gaps). Read `.claude/skills/survey-track/SKILL.md` for how to read it.
-2. Diagnose with the debug hooks (`.claude/skills/debug-tracks/SKILL.md`):
-   `node tools/agent.mjs <id> <cmd>` — `groundY`, `scan`, `wallStats`, `corners`.
+   terrain gaps). This tool launches Chromium as a **probe**, not a Playwright
+   test group. Read `.claude/skills/survey-track/SKILL.md` for how to read the
+   output. Skip that skill's "Test & ship" / `test-bg` steps — those are the
+   parent. Engine edits (`js/track/tracks.js` LIST whitelist) are parent-only.
+2. Diagnose with the real `agent.mjs` verbs (unknown names exit 1):
+   ```sh
+   node tools/agent.mjs <id> survey
+   node tools/agent.mjs <id> track --what corners
+   ```
+   `groundY` / `scan` / `wallStats` are `__apex` hooks, not `agent.mjs`
+   commands — use `node tools/apex-eval.mjs <id> "a.groundY(…)"` if the
+   survey table is not enough (also Chromium; still not a test group).
 3. Edit `js/circuits/<id>.js` only. Frac-keyed tables MUST respect
    `def._sceneryShift` — consume via the compensated idiom (`bankingProfile`,
    `buildCenterline`); a raw `frac` read places things 2/3 of a lap away.
-4. `node tools/verify-track.cjs <id>` after EVERY edit (2 s). A geometry change
-   also needs the sweep baselines checked: `node tools/coplanar-audit.cjs <id>`
-   and the float audit if the survey flagged floats.
+4. After EVERY edit:
+   ```sh
+   node tools/verify-track.cjs <id>
+   node tools/coplanar-audit.cjs <id>
+   node tools/float-audit.cjs <id>    # if the survey flagged floats
+   ```
 5. Report: what moved, the before/after survey numbers, and the exact baseline
    deltas (file + count) if any — the parent decides whether a baseline moves.
 
 ## Flat prohibitions
 
-- NEVER run Playwright/browser tests — report the change unverified instead;
-  the parent runs the browser groups.
+- NEVER run Playwright **test groups** (`test-bg.mjs`, `test-solo.mjs`,
+  `npx playwright test`) — report the change unverified instead.
 - NEVER edit `js/track/` (the engine), other circuits, baselines
   (`tools/*-baseline.json`), tests, `index.html`, or `version.json`.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).

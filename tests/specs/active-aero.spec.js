@@ -40,7 +40,14 @@ async function fracWhere(page, pick) {
     if (!zones.length) throw new Error("track has no activation zones");
     // Everything here is in lap FRACTIONS, which is what jump() takes and the
     // only frame that is wrap-safe without knowing the lap length.
-    if (p === "straight") return zones.slice().sort((a, b) => b.len - a.len)[0].midFrac;
+    if (p === "straight") {
+      // Prefer the longest NON-wrapping zone. A wrap zone's midFrac can sit
+      // metres from the exit (Monza's main straight midFrac ≈ 0.99 → T1), so a
+      // short settle+steer window disarms mid-assert and reads aeroX as 0.
+      const sorted = zones.slice().sort((a, b) => b.len - a.len);
+      const z = sorted.find((q) => q.endFrac > q.startFrac) || sorted[0];
+      return z.midFrac;
+    }
     // "corner" = the middle of the longest stretch covered by NO zone. Built as
     // a coverage mask rather than by sorting gaps, because a zone may WRAP the
     // start line (Monza's main straight does, endFrac < startFrac) and every
@@ -243,13 +250,17 @@ test.describe("active aero — the trade", () => {
         window.__apex.step(1 / 60, 2);
         window.__apex.aero(x);
         window.__apex.act({ throttle: true }, 1 / 60, 60);   // let the flap settle
+        // Flap AFTER settle, BEFORE steer. Leaving the arming window (or a
+        // speed drop under X_MIN_SPEED) snaps aeroX shut — reading it after
+        // the steer measures disarm, not the trade under test.
+        const flap = window.__apex.aero().aeroX;
         const before = window.__apex.obs();
         window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 25);
         const after = window.__apex.obs();
         let dh = after.head - before.head;
         while (dh > Math.PI) dh -= 2 * Math.PI;
         while (dh < -Math.PI) dh += 2 * Math.PI;
-        return { dHead: Math.abs(dh), dx: Math.abs(after.x - before.x), flap: window.__apex.aero().aeroX };
+        return { dHead: Math.abs(dh), dx: Math.abs(after.x - before.x), flap };
       };
       return { z: run(false), x: run(true) };
     }, frac);
