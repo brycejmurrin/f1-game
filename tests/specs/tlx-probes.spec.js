@@ -199,10 +199,11 @@ test.describe("TLX — boot", () => {
     // and a TLX present during the rebuild does not return on SwiftShader
     // (530 s+ hung evaluate, GPU 387%, measured twice). Singapore is a
     // shipped night race — same gate, no same-track rebuild.
-    await page.evaluate(() => window.__apex.headless(false));
+    // Stay headless through race(): un-pausing the loop first re-presents
+    // day Monza while the next evaluate is queued, which is the same hang.
     await page.evaluate(() => window.__apex.race("singapore"));
     await page.waitForFunction(() => window.__apex.info().track === "singapore", { polling: 100, timeout: 60_000 });
-    await page.evaluate(() => window.__apex.park(0.1));
+    await page.evaluate(() => { window.__apex.headless(false); window.__apex.park(0.1); });
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
     const night = await page.evaluate(() => GLX.__tlx.skyState());
     expect(night.on).toBe(true);
