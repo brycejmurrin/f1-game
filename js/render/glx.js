@@ -96,6 +96,10 @@ const GLX = (function () {
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
+  // Saved game-frame fields while a probe face is open — restored in envFaceEnd
+  // so drawWorldMeshes (propBatches cull via frame.viewProj) still sees the
+  // probe frustum. Restoring in envFaceBegin left cull against the main camera.
+  let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
   const _envView = new Float32Array(16), _envProj = new Float32Array(16),
         _envVP = new Float32Array(16), _envInvVP = new Float32Array(16),
         _envTgt = [0, 0, 0];
@@ -261,10 +265,10 @@ const GLX = (function () {
     watchCanvasSize();
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
-      // (Apple GPUs round the request up to 4×) — pure waste on the post path,
-      // which renders offscreen and only blits a resolved image to the screen.
-      // On the memory-tight mobile tier that's ~40-50 MB of IOSurface for nothing.
-      antialias: !IS_MOBILE,   // phones never take the context-level AA path (see GRAPHICS: HIGH note in shadow.js)
+      // (Apple GPUs round the request up to 4×) — pure waste: the post path
+      // renders offscreen with its own MSAA and only blits a resolved image to
+      // the screen. Always false; never pay for unused browser MSAA.
+      antialias: false,
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -909,7 +913,12 @@ const GLX = (function () {
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
-    const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
+    // Keep probe VP / eye / cullDist on `frame` until envFaceEnd so
+    // drawWorldMeshes → makeFrustumPlanes(frame.viewProj) culls propBatches
+    // against the face frustum (chunked draws already read frameViewProj from
+    // begin()). Restoring here made reflections miss off-camera props.
+    _envFrame = frame;
+    _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
     // PerfTry.envCull (default ON; counted reach in docs/PERF-FINDINGS.md): the
     // probe inherits the MAIN camera's
@@ -922,13 +931,18 @@ const GLX = (function () {
     // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-      frame.cullDist = svCull > 0 ? Math.min(svCull, ENV_CULL_M) : ENV_CULL_M;
+      frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
     }
     begin(frame);
-    frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
     return _envInvVP;
   }
   function envFaceEnd(face) {
+    if (_envFrame) {
+      _envFrame.viewProj = _envSvVP;
+      _envFrame.eye = _envSvEye;
+      _envFrame.cullDist = _envSvCull;
+      _envFrame = null;
+    }
     if (!gl || !envTex) return;
     _envActive = false;
     envFacesMask |= 1 << face;
@@ -1436,6 +1450,8 @@ const GLX = (function () {
   // Repack the instances whose cell survives the frustum to the front of the GPU
   // buffer and record how many. Returns the visible count. A batch created
   // without cellSize has no cells and is left whole (always drawn in full).
+  // Skips bufferSubData when the visible cell set (count + cell-index hash) is
+  // unchanged from the previous cull — static prop batches often match.
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
     // Dual-sig cache: main + env-probe VPs alternate; skip repack/upload when
@@ -1816,6 +1832,9 @@ const GLX = (function () {
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
+    // Active light VP for shadow-caster cull (lamp frustum while lamp pass is
+    // open, else the sun ortho). game.js cullInstances before castShadowInstanced.
+    get shadowCullVP() { return SHD ? (SHD.castCullVP || SHD.lightVP) : null; },
     carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),

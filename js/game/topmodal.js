@@ -133,9 +133,28 @@ window.TopModal = (function () {
     btn.click();
   }
 
+  function onFocusIn(e) {
+    // Non-dialog layers never got platform focus containment. Keep Tab inside
+    // the top UiLayers pane (#select, #career, #lighting, …). Dialogs already
+    // trap via showModal(); #carsetup stays pointer-events:none for the
+    // turntable — still contain keyboard focus to its chrome.
+    const layer = window.UiLayers && window.UiLayers.top();
+    if (!layer || layer.tagName === "DIALOG") return;
+    const t = e.target;
+    if (t && layer.contains(t)) return;
+    const focusable = layer.querySelector(
+      "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+    );
+    if (focusable) {
+      e.preventDefault();
+      try { focusable.focus(); } catch (_) { /* detached */ }
+    }
+  }
+
   function init() {
     scan();
     document.addEventListener("keydown", onEscape, true);
+    document.addEventListener("focusin", onFocusIn, true);
   }
 
   // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.

@@ -79,7 +79,8 @@ function simCareerRound() {
 
   // The championship award, exactly as endRace() does it — settleRound() reads
   // the standings it leaves behind, so a shortcut here would settle against a
-  // season that never happened.
+  // season that never happened. settleRound() persists itself; do NOT save
+  // beforehand or a crash mid-settle leaves a half-written championship on disk.
   order.forEach((car, i) => {
     const pts = car.retired ? 0 : (Teams.POINTS[i] || 0);   // a DNF scores nothing
     car.finPos = i + 1;
@@ -88,7 +89,6 @@ function simCareerRound() {
     season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
   });
   season.round++;
-  Career.save();
   const settled = Career.settleRound(order, G.player);
   if (!settled) return null;
   return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);

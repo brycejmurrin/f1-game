@@ -771,6 +771,9 @@ function objectiveFor(r) {
 // the HUD agree, refreshed whenever the calendar has moved past it.
 function objective() {
   if (!career) return null;
+  // Exhausted calendar: no next brief — inventing one would write a phantom
+  // objective into the save and show it on a finished season's hub.
+  if (seasonDone()) return null;
   const r = career.season.round;
   if (!career.obj || career.obj.round !== r) { career.obj = objectiveFor(r); save(); }
   return career.obj;
@@ -804,6 +807,11 @@ function prizeFor(pos) {
 // have been awarded. `order` is the finishing order; `player` is the player's car.
 function settleRound(order, player) {
   if (!inCareer() || !player) return null;
+  // The calendar has already moved on, so the brief that was live for this race is
+  // the PREVIOUS round's. Idempotent: a second call for the same raced round must
+  // not re-pay prize/salary/wages (half-written saves + re-entry used to double it).
+  const raced = career.season.round - 1;
+  if (career.results.some((row) => row.r === raced)) return null;
   const pos = order.indexOf(player) + 1;
   const team = Teams.LIST.find((t) => t.id === career.team);
   // A retirement scores nothing — the same rule endRace() awards on. Recomputing
@@ -814,10 +822,8 @@ function settleRound(order, player) {
   const salary = career.deal ? career.deal.salary : 0;
   const bonus = career.deal ? career.deal.bonusPt * pts : 0;
 
-  // The calendar has already moved on, so the brief that was live for this race is
-  // the PREVIOUS round's. Recomputed rather than read off career.obj: the draw is
-  // pure, so this can never disagree with what the hub showed.
-  const raced = career.season.round - 1;
+  // Recomputed rather than read off career.obj: the draw is pure, so this can
+  // never disagree with what the hub showed.
   const obj = objectiveFor(raced);
   const mate = order.find((c) => c !== player && c.team && c.team.id === career.team);
   obj.done = objectiveMet(obj, {
@@ -833,6 +839,9 @@ function settleRound(order, player) {
   // off the fitted cap, so hiring well costs you upgrades rather than legality.
   const wages = wageBill();
   career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
+  // Wages can exceed the round's income (esp. MY TEAM payroll); never let the
+  // balance go permanently negative — the economy floors at zero.
+  career.money = Math.max(0, career.money);
   const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
@@ -1288,7 +1297,15 @@ function rollover() {
 function round() { return career ? career.season.round : 0; }
 function roundsTotal() { return Tracks.SEASON.length; }
 function seasonDone() { return career ? career.season.round >= Tracks.SEASON.length : false; }
-function trackIndex() { return Tracks.seasonIndex(career ? career.season.round : 0); }
+// LIST index of the round about to be raced. Once the calendar is exhausted
+// (`seasonDone`), clamp to the LAST valid round — callers (openCareer / #res-next
+// → scheduleFlybyTrack → loadTrack) must never see -1, which crashes on `def.night`.
+function trackIndex() {
+  const n = Tracks.SEASON.length;
+  if (!n) return -1;
+  const r = career ? career.season.round : 0;
+  return Tracks.seasonIndex(Math.min(Math.max(0, r), n - 1));
+}
 
 // A compact snapshot for the HUD, the hub header and __apex.careerState().
 function state() {

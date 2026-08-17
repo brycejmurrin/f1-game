@@ -540,9 +540,9 @@
           If(aaFade.greaterThan(0.005), () => {
             const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
             const e = 0.05;
-            const h0 = matBumpHeight(mid, vec2(hc, y));
-            const hx = matBumpHeight(mid, vec2(hc.add(e), y));
-            const hy = matBumpHeight(mid, vec2(hc, y.add(e)));
+            const h0 = matBumpHeight(mid, vec2(hc0, y0));
+            const hx = matBumpHeight(mid, vec2(hc0.add(e), y0));
+            const hy = matBumpHeight(mid, vec2(hc0, y0.add(e)));
             const amt = select(mid.equal(2.0).or(mid.equal(13.0)), float(0.10),
                         select(mid.equal(12.0).or(mid.equal(14.0)), float(0.09), float(0.05)));
             N.assign(normalize(N.add(
@@ -550,7 +550,6 @@
                 .mul(amt.mul(bumpFade).mul(aaFade).div(e)))));
           });
         }).Else(() => {
-          const p = wp.xz;
           // Ground/road gets the SAME grazing-angle guard as the wall branch
           // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
           // the road — the one horizontal surface viewed almost edge-on at
@@ -561,9 +560,10 @@
           const aaG = clamp(fwGround.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
           If(aaG.greaterThan(0.005), () => {
             const e = 0.22;
-            const h0 = matBumpHeight(mid, p);
-            const hx = matBumpHeight(mid, p.add(vec2(e, 0.0)));
-            const hz = matBumpHeight(mid, p.add(vec2(0.0, e)));
+            const p0 = wp.xz;
+            const h0 = matBumpHeight(mid, p0);
+            const hx = matBumpHeight(mid, p0.add(vec2(e, 0.0)));
+            const hz = matBumpHeight(mid, p0.add(vec2(0.0, e)));
             const amt = select(mid.equal(8.0), float(0.16),
                         select(mid.equal(10.0), float(0.14),
                         select(mid.equal(16.0), float(0.025), float(0.07))));

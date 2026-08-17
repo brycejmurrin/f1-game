@@ -229,9 +229,17 @@ const NetTransport = (function () {
   // purpose: a relay improves the odds of connecting, and waiting for one is
   // never worth making the player stare at a lobby that has not opened.
   const FETCH_TIMEOUT_MS = 4000;
+  // Metered (and typical TURN REST) vends expiring credentials — often ~1 h.
+  // Refresh before that so a new RTCPeerConnection never gathers with a dead
+  // username/credential. 55 min leaves a small skew margin under a 60 min TTL.
+  const ICE_CRED_TTL_MS = 55 * 60 * 1000;
 
   let fetchedIce = null;
+  let fetchedIceAt = 0;
   let fetchingIce = null;
+  function iceCredFresh() {
+    return !!(fetchedIce && (Date.now() - fetchedIceAt) < ICE_CRED_TTL_MS);
+  }
   function prefetchIce() {
     const jobs = [derivedRelays()];
     let url = null;
@@ -239,7 +247,12 @@ const NetTransport = (function () {
     // Yours first, ours as the default — so a player who configured one is
     // never quietly moved onto somebody else's quota.
     if (!url) url = TURN_API;
-    if (url && !fetchedIce && !fetchingIce) {
+    // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
+    // landed). iceServers are fixed at RTCPeerConnection construction, so
+    // stale credentials only hurt the NEXT gather — refresh before that.
+    if (url && !iceCredFresh() && !fetchingIce) {
+      fetchedIce = null;
+      fetchedIceAt = 0;
       // BOUNDED. A credentials endpoint that never answers — captive portal,
       // dead DNS, a firewall that blackholes rather than refuses — must not
       // become an unbounded wait, because the lobby now awaits this before
@@ -249,7 +262,10 @@ const NetTransport = (function () {
       const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, FETCH_TIMEOUT_MS);
       fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
         const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
-        if (Array.isArray(list) && list.length) fetchedIce = list;
+        if (Array.isArray(list) && list.length) {
+          fetchedIce = list;
+          fetchedIceAt = Date.now();
+        }
         return fetchedIce;
       }).catch((err) => {
         // No relay is a NORMAL state and must not block the lobby (see below),
@@ -383,7 +399,10 @@ const NetTransport = (function () {
     // follow. ICE prefers whichever actually yields a working pair, so listing
     // both costs nothing but a couple of extra candidates.
     if (mine) list.push(mine);
-    if (fetchedIce) list.push(...fetchedIce);
+    // Only merge while fresh — expired Metered credentials gather as failures
+    // that look like "relay:0" while the endpoint is fine. prefetchIce()
+    // refreshes before a new PC; skip a stale list rather than offer it.
+    if (iceCredFresh()) list.push(...fetchedIce);
     // The free relays go LAST when opted in, and only ever add candidates.
     // ICE tries every pair it can form and keeps the best, so ordering by
     // INTENT — yours, then your operator's, then whatever is free — means a
@@ -425,6 +444,10 @@ const NetTransport = (function () {
       pc = new PC(cfg);
     } catch (e) { return null; }
     const chans = {};
+    // Cap queued messages until pump() drains them. Unreliable STATE is
+    // drop-oldest (keep the newest); EVENT is reliable so we still prefer
+    // shedding state first when the cap bites.
+    const INBOX_CAP = 64;
     let inbox = [];
     let openCount = 0;
 
@@ -456,7 +479,17 @@ const NetTransport = (function () {
         if (ep.status === "closed") return;
         ep.status = "closed"; ep._emit("close", "peer");
       };
-      ch.onmessage = (e) => { inbox.push({ channel: kind, data: e.data }); };
+      ch.onmessage = (e) => {
+        inbox.push({ channel: kind, data: e.data });
+        while (inbox.length > INBOX_CAP) {
+          let dropped = false;
+          // Drop oldest STATE first; keep the newest (just-pushed) packet.
+          for (let i = 0; i < inbox.length - 1; i++) {
+            if (inbox[i].channel === STATE) { inbox.splice(i, 1); dropped = true; break; }
+          }
+          if (!dropped) inbox.shift();
+        }
+      };
     }
 
     if (opts.role === "host") {

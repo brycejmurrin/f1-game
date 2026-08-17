@@ -99,10 +99,15 @@ window.ScrollFade = (function () {
   function paintAll() {
     timer = 0;
     // Measure everything, THEN write everything: one layout for the whole batch
-    // instead of one per region.
+    // instead of one per region. Skip regions whose screen layer is [hidden] —
+    // mid-race resize used to force layout over every menu pane still in the DOM.
     const els = document.querySelectorAll(SEL);
     const measured = [];
-    els.forEach((el) => { watch(el); measured.push(measure(el)); });
+    els.forEach((el) => {
+      if (el.closest && el.closest("[hidden]")) return;
+      watch(el);
+      measured.push(measure(el));
+    });
     for (const m of measured) write(m);
   }
 
@@ -129,7 +134,9 @@ window.ScrollFade = (function () {
   function watch(el) {
     if (watched.has(el)) return;
     watched.add(el);
-    if (ro) { ro.observe(el); for (const c of el.children) ro.observe(c); }
+    // Observe the scroller only — child RO storms on garage/select rebuilds;
+    // contentMo already sees childList on the pane.
+    if (ro) ro.observe(el);
     if (contentMo) contentMo.observe(el, { childList: true, subtree: true });
   }
 

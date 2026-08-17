@@ -82,6 +82,7 @@ sit in this table was indexed by nothing and moved to
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/game/steer-tuning.js`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
+| [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey (physics / GLX / WGX / TLX / track / net / UI / career) plus Context7 + tinyfish deploy-check: ranked open bugs and perf opportunities with file evidence. Not a fix log — act from the priority board. |
 
 The four workflows' verbatim per-agent output now lives together in
 [`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,

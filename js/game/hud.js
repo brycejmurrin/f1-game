@@ -139,7 +139,7 @@ function fitHud() {
   // to report, and the POS row widens from "1/22" to "12/22". Four rect reads at
   // 2Hz — updateHud itself runs at ~10Hz — is nothing next to the frame.
   if (key === _fitKey && --_fitWait > 0) return;
-  _fitKey = key; _fitWait = 5;
+  _fitKey = key; _fitWait = 30;   // ~0.5 s at 60 Hz tick — was 5 (~12 Hz layout thrash)
   const wide = (el) => {
     if (!el) return 0;
     const r = el.getBoundingClientRect();

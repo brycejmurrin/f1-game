@@ -188,7 +188,11 @@
 
       // Grade-aware portal beats. Short decks keep the declared underside
       // clearance true across Singapore's ramps instead of allowing a long flat
-      // slab to approach the rising road at either end.
+      // slab to approach the rising road at either end. Supports come from
+      // overheadSpan itself (models.js) — do NOT hand-roll legs via anchor():
+      // under sceneryLapMirror those land half a lap away from shift-only
+      // decks, and even after the full remap they would double the built-in
+      // piers.
       const makePortal = (id, s0, s1, opts) => {
         const h = opts.h;
         const gap = opts.gap;
@@ -196,21 +200,10 @@
         const stations = [s0, (s0 + s1) * 0.5, s1];
         for (let i = 0; i < stations.length; i++) {
           const s = stations[i];
-          const k = K(s);
           overheadSpan({
             id: `${id}-deck-${i}`, frac: s, clearance: h, thickness: 0.9,
             depth: 6, supportGap: gap, color: col, required: true,
           });
-          for (const side of [-1, 1]) {
-            const a = anchor(k, side, gap);
-            const size = [1.2, h, 6];
-            const center = vadd(a.c, a.u, h * 0.5);
-            modelGroup(`${id}-support-${i}-${side < 0 ? "l" : "r"}`, {
-              center, size, basis: [a.r, a.u, a.t],
-            }, (stage) => {
-              TrackGeom.addBox(stage, center, size, col, [a.r, a.u, a.t]);
-            }, { required: true });
-          }
         }
       };
 
@@ -899,15 +892,9 @@
         // Beacon light on the race-control roof — a landmark visible from
         // across the venue, echoing the old hand-rolled tower's night glow.
         // MIXED COORDINATE SPACES: circuitKit.raceControl's `frac` goes through
-        // circuit-kit.js's SHIFT-ONLY frameAt wrapper (js/track/tracks.js ~361),
-        // but this anchor read `K(0.999)` directly — a raw index with no shift
-        // applied — so the beacon landed nowhere near the tower's footprint
-        // (float-audit's gap tracked the beacon's own height offset 1:1 with no
-        // sign of ever resting on anything, even with a base pushed to mid-
-        // tower height, which only makes sense if the two never overlap in
-        // XZ at all). KOLD converts the SAME literal frac into the raw node
-        // index that lands where circuitKit's shift resolves it.
-        // The tower's "lattice" landmark (the `lattice` branch of tower() in js/track/landmark-kit.js)
+        // circuit-kit.js's SHIFT-ONLY frameAt wrapper; this anchor needs KOLD so
+        // it lands on the same spot. The tower's "lattice" landmark
+        // (the `lattice` branch of tower() in js/track/landmark-kit.js)
         // stacks 6 levels inset 0.86x, so its real roof surface sits a touch
         // under the nominal size[1]=34 (~33.6 m), not at 34. addCone is
         // BASE-anchored, so the beacon's base needs to be near that real
