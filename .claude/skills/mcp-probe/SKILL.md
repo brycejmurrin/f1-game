@@ -24,6 +24,25 @@ python3 tools/probe-mcp.py call tinyfish_fetch_content \
   '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
 ```
 
+**A bare `call` spawns a FRESH Chromium per invocation** — MEASURED
+2026-08-17: `navigate_page` in one call, `list_pages` in the next read
+`about:blank`; every recipe below that chains navigate → evaluate →
+screenshot silently ran against different browsers this way. For ANY
+multi-call chrome flow start the persistent daemon first — `call`
+auto-routes to it (stderr prints `# chrome via daemon :3712`), and a
+follow-up `evaluate_script` against an already-booted race costs ~0.7 s
+instead of a fresh boot+race (~30-60 s under SwiftShader):
+
+```
+python3 tools/probe-mcp.py chrome-start    # one Chromium in tmux, port 3712
+python3 tools/probe-mcp.py call chrome_...    # as many calls as needed
+python3 tools/probe-mcp.py chrome-stop     # ALWAYS before test-bg.mjs
+```
+
+`chrome-stop` is part of the parking rule below, not an optional cleanup — a
+daemon browser left rendering is exactly the ~20% CPU Playwright-starver the
+first trap describes.
+
 Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
