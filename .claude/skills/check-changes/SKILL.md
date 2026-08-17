@@ -6,8 +6,18 @@ description: Use when the user asks did I break anything, run the right tests, v
 # Validate changes before committing/pushing
 
 The suite is ~40 minutes of software rendering, so running everything for every
-change is not a plan. Which groups a change needs is mechanical — **ask, do not
-guess or hand-maintain a second copy of the map**:
+change is not a plan. **One command composes the rest** (`pick-tests` selection,
+inline `verify-track`/`graph-parity`/`tooling-fast`/`bump-cache --check`, then
+`test-bg` batches with one browser group per batch):
+
+```sh
+node tools/verify-change.mjs --plan       # what this change needs (JSON)
+node tools/verify-change.mjs              # fast gate + start batch 1 (background)
+node tools/verify-change.mjs --wait       # drive every batch to one verdict
+node tools/verify-change.mjs --fast       # no browsers
+```
+
+The pieces underneath, if you need them separately:
 
 ```sh
 git status --short && git diff --stat     # look at the diff first

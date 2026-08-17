@@ -1,7 +1,9 @@
 ---
 name: deploy-research
 description: Public-web and post-deploy research via tinyfish. Use proactively for live version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright.
+model: inherit
 readonly: true
+is_background: true
 tools: Bash, Read, Grep, Glob
 ---
 

@@ -1,6 +1,9 @@
 ---
 name: verify-agent
 description: Read-only verification subagent. Runs tools/verify-change.mjs against the current tree and reports the JSON verdict. Use to verify a change without giving a subagent write access or a browser run of its own.
+model: inherit
+readonly: true
+is_background: true
 tools: Bash, Read, Grep, Glob
 ---
 
