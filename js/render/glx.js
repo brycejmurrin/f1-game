@@ -1444,18 +1444,25 @@ const GLX = (function () {
     for (const c of batch.cells) {
       if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
       for (const i of c.idx) {
-        dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
-        if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
+        // Copy without Float32Array.subarray — that view was a per-instance alloc
+        // on Vegas-scale batches (tens of thousands/frame).
+        const so = i * 16, dOff = n * 16;
+        for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+        if (dc) {
+          const sco = i * 3, dco = n * 3;
+          dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+        }
         n++;
       }
     }
     batch.visible = n;
     if (n) {
+      // WebGL2 bufferSubData(srcOffset, length) — no .subarray view.
       gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst.subarray(0, n * 16));
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
       if (dc) {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc.subarray(0, n * 3));
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
       }
     }
     return n;

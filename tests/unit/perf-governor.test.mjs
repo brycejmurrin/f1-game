@@ -505,3 +505,17 @@ test("raising the GRAPHICS preset releases a shed the preset itself caused", () 
   assert.ok(gov.tier() <= 2,
     `only the rungs the governor genuinely measured may survive, got ${gov.tier()}`);
 });
+
+test("clearStrikes / safeMode(false) releases a latched _perfTier", () => {
+  // REGRESSION. clearStrikes used to zero the strike floor and leave `_perfTier`
+  // where degrade had parked it — so __apex.safeMode(false) reported a lower
+  // floor while tier() stayed high until reload. Mirror cleanRace()'s release.
+  const { PerfGov } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
+  assert.ok(PerfGov.tier() > 0, "precondition: governor shed at least one feature rung");
+  const before = PerfGov.tier();
+  PerfGov.clearStrikes();
+  assert.ok(PerfGov.tier() <= before,
+    `clearStrikes must not leave tier() above the new floor (was ${before}, now ${PerfGov.tier()})`);
+  assert.equal(PerfGov.tierFloor(), 0, "strikes cleared → floor 0");
+});
