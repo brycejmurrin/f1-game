@@ -328,7 +328,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("23 portrait rotate-device overlay", async ({ page }) => {
-      if (orient === "landscape") { test.skip(); return; }
+      if (orient === "landscape") { test.skip(true, "the rotate-device overlay only exists in portrait"); return; }
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
