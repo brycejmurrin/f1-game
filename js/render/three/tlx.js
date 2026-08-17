@@ -193,8 +193,49 @@ const TLX = (function () {
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
       const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
 
+      // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
+      // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
+      // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
+      // post-only death path in present() keeps those materials while painting
+      // straight to the canvas. On an alpha-composited canvas that tag IS the
+      // compositor's opacity, so from the first post failure onward the painted
+      // bodywork of every car is 35% transparent and the page shows through it,
+      // for the rest of the session. Reported from an iPhone on this backend,
+      // which is exactly where a post present() throw happens — the tag is
+      // written on ALL platforms, but only an alpha canvas turns it into
+      // see-through cars. GLX has never been able to hit this: `alpha: false`
+      // means the compositor ignores whatever it writes to alpha.
+      //
+      // three needs telling TWICE, because the two backends read different
+      // things and neither reads the other's:
+      //   WebGPU backend — honours this parameter (`alpha ? "premultiplied" :
+      //     "opaque"` in its context configure()).
+      //   WebGL backend  — IGNORES it. WebGLBackend.init() hardcodes
+      //     `alpha: !0` in its own getContext attributes. It does honour a
+      //     caller-supplied `context`, so on that path we make the context
+      //     ourselves with GLX's attributes. Only when forceWebGL is set: the
+      //     WebGPU backend reads `parameters.context` too and would try to
+      //     configure a WebGL2 context as a WebGPU one.
+      // Gfx.create() runs before any GLX.init(), so this getContext is the
+      // FIRST on this canvas and its attributes are the ones that take (a
+      // second getContext returns the existing context and silently drops
+      // them).
+      let ownGL = null;
+      if (forceWebGL) {
+        try {
+          ownGL = canvas.getContext("webgl2", {
+            antialias: !isMobile,        // must agree with the renderer's own antialias
+            alpha: false,
+            depth: true,
+            stencil: false,
+            powerPreference: "high-performance",
+          });
+        } catch (_) { ownGL = null; }    // null -> three makes its own, as before
+      }
       const renderer = new THREE.WebGPURenderer({
         canvas,
+        alpha: false,
+        ...(ownGL ? { context: ownGL } : {}),
         // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
         // the context-level AA path". This is NOT the scene target's MSAA
         // (msaa() below is honestly 1: the post chain deliberately has no
@@ -301,9 +342,9 @@ const TLX = (function () {
       // present) while three is retained-mode. Bridge: draw() appends a
       // (geometry, matrix) record; present() materialises records into a
       // pooled set of THREE.Mesh objects IN SUBMISSION ORDER (GLX semantics:
-      // caller order is draw order) and renders once. Repeated geometries stay
-      // discrete Mesh draws today — THREE.InstancedMesh batching is a separate
-      // look/perf pass (kept off this lifecycle fix).
+      // caller order is draw order) and renders once. TrackGraph.batches()
+      // go through createInstancedBatch → THREE.InstancedMesh (one draw call
+      // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
@@ -594,6 +635,146 @@ const TLX = (function () {
       }
 
       const drawList = [];          // {geo, matrix, material} in submission order
+      const _instMat = new THREE.Matrix4();
+      const _instColor = new THREE.Color();
+      const _instAlive = new Set();   // InstancedMesh objects shown this frame
+      const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
+
+      function _writeInstanceMatrices(imesh, matrices, colors, n) {
+        for (let i = 0; i < n; i++) {
+          _instMat.fromArray(matrices, i * 16);
+          imesh.setMatrixAt(i, _instMat);
+          if (colors && colors.length && imesh.setColorAt) {
+            _instColor.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+            imesh.setColorAt(i, _instColor);
+          }
+        }
+        imesh.instanceMatrix.needsUpdate = true;
+        if (imesh.instanceColor) imesh.instanceColor.needsUpdate = true;
+        imesh.count = n;
+      }
+
+      function createInstancedBatch(data, matrices, colors, opts) {
+        if (!data || !data.pos || !data.pos.length || !matrices || !matrices.length) {
+          return { __tlx: true, geo: null, instances: 0, visible: 0, imesh: null };
+        }
+        const geo = buildGeometry(data);
+        const n = (matrices.length / 16) | 0;
+        const imesh = new THREE.InstancedMesh(geo, unlitMat, n);
+        imesh.matrixAutoUpdate = false;
+        imesh.frustumCulled = false;
+        imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        imesh.userData.tlxInstCap = n;
+        if (colors && colors.length) {
+          imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+          imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        }
+        _writeInstanceMatrices(imesh, matrices, colors, n);
+        imesh.visible = false;
+        scene.add(imesh);
+        _instRegistry.push(imesh);
+
+        const batch = {
+          __tlx: true,
+          geo,
+          instances: n,
+          visible: n,
+          imesh,
+          srcMatrices: matrices,
+          srcColors: colors && colors.length ? colors : null,
+          packMatrices: new Float32Array(matrices.length),
+          packColors: colors && colors.length ? new Float32Array(colors.length) : null,
+          cells: null,
+        };
+        if (opts && opts.cellSize > 0 && n) {
+          const cell = opts.cellSize;
+          let reach = opts.radius || 0;
+          if (!reach) {
+            const p0 = data.pos;
+            for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
+          }
+          const buckets = new Map();
+          for (let i = 0; i < n; i++) {
+            const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
+            const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
+            const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
+            const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
+            const r = reach * Math.max(sx, sy, sz);
+            const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
+            let bk = buckets.get(key);
+            if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
+            bk.idx.push(i);
+            const mn = bk.mn, mx = bk.mx;
+            if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
+            if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
+            if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
+          }
+          batch.cells = [...buckets.values()];
+        }
+        return batch;
+      }
+
+      function cullInstances(batch, planes) {
+        if (!batch || !batch.cells) return batch ? batch.instances : 0;
+        const src = batch.srcMatrices, dst = batch.packMatrices;
+        const sc = batch.srcColors, dc = batch.packColors;
+        let n = 0;
+        for (const c of batch.cells) {
+          if (!TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
+          for (const i of c.idx) {
+            dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
+            if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
+            n++;
+          }
+        }
+        batch.visible = n;
+        if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
+        return n;
+      }
+
+      function drawInstanced(batch, opts) {
+        if (!batch || !batch.imesh || !batch.instances) return;
+        const n = batch.visible === undefined ? batch.instances : batch.visible;
+        if (n <= 0) return;
+        drawList.push({ instanced: batch, mat: materialFor(opts, false) });
+      }
+
+      function freeInstancedBatch(batch) {
+        if (!batch) return;
+        if (batch.imesh) {
+          const ix = _instRegistry.indexOf(batch.imesh);
+          if (ix >= 0) _instRegistry.splice(ix, 1);
+          try { scene.remove(batch.imesh); } catch (_) { /* */ }
+          try { batch.imesh.dispose(); } catch (_) { /* */ }
+          batch.imesh = null;
+        }
+        if (batch.geo) {
+          try { batch.geo.dispose(); } catch (_) { /* */ }
+          batch.geo = null;
+        }
+      }
+
+      function castShadowInstanced(batch) {
+        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch);
+      }
+
+      function _showInstanced(rec, order) {
+        const b = rec.instanced;
+        const n = b.visible === undefined ? b.instances : b.visible;
+        if (!(n > 0) || !b.imesh) return;
+        b.imesh.count = n;
+        b.imesh.material = rec.mat || unlitMat;
+        b.imesh.renderOrder = order;
+        b.imesh.visible = true;
+        _instAlive.add(b.imesh);
+      }
+
+      function _hideUndrawnInstanced() {
+        for (let i = 0; i < _instRegistry.length; i++) {
+          const im = _instRegistry[i];
+          if (!_instAlive.has(im)) im.visible = false;
+        }
+      }
       const meshPool = [];          // recycled THREE.Mesh wrappers
       let poolUsed = 0;
       // Two scratch matrices for begin()'s view reconstruction. BOTH are
@@ -940,17 +1121,25 @@ const TLX = (function () {
         // after disposing any owned pack textures — GLX deleteTexture parity.
         setMaterialMaps(maps) {
           if (!lit || !lit.setMaterialMaps) return;
-          function releaseOwned() {
+          // A caller re-passing a texture it already handed over must not have
+          // it disposed under the new binding (assets.js always builds fresh
+          // arrays; webbake/__apex/tests need not).
+          function releaseOwned(keep) {
+            const kept = new Set();
+            if (keep) {
+              if (keep.albedo) kept.add(keep.albedo);
+              if (keep.normal) kept.add(keep.normal);
+            }
             const seen = new Set();
             for (const t of [matOwnedAlbedo, matOwnedNormal]) {
-              if (!t || seen.has(t)) continue;
+              if (!t || seen.has(t) || kept.has(t)) continue;
               seen.add(t);
               try { t.dispose(); } catch (_) { /* already disposed */ }
             }
             matOwnedAlbedo = null;
             matOwnedNormal = null;
           }
-          releaseOwned();
+          releaseOwned(maps);
           if (!maps) {
             // Restore placeholder .value bindings and zero scales.
             if (matPlaceAlbedo || matPlaceNormal) {
@@ -1036,6 +1225,10 @@ const TLX = (function () {
           poolUsed = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
+            if (rec.instanced) {
+              _showInstanced(rec, i);
+              continue;
+            }
             if (rec.chunked) {
               if (!chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, null, 0);
@@ -1096,23 +1289,18 @@ const TLX = (function () {
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 
-        // ── NOT IMPLEMENTED — declared, and declared ABSENT ─────────────────
-        // The GLX instanced-draw path (TrackGraph.batches() is its consumer)
-        // has no TLX counterpart. Listed as explicit `undefined` for the same
-        // reason WGX lists its own gaps: the descriptor-copy install means a
-        // name this object omits keeps GLX's function, which runs against a
-        // `gl`/`CHK` that stay null when GLX.init() never ran. A caller's
-        // feature test then passes and the call dies inside GLX. A descriptor
-        // whose value is undefined overwrites the inherited one, so the feature
-        // test tells the truth. Implementing any of these means deleting a line.
-        createInstancedBatch: undefined,
-        cullInstances: undefined,
-        drawInstanced: undefined,
-        freeInstancedBatch: undefined,
-        castShadowInstanced: undefined,
+        // TrackGraph.batches() consumer — THREE.InstancedMesh. Must be real
+        // functions (not omitted): descriptor-copy onto GLX would otherwise
+        // keep dead GLX closures. See backend-surface-parity.test.mjs.
+        createInstancedBatch,
+        cullInstances,
+        drawInstanced,
+        freeInstancedBatch,
+        castShadowInstanced,
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
+          _instAlive.clear();
           const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
           scene.background.setRGB(f[0], f[1], f[2]);
           // Camera from the game's column-major matrices. Main path supplies
@@ -1317,6 +1505,10 @@ const TLX = (function () {
           // order because FX never write depth.
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
+            if (rec.instanced) {
+              _showInstanced(rec, i);
+              continue;
+            }
             if (rec.chunked) {
               // M7: cull NOW, against begin()'s viewProj copy — the camera is
               // final at present time. Every visible chunk stamps the SAME
@@ -1337,6 +1529,8 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          // Hide InstancedMeshes that were not drawn this frame (still in scene).
+          _hideUndrawnInstanced();
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
           // often throws here. tick() reports any escape as the full-screen

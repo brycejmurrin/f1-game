@@ -47,7 +47,9 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
 
 - **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
   a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
-  suite uses; measured: `ANGLE (…SwiftShader…)`). It reaches
+  suite uses; measured: `ANGLE (…SwiftShader…)`) **and, since 2026-08-17, WebGPU
+  via SwiftShader too** — see [Probing a specific renderer](#probing-a-specific-renderer)
+  below, which is how all four of that day's WGX blockers were found. It reaches
   `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
   from this container**: MEASURED 2026-08-13, `navigate_page` to
   `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
@@ -55,14 +57,96 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   anything on the DEPLOYED artifact use tinyfish, which fetches server-side from
   its own network. This is the canvas-**visible** probe: render a track/car,
   drive `__apex`, screenshot, take a heap snapshot, read the console. The
-  interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
+  interactive twin of `playwright-probe`'s `shot.mjs`. Shell:
   `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
+- **Both are reachable two ways, and the MCP way needs no shell.** VERIFIED
+  2026-08-17: the `apex-wrap` MCP server is `ready` and advertises 56 tools — 40
+  `chrome_*` and 16 `tinyfish_*` — so `tinyfish_fetch_content`,
+  `tinyfish_search`, `chrome_navigate_page`, `chrome_evaluate_script` and the
+  rest can be called directly as MCP tools. Use the MCP path for one-off calls
+  and the shell wrappers when you want their added logic (`deploy-check`'s build
+  comparison, `deploy-js --marker`'s verdict, `mcp-cli probe`'s
+  set-pick-then-reload batch). The wrappers are not a fallback for a missing MCP;
+  they are where the repo-specific knowledge lives.
 - **tinyfish MCP** (`mcp__tinyfish__*` or `tinyfish_*` via probe) —
   `fetch_content` / `search` / automation over the public web. For us its main
   testing job is the **post-deploy liveness check**: read the live
   `version.json` and shipped JS. It cannot see the working tree (only public
   URLs), so it is useless for pre-ship verification. Shell:
   `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
+  Two measured limits, both server-side — do not try to fix them in the wrapper:
+  the extracted body is **truncated** (6.1 KB back from a 200 KB `wgx.js`, 9.6 KB
+  from an 11 KB `log.js`; identical through the raw MCP tool with `format: html`
+  and a 90 s budget), so a deep code marker is unverifiable from here — use
+  `deploy-js --marker` for a top-of-file verdict and git provenance for the rest.
+  And the upstream fetch **times out intermittently**, arriving as a SUCCESSFUL
+  JSON-RPC result carrying an `errors[]` payload; the wrapper now asks for a
+  60 s `per_url_timeout_ms` and retries the transient case three times.
+
+---
+
+## Probing a specific renderer
+
+`node tools/mcp-cli.mjs probe` is the shape a renderer question takes. One
+command, one browser, no heredoc:
+
+```sh
+npx serve -l 3456 .          # the page must be on 127.0.0.1 (see the trap below)
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
+  --eval 'return JSON.stringify({gpuErrors: WGX.gpuErrors ? WGX.gpuErrors() : "n/a"});'
+node tools/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser
+```
+
+Four traps, each of which has cost a run:
+
+- **`navigator.gpu` needs a SECURE CONTEXT.** It is undefined on `about:blank`
+  no matter which Chrome flags are set, and reads exactly like a missing flag —
+  measured across four flag combinations before the origin turned out to be the
+  variable. Probe `http://127.0.0.1`. (The flags are needed too: the wrapper now
+  passes `--enable-unsafe-webgpu`, without which headless Chrome exposes no
+  WebGPU at all and every WGX probe reports "No available adapters".)
+- **Script globals are not `window` properties.** `js/*.js` files assign
+  `const GLX = …` at top level, a lexical binding: `window.GLX` is `undefined`
+  while bare `GLX` works. Same for `Assets`, `Tracks`, `TLX`, `WGX`.
+- **The backend pick lives in `localStorage`, and each invocation gets a fresh
+  profile** — so it must be written and then RELOADED inside one batch. `--backend`
+  does that; setting it as a separate command probes the default and looks like
+  the backend silently ignoring you.
+- **`--backend three` pins three to WebGL2** (`apex26.tlxForceGL=1`, what
+  `tests/specs/tlx-probes.spec.js` sets). TLX auto-picks three's WebGPU backend on
+  Chromium desktop, and under SwiftShader that path dies inside three's own
+  `mappedAtCreation` buffer upload — which reads as a TLX regression and is not
+  one. `--tlx-webgpu` opts in deliberately.
+
+What a clean WGX boot looks like: no `WGX` console line at all,
+`WGX.gpuErrors()` 0, and `sessionStorage["apex26.gfxBound"]` ABSENT — that key
+is written only when WGX refuses and hands the frame back to GLX, so its
+presence (`"webgl2"`) is the failure signal, not the success one.
+
+**Those are all ABSENCE signals — pair them with one positive.** Nothing was
+logged is also what a probe that never reached the renderer looks like, and
+`__apex.info().backend` is the *pick* at menu state, not what bound. Drive a
+race and ask the canvas:
+
+```sh
+node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+  --eval 'await __apex.race("monza"); await __apex.go();
+          await new Promise(r=>setTimeout(r,7000));
+          return String(document.querySelector("canvas").getContext("webgl2") === null);'
+```
+
+`true` proves it: a canvas is bound to one context type for life, so once
+WebGPU has claimed it, `getContext("webgl2")` can only return null. It also
+means the meshes uploaded, the pipelines built and the post targets allocated —
+each of the four 2026-08-17 blockers failed a different one of those stages, and
+the earlier ones masked the later ones, so **expect to find them one boot at a
+time** rather than in a single pass. Two of the four were format/feature
+validation errors that a mock device cannot model at all
+(`sampleCount` 2, and `rg11b10ufloat` as a render target without
+`rg11b10ufloat-renderable`).
+
+SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
+bind groups match, buffers upload. It is not a visual one.
 
 ---
 
@@ -536,6 +620,58 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
     screen (excludes performance; use traces for that).
   - `click` / `press_key` / `wait_for` on snapshot **uids** (`1_12`, not `1`).
 
+### A/B two trees on two ports — the strongest evidence this setup can give
+
+A source guard proves a renderer **asked** for something; only pixels prove it
+**got** it. Two `serve` roots on two ports turn "I think this fixes it" into a
+measured before/after, in one command, with the browser held constant:
+
+```sh
+npx serve -l 3456 /the/pre-fix/tree &     # control
+npx serve -l 3466 /the/fixed/tree   &     # patch
+for P in 3456 3466; do node tools/mcp-cli.mjs probe \
+  --url http://127.0.0.1:$P/index.html --backend three \
+  --wait 14000 --eval scratch/my-probe.js; done
+```
+
+Measured 2026-08-17 for the transparent-cars fix (`js/render/three/tlx.js` —
+canvas alpha), reading composited alpha by `drawImage`-ing `canvas#game` onto a
+cleared 2d canvas and histogramming the alpha byte:
+
+| tree | `getContextAttributes().alpha` | min alpha | px < 255 |
+| --- | --- | --- | --- |
+| pre-fix `?v=1300` | `true` | 0 | 329160 (**100 %**) |
+| fixed `?v=1306` | `false` | 255 | 0 |
+
+Two things make this readable rather than lucky:
+
+- **Report the identity of what you measured, not just the number.** The probe
+  returns the `game.js?v=` it found alongside the pixels, so the row cannot be
+  silently the same tree twice — the failure mode of every two-port A/B.
+- **A WebGL drawing buffer is cleared after compositing** (no
+  `preserveDrawingBuffer`), so by read time you are usually measuring the CLEAR,
+  not the frame: an alpha canvas clears to 0, an opaque one to 255. Perfect for a
+  canvas-CONFIG question and useless for a "what colour is the car" one. Know
+  which of the two you are asking before you trust the histogram.
+
+### Reproducing the post-death path on purpose (WebGPU + SwiftShader)
+
+`--backend three --tlx-webgpu` cannot render here — it dies inside **three's own**
+buffer upload, the same SwiftShader limit that WGX had to route around:
+
+```
+[gfx] TLX: shadow pass failed — createBuffer failed, size (7692) is too large
+      for the implementation when mappedAtCreation == true
+[gfx] TLX: present failed — Cannot read properties of null (reading 'constructor')
+```
+
+Useless for parity, but it is the only place the **post-only death path** boots
+on demand — `present failed`, repeatedly, with materials that were built while
+post was alive. That is the exact state behind the transparent-cars report, so
+it is where to point a probe when reasoning about what reaches the canvas after
+the post chain gives up. It also means the desktop WebGPU half of any TLX fix
+stays source-guarded only; say so rather than implying it was run.
+
 ### File writes and roots (measured 2026-08-12)
 
 Heap / perf / lighthouse tools validate paths against MCP **roots**. A stdio
@@ -550,7 +686,7 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 ### When NOT to use it
 
-Regression coverage, anything that must assert-and-gate, the 111-spec batch, or
+Regression coverage, anything that must assert-and-gate, the 113-spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
 framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
 
@@ -608,6 +744,25 @@ before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
 Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
+
+## Research recipes (tinyfish — no Chrome)
+
+Use these when the question is the **deployed** artifact or the **public web**.
+For a long fetch/search that would flood the main context, delegate to the
+`deploy-research` subagent (`.claude/agents/deploy-research.md`) instead of
+inlining every page.
+
+| Goal | Command |
+|---|---|
+| Live vs local build | `./tools/tinyfish-mcp.sh deploy-check` |
+| Confirm a marker shipped | `./tools/tinyfish-mcp.sh deploy-js js/<path>.js` then grep the unique string |
+| Raw Pages URL | `./tools/tinyfish-mcp.sh fetch --ttl 0 "https://brycejmurrin.github.io/f1-game/…"` |
+| External grounding | `./tools/tinyfish-mcp.sh search "…"`, then `fetch` the best URLs |
+| Via probe wrapper | `python3 tools/probe-mcp.py call tinyfish_fetch_content '{"urls":["…"]}'` |
+
+Do **not** use tinyfish for the working tree (localhost). Do **not** use Chrome
+DevTools MCP for `github.io` from this container (egress proxy). Pattern
+false-negatives under `format: markdown` — see the `*` escape gotcha above.
 
 **Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
 (shell env / `.env` override it), so `ensure` works on a fresh checkout.

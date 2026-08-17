@@ -52,6 +52,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // anchor) moved neither. Recorded here so the caps stop lying about the tree;
 // the underlying same-facing pairs are a real open defect on that lineage.
 //
+//
 // vegas 66 -> 67 (2026-08-08): the street-barrier chord-cut fix splits apex
 // spans into two single-node panels that follow the curve, and the new joint
 // abuts two same-height panel tops — the identical seam class every existing
@@ -67,7 +68,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // same-facing ~18 m² faces at 0.0 mm over the start grid. Sizing the crossbar
 // 0.1 m inside the span on those axes ([50,2.0,1.2] centred 0.75 below the
 // beam) removes the pair outright, so the baseline goes back down instead of
-// carrying a real z-fight as a recorded trade.
+// carrying a real z-fight as a recorded trade. Worth keeping from the raise:
+// 4f109f76 shipped the geometry change WITHOUT touching this cap, so
+// test:sweeps was red on the deploy branch itself for the whole window — two
+// sessions independently measured 16 in isolated worktrees and each assumed it
+// was their own merge. A cap left behind reads exactly like a regression you
+// caused.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );

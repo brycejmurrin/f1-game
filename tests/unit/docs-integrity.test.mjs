@@ -453,6 +453,24 @@ test("the skills index lists every skill", () => {
   assert.deepEqual(missing, [], "a skill exists on disk but is not in .claude/skills/README.md");
 });
 
+test("the agents index lists every custom subagent and gitignore tracks the dir", () => {
+  // .claude/* is ignored with an allowlist — without !.claude/agents/, a new
+  // subagent would never ship. Same shape as the skills index guard.
+  const gitignore = read(".gitignore");
+  assert.ok(
+    gitignore.includes("!.claude/agents/"),
+    ".gitignore must allowlist !.claude/agents/ so subagents are trackable",
+  );
+  const index = read(".claude/agents/README.md");
+  const agentsDir = path.join(ROOT, ".claude/agents");
+  assert.ok(fs.existsSync(agentsDir), ".claude/agents/ must exist");
+  const missing = fs.readdirSync(agentsDir)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .map((f) => f.replace(/\.md$/, ""))
+    .filter((name) => !index.includes(name));
+  assert.deepEqual(missing, [], "an agent .md exists but is not in .claude/agents/README.md");
+});
+
 test("every tool named in tools/README.md exists on disk", () => {
   // The other direction, which nothing checked. tools/README.md carried a row
   // for `.vt-warn.cjs` — a file that is not on disk and CANNOT be, because
