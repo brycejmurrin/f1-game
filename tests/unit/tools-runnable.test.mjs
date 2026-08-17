@@ -99,15 +99,13 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: process.execPath, args: [path.join(TOOLS, "mcp-cli.mjs"), "probe", "--dry-run"], want: /new_page/ },
     { cmd: "bash", args: [path.join(TOOLS, "tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
     { cmd: "python3", args: [path.join(TOOLS, "probe-mcp.py"), "help"], want: /chrome_/ },
-    // NOT `--help`: pick-tests has no such flag, so it ignores it and falls
-    // through to asking git what changed — which made this assertion a
-    // description of the CHECKOUT, not the tool. It passed on the dirty tree it
-    // was written on and failed in CI, where the tree is clean and the honest
-    // answer is "no changed files — nothing to run". A non-flag argument is an
-    // explicit file list, so this asks a fixed question with a fixed answer,
-    // and gets to assert the mapping while it is there.
+    // Prefer an explicit path so the assertion is independent of a clean vs
+    // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
+    // either shape is fine — the path form also exercises RULES → test:tlx.
     { cmd: process.execPath, args: [path.join(TOOLS, "pick-tests.mjs"), "js/render/three/tlx.js"],
       want: /test:tlx/ },
+    { cmd: process.execPath, args: [path.join(TOOLS, "pick-tests.mjs"), "--help"],
+      want: /group|test:/ },
   ];
   const failed = [];
   for (const c of cases) {
