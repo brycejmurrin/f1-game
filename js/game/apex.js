@@ -1454,6 +1454,12 @@ const api = {
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
       tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
+      // tell VER-from-LIN without opening driver-ratings.js.
+      craft: +(c.craft != null ? c.craft : 0).toFixed(3),
+      awareness: +(c.awareness != null ? c.awareness : 0).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0).toFixed(3),
+      lane: +(c.lane != null ? c.lane : 0).toFixed(3),
       ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,

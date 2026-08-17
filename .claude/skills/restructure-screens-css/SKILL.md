@@ -37,9 +37,6 @@ grep -ohE '(max|min)-height: *[0-9]+px' css/*.css | sort | uniq -c
 
 ---
 
-
----
-
 ## Load on demand
 
 - The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [references/rules.md](references/rules.md).

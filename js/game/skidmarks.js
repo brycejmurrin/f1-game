@@ -85,7 +85,7 @@ function create(_G) {
     let rebuilt = false;
     if (dirty) { rebuild(); rebuilt = true; }
     if (gfx.drawSkidBatch(verts, vertCount, rebuilt)) return;
-    const ex = camEye[0], ez = camEye[2];
+    const ex = (camEye && camEye[0]) || 0, ez = (camEye && camEye[2]) || 0;
     const full = active >= MAX_SKID, cnt = full ? MAX_SKID : active;
     for (let i = 0; i < cnt; i++) {
       const m = full ? marks[(idx + i) % MAX_SKID] : marks[i];

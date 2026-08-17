@@ -293,7 +293,13 @@ const CEILINGS = {
   // -> 8311 PERF-FINDINGS shadow ribbon chunk: road+terrain castShadowChunked vs
   // sun ortho (~89% tris culled; depth bit-identical) + freeChunkedMesh on reload.
   // -> 8333 perf-hunt: S3 propBatches draw/free/shadow + envCull road chunk.
-  "js/game.js": 8333,
+  // -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
+  // -> 8361 smarter AI drivers: wire AiDrive (OT/ERS/brake/lane + rating axes)
+  // into updateCar. Decision math lives in js/game/ai-drive.js (188 lines);
+  // this raise is call-site glue + nearbyN / soft brakeLvl path.
+  // -> 8378 deploy∪perf-hunt merge: AiDrive call sites + energy short-circuit
+  // before kAhead60 LUT + propBatches draw/free/shadow + envCull road chunk.
+  "js/game.js": 8375,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -316,7 +322,10 @@ const CEILINGS = {
   // record the placement constraint, which is real: quoting the api literal's
   // opening text in that comment moved hooks-documented.test.mjs's slice point
   // and invented a hook called `for`.
-  "js/game/apex.js": 3109,
+  // -> 3109 perf-hunt: __apex.perf() + autoTier/userTier on renderScale report.
+  // -> 3112 carAt exposes craft/awareness/experience/lane for AI racecraft probes.
+  // -> 3115 deploy∪perf-hunt merge (split-newline count).
+  "js/game/apex.js": 3115,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
