@@ -24,17 +24,16 @@ const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.te
 
 // ---------------------------------------------------------------------------
 // Docs that describe the CURRENT code. Everything else under docs/ is a dated
-// record and is exempt: docs/archive/ and docs/research/ were accurate when
-// written and are explicitly labelled historical in docs/README.md. Exempting
-// archive/ is the POINT of having it — a provenance doc naming a file that has
-// since moved is expected, and holding it to the live standard would either
-// churn build logs on every refactor or stop anyone archiving anything.
+// record and is exempt: docs/archive/, docs/research/, and docs/superpowers/
+// were accurate when written. Exempting historical records is the POINT of
+// keeping them — a provenance doc or implementation plan naming a file that
+// will move or has not yet been created must not churn build logs.
 const LIVE_DOCS = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (/archive|research|tracks/.test(e.name)) continue;
+      if (/archive|research|tracks|superpowers/.test(e.name)) continue;
       walk(rel);
     } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
   }
