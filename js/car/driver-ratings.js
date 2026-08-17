@@ -78,6 +78,7 @@ function hash32(str) {
 }
 
 const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const rClamp = (v, lo, hi) => Math.round(clamp(v, lo, hi));
 
 // Fallback for a code not in BASE. Anchored on the car's tier (a tier-4 seat
 // rarely holds a 90-pace driver) and spread by the code's hash so two unknown
@@ -87,13 +88,12 @@ function fromTier(tier, code) {
   const h = hash32(code || "???");
   const spread = (n) => ((h >>> (n * 5)) & 31) - 15;      // -15..+16, stable per code
   const anchor = 88 - t * 4;
-  const r = (v, lo, hi) => Math.round(clamp(v, lo, hi));
   return {
-    pace:        r(anchor + spread(0) * 0.35, 60, 96),
-    craft:       r(anchor + spread(1) * 0.45, 55, 96),
-    awareness:   r(anchor + spread(2) * 0.50, 55, 94),
-    consistency: r(anchor + spread(3) * 0.45, 55, 94),
-    experience:  r(45 + spread(4) * 2.0, 5, 100),
+    pace:        rClamp(anchor + spread(0) * 0.35, 60, 96),
+    craft:       rClamp(anchor + spread(1) * 0.45, 55, 96),
+    awareness:   rClamp(anchor + spread(2) * 0.50, 55, 94),
+    consistency: rClamp(anchor + spread(3) * 0.45, 55, 94),
+    experience:  rClamp(45 + spread(4) * 2.0, 5, 100),
   };
 }
 

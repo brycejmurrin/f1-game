@@ -19,21 +19,11 @@ const TrackMesh = (function () {
   // setup inside each builder keeps the plain `Math.` spelling.
   const __M = Math;
 
-  // cross from js/track/geom.js; curvature (baked LUT reader) from
-  // js/track/spline.js — eval-time destructures (hard edges).
+  // cross from js/track/geom.js; curvature (baked LUT reader) and cr (Catmull-Rom)
+  // from js/track/spline.js — eval-time destructures (hard edges).
   const { cross, MAT } = TrackGeom;
-  const { curvature } = TrackSpline;
+  const { curvature, cr: catmull } = TrackSpline;
   const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
-  // Uniform Catmull-Rom through p1..p2. C1 where a lerp is only C0, passes
-  // through every node, and reproduces a straight line exactly on collinear
-  // input — so it is a drop-in wherever a continuous SLOPE is wanted and the
-  // node values must still be honoured. Used by banking()'s `smooth` path.
-  const catmull = (p0, p1, p2, p3, t) => {
-    const t2 = t * t, t3 = t2 * t;
-    return 0.5 * ((2 * p1) + (-p0 + p2) * t
-      + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
-      + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
-  };
 
   // Add one triangle's un-normalised face normal into each of its three
   // vertices' normal slots. Un-normalised on purpose: |cross| is twice the

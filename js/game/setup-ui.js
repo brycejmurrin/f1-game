@@ -243,7 +243,7 @@ function buildSetup() {
     }
   }
   if (budgetFill) {
-    budgetFill.style.transform = unlimited ? "scaleX(0)" : "scaleX(" + Math.max(0, Math.min(1, spent / cap)) + ")";
+    budgetFill.style.transform = unlimited ? "scaleX(0)" : "scaleX(" + M4.clamp(spent / cap, 0, 1) + ")";
   }
   if (unlimitedBtn) {
     unlimitedBtn.hidden = !!owned;
@@ -339,7 +339,7 @@ function buildSetup() {
     if (badges.length) {
       const tg = document.createElement("span");
       tg.className = "cs-opt-tag";
-      tg.textContent = Array.from(new Set(badges)).join(" · ");
+      tg.textContent = badges.join(" · ");
       nameRow.appendChild(tg);
     }
     main.appendChild(nameRow);
