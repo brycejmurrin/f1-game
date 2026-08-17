@@ -56,6 +56,9 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
 test("bump-cache: --check catches drift, --apply lands max+1 everywhere, --at pins", () => {
+  // artifacts/ is gitignored — a fresh CI checkout does not have it, and
+  // mkdtemp does not create parents (measured: ENOENT on runner, green local).
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "bumpfix-"));
   try {
     fs.writeFileSync(path.join(dir, "index.html"),
