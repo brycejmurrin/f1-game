@@ -82,8 +82,8 @@ const AiDrive = (function () {
     const roomScore = clamp(room / 3.2, 0, 1);
     const closeScore = clamp(0.45 + closing / 8, 0, 1);
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);
-    const streetCut = ctx.street ? lerp(0.55, 0.9, t.awareness) : 1;
-    const situ = (0.34 * gapScore + 0.28 * roomScore + 0.22 * closeScore + 0.16 * straight) * streetCut;
+    const situ = (0.34 * gapScore + 0.28 * roomScore + 0.22 * closeScore + 0.16 * straight)
+      * (ctx.street ? streetOtScale(t) : 1);
     // Mid-grid craft/awareness at situ≈0.55 should land near the old λ=0.7.
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
@@ -183,6 +183,6 @@ const AiDrive = (function () {
   return {
     traits, stuckThreshold, followPad, contactGive, steerDamp, unstuckPull,
     streetOtScale, otFireRate, otShouldFire, wantBoost, brakeTarget, brakeDecision,
-    adaptLane, damp,
+    adaptLane,
   };
 })();
