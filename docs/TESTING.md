@@ -1058,3 +1058,17 @@ desktop stack can LOSE the device seconds in (Chrome reports it as
 `createBuffer failed, size (N) is too large` on a tiny N — that wording means
 device-lost, not size). Validation evidence here is exact; pixel evidence now
 exists in-container; PERFORMANCE truth still needs a real GPU.
+
+**TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
+(2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
+load). The remaining group timeouts were GPU fill: M4 left the loop
+presenting, Playwright tore the page down, and M5's first frame sat behind a
+387% GPU process. `setTimeOfDay("night")` / a second `race()` on a live TLX
+page does not return (530 s+ hung `evaluate`, measured four times). Product
+cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
+cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
+lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
+`stopRendering` at the end of M4 so the next spec is not starved. Solo
+verdict after those cuts: M4 10.0 s, M5 313.1 s, M9 278.9 s, `= run passed
+(3/3)`. M5/M9 stay near the `test.slow()` 360 s budget because they still
+pay a first-frame SwiftShader present; do not widen assertion tolerances.

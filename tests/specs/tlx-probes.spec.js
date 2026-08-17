@@ -131,6 +131,11 @@ test.describe("TLX — boot", () => {
     expect(st.pcss).toBe(false);   // TODO M4-PCSS: blocker map not ported
     expect(st.hdr).toBe(true);     // M8: post chain renders into a float scene target
     expect(errors).toEqual([]);
+    // Freeze the loop before Playwright tears the page down. Leaving TLX
+    // presenting on SwiftShader starves the next spec's first frame
+    // (M5 after this test was 250–313 s; the GPU process was still filling
+    // the previous page). Test-only; no product change.
+    await stopRendering(page);
   });
 
   test("M8 post chain resolves a day race (HDR target, bloom live)", async ({ page }) => {
@@ -371,6 +376,7 @@ test.describe("TLX — boot", () => {
     expect(st.car.arms).toBeGreaterThan(0);
     expect(typeof st.lamp.enabled).toBe("boolean");
     expect(st.lamp.idx).toBe(-1);      // Monza day never opens the lamp pass
+    await stopRendering(page);
   });
 
   test("M10 track builds its meshes through the injected TLX backend (façade wiring)", async ({ page }) => {
