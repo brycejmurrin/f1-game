@@ -133,39 +133,36 @@ const SceneryNature = (function () {
       ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
-      const c2 = [col[0] * 0.86, col[1] * 0.86, col[2] * 0.82];   // shaded lower needles
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
       const sparse = opts.sparse != null ? !!opts.sparse : vr > 0.82;   // ~18% thinner 3-tier trees
       const lean = opts.lean != null ? opts.lean
         : (!sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0);              // ~27% windswept lean
       const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
         : (sparse ? 3 : 4);
-      // Graph form: the silhouette is recorded ONCE per distinct parameter set in
-      // canonical space (origin = the anchor, axes = the track basis) and replayed
-      // through the guarded emitters. Geometry and guard decisions are unchanged;
-      // what is new is that the build now knows this is a pine and where it stands.
-      // The key carries every value that changes the shape — h and j are continuous,
-      // so reuse here is whatever genuinely repeats. See docs/research/
-      // SCENE-GRAPH-PLAN.md §S4: pine's dimensions are AFFINE in h (the trunk's
-      // 0.35 + h*0.02 radius, its +0.5 m sink), not linear, so it cannot yet
-      // collapse to one model plus a per-node scale. Re-parameterising it is a
-      // deliberate look change and belongs with the detail pass, not here.
+      // S4 remesh (SCENE-GRAPH-PLAN): geometry is linear in a reference height
+      // so one model + uniform scale instances. World-space 0.5 m sink stays on
+      // the placement (not in the mesh) so scale cannot float/bury the trunk.
+      // lean/j quantize so the key is discrete; side flips +r; tint is NODE_COLOR.
+      const PINE_REF_H = 12;
+      const jQ = 0.85 + Math.round((j - 0.85) / 0.15) * 0.15;
+      const leanQ = lean <= 0 ? 0 : Math.round(lean / 0.4) * 0.4;
+      const s = h / PINE_REF_H;
+      const o = [a.c[0] - a.u[0] * 0.5, a.c[1] - a.u[1] * 0.5, a.c[2] - a.u[2] * 0.5];
+      const r = side < 0 ? [-a.r[0], -a.r[1], -a.r[2]] : a.r;
       ctx.instance(
-        `pine|${h}|${j}|${lean}|${sparse ? 1 : 0}|${side}|${col.join(",")}`,
-        { o: a.c, r: a.r, u: a.u, t: a.t },
+        `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
+        { o, r, u: a.u, t: a.t, s: [s, s, s], col },
         (rec) => {
+          const H = PINE_REF_H;
           rec.mat(MAT.WOOD);
-          // Trunk starts 0.5 m BELOW the anchor: anchor() samples the terrain at one
-          // point, so on a slope a flat-based trunk floats on the downhill side.
-          rec.cyl([0, -0.5, 0], 0.35 + h * 0.02, h * 0.4 + 0.5, [0.30, 0.22, 0.13], 6);
+          rec.cyl([0, 0, 0], 0.35 + H * 0.02, H * 0.4 + 0.5, [0.30, 0.22, 0.13], 6);
           rec.mat(MAT.FOLIAGE);
-          let y = h * 0.3;
+          let y = H * 0.3 + 0.5;
           for (let i = 0; i < tiers; i++) {
-            const w = (sparse ? 2.3 : 2.7) * j * (1 - i * (sparse ? 0.24 : 0.21));
-            // tilt away from the road
-            rec.cone([lean ? lean * (y / h) * 1.6 * side : 0, y, 0],
-                     w, h * 0.32, i === 0 ? c2 : col, 7);
-            y += h * (sparse ? 0.24 : 0.18) * j;
+            const w = (sparse ? 2.3 : 2.7) * jQ * (1 - i * (sparse ? 0.24 : 0.21));
+            rec.cone([leanQ ? leanQ * (y / H) * 1.6 : 0, y, 0],
+                     w, H * 0.32, TrackGraph.NODE_COLOR, 7);
+            y += H * (sparse ? 0.24 : 0.18) * jQ;
           }
         },
         { kind: "pine", k, side, h });
