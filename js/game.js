@@ -5364,7 +5364,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
         }
       }
       const _rc = track.meshes.roadChunked;
-      if (_rc && _rc.chunks) { _roadMesh = _rc; _roadChunked = true; }
+      if (_rc && _rc.chunks && _rc.chunks.length) { _roadMesh = _rc; _roadChunked = true; }
     }
     if (_roadChunked) gfx.drawChunked(_roadMesh, MAT_IDENT, m);
     else gfx.draw(_roadMesh, MAT_IDENT, m);
