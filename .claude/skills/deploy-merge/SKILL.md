@@ -1,6 +1,6 @@
 ---
 name: deploy-merge
-description: Use when merging the deploy branch (claude/f1-game-project-26h3ng) into a working branch, pushing work to the deploy branch, fast-forwarding a deploy, resolving cross-lineage cache versions or geometry baseline conflicts, or verifying a live GitHub Pages deploy.
+description: Use when merging the deploy branch (claude/f1-game-project-26h3ng) into a working branch, pushing work to the deploy branch, fast-forwarding a deploy, or resolving cross-lineage cache versions or geometry baseline conflicts. For live vs local version.json liveness use deploy-research or mcp-probe deploy-check — this skill is the git/merge/push protocol.
 ---
 
 # Merge with the deploy branch and ship

@@ -15,6 +15,7 @@ Three kinds of docs live here.
 | Doc | Covers |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
+| [RENDERERS.md](RENDERERS.md) | Three backends behind one seam: GLX / WGX / TLX boot flow, frame pipeline, safety prefs, parity snapshot. |
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | Standing assessment + defect register: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and what is deferred. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (AGENTS.md has the short list). |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability. |
@@ -44,31 +45,20 @@ Three kinds of docs live here.
 | [iOS-OPTIMIZATION.md](iOS-OPTIMIZATION.md) | Mobile/iOS perf and Safari quirks. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 
-### WebGPU backend (opt-in)
+### Renderers (GLX / WGX / TLX)
 
-`js/render/webgpu/*` is **DEFERRED** — no `<script>` tag; `js/game.js` injects it
-at boot only when `apex26.gfxBackend=webgpu`, with GLX fallback on any failure.
+Boot flow, shared frame pipeline, safety prefs, and the live parity snapshot
+live in **[RENDERERS.md](RENDERERS.md)**. Module contracts and the GLX API
+sketch stay in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**What still matters is in [ARCHITECTURE.md](ARCHITECTURE.md)**: WGX stays
-opt-in (`apex26.gfxBackend=webgpu`) with GLX as the default. The 2026-08
-parity pass closed the documented gaps (gpuTimer, texture arrays, lamp
-shadows, instancing, particles, MSAA 2×, world-space god-ray, applyMaterial,
-and WGSL uniform control flow derivative hoisting).
-Recipes and remaining sharp edges live in
-[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). The six
-phase/migration build logs are provenance and live in
-[`archive/webgpu/`](archive/webgpu/).
-
-### three.js / TLX backend (opt-in)
-
-The third renderer behind the same `Gfx` seam (`js/render/three/`), activated
-via `localStorage apex26.gfxBackend=three`. Built on vendored three.js r184 with
-TSL-based shaders (chunked meshes, lit core, procedural sky, full post chain,
-shadow system, and env cube probe). Evaluation spikes, measured
-criteria and the phased adoption plan live in [`spike/`](../spike/) —
-`spike/README.md` for the criteria table and numbers, `spike/ADOPTION-PLAN.md`
-for the graphics phases and the additive Rapier plan that `js/game/debrisworld.js`
-and `js/game/incidentsim.js` implement.
+`js/render/webgpu/*` and `js/render/three/*` are **DEFERRED** — no `<script>`
+tag; `js/game.js` injects them only when `apex26.gfxBackend` is `webgpu` or
+`three`, with GLX fallback on any failure. GLX stays the default. WGX recipes
+and remaining sharp edges (TAA still off) live in
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). WebGPU phase/migration
+build logs are provenance under [`archive/webgpu/`](archive/webgpu/). TLX
+evaluation spikes and the phased adoption plan live in [`spike/`](../spike/)
+(`spike/README.md`, `spike/ADOPTION-PLAN.md`).
 
 ## Research (cited, but not a description of behaviour)
 

@@ -1,6 +1,6 @@
 ---
 name: bump-cache
-description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, stale GitHub Pages/browser/PWA cache is suspected, or Apex 26 asset changes need a new ?v=N/version.json build.
+description: Use when JS/CSS changed, index.html script/link tags changed, the user says bump the version or cache bust, or Apex 26 asset changes need a new ?v=N/version.json build. For live vs local GitHub Pages version.json use mcp-probe deploy-check — do not bump to "check" the deploy.
 ---
 
 # Bump cache-busting version

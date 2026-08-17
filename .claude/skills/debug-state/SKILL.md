@@ -1,6 +1,6 @@
 ---
 name: debug-state
-description: Use when the user asks what the car is doing, read telemetry, inspect slip/grip/physics state, dump field order/gaps, show sector/lap timing, check lightState, debug understeer, or run a headless control/obs/act/reset loop in Apex 26.
+description: Use when the user asks what the car is doing, read telemetry, inspect slip/grip/physics state, dump field order/gaps, show sector/lap timing, check lightState, or run a headless control/obs/act/reset loop in Apex 26. Handling tune / understeer feel → tune-physics; scene lighting knobs → lighting-tuner.
 ---
 
 # State & telemetry debug hooks

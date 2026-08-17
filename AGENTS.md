@@ -232,10 +232,11 @@ same surface from a shell.
 ## Area references (load on demand)
 
 Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
-(`.claude/skills/bake-lighting` lands a COPY VALUES export). Career:
-`docs/CAREER.md`. Multiplayer: `docs/MULTIPLAYER.md`. Scenery:
-`docs/SCENERY-API.md`. Testing: `docs/TESTING.md`. WGX/WGSL
-(`js/render/webgpu/`): `docs/research/WEBGPU-PARITY.md`.
+(`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
+(GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
+`docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
+`docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
+`docs/research/WEBGPU-PARITY.md`.
 
 Two WGSL rules the language enforces and a mock device cannot: `sampleCount` is
 1 or 4 ONLY, and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is

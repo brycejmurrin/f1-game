@@ -212,6 +212,9 @@ its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx.js (+ js/render/glx/) / js/render/webgpu/wgx.js / js/render/three/* / js/render/gfx.js — renderers
 
+Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
+is the module contract and GLX API sketch.
+
 ### Three backends behind one seam
 
 `js/render/gfx.js` (`Gfx`) is the renderer selection seam. `Gfx.create(canvas)`

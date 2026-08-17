@@ -738,8 +738,8 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/test-bg.mjs career`
-(and in `node tools/test-bg.mjs modes`). They cover the mode axes, the save and its migration, the
+`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/test-bg.mjs modes`
+(there is no `test:career` group — `test-bg` exits 2 on an unknown name). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
 the grid, and RELIABILITY — that OFF changes nothing, that a seeded season retires

@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), needs track/scenery/car as JSON, wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do.
+description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do. One-off geometry JSON (corners/groundY/walls) → debug-tracks.
 ---
 
 # Agent view — perceive and drive the game as text
