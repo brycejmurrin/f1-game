@@ -256,6 +256,29 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      // r184 keys the TSL node-builder cache on RenderObject.initialCacheKey,
+      // which folds in renderer.contextNode.version + the scene lights hash.
+      // Both change across the many renderer.render() calls of a track load
+      // (shadow primes, env faces, present), so every newly pooled mesh
+      // misses, setup() mints new node ids, and the vertex shader text
+      // changes only in `NodeUniforms<id>` — 593 unique programs / ~60 s of
+      // getProgramParameter on Monza (measured 2026-08-17). Replace the key
+      // with the program family + attribute layout, which is what actually
+      // forks GLSL. Pipeline state (blend/side/depth) stays on the separate
+      // pipeline cache and is not compiled into the program text.
+      if (renderer._nodes && typeof renderer._nodes.getForRenderCacheKey === "function") {
+        renderer._nodes.getForRenderCacheKey = function (ro) {
+          const mat = ro.material;
+          const geo = ro.geometry;
+          const fam = (mat && typeof mat.customProgramCacheKey === "function")
+            ? mat.customProgramCacheKey() : (mat && mat.type) || "mat";
+          const attrs = geo && geo.attributes
+            ? Object.keys(geo.attributes).sort().join(",") : "";
+          const idx = geo && geo.index ? "i" : "n";
+          const inst = ro.object && ro.object.isInstancedMesh ? "I" : "M";
+          return fam + "|" + attrs + "|" + idx + "|" + inst;
+        };
+      }
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
@@ -376,6 +399,8 @@ const TLX = (function () {
       const unlitMat = new THREE.MeshBasicNodeMaterial();
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
+      unlitMat.lights = false;
+      unlitMat.customProgramCacheKey = () => "tlx-unlit";
       const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
       rawUnlitMat.side = THREE.FrontSide;
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
@@ -601,7 +626,7 @@ const TLX = (function () {
         // and the ≤0.03 emissive delta is invisible.
         const key =
           (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
-          (o.alpha !== undefined ? o.alpha : 1) + "," +
+          (o.alpha !== undefined ? Math.round(o.alpha * 32) / 32 : 1) + "," +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
           (o.specular !== undefined ? o.specular : 0.5) + "," +
@@ -1033,14 +1058,30 @@ const TLX = (function () {
         return filled;
       }
 
+      // CACHED CSS SIZE — same forced-reflow trap GLX documented at
+      // js/render/glx.js (clientWidth in begin() → HUD layout → jank).
+      let cssW = 0, cssH = 0, cssDirty = true;
+      const markCssDirty = () => { cssDirty = true; };
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("resize", markCssDirty);
+        window.addEventListener("orientationchange", markCssDirty);
+        if (typeof ResizeObserver === "function" && canvas) {
+          try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+        }
+      }
       function resize() {
         // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
         // writes the backing store, so reading it back here fed the previous frame's
         // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
-        const cw = canvas.clientWidth || 1;
-        const ch = canvas.clientHeight || 1;
+        if (cssDirty || cssW <= 0 || cssH <= 0) {
+          cssW = canvas.clientWidth;
+          cssH = canvas.clientHeight;
+          cssDirty = false;
+        }
+        const cw = cssW || 1;
+        const ch = cssH || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         const w = Math.max(1, Math.round(cw * dpr * renderScale));
         const h = Math.max(1, Math.round(ch * dpr * renderScale));

@@ -143,6 +143,8 @@
         blockerRT.texture.name = "TLXSunBlocker";
         const bmat = new THREE.MeshBasicNodeMaterial();
         bmat.fog = false;
+        bmat.lights = false;
+        bmat.customProgramCacheKey = () => "tlx-blocker";
         // k source texels per dest texel; taps at the block centre ±1 source
         // texel — texel-exact GLX BLOCKER_FS (its vUV lands on the block
         // centre and uSrcTexel offsets one source texel with NEAREST).
@@ -188,6 +190,8 @@
     depthMat.colorNode = TSL.vec3(0.0);
     depthMat.side = THREE.DoubleSide;
     depthMat.fog = false;
+    depthMat.lights = false;
+    depthMat.customProgramCacheKey = () => "tlx-depth";
 
     // ── caster scene + pooled mesh wrappers (the tlx.js draw-list pattern) ──
     const castScene = new THREE.Scene();
