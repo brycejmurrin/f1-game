@@ -98,6 +98,8 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["bake-lighting", "references/steps.md"],
     ["scenery-dress", "references/rules.md"],
     ["game-feel", "references/workflow.md"],
+    ["debug-cameras", "references/framing.md"],
+    ["debug-tracks", "references/sweeps.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -152,6 +154,14 @@ test("skills only name real test-bg groups", () => {
   walk(SKILLS);
   walk(AGENTS);
   assert.deepEqual(bad, [], "unknown test-bg group (barriers, career, …) — use a package.json test:* name");
+});
+
+test("wgx-validate Usage lists --static as the no-browser gate", () => {
+  const text = fs.readFileSync(path.join(ROOT, "tools/wgx-validate.mjs"), "utf8");
+  const usage = text.match(/Usage:[\s\S]*?\n\/\/\n\/\/ PASS/);
+  assert.ok(usage, "could not find the Usage block in tools/wgx-validate.mjs");
+  assert.match(usage[0], /wgx-validate\.mjs --static/);
+  assert.match(usage[0], /parent session only/);
 });
 
 test("verify-agent stays --fast and never starts Playwright", () => {

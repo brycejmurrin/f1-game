@@ -34,4 +34,4 @@ at 100%. Default is 1.0 on every pointer now (`css/tokens.css`).
   [references/setup.md](references/setup.md).
 - Probe JS (clip/trunc/tap/overflow) + routes + CSS-cache diagnosis +
   measured mistakes → [references/probes.md](references/probes.md).
-- Chrome park-before-Playwright → `mcp-probe` `references/traps.md` §1.
+- Chrome park-before-Playwright → [.claude/skills/mcp-probe/references/traps.md](../mcp-probe/references/traps.md) §1.

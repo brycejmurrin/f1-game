@@ -21,7 +21,11 @@
 // evidence here is exact; pixel sign-off needs a real GPU.
 //
 // Usage:
+//   node tools/wgx-validate.mjs --static
 //   node tools/wgx-validate.mjs [trackId] [--lite] [--frames N] [--no-rg11b10]
+//
+// --static is the default no-browser gate. Bare / --lite / --no-rg11b10
+// launch Chromium (parent session only).
 //
 // --no-rg11b10 spoofs an adapter WITHOUT 'rg11b10ufloat-renderable' (common on
 // phones), forcing the POST_HDR_FORMAT -> rgba16float fallback branch that the

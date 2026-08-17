@@ -47,8 +47,11 @@ Persisted per origin in `apex26.gfxWgxLevel`; one `device.lost` = one rung
 up + one reload:
 
 - rung 0 full — desktop (MSAA 4, timestamp-query, 2048 shadows)
-- rung 1 lite — phone parity (MSAA 1, 1024 shadows; ALL phones and WebKit
-  START here — `IS_MOBILE || IS_WEBKIT` in `js/render/webgpu/wgx.js`)
+- rung 1 lite — phone parity (MSAA 1, 1024 shadows). Phones/WebKit apply the
+  lite stack immediately via `WGX_LITE = IS_MOBILE || IS_WEBKIT` while
+  persisted `apex26.gfxWgxLevel` stays 0 on first launch; rung 1 is the
+  device-loss escalation floor, not the stored key on first boot
+  (`js/render/webgpu/wgx.js`)
 - rung 2 minimal — lite + no post chain, DPR capped at 1
 - loss on rung 2 → session-skip to GLX; the user's RENDERER pick is preserved
 

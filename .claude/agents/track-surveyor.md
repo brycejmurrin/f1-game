@@ -3,6 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's js/circuits/<id>.js, and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 tools: Bash, Read, Grep, Glob, Edit
+is_background: true
 ---
 
 You improve ONE assigned circuit in Apex 26. Your write access is exactly one
