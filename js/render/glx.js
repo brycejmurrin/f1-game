@@ -45,6 +45,7 @@ const GLX = (function () {
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  function ctxGone() { return _ctxLost || !!(gl && gl.isContextLost && gl.isContextLost()); }
 
   // ── GPU frame timer (opt-in via gpuTimer(true); __apex.gpuTimer()) ──
   // EXT_disjoint_timer_query_webgl2 measures GPU-side frame cost — the thing a
@@ -398,7 +399,7 @@ const GLX = (function () {
       // tail-light spill under per-chunk lamps) that nobody had until this
       // week. Re-land it WITH a repro of the crash it may or may not have
       // caused, not before.
-      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
+      uploadLightSet: (L, idx, n, L2, o2, n2) => uploadLightSet(L, idx, n, L2, o2, n2),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -567,6 +568,7 @@ const GLX = (function () {
     }
   }
   function resize() {
+    if (ctxGone()) return;
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
@@ -600,6 +602,7 @@ const GLX = (function () {
   }
 
   function createMesh(data) {
+    if (ctxGone()) return null;
     const pos = toF32(data.pos);
     const nrm = toF32(data.nrm);
     const col = toF32(data.col);
@@ -897,7 +900,7 @@ const GLX = (function () {
   // camera so every lighting uniform (sun, shadow map, ambient, fog, tune)
   // matches the main frame exactly. Returns the face's invViewProj for drawSky.
   function envFaceBegin(face, eye, frame) {
-    if (!gl || _ctxLost || (gl.isContextLost && gl.isContextLost())) return null;
+    if (!gl || ctxGone()) return null;
     if (!envTex) envInit();
     _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
@@ -998,7 +1001,7 @@ const GLX = (function () {
   }
 
   function begin(frame) {
-    if (_ctxLost || (gl && gl.isContextLost && gl.isContextLost())) return false;
+    if (ctxGone()) return false;
     _gpuTimerBegin();
     frameViewProj = frame.viewProj;
     frameSunDir = frame.sunDir;
@@ -1499,6 +1502,7 @@ const GLX = (function () {
   }
 
   function draw(mesh, modelMat, opts) {
+    if (ctxGone() || !mesh) return;
     const alpha = litMaterial(modelMat, opts);
     // Each draw declares the full render state it needs (no restores afterwards),
     // so runs of same-state draws collapse to a single real toggle via the cache.
@@ -1536,6 +1540,7 @@ const GLX = (function () {
   }
 
   function drawSky(sky) {
+    if (ctxGone() || !sky) return;
     useProg(skyProg);
     gl.uniformMatrix4fv(skyU.uInvViewProj, false, sky.invViewProj);
     gl.uniform3fv(skyU.uZenith, sky.zenith);
@@ -1772,7 +1777,7 @@ const GLX = (function () {
     drawSkidBatch,
     drawGlow,
     drawParticles,
-    present: (opts) => PST.present(opts),
+    present: (opts) => { if (ctxGone()) return; return PST.present(opts); },
     envFaceBegin,
     envFaceEnd,
     envProbeReady() { return envReady; },

@@ -1354,6 +1354,7 @@ const TLX = (function () {
             const reason = (e && e.message) || String(e);
             _lastFailure = { reason, at: Date.now() };
             try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
+            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
             try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {

@@ -38,7 +38,7 @@ const LIVE_DOCS = [];
     } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
   }
 })("docs");
-LIVE_DOCS.push("CLAUDE.md", "README.md");
+LIVE_DOCS.push("CLAUDE.md", "AGENTS.md", "README.md");
 const SKILL_DOCS = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => path.join(".claude/skills", e.name, "SKILL.md"))
@@ -275,7 +275,7 @@ test("the scenery api member count in the docs matches the frozen contract", () 
   assert.deepEqual(wrong, [], "the frozen scenery(api) contract grew or shrank and the docs did not follow");
 });
 
-test("the test-suite counts in CLAUDE.md and README.md match the files on disk", () => {
+test("the test-suite counts in the agent docs and README.md match the files on disk", () => {
   // README was checked for circuits and part categories but NOT for suite
   // counts, so it sat at "101 specs / 37 unit suites" against 102/38 while
   // CLAUDE.md — the only file this test read — was correct. A guard that covers
@@ -285,7 +285,7 @@ test("the test-suite counts in CLAUDE.md and README.md match the files on disk",
   const units = ls("tests/unit", /\.test\.mjs$/).length;
 
   let sawSpecCount = false;
-  for (const doc of ["CLAUDE.md", "README.md"]) {
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
     const text = read(doc);
     const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
     if (claimed.length) sawSpecCount = true;
@@ -304,7 +304,7 @@ test("the test-suite counts in CLAUDE.md and README.md match the files on disk",
 // a knob's default was flipped) and the prose that quoted it did not move.
 test("the circuit count in the docs matches js/circuits/", () => {
   const circuits = ls("js/circuits", /\.js$/).length;
-  for (const doc of ["CLAUDE.md", "README.md"]) {
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
     const text = read(doc);
     for (const m of text.matchAll(/(\d+)\s+circuit data files/gi))
       assert.equal(Number(m[1]), circuits, `${doc} claims ${m[1]} circuit data files; js/circuits/ holds ${circuits}`);
@@ -320,7 +320,7 @@ test("the parts-category count in the docs matches Parts.CATALOG", () => {
   const catalog = src.slice(src.indexOf("const CATALOG"), src.indexOf("const DEFAULTS"));
   const categories = (catalog.match(/^\s{6}id: "\w+", label: "/gm) || []).length;
   assert.ok(categories > 0, "could not count Parts.CATALOG categories");
-  for (const doc of ["CLAUDE.md", "README.md"]) {
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
     const text = read(doc);
     for (const m of text.matchAll(/(\d+)\s+(?:part |upgrade )?categor(?:y|ies)/gi))
       assert.equal(Number(m[1]), categories,
@@ -328,20 +328,35 @@ test("the parts-category count in the docs matches Parts.CATALOG", () => {
   }
 });
 
-test("CLAUDE.md's matTexMix default matches TUNE_DEFS", () => {
+test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
+  // CLAUDE.md and AGENTS.md spent months as byte-for-byte duplicates, both
+  // loaded into every session (~490 lines of context for 244 of information)
+  // — and they still drifted: one lost a clause the other kept, despite this
+  // suite existing to stop exactly that. One canonical file ends the class:
+  // AGENTS.md holds the content, CLAUDE.md is a Claude Code @import stub.
+  // The line ceiling is what keeps rules from creeping back into the stub.
+  const stub = read("CLAUDE.md");
+  assert.ok(/^@AGENTS\.md$/m.test(stub),
+    "CLAUDE.md must import AGENTS.md with a line reading exactly `@AGENTS.md`");
+  const lines = stub.trim().split("\n").length;
+  assert.ok(lines <= 15,
+    `CLAUDE.md is ${lines} lines — it is a stub; rules belong in AGENTS.md`);
+});
+
+test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
   // the meaning of the whole asset-pack section.
   const lighting = read("js/game/lighting.js");
   const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
-  const claude = read("CLAUDE.md");
-  const section = claude.slice(claude.indexOf("Baked asset pack"), claude.indexOf("`window.__apex` dev API"));
+  const agents = read("AGENTS.md");
+  const section = agents.slice(agents.indexOf("Baked asset pack"), agents.indexOf("`window.__apex` dev API"));
   assert.ok(section, "the baked-asset-pack section moved");
   assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
   assert.ok(!/`matTexMix`[^\n]*`def: 0`/.test(section) || !on,
-    "CLAUDE.md still claims matTexMix has def: 0");
+    "AGENTS.md still claims matTexMix has def: 0");
   // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
   // trap sent agents hunting a missing port that already shipped.
   assert.doesNotMatch(section, /WGX does not/);
@@ -350,40 +365,40 @@ test("CLAUDE.md's matTexMix default matches TUNE_DEFS", () => {
   // …and the same claim, outside the slice. The check above reads only the text
   // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook
   // table — which sits after that boundary — kept saying "(ships at 0)" for as
-  // long as the section above it said "Ships ON". Both were in CLAUDE.md at
+  // long as the section above it said "Ships ON". Both were in the doc at
   // once. Scan the WHOLE file for a shipped-default claim about this knob.
-  for (const m of read("CLAUDE.md").matchAll(/matTex[^\n]*?ships at ([\d.]+)/gi)) {
+  for (const m of read("AGENTS.md").matchAll(/matTex[^\n]*?ships at ([\d.]+)/gi)) {
     assert.equal(Number(m[1]), Number(def[1]),
-      `CLAUDE.md says matTex ships at ${m[1]}; TUNE_DEFS has def: ${def[1]}`);
+      `AGENTS.md says matTex ships at ${m[1]}; TUNE_DEFS has def: ${def[1]}`);
   }
 });
 
-test("CLAUDE.md's layout names the module-roster truth it defers to", () => {
+test("AGENTS.md's layout names the module-roster truth it defers to", () => {
   // History: js/game/sheetshape.js and js/game/topmodal.js shipped while absent
-  // from CLAUDE.md's then-exhaustive layout, so an agent reading it concluded
-  // they did not exist — and this guard required every js/game basename in the
-  // file. The 2026-08-13 slimming inverted the contract: the layout is a
-  // directory map that DEFERS enumeration to tools/manifest.cjs, so the honest
-  // assertion is that the deferral is stated (the reader is told where the
-  // roster lives), and that any module CLAUDE.md still singles out by name
-  // actually exists in the manifest (no ghosts — the reverse failure mode).
+  // from the then-exhaustive layout, so an agent reading it concluded they did
+  // not exist — and this guard required every js/game basename in the file.
+  // The 2026-08-13 slimming inverted the contract: the layout is a directory
+  // map that DEFERS enumeration to tools/manifest.cjs, so the honest assertion
+  // is that the deferral is stated (the reader is told where the roster
+  // lives), and that any module the doc still singles out by name actually
+  // exists in the manifest (no ghosts — the reverse failure mode).
   const manifest = read("tools/manifest.cjs");
-  const claude = read("CLAUDE.md");
+  const agents = read("AGENTS.md");
   assert.ok(manifest.length > 0, "tools/manifest.cjs unreadable");
-  assert.ok(/tools\/manifest\.cjs/.test(claude),
-    "CLAUDE.md no longer points readers at tools/manifest.cjs for the module roster");
+  assert.ok(/tools\/manifest\.cjs/.test(agents),
+    "AGENTS.md no longer points readers at tools/manifest.cjs for the module roster");
 });
 
-test("CLAUDE.md's active branch is a branch that exists, and names the deploy branch", () => {
-  // Three different answers were in the repo at once: CLAUDE.md named a branch
-  // nobody was on, pages.yml deploys from a third, and nothing said so.
-  const claude = read("CLAUDE.md");
+test("AGENTS.md names the deploy branch", () => {
+  // Three different answers were in the repo at once: the agent doc named a
+  // branch nobody was on, pages.yml deploys from a third, and nothing said so.
+  const agents = read("AGENTS.md");
   const pages = read(".github/workflows/pages.yml");
   const deploy = pages.match(/branches:\s*\[([^\]]+)\]/);
   assert.ok(deploy, "pages.yml no longer pins a deploy branch");
   const deployBranch = deploy[1].trim();
-  assert.ok(claude.includes(deployBranch),
-    `CLAUDE.md must name the deploy branch (${deployBranch}) so nobody assumes their branch ships`);
+  assert.ok(agents.includes(deployBranch),
+    `AGENTS.md must name the deploy branch (${deployBranch}) so nobody assumes their branch ships`);
 });
 
 test("every npm test:* group names specs that exist", () => {
@@ -415,17 +430,18 @@ test("every npm test:* group names specs that exist", () => {
   assert.deepEqual(missing, [], "an npm test group points at a spec that no longer exists");
 });
 
-test("every renderer backend directory is described in CLAUDE.md", () => {
+test("every renderer backend directory is described in AGENTS.md", () => {
   // The TLX (three.js) backend shipped an entire js/render/three/ tree while
-  // CLAUDE.md still listed only GLX and WGX. A whole backend going undocumented
-  // is the failure mode worth catching; individual files are covered by grouped
-  // notation ("tlx-chunked/-post/-shadow.js") and are not checked here.
-  const claude = read("CLAUDE.md");
+  // the agent doc still listed only GLX and WGX. A whole backend going
+  // undocumented is the failure mode worth catching; individual files are
+  // covered by grouped notation ("tlx-chunked/-post/-shadow.js") and are not
+  // checked here.
+  const agents = read("AGENTS.md");
   const missing = fs.readdirSync(path.join(ROOT, "js/render"), { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
-    .filter((d) => !claude.includes(`${d}/`));
-  assert.deepEqual(missing, [], "a renderer backend/dir under js/render/ is missing from the CLAUDE.md layout");
+    .filter((d) => !agents.includes(`${d}/`));
+  assert.deepEqual(missing, [], "a renderer backend/dir under js/render/ is missing from the AGENTS.md layout");
 });
 
 test("the skills index lists every skill", () => {

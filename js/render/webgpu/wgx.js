@@ -78,9 +78,9 @@
  *   - the full-res SSR target (8 B/px that GLX does not allocate at all) is
  *     skipped on the mobile tier; the 1×1 placeholder makes the LIT SSR block a
  *     documented no-op.
- * What is NOT covered: post-chain target FORMATS are still the fat ones
- * (SSAO rgba8 vs GLX r8; bloom/godray rgba16float vs GLX R11F_G11F_B10F), so a
- * phone frame still carries roughly 1.5x GLX's discretionary target bytes.
+ * Post-chain target formats match GLX's slim set: SSAO is r8unorm (GLX r8),
+ * bloom/godray are rg11b10ufloat (GLX R11F_G11F_B10F). The HDR scene target
+ * stays rgba16float because LIT writes scene-alpha (the SSR car-paint tag).
  * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
  * which reverts to WebGL2 on jetsam. A live create/device-lost refusal keeps
  * the WEBGPU pick and falls this tab back to GLX (session skip).
@@ -176,7 +176,8 @@ const WGX = (function () {
   const SCENE_FORMAT = "rgba16float";   // HDR scene (core-renderable/blendable)
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
-  const SSAO_FORMAT  = "rgba8unorm";    // AO half-res (composite samples .r)
+  const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
+  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -471,8 +472,11 @@ const WGX = (function () {
       try {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-      } catch (_) { /* no sessionStorage: the frozen-frame rule above applies */ }
+      } catch (_) { /* no sessionStorage: re-arm the canary below */ }
       if (skipped) { try { location.reload(); } catch (_) { /* harness */ } }
+      else {
+        try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* next boot has no canary; RESET is the way back */ }
+      }
     }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
@@ -513,6 +517,11 @@ const WGX = (function () {
           (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
       } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
       if (skipped) { try { location.reload(); } catch (_) { /* no location (harness/worker) */ } }
+      else {
+        // Next cold start finds the canary armed and reverts to WebGL2 instead
+        // of replaying this loss (the handler already disarmed the live probe).
+        try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET is the remaining door */ }
+      }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -610,7 +619,7 @@ const WGX = (function () {
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
-    let _carShadowArmed = false, _carArms = 0;
+    let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
     const carShadowLVPData = new Float32Array(16);
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
@@ -808,15 +817,20 @@ const WGX = (function () {
         entries: [{ binding: 0, resource: { buffer: drawUBO, offset: 0, size: DRAW_USED_BYTES } }],
       });
 
-      // Sky pipeline — renders into the LIT pass now, so target = SCENE_FORMAT and
-      // it declares the pass's depth attachment (write off, compare always: the
-      // sky fills the background without touching depth).
+      // Sky pipeline — renders into the LIT pass (SCENE_FORMAT). Depth write OFF,
+      // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
+      // early sky paints the clear background, and PerfTry.skyLate (default ON)
+      // still only fills pixels the world left at the far plane — GLX parity
+      // (js/render/shaders/sky.js + glx.js drawSky depthMask false / LEQUAL).
+      // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
+      // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
+      // melted world; cars still visible because they draw after the sky).
       skyPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: skyModule, entryPoint: "vs_main" },
         fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
         primitive: { topology: "triangle-list" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
       });
       if (MSAA_COUNT > 1) {
         skyPipelineMS = device.createRenderPipeline({
@@ -824,7 +838,7 @@ const WGX = (function () {
           vertex: { module: skyModule, entryPoint: "vs_main" },
           fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
           primitive: { topology: "triangle-list" },
-          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
           multisample: { count: MSAA_COUNT },
         });
       }
@@ -1059,13 +1073,13 @@ const WGX = (function () {
           pGodray = device.createRenderPipeline({
             layout: device.createPipelineLayout({ bindGroupLayouts: [grG0] }),
             vertex: { module: grMod, entryPoint: "vs_main" },
-            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
+            fragment: { module: grMod, entryPoint: "fs_main", targets: [{ format: POST_HDR_FORMAT }] },
             primitive: { topology: "triangle-list" },
           });
         }
         if (_Post.BLUR) {
           pBlur    = fsPipe(_Post.BLUR, SSAO_FORMAT,  null);
-          pBlurHDR = fsPipe(_Post.BLUR, SCENE_FORMAT, null);
+          pBlurHDR = fsPipe(_Post.BLUR, POST_HDR_FORMAT, null);
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       format,        null);
@@ -1221,13 +1235,19 @@ const WGX = (function () {
     if (!WGX_MINIMAL) _buildPost();
     _buildFx();
 
-    // ── Lit pipeline variants (blend / cull / alpha-write), built & cached lazily.
+    // ── Lit pipeline variants (blend / cull / alpha-write / depthBias), built & cached lazily.
     function _litPipeline(opts) {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
       const samples = _passSamples | 0 || 1;
-      const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3);
+      // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
+      // Start-line decals pass [-1, -2]; without this they shimmer at range.
+      const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
+      const dbC = db ? (db[0] | 0) : 0;
+      const dbS = db ? (db[1] | 0) : 0;
+      const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3)
+                | ((dbC + 8) << 8) | ((dbS + 8) << 16);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -1240,6 +1260,14 @@ const WGX = (function () {
         color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
         alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
       };
+      const depthStencil = {
+        format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal",
+      };
+      if (db) {
+        depthStencil.depthBias = dbC;
+        depthStencil.depthBiasSlopeScale = dbS;
+        depthStencil.depthBiasClamp = 0;
+      }
       p = device.createRenderPipeline({
         layout: litLayout,
         vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
@@ -1257,7 +1285,7 @@ const WGX = (function () {
         // buffer culls the cars/props drawn after it, and lands in the depth
         // texture as a solid wall for the SSAO/SSR post passes.
         primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal" },
+        depthStencil,
         multisample: { count: samples },
       });
       _litPipelines.set(key, p);
@@ -1403,9 +1431,9 @@ const WGX = (function () {
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ssaoBlurTex = device.createTexture({ size: [halfW, halfH], format: SSAO_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          next.godrayTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+          next.godrayTex = device.createTexture({ size: [halfW, halfH], format: POST_HDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          next.godrayBlurTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
+          next.godrayBlurTex = device.createTexture({ size: [halfW, halfH], format: POST_HDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           next.ldrTex = device.createTexture({ size: [width, height], format: LDR_FORMAT,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -1431,7 +1459,7 @@ const WGX = (function () {
           for (let i = 0; i < BLOOM_MAX_LEVELS; i++) {
             if (i > 0) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
             if (i > 0 && (bw < 4 || bh < 4)) break;
-            const tex = device.createTexture({ size: [bw, bh], format: SCENE_FORMAT,
+            const tex = device.createTexture({ size: [bw, bh], format: POST_HDR_FORMAT,
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
             const level = { tex, view: null, w: bw, h: bh };
             next.bloomLv.push(level);   // take ownership before createView can throw
@@ -1526,6 +1554,8 @@ const WGX = (function () {
               { binding: 4, resource: linearSampler },
               { binding: 5, resource: { buffer: compositeUBO } },
               { binding: 6, resource: _dirtView },   // LENS DIRT grime map (built once at init)
+              // Scene depth for flare sunVis occlusion + SSAO bilateral upsample.
+              { binding: 7, resource: next.depthSampleView },
             ],
           });
           next.fxaaBG = device.createBindGroup({
@@ -1703,8 +1733,9 @@ const WGX = (function () {
 
     // ── Resources (Phase 2) ──
     // createBuffer may still throw a synchronous RangeError when the allocation
-    // cannot be satisfied — exactly the memory
-    // pressure that precedes a device loss. The mesh family is called LAZILY
+    // cannot be satisfied — writeBuffer removed the mappable-pool failure above,
+    // not plain out-of-memory, which is the pressure that precedes a device
+    // loss. The mesh family is called LAZILY
     // from the render path (gear digits, LED strips mid-race), so a throw here
     // would escape into tick() and paint the full-screen overlay. Every draw
     // path checks .vbuf, so an inert mesh keeps the frame alive instead —
@@ -2042,12 +2073,12 @@ const WGX = (function () {
       const sctr = f.shadowCtr || f.eye || [0, 0, 0];
       d[88] = sctr[0]; d[89] = sctr[1]; d[90] = sctr[2];
       d[91] = (T && T.shadowRange != null) ? T.shadowRange : 80.0;   // same fallback as GLX uShadowRange
-      // params6 (floats 92..95): wet-surface darkening parity with GLX (.x),
-      // car-shadow arm flag (.y — set only on frames where the car caster pass
-      // ran; reset each present so a stale map can't keep shadowing), then the
-      // pure-look CAR SPARKLE (.z, def 1.6) + FOG SUN CORE (.w, def 0.6) knobs.
+      // params6 (floats 92..95): wet-surface darkening (.x), carBiasScale when
+      // the car caster armed (.y — GLX uCarBiasScale = cBox/42 from game.js;
+      // 0 when unarmed so the >0.5 gate still works), CAR SPARKLE (.z), FOG SUN
+      // CORE (.w).
       d[92] = (T && T.wetDark != null) ? T.wetDark : 1.0;
-      d[93] = _carShadowArmed ? 1.0 : 0.0;
+      d[93] = _carShadowArmed ? (_carBoxScale || 1.0) : 0.0;
       // params6.z/w: CAR SPARKLE + FOG SUN CORE pure-look knobs (GLX parity).
       // Always pack the resolved value — WGSL reads these lanes directly, so 0 is
       // a real "off", not an unset slot.
@@ -2144,6 +2175,9 @@ const WGX = (function () {
       skyData[55]=f.cityGlowReach != null ? f.cityGlowReach : 1;
       // p5.x: CLOUD DEFINITION (GLX uCloudDef). 0 is a valid "soft smear".
       skyData[56]=f.cloudDef      != null ? f.cloudDef      : 1;
+      // p5.y: storm lightning flash 1→0 (frameSky.lightning from game.js).
+      skyData[57]=f.lightning    != null ? f.lightning    : 0;
+      skyData[58]=0; skyData[59]=0;
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
@@ -2348,10 +2382,16 @@ const WGX = (function () {
       M4.perspectiveTo(_envProj, Math.PI / 2, 1, 0.4, 900);
       M4.mulTo(_envVP, _envProj, _envView);   // raw GL view-proj
       M4.invertTo(_envInvVP, _envVP);          // for drawSky ray reconstruction (raw, pre-Z01)
-      // Upload the face's frame (viewProj gets the Z01 remap inside _writeFrame). No
-      // radial cull for the probe — it must capture the full surroundings.
+      // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
+      // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
+      // when envCull is on; keep a tighter main-camera cull when present.
       const svVP = frame.viewProj, svEye = frame.eye, svCull = frame.cullDist;
-      frame.viewProj = _envVP; frame.eye = eye; frame.cullDist = 0;
+      frame.viewProj = _envVP; frame.eye = eye;
+      if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
+        frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
+      } else {
+        frame.cullDist = 0;
+      }
       _writeFrame(frame);
       frame.viewProj = svVP; frame.eye = svEye; frame.cullDist = svCull;
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
@@ -2499,23 +2539,25 @@ const WGX = (function () {
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
-      if (_ssrReady && ssrBG && frameHaveProj && _wet > 0.01 && _ssrStr > 0.001) {
+      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0;
+      // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
+      // gates on either path). Dry days still get car-paint SSR.
+      if (_ssrReady && ssrBG && frameHaveProj &&
+          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001)) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
         s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
         const up = frameUpVS || [0, 1, 0];
-        s[32] = up[0]; s[33] = up[1]; s[34] = up[2]; s[35] = 0;
+        s[32] = up[0]; s[33] = up[1]; s[34] = up[2];
+        s[35] = _carRefl;   // upVS.w = carReflect (SSR car-paint gate)
         const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
         s[36] = 1 / tw; s[37] = 1 / th; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
         const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
         const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
-        // ssrTopUV / ssrNear are CAMERA-AWARE (game.js widens both for a low
-        // onboard eye). The literals here reproduced only the chase-cam pair, so
-        // cockpit and hood views got a mirror clipped to the chase geometry.
         const topUV = (o.ssrTopUV != null) ? o.ssrTopUV : 0.62;
         const ssrNear = (o.ssrNear != null) ? o.ssrNear : -2.5;
-        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;   // reflSkyLo + upper-screen cutoff
-        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear; // reflSkyHi + near fade start
+        s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;
+        s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear;
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
@@ -2546,10 +2588,11 @@ const WGX = (function () {
       }
 
       // ── 1) GODRAY (half-res) — world-space march through depth + sun/lamp
-      //    shadow maps (GLX GODRAY_FS). CPU gates on sun-on-screen or lampVol.
+      // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
+      // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
-      const haveGR = godrayBG && ((grStr > 0 && sun && sun.onScreen && sun.shaft > 0) || lampVol > 0);
+      const haveGR = godrayBG && ((grStr > 0 && sun && sun.shaft > 0) || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
@@ -2658,20 +2701,12 @@ const WGX = (function () {
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
-        // SCREEN SUN-SHAFT knob. NOT at GLX parity, and the difference is
-        // load-bearing: GLX has a SEPARATE 8-tap radial screen shaft that reads
-        // the bright pass, and uSunShaft scales ONLY that — the volumetric
-        // god-ray texture is added unscaled (`c += texture(uGodray, vUV).rgb`).
-        // WGX has no screen shaft, so p0.z lands on the god-ray texture instead.
-        // Consequence for the player: turning SCREEN SUN-SHAFT down to 0 on
-        // WebGPU removes the VOLUMETRIC shafts, which on WebGL2 that knob cannot
-        // touch. sunShaftDecay and sunShaftSpread have no WGX consumer at all.
-        // Fixing this means porting the screen-shaft block from
-        // js/render/shaders/post.js and widening CompositeU past its 256 B —
-        // do not "fix" it by dropping the multiply, which would leave the knob
-        // with no authority over anything here.
-        const shaftMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
-        s[0] = exposure; s[1] = bloomNorm; s[2] = haveGR ? shaftMul : 0.0; s[3] = flareStr;   // p0
+        // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
+        // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
+        const shaftMul = (sun && sun.onScreen && sun.shaft > 0)
+          ? ((T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0) * sun.shaft
+          : 0.0;
+        s[0] = exposure; s[1] = bloomNorm; s[2] = shaftMul; s[3] = flareStr;   // p0
         s[4] = sunUVx; s[5] = sunUVy;
         s[6] = (T && T.whitePoint != null) ? T.whitePoint : 1.0;
         s[7] = (T && T.blackLift != null) ? T.blackLift : 0.005;                          // sunUV
@@ -2681,14 +2716,20 @@ const WGX = (function () {
         s[11] = (T && T.tint       != null) ? T.tint       : 0.0;                         // grade
         s[12] = (T && T.vignette   != null) ? T.vignette   : 0.80;
         s[13] = (T && T.grain      != null) ? T.grain      : 0.0;
-        s[14] = frameTime; s[15] = 0;                                                     // fx
+        s[14] = frameTime;
+        s[15] = (T && T.sunShaftDecay != null) ? T.sunShaftDecay : 0.82;                  // fx.w = shaftDecay
         const grade = o.grade || null;
         const gsh = grade && grade.shadow ? grade.shadow : [1, 1, 1];
         const ghi = grade && grade.hi ? grade.hi : [1, 1, 1];
         s[16] = gsh[0]; s[17] = gsh[1]; s[18] = gsh[2];
         s[19] = grade && grade.str != null ? grade.str : 0;                              // gradeShadow (w=str)
-        s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2]; s[23] = 0;                        // gradeHi
-        s[24] = 1 / tw; s[25] = 1 / th; s[26] = 0; s[27] = 0;                            // texel
+        s[20] = ghi[0]; s[21] = ghi[1]; s[22] = ghi[2];
+        // GLX: uShaftSpread = sqrt(max(0.05, sunShaftMul)) — not a separate knob.
+        const _shaftSpreadMul = (T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0;
+        s[23] = Math.sqrt(Math.max(0.05, _shaftSpreadMul));                              // gradeHi.w = shaftSpread
+        // texel.xy = full-res; zw = half-res AO texel (0 = skip bilateral upsample)
+        s[24] = 1 / tw; s[25] = 1 / th;
+        s[26] = haveAO ? (1 / halfW) : 0; s[27] = haveAO ? (1 / halfH) : 0;
         // imgFx (off 112): chromatic aberration, sharpen, speed-blur, bloom knee.
         s[28] = (T && T.chromAb != null) ? T.chromAb : 0.0;
         s[29] = (T && T.sharpen != null) ? T.sharpen : 0.0;
@@ -2868,9 +2909,10 @@ const WGX = (function () {
     // device, not MOBILE_TIER: GRAPHICS: HIGH buys quality, not a per-frame extra
     // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
     // what keeps the pass from rasterising cars into a 1-pixel target.
-    function carShadowBegin(lightVP) {
+    function carShadowBegin(lightVP, boxScale) {
       if (_lost || !carShadowView || IS_MOBILE || WGX_LITE) return;
       _carArms++;   // lifetime arm count, mirroring GLX SHD.carArms (debug only)
+      _carBoxScale = boxScale || 1;
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
       device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);

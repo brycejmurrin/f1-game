@@ -95,6 +95,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const gq = read("js/game/gfx-quality.js");
   assert.match(gq, /removeItem\("apex26\.gfxWgxLevel"\)/);
   assert.match(gq, /removeItem\("apex26\.gfxWgxLite"\)/);
+  assert.match(gq, /removeItem\("apex26\.gfxWgxFail"\)/);
 });
 
 test("RENDERER label names the live backend when WEBGPU fell back to GLX", () => {
@@ -152,4 +153,169 @@ test("nextBackend is webgl2 → three → webgpu → webgl2", () => {
   assert.equal(G.nextBackend("webgpu"), "webgl2");
   assert.equal(G.backendLabel("three"), "THREE");
   assert.equal(G.backendLabel("webgpu"), "WEBGPU");
+});
+
+function makeStorage(seed) {
+  const m = new Map(Object.entries(seed || {}));
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); },
+    removeItem: (k) => { m.delete(k); },
+    _map: m,
+  };
+}
+
+test("RESET RENDERER is injected next to #pm-renderer, not written into the shell", () => {
+  const html = read("index.html");
+  const src = read("js/game/gfx-quality.js");
+  assert.doesNotMatch(html, /id="pm-renderer-reset"/);
+  assert.match(src, /getElementById\("pm-renderer-reset"\)/);
+  assert.match(src, /createElement\("button"\)/);
+  assert.match(src, /RESET RENDERER/);
+  assert.match(src, /insertBefore\(btn, anchor\.nextSibling\)/);
+});
+
+test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
+  const src = read("js/game/gfx-quality.js");
+  const ls = makeStorage({
+    "apex26.gfxBackend": "three",
+    "apex26.gfxBackendProbe": "three",
+    "apex26.gfxWgxLevel": "2",
+    "apex26.gfxWgxLite": "1",
+    "apex26.gfxWgxOk": "0",
+    "apex26.gfxWgxFail": "device lost",
+    "apex26.gfxTlxFail": "present failed",
+    "apex26.envProbeOff": "1",
+    "apex26.perChunkOff": "1",
+    "apex26.tlxForceGL": "0",
+    "apex26.tlxViz": "lit",
+    "apex26.gfxHigh": "1",
+    "apex26.uiScale": "110",
+  });
+  const ss = makeStorage({
+    "apex26.gfxClaimFail": "1",
+    "apex26.gfxBound": "webgl2",
+    "apex26.ctxLostReloads": "2",
+  });
+  const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
+  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
+  const G = vm.runInContext("GfxQuality", ctx);
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxBackend"));
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxTlxFail"));
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.envProbeOff"), "context-loss latches are renderer crash state");
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.perChunkOff"));
+  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.ctxLostReloads"));
+  assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
+  const removed = G.clearRendererStorage();
+  assert.ok(removed.includes("apex26.gfxBackend"));
+  assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ls.getItem("apex26.gfxBackendProbe"), null);
+  assert.equal(ls.getItem("apex26.gfxWgxLevel"), null);
+  assert.equal(ls.getItem("apex26.gfxTlxFail"), null);
+  assert.equal(ls.getItem("apex26.envProbeOff"), null);
+  assert.equal(ls.getItem("apex26.perChunkOff"), null);
+  assert.equal(ls.getItem("apex26.tlxForceGL"), null);
+  assert.equal(ls.getItem("apex26.tlxViz"), null);
+  assert.equal(ls.getItem("apex26.gfxHigh"), "1", "mobile GRAPHICS: ULTRA bit must survive");
+  assert.equal(ls.getItem("apex26.uiScale"), "110", "unrelated settings must survive");
+  assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
+  assert.equal(ss.getItem("apex26.gfxBound"), null);
+  assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
+  assert.equal(G.readBackend(), "webgl2");
+});
+
+test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
+  const game = read("js/game.js");
+  const boot = game.slice(game.indexOf("let skipClaim = false"), game.indexOf("const PROBE_KEY"));
+  assert.match(boot, /catch \(_\) \{ skipClaim = true;/);
+  assert.doesNotMatch(boot, /try the opt-in as usual/);
+});
+
+test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", () => {
+  const src = read("js/game/gfx-quality.js");
+  const ls = makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.gfxHigh": "0" });
+  const ss = makeStorage({ "apex26.gfxClaimFail": "1" });
+  const kids = [];
+  const resetHost = {
+    insertBefore(node, _ref) { kids.push(node); return node; },
+  };
+  const rendererBtn = { id: "pm-renderer", parentNode: resetHost, nextSibling: null };
+  const gfxBtn = { id: "pm-gfx", textContent: "", hidden: true, onclick: null };
+  const byId = { "pm-renderer": rendererBtn, "pm-gfx": gfxBtn };
+  let reloaded = 0;
+  let sentinel = true;
+  const timers = [];
+  const ctx = vm.createContext({
+    window: { addEventListener() {} },
+    document: {
+      getElementById: (id) => byId[id] || null,
+      createElement: (tag) => {
+        const el = { tagName: tag, id: "", textContent: "", title: "", onclick: null };
+        if (tag === "button") {
+          Object.defineProperty(el, "id", {
+            get() { return this._id || ""; },
+            set(v) { this._id = v; byId[v] = this; },
+          });
+        }
+        return el;
+      },
+      readyState: "complete",
+      addEventListener() {},
+    },
+    localStorage: ls,
+    sessionStorage: ss,
+    location: { reload() { reloaded += 1; } },
+    setTimeout: (fn) => { timers.push(fn); return 1; },
+    PerfGov: { setUserTier() {}, sentinelArm(on) { sentinel = !!on; } },
+    GameStore: { store: { get() { return null; }, set() {} } },
+    GLX: { isMobile: true },
+  });
+  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
+  const G = vm.runInContext("GfxQuality", ctx);
+  G.init();
+  const btn = byId["pm-renderer-reset"];
+  assert.ok(btn, "reset button was injected");
+  assert.equal(btn.textContent, "RESET RENDERER");
+  assert.equal(kids[0], btn);
+  btn.onclick();
+  assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
+  assert.equal(ls.getItem("apex26.gfxHigh"), "0");
+  assert.equal(sentinel, false, "settings reload must not count as a crash strike");
+  assert.match(btn.textContent, /RELOADING/);
+  assert.equal(reloaded, 0);
+  timers.forEach((fn) => fn());
+  assert.equal(reloaded, 1);
+});
+
+test("GLX forwards tail-lights through per-chunk uploadLightSet and no-ops when the context is lost", () => {
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /uploadLightSet:\s*\(L, idx, n, L2, o2, n2\)\s*=>\s*uploadLightSet\(L, idx, n, L2, o2, n2\)/);
+  assert.match(glx, /function ctxGone\(\)/);
+  const draw = glx.slice(glx.indexOf("function draw(mesh, modelMat, opts)"), glx.indexOf("function drawSky"));
+  assert.match(draw, /ctxGone\(\)/);
+  const present = glx.slice(glx.indexOf("present:"));
+  assert.match(present, /ctxGone\(\)/);
+});
+
+test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variation", () => {
+  const sky = read("js/render/webgpu/wgsl-chunks.js");
+  assert.match(sky, /nightLid/);
+  assert.match(sky, /greyZ/);
+  assert.match(sky, /bankThresh/);
+  assert.match(sky, /atan2\(dir\.z,\s*dir\.x\)/);
+  assert.doesNotMatch(sky, /Deliberately reduced vs GLX SKY_FS/);
+});
+
+test("WGX phone post targets use the slim GLX-equivalent formats", () => {
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
+  assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
+  assert.match(wgx, /pBlurHDR = fsPipe\(_Post\.BLUR, POST_HDR_FORMAT/);
+});
+
+test("TLX present() records gfxBound when a fallback still paints", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const persist = tlx.slice(tlx.indexOf("const persistFail"), tlx.indexOf("const paintCanvas"));
+  assert.match(persist, /apex26\.gfxBound/);
 });

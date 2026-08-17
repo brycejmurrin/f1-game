@@ -433,10 +433,11 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/render/shaders/lit.js)
   //    PHASE 4 (deferred features, this file): PCSS-style shadow penumbra +
   //    cool shadow tint (params4.x/.y consumed in the shadow block);
-  //      * [Block 7]    env-cube car-paint reflection (carReflect = params4.z ;
-  //        group0 @binding 4/5 env cube+sampler ; mirrors GLX uCarReflect)
-  //      * [Block 8]    wet-road SSR consumption (ssrStrength = params4.w ;
-  //        group0 @binding 6 SSR-result texture from wgsl-post.js)
+  //      * [Block 7]    energy-conserving lacquer env mirror (envProbeStr =
+  //        params5.x ; group0 @binding 4/5 ; mirrors GLX clearcoat env, not
+  //        uCarReflect — params4.z drives car-paint SSR consume below)
+  //      * [Block 8]    wet-road SSR + car-paint SSR consume (ssrStrength =
+  //        params4.w / carReflect = params4.z ; group0 @binding 6)
   //    applyMaterial* / applyMaterialNormal are ported (14 procedural MAT ids).
   //    params9 carries the four LIT tuner knobs that used to have no FrameU
   //    lane (uAmbContactDark / uLampWallSpill / uWindowSunFlash / uSkyRimGlow).
@@ -642,7 +643,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // sheet). Distance-faded (would alias to shimmer) and wetness-faded (the water
   // film levels the surface).
   if (detail > 0.001) {
-    let mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    var mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    // Footprint fade (GLX lit.js): grazing road pixels span metres; without this
+    // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
+    // the car. Distance fade alone misses a near-but-grazing patch.
+    // Reads the hoisted fwW, NOT dpdx here: this block is behind a non-uniform
+    // detail branch, where a derivative is a hard compile error (see fw3).
+    let mnFpAbs = max(fwW.x, fwW.z);
+    mnFade = mnFade * clamp(1.0 - (mnFpAbs - 0.15) / 0.70, 0.0, 1.0);
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
       let e = 0.22;
@@ -722,12 +730,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
   }
-  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwW);
-  roadMarkings(&albedo, &rough, in.trk, fwT);
-
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js,
   // reduced: coarse+fine value-noise grain + repair-patch tint/roughness; the sparse
   // crack lines are dropped). Multiplicative, so it darkens as much as it lightens.
+  // Runs BEFORE applyMaterial/roadMarkings, which is GLX lit.js order —
+  // grain-after-markings muddied the white line paint.
   var patchM = 0.5;
   if (detail > 0.0) {
     let wp = in.wpos.xz;
@@ -740,6 +747,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
+  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwW);
+  roadMarkings(&albedo, &rough, in.trk, fwT);
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
@@ -759,8 +768,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
-    let absorb = mix(clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0),
-                     clamp(1.0 - 0.42 * F.params6.x, 0.0, 1.0), porous);
+    // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
+    // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
+    // at wetDark 1.0 porous sat at 0.58 against the road's 0.42 — verges and
+    // gravel traps reading 38% BRIGHTER than the tarmac they border, which is
+    // the flooded-canal-with-pale-banks silhouette inverted. As a FRACTION of
+    // the road's own absorption the two saturate together and porous stays
+    // strictly darker across the whole range, with no clip order to get wrong.
+    // GLX carries the fixed form in js/render/shaders/lit.js.
+    let absorbRoad = clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0);
+    let absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo = albedo * mix(1.0, absorb, wet);
     albedo = albedo * mix(1.0, 0.50, puddle);
     wetSheen = wet * (1.0 - porous);
@@ -768,6 +785,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     rough = mix(rough, 0.06, puddle);
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
   }
+
+  // SPECULAR ANTI-ALIASING (GLX lit.js parity). Widen roughness by how fast the
+  // normal is changing in SCREEN space, so a thin bright GGX lobe on a geometry
+  // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
+  // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
+  // every lamp lobe, so on a night track it is the difference between 48 stable
+  // highlights and 48 flickering ones. Placed at function-body top level on
+  // purpose: WGSL requires derivatives in uniform control flow, so this cannot
+  // move inside the material branches above.
+  let saaDx = dpdx(N);
+  let saaDy = dpdy(N);
+  let saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
 
   let a = rough * rough;
 
@@ -819,7 +849,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
         let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
         let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
-        let refD = ndc.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;   // SHADOW BIAS knob (params2.w)
+        // STATIC map only: biasTerm × (shadowRange/80) — GLX lit.js sampleShadow.
+        // Unscaled, the same absolute push is ~25× too much at SHADOW DISTANCE 16
+        // and barely covers acne at 200. Car map below uses biasTerm × params6.y
+        // (carBoxScale when armed — GLX uCarBiasScale).
+        let biasTerm = clamp(slopeB, 0.0005, 0.004) + max(F.params2.w, 0.0) * 0.5;
+        let refD = ndc.z - biasTerm * (shRange / 80.0);
         // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
         let aDist = distance(in.wpos, fadeCtr);
         let near = aDist < shRange * 0.80;
@@ -853,15 +888,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         }
         // Dynamic CAR shadows (GLX parity): min-combine the per-frame car-only
         // map — cars can't live in the snap-cached static map, so without this
-        // they cast nothing. Same slope/constant bias; params6.y arms it only on
-        // frames where wgx ran the car caster pass; carLightVP is the Z01-remapped
-        // matrix the car map was rasterised with.
+        // they cast nothing. biasTerm × params6.y (= carBoxScale when armed, 0
+        // when not — same gate as GLX uCarBiasScale); carLightVP is the
+        // Z01-remapped matrix the car map was rasterised with.
         if (F.params6.y > 0.5) {
           let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
           let cn = cc.xyz / cc.w;
           let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
           if (cuv.x > 0.0 && cuv.x < 1.0 && cuv.y > 0.0 && cuv.y < 1.0 && cn.z <= 1.0) {
-            let crefD = cn.z - clamp(slopeB, 0.0005, 0.004) - max(F.params2.w, 0.0) * 0.5;
+            let crefD = cn.z - biasTerm * F.params6.y;
             let ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
             let csh = ( textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>(-ct, -ct), crefD)
                       + textureSampleCompareLevel(carShadowTex, shadowSamp, cuv + vec2<f32>( ct, -ct), crefD)
@@ -885,12 +920,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
   }
   let litNoL = NoL * keyMul * shadow;
-  // SHADOW TINT (F.params4.y = shadowTintAmt): push shadowed regions toward a cool
-  // colour (sky-fill bias), applied to the hemisphere ambient so cast shadows read
-  // as cool ambient occlusion. shadowTintAmt=0 -> tintMul is 1 (no-op).
+  var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
+  // SHADOW COOLNESS (GLX lit.js): bias sun-starved pixels toward cool blue.
   let shadowTintAmt = max(F.params4.y, 0.0);
-  let tintMul = mix(vec3<f32>(1.0), vec3<f32>(0.80, 0.88, 1.08), (1.0 - shadow) * shadowTintAmt);
-  var color = albedo * (amb * tintMul + F.sunColor.xyz * litNoL * (1.0 - metalness));
+  if (shadowTintAmt > 0.001) {
+    color = color * mix(vec3<f32>(1.0), vec3<f32>(0.90, 0.96, 1.12),
+      shadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
+  }
 
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
   let Dg = D_GGX(NoH, a);
@@ -899,6 +935,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
   specCol = specCol / (1.0 + specCol);
   color = color + specCol;
+
+  // Specular AA variance for clearcoat + lacquer env disc (GLX parity).
+  // ccDx/ccDy are hoisted to uniform control flow (see where Ngeo is bound).
+  let ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
 
   // [Block 2] CLEARCOAT 2nd specular lobe (mirrors GLX LIT_FS js/render/shaders/lit.js). A
   // second, fixed low-roughness (a=0.035) GGX lobe over the base coat catches a crisp
@@ -914,52 +954,51 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // Specular AA (GLX parity): widen the fixed lobe by the geometric-normal
     // variance so the streak stops strobing on tight curvature; flat panels
     // keep the crisp 0.035. Capped so silhouette edges can't matte it out.
-    // ccDx/ccDy are hoisted to uniform control flow (see where Ngeo is bound).
-    let ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
     let ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
     let Dc = D_GGX(NoHg, ccA);
     let Vc = V_SmithGGX(NoVg, NoLg, ccA);
     let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;
-    var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * clearcoat;
+    // keyMul: GLX includes uKeyMul so KEY LIGHT dims this lobe with the rest of
+    // the direct sun (lit.js). Without it a keyMul of 0 left every clearcoated
+    // car with a full-brightness sun streak on WebGPU.
+    var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * keyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color = color + ccCol;
   }
 
-  // [Block 7] ENV car-paint reflection (mirrors GLX uCarReflect env-mirror). On
-  // lacquered surfaces (car-paint or clearcoat) reflect the environment along the
-  // view-reflection vector, weighted by a grazing Fresnel so the mirror strengthens
-  // toward the edges. TWO sources, matching GLX:
-  //   • carReflect (F.params4.z): the ANALYTIC sky gradient (skyHorizon↔skyZenith by
-  //     the reflected ray's Y, same convention as the wet-road sheen Block 5b). Always
-  //     available, cheap — the default (carEnvCube=0) and the mobile-safe path.
-  //   • envProbeStr (F.params5.x): the REAL live cube probe (wgx.js envFaceBegin/End).
-  //     Non-zero only after a full 6-face capture cycle when the CAR ENV REFLECTION
-  //     tuner is on — then the paint mirrors actual surroundings (trees, buildings,
-  //     everything behind the camera SSR can't see). Supersedes the analytic sky.
-  // textureSampleLevel (explicit LOD 0) keeps the cube sample legal in this branch.
-  let carReflect  = max(F.params4.z, 0.0);
+  // [Block 7] ENV lacquer mirror (GLX energy-conserving clearcoat env — lit.js).
+  // Gate on envSurface + clearcoat (not carReflect — that slot drives composite
+  // SSR). envProbeStr scales probeLive (baseRefl 0.14→0.72); probe 0 still gets
+  // a gentle analytic sheen. Energy-conserving: darken base under envW, then add.
   let envProbeStr = max(F.params5.x, 0.0);
-  if ((carReflect > 0.001 || envProbeStr > 0.001) && envSurface) {
-    let R = reflect(-V, Ngeo);
-    var envCol : vec3<f32>;
-    var strength : f32;
-    if (envProbeStr > 0.001) {
-      let maxLod = f32(textureNumLevels(envCube) - 1u);
-      envCol = textureSampleLevel(envCube, envSamp, R, rough * maxLod).rgb;
-      strength = envProbeStr;
+  if (envSurface && clearcoat > 0.001) {
+    let Rg = reflect(-V, Ngeo);
+    let NoVc = max(dot(Ngeo, V), 1e-4);
+    let ccFb = 1.0 - NoVc;
+    let ccF = ccFb * ccFb;
+    let probeLive = clamp(envProbeStr, 0.0, 1.0);
+    let baseRefl = mix(0.14, 0.72, probeLive);
+    let envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    var envCC : vec3<f32>;
+    if (envProbeStr >= 0.999) {
+      envCC = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
     } else {
-      let skyRT = pow(max(R.y, 1e-4), 0.40);
-      envCol = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyRT);
-      strength = carReflect;
+      let horiz = smoothstep(-0.12, 0.30, Rg.y);
+      let skyR = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rg.y, 0.0)));
+      envCC = mix(F.ambGround.xyz * 0.6, skyR, horiz);
+      if (envProbeStr > 0.001) {
+        let envReal = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
+        envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
+      }
     }
-    // CAR SUN GLINT knob (F.params7.y = uCarSunGlint, def 12.0; GLX js/render/shaders/lit.js):
-    // a tight sun disc reflected in the lacquer. Folded into the env colour so it rides
-    // the same mirror weight (envF·strength) exactly as GLX adds it to envCC before ×envW.
-    // Base floored at 1e-4 — pow(0.0, 400.0) is NaN on mobile GPUs (log2(0) = -Inf).
-    envCol = envCol + F.sunColor.xyz * pow(max(dot(R, F.sunDir.xyz), 1e-4), 400.0) * F.params7.y * shadow * keyMul;
-    let envF = F_Schlick(NoV, f0, clamp(1.0 - rough, 0.0, 1.0));
-    let refl = envCol * envF * strength * (1.0 - rough * 0.5);
-    color = color + refl;
+    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent).
+    let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+    let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+    envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
+          * F.params7.y * shadow * keyMul;
+    color = color * (1.0 - envW * 0.94);
+    let addCC = envCC * envW;
+    color = color + addCC / (1.0 + addCC * 0.35);
   }
 
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
@@ -1120,6 +1159,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ssrK = ssr.a * clamp(wetSheen * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
     color = mix(color, color * 0.10 + ssr.rgb * 0.92, ssrK);
   }
+  // Car-paint SSR consume (F.params4.z = carReflect / composite SSR strength).
+  if (carPaint > 0.001 && max(F.params4.z, 0.0) > 0.001) {
+    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
+    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
+    let ssrK = ssr.a * clamp(F.params4.z, 0.0, 1.0);
+    color = mix(color, color * 0.22 + ssr.rgb * 0.88, clamp(ssrK, 0.0, 0.85));
+  }
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/shaders/lit.js).
@@ -1152,9 +1198,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
   // valid "no hot core", so the uploader always packs the resolved value.
   fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
-  // FOG TINT knob (params3.y, -1..1): warm (+) or cool (-) the distance haze.
+  // FOG WARM / COOL white-balance (params3.y; GLX uFogTint asymmetric mix).
   let fTint = F.params3.y;
-  fogCol = fogCol * vec3<f32>(1.0 + fTint * 0.16, 1.0 - abs(fTint) * 0.02, 1.0 - fTint * 0.16);
+  fogCol = fogCol * vec3<f32>(
+    1.0 + max(fTint, 0.0) * 0.25 - max(-fTint, 0.0) * 0.12,
+    1.0 - abs(fTint) * 0.02,
+    1.0 - max(fTint, 0.0) * 0.25 + max(-fTint, 0.0) * 0.18);
   // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
   // glows around the lamps at night (mirrors GLX LIT_FS; F.params8.x = uLampFog).
   var lampFogC = vec3<f32>(0.0);
@@ -1178,13 +1227,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (mistK > 0.001) {
     let mh = max(F.params3.w, 0.05);
     let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
-    let band = exp(-lowH / (mh * 20.0));
+    // GLX parity (lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
+    // exp(-lowH/(mh*20)) == exp(-lowH*0.05/mh) fell off ~1.8× too slowly and
+    // the extra *0.5 + 0.35 clamp stacked a denser low sheet than GLX's 0.45
+    // ceiling — a washed translucent band over the road on misty day circuits.
+    let band = exp(-lowH * (0.09 / mh));
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
     let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
-    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp * 0.5;
+    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
     // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
     let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
-    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.35));
+    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
   }
 
   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
@@ -1288,15 +1341,16 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
 
-  // ── SKY: the first real WGSL shader. A *reduced but faithful* port of SKY_FS
-  //    (js/render/shaders/sky.js) — gradient (zenith/horizon), golden-hour horizon warmth,
-  //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
-  //    city skyglow. Composed from the leaves above.
+  // ── SKY: the first real WGSL shader. A faithful port of SKY_FS
+  //    (js/render/shaders/sky.js) — gradient (zenith/horizon) with overcast
+  //    grey-shift + azimuthal variation, golden-hour horizon warmth, procedural
+  //    clouds with twilight horizon bank + lightning flash, Mie sun corona +
+  //    disc, stars, moon, and city skyglow. Composed from the leaves above.
   //
-  //    Deliberately reduced vs GLX SKY_FS (drops the overcast grey-shift, the
-  //    twilight horizon cloud-bank, and azimuthal gradient variation). SkyU
-  //    is 240 B (p0–p5); p5.x is CLOUD DEFINITION (uCloudDef) so the billow
-  //    octave matches GLX / TLX. The moon sits behind covRay like the stars.
+  //    GLX SKY_FS parity: overcast grey-shift (night-gated), twilight horizon
+  //    cloud-bank, and azimuthal gradient variation. SkyU is 240 B (p0–p5);
+  //    p5.x is CLOUD DEFINITION (uCloudDef), p5.y is lightning (uLightning).
+  //    The moon sits behind covRay like the stars.
   //
   //    Uniform block layout MUST match WGX._writeSky() (see wgx.js). vec3s are
   //    padded to vec4 per WGSL's 16-byte alignment.
@@ -1313,7 +1367,7 @@ struct SkyU {
   p2          : vec4<f32>,     // (mieScatter, cloudSilver, coronaAureole, sunDiscSize) — pure-look knobs; read directly (0 is a real "off"), uploader always packs the resolved default
   p3          : vec4<f32>,     // (daySkyBlue, starSize, starTwinkle, moonDiscSize) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
   p4          : vec4<f32>,     // (moonHalo, sunCorona, sunSquash, cityGlowReach) — GLX-parity sky knobs; read directly, uploader always packs the resolved default (1.0 = as-shipped)
-  p5          : vec4<f32>,     // (cloudDef, _, _, _) — CLOUD DEFINITION billow-octave scale (def 1.0)
+  p5          : vec4<f32>,     // (cloudDef, lightning, _, _) — CLOUD DEFINITION billow-octave scale (def 1.0); p5.y = storm lightning flash 1→0
 };
 @group(0) @binding(0) var<uniform> U : SkyU;
 ${hash}
@@ -1373,6 +1427,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let sunSquash     = U.p4.z;
   let cityGlowReach = U.p4.w;
   let cloudDef      = U.p5.x;   // CLOUD DEFINITION; 0 is a valid "soft smear"
+  let lightning     = U.p5.y;   // storm strike flash 1→0 (0 = none)
 
   let sunE = clamp(sunDir.y * 1.4, 0.0, 1.0);
   // NIGHT gate (parity with GLX): at night sunDir stays HIGH as the moon
@@ -1393,20 +1448,39 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
-    c = mix(U.horizon.xyz, U.zenith.xyz, pow(max(up, 0.0), skyGrad));
+    // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
+    // must not paint a pale lid over a night+rain session.
+    let nightLid = (U.zenith.xyz + U.horizon.xyz) * 1.25;
+    let greyZ = mix(vec3<f32>(0.55, 0.56, 0.58), nightLid, nightSky);
+    let greyH = mix(vec3<f32>(0.58, 0.58, 0.60), nightLid, nightSky);
+    let zenithO = mix(U.zenith.xyz, greyZ, overcast * 0.75);
+    let horizonO = mix(U.horizon.xyz, greyH, overcast * 0.60);
+    c = mix(horizonO, zenithO, pow(max(up, 0.0), skyGrad));
     // Day gradient LIFE (GLX js/render/shaders/sky.js): a deeper
     // saturated blue pushed into the low/mid band so the gameplay sky strip isn't
-    // a flat pale wash. Day-only and faded under overcast, so dusk/dawn/night and
-    // grey days are untouched. DAY SKY BLUE knob scales the band; clamp keeps the
-    // blend valid when the knob pushes past 1.
-    let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
-    let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
-    c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
+    // a flat pale wash, plus faint azimuthal variation. Day-only and faded under
+    // overcast, so dusk/dawn/night and grey days are untouched. DAY SKY BLUE knob
+    // scales the band; clamp keeps the blend valid when the knob pushes past 1.
+    if (daytime > 0.0) {
+      let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
+      let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
+      c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
+      let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+      c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up)));
+    }
     // Golden-hour warm band near the horizon when the sun is low.
-    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up));
+    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up))
+                  * (1.0 - overcast * 0.9);
     let goldenColor = mix(vec3<f32>(0.70, 0.22, 0.04), vec3<f32>(0.92, 0.55, 0.16),
                           clamp(sunE * 2.5, 0.0, 1.0));
     c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+    let lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
+                * (1.0 - smoothstep(0.0, 0.18, up))
+                * smoothstep(0.01, 0.06, up)
+                * (1.0 - overcast * 0.85);
+    let lowColor = mix(vec3<f32>(0.90, 0.26, 0.03), vec3<f32>(1.0, 0.66, 0.12),
+                       clamp(sunE * 3.0, 0.0, 1.0));
+    c = mix(c, lowColor, lowBand * 0.70);
   } else {
     let gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
@@ -1431,6 +1505,14 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
                   * smoothstep(0.013, 0.05, up);
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
+      // Twilight / day horizon cloud-bank (GLX SKY_FS): distant cumulus on a
+      // compressed plane so the low gameplay sky band isn't a plain wash.
+      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
+      let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
+      let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                  * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
@@ -1442,7 +1524,17 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     var lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
     let silver = pow(sd, 6.0) * (1.0 - thick);
     lit = lit + sunColor * silver * 1.3 * cloudSilver;   // CLOUD SILVER LINING knob
+    // LIGHTNING: cool blue-white flash through the deck (GLX SKY_FS).
+    if (lightning > 0.001) {
+      let ltFlash = vec3<f32>(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
+      lit = mix(lit, ltFlash, clamp(lightning * (0.40 + 0.60 * thick), 0.0, 1.0));
+    }
     c = mix(c, lit, cov);
+  }
+
+  // LIGHTNING sky-gradient lift between clouds (GLX SKY_FS).
+  if (lightning > 0.001 && up > 0.0) {
+    c = c + vec3<f32>(0.10, 0.13, 0.20) * lightning * (1.0 - covRay * 0.6);
   }
 
   // --- Mie forward scatter + sun corona/disc ---

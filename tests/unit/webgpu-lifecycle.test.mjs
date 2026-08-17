@@ -187,7 +187,10 @@ function makeGpuHarness(opts = {}) {
     } : { getItem: () => null, setItem() {} },
     ...(session ? { sessionStorage: {
       getItem: (k) => (session.has(k) ? session.get(k) : null),
-      setItem: (k, v) => { session.set(k, String(v)); },
+      setItem: (k, v) => {
+        if (opts.blockSession) throw new Error("blocked sessionStorage");
+        session.set(k, String(v));
+      },
       removeItem: (k) => { session.delete(k); },
     } } : {}),
     location: { reload() { if (opts.onReload) opts.onReload(); } },
@@ -631,6 +634,79 @@ test("WGX source keeps the proven parity fixes", () => {
   assert.doesNotMatch(WGX_SOURCE, /colors\[i \* 3\] \|\| 1/);
 });
 
+// PerfTry.skyLate (default ON) draws sky after the opaque world. Sky VS puts
+// the FS-tri at depth 1.0; with less-equal + depthWrite off that only fills
+// far-plane holes (GLX LEQUAL parity). depthCompare "always" was correct for
+// sky-FIRST and catastrophic for skyLate: late sky overwrote the lit buffer
+// (hall-of-mirrors / melted scenery; cars still visible because they draw after).
+
+test("WGX ground mist matches GLX band/strength", () => {
+  // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).
+  assert.match(CHUNKS_SOURCE, /exp\(-lowH \* \(0\.09 \/ mh\)\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /mh \* 20\.0/);
+  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
+});
+
+
+test("WGX full parity batch is wired", () => {
+  assert.match(CHUNKS_SOURCE, /0\.90, 0\.96, 1\.12/);
+  assert.match(CHUNKS_SOURCE, /biasTerm \* F\.params6\.y/);
+  assert.match(CHUNKS_SOURCE, /baseRefl = mix\(0\.14, 0\.72/);
+  assert.match(CHUNKS_SOURCE, /bankThresh/);
+  assert.match(CHUNKS_SOURCE, /U\.p5\.y/);
+  assert.match(POST_SOURCE, /loadCompDepth/);
+  assert.match(POST_SOURCE, /shaftDecay/);
+  assert.match(POST_SOURCE, /carReflect = U\.upVS\.w/);
+  assert.match(WGX_SOURCE, /maxAnisotropy: 4/);
+  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);
+  assert.match(WGX_SOURCE, /_carBoxScale/);
+  assert.match(WGX_SOURCE, /binding: 7, resource: next\.depthSampleView/);
+  assert.match(WGX_SOURCE, /sunShaftDecay/);
+  assert.match(WGX_SOURCE, /f\.lightning/);
+});
+
+test("WGX LIT keeps high-severity GLX parity sites", () => {
+  // Clearcoat sun lobe must take KEY LIGHT (lit.js uKeyMul).
+  assert.match(CHUNKS_SOURCE, /shadow \* keyMul \* clearcoat/);
+  // Static shadow bias tracks SHADOW DISTANCE (lit.js biasTerm * range/80).
+  assert.match(CHUNKS_SOURCE, /biasTerm \* \(shRange \/ 80\.0\)/);
+  // FOG TINT asymmetric warm/cool (not the linear ±0.16 shortcut).
+  assert.match(CHUNKS_SOURCE, /max\(fTint, 0\.0\) \* 0\.25/);
+  // Road micro-normal footprint fade (grazing crawl guard).
+  assert.match(CHUNKS_SOURCE, /mnFpAbs/);
+  // Detail grain before roadMarkings so paint stays crisp.
+  const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
+  const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
+  assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+});
+
+test("WGX god-ray and env probe match GLX gates", () => {
+  // Volumetric shafts must not require sun.onScreen (GLX post.js).
+  assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
+  assert.match(WGX_SOURCE, /grStr > 0 && sun && sun\.shaft > 0/);
+  // Env probe respects PerfTry.envCull (300 m cap).
+  assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
+  assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+});
+
+test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {
+  assert.match(
+    WGX_SOURCE,
+    /skyPipeline = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "less-equal"/,
+    "skyPipeline must depth-test less-equal",
+  );
+  assert.match(
+    WGX_SOURCE,
+    /skyPipelineMS = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "less-equal"/,
+    "skyPipelineMS must depth-test less-equal",
+  );
+  assert.doesNotMatch(
+    WGX_SOURCE,
+    /skyPipeline(?:MS)? = device\.createRenderPipeline\(\{[\s\S]{0,500}?depthCompare: "always"/,
+    "sky pipelines must not use always (breaks skyLate)",
+  );
+});
+
 test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
@@ -814,6 +890,23 @@ test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one
   assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
 });
 
+test("a minimal loss with blocked sessionStorage re-arms the boot canary instead of freezing", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, blockSession: true, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  gfx.begin({});
+  gfx.present({});
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "skip write must not stick");
+  assert.equal(reloads, 0, "no reload when the skip cannot be armed");
+  assert.equal(storage.get("apex26.gfxBackendProbe"), "webgpu",
+    "next cold start must find the canary armed and revert to WebGL2");
+});
+
 test("clean sessions heal the ladder: minimal steps back to lite after a streak", async () => {
   const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
   for (let boot = 1; boot <= 5; boot++) {
@@ -875,13 +968,17 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // callee that returns early non-uniformly poisons its CALLER too, so the fix
   // is structural: derivatives at the fs_main entry, footprint passed down.
   const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
-  // The only legal homes: the fw1/fw2/fw3 wrappers and the clearcoat pair, all
-  // called from (or written at) the top of fs_main.
+  // The only legal homes: the fw1/fw2/fw3 wrappers, the clearcoat pair and the
+  // specular-AA pair — all called from (or written at) the top of fs_main, never
+  // inside a material branch. Adding a home here means asserting by inspection
+  // that the new site is unconditional; the whole point of the list is that
+  // growing it is a deliberate act.
   const allowed = [
     /fn fw1\(x: f32\) -> f32 \{ return abs\(dpdx\(x\)\) \+ abs\(dpdy\(x\)\); \}/,
     /fn fw2\(v: vec2<f32>\) -> vec2<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
     /fn fw3\(v: vec3<f32>\) -> vec3<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
     /let ccDx = dpdx\(Ngeo\);/, /let ccDy = dpdy\(Ngeo\);/,
+    /let saaDx = dpdx\(N\);/, /let saaDy = dpdy\(N\);/,
   ];
   for (const re of allowed) assert.match(CHUNKS_SOURCE, re, `derivative home moved: ${re}`);
   // Comments discuss fwidth freely; only code counts.

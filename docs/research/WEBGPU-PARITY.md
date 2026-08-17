@@ -4,14 +4,14 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 + `js/render/shaders/` + `js/render/glx/`) and the opt-in native WebGPU backend
 (`js/render/webgpu/wgx.js` + `wgsl-*.js`).
 
-**Status (2026-08): the gap inventory in §3 is implemented** in
-`js/render/webgpu/wgx.js` + `wgsl-*.js`. This file stays as the recipe book
-and the sharp-edge list. WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX
-stays the default. Nothing here flips that.
-The platform assumption that justified the freeze — "Safari cannot run WebGPU"
-— has moved; the *shader-duplication* cost has not. See
-[CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 for the support
-matrix and [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
+**Status (2026-08): most of the §3 inventory is implemented** in
+`js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
+screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
+MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
+Remaining honest look deltas: TAA still off; some FX/noise LOD details.
+WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
+See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
+[ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
 migration plan and four phase build logs under `docs/archive/webgpu/`.
@@ -63,8 +63,8 @@ The gaps fall into three kinds:
 
 | Kind | Examples | What it actually is |
 |---|---|---|
-| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. Remaining honest gaps are reduced sky (overcast grey-shift, twilight horizon bank, azimuthal gradient) and TAA (still off). |
-| **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray, `params8.x` lamp-fog, roughness env LOD, and `applyMaterial*` are in. |
+| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
+| **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
 | **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
@@ -339,7 +339,7 @@ WebGPU color path is the same idea and is **core**
 const sceneMS = device.createTexture({
   size: [w, h],
   format: "rgba16float",
-  sampleCount: 2,                       // match GLX's cap; query is not per-format the GL way
+  sampleCount: 4,                       // 1 or 4 are the ONLY legal values — see below
   usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
 // lit pass:
@@ -359,7 +359,7 @@ solved this with a manual resolver).
 
 WGX needs the resolved depth for SSAO (and for a world-space god-ray). Recipe:
 
-1. Allocate `depthMS` at `sampleCount: 2`, format `depth24plus`, usage
+1. Allocate `depthMS` at `sampleCount: 4`, format `depth24plus`, usage
    `RENDER_ATTACHMENT | TEXTURE_BINDING`.
 2. Lit pass uses `depthMS` as the depth attachment (`storeOp: "store"` this
    time — we will read it).
@@ -372,7 +372,7 @@ WGX needs the resolved depth for SSAO (and for a world-space god-ray). Recipe:
 fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) f32 {
   let c = vec2<i32>(pos.xy);
   var d = 1.0;
-  for (var i = 0; i < 2; i++) {
+  for (var i = 0; i < 4; i++) {
     d = min(d, textureLoad(depthMS, c, i));   // closest surface, matches GL blit
   }
   return d;
@@ -383,11 +383,17 @@ fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) f32 {
    binding from `texture_depth_2d` to `texture_2d<f32>` and read `.r`. That
    is cheaper than fighting depth-as-color view rules.
 
-5. `msaa()` returns `2` when the MS targets exist, `1` on mobile / alloc fail
-   — same policy as GLX.
+5. `msaa()` returns `4` when the MS targets exist, `1` on mobile / alloc fail
+   — the same *policy* as GLX, not the same number.
 
-`sampleCount: 4` is widely supported but GLX caps at 2× after
-`getInternalformatParameter`. Stay at 2× unless a driven A/B says 4× is free.
+**`sampleCount` is 1 or 4 and nothing else** — the spec says so and Dawn
+enforces it. This section originally read "match GLX's 2× cap, stay at 2×
+unless a driven A/B says 4× is free", WGX implemented exactly that, and every
+real device answered `Multisample count (2) is not supported` once per MS
+pipeline, then cascaded into Invalid RenderPipeline / Invalid BindGroupLayout
+off the first failure. There is no A/B to run: 2× is not a tuning choice on
+this API, and the GLX cap does not transfer. A mock device will happily accept
+2 forever (see §0).
 
 ### 4.8 Instancing
 
