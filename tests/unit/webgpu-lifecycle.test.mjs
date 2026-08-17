@@ -187,7 +187,10 @@ function makeGpuHarness(opts = {}) {
     } : { getItem: () => null, setItem() {} },
     ...(session ? { sessionStorage: {
       getItem: (k) => (session.has(k) ? session.get(k) : null),
-      setItem: (k, v) => { session.set(k, String(v)); },
+      setItem: (k, v) => {
+        if (opts.blockSession) throw new Error("blocked sessionStorage");
+        session.set(k, String(v));
+      },
       removeItem: (k) => { session.delete(k); },
     } } : {}),
     location: { reload() { if (opts.onReload) opts.onReload(); } },
@@ -812,6 +815,23 @@ test("a JS throw in begin() strikes out to GLX only at the cap, not on frame one
   assert.equal(reloads, 1);
   h.setEncoderFail(false);
   assert.equal(gfx.begin({}), false, "after the cap the backend stays down for this tab");
+});
+
+test("a minimal loss with blocked sessionStorage re-arms the boot canary instead of freezing", async () => {
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, blockSession: true, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  gfx.begin({});
+  gfx.present({});
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "skip write must not stick");
+  assert.equal(reloads, 0, "no reload when the skip cannot be armed");
+  assert.equal(storage.get("apex26.gfxBackendProbe"), "webgpu",
+    "next cold start must find the canary armed and revert to WebGL2");
 });
 
 test("clean sessions heal the ladder: minimal steps back to lite after a streak", async () => {

@@ -1270,10 +1270,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    a basic procedural cloud layer, Mie sun corona + disc, stars, moon, and
   //    city skyglow. Composed from the leaves above.
   //
-  //    Deliberately reduced vs GLX SKY_FS (drops the overcast grey-shift, the
-  //    twilight horizon cloud-bank, and azimuthal gradient variation). SkyU
-  //    is 240 B (p0–p5); p5.x is CLOUD DEFINITION (uCloudDef) so the billow
-  //    octave matches GLX / TLX. The moon sits behind covRay like the stars.
+  //    GLX SKY_FS parity: overcast grey-shift (night-gated), twilight horizon
+  //    cloud-bank, and azimuthal gradient variation. SkyU is 240 B (p0–p5);
+  //    p5.x is CLOUD DEFINITION (uCloudDef) so the billow octave matches
+  //    GLX / TLX. The moon sits behind covRay like the stars.
   //
   //    Uniform block layout MUST match WGX._writeSky() (see wgx.js). vec3s are
   //    padded to vec4 per WGSL's 16-byte alignment.
@@ -1370,7 +1370,14 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
-    c = mix(U.horizon.xyz, U.zenith.xyz, pow(max(up, 0.0), skyGrad));
+    // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
+    // must not paint a pale lid over a night+rain session.
+    let nightLid = (U.zenith.xyz + U.horizon.xyz) * 1.25;
+    let greyZ = mix(vec3<f32>(0.55, 0.56, 0.58), nightLid, nightSky);
+    let greyH = mix(vec3<f32>(0.58, 0.58, 0.60), nightLid, nightSky);
+    let zenithO  = mix(U.zenith.xyz,  greyZ, overcast * 0.75);
+    let horizonO = mix(U.horizon.xyz, greyH, overcast * 0.60);
+    c = mix(horizonO, zenithO, pow(max(up, 0.0), skyGrad));
     // Day gradient LIFE (GLX js/render/shaders/sky.js): a deeper
     // saturated blue pushed into the low/mid band so the gameplay sky strip isn't
     // a flat pale wash. Day-only and faded under overcast, so dusk/dawn/night and
@@ -1379,11 +1386,23 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
     let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
     c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
+    if (daytime > 0.0) {
+      let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+      c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
+    }
     // Golden-hour warm band near the horizon when the sun is low.
-    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up));
+    let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up))
+                  * (1.0 - overcast * 0.9);
     let goldenColor = mix(vec3<f32>(0.70, 0.22, 0.04), vec3<f32>(0.92, 0.55, 0.16),
                           clamp(sunE * 2.5, 0.0, 1.0));
     c = mix(c, c * 0.45 + goldenColor * 0.55, goldenAmt * 0.80);
+    let lowBand = (1.0 - smoothstep(0.0, 0.60, sunE))
+                * (1.0 - smoothstep(0.0, 0.18, up))
+                * smoothstep(0.01, 0.06, up)
+                * (1.0 - overcast * 0.85);
+    let lowColor = mix(vec3<f32>(0.90, 0.26, 0.03), vec3<f32>(1.0, 0.66, 0.12),
+                       clamp(sunE * 3.0, 0.0, 1.0));
+    c = mix(c, lowColor, lowBand * 0.70);
   } else {
     let gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
@@ -1408,6 +1427,12 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let defined = smoothstep(0.42, 0.80, f * 0.6 + billow * 0.45)
                   * smoothstep(0.013, 0.05, up);
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
+      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
+      let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
+      let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                  * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
