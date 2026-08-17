@@ -1460,6 +1460,10 @@ const api = {
       awareness: +(c.awareness != null ? c.awareness : 0).toFixed(3),
       experience: +(c.experience != null ? c.experience : 0).toFixed(3),
       lane: +(c.lane != null ? c.lane : 0).toFixed(3),
+      // AI intent peek — kinematic cars only. stuckT > AiDrive.stuckThreshold
+      // is what flips unstuck; deploying is the live ERS/OT thrust flag.
+      stuckT: c.human ? null : +(c.stuckT || 0).toFixed(2),
+      deploying: c.human ? null : !!c.deploying,
       ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
       x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
       prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
