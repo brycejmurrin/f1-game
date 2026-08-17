@@ -572,6 +572,23 @@ test("TLX supplies its own WebGL2 context, because three hardcodes alpha there",
     "the hand-made WebGL2 context must be gated on forceWebGL");
 });
 
+test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
+  // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
+  //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  // — and unlike TLX's, that line has no ssrTag gate at all, so EVERY WGX frame
+  // carries 0.35 over car paint whether or not anything reads it. What makes
+  // that safe is one word in the context configure, and nothing was checking
+  // it. All three backends now hold the same invariant for the same reason:
+  // GLX `alpha: false`, WGX `alphaMode: "opaque"`, TLX both spellings.
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /\.configure\(\{[^}]*alphaMode:\s*"opaque"/,
+    "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
+
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
+    "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
+});
+
 test("three's WebGL backend still hardcodes an alpha canvas (why we pass a context)", () => {
   // Makes the assertion above NECESSARY. When three starts honouring the
   // parameter on this backend, the hand-made context can go — and this is the
