@@ -54,7 +54,10 @@
     "test:pick": "node tools/pick-tests.mjs",
     "test:bg": "node tools/test-bg.mjs",
     "ui:survey": "node tools/ui-mcp-survey.mjs",
-    "ab:light": "node tools/lighting/ab-lighting.mjs"
+    "ab:light": "node tools/lighting/ab-lighting.mjs",
+    "setup:browsers": "bash tools/install-browsers.sh",
+    "physics:sweep": "node tools/physics-tune-sweep.mjs",
+    "wgx:capture": "node tools/wgx-capture.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

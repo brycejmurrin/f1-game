@@ -2,7 +2,7 @@
 
 Why the UI is sized the way it is, and the two rules that should govern B1
 (the type scale) and B2 (collapsing duplicated primitives). Sourced and dated
-August 2026. Companion to `docs/archive/research/UI-SCALE-AND-ZOOM.md`, which covers the mechanism;
+August 2026. Companion to [docs/README.md](../README.md) (rendering and scenery references).
 this one covers the intent.
 
 ---

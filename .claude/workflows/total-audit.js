@@ -17,7 +17,7 @@ export const meta = {
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const KNOWN = (A.known || []).map((k, i) => `${i + 1}. ${k}`).join('\n') || '(none supplied this run)'
 
-const COMMON = `Repo: /home/user/f1-game (check \`git branch --show-current\` if you need the branch — do not assume). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. Browser test runs may be in flight in the main session — never touch artifacts/logs or test processes.
+const COMMON = `Repo: current workspace (check \`git branch --show-current\` if you need the branch — do not assume). STRICTLY READ-ONLY — never edit a file, never run Playwright/browser tests or any npm script (4-core box, flat prohibition); node --check is fine. Browser test runs may be in flight in the main session — never touch artifacts/logs or test processes.
 Project shape: no-build IIFE modules, one global per file, load order in tools/manifest.cjs; AGENTS.md is the engineering reference (CLAUDE.md is a stub that imports it); docs/ splits into reference / research / archive. tests/ per-file semantics are OUT OF SCOPE (a dedicated audit is running) — do not audit test files.
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants of them:
 ${KNOWN}`

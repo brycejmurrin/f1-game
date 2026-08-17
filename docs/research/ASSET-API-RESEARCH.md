@@ -4,10 +4,7 @@ How Apex 26 could ingest real 3D models and PBR texture/normal maps without
 giving up the things that make it what it is: no build step, no ES modules,
 static hosting, offline-first.
 
-Companion to [../archive/research/RENDERING-IMPROVEMENTS.md](../archive/research/RENDERING-IMPROVEMENTS.md) (which
-established the rendering budgets) and
-[../archive/SCENERY-UPGRADE-PLAN.md](../archive/SCENERY-UPGRADE-PLAN.md) (which established the
-scenery-variety problem this would help solve).
+Companion to the rendering and scenery research in `docs/README.md`.
 
 Status: **implemented** (2026-08). See §7 for what shipped, what is stubbed and
 what is still open. The research below is kept as the rationale.
