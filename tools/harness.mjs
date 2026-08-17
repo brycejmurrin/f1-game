@@ -28,6 +28,11 @@
 // WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
 // --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
+//
+// SwiftShader: Dawn validation oracle — gpuErrors often 0, canvas compositor blank.
+// Lavapipe (+ xvfb-run for headed): three.js e2e recipe — real Vulkan ICD, shared
+// ANGLE/Dawn device; still often blank in CI but catches different failure modes.
+// Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
 export const WEBGPU_CHROMIUM_ARGS = [
   "--headless=new",
   "--enable-unsafe-webgpu",
@@ -36,6 +41,19 @@ export const WEBGPU_CHROMIUM_ARGS = [
   "--use-webgpu-adapter=swiftshader",
   "--no-sandbox",
 ];
+
+export const WEBGPU_LAVAPE_CHROMIUM_ARGS = [
+  "--enable-unsafe-webgpu",
+  "--enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE",
+  "--use-angle=vulkan",
+  "--use-vulkan=native",
+  "--disable-vulkan-surface",
+  "--no-sandbox",
+];
+
+export const WEBGPU_LAVAPE_ENV = {
+  VK_ICD_FILENAMES: "/usr/share/vulkan/icd.d/lvp_icd.json",
+};
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
