@@ -802,14 +802,20 @@ const WGX = (function () {
       });
 
       // Sky pipeline — renders into the LIT pass now, so target = SCENE_FORMAT and
-      // it declares the pass's depth attachment (write off, compare always: the
-      // sky fills the background without touching depth).
+      // it declares the pass's depth attachment. Write off, compare LESS-EQUAL:
+      // the sky VS pins depth to 1.0 (wgsl-chunks.js SKY, z = w), so against a
+      // cleared buffer (1.0 <= 1.0) it fills the background, and where the
+      // opaque world already wrote (depth < 1) it is rejected — GLX's exact
+      // LEQUAL contract. This mattered the day PerfTry.skyLate shipped ON:
+      // game.js then draws the sky AFTER the world, and the previous
+      // "always" let the fullscreen sky triangle overwrite every world pixel
+      // (road/terrain/props gone; only cars/FX drawn after the sky survived).
       skyPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: skyModule, entryPoint: "vs_main" },
         fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
         primitive: { topology: "triangle-list" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
       });
       if (MSAA_COUNT > 1) {
         skyPipelineMS = device.createRenderPipeline({
@@ -817,7 +823,7 @@ const WGX = (function () {
           vertex: { module: skyModule, entryPoint: "vs_main" },
           fragment: { module: skyModule, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT }] },
           primitive: { topology: "triangle-list" },
-          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
           multisample: { count: MSAA_COUNT },
         });
       }

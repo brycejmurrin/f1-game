@@ -46,6 +46,7 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
   const stored = opts.storage || null;
@@ -84,7 +85,7 @@ function makeGpuHarness(opts = {}) {
           : [],
       }),
     }),
-    createRenderPipeline: () => pipeline,
+    createRenderPipeline: (desc) => { pipelineDescs.push(desc); return pipeline; },
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -224,6 +225,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    pipelineDescs,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -621,6 +623,31 @@ test("WGX requests timestamp-query when the adapter exposes it", async () => {
   assert.match(WGX_SOURCE, /requiredFeatures/);
   assert.match(WGX_SOURCE, /timestamp-query/);
   assert.match(WGX_SOURCE, /timestampWrites/);
+});
+
+test("depth-testing pipelines never use compare 'always' (skyLate erased the world)", async () => {
+  // PerfTry.skyLate ships ON, so game.js draws the sky AFTER the opaque world
+  // on every backend. GLX's sky sits at depth 1.0 under LEQUAL and is rejected
+  // where the world already wrote; WGX's sky pipeline declared
+  // depthCompare:"always", so the late fullscreen sky triangle overwrote every
+  // world pixel — WebGPU rendered with no road, terrain, or props (only
+  // cars/FX drawn after the sky survived). The invariant that pins the fix:
+  // any pipeline that reads depth without writing it (sky, glow, skid, decal,
+  // particles) exists to be occluded by the world, so "always" is never right
+  // there. (The MS depth-resolve pass legitimately uses "always" — it WRITES
+  // depth via @builtin(frag_depth) — hence the depthWriteEnabled filter.)
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  gfx.drawSky({});
+  const readOnlyDepth = h.pipelineDescs.filter(
+    (d) => d && d.depthStencil && !d.depthStencil.depthWriteEnabled);
+  assert.ok(readOnlyDepth.length >= 1, "the sky pipeline must be among the recorded descriptors");
+  for (const d of readOnlyDepth) {
+    assert.notEqual(d.depthStencil.depthCompare, "always",
+      "a depth-test-only pipeline must respect the world's depth (GLX LEQUAL parity)");
+  }
 });
 
 test("WGX source keeps the proven parity fixes", () => {
