@@ -293,7 +293,7 @@ const CEILINGS = {
   // -> 8311 PERF-FINDINGS shadow ribbon chunk: road+terrain castShadowChunked vs
   // sun ortho (~89% tris culled; depth bit-identical) + freeChunkedMesh on reload.
   // -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
-  "js/game.js": 8321,
+  "js/game.js": 8323,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

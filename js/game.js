@@ -5166,7 +5166,7 @@ function renderSetupPreview(dt) {
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  gfx.begin({
+  if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
     // lights one face and leaves the other on ambient — the same badge came out
@@ -5178,7 +5178,7 @@ function renderSetupPreview(dt) {
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
     fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
-  });
+  }) === false) return;
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
@@ -6236,12 +6236,14 @@ function render(dt) {
       gfx.envFaceEnd(_envFace);
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  let _b;
   if (dbgCam) {
     const bf = frame.fogDensity;
     frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
-    gfx.begin(frame);
+    _b = gfx.begin(frame);
     frame.fogDensity = bf;
-  } else gfx.begin(frame);
+  } else _b = gfx.begin(frame);
+  if (_b === false) return;
   // _mInvVP still holds this frame's inverse (computed once, right after _mVP,
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.

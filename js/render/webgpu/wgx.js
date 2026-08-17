@@ -317,6 +317,14 @@ const WGX = (function () {
 
   function toF32(a) { return a instanceof Float32Array ? a : new Float32Array(a); }
 
+  // IEEE-754 half → float32 (runtime output probe reads rgba16float scene texels).
+  function _f16to32(h) {
+    const s = (h & 0x8000) >> 15, e = (h & 0x7C00) >> 10, f = h & 0x03FF;
+    if (!e) return (s ? -1 : 1) * 0.00006103515625 * (f / 1024);
+    if (e === 31) return f ? NaN : (s ? -Infinity : Infinity);
+    return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
+  }
+
   // Column-major 4×4 multiply: out = a · b (out must not alias a or b).
   function _mul4(out, a, b) {
     for (let c = 0; c < 4; c++) {
@@ -469,6 +477,92 @@ const WGX = (function () {
     let _jsStrikes = 0;
     let _okCounted = false;   // first presented frame of the boot = one clean session
     const JS_STRIKE_CAP = 3;
+    // Runtime output probe: SwiftShader-Vulkan (and some phone GPUs) VALIDATE
+    // WebGPU but never execute shader work — the boot blit self-test can pass on
+    // a 1×1 offscreen target while every full-size frame stays black. Copy a
+    // 4×4 patch from the HDR scene after the lit pass; three consecutive all-dark
+    // readbacks climb the loss ladder (full→lite→minimal) then surrender to GLX.
+    let _outProbeBuf = null, _outProbePending = false, _outProbeN = 0, _outBlack = 0;
+    const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
+    function _wgxEscalate(why) {
+      if (_lost) return;
+      _lost = true;
+      _healReset();
+      try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* blocked storage */ }
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+      const _rung = WGX_MINIMAL ? 2 : (WGX_LITE ? 1 : 0);
+      if (_rung < 2) {
+        const nextRung = String(_rung + 1);
+        try {
+          localStorage.setItem("apex26.gfxWgxLevel", nextRung);
+          localStorage.setItem("apex26.gfxWgxLite", "1");
+        } catch (_) { /* cannot persist the rung; fall through to GLX skip */ }
+        let armed = false;
+        try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
+        if (armed) {
+          try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
+          try { location.reload(); } catch (_) { /* no location */ }
+          return;
+        }
+      }
+      _markGlxBound();
+      let skipped = false;
+      try {
+        sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+      } catch (_) { /* no sessionStorage */ }
+      try {
+        Log.warn("gfx", "WGX " + why + " — keeping WEBGPU pick" +
+          (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
+      } catch (_) { /* harness */ }
+      if (skipped) { try { location.reload(); } catch (_) { /* no location */ } }
+      else { try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET door */ } }
+    }
+    function _outputBlackSurrender() {
+      _wgxEscalate("runtime output black (GPU drew nothing)");
+    }
+    function _queueOutputProbe() {
+      if (_lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
+      if (!sceneTex || !encoder || typeof encoder.copyTextureToBuffer !== "function") return;
+      try {
+        if (!_outProbeBuf) {
+          _outProbeBuf = device.createBuffer({
+            size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          });
+        }
+        const tw = _texW || width, th = _texH || height;
+        const cx = Math.max(0, (tw >> 1) - 2), cy = Math.max(0, (th >> 1) - 2);
+        encoder.copyTextureToBuffer(
+          { texture: sceneTex, origin: [cx, cy, 0] },
+          { buffer: _outProbeBuf, bytesPerRow: 256, rowsPerImage: 4 },
+          [4, 4, 1]
+        );
+        _outProbePending = true;
+        _outProbeN++;
+      } catch (_) { /* copy unsupported on this device */ }
+    }
+    function _readOutputProbe() {
+      if (!_outProbePending || !_outProbeBuf || _outProbeBuf.mapState !== "unmapped") return;
+      _outProbePending = false;
+      if (typeof _outProbeBuf.mapAsync !== "function") return;
+      try {
+        _outProbeBuf.mapAsync(GPUMapMode.READ).then(function () {
+          try {
+            const px = new Uint16Array(_outProbeBuf.getMappedRange().slice(0, 128));
+            let max = 0;
+            for (let i = 0; i < px.length; i++) {
+              const f = _f16to32(px[i]);
+              if (f > max) max = f;
+            }
+            if (max < OUT_BLACK_EPS) {
+              _outBlack++;
+              if (_outBlack >= OUT_BLACK_CAP) _outputBlackSurrender();
+            } else _outBlack = 0;
+          } catch (_) { /* probe read failed */ }
+          try { _outProbeBuf.unmap(); } catch (_) { /* already unmapped */ }
+        }).catch(function () { /* mapAsync rejected */ });
+      } catch (_) { /* mapAsync threw */ }
+    }
     function _jsStrike(where, e) {
       litPass = null; encoder = null; currentView = null;
       try { Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
@@ -491,48 +585,7 @@ const WGX = (function () {
     }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
-      _lost = true;
-      _healReset();
-      const why = "device lost (" + ((info && info.reason) || "unknown") + ")";
-      try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* lastFailure stays empty; the label still updates */ }
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
-      // Climb the escalation ladder before surrendering the tab to GLX:
-      // full → lite → minimal, one rung per loss, each rung persisted so the
-      // next boot STARTS there. Only a loss on the minimal stack falls back.
-      // Never write webgl2 over the pick — the button must say
-      // WEBGPU (WEBGL2) so the player can see the live backend.
-      const _rung = WGX_MINIMAL ? 2 : (WGX_LITE ? 1 : 0);
-      if (_rung < 2) {
-        const nextRung = String(_rung + 1);
-        try {
-          localStorage.setItem("apex26.gfxWgxLevel", nextRung);
-          // Keep the legacy flag in step so an older cached build reads lite.
-          localStorage.setItem("apex26.gfxWgxLite", "1");
-        } catch (_) { /* cannot persist the rung; fall through to GLX skip */ }
-        let armed = false;
-        try { armed = localStorage.getItem("apex26.gfxWgxLevel") === nextRung; } catch (_) { /* blocked */ }
-        if (armed) {
-          try { Log.warn("gfx", "WGX " + why + " — retrying " + (nextRung === "1" ? "slim" : "minimal") + " WebGPU"); } catch (_) { /* harness */ }
-          try { location.reload(); } catch (_) { /* no location */ }
-          return;
-        }
-      }
-      _markGlxBound();
-      let skipped = false;
-      try {
-        sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-      } catch (_) { /* no sessionStorage: still do not wipe the pick */ }
-      try {
-        Log.warn("gfx", "WGX " + why + " — keeping WEBGPU pick" +
-          (skipped ? ", this tab falls back to WebGL2" : " (could not arm session skip; not reloading)"));
-      } catch (_) { /* Log is absent in the node VM harness; a missing log line must never mask the recovery */ }
-      if (skipped) { try { location.reload(); } catch (_) { /* no location (harness/worker) */ } }
-      else {
-        // Next cold start finds the canary armed and reverts to WebGL2 instead
-        // of replaying this loss (the handler already disarmed the live probe).
-        try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* RESET is the remaining door */ }
-      }
+      _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + ")");
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -1732,6 +1785,10 @@ const WGX = (function () {
     // the same contract createTexture already honours.
     function _allocFail(what, e) {
       try { Log.warn("gfx", "WGX " + what + " alloc failed —", e); } catch (_) { /* harness */ }
+      const msg = (e && e.message) || String(e);
+      if (/too large|out of memory|device lost|invalid device|destroyed/i.test(msg)) {
+        _wgxEscalate(what + " alloc: " + msg.slice(0, 120));
+      }
     }
     function createMesh(data) {
       const b = _interleave(data);
@@ -2465,6 +2522,7 @@ const WGX = (function () {
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       try {
       if (litPass) { litPass.end(); litPass = null; }
+      _queueOutputProbe();
       if (_passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
           depthResolveBG = device.createBindGroup({
@@ -2495,13 +2553,14 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         device.queue.submit([encoder.finish()]);
         encoder = null; currentView = null;
+        _readOutputProbe();
         _jsStrikes = 0;   // a presented frame clears the strike count
         if (!_okCounted) { _okCounted = true; _healTick(); }
         return;
       }
 
+      try {
       const T = o.tune || null;
-      // MEASURE THE TARGETS WE ARE ACTUALLY SAMPLING, not the size we asked for.
       // width/height are the size resize() last computed; _texW/_texH are the
       // size ensureTargets() last managed to ALLOCATE. They agree on every frame
       // that allocation succeeded — but its failure path deliberately keeps
@@ -2781,6 +2840,11 @@ const WGX = (function () {
         p.setPipeline(pFXAA); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
       }
 
+      } catch (postE) {
+        try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+        _tonemapBlit(exposure);
+      }
+
       if (_gpuTimerOn && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
@@ -2788,6 +2852,7 @@ const WGX = (function () {
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
       device.queue.submit([encoder.finish()]);
+      _readOutputProbe();
       if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
         try {
           _gpuReadBuf.mapAsync(GPUMapMode.READ).then(function () {
@@ -3377,6 +3442,25 @@ const WGX = (function () {
         if (!litErr && gpuErr) litErr = (gpuErr.message || "invalid lit pipeline");
       }
       if (litErr) return "lit pipeline: " + String(litErr).slice(0, 200);
+
+      // 2b) MSAA lit + sky pipelines (desktop stack). Sample count 2 is illegal
+      // in WebGPU; MSAA 4 is the GLX-parity path and must validate at boot, not
+      // on the first real frame when refusal is no longer possible.
+      if (MSAA_COUNT > 1) {
+        if (scoped) device.pushErrorScope("validation");
+        let msErr = null;
+        try {
+          _passSamples = MSAA_COUNT;
+          _litPipeline({});
+          if (!skyPipelineMS) msErr = "sky MSAA pipeline missing";
+        } catch (e) { msErr = (e && e.message) || String(e); }
+        _passSamples = 1;
+        if (scoped) {
+          const gpuErr = await device.popErrorScope();
+          if (!msErr && gpuErr) msErr = (gpuErr.message || "invalid MSAA pipeline");
+        }
+        if (msErr) return "msaa pipeline: " + String(msErr).slice(0, 200);
+      }
 
       // 3) RENDER AND READ BACK. Clear a 1×1 HDR source to white, run the real
       //    blit/tonemap pipeline over a small target, copy it to a mappable
