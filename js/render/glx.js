@@ -187,33 +187,29 @@ const GLX = (function () {
   // is tidier and because resetDrawState() is a real invariant.
   // GL defaults: culling ON, all four colour channels writable,
   // polygon offset disabled. resetDrawState() re-syncs to those, and is called
-  // from begin()/present() alongside the blend/depth pair so a cached value can
+  // from begin()/present() alongside the blend/depth pair so state can
   // never outlive the frame that set it.
-  let _cullOn = true, _colorMaskA = true, _polyOffOn = false;
-  const _stateCache = () => false;   // see the measured note above
   function setCull(on) {
-    if (!_stateCache()) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); return; }
-    if (on !== _cullOn) { if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE); _cullOn = on; }
+    if (on) gl.enable(gl.CULL_FACE);
+    else gl.disable(gl.CULL_FACE);
   }
   function setAlphaWrite(on) {
-    if (!_stateCache()) { gl.colorMask(true, true, true, on); return; }
-    if (on !== _colorMaskA) { gl.colorMask(true, true, true, on); _colorMaskA = on; }
+    gl.colorMask(true, true, true, on);
   }
   function setPolyOffset(bias) {
-    if (!_stateCache()) {
-      if (bias) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(bias[0], bias[1]); }
-      else { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); }
-      return;
-    }
     if (bias) {
-      if (!_polyOffOn) { gl.enable(gl.POLYGON_OFFSET_FILL); _polyOffOn = true; }
-      gl.polygonOffset(bias[0], bias[1]);   // always re-set: the VALUE varies per decal
-    } else if (_polyOffOn) { gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false; }
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(bias[0], bias[1]);
+    } else {
+      gl.polygonOffset(0, 0);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+    }
   }
   function resetDrawState() {
-    gl.enable(gl.CULL_FACE); _cullOn = true;
-    gl.colorMask(true, true, true, true); _colorMaskA = true;
-    gl.polygonOffset(0, 0); gl.disable(gl.POLYGON_OFFSET_FILL); _polyOffOn = false;
+    gl.enable(gl.CULL_FACE);
+    gl.colorMask(true, true, true, true);
+    gl.polygonOffset(0, 0);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
   }
 
   function compile(type, src) {
@@ -859,8 +855,9 @@ const GLX = (function () {
     if (envDummyTex) return;
     envDummyTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, envDummyTex);
+    const px = new Uint8Array([0, 0, 0, 255]);
     for (let f = 0; f < 6; f++)
-      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+      gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);

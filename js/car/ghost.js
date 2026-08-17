@@ -102,14 +102,14 @@ const Ghost = (function () {
     return false;
   }
 
-  // Binary search: largest index with playback.t[i] <= t.
-  function findIndex(ts, t) {
-    let lo = 0, hi = ts.length - 1;
-    if (t <= ts[0]) return 0;
-    if (t >= ts[hi]) return hi;
+  // Binary search: largest index with arr[i] <= val.
+  function findFloorIndex(arr, val) {
+    let lo = 0, hi = arr.length - 1;
+    if (val <= arr[0]) return 0;
+    if (val >= arr[hi]) return hi;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
-      if (ts[mid] <= t) lo = mid; else hi = mid - 1;
+      if (arr[mid] <= val) lo = mid; else hi = mid - 1;
     }
     return lo;
   }
@@ -123,7 +123,7 @@ const Ghost = (function () {
     if (n === 0) return null;
     if (t >= ts[n - 1]) return { s: ss[n - 1], x: xs[n - 1], done: true };
     if (t <= ts[0]) return { s: ss[0], x: xs[0], done: false };
-    const i = findIndex(ts, t);
+    const i = findFloorIndex(ts, t);
     const j = Math.min(i + 1, n - 1);
     const span = ts[j] - ts[i];
     const f = span > 1e-6 ? Math.max(0, Math.min(1, (t - ts[i]) / span)) : 0;
@@ -139,9 +139,7 @@ const Ghost = (function () {
     if (n === 0) return null;
     if (s <= ss[0]) return ts[0];
     if (s >= ss[n - 1]) return ts[n - 1];
-    // binary search: find largest index where ss[i] <= s
-    let lo = 0, hi = n - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ss[mid] <= s) lo = mid; else hi = mid - 1; }
+    const lo = findFloorIndex(ss, s);
     const j = Math.min(lo + 1, n - 1);
     const span = ss[j] - ss[lo];
     const f = span > 0.1 ? Math.max(0, Math.min(1, (s - ss[lo]) / span)) : 0;
