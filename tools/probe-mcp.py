@@ -18,6 +18,17 @@ CLI (no MCP host required):
       '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
   python3 tools/probe-mcp.py serve          # stdio MCP for Cursor (.mcp.json)
 
+A bare `call` spawns a FRESH Chromium per invocation — state does not survive
+between calls (measured 2026-08-17: navigate_page in one call, list_pages in
+the next reads `about:blank`). Any multi-step chrome flow (navigate →
+evaluate → screenshot) needs the persistent daemon; `call` auto-routes to it
+whenever it is up:
+
+  python3 tools/probe-mcp.py chrome-start   # one browser in tmux, port 3712
+  python3 tools/probe-mcp.py call chrome_navigate_page '{"url":"http://127.0.0.1:3456/"}'
+  python3 tools/probe-mcp.py call chrome_evaluate_script '{"function":"() => 1"}'
+  python3 tools/probe-mcp.py chrome-stop    # ALWAYS stop before test-bg.mjs
+
 Mock catalog (unit tests / offline): PROBE_MCP_MOCK=1 python3 tools/probe-mcp.py serve
 
 See .claude/skills/mcp-probe — park chrome to about:blank before Playwright;
@@ -37,6 +48,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+CHROME_DAEMON_PORT = int(os.environ.get("PROBE_CHROME_PORT", "3712"))
+CHROME_DAEMON_STATE = ROOT / "scratch" / "probe-chrome-daemon.port"
+CHROME_DAEMON_SESSION = "probe-chrome"
 TINYFISH_SH = ROOT / "tools" / "tinyfish-mcp.sh"
 TINYFISH_BASE = os.environ.get("TINYFISH_MCP_BASE", "http://127.0.0.1:3711")
 TINYFISH_MCP = f"{TINYFISH_BASE.rstrip('/')}/mcp"
@@ -74,6 +88,55 @@ def _mock() -> bool:
     return os.environ.get("PROBE_MCP_MOCK", "").strip() not in ("", "0", "false", "no")
 
 
+def daemon_port() -> int | None:
+    """Port of a LIVE chrome daemon, else None. Env wins, then the state file,
+    then the default — each candidate is health-checked, never trusted."""
+    candidates: list[int] = []
+    env = os.environ.get("PROBE_CHROME_PORT", "").strip()
+    if env.isdigit():
+        candidates.append(int(env))
+    if CHROME_DAEMON_STATE.is_file():
+        text = CHROME_DAEMON_STATE.read_text().strip()
+        if text.isdigit():
+            candidates.append(int(text))
+    candidates.append(3712)
+    for port in dict.fromkeys(candidates):
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/healthz", timeout=0.5
+            ) as resp:
+                if resp.status == 200:
+                    return port
+        except Exception:  # noqa: BLE001 — any failure means "not this port"
+            continue
+    return None
+
+
+def _daemon_get(port: int, path: str) -> dict[str, Any]:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=90) as resp:
+        return json.loads(resp.read().decode())
+
+
+def _daemon_post(port: int, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode() if e.fp else ""
+        try:
+            detail = json.loads(raw).get("error", raw)
+        except (json.JSONDecodeError, AttributeError):
+            detail = raw
+        raise RuntimeError(f"chrome daemon HTTP {e.code}: {str(detail)[:2000]}") from e
+
+
 def route(name: str) -> tuple[str, str]:
     """Return (backend, upstream_tool_name) for a prefixed tool name."""
     if name.startswith(CHROME_PREFIX):
@@ -97,9 +160,26 @@ def _load_cdmcp():
 
 
 class ChromeBackend:
-    def __init__(self) -> None:
+    """One Chromium, three transports: mock (tests), a live daemon when one is
+    up (state survives across CLI invocations), else an OWN spawn that dies
+    with this process (a bare `call` gets a fresh browser every time)."""
+
+    def __init__(self, *, use_daemon: bool = True) -> None:
         self._client = None
         self._tools: list[dict[str, Any]] = []
+        self._use_daemon = use_daemon
+        self._daemon: int | None = None
+        self._probed = False
+
+    def _find_daemon(self) -> int | None:
+        # Lazy: a tinyfish-only invocation must not pay the health probe.
+        if not self._probed:
+            self._probed = True
+            if self._use_daemon and not _mock():
+                self._daemon = daemon_port()
+                if self._daemon:
+                    print(f"# chrome via daemon :{self._daemon}", file=sys.stderr)
+        return self._daemon
 
     def ensure(self) -> None:
         if _mock():
@@ -107,6 +187,10 @@ class ChromeBackend:
                 {"name": n, "description": f"mock chrome {n}", "inputSchema": {"type": "object"}}
                 for n in MOCK_CHROME
             ]
+            return
+        if self._find_daemon() is not None:
+            if not self._tools:
+                self._tools = list(_daemon_get(self._daemon, "/tools").get("tools") or [])
             return
         if self._client is not None:
             return
@@ -128,6 +212,8 @@ class ChromeBackend:
                     {"type": "text", "text": json.dumps({"ok": True, "mock": True, "tool": name})}
                 ]
             }
+        if self._daemon is not None:
+            return _daemon_post(self._daemon, "/call", {"name": name, "arguments": arguments})
         assert self._client is not None
         return self._client.call(name, arguments)
 
@@ -181,6 +267,15 @@ class TinyfishBackend:
             raw = e.read().decode() if e.fp else ""
             if not raw and allow_empty and 200 <= e.code < 300:
                 return None
+            # Upstream wraps refusals as JSON-RPC errors inside HTTP 400 —
+            # surface the human message, not the transport wrapper.
+            msg = ""
+            try:
+                msg = (json.loads(raw).get("error") or {}).get("message") or ""
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            if msg:
+                raise RuntimeError(f"tinyfish: {msg}") from e
             raise RuntimeError(f"tinyfish HTTP {e.code}: {raw[:500]}") from e
         if not raw:
             if allow_empty:
@@ -296,10 +391,13 @@ def cmd_help(_: argparse.Namespace) -> int:
     print(
         """Commands:
   help                 this text
-  status               chrome wrapper + tinyfish healthz
+  status               chrome wrapper + tinyfish healthz + chrome daemon
   route <prefixed>     show backend + upstream tool name
   list-tools           every chrome_* and tinyfish_* tool
-  call <name> '<json>' invoke one prefixed tool
+  call <name> '<json>' invoke one prefixed tool (auto-routes to the daemon)
+  chrome-start         persistent Chromium daemon in tmux (state survives calls)
+  chrome-stop          stop it — ALWAYS before test-bg.mjs / Playwright
+  chrome-daemon        the daemon itself, foreground (chrome-start runs this)
   serve                stdio MCP server (Cursor .mcp.json entry)
 """
     )
@@ -326,6 +424,10 @@ def cmd_status(_: argparse.Namespace) -> int:
     )
     print("=== chrome-devtools ===")
     print((r.stdout or r.stderr).rstrip() or f"exit {r.returncode}")
+    print("=== chrome daemon ===")
+    port = daemon_port()
+    print(f"UP  127.0.0.1:{port} (calls share one browser)" if port
+          else "DOWN (per-call spawn; chrome-start for a persistent browser)")
     print("=== tinyfish ===")
     t = subprocess.run(
         [str(TINYFISH_SH), "status"],
@@ -363,10 +465,133 @@ def cmd_call(args: argparse.Namespace) -> int:
         return 1
     bridge = Bridge()
     try:
-        result = bridge.call(args.name, arguments)
-        print(json.dumps(result, indent=2, sort_keys=True)[:12000])
+        try:
+            result = bridge.call(args.name, arguments)
+        except Exception as e:  # noqa: BLE001 — a traceback buries the upstream message
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        text = json.dumps(result, indent=2, sort_keys=True)
+        full = os.environ.get("PROBE_MCP_FULL", "").strip() not in ("", "0")
+        if full or len(text) <= 12000:
+            print(text)
+        else:
+            # A silent cut reads as a complete answer — say what is missing.
+            print(text[:12000])
+            print(
+                f"# … truncated {len(text) - 12000} of {len(text)} bytes — "
+                "set PROBE_MCP_FULL=1 for everything",
+                file=sys.stderr,
+            )
     finally:
         bridge.close()
+    return 0
+
+
+def _tmux(*args: str) -> subprocess.CompletedProcess:
+    conf = Path("/exec-daemon/tmux.portal.conf")
+    base = ["tmux", "-f", str(conf)] if conf.is_file() else ["tmux"]
+    return subprocess.run([*base, *args], capture_output=True, text=True)
+
+
+def cmd_chrome_daemon(args: argparse.Namespace) -> int:
+    """Foreground HTTP wrapper around ONE Chromium MCP client (127.0.0.1 only).
+    `call`/`list-tools` auto-route chrome_* here whenever /healthz answers, so
+    page state survives across CLI invocations — the one thing a per-call
+    spawn can never give. Normally run inside tmux via chrome-start."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    backend = ChromeBackend(use_daemon=False)
+    backend.ensure()  # launch upstream now, so healthz means "browser is up"
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_a: Any) -> None:  # keep the tmux pane readable
+            pass
+
+        def _send(self, code: int, obj: dict[str, Any]) -> None:
+            data = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self) -> None:  # noqa: N802 — http.server API
+            if self.path == "/healthz":
+                self._send(200, {"ok": True, "mock": _mock()})
+            elif self.path == "/tools":
+                self._send(200, {"tools": backend.tools()})
+            else:
+                self._send(404, {"error": f"no route {self.path}"})
+
+        def do_POST(self) -> None:  # noqa: N802 — http.server API
+            if self.path != "/call":
+                self._send(404, {"error": f"no route {self.path}"})
+                return
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+            except json.JSONDecodeError:
+                self._send(400, {"error": "body must be JSON"})
+                return
+            name = str(body.get("name") or "")
+            if name.startswith(CHROME_PREFIX):
+                name = name[len(CHROME_PREFIX) :]
+            try:
+                self._send(200, backend.call(name, body.get("arguments") or {}))
+            except Exception as e:  # noqa: BLE001 — surface to the caller
+                self._send(500, {"error": str(e)[:2000]})
+
+    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    port = srv.server_address[1]
+    CHROME_DAEMON_STATE.parent.mkdir(parents=True, exist_ok=True)
+    CHROME_DAEMON_STATE.write_text(str(port))
+    print(f"probe-chrome daemon listening on 127.0.0.1:{port}", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        backend.close()
+        if CHROME_DAEMON_STATE.is_file():
+            CHROME_DAEMON_STATE.unlink()
+    return 0
+
+
+def cmd_chrome_start(args: argparse.Namespace) -> int:
+    port = daemon_port()
+    if port is not None:
+        print(f"already running on 127.0.0.1:{port}")
+        return 0
+    _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
+    r = _tmux(
+        "new-session", "-d", "-s", CHROME_DAEMON_SESSION, "-c", str(ROOT),
+        "python3", "tools/probe-mcp.py", "chrome-daemon", "--port", str(args.port),
+    )
+    if r.returncode != 0:
+        print(f"tmux failed: {r.stderr.strip()}", file=sys.stderr)
+        return 1
+    import time
+
+    # First run may npx-download the MCP server before Chromium even launches.
+    for _ in range(240):
+        time.sleep(0.5)
+        port = daemon_port()
+        if port is not None:
+            print(f"probe-chrome daemon up on 127.0.0.1:{port}")
+            print("REMEMBER: `chrome-stop` before any test-bg.mjs run — a live "
+                  "MCP browser starves Playwright (see .claude/skills/mcp-probe).")
+            return 0
+    print("daemon did not come up — tmux pane:", file=sys.stderr)
+    print(_tmux("capture-pane", "-t", f"{CHROME_DAEMON_SESSION}:0.0", "-p").stdout,
+          file=sys.stderr)
+    return 1
+
+
+def cmd_chrome_stop(_: argparse.Namespace) -> int:
+    _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
+    if CHROME_DAEMON_STATE.is_file():
+        CHROME_DAEMON_STATE.unlink()
+    print("stopped (if it was running)")
     return 0
 
 
@@ -470,6 +695,17 @@ def main() -> int:
     p_call.add_argument("name")
     p_call.add_argument("args_json", nargs="?", default="{}")
     p_call.set_defaults(func=cmd_call)
+
+    p_daemon = sub.add_parser("chrome-daemon", add_help=False)
+    p_daemon.add_argument("--port", type=int, default=CHROME_DAEMON_PORT)
+    p_daemon.set_defaults(func=cmd_chrome_daemon)
+
+    p_cstart = sub.add_parser("chrome-start", add_help=False)
+    p_cstart.add_argument("--port", type=int, default=CHROME_DAEMON_PORT)
+    p_cstart.set_defaults(func=cmd_chrome_start)
+
+    p_cstop = sub.add_parser("chrome-stop", add_help=False)
+    p_cstop.set_defaults(func=cmd_chrome_stop)
 
     p_serve = sub.add_parser("serve", add_help=False)
     p_serve.set_defaults(func=cmd_serve)

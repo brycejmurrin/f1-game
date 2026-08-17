@@ -33,7 +33,9 @@ prints nothing you can act on. The default reporter is `tests/helpers/live-repor
 one timestamped, immediately-flushed line per test start and end, plus a
 30-second heartbeat naming everything still in flight — so a piped log is
 genuinely tail-able and a hung test is the one with a `> start` line and no end
-line.
+line. Never let foreground test runs block autonomous workflows; invoke test
+suites in the background, inspect logs asynchronously, and continue productive
+tasks without waiting.
 
 ```sh
 node tools/test-bg.mjs smoke api collision   # start; returns immediately
@@ -109,7 +111,7 @@ serializes the agent behind SwiftShader several times over.
 |---|---|
 | in the edit loop | `npm run test:tooling-fast` (~30 s, structural, no browser) |
 | track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `npm run test:tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
 | single spec | `npm test -- tests/<file>.spec.js` |
 | single unit suite | `node --test tests/<file>.test.mjs` |
@@ -903,8 +905,8 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
-| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry (no Chromium / no TinyFish network) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network) |
 
 ---
 

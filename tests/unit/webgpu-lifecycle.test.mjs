@@ -229,6 +229,7 @@ function makeGpuHarness(opts = {}) {
     buffers,
     writes,
     pipelineDescs,
+    WGX: context.window.WGX,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -710,7 +711,8 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
 test("WGX god-ray and env probe match GLX gates", () => {
   // Volumetric shafts must not require sun.onScreen (GLX post.js).
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
-  assert.match(WGX_SOURCE, /grStr > 0 && sun && sun\.shaft > 0/);
+  assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
+  assert.match(WGX_SOURCE, /!f\.noEnv/);
   // Env probe respects PerfTry.envCull (300 m cap).
   assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
@@ -965,7 +967,6 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
 });
-
 test("setMaterialMaps owns pack textures and destroys them on unload/replace", async () => {
   // GLX deletes prior arrays in setMaterialMaps; WGX used to orphan GPUTexture
   // objects on unload/tier-swap and left materialMapState stale only via flags
@@ -1016,27 +1017,46 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   assert.equal(n3.texture.destroyed, true);
 });
 
-test("derivatives stay in uniform control flow (the WGSL NaN-white road)", () => {
-  // WGSL — unlike GLSL — makes a dpdx/dpdy call reached through a non-uniform
-  // branch or early return a derivative_uniformity ERROR. The material helpers
+test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 removed", () => {
+  // In WGSL, derivatives (dpdx, dpdy, fwidth) must only be called in uniform control flow.
+  // fw1() inside conditional branches/helper functions caused shader compilation failures on strict compilers.
+  assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 helper must be removed in favor of uniform derivatives");
+  assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
+  assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
+  assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+});
+
+test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white road)", () => {
+  // The mechanism the hoist above fixes, pinned per-helper: these functions
   // all early-return on per-fragment values (roadMarkings on trk.z > 0.5 — the
-  // road surface itself), so a derivative INSIDE any of them either invalidates
-  // the whole lit pipeline (enforcing Dawn: WGX silently fell back to GLX) or
-  // executes UNDEFINED values exactly where the returns diverge (warning-mode
-  // Dawn: the entire road + shoulders rendered NaN-white on phones while grass,
-  // walls and cars — hw 0, early return before any derivative — looked fine).
-  // The fix pins this shape: fs_main takes fw1 of wpos/trk FIRST, in uniform
-  // flow, and threads those widths in; every pattern width below is linear in
-  // them. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  // road surface itself), so a derivative INSIDE any of them either
+  // invalidates the whole lit pipeline (enforcing Dawn: WGX silently fell back
+  // to GLX) or executes UNDEFINED values exactly where the returns diverge
+  // (warning-mode Dawn: the entire road + shoulders rendered NaN-white on
+  // phones while grass, walls and cars — hw 0, early return before any
+  // derivative — looked fine). Widths are computed at fs_main top and threaded
+  // in; every pattern width is linear in them, so the chain-rule scaling is
+  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
   const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
                    "applyMaterialNormal", "applyMaterial", "roadMarkings"];
   for (const name of helpers) {
     const m = CHUNKS_SOURCE.match(new RegExp("fn " + name + "\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}", ""));
     assert.ok(m, "helper fn " + name + " exists in wgsl-chunks.js");
-    assert.doesNotMatch(m[0], /dpdx|dpdy|fw1\(/,
+    assert.doesNotMatch(m[0], /dpdx|dpdy|fwidth|fw1\(/,
       "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
   }
-  // The uniform-flow bases exist and are taken before anything can diverge.
-  assert.match(CHUNKS_SOURCE, /let fwW = vec3<f32>\(fw1\(in\.wpos\.x\), fw1\(in\.wpos\.y\), fw1\(in\.wpos\.z\)\)/);
-  assert.match(CHUNKS_SOURCE, /let fwTrk = vec2<f32>\(fw1\(in\.trk\.x\), fw1\(in\.trk\.y\)\)/);
+});
+
+test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {
+  const h = makeGpuHarness();
+  assert.equal(typeof h.WGX.isSupported, "function");
+  assert.equal(typeof h.WGX.isSupported(), "boolean");
+  assert.equal(typeof h.WGX.gpuErrors, "function");
+  const initialErrors = h.WGX.gpuErrors();
+
+  await h.create();
+  assert.equal(typeof h.device.onuncapturederror, "function", "device.onuncapturederror must be wired");
+
+  h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
+  assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });

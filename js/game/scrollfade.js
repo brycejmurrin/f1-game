@@ -38,7 +38,7 @@ window.ScrollFade = (function () {
   // hidden attribute like the rest.
   const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
     "#lighting,#camtune,#audioset,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
-    "#datahub,#track-detail";
+    "#datahub,#track-detail,#vsfriend,#spotifypanel";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
   const watched = new WeakSet();

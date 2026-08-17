@@ -112,6 +112,78 @@ test("probe-mcp serve handshake (mock) advertises prefixed tools", () => {
   assert.ok(names.length >= 50, `expected full catalog, got ${names.length}`);
 });
 
+test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live daemon", async () => {
+  // A bare `probe-mcp.py call` spawns a fresh Chromium per invocation, so page
+  // state never survives between calls (measured 2026-08-17: navigate_page in
+  // one call, list_pages in the next reads about:blank). The daemon is the fix
+  // — this proves the wiring without launching a real browser.
+  const { spawn } = await import("node:child_process");
+  const env = { ...process.env, PROBE_MCP_MOCK: "1" };
+  const daemon = spawn("python3", [PROBE, "chrome-daemon", "--port", "0"], {
+    env,
+    cwd: ROOT,
+  });
+  const port = await new Promise((resolve, reject) => {
+    let buf = "";
+    const t = setTimeout(
+      () => reject(new Error(`daemon never printed its port: ${buf}`)),
+      15000,
+    );
+    daemon.stdout.on("data", (chunk) => {
+      buf += chunk;
+      const m = buf.match(/listening on 127\.0\.0\.1:(\d+)/);
+      if (m) {
+        clearTimeout(t);
+        resolve(Number(m[1]));
+      }
+    });
+    daemon.on("exit", (code) => reject(new Error(`daemon exited ${code}: ${buf}`)));
+  });
+  try {
+    const hz = await (await fetch(`http://127.0.0.1:${port}/healthz`)).json();
+    assert.equal(hz.ok, true);
+    assert.equal(hz.mock, true);
+
+    const tools = await (await fetch(`http://127.0.0.1:${port}/tools`)).json();
+    const toolNames = (tools.tools || []).map((t2) => t2.name);
+    assert.ok(toolNames.includes("navigate_page"), toolNames.slice(0, 5));
+
+    const res = await (
+      await fetch(`http://127.0.0.1:${port}/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "chrome_navigate_page", // prefixed name must be accepted too
+          arguments: { url: "about:blank" },
+        }),
+      })
+    ).json();
+    assert.match(res.content[0].text, /"mock": true/);
+
+    // The CLI — NOT in mock mode — must prefer the live daemon over spawning
+    // its own Chromium (which would hang this test for a browser launch).
+    const cli = spawnSync("python3", [PROBE, "call", "chrome_list_pages", "{}"], {
+      encoding: "utf8",
+      cwd: ROOT,
+      env: { ...process.env, PROBE_CHROME_PORT: String(port), PROBE_MCP_MOCK: "" },
+      timeout: 20000,
+    });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.match(cli.stderr, /via daemon/);
+    assert.match(cli.stdout, /mock/);
+  } finally {
+    daemon.kill("SIGKILL");
+  }
+});
+
+test("probe-mcp help documents the persistent daemon commands", () => {
+  const r = spawnSync("python3", [PROBE, "help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /chrome-start/);
+  assert.match(r.stdout, /chrome-stop/);
+  assert.match(r.stdout, /test-bg\.mjs|Playwright/);
+});
+
 test("mcp-wrap.py compat shim forwards to probe-mcp serve", () => {
   const wrap = path.join(ROOT, "tools/mcp-wrap.py");
   assert.ok(fs.existsSync(wrap));

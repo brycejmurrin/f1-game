@@ -811,19 +811,15 @@
       // through the Vegas palette — a "Glitter Gulch" gateway.
       {
         const k = K(0.66);
-        const r = [track.rx[k], track.ry[k], track.rz[k]];
-        const t = [track.tx[k], track.ty[k], track.tz[k]];
-        const u = upOf(track, k);
-        const base = [px[k], py[k], pz[k]];
-        const b = [r, u, t];
-        const span = hw[k] * 2 + 10;
+        const aL = anchor(k, -1, 3.5), aR = anchor(k, 1, 3.5);
+        const span = (hw[k] || 7) * 2 + 10;
         // Piers
-        for (const sd of [-1, 1]) {
-          const pc = vadd(base, r, sd * (hw[k] + 3.5));
+        for (const [sd, a] of [[-1, aL], [1, aR]]) {
+          const b = [a.r, a.u, a.t];
           out._mat = MAT.METAL;
-          addBox(out, vadd(pc, u, 6), [2.6, 12, 2.6], [0.10, 0.10, 0.14], b);
+          addBox(out, vadd(a.c, a.u, 6), [2.6, 12, 2.6], [0.10, 0.10, 0.14], b);
           out._mat = 0;
-          addBox(out, vadd(pc, u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
+          addBox(out, vadd(a.c, a.u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
         }
         overheadSpan({
           id: "vegas-strip-gateway", frac: 0.66, clearance: 12.5,

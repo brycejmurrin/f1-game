@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # TinyFish local MCP proxy — start/stop and curl helpers for http://127.0.0.1:3711/mcp
-# Clone lives at scratch/tinyfish-mcp-server (gitignored). Needs TINYFISH_API_KEY.
+# Clone lives at scratch/tinyfish-mcp-server (gitignored). The project key is
+# baked in below (shell env / .env override it), so a fresh checkout needs no setup.
 #
 # Agent-facing defaults (measured 2026-08-17):
 # - fetch/search/deploy-check auto-ensure (start + init) so a cold box works
@@ -26,11 +27,18 @@ FETCH_FORMAT="markdown"
 FETCH_TTL=""
 FETCH_PURPOSE=""
 
+# Project key baked in so any checkout works with zero setup (owner's call,
+# 2026-08-17). Precedence: shell env > $ENV_FILE > this default. If it is ever
+# abused, rotate at https://agent.tinyfish.ai/api-keys and update this line.
+BAKED_KEY="sk-tinyfish-khLFUpjoWmSBQgf_6f834NI9vyaYaEjW"
+
 load_env() {
+  local from_shell="${TINYFISH_API_KEY:-}"
   if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     set -a; source "$ENV_FILE"; set +a
   fi
+  TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-$BAKED_KEY}}"
 }
 
 need_key() {
@@ -38,7 +46,7 @@ need_key() {
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     echo "TINYFISH_API_KEY is not set." >&2
     echo "  1. Get a key: https://agent.tinyfish.ai/api-keys" >&2
-    echo "  2. echo 'TINYFISH_API_KEY=tf_...' > $ENV_FILE" >&2
+    echo "  2. echo 'TINYFISH_API_KEY=sk-tinyfish-...' > $ENV_FILE" >&2
     echo "  3. $0 start" >&2
     exit 1
   fi
@@ -94,6 +102,14 @@ is_up() {
 cmd_start() {
   need_key
   need_repo
+  # The tmux pane sources ONLY $ENV_FILE — a key exported in THIS shell passes
+  # need_key yet never reaches the server, which then 401s on every call.
+  # Persist it (the file lives under gitignored scratch/).
+  if [[ ! -f "$ENV_FILE" && -n "${TINYFISH_API_KEY:-}" ]]; then
+    printf 'TINYFISH_API_KEY=%s\n' "$TINYFISH_API_KEY" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    echo "Wrote $ENV_FILE from shell env (the tmux server reads only the file)" >&2
+  fi
   if is_up; then
     echo "Already listening on ${BASE} (healthz ok)"
     return 0
@@ -297,7 +313,7 @@ cmd_search() {
   load_session
   local q_esc raw
   q_esc="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$q")"
-  raw="$(mcp_post '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":'"${q_esc}"'}}}"')"
+  raw="$(mcp_post '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":'"${q_esc}"'}}}')"
   emit_rpc "$raw" unwrap
 }
 

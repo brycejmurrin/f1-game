@@ -150,7 +150,7 @@ function applyPreset(name) {
   refreshPresetButtons();
 }
 // A manual slider edit means the settings no longer match a named preset.
-function clearPreset() { if (store.get("preset", null)) { store.set("preset", "custom"); refreshPresetButtons(); } }
+function clearPreset() { store.set("preset", "custom"); refreshPresetButtons(); }
 function refreshPresetButtons() {
   const active = store.get("preset", "standard");
   for (const name of ["relax", "standard", "pro"]) {

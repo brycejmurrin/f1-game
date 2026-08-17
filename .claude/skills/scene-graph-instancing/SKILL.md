@@ -115,7 +115,7 @@ non-uniform XZ scale; otherwise node lands in `bakeOnly` (caller must `bake()`).
 5. **Fast contract tests** then **GL wiring**:
    ```sh
    npm run test:tooling-fast    # track-graph.test.mjs
-   npm run test:webgl           # instanced-draw.spec.js
+   node tools/test-bg.mjs webgl # in background: instanced-draw.spec.js
    ```
 
 6. **Ship** — bump cache if you edited `js/` (**bump-cache** skill). For a
