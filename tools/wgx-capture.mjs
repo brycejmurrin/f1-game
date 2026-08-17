@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 // wgx-capture.mjs — capture WGX render evidence on a REAL WebGPU device.
 //
-// SwiftShader-Dawn EXECUTES shader work in this container (a pipeline draw
-// reads back exact fragment output) — it is only the headless canvas
-// PRESENT/screenshot path that is blank. So the real pixels come from
-// WGX.capturePixels(): a copyTextureToBuffer readback of the presented frame,
-// written here as frame.png (PNG-encoded in-page via a 2D canvas). On
-// software adapters WGX also soft-presents (2D blit onto the visible canvas),
-// so page.screenshot() canvas.png may show the frame too — kept as the
-// present-path probe — and __apex.render({what:"view"}) is the CPU-side
-// coverage cross-check.
+// SwiftShader-Dawn EXECUTES shader work in this container. The native swapchain
+// never composites; WGX soft-presents (final pass → COPY_SRC texture → 2D blit
+// on visible #game). This tool requests GLX.capturePixels() readback of that
+// same texture → frame.png. Primary visible-canvas gate:
+//   node tools/gfx-probe.mjs --backend webgpu [--lite] <track>  → canvas.png
+// Readback here is an optional oracle — can flake on SwiftShader when run after
+// display readback. __apex.render({what:"view"}) is the CPU coverage cross-check.
 //
 // Usage:
 //   node tools/wgx-capture.mjs [trackId] [--lite] [--out DIR] [--frames N]
@@ -144,7 +142,7 @@ try {
       : { failed: frameCap.why },
     canvasBytes: canvasStat.size,
     canvasLikelyBlank: canvasStat.size < 8000,
-    note: "frame.png is the WGX.capturePixels() readback (real pixels); canvas.png only probes the headless present path and may be blank.",
+    note: "frame.png = GLX.capturePixels() readback (optional oracle). canvas.png = page screenshot (visible #game via soft-present 2D blit when timing is right). Prefer gfx-probe.mjs for visible-canvas gate.",
   }, null, 2));
   writeFileSync(join(outDir, "diag.json"), JSON.stringify(payload.diag, null, 2));
 

@@ -29,9 +29,9 @@
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
 // --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
 //
-// SwiftShader: Dawn validation oracle — gpuErrors often 0, canvas compositor blank.
-// Lavapipe (+ xvfb-run for headed): three.js e2e recipe — real Vulkan ICD, shared
-// ANGLE/Dawn device; still often blank in CI but catches different failure modes.
+// SwiftShader: Dawn validation oracle — native swapchain compositor blank; WGX
+// soft-presents to visible #game via 2D blit. Lavapipe (+ xvfb-run for headed):
+// three.js e2e recipe — real Vulkan ICD; same soft-present path as SwiftShader.
 // Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";

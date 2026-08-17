@@ -55,7 +55,10 @@ overlay — don't copy the spec viewport into `shot.mjs` or vice versa.
 **debug-tracks**).
 
 A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
-suite's non-blank heuristic). For the full camera-hook reference
+suite's non-blank heuristic). **WGX on SwiftShader:** native swapchain is blank;
+use `gfx-probe.mjs --backend webgpu` for visible `#game` (soft-present blit),
+not a raw `#game` screenshot without `awaitSoftPresent`. For the full camera-hook
+reference
 (park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see
 **debug-cameras**; add `setTimeOfDay`/`weather` calls for lighting variants.
 For before/after: capture with the same `(track, frac, cam)` args on each side

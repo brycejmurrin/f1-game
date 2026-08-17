@@ -25,16 +25,17 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES shader work
-here. Two narrower limits remain: headless canvas PRESENT is blank
-(screenshots show DOM only), and the FIRST `getCurrentTexture()` call
-permanently breaks `mapAsync` on that device. Real pixels:
-`node tools/wgx-capture.mjs <track>` — on software adapters WGX
-soft-presents (final pass into a COPY_SRC texture, never the swapchain)
-and the tool writes the `GLX.capturePixels()` readback as `frame.png`.
-Prefer capture over reasoning from absence. Still true: SwiftShader is
-not a PERFORMANCE oracle, software adapters force MSAA 1 (MSAA-only
-paths need the source guards in `webgpu-lifecycle.test.mjs`), and
+**The ceiling, corrected 2026-08-17 (cache 1342):** SwiftShader-Dawn EXECUTES
+shader work here. Two narrower limits remain: the **native swapchain** never
+composites (hidden WebGPU canvas stays black), and the FIRST
+`getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
+never touches the swapchain on software adapters. Visible pixels: soft-present
+2D blit on `#game` — probe with `node tools/gfx-probe.mjs --backend webgpu`
+(`awaitSoftPresent` + `#game` luma). Readback oracle:
+`node tools/wgx-capture.mjs <track>` → `frame.png` via `GLX.capturePixels()`
+(same `COPY_SRC` texture; can flake when concurrent with display readback).
+Prefer hooks/capture over reasoning from absence. Still true: SwiftShader is
+not a PERFORMANCE oracle, software adapters force MSAA 1, and
 `deviceLostHint: true` after a clean init is a note, not a failure.
 
 ## 2. Backend and error state

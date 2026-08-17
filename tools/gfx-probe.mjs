@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// gfx-probe.mjs — test WEBGPU (WGX) and THREE (TLX) with real screenshots.
+// gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
 //
-// Playwright path with the correct Chromium flags (tools/webgpu-chrome-args.cjs).
-// MCP chrome-devtools uses the same flags via chrome-devtools-mcp.sh.
+// WGX on software adapters: primary gate is visible #game after
+// GLX.awaitSoftPresent() (soft-present 2D blit). capturePixels readback →
+// frame.png is optional and runs AFTER the visible check. Playwright uses
+// tools/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
 //
 // Usage:
 //   node tools/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]

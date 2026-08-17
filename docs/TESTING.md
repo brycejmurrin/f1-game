@@ -1051,14 +1051,17 @@ every WGSL module and validates every pipeline. The ceiling, corrected
 2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
-found). What remains environmental: WGX-canvas SCREENSHOTS are blank (the
-present path), the first `getCurrentTexture()` call breaks `mapAsync`
-device-wide (why readbacks ever looked like zeros), software adapters force
-MSAA 1 (MSAA-only paths need the unit-test source guards), and the full
-desktop stack can LOSE the device seconds in (Chrome reports it as
-`createBuffer failed, size (N) is too large` on a tiny N — that wording means
-device-lost, not size). Validation evidence here is exact; pixel evidence now
-exists in-container; PERFORMANCE truth still needs a real GPU.
+found). **Software compositor (2026-08-17, cache 1342):** WGX soft-presents
+the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+`node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
+(`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
+SwiftShader when concurrent with display readback. Still environmental: the
+first `getCurrentTexture()` call breaks `mapAsync` device-wide (why WGX never
+touches the swapchain on software adapters), software adapters force MSAA 1,
+and the full desktop stack can LOSE the device seconds in. Validation evidence
+here is exact; visible-canvas evidence exists in-container via soft-present;
+PERFORMANCE truth still needs a real GPU.
 
 **TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
 (2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
@@ -1076,11 +1079,13 @@ M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
 `test.slow()` 360 s budget because the env-probe wait is fill-bound on
 SwiftShader even with a quiet GPU; do not widen assertion tolerances.
 
-**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** A blank headless
-`#game` canvas under WGX is expected on SwiftShader/Lavapipe — use
-`node tools/wgx-capture.mjs` (soft-present readback) or
-`node tools/gfx-probe.mjs --backend webgpu|three`. Lavapipe needs
-`mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
+**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** Native WebGPU
+swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
+visible `#game` via a 2D blit (auto on software adapters +
+`sessionStorage apex26.wgxCapture=1`). Primary probe:
+`node tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
+needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
 three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:

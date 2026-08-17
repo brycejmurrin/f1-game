@@ -556,10 +556,13 @@ const WGX = (function () {
     // on phones/WebKit). WebKit/iOS mapAsync/f16 copy timing false-triggers the
     // black-output ladder while the swapchain is fine.
     const _sceneProbeOn = !_outProbeOff && !WGX_LITE;
-    // Software adapters validate WebGPU but the browser never composites the
-    // hidden swapchain to the visible canvas (measured: CDP/screenshot black while
-    // agentview coverage is healthy). Route the visible #game through a 2D blit
-    // fed by a COPY_SRC present target; keep WebGPU on a hidden canvas.
+    // Software adapters: native swapchain never composites to #game (measured black
+    // CDP/screenshot of hidden WebGPU canvas while agentview coverage is healthy).
+    // Soft-present path: final pass → softPresentTex (COPY_SRC) → ephemeral staging
+    // buffer readback (_softDisplayEncode/_softDisplayFinish) → putImageData on
+    // visible #game 2D context. Never getCurrentTexture() on software — first call
+    // breaks mapAsync device-wide. awaitSoftPresent() resolves only after a blit
+    // with maxPx >= 8. WebGPU renders on a hidden canvas swapped in at boot.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;

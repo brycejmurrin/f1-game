@@ -66,7 +66,8 @@ SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
 bind groups match, buffers upload. It is not a visual one. For **pixels**:
 
 ```sh
-node tools/wgx-capture.mjs montreal --lite          # WGX soft-present → frame.png
+node tools/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
+node tools/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
 node tools/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
 node tools/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
