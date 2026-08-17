@@ -572,6 +572,31 @@ test("TLX supplies its own WebGL2 context, because three hardcodes alpha there",
     "the hand-made WebGL2 context must be gated on forceWebGL");
 });
 
+test("the hand-made WebGL2 context still matches three's own attribute set", () => {
+  // Supplying `context` means three stops deriving the attributes and we own
+  // ALL of them, not just the one we came to change. Today ours is three's set
+  // byte for byte except alpha:
+  //   three: { antialias: currentSamples > 0, alpha: !0, depth: e.depth, stencil: e.stencil }
+  //   ours:  { antialias: !isMobile,           alpha: false, depth: true,  stencil: false }
+  // and those agree only because TLX overrides neither depth nor stencil, so
+  // the renderer holds three's defaults — depth true, stencil false. Should a
+  // three bump default stencil back to true, its passes would want a stencil
+  // buffer that our context never asked for, and nothing else would notice.
+  assert.match(THREE_BUNDLE, /depth:\w+=!0,stencil:\w+=!1/,
+    "three's depth/stencil defaults moved — re-derive the context TLX hands it");
+
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const ctx = tlx.match(/getContext\("webgl2",\s*\{([^}]*)\}/);
+  assert.ok(ctx, "TLX no longer makes its own WebGL2 context");
+  assert.match(ctx[1], /depth:\s*true/, "context must request depth (three's default)");
+  assert.match(ctx[1], /stencil:\s*false/, "context must match three's stencil default");
+  // Not cosmetic either: three's antialias becomes samples>0 on the DEFAULT
+  // canvas target, so a context that disagrees with the renderer gets a
+  // multisample resolve mismatch on the very path this fix exists to protect.
+  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's");
+  assert.match(tlx, /antialias:\s*!isMobile,\s*forceWebGL/, "renderer AA must track the context's");
+});
+
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
   // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
   //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
