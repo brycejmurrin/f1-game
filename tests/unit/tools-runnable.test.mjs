@@ -106,6 +106,8 @@ test("the MCP-facing entry points answer without touching a browser or a network
       want: /test:tlx/ },
     { cmd: process.execPath, args: [path.join(TOOLS, "pick-tests.mjs"), "--help"],
       want: /group|test:/ },
+    { cmd: process.execPath, args: [path.join(TOOLS, "wgx-validate.mjs"), "--static"],
+      want: /"static": true/ },
   ];
   const failed = [];
   for (const c of cases) {

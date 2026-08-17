@@ -394,10 +394,13 @@ class Bridge:
         # NEVER let one backend's ensure() empty the whole catalog — see
         # _static_catalog. A throw here is how apex-wrap shipped 0 tools.
         out: list[dict[str, Any]] = []
+        fail_all = os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no")
         for backend, getter in (("chrome", self.chrome.tools), ("tinyfish", self.tinyfish.tools)):
+            if fail_all:
+                print(f"# {backend} tools() skipped (PROBE_MCP_FAIL_BACKENDS)", file=sys.stderr)
+                out.extend(prefix_tools(backend, _static_catalog(backend)))
+                continue
             try:
-                if os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no"):
-                    raise RuntimeError("PROBE_MCP_FAIL_BACKENDS")
                 out.extend(prefix_tools(backend, getter()))
             except Exception as e:
                 print(f"# {backend} tools() failed, using static catalog: {e}", file=sys.stderr)

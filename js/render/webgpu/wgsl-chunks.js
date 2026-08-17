@@ -564,6 +564,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrk = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let topNgeo = normalize(in.nrm);
+  // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
+  // N is written inside applyMaterialNormal, which is non-uniform in matId, and
+  // a dpdx after that branch is the NaN-white-road class. Geometric N is the
+  // uniform stand-in — SAA/clearcoat under-count orange-peel vs GLX; that is
+  // a look gap, not a compile defect.
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);

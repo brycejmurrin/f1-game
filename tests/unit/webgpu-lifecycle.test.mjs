@@ -1142,6 +1142,26 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   assert.deepEqual(offenders, [],
     "a derivative (or a wrapper around one) lives outside a fragment entry point");
 
+  // Same walk on the post chain — SSAO already hoists; a helper-side dpdx
+  // there would slip through a CHUNKS_SOURCE-only ratchet.
+  const postStripped = POST_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  const postFns = [];
+  for (const m of postStripped.matchAll(/\bfn\s+(\w+)\s*\(/g)) {
+    let i = postStripped.indexOf("{", m.index);
+    if (i < 0) continue;
+    let depth = 0, end = i;
+    for (; end < postStripped.length; end++) {
+      if (postStripped[end] === "{") depth++;
+      else if (postStripped[end] === "}" && --depth === 0) break;
+    }
+    postFns.push({ name: m[1], body: postStripped.slice(i, end + 1) });
+  }
+  const postOff = postFns
+    .filter((f) => { DERIV.lastIndex = 0; return DERIV.test(f.body) && !/^fs_main/.test(f.name); })
+    .map((f) => f.name);
+  assert.deepEqual(postOff, [],
+    "wgsl-post.js: a derivative lives outside a fragment entry point: " + postOff.join(","));
+
   // Uniform means before the FIRST branch, not merely inside fs_main: an early
   // `return` or an `if` above the derivative poisons everything after it.
   for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
