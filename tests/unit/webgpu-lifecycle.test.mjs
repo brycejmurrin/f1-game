@@ -1257,7 +1257,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrk = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
-                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos\);/,
+                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
                     /roadMarkings\(&albedo, &rough, in\.trk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.

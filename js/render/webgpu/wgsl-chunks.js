@@ -602,16 +602,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // branches. textureSample gets implicit LOD + anisotropy — the GLX
   // texture() path. textureSampleLevel (used for other MAT ids, which cannot
   // hoist a constant layer) cannot use aniso and smeared tarmac at chase.
-  let roadSc = matScale(16);
-  var roadPack = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-  var roadNrmPack = vec4<f32>(0.5, 0.5, 1.0, 1.0);
-  var roadPackOn = false;
-  if (F.params8.w > 0.001 && roadSc > 0.0) {
-    let roadUv = in.wpos.xz / roadSc;
-    roadPack = textureSample(matAlbedoTex, matSamp, roadUv, 16);
-    roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
-    roadPackOn = true;
-  }
+  // No branch around these samples: textureSample needs uniform CF, and a
+  // helper-side early-return test also forbids branching above derivatives.
+  // scale=0 / mix=0 still samples the 128-grey placeholder (identity * 2).
+  let roadSc = max(matScale(16), 1e-4);
+  let roadUv = in.wpos.xz / roadSc;
+  let roadPack = textureSample(matAlbedoTex, matSamp, roadUv, 16);
+  let roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
+  let roadPackOn = F.params8.w > 0.001 && matScale(16) > 0.0;
   let topNgeo = normalize(in.nrm);
   // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
   // N is written inside applyMaterialNormal, which is non-uniform in matId, and
