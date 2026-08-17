@@ -16,6 +16,39 @@ matrix and [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 Companion provenance (do not treat as current structure): the original
 migration plan and four phase build logs under `docs/archive/webgpu/`.
 
+### First live boot (2026-08-17) — and the three bugs it found
+
+Until this date nothing had ever run WGX against a real WebGPU device in this
+container, because headless Chrome does not expose `navigator.gpu` without
+`--enable-unsafe-webgpu`. Every WGX assertion in the suite runs against a mock
+device, and all three of the following passed those tests while making the
+backend unusable on any real one:
+
+| Bug | Symptom on a real device | Fix |
+|---|---|---|
+| `MSAA_COUNT = 2` | "Multisample count (2) is not supported" per MS pipeline, then Invalid RenderPipeline / Invalid BindGroupLayout cascading off it. WebGPU allows 1 or 4 only. | `MSAA_COUNT = WGX_LITE ? 1 : 4` |
+| `fwidth` in the material helpers | `'dpdx' must only be called from uniform control flow` — a COMPILE error that invalidates the lit pipeline, so WGX refused and the game fell back to WebGL2 with a console warning. | footprint taken at the `fs_main` entry, passed down as a parameter |
+| `createBuffer({mappedAtCreation:true})` for geometry | Every mesh failed once the 35 MB chunked scenery buffer exhausted the mappable pool — including a 208-BYTE buffer. Empty world, no error state. | `queue.writeBuffer` (+ `COPY_DST`), which stages in bounded chunks |
+
+Both shader invariants are now gated by `tests/unit/webgpu-lifecycle.test.mjs`
+("every sampleCount…", "no WGSL derivative sits where control flow can be
+non-uniform"). Reproduce the live boot with:
+
+```sh
+npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+A clean boot prints no `WGX` console line, `WGX.gpuErrors()` is 0, and
+`sessionStorage["apex26.gfxBound"]` is ABSENT (that key is written only when
+WGX refuses and hands the frame to GLX).
+
+SwiftShader is a **validation and lifecycle** oracle, not a visual one: it
+proves the shaders compile, the bind groups match and the buffers upload. It
+says nothing about how the result looks. Note also that three's WebGPU backend
+(TLX auto-picks it on Chromium desktop) still dies here inside its own
+`mappedAtCreation` upload — probe TLX with the WebGL2 pin, as the specs do.
+
 ---
 
 ## 1. Verdict
@@ -32,7 +65,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. Remaining honest gaps are reduced sky (overcast grey-shift, twilight horizon bank, azimuthal gradient) and TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray, `params8.x` lamp-fog, roughness env LOD, and `applyMaterial*` are in. |
-| **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.

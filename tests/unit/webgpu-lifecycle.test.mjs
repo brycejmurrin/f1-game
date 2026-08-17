@@ -568,7 +568,7 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(gfx.gpuMs(), -1);
   gfx.gpuTimer(true);
   assert.equal(gfx.gpuTimer().on, true);
-  assert.equal(gfx.msaa(), 2);
+  assert.equal(gfx.msaa(), 4);
   const maps = gfx.materialMapState();
   assert.equal(maps.albedo, false);
   assert.equal(maps.layers, 0);
@@ -707,21 +707,21 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
   // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
-  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // stack there. WGX cannot: timestamp-query + multisampled rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
   assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
 test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
-  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.msaa(), 4, "desktop keeps MSAA; 4 because WebGPU permits only 1 or 4");
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
@@ -833,7 +833,7 @@ test("clean sessions heal the ladder: minimal steps back to lite after a streak"
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
   // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
-  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took MSAA 2×
+  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took multisampled
   // rgba16float and lost the device after one frame.
   const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
   const gfx = await h.create();
@@ -842,6 +842,59 @@ test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async (
   assert.equal(gfx.msaa(), 1);
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);
+});
+
+test("every sampleCount WGX requests is one WebGPU actually allows (1 or 4)", async () => {
+  // The spec (w3.org/TR/webgpu) permits sampleCount 1 or 4 and nothing else.
+  // WGX shipped 2 — mirroring GLX's 2× WebGL MSAA — and every real device
+  // answered "Multisample count (2) is not supported" for each MS pipeline,
+  // then cascaded Invalid RenderPipeline / Invalid BindGroupLayout off it.
+  // The old assertions read msaa() === 2 and passed: they never asked a GPU.
+  // This one checks the descriptors, so a future retune cannot pick 2 or 8.
+  const LEGAL = new Set([1, 4]);
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  gfx.begin({});
+  gfx.present({});
+  assert.ok(LEGAL.has(gfx.msaa()), `msaa() must be 1 or 4, got ${gfx.msaa()}`);
+  const texBad = h.textures.filter((t) => t.desc.sampleCount != null && !LEGAL.has(t.desc.sampleCount));
+  assert.deepEqual(texBad.map((t) => t.desc.sampleCount), [], "illegal texture sampleCount");
+  const pipeBad = (h.pipelines || []).filter((p) =>
+    p && p.desc && p.desc.multisample && p.desc.multisample.count != null
+      && !LEGAL.has(p.desc.multisample.count));
+  assert.deepEqual(pipeBad.map((p) => p.desc.multisample.count), [], "illegal pipeline multisample count");
+  assert.ok(h.textures.some((t) => t.desc.sampleCount === 4), "desktop must still allocate MS targets");
+});
+
+test("no WGSL derivative sits where control flow can be non-uniform", () => {
+  // 'dpdx must only be called from uniform control flow' is a COMPILE error that
+  // invalidates the whole lit pipeline; WGX then refuses and the game falls back
+  // to WebGL2 with only a console warning. It shipped that way — the material
+  // helpers took fwidth behind material-id branches and early returns, and a
+  // callee that returns early non-uniformly poisons its CALLER too, so the fix
+  // is structural: derivatives at the fs_main entry, footprint passed down.
+  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
+  // The only legal homes: the fw1/fw2/fw3 wrappers and the clearcoat pair, all
+  // called from (or written at) the top of fs_main.
+  const allowed = [
+    /fn fw1\(x: f32\) -> f32 \{ return abs\(dpdx\(x\)\) \+ abs\(dpdy\(x\)\); \}/,
+    /fn fw2\(v: vec2<f32>\) -> vec2<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
+    /fn fw3\(v: vec3<f32>\) -> vec3<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
+    /let ccDx = dpdx\(Ngeo\);/, /let ccDy = dpdy\(Ngeo\);/,
+  ];
+  for (const re of allowed) assert.match(CHUNKS_SOURCE, re, `derivative home moved: ${re}`);
+  // Comments discuss fwidth freely; only code counts.
+  let stripped = CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const re of allowed) stripped = stripped.replace(re, "");
+  const leftover = stripped.match(DERIV) || [];
+  assert.deepEqual(leftover, [], "a derivative escaped the uniform-control-flow entry points");
+  // …and the footprint must reach every consumer as a parameter.
+  for (const re of [/let fwW = fw3\(in\.wpos\);/, /let fwT = fw2\(in\.trk\.xy\);/,
+                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwW\);/,
+                    /roadMarkings\(&albedo, &rough, in\.trk, fwT\);/]) {
+    assert.match(CHUNKS_SOURCE, re, `footprint plumbing changed: ${re}`);
+  }
 });
 
 test("the MAT array sampler asks for anisotropy, like GLX and TLX", () => {

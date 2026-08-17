@@ -277,7 +277,14 @@ const WGX = (function () {
   };
   const MAT_TEX_LAYERS = 17;
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
-  const MSAA_COUNT = WGX_LITE ? 1 : 2;
+  // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
+  // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
+  // This read 2 to mirror GLX's 2x WebGL MSAA and every real device rejected it
+  // — "Multisample count (2) is not supported", once per MS pipeline, then
+  // Invalid RenderPipeline / Invalid BindGroupLayout cascading off the first
+  // failure. Unit tests asserting msaa() === 2 passed throughout, because
+  // nothing in them ever asked a GPU.
+  const MSAA_COUNT = WGX_LITE ? 1 : 4;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -1589,11 +1596,29 @@ const WGX = (function () {
     }
 
     // ── buffer helper: create a GPUBuffer initialised from a typed array ──
+    // Geometry is uploaded with queue.writeBuffer, NOT createBuffer({
+    // mappedAtCreation:true}). mappedAtCreation needs a client-visible mapping
+    // as large as the WHOLE buffer, and Dawn throws when that allocation fails:
+    // measured on a live device as "createBuffer failed, size (208) is too large
+    // for the implementation when mappedAtCreation == true" for EVERY mesh in
+    // the track — a 208-BYTE buffer failing is an exhausted mappable pool, not a
+    // size limit, and the 35 MB chunked scenery buffer is what exhausted it.
+    // (PlayCanvas #6676 and pixijs #10404 are the same failure on real GPUs
+    // under memory pressure.) writeBuffer stages through Dawn's own ring buffer
+    // in bounded chunks, so peak mappable demand no longer tracks mesh size.
     function _mkBuffer(data, usage) {
-      const size = (data.byteLength + 3) & ~3;   // pad to 4 (mappedAtCreation req.)
-      const buf = device.createBuffer({ size, usage, mappedAtCreation: true });
-      new data.constructor(buf.getMappedRange()).set(data);
-      buf.unmap();
+      const size = (data.byteLength + 3) & ~3;   // writeBuffer: size multiple of 4
+      const buf = device.createBuffer({ size, usage: usage | GPUBufferUsage.COPY_DST });
+      if (data.byteLength === size) {
+        device.queue.writeBuffer(buf, 0, data);
+      } else {
+        // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
+        // wants a 4-multiple, so pad through a scratch view rather than round
+        // the count and read past the array.
+        const pad = new Uint8Array(size);
+        pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+        device.queue.writeBuffer(buf, 0, pad);
+      }
       return buf;
     }
 
@@ -1677,8 +1702,8 @@ const WGX = (function () {
     }
 
     // ── Resources (Phase 2) ──
-    // createBuffer({mappedAtCreation}) may throw a synchronous RangeError when
-    // the client-side mapping cannot be allocated — exactly the memory
+    // createBuffer may still throw a synchronous RangeError when the allocation
+    // cannot be satisfied — exactly the memory
     // pressure that precedes a device loss. The mesh family is called LAZILY
     // from the render path (gear digits, LED strips mid-race), so a throw here
     // would escape into tick() and paint the full-screen overlay. Every draw
