@@ -1389,6 +1389,20 @@
         m.blendEquationAlpha = THREE.AddEquation;
         m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
         m.blendDstAlpha = THREE.OneFactor;
+      } else {
+        // PLAIN OPAQUE — and it must say so explicitly. three defaults every
+        // material to NormalBlending and applies it from `material.blending`
+        // regardless of `transparent`; that flag only picks the render LIST.
+        // So an opaque draw still goes through SrcAlpha/OneMinusSrcAlpha, which
+        // was harmless only while opaque alpha was always 1. It stopped being 1
+        // when the SSR car-paint tag (M8) began writing 0.35 into alpha: cars
+        // rendered at 35% opacity and you could see the track through them.
+        // Reported from an iPhone on the three backend, and worst on a DRY
+        // race, where SSR never runs — so the tag was ghosting the cars while
+        // nothing consumed it.
+        // GLX's equivalent draw has blending OFF entirely (js/render/glx.js),
+        // which writes colour AND the alpha tag verbatim. Match that.
+        m.blending = THREE.NoBlending;
       }
       return m;
     }

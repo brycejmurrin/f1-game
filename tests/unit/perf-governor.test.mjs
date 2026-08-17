@@ -445,3 +445,63 @@ test("changing preset drops a pending TIER verify", () => {
   assert.ok(gov.tier() >= Math.max(before, 1),
     `no revert may fire across a user quality change — was ${before}, now ${gov.tier()}`);
 });
+
+test("a CPU-bound device sheds features instead of looping on a scale lever that cannot help", () => {
+  // dt is genuinely slow and NOT coupled to render scale: the CPU-bound case,
+  // where cutting resolution buys nothing. The cheap frame every 20th tick is
+  // what separates this from the externally-capped case above (a cap shows the
+  // SAME dt on every frame), so the governor is right to degrade here — the
+  // question is WHICH lever it reaches for.
+  //
+  // Before the fix it reached for the only one that cannot help, forever: the
+  // tier ladder lives in the `else` of "did setRenderScale move?", and
+  // setRenderScale only refuses at the 0.5 clamp or its 0.02 dead zone, so
+  // `stepped` was true on every attempt and the ladder was never evaluated —
+  // while the causal check reverted each of those steps for buying nothing.
+  // Net: a slow device that shed NOTHING. Measured on an iPhone at
+  // Bahrain/night, build 1284: WebGL2 sat at scale 0.80 / tier 0 / 23 fps
+  // while WebGPU and three.js, where the scale lever did bite, reached tier 2
+  // and ran at 60 and 40 fps — the slowest backend shedding the least work.
+  // dt responds to TIER but not to SCALE — the shape of a draw-call/CPU-bound
+  // frame. Modelling a cost that responds to NEITHER would be the capped-clock
+  // case above, where shedding nothing is the correct answer.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
+  assert.ok(PerfGov.tier() > 0,
+    `the feature ladder must be reachable once the scale lever is proven useless, got tier ${PerfGov.tier()}`);
+  assert.ok(scale() > 0.5,
+    "and it must not have ground the resolution to the floor on the way there");
+});
+
+test("raising the GRAPHICS preset releases a shed the preset itself caused", () => {
+  // THE PHONE BUG. The degrade branch steps from _floorTier() so that every shed
+  // is one the EMA can feel — a rung the floor already covers changes nothing.
+  // But it used to STORE that result in _perfTier, which is exactly the
+  // conflation setUserTier's own comment forbids: "shed because the device
+  // struggled" became indistinguishable from "shed because the player asked".
+  //
+  // On a phone the default preset is MEDIUM (userTier 2), so the governor's
+  // FIRST shed wrote _perfTier = max(0, 2) + 1 = 3. Raising to HIGH then set
+  // userTier 0 and left _perfTier at 3, so tier() stayed 3 and SSR (WET MIRROR
+  // + the dry sheens), PER-CHUNK LAMPS, lamp shadows and car shadows all stayed
+  // off. Only a reload cleared it — and on mobile the one preset switch that
+  // forces a reload is ULTRA, because it flips the mobileHigh bit. Hence the
+  // report: "wet sheen and chunk lighting only work on ULTRA".
+  const gov = makeGovAtFloor();
+  gov.setUserTier(2);                       // GRAPHICS: MEDIUM, the mobile default
+  assert.equal(gov.tier(), 2, "MEDIUM floors the ladder at 2");
+
+  // Frames that genuinely get cheaper with each shed, so the causal check keeps
+  // the steps rather than reverting them.
+  feed(gov, (i) => (i % 20 === 0 ? 12 : 30 - gov.tier() * 4), 2000);
+  assert.ok(gov.tier() > 2, "the governor should have shed at least one rung above the floor");
+  const shedTier = gov.tier();
+
+  gov.setUserTier(0);                       // the player raises to HIGH
+  assert.ok(gov.tier() < shedTier,
+    `raising the preset must release the part of the shed the preset caused (was ${shedTier}, now ${gov.tier()})`);
+  assert.equal(gov.tier(), gov.autoTier(),
+    "with no user floor left, tier() must equal the governor's own evidence");
+  assert.ok(gov.tier() <= 2,
+    `only the rungs the governor genuinely measured may survive, got ${gov.tier()}`);
+});

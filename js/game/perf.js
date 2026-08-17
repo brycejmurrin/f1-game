@@ -30,6 +30,25 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+// The scale lever is INEFFECTIVE on this device right now — set when a
+// scale-down step was reverted for buying nothing, cleared once a tier has been
+// shed (the next rung may change that) or once headroom returns.
+//
+// Without it the ladder cannot be reached on a CPU-bound frame. The degrade
+// branch sheds a tier only in the `else` of "did setRenderScale move?", and
+// setRenderScale only refuses at the 0.5 clamp or its 0.02 dead zone — so while
+// the scale can still nominally step, `stepped` is true every time and the
+// tier branch is never evaluated. On a frame whose cost is not fill-bound,
+// every one of those steps is then reverted by the verify below for failing to
+// improve the EMA, and the governor loops forever on the one lever that cannot
+// help while shedding nothing. Measured on an iPhone at Bahrain/night, build
+// 1284, 25 s per backend: WebGL2 sat at scale 0.80 / tier 0 / 23 fps, while
+// WebGPU and three.js — where the scale lever did bite — reached tier 2 and ran
+// at 60 and 40 fps. The slowest backend was shedding the least work.
+//
+// "Reverted for buying nothing" is the honest signal that the lever is wrong,
+// and it is already computed; this just stops throwing it away.
+let _scaleFutile = false;
 
 // THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
 // a 60 Hz display can go" — it silently assumed the frame INTERVAL is a proxy
@@ -181,9 +200,14 @@ function init(gfx) {
       }
     } catch (_) {}
   }
-  _perfTierFloor = _crashStrikes >= 2 ? 4 : (_crashStrikes >= 1 ? 2 : 0);
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
 }
+
+// ONE owner for the strikes -> floor mapping. It used to be spelled out at init
+// and simply missing from cleanRace(), so paying a strike down moved the counter
+// and left the floor where boot had put it. See cleanRace() for what that cost.
+function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 function sentinelArm(on) {
   if (!_gfx || !_gfx.isMobile) return;
@@ -194,6 +218,25 @@ function cleanRace() {
   if (_crashStrikes > 0) {
     _crashStrikes--;
     try { localStorage.setItem(SENT_STRIKES, String(_crashStrikes)); } catch (_) {}
+    // RECOMPUTE THE FLOOR. Paying a strike down used to move the counter and
+    // nothing else, so _perfTierFloor stayed at whatever init() derived for the
+    // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
+    // the gate that sheds SSR (WET MIRROR / the dry sheens) and lamp shadows,
+    // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe. So a single
+    // crash — or one sentinel trip that was never a crash — silently pinned
+    // those features off until the page happened to reload, no matter what the
+    // player set GRAPHICS to. On mobile the one preset switch that DOES force a
+    // reload is ULTRA (it flips the mobileHigh bit, see js/game/gfx-quality.js
+    // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
+    // only work on ULTRA" rather than as a stuck floor.
+    // clearStrikes() has always done this; this path was missed, and the two
+    // now share _floorFromStrikes so they cannot drift apart again.
+    _perfTierFloor = _floorFromStrikes(_crashStrikes);
+    // The floor just dropped. _perfTier may be sitting on the OLD one (the
+    // degrade branch steps from _floorTier(), so it absorbs whatever floor was
+    // live when it fired). Release it to the new floor and let the governor
+    // re-earn any shed from its own measurements.
+    if (_perfTier > _floorTier()) _perfTier = _floorTier();
   }
 }
 
@@ -235,8 +278,15 @@ function tick(dtMs) {
     const failed = v.up ? (_frameEMA > v.ema + VERIFY_MARGIN)
                         : (_frameEMA > v.ema - VERIFY_MARGIN);
     if (failed) {
-      if (v.kind === "scale") _gfx.setRenderScale(v.prev);
-      else _perfTier = v.prev;
+      if (v.kind === "scale") {
+        _gfx.setRenderScale(v.prev);
+        // A DOWN step that bought nothing means this frame is not fill-bound,
+        // so stepping the scale again would revert again. Fall through to the
+        // feature ladder on the next evaluation instead of re-testing a lever
+        // this device has just answered for. (An UP step failing says the
+        // opposite — there was no headroom — and implies nothing about fill.)
+        if (!v.up) _scaleFutile = true;
+      } else _perfTier = v.prev;
       _govCool = VERIFY_COOL;
       return;
     }
@@ -265,7 +315,7 @@ function tick(dtMs) {
     // chasing the constant, and tests/unit/perf-governor.test.mjs:38 already
     // calls that boolean "the real gfx contract PerfGov.tick() relies on".
     let stepped = false;
-    if (_autoRes && cur > 0.5) stepped = !!_gfx.setRenderScale(cur - 0.1);
+    if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
@@ -281,8 +331,13 @@ function tick(dtMs) {
       // Skipping to floor+1 guarantees every step is one that can be felt.
       _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
       _perfTier = Math.max(_perfTier, _floorTier()) + 1; _govCool = 90; _downHold = 600;
+      // A shed rung changes what the frame is bound BY, so let the scale lever
+      // prove itself again from the new baseline rather than staying latched
+      // off for the session on one old measurement.
+      _scaleFutile = false;
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
+    _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
     // headroom is real, and the same _pendingVerify machinery that reverts a
     // useless cut reverts a premature restore one evaluation later — without
@@ -332,7 +387,7 @@ function tick(dtMs) {
 // __apex.safeMode(false).
 function clearStrikes() {
   _crashStrikes = 0;
-  _perfTierFloor = 0;
+  _perfTierFloor = _floorFromStrikes(_crashStrikes);
   try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
 
@@ -343,6 +398,17 @@ return {
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
   // GRAPHICS: LOW still sheds env/SSR/shadows via tier() but the lighting
   // tuner stays live unless the device proved it cannot afford the pass.
+  // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
+  // this wrong in a way worth recording. That draft derived the governor tier as
+  // (floor + its own shed count) so the two could be separated cleanly — but the
+  // degrade branch stops once _floorTier() + sheds reaches 4, and _floorTier()
+  // folds in _userTier while this accessor does not. The shed count was therefore
+  // capped at 4 - _userTier, and this returned at most that: measured 2 on
+  // GRAPHICS: MEDIUM (every phone's default) and 0 on LOW, so bloom, SSAO,
+  // god-rays, contact shadows and lamp volumetrics became UNSHEDABLE however
+  // badly the device was missing frames — the opposite of what a low preset is
+  // for. _perfTier is the effective tier and can always climb to 4, so the
+  // tier-4 consumers stay reachable on every preset.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
@@ -355,7 +421,19 @@ return {
   setUserTier: (n) => {
     const t = Math.max(0, Math.min(4, n | 0));
     if (t === _userTier) return;
+    const prev = _userTier;
     _userTier = t;
+    // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
+    // branch steps from _floorTier(), which folds in _userTier, so a shed taken
+    // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted
+    // the preset as its own evidence, exactly what the note below forbids. On a
+    // phone (default MEDIUM) that made GRAPHICS one-way: raising to HIGH left
+    // tier() at 3, so SSR, per-chunk lamps and both shadow maps stayed off until
+    // a reload, and ULTRA only appeared to fix it because it flips the mobileHigh
+    // bit and forces one. Dropping to the new floor on a RAISE gives the device a
+    // clean chance to prove itself; if it still cannot hold the budget the
+    // governor re-sheds within a couple of evaluations, on its own measurements.
+    if (t < prev && _perfTier > _floorTier()) _perfTier = _floorTier();
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed

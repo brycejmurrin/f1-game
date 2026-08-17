@@ -60,6 +60,13 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
     "index.html must not hardcode window.__APEX_BUILD = <number> (the ?v= bump sed does not touch it)");
 });
 
+test("service-worker registration derives the shell build", () => {
+  assert.doesNotMatch(indexHtml, /href\*="\?v=\d+"/,
+    "inline shell code must discover a version, not embed one");
+  assert.match(indexHtml, /register\("sw\.js" \+ \(loaded \? "\?v=" \+ loaded : ""\)\)/,
+    "service-worker registration must append the parsed build once");
+});
+
 test("every js/**/*.js appears in MANIFEST.FULL (and vice versa)", () => {
   const files = [];
   (function walk(dir) {
