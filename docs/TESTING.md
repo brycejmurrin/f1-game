@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 92 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 93 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -737,6 +737,7 @@ what it covers.
 | `webgpu-lifecycle.test.mjs` | WGX resource lifecycle |
 | `assets-pack.test.mjs` | the baked pack on disk: licence allow-list, md5, size budget |
 | `import-models.test.mjs` | the AX26 model-import output and its determinism |
+| `import-models-workflow.test.mjs` | workflow-dispatch inputs stay out of executable shell text; HTTPS URL and non-deploy branch validation |
 
 ### Car & parts
 
