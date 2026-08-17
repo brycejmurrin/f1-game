@@ -4114,10 +4114,10 @@ const WGX = (function () {
       aabbInFrustum: _aabbInFrustum,
       aabbDist2: _aabbDist2,
 
-      // ── NOT IMPLEMENTED — declared, and declared ABSENT ────────────────────
-      // These are the GLX methods WGX has no counterpart for. They are listed
-      // here as explicit `undefined` because of HOW this backend is installed:
-      // game.js does
+      // ── Parity surface (must stay on this object) ──────────────────────────
+      // These were once absent / explicit `undefined`. They are real WGX
+      // implementations now (2026-08 parity pass) and MUST remain listed here
+      // because of HOW this backend is installed: game.js does
       //     Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend))
       // so every name the backend does NOT define keeps GLX's own function —
       // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
@@ -4126,9 +4126,9 @@ const WGX = (function () {
       // That happened with lampShadowBegin before WGX grew a real one: game.js
       // inherited GLX's, and every night frame threw inside SHD (null) — aborting
       // tickBody before present().
-      // A descriptor whose value is undefined overwrites the inherited one, so
-      // the feature test tells the truth again. Restoring any of these means
-      // implementing it here and deleting the line.
+      // Omitting a name (or leaving a stale "absent" comment that tempts a
+      // delete) re-opens that hole. Gated by backend-surface-parity.test.mjs.
+      // Honest remaining gap vs GLX: TAA scaffold (`_TAA_ENABLED`) is still off.
       drawParticles,
       lampShadowBegin,
       lampShadowEnd,

@@ -151,11 +151,15 @@ Do not re-port these. They are the Phase 2–4b ceiling:
 - FX into the open lit pass: blob shadow, skid, glow, decal
 - Boot self-test + pixel readback; any proven failure returns `null` → GLX
 
-The install rule is load-bearing and must stay: every GLX name WGX does not
-implement is listed as `undefined` on the returned object
-(`js/render/webgpu/wgx.js`). Omitting a name keeps GLX's own function, which
-closes over a null `gl` and throws mid-frame. Gated by
-`tests/unit/backend-surface-parity.test.mjs`.
+The install rule is load-bearing and must stay: every GLX name the game may
+call through `gfx` must appear on the WGX return object
+(`js/render/webgpu/wgx.js`) — as a real function when implemented, or as
+explicit `undefined` when still absent. Omitting a name keeps GLX's own
+function, which closes over a null `gl` and throws mid-frame. The 2026-08
+parity names (`gpuTimer`, texture arrays, lamp shadows, instancing,
+`drawParticles`, …) are real functions and remain listed for that reason.
+Gated by `tests/unit/backend-surface-parity.test.mjs`. Overview:
+[RENDERERS.md](../RENDERERS.md).
 
 ---
 
