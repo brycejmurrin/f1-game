@@ -34,6 +34,7 @@ const Tracks = (function () {
   // to draw the 2D minimaps without paying the full 3D build cost (24 of those
   // on the select screen was a ~16 s first-open stall).
   function buildCenterline(def) {
+    ensurePoints(def);
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
     // dense sampling for arc-length parameterization
@@ -1263,29 +1264,63 @@ const Tracks = (function () {
     // check on the two rectangles' own axes (exact for the rectangle-vs-
     // rectangle case, unlike an AABB, which on a diagonal street over-reports
     // by metres and would delete half the skyline).
+    // Spatial mass index (world XZ) — same CELL pattern as barSegs below.
+    // PERF-FINDINGS: flat masses made massBlocked O(buildings²); SAT stays exact,
+    // only candidate gathering is culled by the grid.
     const masses = [];
+    const MASS_CELL = 24;
+    let massGrid = null;
+    const massCellKey = (cx, cz) => cx * 100003 + cz;
+    const massGridInsert = (i) => {
+      const m = masses[i], r = m.r;
+      const cx0 = Math.floor((m.c[0] - r) / MASS_CELL), cx1 = Math.floor((m.c[0] + r) / MASS_CELL);
+      const cz0 = Math.floor((m.c[2] - r) / MASS_CELL), cz1 = Math.floor((m.c[2] + r) / MASS_CELL);
+      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+        const key = massCellKey(cx, cz);
+        let b = massGrid.get(key); if (!b) massGrid.set(key, b = []);
+        b.push(i);
+      }
+    };
+    const buildMassGrid = () => {
+      massGrid = new Map();
+      for (let i = 0; i < masses.length; i++) massGridInsert(i);
+    };
     const massBlocked = (c, w, d, b, shrink) => {
       const ax = b[0], az = b[2];
       const hw1 = w / 2 * (shrink || 1), hd1 = d / 2 * (shrink || 1);
-      for (let i = 0; i < masses.length; i++) {
-        const m = masses[i];
-        const dx = c[0] - m.c[0], dz = c[2] - m.c[2];
-        if (dx * dx + dz * dz > (hw1 + hd1 + m.r) * (hw1 + hd1 + m.r)) continue;
-        let sep = false;
-        for (const A of [[ax[0], ax[2]], [az[0], az[2]], [m.ax[0], m.ax[2]], [m.az[0], m.az[2]]]) {
-          const L = Math.hypot(A[0], A[1]) || 1;
-          const ux = A[0] / L, uz = A[1] / L;
-          const p1 = hw1 * Math.abs(ax[0] * ux + ax[2] * uz) + hd1 * Math.abs(az[0] * ux + az[2] * uz);
-          const p2 = m.hw * Math.abs(m.ax[0] * ux + m.ax[2] * uz) + m.hd * Math.abs(m.az[0] * ux + m.az[2] * uz);
-          if (Math.abs(dx * ux + dz * uz) > p1 + p2) { sep = true; break; }
+      if (!massGrid) buildMassGrid();
+      if (!massGrid.size) return false;
+      // Insert buckets by m.r; query by our half-extents — same inflated-AABB
+      // proof as barrierClear (reach = hw1+hd1 misses nothing that circle-rejects).
+      const reach = hw1 + hd1;
+      const cx0 = Math.floor((c[0] - reach) / MASS_CELL), cx1 = Math.floor((c[0] + reach) / MASS_CELL);
+      const cz0 = Math.floor((c[2] - reach) / MASS_CELL), cz1 = Math.floor((c[2] + reach) / MASS_CELL);
+      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+        const bucket = massGrid.get(massCellKey(cx, cz)); if (!bucket) continue;
+        for (let j = 0; j < bucket.length; j++) {
+          const m = masses[bucket[j]];
+          const dx = c[0] - m.c[0], dz = c[2] - m.c[2];
+          if (dx * dx + dz * dz > (hw1 + hd1 + m.r) * (hw1 + hd1 + m.r)) continue;
+          let sep = false;
+          for (const A of [[ax[0], ax[2]], [az[0], az[2]], [m.ax[0], m.ax[2]], [m.az[0], m.az[2]]]) {
+            const L = Math.hypot(A[0], A[1]) || 1;
+            const ux = A[0] / L, uz = A[1] / L;
+            const p1 = hw1 * Math.abs(ax[0] * ux + ax[2] * uz) + hd1 * Math.abs(az[0] * ux + az[2] * uz);
+            const p2 = m.hw * Math.abs(m.ax[0] * ux + m.ax[2] * uz) + m.hd * Math.abs(m.az[0] * ux + m.az[2] * uz);
+            if (Math.abs(dx * ux + dz * uz) > p1 + p2) { sep = true; break; }
+          }
+          if (!sep) return true;
         }
-        if (!sep) return true;
       }
       return false;
     };
     const massAdd = (c, w, d, b) => {
+      const i = masses.length;
       masses.push({ c: [c[0], c[1], c[2]], hw: w / 2, hd: d / 2,
                     ax: b[0], az: b[2], r: Math.hypot(w / 2, d / 2) });
+      // Keep the grid CURRENT (massBlocked runs mid-scenery while rows keep
+      // landing) — same incremental contract as pushSeg → barGridInsert.
+      if (massGrid) massGridInsert(i);
     };
     // ── Spatial barrier index (world XZ) ──────────────────────────────────
     // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
@@ -2617,7 +2652,26 @@ const Tracks = (function () {
       sectors: (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].sectors) || null,
       turns:   (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].turns)   || null,
     };
-    def.points = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
+    // PERF-FINDINGS: boot ran realPoints/centerline for all 40 circuits (24.0 ms)
+    // even though a session builds exactly one. Keep LIST.length===40 and every
+    // metadata field copied as today; defer points (+ startFrac remaps /
+    // elevation fmap / applyHwZones) until first access. The getter replaces
+    // itself with a data property after materializing the SAME pipeline that
+    // used to run inline — bit-identical once touched. Tracks.build →
+    // buildCenterline calls ensurePoints so the heavy path never sees a getter.
+    Object.defineProperty(def, "points", {
+      configurable: true,
+      enumerable: true,
+      get() { return materializeListPoints(def, d); }
+    });
+    return def;
+  });
+
+  // Run the eager-LIST points pipeline once, then pin `def.points` as a plain
+  // array so later reads skip the accessor. Closed over by the LIST getter and
+  // by ensurePoints (buildCenterline).
+  function materializeListPoints(def, d) {
+    let pts = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
     // Lap-direction + start-line transform.
     //  • `reverse`   flips the traversal so the loop is driven the other way.
     //  • `startFrac` rotates the start/finish line to a chosen fraction of the
@@ -2633,9 +2687,9 @@ const Tracks = (function () {
       ? TrackSpace.wrap01(def.sceneryStartFrac) : phi;
     if (def.reverse || phi || phiAuthor) {
       if (def.reverse || phi) {
-        const P = def.points, N = P.length, out = new Array(N);
+        const P = pts, N = P.length, out = new Array(N);
         for (let i = 0; i < N; i++) out[i] = P[TrackSpace.racingNodeToSource(def, i, N)];
-        def.points = out;
+        pts = out;
       }
       def._startFrac = phi;
       // ELEVATION AND BRIDGE ANCHORS ARE DRESSING, NOT GEOMETRY, and they are
@@ -2682,9 +2736,19 @@ const Tracks = (function () {
       }
     }
     // Apply after startFrac remap so authored s0/s1 stay in racing-lap space.
-    if (def.hwZones) applyHwZones(def.points, def.hwZones, d.baseHW);
-    return def;
-  });
+    if (def.hwZones) applyHwZones(pts, def.hwZones, d.baseHW);
+    Object.defineProperty(def, "points", {
+      value: pts, writable: true, configurable: true, enumerable: true
+    });
+    return pts;
+  }
+
+  // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
+  // buildCenterline is the only build entry that needs the array; LIST.find
+  // metadata consumers never pay.
+  function ensurePoints(def) {
+    return def.points;
+  }
 
   // THE CHAMPIONSHIP CALENDAR. `LIST` is every playable circuit; `SEASON` is the
   // subset that forms a season. They used to be the same array, which meant

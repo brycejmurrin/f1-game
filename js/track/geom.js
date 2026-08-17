@@ -198,7 +198,12 @@ const TrackGeom = (function () {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
     const ring = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
-    for (let i = 0; i < seg; i++) emit(out, [ring(i / seg * 6.2832), ring((i + 1) / seg * 6.2832), ap], col, ref);
+    // Cache ring ends once per segment (PERF-FINDINGS). Keep angle as
+    // (i+1)/seg*6.2832 — NOT %seg: 6.2832 ≠ 2π, wrapping moves the last edge.
+    for (let i = 0; i < seg; i++) {
+      const p0 = ring(i / seg * 6.2832), p1 = ring((i + 1) / seg * 6.2832);
+      emit(out, [p0, p1, ap], col, ref);
+    }
   }
 
   // Cylinder: n-gon column radius `rad`, height `h` (+ top cap). Trunks, towers.
@@ -209,8 +214,10 @@ const TrackGeom = (function () {
     const lo = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
     for (let i = 0; i < seg; i++) {
       const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      emit(out, [lo(a0), lo(a1), vadd(lo(a1), u, h), vadd(lo(a0), u, h)], col, ref);
-      emit(out, [vadd(lo(a0), u, h), vadd(lo(a1), u, h), top], col, ref);
+      // lo(a0)/lo(a1) once each — side + cap shared the same ring ends 3×.
+      const p0 = lo(a0), p1 = lo(a1), q0 = vadd(p0, u, h), q1 = vadd(p1, u, h);
+      emit(out, [p0, p1, q1, q0], col, ref);
+      emit(out, [q0, q1, top], col, ref);
     }
   }
 
@@ -224,7 +231,8 @@ const TrackGeom = (function () {
     const hi = (a) => vadd(vadd(vadd(c, u, h), r, __M.cos(a) * rTop), f, __M.sin(a) * rTop);
     for (let i = 0; i < seg; i++) {
       const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      emit(out, [lo(a0), lo(a1), hi(a1), hi(a0)], col, ref);
+      const p0 = lo(a0), p1 = lo(a1), q0 = hi(a0), q1 = hi(a1);
+      emit(out, [p0, p1, q1, q0], col, ref);
     }
   }
 

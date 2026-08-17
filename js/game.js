@@ -2118,6 +2118,8 @@ function loadTrack(idx) {
       gfx.freeMesh(track.meshes.floor);
       gfx.freeMesh(track.meshes.road);
       gfx.freeMesh(track.meshes.terrain);
+      if (track.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.roadChunked);
+      if (track.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.terrainChunked);
       if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
       if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
@@ -5748,23 +5750,24 @@ function render(dt) {
       M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
       M4.mulTo(_mLVP, _mLProj, _mLView);
       gfx.shadowBegin(_mLVP);
-      gfx.castShadow(track.meshes.terrain, MAT_IDENT);
-      // Shadow-only road chunk: frustum-cull the ribbon against the ±shadow-box
-      // ortho (castShadowChunked). Independent of LT.roadChunkLamps — that knob
-      // is for the lit pass (and needs trk); depth casting only needs positions.
-      // Lazy-build shares track.meshes.roadChunked with the lamp draw path.
-      if (track.meshes.roadChunked === undefined) {
-        track.meshes.roadChunked = null;
-        if (track.roadGeo && gfx.createChunkedMesh) {
-          track.roadGeo._keepPositions = true;
-          track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+      // Shadow ribbons: chunk + frustum-cull against the ±shadow-box ortho
+      // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
+      // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
+      // Lazy-build shares roadChunked with the lamp draw path.
+      const _castRibbonSh = (geo, key, plain) => {
+        if (track.meshes[key] === undefined) {
+          track.meshes[key] = null;
+          if (geo && gfx.createChunkedMesh) {
+            geo._keepPositions = true;
+            track.meshes[key] = gfx.createChunkedMesh(geo, 72);
+          }
         }
-      }
-      {
-        const _roadSh = track.meshes.roadChunked;
-        if (_roadSh && _roadSh.chunks) gfx.castShadowChunked(_roadSh, MAT_IDENT);
-        else gfx.castShadow(track.meshes.road, MAT_IDENT);
-      }
+        const ch = track.meshes[key];
+        if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
+        else gfx.castShadow(plain, MAT_IDENT);
+      };
+      _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
+      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map at NIGHT — directional sun shadows are invisible under the dim
       // moonlight, so this is the biggest night saving. Gate on the KEY's actual
