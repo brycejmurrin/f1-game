@@ -873,7 +873,7 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish proxy helper + RPC unwrap — `.mcp.json` wiring, help surface, fixture unwrap/deploy-summary STALE vs OK, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has only tinyfish + chrome-devtools, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
 
 ---
 

@@ -43,21 +43,46 @@ test("tinyfish-mcp.sh and tinyfish-rpc.py exist", () => {
   assert.ok(fs.statSync(SH).mode & 0o100, "tinyfish-mcp.sh should be executable");
 });
 
-test(".mcp.json wires tinyfish HTTP + chrome-devtools via wrapper script", () => {
+test(".mcp.json wires only tinyfish HTTP + chrome-devtools wrapper", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "chrome-devtools",
+    "tinyfish",
+  ]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["run"]);
-  assert.equal(cfg.mcpServers["apex-wrap"], undefined, "apex-wrap was removed");
 });
 
-test("tinyfish-mcp.sh help lists ensure / format / deploy-check compare", () => {
+test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
   const r = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /setup/);
   assert.match(r.stdout, /ensure/);
   assert.match(r.stdout, /deploy-check/);
+  assert.match(r.stdout, /deploy-js/);
   assert.match(r.stdout, /--format/);
   assert.match(r.stdout, /version\.json/);
+});
+
+test("tinyfish-rpc live-build extracts N from nested version.json RPC", () => {
+  const r = spawnSync("python3", [RPC, "live-build"], {
+    encoding: "utf8",
+    input: JSON.stringify(FIXTURE_FETCH),
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "1262");
+});
+
+test("chrome-devtools-mcp.sh help lists clone / verify / run", () => {
+  const r = spawnSync("bash", [CD_SH, "help"], { encoding: "utf8" });
+  // help is the default unknown-path; script exits 1 with usage on bad cmd —
+  // `status` exits 0. Usage text lives on stderr+stdout for the catch-all.
+  const text = `${r.stdout}\n${r.stderr}`;
+  assert.match(text, /clone/);
+  assert.match(text, /verify/);
+  assert.match(text, /run/);
+  assert.match(text, /chrome-devtools-mcp/);
 });
 
 test("tinyfish-rpc unwrap prints version.json body text from nested RPC", () => {

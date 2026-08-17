@@ -44,13 +44,43 @@ need_key() {
   fi
 }
 
+REPO_URL="https://github.com/tinyfish-io/tinyfish-mcp-server.git"
+DEPLOY_BASE="https://brycejmurrin.github.io/f1-game"
+
 need_repo() {
   if [[ ! -f "$REPO/dist/index.js" ]]; then
-    echo "Missing build at $REPO — run:" >&2
-    echo "  git clone https://github.com/tinyfish-io/tinyfish-mcp-server.git $REPO" >&2
-    echo "  cd $REPO && npm ci && npm run build" >&2
+    echo "Missing build at $REPO — run: $0 setup" >&2
     exit 1
   fi
+}
+
+cmd_setup() {
+  mkdir -p "$(dirname "$REPO")"
+  if [[ -d "$REPO/.git" ]]; then
+    echo "Already cloned: $REPO"
+    git -C "$REPO" pull --ff-only 2>/dev/null || true
+  else
+    git clone "$REPO_URL" "$REPO"
+  fi
+  (
+    cd "$REPO"
+    npm ci
+    npm run build
+  )
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "Create $ENV_FILE with: TINYFISH_API_KEY=…" >&2
+    echo "  Get a key: https://agent.tinyfish.ai/api-keys" >&2
+  else
+    echo "Env: $ENV_FILE present"
+  fi
+  if local_ok_bin; then
+    echo "Build OK: $REPO/dist/index.js"
+  fi
+  echo "Next: $0 ensure"
+}
+
+local_ok_bin() {
+  [[ -f "$REPO/dist/index.js" ]]
 }
 
 tmux_cmd() {
@@ -276,12 +306,10 @@ cmd_deploy_check() {
   cmd_ensure >/dev/null
   load_session
   local args_json raw
-  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["https://brycejmurrin.github.io/f1-game/version.json"],"format":"markdown","ttl":0}))')"
+  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
   raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$args_json"'}}')"
   if [[ "$FLAG_JSON" -eq 1 ]]; then
     printf '%s\n' "$raw"
-    # Still run the summary on a copy for the exit code? Prefer explicit:
-    # --json prints RPC and skips compare (exit 0 if RPC ok).
     return 0
   fi
   if [[ -f "$VERSION_JSON" ]]; then
@@ -291,10 +319,45 @@ cmd_deploy_check() {
   fi
 }
 
+# Fetch a shipped JS/CSS asset at the live ?v= build (script tags are stripped
+# from index.html extracts, so this is the marker-grep path).
+cmd_deploy_js() {
+  parse_common_flags "$@"
+  set -- "${PARSE_REST[@]}"
+  local rel="${1:?usage: $0 deploy-js [--json] <path-under-site>   e.g. js/log.js}"
+  # Accept "js/foo.js", "/js/foo.js", or "foo.js" (→ js/foo.js).
+  rel="${rel#/}"
+  if [[ "$rel" != js/* && "$rel" != css/* && "$rel" != *.* ]]; then
+    rel="js/$rel"
+  elif [[ "$rel" != */* ]]; then
+    rel="js/$rel"
+  fi
+  cmd_ensure >/dev/null
+  load_session
+  local ver_args raw live url
+  ver_args="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
+  raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$ver_args"'}}')"
+  live="$(printf '%s' "$raw" | python3 "$RPC" live-build)"
+  url="${DEPLOY_BASE}/${rel}?v=${live}"
+  echo "# live=${live}  $url" >&2
+  # Re-enter fetch with the resolved URL (preserve --json / --format).
+  local -a fetch_args=()
+  [[ "$FLAG_JSON" -eq 1 ]] && fetch_args+=(--json)
+  [[ -n "$FETCH_FORMAT" ]] && fetch_args+=(--format "$FETCH_FORMAT")
+  [[ -n "$FETCH_TTL" ]] && fetch_args+=(--ttl "$FETCH_TTL")
+  [[ -n "$FETCH_PURPOSE" ]] && fetch_args+=(--purpose "$FETCH_PURPOSE")
+  # Prefer live origin for the asset itself.
+  if [[ -z "$FETCH_TTL" ]]; then
+    fetch_args+=(--ttl 0)
+  fi
+  cmd_fetch "${fetch_args[@]}" "$url"
+}
+
 usage() {
   cat <<EOF
 TinyFish local MCP helper (proxy -> https://agent.tinyfish.ai/mcp)
 
+  $0 setup                 Clone/build scratch/tinyfish-mcp-server
   $0 start                 Start proxy in tmux (port ${PORT})
   $0 stop                  Stop tmux session (+ clear saved session id)
   $0 status                healthz probe
@@ -304,16 +367,16 @@ TinyFish local MCP helper (proxy -> https://agent.tinyfish.ai/mcp)
   $0 fetch [flags] <url>…  fetch_content (free); unwraps body text
   $0 search [--json] <q>   web search (free); unwraps body text
   $0 deploy-check [--json] live version.json vs local version.json
+  $0 deploy-js <path>      fetch shipped asset at live ?v= (e.g. js/log.js)
 
 Fetch flags:
   --format markdown|html|json   (default markdown; html keeps more markup)
   --ttl N                       freshness seconds (0 = prefer live)
-  --purpose "…"                 optional intent hint for TinyFish
+  --purpose "..."               optional intent hint for TinyFish
   --json                        print raw JSON-RPC (no unwrap)
 
 deploy-check exits 1 when live build != local version.json (STALE Pages).
-For shipped-JS markers, fetch the asset URL with ?v=<live> — index.html
-fetch strips <script> tags (TinyFish content extract), so ?v= is not there.
+deploy-js is the marker-grep path — index.html extracts strip <script> tags.
 
 Env: TINYFISH_API_KEY in $ENV_FILE or shell.
 Repo: $REPO
@@ -324,6 +387,7 @@ main() {
   local cmd="${1:-}"
   shift || true
   case "$cmd" in
+    setup) cmd_setup ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
     status) cmd_status ;;
@@ -333,6 +397,7 @@ main() {
     fetch) cmd_fetch "$@" ;;
     search) cmd_search "$@" ;;
     deploy-check) cmd_deploy_check "$@" ;;
+    deploy-js) cmd_deploy_js "$@" ;;
     -h|--help|help|"") usage ;;
     *) echo "Unknown: $cmd" >&2; usage >&2; exit 1 ;;
   esac

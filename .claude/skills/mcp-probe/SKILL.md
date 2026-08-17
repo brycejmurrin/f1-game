@@ -531,6 +531,8 @@ in the session catalog):
 ./tools/tinyfish-mcp.sh ensure
 ./tools/tinyfish-mcp.sh deploy-check
 # → live=N local=M OK   or   live=N local=M STALE (exit 1)
+./tools/tinyfish-mcp.sh deploy-js js/log.js
+# → shipped source at ?v=<live> (marker-grep path; index.html strips <script>)
 ./tools/tinyfish-mcp.sh fetch --ttl 0 \
   "https://brycejmurrin.github.io/f1-game/js/<path>.js?v=<N>"
 ```

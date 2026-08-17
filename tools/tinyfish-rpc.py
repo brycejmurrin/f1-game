@@ -126,6 +126,17 @@ def cmd_deploy_summary(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_live_build(args: argparse.Namespace) -> int:
+    rpc = load_rpc(sys.stdin.read())
+    for row in result_bodies(rpc):
+        live = extract_build(row.get("text") or "")
+        if live is not None:
+            print(live)
+            return 0
+    print("tinyfish-rpc: could not parse live build", file=sys.stderr)
+    return 2
+
+
 def cmd_tool_names(args: argparse.Namespace) -> int:
     rpc = load_rpc(sys.stdin.read())
     tools = (rpc.get("result") or {}).get("tools") or []
@@ -148,6 +159,9 @@ def main() -> int:
     p_dep.add_argument("--local-build", type=int, default=None)
     p_dep.add_argument("--local-file", type=str, default=None)
     p_dep.set_defaults(func=cmd_deploy_summary)
+
+    p_live = sub.add_parser("live-build", help="print the live build number from a version.json RPC")
+    p_live.set_defaults(func=cmd_live_build)
 
     p_names = sub.add_parser("tool-names", help="list tool names from tools/list RPC")
     p_names.set_defaults(func=cmd_tool_names)
