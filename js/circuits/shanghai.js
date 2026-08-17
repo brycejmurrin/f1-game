@@ -71,7 +71,7 @@
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
-        waterSurface, groundPatch, sailCanopy, terrainYAt,
+        waterSurface, groundPatch, sailCanopy, terrainYAt, frameAt,
         cameraTower, broadcastCompound, sponsorHoarding,
         groundUnder,
       } = api;
@@ -337,7 +337,7 @@
           // sinks 0.3 m — and here the verge runs ~1.5 m below the road, so the
           // old `hgt - 0.8` pillars stopped 2.3 m short of the deck they carry.
           // Solve for the deck underside and overrun 0.5 m into the slab.
-          const deckTopY = py[K(sLap)] + hgt + 0.5;
+          const deckTopY = frameAt(sLap).c[1] + hgt + 0.5;
           for (const tOff of [-2.4, 2.4]) {
             seat.cyl(out, vadd(aL.c, aL.t, tOff), 0.45, deckTopY - aL.c[1], STEEL, 6, bL);
             seat.cyl(out, vadd(aR.c, aR.t, tOff), 0.45, deckTopY - aR.c[1], STEEL, 6, bR);

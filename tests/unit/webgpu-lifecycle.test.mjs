@@ -47,6 +47,7 @@ function makeGpuHarness(opts = {}) {
 
   const pass = new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
+  const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
   const stored = opts.storage || null;
@@ -95,8 +96,14 @@ function makeGpuHarness(opts = {}) {
     // multisample count that WebGPU rejects is invisible to a harness that
     // throws the descriptor away, and both of those shipped. (The pipeline
     // half of the sampleCount guard was reading an undefined h.pipelines and
-    // passing vacuously.)
-    createRenderPipeline: (desc) => { pipelines.push({ desc }); return pipeline; },
+    // passing vacuously.) Two lineages grew two readers of this — the raw desc
+    // for the depth-compare guards, the wrapped one for the format guards — so
+    // it feeds both rather than renaming one and breaking its tests.
+    createRenderPipeline: (desc) => {
+      pipelineDescs.push(desc);
+      pipelines.push({ desc });
+      return pipeline;
+    },
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -243,6 +250,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    pipelineDescs,
     WGX: context.window.WGX,
     pipelines,
     deviceRequests,
@@ -645,6 +653,31 @@ test("WGX requests timestamp-query when the adapter exposes it", async () => {
   assert.match(WGX_SOURCE, /timestampWrites/);
 });
 
+test("depth-testing pipelines never use compare 'always' (skyLate erased the world)", async () => {
+  // PerfTry.skyLate ships ON, so game.js draws the sky AFTER the opaque world
+  // on every backend. GLX's sky sits at depth 1.0 under LEQUAL and is rejected
+  // where the world already wrote; WGX's sky pipeline declared
+  // depthCompare:"always", so the late fullscreen sky triangle overwrote every
+  // world pixel — WebGPU rendered with no road, terrain, or props (only
+  // cars/FX drawn after the sky survived). The invariant that pins the fix:
+  // any pipeline that reads depth without writing it (sky, glow, skid, decal,
+  // particles) exists to be occluded by the world, so "always" is never right
+  // there. (The MS depth-resolve pass legitimately uses "always" — it WRITES
+  // depth via @builtin(frag_depth) — hence the depthWriteEnabled filter.)
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  gfx.drawSky({});
+  const readOnlyDepth = h.pipelineDescs.filter(
+    (d) => d && d.depthStencil && !d.depthStencil.depthWriteEnabled);
+  assert.ok(readOnlyDepth.length >= 1, "the sky pipeline must be among the recorded descriptors");
+  for (const d of readOnlyDepth) {
+    assert.notEqual(d.depthStencil.depthCompare, "always",
+      "a depth-test-only pipeline must respect the world's depth (GLX LEQUAL parity)");
+  }
+});
+
 test("WGX source keeps the proven parity fixes", () => {
   assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);
@@ -1043,41 +1076,55 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // callee that returns early non-uniformly poisons its CALLER too, so the fix
   // is structural: derivatives at the fs_main entry, footprint passed down.
   const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
-  // The only legal homes: the fw2/fw3 wrappers, the clearcoat pair and the
-  // specular-AA pair — all called from (or written at) the top of fs_main, never
-  // inside a material branch. Adding a home here means asserting by inspection
-  // that the new site is unconditional; the whole point of the list is that
-  // growing it is a deliberate act.
-  const allowed = [
-    /fn fw2\(v: vec2<f32>\) -> vec2<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
-    /fn fw3\(v: vec3<f32>\) -> vec3<f32> \{ return abs\(dpdx\(v\)\) \+ abs\(dpdy\(v\)\); \}/,
-    /let ccDx = dpdx\(Ngeo\);/, /let ccDy = dpdy\(Ngeo\);/,
-    /let saaDx = dpdx\(N\);/, /let saaDy = dpdy\(N\);/,
-  ];
-  for (const re of allowed) assert.match(CHUNKS_SOURCE, re, `derivative home moved: ${re}`);
-  // Comments discuss fwidth freely; only code counts.
-  let stripped = CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
-  for (const re of allowed) stripped = stripped.replace(re, "");
-  const leftover = stripped.match(DERIV) || [];
-  assert.deepEqual(leftover, [], "a derivative escaped the uniform-control-flow entry points");
+  // Structural, not an allow-list of spellings: two sessions fixed this in
+  // parallel and picked different names, and a list of exact lines would have
+  // called the other one's correct code a regression. The invariant is about
+  // POSITION. Walk every `fn` in the module and require that any body taking a
+  // derivative is an entry point — a helper that takes one is reachable from a
+  // material branch by construction, and a wrapper is the worst case because
+  // the call site then looks like ordinary arithmetic (that is exactly how the
+  // original fw1 shipped, and how it survived the first fix as dead code).
+  const stripped = CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  const fns = [];
+  for (const m of stripped.matchAll(/\bfn\s+(\w+)\s*\(/g)) {
+    let i = stripped.indexOf("{", m.index);
+    if (i < 0) continue;
+    let depth = 0;
+    let end = i;
+    for (; end < stripped.length; end++) {
+      if (stripped[end] === "{") depth++;
+      else if (stripped[end] === "}" && --depth === 0) break;
+    }
+    fns.push({ name: m[1], body: stripped.slice(i, end + 1) });
+  }
+  assert.ok(fns.length > 20, `expected the WGSL module's functions, found ${fns.length}`);
+  const offenders = fns
+    .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
+    .map((f) => f.name);
+  DERIV.lastIndex = 0;
+  assert.deepEqual(offenders, [],
+    "a derivative (or a wrapper around one) lives outside a fragment entry point");
 
-  // A WRAPPER hides the derivative, so grepping for dpdx is not enough: calling
-  // fw2/fw3 from behind a material branch is the same compile error and looks
-  // like arithmetic. (This is exactly how the original fw1 shipped, and how it
-  // then survived the first fix as dead code.) Both wrappers must be called
-  // ONLY from the lit fs_main, and only in the two hoisting lines below.
-  const CALLS = /\bfw[123]\s*\(/g;
-  const litFs = /@fragment\s+fn fs_main\(in : VSOut, @builtin\(front_facing\)[\s\S]*?\n\}/.exec(stripped);
-  assert.ok(litFs, "the lit fs_main moved — this guard is now blind");
-  const callsOutside = stripped.replace(litFs[0], "").match(CALLS) || [];
-  assert.deepEqual(callsOutside, [], "a footprint wrapper is called outside the lit fs_main");
-  assert.deepEqual(litFs[0].match(CALLS) || [], ["fw3(", "fw2("],
-    "fs_main must hoist exactly the two footprints, once each");
+  // Uniform means before the FIRST branch, not merely inside fs_main: an early
+  // `return` or an `if` above the derivative poisons everything after it.
+  for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
+    DERIV.lastIndex = 0;
+    const firstBranch = f.body.search(/\b(if|for|while|loop|switch|return|discard)\b/);
+    for (const d of f.body.matchAll(DERIV)) {
+      assert.ok(firstBranch === -1 || d.index < firstBranch,
+        `${f.name}: ${d[1]} at ${d.index} sits after the first branch at ${firstBranch}`);
+    }
+  }
+  DERIV.lastIndex = 0;
 
   // …and the footprint must reach every consumer as a parameter.
-  for (const re of [/let fwW = fw3\(in\.wpos\);/, /let fwT = fw2\(in\.trk\.xy\);/,
-                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwW\);/,
-                    /roadMarkings\(&albedo, &rough, in\.trk, fwT\);/]) {
+  for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
+                    /let fwTrk = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
+                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos\);/,
+                    /roadMarkings\(&albedo, &rough, in\.trk, fwTrk\);/,
+                    // The one the first fix missed: this sits behind `if (detail
+                    // > 0.001)`, so it must READ the hoisted footprint.
+                    /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
     assert.match(CHUNKS_SOURCE, re, `footprint plumbing changed: ${re}`);
   }
 });
@@ -1156,6 +1203,27 @@ test("WGSL derivative uniform control flow: fw1 is gone for good", () => {
   // control flow can be non-uniform" above; this pins the deletion.
   assert.doesNotMatch(CHUNKS_SOURCE, /fn\s+fw1\s*\(/, "fn fw1 must not come back — a wrapper hides the derivative");
   assert.doesNotMatch(CHUNKS_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""), /\bfw1\s*\(/, "no calls to fw1 may remain");
+});
+
+test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white road)", () => {
+  // The mechanism the hoist above fixes, pinned per-helper: these functions
+  // all early-return on per-fragment values (roadMarkings on trk.z > 0.5 — the
+  // road surface itself), so a derivative INSIDE any of them either
+  // invalidates the whole lit pipeline (enforcing Dawn: WGX silently fell back
+  // to GLX) or executes UNDEFINED values exactly where the returns diverge
+  // (warning-mode Dawn: the entire road + shoulders rendered NaN-white on
+  // phones while grass, walls and cars — hw 0, early return before any
+  // derivative — looked fine). Widths are computed at fs_main top and threaded
+  // in; every pattern width is linear in them, so the chain-rule scaling is
+  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
+                   "applyMaterialNormal", "applyMaterial", "roadMarkings"];
+  for (const name of helpers) {
+    const m = CHUNKS_SOURCE.match(new RegExp("fn " + name + "\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}", ""));
+    assert.ok(m, "helper fn " + name + " exists in wgsl-chunks.js");
+    assert.doesNotMatch(m[0], /dpdx|dpdy|fwidth|fw1\(/,
+      "fn " + name + " must not take screen-space derivatives — hoist to fs_main top and pass widths in");
+  }
 });
 
 test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {

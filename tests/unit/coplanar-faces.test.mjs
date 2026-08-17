@@ -52,16 +52,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // anchor) moved neither. Recorded here so the caps stop lying about the tree;
 // the underlying same-facing pairs are a real open defect on that lineage.
 //
-// silverstone 15 -> 16 (2026-08-17): owed by 4f109f76, which made the pit-straight
-// gantry beam sceneryShift-safe — `vadd(L.c, L.u, H + 0.35)` in place of a raw
-// `frac`-keyed `px[kb]/py[kb]/pz[kb]` read. That read placed the beam ~2/3 of a
-// lap from its anchor (the standing hazard of the 7a173519 rotation), so the new
-// count is the beam sitting where it belongs and meeting the gantry it belongs
-// to. Measured 16 on `origin/claude/f1-game-project-26h3ng` at 84b2edaf in an
-// isolated worktree with nothing else merged, so the commit shipped the geometry
-// fix and left this cap behind — CI on that branch has been red since. Not drift
-// and not a merge interaction: the WGX branch that found it changes no file the
-// audit loads.
 //
 // vegas 66 -> 67 (2026-08-08): the street-barrier chord-cut fix splits apex
 // spans into two single-node panels that follow the curve, and the new joint
@@ -69,6 +59,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // panel joint on the lap already contributes. The alternative was a 1.1 m
 // barrier hanging over the racing surface (the props-over-road failure this
 // baseline's +1 paid for). A deliberate trade, not drift.
+//
+// silverstone 15 -> 16 (2026-08-17): the start-gantry crossbar fix (4f109f76)
+// seats the beam on the mast anchors (`vadd(L.c, L.u, ...)`) instead of a raw
+// sceneryShift-uncompensated `px[kb]` read that hung it tens of metres away.
+// Bridging the masts means the beam's underside now abuts two same-height
+// mast caps — the same seam class as vegas's panel joints. The +1 pays for a
+// gantry that actually spans the grid; measured identically on the deploy
+// head alone and on the WGX-fix merge (this tree), so it is that commit's
+// deliberate trade, not a merge interaction. (Two sessions wrote this entry
+// independently, one of them after measuring 16 at 84b2edaf in an isolated
+// worktree with nothing else merged — the cap was left behind by the geometry
+// commit itself, and test:sweeps was red on the deploy branch until it landed.)
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );

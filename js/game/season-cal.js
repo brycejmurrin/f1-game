@@ -284,12 +284,23 @@ function presetIds(id) {
   return n > 0 ? all.slice(0, Math.min(n, all.length)) : all;
 }
 // Fisher-Yates on a COPY. The caller owns the result; nothing here mutates the
-// live config until setConfig() is called with it.
-function shuffled(ids) {
+// live config until setConfig() is called with it. Supports an optional seed for
+// deterministic shuffling.
+function shuffled(ids, seed) {
   const a = ids.slice();
+  let s = seed != null ? (seed | 0) : null;
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const t = a[i]; a[i] = a[j]; a[j] = t;
+    let r;
+    if (s != null) {
+      s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      r = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    } else {
+      r = Math.random();
+    }
+    const j = Math.floor(r * (i + 1));
+    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
   }
   return a;
 }

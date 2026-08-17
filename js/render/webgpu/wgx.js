@@ -50,7 +50,7 @@
  *     are real (GPUTexture upload) so decals have an atlas.
  *
  * PARITY (2026-08): gpuTimer, createTextureArray/matTexMix, generateMips (env +
- *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 2× with
+ *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 4× with
  *   manual depth resolve, Poisson PCSS, world-space god-ray, applyMaterial*,
  *   road markings, heat haze, SSAO/god-ray separable blur. See
  *   docs/research/WEBGPU-PARITY.md.
@@ -100,14 +100,14 @@ const WGX = (function () {
   const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
   // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
   // first full-size frame if we take the desktop stack (high-performance +
-  // timestamp-query + MSAA 2× rgba16float + 2048 shadows). Same sniff as TLX.
+  // timestamp-query + MSAA 4× rgba16float + 2048 shadows). Same sniff as TLX.
   const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const IS_WEBKIT = /CriOS|FxiOS|EdgiOS/.test(_ua) ||
     (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
   // Loss-escalation ladder, persisted per origin. One device.lost = one rung
   // up + one reload, so every retry is genuinely CHEAPER than the config that
   // just died — never the identical crash again:
-  //   rung 0  full    — desktop stack (MSAA 2, timestamp, 2048 shadows, SSR)
+  //   rung 0  full    — desktop stack (MSAA 4, timestamp, 2048 shadows, SSR)
   //   rung 1  lite    — phone-parity (MSAA 1, 1024 shadows, no SSR/timestamp)
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
@@ -121,7 +121,7 @@ const WGX = (function () {
   } catch (_) { /* blocked storage: sniff-only lite */ }
   const _litePref = _wgxLevel >= 1;
   // Slim stack: every phone, every WebKit, or a previous device.lost on this
-  // origin. GRAPHICS: ULTRA must not 2× MSAA a phone WebGPU device — that is
+  // origin. GRAPHICS: ULTRA must not 4× MSAA a phone WebGPU device — that is
   // the "worked for a second then crashed" path.
   const WGX_LITE = !!(IS_MOBILE || IS_WEBKIT || _litePref);
   // Minimal only ever comes from the ladder (a LITE device that still lost

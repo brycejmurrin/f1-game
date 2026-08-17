@@ -35,6 +35,7 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | docs, tools, tests only | `npm run test:tooling-fast` |
 | one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
+| WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
 
@@ -55,25 +56,32 @@ Session shape — this is what controls both wall time and waiting:
    re-run browser specs after every edit; `test:tooling-fast` is the edit-loop
    check, and `test:tiny` runs once before the bump. Track or scenery edits
    run `verify-track.cjs <id>` first (2 s), not a browser group.
-3. ONE Playwright process, ONE browser group per batch, started in the
+3. NEVER BLOCK THE FOREGROUND ON A TEST RUN — this is a flat prohibition and
+   it covers node suites, sweeps, and audits, not just browser groups. Every
+   command expected to take more than ~30 s starts in the background with its
+   output to an `artifacts/` log, and the session does other work (docs,
+   analysis, the next investigation) or ends the turn while it runs. Poll a
+   log with a bounded read when a decision needs it; a session sitting in a
+   foreground `npm test` is the failure mode this rule exists to kill.
+4. ONE Playwright process, ONE browser group per batch, started in the
    background with `test-bg.mjs`. Anchor on the log's terminal line
    `= run (passed|failed|timedout|interrupted)` — never a looser pattern,
    never the process table, never `| tail` on a live log. While it runs, do
    non-`js/`/`css/` work or end the turn; do not idle-watch the log.
-4. A timeout on a busy box measures the machine, not the code — budgets mean
+5. A timeout on a busy box measures the machine, not the code — budgets mean
    roughly half what they say at two workers. Check `/proc/loadavg` (< 3) and
    for a live `playwright test` process before starting anything. On a
    timeout, look for a load inversion in the log first; re-run the spec ALONE
    only when the verdict matters.
-5. STOPPING IS ALLOWED: a pushed change that names its unverified groups in
+6. STOPPING IS ALLOWED: a pushed change that names its unverified groups in
    the PR beats an hour of serialized SwiftShader. Never widen a tolerance to
    make a spec pass; write tests against `__apex` hooks, relative assertions
    over absolute thresholds; any `waitForFunction` on a rendering page needs
    `{ polling: 100 }` or its declared timeout never fires.
-6. Never hand a subagent a browser run — give a flat prohibition ("report it
+7. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-7. Never bump `?v=N`/`version.json` mid-run — the bump is the LAST edit
+8. Never bump `?v=N`/`version.json` mid-run — the bump is the LAST edit
    before commit.
 
 ## Seeing the game (cheapest first)
@@ -130,7 +138,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and
   `three/` TLX (opt-in `apex26.gfxBackend="three"`)
 - `js/track/` — spline mesh geom graph space surface markings models themes
-  kits geo-paths maps + the scenery split; the 110-member scenery(api)
+  kits geo-paths maps + the scenery split; the 111-member scenery(api)
   contract is frozen by `tests/unit/scenery-api-contract.test.mjs`
 - `js/car/` — car3d, liveries, liverytex, the parts catalog (600 cr budget),
   ghost, teams, driver-ratings
