@@ -177,7 +177,17 @@ const WGX = (function () {
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
   const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
-  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
+  // bloom/godray (GLX R11F_G11F_B10F). NOT a const, and not renderable by
+  // default: rg11b10ufloat carries TEXTURE_BINDING and the copy usages in core
+  // WebGPU, but RENDER_ATTACHMENT only arrives with the OPTIONAL
+  // "rg11b10ufloat-renderable" feature. Allocating a target in it without asking
+  // for the feature is a validation error per target — measured on a live device
+  // as "Color format (TextureFormat::RG11B10Ufloat) is not color renderable",
+  // twice, then "WGX unavailable" and a silent fall back to GLX. create()
+  // negotiates the feature and downgrades this to SCENE_FORMAT when the device
+  // withholds it: 8 B/px instead of 4 on two half-res targets and the bloom
+  // chain, which is the cost of having a post chain at all.
+  let POST_HDR_FORMAT = "rg11b10ufloat";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -390,8 +400,18 @@ const WGX = (function () {
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
       // treats the phone timer as absent; Safari Mac is the same GPU.
-      const _canTimestamp = !WGX_LITE && !!(adapter.features && adapter.features.has && adapter.features.has("timestamp-query"));
-      device = await adapter.requestDevice(_canTimestamp ? { requiredFeatures: ["timestamp-query"] } : {});
+      const _has = function (name) {
+        return !!(adapter.features && adapter.features.has && adapter.features.has(name));
+      };
+      const _canTimestamp = !WGX_LITE && _has("timestamp-query");
+      // rg11b10ufloat is renderable ONLY with this feature (see POST_HDR_FORMAT).
+      // Asked for on every tier, phones included: it makes the post targets
+      // HALF the bytes, which matters most where memory is tightest.
+      const _canPostHDR = _has("rg11b10ufloat-renderable");
+      const _want = [];
+      if (_canTimestamp) _want.push("timestamp-query");
+      if (_canPostHDR) _want.push("rg11b10ufloat-renderable");
+      device = await adapter.requestDevice(_want.length ? { requiredFeatures: _want } : {});
       // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
       // says so — even when it cannot give a valid one; the failure is signalled
       // by handing back a device whose `lost` promise is ALREADY resolved. So a
@@ -411,7 +431,16 @@ const WGX = (function () {
       device.lost.then(function (info) { _bornLost = (info && info.reason) || "unknown"; });
       await null; await null;
       if (_bornLost) return _fail("device arrived lost (" + _bornLost + ")");
-      var _timestampOk = _canTimestamp && !!(device.features && device.features.has && device.features.has("timestamp-query"));
+      const _devHas = function (name) {
+        return !!(device.features && device.features.has && device.features.has(name));
+      };
+      var _timestampOk = _canTimestamp && _devHas("timestamp-query");
+      // Re-derived from the DEVICE, not the adapter, and assigned on every
+      // create — an adapter that advertises a feature can still hand back a
+      // device without it, and a later create must not inherit an earlier
+      // device's downgrade.
+      POST_HDR_FORMAT = (_canPostHDR && _devHas("rg11b10ufloat-renderable"))
+        ? "rg11b10ufloat" : SCENE_FORMAT;
     } catch (e) {
       return _fail("device request threw: " + ((e && e.message) || e));
     }

@@ -36,6 +36,7 @@ function makeGpuHarness(opts = {}) {
   const textures = [];
   const buffers = [];
   const writes = [];
+  const pipelines = [];
   let textureCalls = 0;
   let viewCalls = 0;
   let bindGroupCalls = 0;
@@ -50,6 +51,12 @@ function makeGpuHarness(opts = {}) {
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
   const stored = opts.storage || null;
   const session = opts.session || null;
+  // Optional feature negotiation. Default is the historical harness: a
+  // timestamp-query-only device, which is also the tier that must DOWNGRADE
+  // POST_HDR_FORMAT (rg11b10ufloat is renderable only behind its own feature).
+  const adapterFeatures = opts.adapterFeatures || ["timestamp-query"];
+  const deviceFeatures = opts.deviceFeatures || adapterFeatures;
+  const deviceRequests = [];
   let loseDevice = null;
   let failEncoder = false;
   const device = {
@@ -84,7 +91,12 @@ function makeGpuHarness(opts = {}) {
           : [],
       }),
     }),
-    createRenderPipeline: () => pipeline,
+    // The DESCRIPTOR is kept, not just the count: a target format or a
+    // multisample count that WebGPU rejects is invisible to a harness that
+    // throws the descriptor away, and both of those shipped. (The pipeline
+    // half of the sampleCount guard was reading an undefined h.pipelines and
+    // passing vacuously.)
+    createRenderPipeline: (desc) => { pipelines.push({ desc }); return pipeline; },
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -200,9 +212,13 @@ function makeGpuHarness(opts = {}) {
       maxTouchPoints: 0,
       gpu: {
         requestAdapter: async () => ({
-          features: { has: (name) => name === "timestamp-query" },
-          requestDevice: async () => {
-            device.features = { has: (name) => name === "timestamp-query" };
+          features: { has: (name) => adapterFeatures.includes(name) },
+          requestDevice: async (desc) => {
+            deviceRequests.push((desc && desc.requiredFeatures) || []);
+            // The DEVICE answer is deliberately separate from the adapter's:
+            // an adapter may advertise a feature and hand back a device without
+            // it, and WGX has to re-derive from the device it actually holds.
+            device.features = { has: (name) => deviceFeatures.includes(name) };
             return device;
           },
         }),
@@ -227,6 +243,8 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    pipelines,
+    deviceRequests,
     create: () => context.window.WGX.create(canvas),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
@@ -789,7 +807,10 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
-  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
+  // The adapter probe is shared with rg11b10ufloat-renderable now, so this
+  // pins the GATE (lite skips the timer) rather than the probe's spelling.
+  assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && _has\("timestamp-query"\)/);
+  assert.match(WGX_SOURCE, /adapter\.features\.has\(name\)/);
   assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
@@ -953,11 +974,63 @@ test("every sampleCount WGX requests is one WebGPU actually allows (1 or 4)", as
   assert.ok(LEGAL.has(gfx.msaa()), `msaa() must be 1 or 4, got ${gfx.msaa()}`);
   const texBad = h.textures.filter((t) => t.desc.sampleCount != null && !LEGAL.has(t.desc.sampleCount));
   assert.deepEqual(texBad.map((t) => t.desc.sampleCount), [], "illegal texture sampleCount");
-  const pipeBad = (h.pipelines || []).filter((p) =>
-    p && p.desc && p.desc.multisample && p.desc.multisample.count != null
+  assert.ok(h.pipelines.length > 0, "harness must record pipeline descriptors");
+  const pipeBad = h.pipelines.filter((p) =>
+    p.desc && p.desc.multisample && p.desc.multisample.count != null
       && !LEGAL.has(p.desc.multisample.count));
   assert.deepEqual(pipeBad.map((p) => p.desc.multisample.count), [], "illegal pipeline multisample count");
   assert.ok(h.textures.some((t) => t.desc.sampleCount === 4), "desktop must still allocate MS targets");
+});
+
+test("rg11b10ufloat is only rendered into when the device grants the feature", async () => {
+  // Fourth defect of the same family, and the one that survived fixing the
+  // other three: rg11b10ufloat carries TEXTURE_BINDING and the copy usages in
+  // core WebGPU, but RENDER_ATTACHMENT needs the OPTIONAL
+  // "rg11b10ufloat-renderable" feature. WGX allocated the bloom/godray targets
+  // in it unconditionally to mirror GLX's R11F_G11F_B10F, and a live device
+  // answered "Color format (TextureFormat::RG11B10Ufloat) is not color
+  // renderable" per target, then "WGX unavailable" — a silent GLX fallback.
+  const RENDERABLE = 1;  // GPUTextureUsage.RENDER_ATTACHMENT in this harness
+  // WGX runs inside a vm context, so its arrays carry THAT realm's prototype
+  // and deepStrictEqual rejects them on identity alone. Copy before comparing.
+  const asked = (h) => h.deviceRequests.map((f) => Array.from(f));
+
+  // WITHOUT the feature: nothing may be rendered into that format.
+  const plain = makeGpuHarness();
+  const gplain = await plain.create();
+  gplain.resize(); gplain.begin({}); gplain.present({});
+  assert.deepEqual(asked(plain), [["timestamp-query"]],
+    "must not ask for a feature the adapter never advertised");
+  const illegal = plain.textures.filter((t) =>
+    t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE));
+  assert.equal(illegal.length, 0, "rg11b10ufloat render target without the feature");
+  const pipeIllegal = plain.pipelines.filter((p) =>
+    (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rg11b10ufloat"));
+  assert.equal(pipeIllegal.length, 0, "pipeline writes rg11b10ufloat without the feature");
+  // The post chain must still EXIST — downgraded, not dropped.
+  assert.ok(plain.textures.some((t) => t.desc.format === "rgba16float" && (t.desc.usage & RENDERABLE)),
+    "bloom/godray must downgrade to the HDR scene format, not disappear");
+
+  // WITH the feature: ask for it, and use it.
+  const rich = makeGpuHarness({ adapterFeatures: ["timestamp-query", "rg11b10ufloat-renderable"] });
+  const grich = await rich.create();
+  grich.resize(); grich.begin({}); grich.present({});
+  assert.deepEqual(asked(rich), [["timestamp-query", "rg11b10ufloat-renderable"]]);
+  assert.ok(rich.textures.some((t) => t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE)),
+    "the granted feature must actually be used (half the bytes per post pixel)");
+
+  // Adapter advertises, device withholds — the case a device-side re-derive
+  // exists for. Reading the adapter's answer here would allocate the illegal
+  // format again.
+  const liar = makeGpuHarness({
+    adapterFeatures: ["timestamp-query", "rg11b10ufloat-renderable"],
+    deviceFeatures: ["timestamp-query"],
+  });
+  const gliar = await liar.create();
+  gliar.resize(); gliar.begin({}); gliar.present({});
+  const liarBad = liar.textures.filter((t) =>
+    t.desc.format === "rg11b10ufloat" && (t.desc.usage & RENDERABLE));
+  assert.equal(liarBad.length, 0, "must re-derive the format from the DEVICE, not the adapter");
 });
 
 test("no WGSL derivative sits where control flow can be non-uniform", () => {

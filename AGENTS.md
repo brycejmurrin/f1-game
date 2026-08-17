@@ -90,11 +90,12 @@ Session shape — this is what controls both wall time and waiting:
    runs script-driven, never through an MCP.
 
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
-device passed every assertion while three separate defects made the real backend
+device passed every assertion while FOUR separate defects made the real backend
 refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
 WGSL compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable
-pool). All three surfaced in one command against a live device, and none was
-findable without one:
+pool; `rg11b10ufloat` is not a render target without its optional feature). Each
+hid the one after it, so they came out one boot at a time — and none was
+findable without a live device:
 
 ```sh
 npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
@@ -106,9 +107,11 @@ webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
 `--console RE` greps the dump, `--dry-run` shows the batch. In page code use
 BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
 binding, not a window property. A clean WGX boot writes NO console line and
-leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused).
-SwiftShader is a validation oracle, never a visual one. Full trap list:
-`.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
+both ABSENCE signals, so confirm with one positive: drive a race and assert
+`canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
+the canvas. SwiftShader is a validation oracle, never a visual one. Full trap
+list: `.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
 
 ## Layout
 

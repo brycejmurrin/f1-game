@@ -16,12 +16,12 @@ See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 Companion provenance (do not treat as current structure): the original
 migration plan and four phase build logs under `docs/archive/webgpu/`.
 
-### First live boot (2026-08-17) — and the three bugs it found
+### First live boot (2026-08-17) — and the four bugs it found
 
 Until this date nothing had ever run WGX against a real WebGPU device in this
 container, because headless Chrome does not expose `navigator.gpu` without
 `--enable-unsafe-webgpu`. Every WGX assertion in the suite runs against a mock
-device, and all three of the following passed those tests while making the
+device, and all four of the following passed those tests while making the
 backend unusable on any real one:
 
 | Bug | Symptom on a real device | Fix |
@@ -29,10 +29,17 @@ backend unusable on any real one:
 | `MSAA_COUNT = 2` | "Multisample count (2) is not supported" per MS pipeline, then Invalid RenderPipeline / Invalid BindGroupLayout cascading off it. WebGPU allows 1 or 4 only. | `MSAA_COUNT = WGX_LITE ? 1 : 4` |
 | `fwidth` in the material helpers | `'dpdx' must only be called from uniform control flow` — a COMPILE error that invalidates the lit pipeline, so WGX refused and the game fell back to WebGL2 with a console warning. | footprint taken at the `fs_main` entry, passed down as a parameter |
 | `createBuffer({mappedAtCreation:true})` for geometry | Every mesh failed once the 35 MB chunked scenery buffer exhausted the mappable pool — including a 208-BYTE buffer. Empty world, no error state. | `queue.writeBuffer` (+ `COPY_DST`), which stages in bounded chunks |
+| `POST_HDR_FORMAT = "rg11b10ufloat"` for the bloom/godray targets | "Color format (TextureFormat::RG11B10Ufloat) is not color renderable", then `WGX unavailable`. The format is core for sampling and copies, but RENDER_ATTACHMENT needs the OPTIONAL `rg11b10ufloat-renderable` feature. | request the feature when the adapter has it; re-derive from the DEVICE and downgrade to `rgba16float` when it does not |
 
-Both shader invariants are now gated by `tests/unit/webgpu-lifecycle.test.mjs`
-("every sampleCount…", "no WGSL derivative sits where control flow can be
-non-uniform"). Reproduce the live boot with:
+Each was hidden by the one before it, so they surfaced one boot at a time —
+budget for that shape rather than expecting a single fix. All four invariants
+are now gated by `tests/unit/webgpu-lifecycle.test.mjs` ("every sampleCount…",
+"no WGSL derivative sits where control flow can be non-uniform",
+"rg11b10ufloat is only rendered into when the device grants the feature").
+That last one needed the harness to start KEEPING pipeline descriptors:
+`createRenderPipeline` discarded them, so the pipeline half of the sampleCount
+guard had been reading an undefined `h.pipelines` and passing vacuously.
+Reproduce the live boot with:
 
 ```sh
 npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
@@ -41,7 +48,20 @@ node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 
 A clean boot prints no `WGX` console line, `WGX.gpuErrors()` is 0, and
 `sessionStorage["apex26.gfxBound"]` is ABSENT (that key is written only when
-WGX refuses and hands the frame to GLX).
+WGX refuses and hands the frame to GLX). Those are all *absence* signals, so
+pair them with one positive check — drive a race and assert
+`canvas.getContext("webgl2") === null`, since a canvas claimed for WebGPU can
+never hand back a WebGL2 context:
+
+```sh
+node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+  --eval 'await __apex.race("monza"); await __apex.go();
+          await new Promise(r=>setTimeout(r,7000));
+          return String(document.querySelector("canvas").getContext("webgl2") === null);'
+```
+
+Measured 2026-08-17 after the fourth fix: `true`, on a Monza race, with an
+empty `__apex.logs()` gfx filter — WGX's first live frames in this repo.
 
 SwiftShader is a **validation and lifecycle** oracle, not a visual one: it
 proves the shaders compile, the bind groups match and the buffers upload. It
