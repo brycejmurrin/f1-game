@@ -297,13 +297,9 @@ const CEILINGS = {
   // -> 8361 smarter AI drivers: wire AiDrive (OT/ERS/brake/lane + rating axes)
   // into updateCar. Decision math lives in js/game/ai-drive.js (188 lines);
   // this raise is call-site glue + nearbyN / soft brakeLvl path.
-<<<<<<< HEAD
-  // -> 8378 deploy∪perf-hunt merge: AiDrive call sites + energy short-circuit
-  // before kAhead60 LUT + propBatches draw/free/shadow + envCull road chunk.
-  "js/game.js": 8375,
-=======
-  "js/game.js": 8364,
->>>>>>> origin/claude/f1-game-project-26h3ng
+  // -> 8377 deploy∪perf-hunt∪WGX-present: AiDrive + energy short-circuit +
+  // propBatches/envCull + WGX software-present merge (split-newline count).
+  "js/game.js": 8377,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
