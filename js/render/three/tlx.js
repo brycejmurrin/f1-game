@@ -738,8 +738,14 @@ const TLX = (function () {
         for (const c of batch.cells) {
           if (!TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
           for (const i of c.idx) {
-            dst.set(src.subarray(i * 16, i * 16 + 16), n * 16);
-            if (dc) dc.set(sc.subarray(i * 3, i * 3 + 3), n * 3);
+            // No src.subarray — per-instance views were GC on Vegas-scale batches
+            // (GLX/WGX already element-copy; design E mirrored here).
+            const so = i * 16, dOff = n * 16;
+            for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+            if (dc) {
+              const sco = i * 3, dco = n * 3;
+              dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+            }
             n++;
           }
         }
