@@ -42,6 +42,20 @@ async function probeOnce(preset) {
   await page.evaluate((n) => new Promise((res) => {
     let i = 0; const t = () => (++i > n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
   }), 30);
+  await page.waitForFunction(() => {
+    const c = document.getElementById("game");
+    if (!c || c.width < 8) return false;
+    const ctx2d = c.getContext("2d");
+    if (ctx2d) {
+      const d = ctx2d.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+      return d[0] + d[1] + d[2] > 30;
+    }
+    const tmp = document.createElement("canvas");
+    tmp.width = c.width; tmp.height = c.height;
+    tmp.getContext("2d").drawImage(c, 0, 0);
+    const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+    return d[0] + d[1] + d[2] > 30;
+  }, null, { polling: 100, timeout: 60000 });
   const stats = await page.evaluate(async () => {
     const c = document.getElementById("game");
     const tmp = document.createElement("canvas");

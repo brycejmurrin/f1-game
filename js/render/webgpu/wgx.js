@@ -537,6 +537,23 @@ const WGX = (function () {
     try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
     const _softGpu = _softAdapter;
     if (_softGpu) _outProbeOff = true;
+    // Software adapters validate WebGPU but the browser never composites the
+    // hidden swapchain to the visible canvas (measured: CDP/screenshot black while
+    // agentview coverage is healthy). Route the visible #game through a 2D blit
+    // fed by a COPY_SRC present target; keep WebGPU on a hidden canvas.
+    let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
+    let softPresentTex = null, softPresentView = null;
+    let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softW = 0, _softH = 0;
+    if (_softGpu && typeof document !== "undefined") {
+      _displayCanvas = canvas;
+      _gpuCanvas = document.createElement("canvas");
+      _gpuCanvas.setAttribute("aria-hidden", "true");
+      if (_gpuCanvas.style) {
+        _gpuCanvas.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none";
+      }
+      if (document.body) document.body.appendChild(_gpuCanvas);
+      canvas = _gpuCanvas;
+    }
     function _wgxEscalate(why) {
       if (_outProbeOff) {
         try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
@@ -1146,8 +1163,8 @@ const WGX = (function () {
             primitive: { topology: "triangle-list" },
           });
         };
-        pBloomDown = fsPipe(_Post.BLOOM_DOWN, SCENE_FORMAT, null);
-        pBloomUp   = fsPipe(_Post.BLOOM_UP,   SCENE_FORMAT, ADD_BLEND);   // additive accumulate
+        pBloomDown = fsPipe(_Post.BLOOM_DOWN, POST_HDR_FORMAT, null);
+        pBloomUp   = fsPipe(_Post.BLOOM_UP,   POST_HDR_FORMAT, ADD_BLEND);   // additive accumulate
         // SSAO samples a DEPTH texture — "auto" layout infers a *filtering*
         // sampler slot, which WebGPU rejects for depth. Build an explicit layout
         // with a non-filtering sampler (pointSampler is nearest = non-filtering).
@@ -1431,22 +1448,93 @@ const WGX = (function () {
         try { Log.warn("gfx", "WGX canvas configure failed —", e); } catch (_) { /* harness */ }
       }
     }
+    function _ensureSoftPresent() {
+      if (!_softGpu || width < 1 || height < 1) return;
+      if (softPresentTex && _softW === width && _softH === height) return;
+      try {
+        if (softPresentTex) softPresentTex.destroy();
+        if (_softBlitBuf) _softBlitBuf.destroy();
+        softPresentTex = device.createTexture({
+          size: [width, height], format: LDR_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC |
+                 GPUTextureUsage.TEXTURE_BINDING,
+        });
+        softPresentView = softPresentTex.createView();
+        _softBlitBPR = Math.ceil((width * 4) / 256) * 256;
+        _softBlitBuf = device.createBuffer({
+          size: _softBlitBPR * height,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        _softBlitPending = false;
+        _softW = width; _softH = height;
+      } catch (e) {
+        try { Log.warn("gfx", "WGX soft present target failed —", e); } catch (_) { /* harness */ }
+        softPresentTex = null; softPresentView = null;
+        if (_softBlitBuf) { try { _softBlitBuf.destroy(); } catch (_) { /* already dead */ } _softBlitBuf = null; }
+      }
+    }
+    function _acquirePresentView() {
+      if (_softGpu) {
+        _ensureSoftPresent();
+        return softPresentView || null;
+      }
+      return ctx.getCurrentTexture().createView();
+    }
+    function _queueSoftPresent() {
+      if (!_softGpu || !softPresentTex || !_softBlitBuf || !encoder || _softBlitPending) return;
+      if (_softBlitBuf.mapState !== "unmapped") return;
+      try {
+        encoder.copyTextureToBuffer(
+          { texture: softPresentTex },
+          { buffer: _softBlitBuf, bytesPerRow: _softBlitBPR, rowsPerImage: height },
+          [width, height, 1]
+        );
+        _softBlitPending = true;
+      } catch (_) { /* COPY_SRC withheld — visible canvas stays on last frame */ }
+    }
+    function _readSoftPresent() {
+      if (!_softGpu || !_softBlitPending || !_softBlitBuf || !_displayCtx) return;
+      _softBlitPending = false;
+      if (_softBlitBuf.mapState !== "unmapped") return;
+      if (typeof _softBlitBuf.mapAsync !== "function") return;
+      try {
+        _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
+          try {
+            const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
+            const img = _displayCtx.createImageData(width, height);
+            const rowBytes = width * 4;
+            for (let y = 0; y < height; y++) {
+              img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
+            }
+            _displayCtx.putImageData(img, 0, 0);
+          } catch (_) { /* 2D blit failed */ }
+          try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
+        }).catch(function () { /* mapAsync rejected */ });
+      } catch (_) { /* mapAsync threw */ }
+    }
     function resize() {
+      const layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
       // past the 8192 default, and every ensureTargets() alloc (and the
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
-      const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
-      const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
-      const sizeChanged = canvas.width !== w || canvas.height !== h;
+      const w = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientWidth * dpr * renderScale)));
+      const h = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientHeight * dpr * renderScale)));
+      const sizeChanged = canvas.width !== w || canvas.height !== h ||
+        (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
         canvas.width = w; canvas.height = h;
         // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
         // configured swapchain. Reconfigure on every buffer-size change.
         if (ctx) _configureCanvas();
+        if (_softGpu && _displayCanvas) {
+          _displayCanvas.width = w;
+          _displayCanvas.height = h;
+        }
       }
       width = w; height = h; aspect = w / h;
+      if (_softGpu) _ensureSoftPresent();
     }
     function setRenderScale(s) {
       s = Math.max(0.5, Math.min(1, s));
@@ -2622,9 +2710,11 @@ const WGX = (function () {
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       try {
       if (litPass) { litPass.end(); litPass = null; }
-      // Acquire the swapchain at present time — same frame, after offscreen work.
+      // Acquire the present target at present time — swapchain on hardware, a
+      // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
-        currentView = ctx.getCurrentTexture().createView();
+        currentView = _acquirePresentView();
+        if (!currentView) { litPass = null; encoder = null; currentView = null; return; }
       } catch (_) {
         litPass = null; encoder = null; currentView = null; return;
       }
@@ -2657,8 +2747,10 @@ const WGX = (function () {
       // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
+        _queueSoftPresent();
         device.queue.submit([encoder.finish()]);
         encoder = null; currentView = null;
+        _readSoftPresent();
         _readOutputProbe();
         _jsStrikes = 0;   // a presented frame clears the strike count
         if (!_okCounted) { _okCounted = true; _healTick(); }
@@ -2957,7 +3049,9 @@ const WGX = (function () {
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
+      _queueSoftPresent();
       device.queue.submit([encoder.finish()]);
+      _readSoftPresent();
       _readOutputProbe();
       if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
         try {
@@ -3771,6 +3865,10 @@ const WGX = (function () {
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _fail("canvas has no webgpu context");
+      if (_softGpu && _displayCanvas) {
+        _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
+        if (!_displayCtx) return _fail("software WebGPU needs a 2D display canvas");
+      }
       resize();
       _configureCanvas();
     } catch (e) {

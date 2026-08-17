@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// wgx-shot.mjs — WebGPU screenshots before the black-output probe reloads.
+// wgx-shot.mjs — WebGPU screenshots (software adapters use the 2D compositor blit).
 //
-// SwiftShader-Vulkan validates WGX but often paints a black swapchain; this tool
-// grabs frame-2 evidence (canvas + CPU view raster) while backend is still webgpu.
+// SwiftShader-Vulkan validates WGX but does not composite the hidden swapchain;
+// wgx.js readbacks the present target and putImageData() on #game when allowed.
 //
 // Usage:
 //   node tools/wgx-shot.mjs [trackId] [--lite] [--out DIR] [--cam orbit|eye|park]
@@ -67,6 +67,22 @@ try {
     const t = () => (++i > n ? res() : requestAnimationFrame(t));
     requestAnimationFrame(t);
   }), 60);
+
+  // Software WebGPU composites via async 2D readback — poll until #game has pixels.
+  await page.waitForFunction(() => {
+    const c = document.getElementById("game");
+    if (!c || c.width < 8) return false;
+    const ctx2d = c.getContext("2d");
+    if (ctx2d) {
+      const d = ctx2d.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+      return d[0] + d[1] + d[2] > 30;
+    }
+    const tmp = document.createElement("canvas");
+    tmp.width = c.width; tmp.height = c.height;
+    tmp.getContext("2d").drawImage(c, 0, 0);
+    const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+    return d[0] + d[1] + d[2] > 30;
+  }, null, { polling: 100, timeout: 60000 });
 
   const canvasPath = join(outDir, "canvas.png");
   const pagePath = join(outDir, "page-hud.png");
