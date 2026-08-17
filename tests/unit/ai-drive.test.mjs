@@ -139,13 +139,21 @@ test("craft late-brake raises the limit when attacking with room", () => {
 
 test("adaptLane nudges toward the freer side under density", () => {
   const a = A.adaptLane(0, {
-    traits: mid, nearby: 3, roomL: 0.5, roomR: 3.5,
+    traits: mid, nearby: 3, roomL: 0.5, roomR: 3.5, baseLane: 0,
   }, 0.5);
   const b = A.adaptLane(0, {
-    traits: mid, nearby: 3, roomL: 3.5, roomR: 0.5,
+    traits: mid, nearby: 3, roomL: 3.5, roomR: 0.5, baseLane: 0,
   }, 0.5);
   assert.ok(a > 0, `expected rightward nudge, got ${a}`);
   assert.ok(b < 0, `expected leftward nudge, got ${b}`);
   // Sparse traffic: no move
-  assert.equal(A.adaptLane(0.2, { traits: mid, nearby: 1, roomL: 0.5, roomR: 4 }, 0.5), 0.2);
+  assert.equal(A.adaptLane(0.2, { traits: mid, nearby: 1, roomL: 0.5, roomR: 4, baseLane: 0.2 }, 0.5), 0.2);
+  // Dense traffic must not accumulate forever — damp toward home±step, not lane+step.
+  let lane = 0;
+  for (let i = 0; i < 120; i++) {
+    lane = A.adaptLane(lane, {
+      traits: mid, nearby: 4, roomL: 0.4, roomR: 3.5, baseLane: 0,
+    }, 1 / 60);
+  }
+  assert.ok(Math.abs(lane) < 0.5, `lane crept too far: ${lane}`);
 });

@@ -84,7 +84,7 @@ const AiDrive = (function () {
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);
     const situ = (0.34 * gapScore + 0.28 * roomScore + 0.22 * closeScore + 0.16 * straight)
       * (ctx.street ? streetOtScale(t) : 1);
-    // Mid-grid craft/awareness at situ≈0.55 should land near the old λ=0.7.
+    // Mid-open window lands ~0.3–0.6 (unit-tested band), not the old fixed λ=0.7.
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
@@ -110,7 +110,7 @@ const AiDrive = (function () {
     if (!straight) return false;
     const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
-    const rich = energy > 0.55 && straight;
+    const rich = energy > 0.55;  // straight already required above
     const desperate = energy > 0.25 && catching;
     // Awareness banks charge: low-awareness drivers still dump early (old feel).
     const bank = ctx.traits.awareness > 0.8 && energy < 0.4 && !catching && !defending;
@@ -176,7 +176,10 @@ const AiDrive = (function () {
     const sign = freer > 0 ? 1 : -1;
     // Awareness commits earlier; craft picks a more decisive bias.
     const step = lerp(0.08, 0.22, ctx.traits.craft) * lerp(0.7, 1.15, ctx.traits.awareness);
-    const target = clamp(lane + sign * step, -0.85, 0.85);
+    // Bias around the grid home line (baseLane), not the live lane — otherwise
+    // every frame adds another step and the field crawls to ±0.85.
+    const home = ctx.baseLane != null ? ctx.baseLane : lane;
+    const target = clamp(home + sign * step, -0.85, 0.85);
     return damp(lane, target, 0.35, dt);
   }
 
