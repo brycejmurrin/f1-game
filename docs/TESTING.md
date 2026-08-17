@@ -734,7 +734,7 @@ what it covers.
 | `chunked-index-ranges.test.mjs` | the equivalence proof behind the concatenated chunk index buffer: `createChunkedMesh` gives each spatial chunk a `(byteOffset, count)` RANGE into one shared IBO instead of a buffer of its own, so `drawChunked`/`castShadowChunked` can merge adjacent visible chunks into a single `drawElements` (measured ~76-87% fewer scenery draws). "Same triangles, same order, fewer calls" is an equivalence claim, so it is tested as one — against a stub GL context that records the real uploads: the ranges tile the buffer with no gap, overlap or misaligned offset, the buffer holds exactly the source indices with the same multiplicities, and merging ANY run of consecutive chunks reproduces the per-chunk index sequence byte for byte. Carries its own anti-vacuity assertions, because a single-chunk fixture — or one under the 2000-triangle chunking floor — would satisfy every other assertion while proving nothing |
 | `material-shimmer.spec.js` | does baked tarmac CRAWL when the car moves |
 | `tlx-probes.spec.js` | the three.js/TSL backend behind `apex26.gfxBackend="three"` |
-| `webgpu-lifecycle.test.mjs` | WGX resource lifecycle |
+| `webgpu-lifecycle.test.mjs` | WGX resource lifecycle — plus the two invariants a MOCK device cannot enforce: every `sampleCount` is 1 or 4 (WebGPU allows nothing else; WGX shipped 2 and no real device accepted it) and no WGSL derivative sits where control flow may be non-uniform (`dpdx` behind a material branch is a COMPILE error, and WGX then silently falls back to GLX) |
 | `assets-pack.test.mjs` | the baked pack on disk: licence allow-list, md5, size budget |
 | `import-models.test.mjs` | the AX26 model-import output and its determinism |
 | `import-models-workflow.test.mjs` | workflow-dispatch inputs stay out of executable shell text; HTTPS URL and non-deploy branch validation |
@@ -874,7 +874,7 @@ what it covers.
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 | `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
-| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry (no Chromium / no TinyFish network) |
+| `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
 
 ---
 
@@ -893,6 +893,20 @@ what it covers.
 
 The measured history behind the testing gates. CLAUDE.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
+
+**A total-red run is almost never the code (2026-08-17).** `test:tiny` reported
+`73/73 failed` and the first line of the log said
+`browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
+`npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
+right flag for the install step and leaves the browser absent. The specs launch
+Playwright's headless SHELL, not the `/opt/google/chrome` this box also ships,
+so nothing browser-driven can pass until
+`npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
+FIRST failure's message before forming any hypothesis about a red run: when EVERY
+test in a group fails, the cause is upstream of the code under test — a missing
+browser, a missing `node_modules`, a dead dev server, a syntax error in a file
+every page loads. Bisecting the diff for a fault the harness is reporting
+verbatim is pure waste.
 
 **Watcher anchoring.** Anchor on the reporter's terminal line
 `= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s

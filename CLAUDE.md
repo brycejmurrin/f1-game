@@ -28,6 +28,12 @@ and is slow. The rules:
   reads as ~18 scattered `Cannot find module` suites inside an otherwise
   green run (measured 344/18 -> 439/0, no source change).
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps it to seconds.
+- **…then `npx playwright install chromium-headless-shell`.** That skip flag
+  leaves the BROWSER absent, and the specs launch the headless shell, not the
+  `/opt/google/chrome` this box ships. Measured 2026-08-17: 73/73 of `test:tiny`
+  failed `browserType.launch: Executable doesn't exist …chromium_headless_shell`
+  — a total-red run that looks like a boot regression and is a 2.3 MB download
+  (seconds). Read the FIRST failure's message before believing any red run.
 - **ONE Playwright process at a time, ONE browser group per batch.** Two
   processes share one HTTP server and oversubscribe the 4 cores; killing
   either strands the other, and browser+browser pairing is the measured
@@ -72,6 +78,27 @@ and is slow. The rules:
 4. Pixel screenshot — thousands of tokens each; visual sign-off only, never
    an assertion source. For live poking use the `mcp-probe` skill; the
    Playwright suite itself always runs script-driven, never through an MCP.
+
+**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
+device passed every assertion while three separate defects made the real backend
+refuse to boot (MSAA 2 is illegal in WebGPU; `fwidth` behind a branch is a WGSL
+compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable pool).
+All three surfaced in one command against a live device, and none was findable
+without one:
+
+```sh
+npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+`probe` writes the backend pick and RELOADS in one batch (`--backend
+webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
+`--console RE` greps the dump, `--dry-run` shows the batch. In page code use
+BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
+binding, not a window property. A clean WGX boot writes NO console line and
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused).
+SwiftShader is a validation oracle, never a visual one. Full trap list:
+`.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
 
 ## Agent output
 
@@ -203,6 +230,13 @@ anything near game.js.
   layer; every failure degrades to procedural; boot never awaits assets.
 - Career/multiplayer/scenery/testing deep dives: `docs/CAREER.md`,
   `docs/MULTIPLAYER.md`, `docs/SCENERY-API.md`, `docs/TESTING.md`.
+- WGX/WGSL (`js/render/webgpu/`): `docs/research/WEBGPU-PARITY.md`. Two rules
+  the language enforces and a mock device cannot: `sampleCount` is 1 or 4 ONLY,
+  and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is uniform — in
+  practice the first statements of `fs_main`, passed down as a parameter, because
+  a callee that returns early non-uniformly poisons its caller too. Breaking
+  either does not throw: WGX refuses and the game falls back to GLX with one
+  console warning. Boot it live before believing a WGX change.
 
 ## Baked asset pack
 
