@@ -1943,7 +1943,8 @@ const WGX = (function () {
       // night — without this fade WebGPU kept full-strength terrain/road sun
       // shadows under moonlight, and prop shadows POPPED when the day↔night
       // key crossed the game.js cast gate instead of fading through dusk in
-      // lockstep with it.
+      // lockstep with it. Packed into params2.y; wgsl-chunks early-outs all
+      // PCF/blocker taps when this fades to <= 0 (GLX uShadowStr parity).
       const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;

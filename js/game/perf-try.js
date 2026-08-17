@@ -1,15 +1,17 @@
-/* Apex 26 — PerfTry: default-OFF switches for renderer optimisations that
-   cannot be measured on the CI box.
+/* Apex 26 — PerfTry: renderer A/B switches. Counted coverage/reach wins ship
+   ON by default (`def: true`); unmeasured or look-sensitive ones stay OFF until
+   someone with a real GPU flips them.
 
    WHY THIS EXISTS. docs/PERF-FINDINGS.md §0 records that the GPU half of this
    game is unmeasurable here: SwiftShader is fill-bound, so frame timing is
    misleading in the OPTIMISTIC direction and a render-mode CPU profile reads
-   99.9% idle. Every finding in this file is mechanism-provable by reading, and
-   none of them has a trustworthy number attached. Shipping them ON, on
-   plausibility, is exactly the trade §3 exists to warn against.
-
-   So they ship OFF, behind one switch each, and get measured on real hardware
-   by whoever has some. A flag flipped here is a QUESTION, not a claim.
+   99.9% idle. Mechanism is readable; wall-clock ms is not. Shipping a change
+   ON from a timing guess is the trade §3 warns against — but once coverage or
+   reach is COUNTED (skyLate coveragePct, envCull chunk-reach.cjs), the switch
+   is no longer a guess: `def: true` is the schema for that class. Pure
+   multiplied-by-zero GLSL gates (flareGate, lampFogGate) are bit-identical and
+   also default ON. Everything else stays `def`-absent (= OFF) and remains a
+   QUESTION to measure on real hardware.
 
    HOW TO USE, on the live site or locally — no __apex hook needed, PerfTry is
    a plain global and resolves in any console:
@@ -19,7 +21,9 @@
      ?perftry=skyLate,flareGate        URL form, no console needed
      ?perftry=all / ?perftry=none      everything on / everything off
    The URL form overrides storage for that session only, so a link can demo a
-   switch without touching anyone's saved state.
+   switch without touching anyone's saved state. Storage persists only
+   deviations from each flag's `def`, so an explicit OFF of a default-ON switch
+   survives reload.
 
    Boot-time by design. Two of these are #defines injected into GLSL at compile
    time, so they cannot change without recompiling shaders; making the JS ones
@@ -34,8 +38,9 @@ const PerfTry = (function () {
 const KEY = "apex26.perfTry";
 
 // name -> what it does, why it might win, and what to watch for when judging it.
-// The `glsl` flag marks switches that become a #define in the shader source
-// (see GLX.compile), rather than a branch in JS.
+// `def: true` = ships ON (counted coverage/reach, or a bit-identical gate).
+// Absent `def` = ships OFF. The `glsl` flag marks switches that become a
+// #define in the shader source (see GLX.compile), rather than a branch in JS.
 // NOT YET WIRED, deliberately absent rather than present-and-inert — a switch
 // that does nothing is worse than no switch, because it reports a negative
 // result that was never actually tested:
@@ -49,20 +54,20 @@ const KEY = "apex26.perfTry";
 // Both live in js/game.js, which was under concurrent edit when this landed.
 const FLAGS = {
   skyLate: {
+    def: true,   // COUNTED coverage — docs/PERF-FINDINGS.md skyLate / coveragePct
     glsl: false,
     what: "Draw the sky AFTER the opaque world instead of before it.",
     why: "SKY_FS is the second most expensive shader in the renderer (up to 4 fbm() " +
          "octaves, ~10 pow(), the hash3 star grid, moon disc + halo, city-glow dome) " +
-         "and today it runs on EVERY pixel of the frame, 40-70% of which opaque " +
-         "geometry then overwrites. The sky sits at depth 1.0 (SKY_VS: z = w) with " +
-         "depth writes off under LEQUAL, so drawing it last lets early-Z reject every " +
-         "covered fragment. MEASURED on vegas, six views around the lap: opaque " +
-         "geometry covers 64.3 / 70.8 / 89.0 / 64.3 / 64.3 / 98.5 % of the frame " +
-         "(mean 75.2%), and every covered pixel is a SKY_FS invocation early-Z " +
-         "rejects. That is the fraction of the sky pass this switch removes — " +
-         "counted from render({what:'view'}) coverage, not timed, so the number " +
-         "transfers to a real GPU. It is also LARGER than the 40-70% the audit " +
-         "estimated. What it is worth in ms still depends on your GPU.",
+         "and without this switch it runs on EVERY pixel of the frame, most of which " +
+         "opaque geometry then overwrites. The sky sits at depth 1.0 (SKY_VS: z = w) " +
+         "with depth writes off under LEQUAL, so drawing it last lets early-Z reject " +
+         "every covered fragment. COUNTED (docs/PERF-FINDINGS.md): vegas, six views " +
+         "around the lap — opaque geometry covers 64.3 / 70.8 / 89.0 / 64.3 / 64.3 / " +
+         "98.5 % of the frame (mean 75.2% coveragePct from render({what:'view'})), and " +
+         "every covered pixel is a SKY_FS invocation early-Z rejects. That fraction " +
+         "is not timed, so it transfers to a real GPU; ms still depends on the GPU. " +
+         "Ships ON because the coverage was counted, not guessed.",
     watch: "The LAMP HALOS are the thing to check. The glow is additive with no depth " +
            "write, so it had to move after the sky too (opaque -> sky -> glow); if the " +
            "ordering is wrong the halos vanish against open sky, or the horizon looks " +
@@ -91,35 +96,39 @@ const FLAGS = {
   // is gone, because a toggle that cannot change anything is a UI element that
   // can only mislead whoever flips it.
   flareGate: {
+    def: true,   // bit-identical multiplied-by-zero gate (post.js sunVis / uFlareStr)
     glsl: true,
     what: "Compute the lens-flare occlusion depth fetch only when the flare is actually on.",
     why: "post.js samples uDepth for sunVis one line ABOVE the uFlareStr > 0.0 test that " +
          "is its only consumer, so every full-res composite pixel pays a depth fetch on " +
          "night frames, where flareStr is 0. Hygiene rather than a big win — uSunUV is a " +
-         "uniform so the texture cache absorbs most of it.",
+         "uniform so the texture cache absorbs most of it. Ships ON: pure gate, " +
+         "bit-identical by construction, day-correct (flareStr already 0 at night).",
     watch: "Bit-identical by construction. If the flare changes at all, the reorder is wrong.",
   },
   envCull: {
+    def: true,   // COUNTED reach — docs/PERF-FINDINGS.md § env probe / tools/chunk-reach.cjs
     glsl: false,
     what: "Give the car-paint reflection probe its OWN 300 m draw-distance cull, "
         + "instead of letting it inherit the main camera's (which is 0 — no cull — "
         + "below PerfGov tier 3).",
     why: "envFaceBegin swaps viewProj and eye for the probe face but not cullDist, so a "
        + "64x64 reflection target re-draws the whole city through a 900 m frustum. "
-       + "COUNTED, not estimated (tools/chunk-reach.cjs; over a full 6-face cube the "
-       + "probe looks in every direction, so its coverage is exactly a SPHERE of the far "
-       + "radius and the count needs no view matrix): at 900 m it reaches 238.3 chunks / "
-       + "1,256,344 indices per cube on vegas, 373.6 / 344,888 on spa, 195.1 / 516,647 on "
-       + "monza. At 300 m that is 68-72% fewer indices and 78-83% fewer chunks, and the "
-       + "three circuits agree closely despite completely different scenery (spa is 1594 "
-       + "small tree chunks over 207k tris, vegas 914 large building chunks over 885k) — "
-       + "so it is a property of the radius, not of a circuit. Why 300 m is defensible "
-       + "rather than arbitrary: a face is 90 deg across 64 pixels = 1.41 deg/px, so a "
-       + "20 m building subtends ~2.7 px at 300 m and 0.9 px at 900 m — UNDER ONE PIXEL, "
-       + "in a target that is then mipmapped and blurred. The whole 300-900 m band pays "
-       + "full vertex cost to move less than a pixel. game.js already calls this pass "
-       + "'the biggest per-frame load multiplier'; the mitigation that shipped halved its "
-       + "RATE (one face every other frame), not its REACH.",
+       + "COUNTED, not estimated (docs/PERF-FINDINGS.md; tools/chunk-reach.cjs; over a "
+       + "full 6-face cube the probe looks in every direction, so its coverage is exactly "
+       + "a SPHERE of the far radius and the count needs no view matrix): at 900 m it "
+       + "reaches 238.3 chunks / 1,256,344 indices per cube on vegas, 373.6 / 344,888 on "
+       + "spa, 195.1 / 516,647 on monza. At 300 m that is 68-72% fewer indices and "
+       + "78-83% fewer chunks, and the three circuits agree closely despite completely "
+       + "different scenery (spa is 1594 small tree chunks over 207k tris, vegas 914 "
+       + "large building chunks over 885k) — so it is a property of the radius, not of a "
+       + "circuit. Why 300 m is defensible rather than arbitrary: a face is 90 deg across "
+       + "64 pixels = 1.41 deg/px, so a 20 m building subtends ~2.7 px at 300 m and "
+       + "0.9 px at 900 m — UNDER ONE PIXEL, in a target that is then mipmapped and "
+       + "blurred. The whole 300-900 m band pays full vertex cost to move less than a "
+       + "pixel. game.js already calls this pass 'the biggest per-frame load multiplier'; "
+       + "the mitigation that shipped halved its RATE (one face every other frame), not "
+       + "its REACH. Ships ON because the reach was counted.",
     watch: "This is the ONE switch here that is not bit-identical — it removes distant "
          + "geometry from the reflection, so judge it by LOOKING, not by assuming. Watch "
          + "a car's bodywork reflection on a street circuit with tall buildings (vegas, "
@@ -130,12 +139,14 @@ const FLAGS = {
          + "camera is already culling tighter (it is a min, not an override).",
   },
   lampFogGate: {
+    def: true,   // bit-identical multiplied-by-zero gate (lit.js lampFog / uLampFog)
     glsl: true,
     what: "Accumulate per-lamp fog only when uLampFog > 0.",
     why: "lit.js accumulates lampFog inside the 32-iteration light loop for every lit " +
          "fragment, but its only consumer is gated on uLampFog > 0, which game.js drives " +
          "to exactly 0 in daylight. Bites where lamps are lit AND the key is bright: " +
-         "daytime floodlights, and always-on fixtures like Monaco's tunnel.",
+         "daytime floodlights, and always-on fixtures like Monaco's tunnel. Ships ON: " +
+         "pure gate, bit-identical by construction, day-correct (uLampFog is 0 in day).",
     watch: "Bit-identical by construction. Check a daytime floodlit scene and Monaco's " +
            "tunnel — if lamp fog changes there, the gate is wrong.",
   },
@@ -145,10 +156,20 @@ let _on = Object.create(null);
 
 function load() {
   _on = Object.create(null);
+  // Schema defaults first (`def: true` → ON). Storage then overlays only keys it
+  // actually holds, so an explicit OFF of a default-ON switch survives reload,
+  // and an old ON-only blob does not wipe newer defaults for untouched keys.
+  for (const k in FLAGS) if (FLAGS[k].def) _on[k] = true;
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw && typeof raw === "object") for (const k in FLAGS) if (raw[k]) _on[k] = true;
-  } catch (_) { /* No storage (Safari private mode) or corrupt JSON: every switch stays OFF, which is the safe default anyway. */ }
+    if (raw && typeof raw === "object") {
+      for (const k in FLAGS) {
+        if (Object.prototype.hasOwnProperty.call(raw, k)) {
+          if (raw[k]) _on[k] = true; else delete _on[k];
+        }
+      }
+    }
+  } catch (_) { /* No storage (Safari private mode) or corrupt JSON: keep schema defaults. */ }
   // URL form wins over storage for the session, so a link can demo a switch
   // without touching anyone's saved state.
   try {
@@ -169,8 +190,14 @@ function set(name, v, opts) {
   if (!FLAGS[name]) return false;
   if (v) _on[name] = true; else delete _on[name];
   try {
+    // Persist only deviations from each flag's `def`, so default-ON switches
+    // can be turned OFF without looking identical to "never touched".
     const out = {};
-    for (const k in _on) out[k] = true;
+    for (const k in FLAGS) {
+      const isOn = _on[k] === true;
+      const defOn = !!FLAGS[k].def;
+      if (isOn !== defOn) out[k] = isOn;
+    }
     localStorage.setItem(KEY, JSON.stringify(out));
   } catch (_) { /* Storage write refused (quota is 0 in private mode): the switch still applies for THIS session, it just will not persist. */ }
   // Shaders are compiled once at renderer init, so a glsl switch cannot take
@@ -239,7 +266,7 @@ function initUI() {
   // micro font, 0.6 opacity). Reused rather than minting a `pm-note` that does
   // not exist in css/ and would have rendered unstyled at body size.
   note.className = "adv-help";
-  note.textContent = "Off by default. These are unmeasured renderer optimisations — turn one on and see if it helps on YOUR hardware. Changing one reloads the page.";
+  note.textContent = "Counted coverage/reach switches and pure gates default ON; the rest stay OFF until you measure them on YOUR hardware. Changing one reloads the page.";
   host.appendChild(note);
 
   for (const k of Object.keys(FLAGS)) {
@@ -262,13 +289,19 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }
 
 function list() {
   const out = {};
-  for (const k in FLAGS) out[k] = { on: on(k), glsl: !!FLAGS[k].glsl, what: FLAGS[k].what, why: FLAGS[k].why, watch: FLAGS[k].watch };
+  for (const k in FLAGS) {
+    out[k] = {
+      on: on(k), def: !!FLAGS[k].def, glsl: !!FLAGS[k].glsl,
+      what: FLAGS[k].what, why: FLAGS[k].why, watch: FLAGS[k].watch,
+    };
+  }
   return out;
 }
 

@@ -77,6 +77,7 @@ let _furnHandles = null; // Set: A3 furniture collider handles
 let _carForce = [];      // per-car real force accumulated this tick (mirror↔dynamic)
 let _spallCool = [];     // per-car spall-burst cooldown (s), decremented each tick
 const _forceBuf = [];    // scratch: drained contact-force events, sorted deterministically
+const _forcePool = [];   // pooled {h1,h2,f} entries — drainForces never allocs per event
 let _lastForce = 0;      // max real force magnitude seen last tick (status)
 
 // ── A2: marbles (separate seeded sub-pool, cosmetic only — never touches grip) ─
@@ -340,7 +341,7 @@ function destroyWorld() {
   _dynCars.clear();   // any in-flight takeover's bodies die with the world — IncidentSim aborts via worldGen()
   _events = null; _colliderCar = null; _furnHandles = null;
   _marbles = []; _marbleCap = 0; _furn = []; _furnBuilt = false;
-  _carForce = []; _spallCool = []; _forceBuf.length = 0; _lastForce = 0;
+  _carForce = []; _spallCool = []; _forceBuf.length = 0; _forcePool.length = 0; _lastForce = 0;
   _panels = []; _panelHandles = null;   // B2 — bodies die with the world
 }
 
@@ -773,8 +774,11 @@ function step(dt) {
   // aged on a tick that never stepped reads a stale non-zero force, resets restT
   // forever, and never reaches PANEL_IDLE_DESPAWN_S.) Any future attempt has to
   // hoist the despawn bookkeeping below AND keep both of those honest.
+  // _carNearFurn is O(furn×cars): skip entirely when there is no furniture, and
+  // JS && short-circuits it whenever anything is already live / queued / dynamic.
   if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
-      && !_anyLive(_slots) && !_anyLive(_marbles) && !_carNearFurn(track, cars)) {
+      && !_anyLive(_slots) && !_anyLive(_marbles)
+      && (!_furn.length || !_carNearFurn(track, cars))) {
     return;
   }
   _tick++;
@@ -1060,7 +1064,9 @@ function hazards() {
 // position each shave MARBLE_GRIP_PER off grip, floored at MARBLE_GRIP_MIN. Any
 // off-path (flag off, cold world, no marbles near) returns 1.0 — a true no-op.
 function marbleGrip(c) {
-  if (!_marbleGripOn || !world || !c || !_marbles.length) return 1;
+  // _marbles.length is the pool CAP (always populated once the world is built) —
+  // early-out on whether any marble is actually live, not the array size.
+  if (!_marbleGripOn || !world || !c || !_anyLive(_marbles)) return 1;
   const track = G.track;
   if (!track) return 1;
   Tracks.sample(track, c.s, _smp);
@@ -1089,12 +1095,20 @@ function drainForces(cars) {
   }
   // B2: zero every panel's per-tick solved force before re-accumulating.
   for (const p of _panels) p.force = 0;
-  _forceBuf.length = 0;
-  if (!_events) { _lastForce = 0; return; }
+  if (!_events) { _forceBuf.length = 0; _lastForce = 0; return; }
+  // Pool the {h1,h2,f} entries: contact storms used to alloc one object per
+  // event every tick. Grow _forcePool to the high-water mark; never shrink it.
+  let n = 0;
   _events.drainContactForceEvents((e) => {
-    _forceBuf.push({ h1: e.collider1(), h2: e.collider2(),
-                     f: e.totalForceMagnitude() });
+    let ent = _forcePool[n];
+    if (!ent) ent = _forcePool[n] = { h1: 0, h2: 0, f: 0 };
+    ent.h1 = e.collider1();
+    ent.h2 = e.collider2();
+    ent.f = e.totalForceMagnitude();
+    n++;
   });
+  _forceBuf.length = n;
+  for (let i = 0; i < n; i++) _forceBuf[i] = _forcePool[i];
   _forceBuf.sort((a, b) => {
     const a1 = Math.min(a.h1, a.h2), a2 = Math.max(a.h1, a.h2);
     const b1 = Math.min(b.h1, b.h2), b2 = Math.max(b.h1, b.h2);

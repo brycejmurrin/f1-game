@@ -795,16 +795,18 @@ const LiveryTex = (function () {
       for (const cb of _logosReady) { try { cb(); } catch (_) {} }
     }
   }
-  // SELF-INITIALISING on purpose — this call is THE kick-off (game.js only
-  // subscribes to onLogosReady for decal-cache invalidation; it must not call
-  // loadLogos too, or all 11 PNGs load twice). Loading here means any consumer
-  // that loads liverytex.js on its own — tools/carview.html, the crest sheets,
-  // tests — gets the real marks instead of silently falling back to the vector
-  // crests. The team ids come from Teams.LIST — the roster is the canonical
-  // list, and js/car/teams.js loads before this file (manifest HARD_EDGES).
-  try { loadLogos(teamIds()); } catch (_) { /* ignored: a roster that is not
-    loaded yet just means no marks prefetch here; onLogosReady still fires for
-    any later registerMark, and every crest falls back to the vector form. */ }
+  // Deferred — do NOT kick off at module eval (boot sand). ensureLogos() is the
+  // one entry point: first buildAtlas, garage open, or game.js after boot. The
+  // team ids come from Teams.LIST — the roster is canonical, and js/car/teams.js
+  // loads before this file (manifest HARD_EDGES). Calling twice is a no-op.
+  let _logosStarted = false;
+  function ensureLogos() {
+    if (_logosStarted) return;
+    _logosStarted = true;
+    try { loadLogos(teamIds()); } catch (_) { /* ignored: a roster that is not
+      loaded yet just means no marks prefetch here; onLogosReady still fires for
+      any later registerMark, and every crest falls back to the vector form. */ }
+  }
 
   // Register a mark at RUNTIME for one team — how MY TEAM's uploaded logo gets
   // in. Same slot the shipped files use, so everything downstream (halo, the
@@ -991,6 +993,7 @@ const LiveryTex = (function () {
 
   // ── main ─────────────────────────────────────────────────────────────────
   function buildAtlas(teamId, colors, numberOverride, isPlayer) {
+    ensureLogos();   // first atlas (race start / garage) kicks logo prefetch
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;
@@ -1143,6 +1146,6 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, onLogosReady, setTeamLogo, LOGOS };
+  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

@@ -289,7 +289,10 @@ const CEILINGS = {
   // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
   // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
   // merged tree with the ceiling test's own metric, per the deploy-merge rule.
-  "js/game.js": 8270,
+  // -> 8293 PERF-FINDINGS Δprog 5.01% / sand audit (pre-reject, cull hoist, shared player anchor, invert/LED gates).
+  // -> 8311 PERF-FINDINGS shadow ribbon chunk: road+terrain castShadowChunked vs
+  // sun ortho (~89% tris culled; depth bit-identical) + freeChunkedMesh on reload.
+  "js/game.js": 8311,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -356,7 +359,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2794, // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  "js/track/tracks.js": 2858, // +64 2026-08-17 PERF-FINDINGS sand: lazy LIST points (24ms boot ×40 circuits deferred to first touch) + massBlocked CELL grid (SAT exact, candidates only). // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

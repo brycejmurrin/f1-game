@@ -27,13 +27,36 @@ const SceneryNature = (function () {
     // form tools/float-audit.cjs falls back to. Matching its model is the point:
     // a footing resolved by any other route disagrees with the grounding audit
     // exactly where the ribbon ends, which is where long stands actually sit.
+    // Scratch for nodeGrid.query — same nearest-node + lateral fallback as
+    // tools/float-audit.cjs (PERF-FINDINGS: was O(n) over every centreline node).
+    const _guCand = new Array(n);
     const groundUnder = (x, z) => {
       const ty = terrainYAt(x, z);
       if (ty !== null) return ty;
       let best = 0, bestD = Infinity;
-      for (let i = 0; i < n; i++) {
-        const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
-        if (d < bestD) { bestD = d; best = i; }
+      const grid = track._nodeGrid || (typeof TrackMesh !== "undefined" && TrackMesh.nodeGrid(track));
+      if (grid && grid.query) {
+        // Expand R until a candidate lies inside the searched disc. query(R) is
+        // a cell-AABB SUPERSET of nodes within Euclidean R, so bestD ≤ R² means
+        // the true nearest cannot be outside the scan.
+        let R = 40;
+        for (;;) {
+          const cnt = grid.query(x, z, R, _guCand, false);
+          best = 0; bestD = Infinity;
+          for (let a = 0; a < cnt; a++) {
+            const i = _guCand[a];
+            const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
+            if (d < bestD) { bestD = d; best = i; }
+          }
+          if (cnt > 0 && bestD <= R * R) break;
+          if (R > 8000) break;
+          R *= 2;
+        }
+      } else {
+        for (let i = 0; i < n; i++) {
+          const d = (x - px[i]) * (x - px[i]) + (z - pz[i]) * (z - pz[i]);
+          if (d < bestD) { bestD = d; best = i; }
+        }
       }
       return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
     };
