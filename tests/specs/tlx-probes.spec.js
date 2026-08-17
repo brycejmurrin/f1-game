@@ -192,23 +192,11 @@ test.describe("TLX — boot", () => {
     expect(day.on).toBe(true);
     expect(day.stars).toBe(0);
     expect(day.sunDir[1]).toBeGreaterThan(0);   // sun above the horizon
-    await stopRendering(page);
-    // Night: uStars flips to 1 (SKY_FS's nightSky gate keys off it — the sun
-    // disc must never paint among the stars even though sunDir stays high).
-    // Do NOT setTimeOfDay("night") on the live Monza: that calls loadTrack()
-    // and a TLX present during the rebuild does not return on SwiftShader
-    // (530 s+ hung evaluate, GPU 387%, measured twice). Singapore is a
-    // shipped night race — same gate, no same-track rebuild.
-    // Stay headless through race(): un-pausing the loop first re-presents
-    // day Monza while the next evaluate is queued, which is the same hang.
-    await page.evaluate(() => window.__apex.race("singapore"));
-    await page.waitForFunction(() => window.__apex.info().track === "singapore", { polling: 100, timeout: 60_000 });
-    await page.evaluate(() => { window.__apex.headless(false); window.__apex.park(0.1); });
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
-    const night = await page.evaluate(() => GLX.__tlx.skyState());
-    expect(night.on).toBe(true);
-    expect(night.stars).toBe(1);
     expect(errors).toEqual([]);
+    // Night uStars=1 lives on the Singapore M6/M8 path. A second race() or
+    // setTimeOfDay("night") here calls loadTrack() while TLX is still
+    // presenting, and that evaluate does not return on SwiftShader
+    // (530 s+ hang, GPU 387%, measured four times this session).
     await stopRendering(page);
   });
 
@@ -223,11 +211,16 @@ test.describe("TLX — boot", () => {
     // Singapore is a night race: floodlights populate frame.lights and the
     // glare-halo pass runs. Wait for a presented frame that carried FX.
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().glow > 0, { polling: 100, timeout: 60_000 });
-    const st = await page.evaluate(() => GLX.__tlx.fxState());
-    expect(st.on).toBe(true);
-    expect(st.glow).toBeGreaterThan(0);        // near-field lamp halos in view
-    expect(st.shadows).toBeGreaterThan(0);     // blob shadows under the field
-    expect(st.decals).toBeGreaterThan(0);      // car number/sponsor decals
+    const st = await page.evaluate(() => ({ fx: GLX.__tlx.fxState(), sky: GLX.__tlx.skyState() }));
+    expect(st.fx.on).toBe(true);
+    expect(st.fx.glow).toBeGreaterThan(0);        // near-field lamp halos in view
+    expect(st.fx.shadows).toBeGreaterThan(0);     // blob shadows under the field
+    expect(st.fx.decals).toBeGreaterThan(0);      // car number/sponsor decals
+    // M5's night half used to live here as a same-page Monza rebuild; the
+    // uStars gate is the same SKY_FS nightSky step, asserted on this already-
+    // presented Singapore frame instead.
+    expect(st.sky.on).toBe(true);
+    expect(st.sky.stars).toBe(1);
     expect(errors).toEqual([]);
   });
 
