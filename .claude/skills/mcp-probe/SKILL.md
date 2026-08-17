@@ -39,7 +39,10 @@ wrappers for `deploy-check` / `deploy-js --marker` / `mcp-cli probe` batching.
    then `chrome-stop`, then check CPU; see `references/traps.md` §1.
 2. **github.io is tinyfish-only** from this container (egress proxy).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
-4. SwiftShader WebGPU is a **lifecycle** oracle, not a visual one.
+4. SwiftShader WebGPU **executes** — real WGX pixels come from
+   `node tools/wgx-capture.mjs <track>` (offscreen mode), never from
+   screenshots of the WGX canvas (headless present is blank, and the first
+   `getCurrentTexture()` kills `mapAsync` device-wide).
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 
 ## Load on demand

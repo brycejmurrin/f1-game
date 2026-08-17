@@ -230,6 +230,12 @@ const TrackGraph = (function () {
 
     // Define-once + place. `meta` is the semantic record (kind, k, side, …) that
     // makes the node answerable by the agent view.
+    //
+    // When `out._preferInstance` is set (props soup only — see tracks.js), a
+    // dry-run counts how many ops survive the guards WITHOUT writing triangles.
+    // Fully instancable placements skip the fuse; the race path draws them via
+    // graph.batches() → createInstancedBatch. Partials / radial+nonUniformXZ
+    // still fuse. Glass / alt buffers leave the flag off and keep today's fuse.
     function instance(key, place, build, meta, emit, out) {
       if (!place || !isVec3(place.o) || !isVec3(place.r) || !isVec3(place.u) || !isVec3(place.t)) {
         dropped++;
@@ -237,9 +243,21 @@ const TrackGraph = (function () {
       }
       const m = model(key, build);
       if (!m.ops.length) { dropped++; return 0; }
-      const landed = emit ? replay(m, place, emit, out) : 0;
+      const prefer = !!(out && out._preferInstance && emit);
+      let landed;
+      if (prefer) {
+        out._dryRun = true;
+        landed = replay(m, place, emit, out);
+        out._dryRun = false;
+      } else {
+        landed = emit ? replay(m, place, emit, out) : 0;
+      }
       if (landed) {
         m.uses++;
+        const full = landed === m.ops.length;
+        const s = place.s;
+        const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
+        const skipFuse = prefer && full && !(m.hasRadial && nonUniformXZ);
         nodes.push({
           model: key,
           o: place.o, r: place.r, u: place.u, t: place.t,
@@ -249,9 +267,16 @@ const TrackGraph = (function () {
           // A placement whose ops were only PARTLY suppressed does not equal its
           // model: drawing the whole mesh at this transform would put back the
           // primitives the guard removed. batches() keeps these out.
-          full: landed === m.ops.length,
+          full,
           meta: meta || null,
         });
+        if (prefer && !skipFuse) {
+          replay(m, place, emit, out);           // fuse bakeOnly into the soup
+        } else if (prefer && skipFuse) {
+          out._absorbOnly = true;                // terrain seating, no triangles
+          replay(m, place, emit, out);
+          out._absorbOnly = false;
+        }
       }
       return landed;
     }

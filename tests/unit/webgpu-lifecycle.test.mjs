@@ -1306,3 +1306,63 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   h.device.onuncapturederror({ error: { message: "synthetic validation error" } });
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
+
+test("pipelines that share a shader module never use layout:'auto'", async () => {
+  // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
+  // byte-identical — and a pair built from ONE module exists precisely to be
+  // used interchangeably with ONE bind group (sky + skyMS, particle alpha +
+  // additive). Both pairs shipped that way: every MSAA-4 sky draw and every
+  // additive spark draw raised "created with a default layout, and is not
+  // compatible" and dropped the whole frame's command buffer. Invisible in
+  // this container (software adapters force MSAA 1; the mock validates
+  // nothing) — found 2026-08-17 by the first real pixel capture
+  // (tools/wgx-capture.mjs), which is the primary oracle for this class.
+  // This test pins the structural rule the fixes follow, using only the
+  // descriptors the harness already records.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize(); gfx.begin({}); gfx.present({});
+  const byModule = new Map();
+  for (const p of h.pipelines) {
+    const mod = p.desc && p.desc.vertex && p.desc.vertex.module;
+    if (!mod) continue;
+    if (!byModule.has(mod)) byModule.set(mod, []);
+    byModule.get(mod).push(p.desc);
+  }
+  const shared = [...byModule.values()].filter((g) => g.length > 1);
+  assert.ok(shared.length >= 2, "expected shared-module pipeline groups (lit variants, sky pair)");
+  for (const group of shared) {
+    const autos = group.filter((d) => d.layout === "auto");
+    assert.equal(autos.length, 0,
+      `${group.length} pipelines share one shader module and ${autos.length} use layout:"auto" — ` +
+      `give the group one explicit createPipelineLayout so a single bind group is valid with all of them`);
+  }
+});
+
+test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () => {
+  // The bloom mip textures are POST_HDR_FORMAT (rg11b10ufloat when granted);
+  // the pipelines were SCENE_FORMAT for months. The mismatch only exists when
+  // the feature is granted AND the perf tier lets bloom run — no container
+  // run reaches that pair (software forces MSAA 1 and low tiers), so this is
+  // pinned at the source. Real-device confirmation lives in wgx-capture runs.
+  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_DOWN,\s*POST_HDR_FORMAT/,
+    "pBloomDown must target POST_HDR_FORMAT (the bloom mip texture format)");
+  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_UP,\s*POST_HDR_FORMAT/,
+    "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
+});
+
+test("drawParticles never destroys the VBO mid-frame (retire, flush after submit)", () => {
+  // game.js calls drawParticles twice per frame (alpha smoke, then additive
+  // sparks). Growth between the two used to destroy a buffer the frame's pass
+  // had already recorded: "used in submit while destroyed", one invalid
+  // command buffer, the whole frame dropped. The old buffer must be RETIRED
+  // and destroyed only after the frame's submit.
+  const draw = WGX_SOURCE.match(/function drawParticles\([\s\S]*?\n    \}/);
+  assert.ok(draw, "drawParticles exists");
+  assert.doesNotMatch(draw[0], /particleVBO\.destroy\(\)/,
+    "drawParticles must not destroy the old VBO in-frame — push it to _retiredBufs");
+  assert.match(draw[0], /_retiredBufs\.push\(particleVBO\)/,
+    "grown-over VBO must be retired for the post-submit flush");
+  assert.match(WGX_SOURCE, /_retireFlush\(\)/,
+    "present must flush retired buffers after submit");
+});

@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-08-17T13:05:00.000Z",
+  "lite": true,
+  "outRoot": "artifacts/tmp/wgx-shots/gallery",
+  "backend": "webgpu",
+  "build": 1316,
+  "note": "PNG output is gitignored under artifacts/; re-run node tools/wgx-gallery.mjs --lite to regenerate.",
+  "shots": [
+    {
+      "label": "montreal-orbit",
+      "track": "montreal",
+      "cam": "orbit",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "sky": 22.2, "tree": 61, "road": 2.5 }
+    },
+    {
+      "label": "montreal-eye",
+      "track": "montreal",
+      "cam": "eye",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "sky": 22.2, "tree": 61, "ground": 7.9 }
+    },
+    {
+      "label": "singapore",
+      "track": "singapore",
+      "cam": "orbit",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "structure": 69.5, "palm": 29.6 }
+    },
+    {
+      "label": "vegas",
+      "track": "vegas",
+      "cam": "orbit",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "structure": 65, "ground": 2.1 }
+    },
+    {
+      "label": "spa",
+      "track": "spa",
+      "cam": "orbit",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "pine": 40.9, "ground": 32.6, "sky": 21.9 }
+    },
+    {
+      "label": "monaco-eye",
+      "track": "monaco",
+      "cam": "eye",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "structure": 33.7, "road": 32, "sky": 29 }
+    },
+    {
+      "label": "bahrain",
+      "track": "bahrain",
+      "cam": "orbit",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": { "structure": 55, "ground": 3.2 }
+    }
+  ]
+}

@@ -761,6 +761,27 @@ let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched O
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
 const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
+// Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
+// does not allocate a fresh closure every frame on night tracks.
+let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
+function _flSteadyFn() { return _flSteady; }
+function _flLive(o) {
+  const flick = _flFlick, tNow = _flTNow, warmK = _flWarmK;
+  const x = Math.sin((o + 13) * 91.17) * 43758.5453;
+  const hsh = x - Math.floor(x);
+  const amp = hsh > 0.90 ? flick : flick * 0.2;
+  let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
+            + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
+  const warmDur = (4 + hsh * 4) * warmK;
+  const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
+  const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
+  f *= (1 - dip) + dip * wu;
+  const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);
+  _flScr[0] = f * (1 + cold * 0.22);
+  _flScr[1] = f * (1 - cold * 0.10);
+  _flScr[2] = f * (1 - cold * 0.38);
+  return _flScr;
+}
 // Ranked-set cache: skip the O(count·log CAP) rebuild when the eye/fwd have not
 // moved enough to change membership. Fade still uses geometric g (not yaw).
 const _RANK_EYE_EPS2 = 0.25;   // 0.5 m eye motion → rebuild
@@ -821,29 +842,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   const warmK = LT.lampWarmup != null ? LT.lampWarmup : 1;
   const warmDone = !(warmK > 0) || (tNow - _lampWarmT0) >= 8 * warmK;
   const skipFl = !(flick > 0) && warmDone;
-  const fl = skipFl ? () => _flSteady : (o) => {
-    const x = Math.sin((o + 13) * 91.17) * 43758.5453;
-    const hsh = x - Math.floor(x);
-    const amp = hsh > 0.90 ? flick : flick * 0.2;
-    // Fast flicker (the odd aging tube) + a slow BREATHE every lamp carries
-    // (mains/arc drift, ~±1.5% at the default knob). Both scale with the LAMP
-    // FLICKER knob so 0 still means rock-steady.
-    let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
-              + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
-    // LAMP WARM-UP knob scales the strike-to-full duration (def 1 = the 4+hsh*4 s
-    // ramp). 0 = instant on (wu pinned to 1, no dip/warmth); higher = a longer,
-    // more staggered warm-up. WARM-UP DIP sets how dim the strike starts, WARM-UP
-    // WARMTH how orange it glows before settling.
-    const warmDur = (4 + hsh * 4) * warmK;
-    const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
-    const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
-    f *= (1 - dip) + dip * wu;
-    const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);   // 1 = just struck (dim, sodium-orange), 0 = settled
-    _flScr[0] = f * (1 + cold * 0.22);
-    _flScr[1] = f * (1 - cold * 0.10);
-    _flScr[2] = f * (1 - cold * 0.38);
-    return _flScr;
-  };
+  _flFlick = flick; _flWarmK = warmK; _flTNow = tNow;
+  const fl = skipFl ? _flSteadyFn : _flLive;
   // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
   // reserve to spare. It used to run for any count ≤ 32, which broke two promises
   // downstream: appendCarTailLights evicts overflow from the array TAIL on the

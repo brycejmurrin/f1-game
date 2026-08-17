@@ -25,10 +25,17 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**Ceiling:** this environment VALIDATES but does not EXECUTE. WGX canvas
-screenshots are BLANK; SwiftShader may lose the device after a clean init
-(`deviceLostHint: true` is a note, not a failure). Scene truth is
-`__apex.render({what:"view"})`; pixel sign-off needs a real GPU.
+**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES shader work
+here. Two narrower limits remain: headless canvas PRESENT is blank
+(screenshots show DOM only), and the FIRST `getCurrentTexture()` call
+permanently breaks `mapAsync` on that device. Real pixels:
+`node tools/wgx-capture.mjs <track>` — on software adapters WGX
+soft-presents (final pass into a COPY_SRC texture, never the swapchain)
+and the tool writes the `GLX.capturePixels()` readback as `frame.png`.
+Prefer capture over reasoning from absence. Still true: SwiftShader is
+not a PERFORMANCE oracle, software adapters force MSAA 1 (MSAA-only
+paths need the source guards in `webgpu-lifecycle.test.mjs`), and
+`deviceLostHint: true` after a clean init is a note, not a failure.
 
 ## 2. Backend and error state
 
@@ -58,6 +65,9 @@ node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval 'a.diag({downl
 
 Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
+`render({what:"view"})` is the cheap scene truth; for REAL pixels run
+`node tools/wgx-capture.mjs <track>` (offscreen capture — the WGX canvas
+itself still screenshots blank in-container).
 
 ## Load on demand
 

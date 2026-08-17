@@ -623,7 +623,6 @@ const Parts = (function () {
     const requested = Object.assign({}, DEFAULTS, setup || {});
     const resolvedSetup = {};
     const mods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
-    const ids = {};
     const tiers = {};
     const visual = {};
     const options = {};
@@ -632,7 +631,6 @@ const Parts = (function () {
       const opt = _resolve(cat, requested, team);
       const tier = opt.visualTier != null ? opt.visualTier : 1;
       resolvedSetup[cat.id] = opt.id;
-      ids[cat.id] = opt.id;
       tiers[cat.id] = tier;
       options[cat.id] = opt;
       visual[cat.id] = Object.assign({ id: opt.id, tier }, opt.visual || {});
@@ -642,7 +640,7 @@ const Parts = (function () {
       if (opt.cornering !== undefined) mods.cornering *= opt.cornering;
       if (opt.braking   !== undefined) mods.braking   *= opt.braking;
     }
-    return { setup: resolvedSetup, mods, cost, ids, tiers, visual, options };
+    return { setup: resolvedSetup, mods, cost, ids: resolvedSetup, tiers, visual, options };
   }
 
   const factoryCache = new Map();

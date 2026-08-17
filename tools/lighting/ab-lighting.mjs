@@ -23,6 +23,7 @@ import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
+import { pickChromium } from "../harness.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -30,9 +31,7 @@ const { chromium } = require("playwright");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function chrome() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined;
+  return pickChromium();
 }
 
 // ── Measurement regions (fractions of the 720x405 frame) ────────────────────
