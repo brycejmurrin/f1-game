@@ -55,7 +55,9 @@
  * game.js), per-frame car map (1024², desktop) and nearest-floodlight spot
  * map (512², desktop), sampled in tsl-lit via hardware-compare depth taps.
  * Armed flags clear in present() like GLX's post present. PCSS blocker map
- * skipped (pcss() = false — TODO M4-PCSS in tlx-shadow.js).
+ * is live on the WebGPU backend (sampler-free textureLoad downsample,
+ * tlx-shadow.js); the WebGL2 fallback keeps the fixed-R look and pcss()
+ * reports the live state.
  *
  * M5 STATUS: the procedural sky is live (tsl-sky.js, TLXShaders.sky — the
  * full SKY_FS port: gradient/golden hour, clouds, sun corona+disc, stars,
@@ -997,7 +999,7 @@ const TLX = (function () {
         get aspect() { return H ? W / H : 1; },
         hdrMode() { return !!(post && post.hdrOk()); },   // M8: float scene target when the chain is up
         msaa() { return 1; },
-        pcss() { return false; },            // truthful: blocker map skipped (TODO M4-PCSS, tlx-shadow.js)
+        pcss() { return !!(shadowSys && shadowSys.S.pcssEnabled); },   // WebGPU blocker map live (tlx-shadow.js)
         isMobile,
         mobileTier,
         // GPU frame timer — the GLX gpuTimer/gpuMs contract (_gpuTimerBegin/_gpuMs in glx.js).
