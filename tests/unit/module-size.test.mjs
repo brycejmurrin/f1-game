@@ -289,7 +289,8 @@ const CEILINGS = {
   // aim fix and TLX/WGX parity work; my god-ray fade, fog cull and per-chunk
   // road gate), so neither 8259 nor 8257 fits the union. Re-measured on the
   // merged tree with the ceiling test's own metric, per the deploy-merge rule.
-  "js/game.js": 8270,
+  // -> 8293 PERF-FINDINGS Δprog 5.01% / sand audit (pre-reject, cull hoist, shared player anchor, invert/LED gates).
+  "js/game.js": 8293,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
