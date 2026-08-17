@@ -28,6 +28,11 @@
 // WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
 // --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
+//
+// SwiftShader: Dawn validation oracle — gpuErrors often 0, canvas compositor blank.
+// Lavapipe (+ xvfb-run for headed): three.js e2e recipe — real Vulkan ICD, shared
+// ANGLE/Dawn device; still often blank in CI but catches different failure modes.
+// Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
 export const WEBGPU_CHROMIUM_ARGS = [
   "--headless=new",
   "--enable-unsafe-webgpu",
@@ -36,6 +41,19 @@ export const WEBGPU_CHROMIUM_ARGS = [
   "--use-webgpu-adapter=swiftshader",
   "--no-sandbox",
 ];
+
+export const WEBGPU_LAVAPE_CHROMIUM_ARGS = [
+  "--enable-unsafe-webgpu",
+  "--enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE",
+  "--use-angle=vulkan",
+  "--use-vulkan=native",
+  "--disable-vulkan-surface",
+  "--no-sandbox",
+];
+
+export const WEBGPU_LAVAPE_ENV = {
+  VK_ICD_FILENAMES: "/usr/share/vulkan/icd.d/lvp_icd.json",
+};
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -122,12 +140,17 @@ export function shutdown() {
  * Serve `root` over HTTP from THIS process (async, unlike `python -m
  * http.server`, which serialises requests). Returns { port, url, close }.
  */
-export async function startStaticServer(root, { port = 0 } = {}) {
+export async function startStaticServer(root, { port = 0, host = "127.0.0.1", route = null } = {}) {
   const base = resolve(root);
   const prefix = base + sep;
   const server = createServer((req, res) => {
     try {
       const url = new URL(req.url || "/", "http://127.0.0.1");
+      // A caller-owned route gets first refusal — it is how a tool adds a
+      // non-static endpoint (a POST collector) without reimplementing the MIME
+      // table and the path-escape check below. Returning true claims the
+      // request; anything else falls through to the static path.
+      if (route && route(req, res, url) === true) return;
       const rel = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
       const file = normalize(join(base, rel));
       if (!file.startsWith(prefix) && file !== base) { res.writeHead(403).end("forbidden"); return; }
@@ -148,7 +171,10 @@ export async function startStaticServer(root, { port = 0 } = {}) {
   });
   await new Promise((ok, fail) => {
     server.once("error", fail);
-    server.listen(port, "127.0.0.1", ok);
+    // host defaults to loopback: a test server must not appear on the LAN just
+    // because it exists. A tool that WANTS to be reachable from a phone passes
+    // "0.0.0.0" deliberately (tools/report-server.mjs).
+    server.listen(port, host, ok);
   });
   // Unref'd: a tool that forgets to close must still be able to exit on its own.
   server.unref();

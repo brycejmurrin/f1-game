@@ -5,9 +5,11 @@
 // reads back exact fragment output) — it is only the headless canvas
 // PRESENT/screenshot path that is blank. So the real pixels come from
 // WGX.capturePixels(): a copyTextureToBuffer readback of the presented frame,
-// written here as frame.png (PNG-encoded in-page via a 2D canvas). The
-// page.screenshot() canvas.png is kept only as the present-path probe, and
-// __apex.render({what:"view"}) as the CPU-side coverage cross-check.
+// written here as frame.png (PNG-encoded in-page via a 2D canvas). On
+// software adapters WGX also soft-presents (2D blit onto the visible canvas),
+// so page.screenshot() canvas.png may show the frame too — kept as the
+// present-path probe — and __apex.render({what:"view"}) is the CPU-side
+// coverage cross-check.
 //
 // Usage:
 //   node tools/wgx-capture.mjs [trackId] [--lite] [--out DIR] [--frames N]
@@ -44,21 +46,21 @@ try {
     headless: true,
     args: WEBGPU_CHROMIUM_ARGS,
   });
-  // Small viewport on purpose: SwiftShader EXECUTES every pass now (offscreen
-  // mode), and a 960×540 full-post frame costs ~10 s of software rasterizing —
-  // 480×270 keeps a capture round under ~20 s.
+  // Small viewport on purpose: SwiftShader EXECUTES every pass, and a 960×540
+  // full-post frame costs ~10 s of software rasterizing — 480×270 keeps a
+  // capture round under ~20 s.
   const page = await browser.newPage({ viewport: { width: 480, height: 270 } });
 
   await page.addInitScript((wantLite) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
-    // Soft-adapter gate refuses Dawn SwiftShader by default (blank canvas).
-    // This tool intentionally validates/captures on software — allow it.
+    localStorage.removeItem("apex26.gfxWgxLevel");
+    // Software adapter => WGX takes its soft-present path automatically: the
+    // final pass renders into a COPY_SRC texture and the swapchain is never
+    // touched (headless SwiftShader breaks mapAsync device-wide on the FIRST
+    // getCurrentTexture() call), so capturePixels() just works.
     localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-    // Offscreen present: headless SwiftShader breaks mapAsync device-wide on
-    // the FIRST getCurrentTexture() call, so capturePixels() only works when
-    // WGX renders its final pass offscreen (wgx.js create() note).
-    localStorage.setItem("apex26.gfxWgxOffscreen", "1");
     if (wantLite) localStorage.setItem("apex26.gfxWgxLite", "1");
+    sessionStorage.setItem("apex26.wgxCapture", "1");
   }, lite);
 
   await page.goto(srv.url + "index.html");

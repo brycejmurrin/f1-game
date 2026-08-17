@@ -17,3 +17,9 @@ One circuit → `track-surveyor`. Parent keeps edits, cache bump, and deploy FF.
 Skills (workflows) live in `.claude/skills/`. Canonical rules live in
 `AGENTS.md`. New agents must be listed here and remain trackable
 (`.gitignore` allowlists `!.claude/agents/`).
+
+Frontmatter (Cursor `https://cursor.com/docs/subagents`): `name` (matches the
+filename), `description` (what + when), `model: inherit` unless a specific
+model is justified. `readonly: true` for research/verify agents;
+`is_background: true` when the job is a long verify/fetch that must not hold
+the parent. `tests/unit/skill-progressive.test.mjs` asserts name/description/model.

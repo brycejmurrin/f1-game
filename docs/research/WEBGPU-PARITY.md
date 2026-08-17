@@ -75,16 +75,19 @@ external Instance reference no longer exists", unrecoverable even by
 ever touched its swapchain can render but never read back — which is exactly
 what "doesn't execute" looked like from outside.
 
-The way past both: `apex26.gfxWgxOffscreen=1` (test-only) renders WGX's final
-pass into an offscreen texture instead of the swapchain, never calls
-`getCurrentTexture()`, and paces the loop with `onSubmittedWorkDone` (one
-frame in flight — without present there is NO backpressure, the queue backlog
-grows unboundedly, and `mapAsync` waits behind it forever). Then
-`GLX.capturePixels()` (WGX-only member) returns real RGBA frames —
-`tools/wgx-capture.mjs` writes them as `frame.png`. The first such capture
-found four latent WGX bugs in one afternoon (§1a below). SwiftShader remains
-non-representative for PERFORMANCE and for anything MSAA (software adapters
-force MSAA 1), but it is now a genuine pixel + validation oracle.
+The way past both (two lineages converged on it the same day): on software
+adapters WGX soft-presents — the final pass renders into a persistent
+`COPY_SRC` texture instead of the swapchain, `getCurrentTexture()` is never
+called, the result is 2D-blitted onto the visible `#game` canvas, and the
+loop is paced with `onSubmittedWorkDone` (one frame in flight — without a
+swapchain there is NO backpressure, the queue backlog grows unboundedly, and
+`mapAsync` waits behind it forever; measured as "second capture never
+resolves"). `GLX.capturePixels()` (WGX-only member) reads the same texture
+back as real RGBA frames — `tools/wgx-capture.mjs` writes them as
+`frame.png`. The first such capture found four latent WGX bugs in one
+afternoon (§1a below). SwiftShader remains non-representative for PERFORMANCE
+and for anything MSAA (software adapters force MSAA 1), but it is now a
+genuine pixel + validation oracle.
 
 Note also that three's WebGPU backend (TLX auto-picks it on Chromium desktop)
 still dies here inside its own `mappedAtCreation` upload — probe TLX with the
@@ -542,7 +545,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **refuses** by default → GLX fallback (`gfxWgxFail=software WebGPU adapter…`). Escape: `apex26.gfxWgxAllowSoftware=1` |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0`, agentview coverage healthy — the GPUCanvasContext still composites blank in headless (present path), **but shader work EXECUTES**: with `apex26.gfxWgxOffscreen=1`, `GLX.capturePixels()` returns real rendered frames (§0 correction / §1a). A visual oracle via `tools/wgx-capture.mjs`. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17):** the final pass renders into a `COPY_SRC` soft-present texture (never `getCurrentTexture()`, which breaks `mapAsync` device-wide on first call) and is 2D-blitted onto `#game` — SwiftShader/Lavapipe canvas pixels ~`[161,170,171]` after poll (was blank). `GLX.capturePixels()` reads the same texture back: `tools/wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`; manifest `docs/research/wgx-gallery-manifest.json`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools

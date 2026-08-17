@@ -1,7 +1,7 @@
 # Start/finish lines — the derivation, the values, and what moving them touches
 
-Supersedes `HANDOFF-STARTFRAC.md`. `startFrac` positions the start/finish line,
-and 22 of 40 circuits put it inside a corner. This is the fix and the evidence.
+Campaign closed — this doc is the live reference for `startFrac`. It positions the
+start/finish line, and 22 of 40 circuits put it inside a corner. This is the fix and the evidence.
 
 ---
 

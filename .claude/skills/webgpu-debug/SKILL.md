@@ -15,6 +15,7 @@ must degrade to GLX, never to a dead canvas.
 ## 1. Real Dawn validation in-container — ALWAYS the first probe
 
 ```sh
+node tools/wgx-validate.mjs --static             # no browser: sky/MSAA/bloom/fw1
 node tools/wgx-validate.mjs                      # full stack (MSAA 4, HDR)
 node tools/wgx-validate.mjs --lite               # the PHONE stack (MSAA 1)
 node tools/wgx-validate.mjs --no-rg11b10         # spoof a phone-class adapter:
@@ -34,9 +35,9 @@ here. Two narrower limits remain: headless canvas PRESENT is blank
 (screenshots show DOM only), and the FIRST `getCurrentTexture()` call
 permanently breaks `mapAsync` on that device ("A valid external Instance
 reference no longer exists"). Real pixels: `node tools/wgx-capture.mjs <track>`
-— it sets `apex26.gfxWgxOffscreen=1` (WGX renders its final pass offscreen,
-never touches the swapchain, paces one frame in flight) and writes the
-`GLX.capturePixels()` readback as `frame.png`. That capture found the bloom
+— on software adapters WGX soft-presents (final pass into a COPY_SRC texture,
+never the swapchain, one frame in flight, 2D-blitted onto `#game`) and the
+tool writes the `GLX.capturePixels()` readback as `frame.png`. That capture found the bloom
 format, sky-MSAA layout, particle layout, and particle-VBO retire bugs in one
 afternoon — prefer it over reasoning from absence. Still true: SwiftShader is
 not a PERFORMANCE oracle, software adapters force MSAA 1 (MSAA-only paths need
@@ -66,7 +67,12 @@ after a clean init is a note, not a failure.
    compliant device. `rg11b10ufloat` is color-renderable only behind the
    optional `rg11b10ufloat-renderable` feature — `create()` requests it when
    the adapter has it, else `POST_HDR_FORMAT` downgrades to `rgba16float`.
-   Any new render-target format needs the same feature audit.
+   Any new render-target format needs the same feature audit. Bloom down/up
+   pipelines must target `POST_HDR_FORMAT` (not `SCENE_FORMAT`) or a granted
+   `rg11b10ufloat` feature becomes a color-format mismatch and bloom drops.
+   `DEPTH_RESOLVE` must min samples 0–3 (the 4× leftover mined only 0 and 1).
+   SAA/clearcoat derivatives stay on geometric N (`topNgeo`) — GLX uses
+   post-bump `dFdx(N)`, which is illegal in WGSL after a material branch.
 
 ## 3. Backend and error state from the page
 
