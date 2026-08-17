@@ -124,9 +124,24 @@ function makeGpuHarness(opts = {}) {
       buffers.push(buffer);
       return buffer;
     },
-    createBindGroup() {
+    createBindGroup(desc) {
       bindGroupCalls += 1;
       if (bindGroupCalls === failBindGroupAt) throw new Error("injected bind-group failure");
+      // VALIDATE, the way a real implementation does. This mock used to accept
+      // any descriptor at all, so a group built from resources that did not
+      // exist yet passed every test and then threw on a real device. That is
+      // exactly how WGX shipped an init() that bound a null matScaleUBO and
+      // aborted on an iPhone with "Member GPUBufferBinding.buffer is required
+      // and must be an instance of GPUBuffer" — the message below is Safari's,
+      // copied verbatim so a failure here reads like the one a player gets.
+      for (const e of (desc && desc.entries) || []) {
+        if (e.resource == null) {
+          throw new Error("Member GPUBindGroupEntry.resource is required (binding " + e.binding + ")");
+        }
+        if (typeof e.resource === "object" && "buffer" in e.resource && !e.resource.buffer) {
+          throw new Error("Member GPUBufferBinding.buffer is required and must be an instance of GPUBuffer");
+        }
+      }
       return {};
     },
   };

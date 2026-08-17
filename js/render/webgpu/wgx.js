@@ -787,7 +787,10 @@ const WGX = (function () {
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-      _rebuildFrameBG();
+      // NOT here — the frame group binds material, blocker and shadow resources
+      // that are still null at this point. It is built at the END of init(),
+      // once they all exist. (The guard in _makeFrameBGs makes this a no-op
+      // rather than a throw, but calling it here at all is misleading.)
       drawBindGroup = device.createBindGroup({
         layout: g1Layout,
         // size = the DrawU slice; the dynamic offset selects the slot at draw time.
@@ -926,6 +929,13 @@ const WGX = (function () {
           ]
         });
       } catch (_) { blockerPipeline = null; blockerBG = null; /* PCSS downsample optional; LIT still binds the placeholder */ }
+
+      // Frame bind group, built HERE: every resource it binds — the material
+      // array + scale UBO, both shadow views, the blocker view — exists by now.
+      // If this still cannot build, the guard inside leaves frameBindGroup null
+      // and the self-test below refuses rather than shipping a renderer that
+      // would draw nothing.
+      _rebuildFrameBG();
       if (MSAA_COUNT > 1 && _Chunks.DEPTH_RESOLVE) {
         const drG0 = device.createBindGroupLayout({ entries: [
           { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth", multisampled: true } },
@@ -1255,7 +1265,25 @@ const WGX = (function () {
     // changes: the SSR result texture is resize-dependent, and the env cube swaps
     // from placeholder to real when the probe runs.
     function _makeFrameBGs(nextSsrView) {
-      if (!g0Layout || !frameUBO) return;
+      // EVERY binding, not just frameUBO. WebGPU rejects a bind group whose
+      // resource is null — Safari's message is "Member GPUBufferBinding.buffer
+      // is required and must be an instance of GPUBuffer" — and the old guard
+      // named only two of the fifteen. init() calls _rebuildFrameBG() straight
+      // after the UBOs are made, ~90 lines BEFORE matScaleUBO, the material
+      // views, the blocker view and both extra shadow views exist, so the
+      // first call built a group full of nulls and threw out of init. That
+      // aborted WGX entirely on a real device (measured: iPhone, Safari 26.6,
+      // build 1281, `apex26.gfxWgxFail` = that exact string, RENDERER showing
+      // "WEBGPU (WEBGL2)"). It survived every test because the WebGPU mock in
+      // tests/unit/webgpu-lifecycle.test.mjs does not validate bind groups.
+      //
+      // Bailing is safe: this is a rebuild, and the callers that matter re-run
+      // it once their resource lands (env probe, setMaterialMaps, and the
+      // explicit call at the end of init).
+      if (!g0Layout || !frameUBO || !lightSBO || !matScaleUBO) return;
+      if (!shadowView || !shadowSampler || !linearSampler || !nextSsrView) return;
+      if (!blockerView || !carShadowView || !lampShadowView) return;
+      if (!matAlbedoView || !matNormalView || !matArraySamp) return;
       const base = (cubeView) => ({
         layout: g0Layout,
         entries: [
