@@ -5,27 +5,45 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 
 # Probing the live game with the MCPs
 
-Two MCP browsers sit alongside the Playwright suite. Neither replaces it — the
-suite is 111 specs + 76 node suites, parallelised, asserted, retried, CI-gated.
-These are **interactive** instruments: one browser, driven a call at a time, for
-the question you can't be bothered to write a `scratch/*.mjs` for, and for the one
-thing the suite never checks — the **deployed artifact**.
+Two upstream MCP servers sit alongside the Playwright suite. Neither replaces
+it — the suite is 113 Playwright specs + 95 `node --test` unit suites,
+parallelised, asserted, retried, CI-gated. These are **interactive** instruments:
+one call at a time for the question you can't be bothered to write a
+`scratch/*.mjs` for, and for the one thing the suite never checks — the
+**deployed artifact**.
 
-- **Chrome DevTools MCP** (`mcp__chrome-devtools__*`) — a real `HeadlessChrome`
-  with **WebGL2 via SwiftShader** (the same renderer the suite uses; measured:
-  `ANGLE (…SwiftShader…)`). It reaches `http://127.0.0.1:<port>` (your working
-  tree) — but **NOT the deployed site from this container**: MEASURED
-  2026-08-13, `navigate_page` to `https://brycejmurrin.github.io/f1-game/` dies
-  `net::ERR_TUNNEL_CONNECTION_FAILED`, the same egress proxy that gives `curl`
-  a 403 CONNECT on that host. (This file previously claimed it reached both;
-  it does not here.) For anything on the DEPLOYED artifact use tinyfish, which
-  fetches server-side from its own network. This is the canvas-**visible** probe:
-  render a track/car, drive `__apex`, screenshot, take a heap snapshot, read the
-  console. The interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`.
-- **tinyfish MCP** (`mcp__tinyfish__*`) — `fetch_content` / `search` over the
-  public web. For us its one testing job is the **post-deploy liveness check**:
-  read the live `version.json` / `index.html`. It cannot see the working tree
-  (only public URLs), so it is useless for pre-ship verification.
+**Unified entry (preferred in cloud agents):** `tools/probe-mcp.py` wraps
+**every** upstream tool under stable prefixes and is registered in `.mcp.json`
+as `probe` (`python3 tools/probe-mcp.py serve`). When the session catalog lacks
+`mcp__chrome-devtools__*` / `mcp__tinyfish__*`, use:
+
+```
+python3 tools/probe-mcp.py list-tools
+python3 tools/probe-mcp.py call chrome_navigate_page '{"url":"http://127.0.0.1:3456/"}'
+python3 tools/probe-mcp.py call tinyfish_fetch_content \
+  '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
+```
+
+Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
+
+- **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
+  a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
+  suite uses; measured: `ANGLE (…SwiftShader…)`). It reaches
+  `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
+  from this container**: MEASURED 2026-08-13, `navigate_page` to
+  `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
+  the same egress proxy that gives `curl` a 403 CONNECT on that host. For
+  anything on the DEPLOYED artifact use tinyfish, which fetches server-side from
+  its own network. This is the canvas-**visible** probe: render a track/car,
+  drive `__apex`, screenshot, take a heap snapshot, read the console. The
+  interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
+  `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
+- **tinyfish MCP** (`mcp__tinyfish__*` or `tinyfish_*` via probe) —
+  `fetch_content` / `search` / automation over the public web. For us its main
+  testing job is the **post-deploy liveness check**: read the live
+  `version.json` and shipped JS. It cannot see the working tree (only public
+  URLs), so it is useless for pre-ship verification. Shell:
+  `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
 
 ---
 
@@ -577,6 +595,8 @@ tinyfish `search` is for external grounding (research), not testing.
 ## The one-line summary
 
 Playwright asserts the working tree in batch; **Chrome DevTools MCP looks at the
-working tree live**; **tinyfish looks at the deployed site**. Keep the first in
-CI, reach for the second when a scratch script is overkill, reach for the third
-after every ship — and never let the second render while the first is running.
+working tree live**; **tinyfish looks at the deployed site**; **`probe-mcp`
+wraps every tool from both** (`chrome_*` / `tinyfish_*`) for hosts that only
+expose one MCP entry. Keep Playwright in CI, reach for Chrome/probe when a
+scratch script is overkill, reach for tinyfish/probe after every ship — and
+never let Chrome render while Playwright is running.

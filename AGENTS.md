@@ -21,7 +21,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 113 Playwright
-specs plus 94 `node --test` unit suites; the browser half runs on SwiftShader
+specs plus 95 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **`npm install` FIRST on a fresh container** — a missing `node_modules`

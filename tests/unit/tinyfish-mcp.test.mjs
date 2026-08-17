@@ -43,15 +43,18 @@ test("tinyfish-mcp.sh and tinyfish-rpc.py exist", () => {
   assert.ok(fs.statSync(SH).mode & 0o100, "tinyfish-mcp.sh should be executable");
 });
 
-test(".mcp.json wires only tinyfish HTTP + chrome-devtools wrapper", () => {
+test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "chrome-devtools",
+    "probe",
     "tinyfish",
   ]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["run"]);
+  assert.equal(cfg.mcpServers.probe.command, "python3");
+  assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
 });
 
 test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {

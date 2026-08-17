@@ -191,8 +191,16 @@ Never run while a Playwright group is in flight.
 
 ## Stdio client note
 
-Cursor-hosted MCP catalogs may only expose `cursor-cloud`. Local agents drive
-chrome-devtools via `tools/chrome-devtools-mcp.sh run` over stdio (see
-`tools/cdmcp-cli.py`, `tools/ui-readable-survey-mcp.py`). When writing a custom
-client, handle **server→client** `roots/list` or restrict artifact paths to
-`/tmp`.
+Cursor-hosted MCP catalogs may only expose `cursor-cloud`. Prefer the unified
+bridge:
+
+```
+python3 tools/probe-mcp.py list-tools
+python3 tools/probe-mcp.py call chrome_<tool> '<json>'
+python3 tools/probe-mcp.py serve   # .mcp.json "probe" entry — every chrome_* + tinyfish_* tool
+```
+
+Local agents can also drive chrome-devtools via `tools/chrome-devtools-mcp.sh run`
+over stdio (`tools/cdmcp-cli.py`, `tools/ui-readable-survey-mcp.py`,
+`tools/mcp-cli.mjs`). When writing a custom client, handle **server→client**
+`roots/list` or restrict artifact paths to `/tmp`.
