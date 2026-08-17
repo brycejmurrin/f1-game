@@ -51,8 +51,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * RENDER-TARGET CHAIN wgx.js should allocate (pass order = WGSLPost.PASS_ORDER)
  * ─────────────────────────────────────────────────────────────────────────────
- * Inputs from the main pass:  sceneHDR (rgba16float, full-res, .a = SSR car tag
- *                             — unused here), sceneDepth (depth24plus/depth32f).
+ * Inputs from the main pass:  sceneHDR (rgba16float, full-res, .a = SSR car tag),
+ *                             sceneDepth (depth24plus/depth32f).
  *
  *   0. SSAO      : half-res R8/rgba8. reads sceneDepth.            -> ssaoTex
  *   0b SSAO denoise / god-ray blur: separable 5-tap gaussian (BLUR)
@@ -87,8 +87,7 @@
  * NOW PORTED (Phase 4b) vs the earlier DEFERRED list:
  *   - Wet-road screen-space reflection: the big SSR march block is lifted into a
  *     SEPARATE `SSR` pass (GLX COMPOSITE_FS wet-road block, js/render/shaders/post.js COMPOSITE_FS) —
- *     short 12-step march for mobile, road-only (car-paint tag omitted; the .a
- *     SSR tag path from GLX isn't reproduced here).
+ *     short march for mobile; road + car-paint (scene .a tag) paths as in GLX.
  *   - Radial speed-blur, chromatic aberration, unsharp mask: folded into
  *     COMPOSITE (GLX COMPOSITE_FS, js/render/shaders/post.js COMPOSITE_FS), each gated by a scalar
  *     so 0 = the shipped no-op look.
@@ -559,15 +558,21 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(3) godrayTex : texture_2d<f32>   additive shafts
   //      @binding(4) samp      : sampler           linear clamp (all four)
   //      @binding(5) U         : uniform  CompositeU
+  //      @binding(6) dirtTex   : texture_2d<f32>   LENS DIRT grime map
+  //      @binding(7) depthTex  : texture_depth_2d  scene depth (bilateral AO + flare occ)
   //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
   //      grade       : vec4<f32>  off  32   (contrast, vibrance, saturation, tint)
-  //      fx          : vec4<f32>  off  48   (vignette, grain, time, _pad)
+  //      fx          : vec4<f32>  off  48   (vignette, grain, time, shaftDecay)
+  //                                          fx.w = shaftDecay (def 0.82)
   //      gradeShadow : vec4<f32>  off  64   (xyz split-tone shadow tint, w gradeStr)
-  //      gradeHi     : vec4<f32>  off  80   (xyz split-tone highlight tint, w _pad)
-  //      texel       : vec4<f32>  off  96   (1/w, 1/h, _pad, _pad) — also the
-  //                                          sharpen unsharp-blur tap offset
+  //      gradeHi     : vec4<f32>  off  80   (xyz split-tone highlight tint,
+  //                                          w = shaftSpread, def 1.0)
+  //      texel       : vec4<f32>  off  96   (1/w, 1/h, aoTexel.x, aoTexel.y) —
+  //                                          xy = sharpen unsharp-blur tap offset;
+  //                                          zw = aoTexel (half-res 1/w,1/h; 0 = skip
+  //                                          bilateral upsample, plain SSAO sample)
   //      imgFx       : vec4<f32>  off 112   (chromAb, sharpen, speedBlur, bloomKnee)
   //                                          NEW Phase-4b image FX. Each 0 = no-op:
   //                                          chromAb  = radial R/B split amount
@@ -586,8 +591,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      dirtFx      : vec4<f32>  off 240   (lensDirt, hazeU, hazeV, hazeStr) —
   //                                          LENS DIRT veil + heat-haze UV/str;
   //                                          samples binding(6) dirtTex grime map
-  //    NOTE: sunShaft (p0.z) here is an extra scalar multiplier on the godray
-  //    contribution; the godray strength itself lives in the GODRAY uniform.
+  //    NOTE: sunShaft (p0.z) is SCREEN sun-shaft intensity only (8-tap radial
+  //    bloom toward sunUV). Volumetric godray is added unscaled; its strength
+  //    lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
   const COMPOSITE = `
 struct CompositeU {
@@ -615,9 +621,16 @@ struct CompositeU {
 @group(0) @binding(4) var samp      : sampler;
 @group(0) @binding(5) var<uniform> U : CompositeU;
 @group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
+@group(0) @binding(7) var depthTex  : texture_depth_2d;
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
+
+fn loadCompDepth(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(depthTex, px, 0);
+}
 
 struct GradeZoneWeights {
   tone0 : vec4<f32>,
@@ -785,10 +798,39 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
 
   // Ambient occlusion (multiply in linear light; 1 = no change).
-  c = c * textureSampleLevel(ssaoTex, samp, in.uv, 0.0).r;
+  // Half-res AO: 4-tap depth-aware bilateral upsample when U.texel.z > 0
+  // (aoTexel = half-res 1/w,1/h); else plain sample (AO off / 1×1 white).
+  var aoV = 1.0;
+  if (U.texel.z > 0.0) {
+    let aoDc = loadCompDepth(in.uv);
+    let aoTexel = U.texel.zw;
+    let aoG = in.uv / aoTexel - vec2<f32>(0.5);
+    let aoF = fract(aoG);
+    let aoB = (floor(aoG) + vec2<f32>(0.5)) * aoTexel;
+    var aoSum = 0.0;
+    var aoW = 0.0;
+    for (var ai = 0; ai < 4; ai = ai + 1) {
+      let ox = select(0.0, aoTexel.x, ai == 1 || ai == 3);
+      let oy = select(0.0, aoTexel.y, ai >= 2);
+      let auv = aoB + vec2<f32>(ox, oy);
+      var bw = 1e-4;
+      if (ai == 0) { bw = (1.0 - aoF.x) * (1.0 - aoF.y) + 1e-4; }
+      else if (ai == 1) { bw = aoF.x * (1.0 - aoF.y) + 1e-4; }
+      else if (ai == 2) { bw = (1.0 - aoF.x) * aoF.y + 1e-4; }
+      else { bw = aoF.x * aoF.y + 1e-4; }
+      let dTap = loadCompDepth(auv);
+      let w = bw / (1e-4 + abs(aoDc - dTap) * 30.0);
+      aoSum = aoSum + textureSampleLevel(ssaoTex, samp, auv, 0.0).r * w;
+      aoW = aoW + w;
+    }
+    aoV = aoSum / aoW;
+  } else {
+    aoV = textureSampleLevel(ssaoTex, samp, in.uv, 0.0).r;
+  }
+  c = c * aoV;
 
-  // Volumetric shafts (additive), scaled by the composite sun-shaft gate.
-  c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb * max(sunShaft, 0.0);
+  // Volumetric shafts (additive, unscaled — strength is in the GODRAY pass).
+  c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;
 
   // Exposure before tonemap.
   c = c * exposure;
@@ -812,6 +854,33 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c = c + bloomSample * exposure * dirt * lensDirt * 2.2;
   }
 
+  // SCREEN SUN-SHAFT: 8-tap radial bloom toward sunUV (p0.z = shaft intensity only).
+  let shaftMul = max(sunShaft, 0.0);
+  let shaftDecay = select(0.82, U.fx.w, U.fx.w > 0.0);
+  let shaftSpread = select(1.0, U.gradeHi.w, U.gradeHi.w > 0.0);
+  if (shaftMul > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0) {
+    let toSun = sunUV - in.uv;
+    let dist = length(toSun);
+    if (dist > 0.005) {
+      let step = toSun / dist * min(dist, 0.40) / 8.0;
+      var shaft = vec3<f32>(0.0);
+      let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
+      var uv = in.uv + step * ign;
+      var decay = 1.0;
+      let reach = 0.32 * shaftSpread;
+      for (var i = 0; i < 8; i = i + 1) {
+        uv = uv + step;
+        let suv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
+        let sw = 1.0 - clamp(length(suv - sunUV) / reach, 0.0, 1.0);
+        shaft = shaft + textureSampleLevel(bloomTex, samp, suv, 0.0).rgb * (decay * sw * sw);
+        decay = decay * shaftDecay;
+      }
+      shaft = shaft / 8.0;
+      let radial = 1.0 - clamp(dist * (2.6 / max(shaftSpread, 1e-3)), 0.0, 1.0);
+      c = c + shaft * shaftMul * radial * radial * 0.60;
+    }
+  }
+
   // Professional HDR grade runs after linear-light composition and before ACES.
   c = applyHdrGrade(c);
 
@@ -822,7 +891,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   c = colourGrade(c);
 
   // Lens flare: anamorphic streak + ghost circles (GLX js/render/shaders/post.js COMPOSITE_FS).
-  if (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
+  // Occlusion: procedural flare would bleed through geometry; sample depth at sunUV.
+  let sunVis = select(0.0,
+    smoothstep(0.9990, 0.9999, loadCompDepth(sunUV)),
+    flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0);
+  if (flareStr > 0.0 && sunVis > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
     let streakY = exp(-abs(in.uv.y - sunUV.y) * 110.0);
@@ -837,7 +910,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     flare = flare + vec3<f32>(0.70, 0.60, 1.00) * smoothstep(0.038, 0.012, d1) * 0.25;
     let d2 = length(in.uv - (sunUV + toCenter * 1.8));
     flare = flare + vec3<f32>(0.50, 1.00, 0.70) * smoothstep(0.028, 0.008, d2) * 0.18;
-    flare = flare * flareStr;
+    flare = flare * flareStr * sunVis;
     // LENS DIRT breaks the clean procedural flare into a blotchy, smudged one —
     // bright spots where grime catches the glare, dimmer in the clean patches
     // (GLX js/render/shaders/post.js). Reuses the dirt sample from the veil.
@@ -938,22 +1011,22 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
-  // 7. SSR — wet-road screen-space reflection (its own full-res pass).
+  // 7. SSR — wet-road + car-paint screen-space reflection (its own full-res pass).
   //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/shaders/post.js COMPOSITE_FS),
-  //    reduced for mobile: the road path only (the GLX .a car-paint tag branch
-  //    is dropped), a SHORT 12-step reflected-ray march + 4-step binary refine.
+  //    reduced for mobile: road + car-paint (.a tag) paths, SHORT 12-step reflected-
+  //    ray march + 4-step binary refine.
   //    Reconstructs view position from depth, a view-space normal from depth
   //    finite differences (NOT dpdx/dpdy — safe past the early sky/road-mask
-  //    returns), masks to up-facing foreground road, marches the reflected view
-  //    ray R = reflect(-V, N) through the depth buffer and samples the already-
-  //    lit scene HDR at the hit. Bright HDR hits are soft-clipped so a floodlight
-  //    lens can't blow the mirror white; a march MISS falls back to a dim night
-  //    sky-glow (a wet road always mirrors something).
+  //    returns), masks to up-facing foreground road OR car bodywork, marches the
+  //    reflected view ray R = reflect(-V, N) through the depth buffer and samples
+  //    the already-lit scene HDR at the hit. Bright HDR hits are soft-clipped so a
+  //    floodlight lens can't blow the mirror white; a march MISS falls back to a
+  //    dim night sky-glow (a wet road always mirrors something).
   //
   //    OUTPUT (rgba16float reflection buffer):
   //      .rgb = soft-clipped reflected HDR colour
-  //      .a   = mix amount in [0, 0.94] (roadMask * strength * fresnel * cover,
-  //             seam-faded at the upper cutoff). 0 = leave the surface untouched.
+  //      .a   = mix amount in [0, 0.85] (ssrGate * fresnel * cover, seam-faded;
+  //             road cap 0.80 / car cap 0.85). 0 = leave the surface untouched.
   //    CONSUMER CONTRACT (COMPOSITE or the LIT pass, per wgx wiring):
   //      let r = textureSampleLevel(ssrTex, samp, uv, 0.0);
   //      c = mix(c, c * 0.10 + r.rgb * 0.92, r.a);   // darker-mirror substitution
@@ -969,12 +1042,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    UNIFORM SsrU (192 B):
   //      invProj   : mat4x4<f32>  off   0   (clip[0..1 z] -> view; WebGPU-convention)
   //      proj      : mat4x4<f32>  off  64   (view -> clip; projects the marched ray)
-  //      upVS      : vec4<f32>    off 128   (xyz world-up in view space, w unused)
+  //      upVS      : vec4<f32>    off 128   (xyz world-up in view space,
+  //                                          w = carReflect — car-paint SSR amount)
   //      p0        : vec4<f32>    off 144   (texel.x, texel.y, ssrThick, strength)
   //                                          ssrThick = depth-tolerance gate (GLX
   //                                          uSsrThick, def 0.20); strength folds
   //                                          the wet-road SSR amount (GLX uReflect
-  //                                          * wetness) — 0 disables the pass.
+  //                                          * wetness) — 0 disables the road path.
   //      reflSkyLo : vec4<f32>    off 160   (xyz zenith sky-glow miss fallback,
   //                                          w = upper-screen cutoff, GLX 0.62)
   //      reflSkyHi : vec4<f32>    off 176   (xyz horizon sky-glow miss fallback,
@@ -1023,18 +1097,22 @@ fn ssrProjUV(p : vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let texel    = U.p0.xy;
-  let thick    = U.p0.z;
-  let strength = U.p0.w;
-  let yCut     = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
+  let texel      = U.p0.xy;
+  let thick      = U.p0.z;
+  let strength   = U.p0.w;
+  let carReflect = U.upVS.w;
+  let yCut       = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
 
   let dC = ssrDepth(in.uv);
-  // Cheap early-outs: sky (far plane), upper screen (never wet road), pass off.
+  // Cheap early-outs: sky (far plane), upper screen, both paths off.
   // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
   // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.
-  if (dC >= 0.9999 || (1.0 - in.uv.y) >= yCut || strength <= 0.0) {
+  if (dC >= 0.9999 || (1.0 - in.uv.y) >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
+
+  let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
+  let carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
 
   let P = ssrViewPos(in.uv);
   // View-space normal from depth finite differences (cheap; the road mask +
@@ -1064,12 +1142,22 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let roadMask = smoothstep(0.25, 0.55, upDot)
                * smoothstep(ssrNear, ssrNear * 2.8, P.z)
                * (1.0 - smoothstep(-22.0, -78.0, P.z));
-  if (roadMask <= 0.001) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+  // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).
+  var carMask = carPx * smoothstep(0.30, 0.65, upDot)
+              * smoothstep(-1.0, -3.0, P.z)
+              * (1.0 - smoothstep(-22.0, -55.0, P.z));
+  let edgeGrad = (length(dpx) + length(dpy)) * (1.0 / 3.0);
+  carMask = carMask * (1.0 - smoothstep(0.35, 0.9, edgeGrad));
+  let roadTerm = roadMask * strength;
+  let carTerm  = carMask * carReflect;
+  let ssrGate  = max(roadTerm, carTerm);
+  if (ssrGate <= 0.001) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+  let carDom = carTerm > roadTerm;
 
   let V = normalize(-P);
-  // Reflect off the smooth road PLANE, not the bumpy per-pixel normal — a bumpy
-  // normal scatters the ray and splits the mirror into hit/miss patches.
-  let Nr = normalize(mix(Nv, upVSn, 0.85));
+  // Road: flatten onto the plane so bump scatter doesn't patch the mirror.
+  // Car paint keeps the true per-pixel normal (curved bodywork needs it).
+  let Nr = select(normalize(mix(Nv, upVSn, 0.85)), Nv, carDom);
   let R = reflect(-V, Nr);         // points up toward the world above the road
 
   // Higher-fidelity march (optimized): 24 steps, fine-grained geometric growth.
@@ -1104,15 +1192,16 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
         if (ssrViewPos(muv).z - mid.z > 0.20) { b = mid; } else { a = mid; }
       }
       let huv = ssrProjUV(b).xy;
-      // GRAZING SELF-REFLECTION REJECT: the reflected ray skims the tarmac and
-      // lands on the ROAD itself, filling the wet mirror with wet-darkened
-      // asphalt. A rough wet surface barely reflects itself at grazing angles.
-      let hP = ssrViewPos(huv);
-      let hdx = ssrViewPos(huv + vec2<f32>(nT.x, 0.0)) - hP;
-      let hdy = ssrViewPos(huv + vec2<f32>(0.0, nT.y)) - hP;
-      var hN = normalize(cross(hdx, hdy));
-      if (hN.z < 0.0) { hN = -hN; }
-      if (dot(hN, upVSn) > 0.55) { continue; }
+      // GRAZING SELF-REFLECTION REJECT (road only): skim-hit on tarmac itself.
+      // Car paint skips this — curved bodywork legitimately hits nearby geometry.
+      if (!carDom) {
+        let hP = ssrViewPos(huv);
+        let hdx = ssrViewPos(huv + vec2<f32>(nT.x, 0.0)) - hP;
+        let hdy = ssrViewPos(huv + vec2<f32>(0.0, nT.y)) - hP;
+        var hN = normalize(cross(hdx, hdy));
+        if (hN.z < 0.0) { hN = -hN; }
+        if (dot(hN, upVSn) > 0.55) { continue; }
+      }
       hitUV = huv;
       let e = abs(hitUV - vec2<f32>(0.5)) * 2.0;
       hitEdge = 1.0 - pow(max(e.x, e.y), 4.0);   // screen-edge fade
@@ -1131,7 +1220,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // content by the hit's own screen-edge confidence.
   let conf = select(0.0, clamp(hitEdge, 0.0, 1.0), found);
   var reflCol = mix(skyRefl, textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb, conf);
-  let cover = 0.60;
+  // Road: constant cover; car: confidence-scaled (falls through to lit env on miss).
+  let cover = select(0.60, conf, carDom);
   // Soft-clip the reflected HDR colour before it's substituted (caps the mirror
   // at a sane peak while keeping its colour).
   reflCol = reflCol / (1.0 + reflCol * 0.35);
@@ -1140,10 +1230,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Off Nr, the same normal the ray used — Nv carries the road's facets and the
   // depth-derivative noise, and this term swings the amount across 0.55..0.97.
   let fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
-  var amt = roadMask * strength * (0.55 + 0.42 * fres);
+  var amt = ssrGate * select(0.55 + 0.42 * fres, 0.50 + 0.45 * fres, carDom);
   // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
   amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
-  amt = clamp(amt * cover, 0.0, 0.80);   // road cap 0.94 -> 0.80, matching GLX
+  amt = clamp(amt * cover, 0.0, select(0.80, 0.85, carDom));
   return vec4<f32>(reflCol, amt);
 }`;
 
