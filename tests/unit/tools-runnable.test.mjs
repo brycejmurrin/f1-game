@@ -138,7 +138,9 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
   const tmpRoot = path.join(ROOT, "artifacts", "tmp");
   fs.mkdirSync(tmpRoot, { recursive: true });          // gitignored: absent in a fresh clone
   const dir = fs.mkdtempSync(path.join(tmpRoot, "reportsrv-"));
-  fs.writeFileSync(path.join(dir, "index.html"), "<html></html>\n");  // the tool refuses a root without one
+  // The tool refuses a root without a shell, and the ?report=1 injection has to
+  // land at a real </body>.
+  fs.writeFileSync(path.join(dir, "index.html"), "<html><body>hi</body></html>\n");
 
   const proc = spawn(process.execPath,
     [path.join(TOOLS, "report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
@@ -162,6 +164,18 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
     const help = await fetch(`${base}/apex-report`);
     assert.equal(help.status, 200);
     assert.match(await help.text(), /collector/);
+
+    // ?report=1 is the console-free path for a phone (iOS Safari has no console
+    // without a Mac and a cable). It must be opt-in: an injected button in every
+    // local page would end up in a screenshot review or a golden.
+    const plain = await fetch(`${base}/`);
+    assert.equal(await plain.text(), "<html><body>hi</body></html>\n", "plain shell must be byte-identical");
+    const injected = await fetch(`${base}/?report=1`);
+    const html = await injected.text();
+    assert.match(html, /id="apexReportBtn"/);
+    assert.match(html, /apexReportBtn[\s\S]*<\/body>/, "the button belongs inside body");
+    assert.equal(Number(injected.headers.get("content-length")), Buffer.byteLength(html),
+      "a rewritten body needs its own Content-Length");
 
     const body = JSON.stringify({ build: 1, backend: "three", verdict: ["ok"] });
     const post = (name) => fetch(`${base}/apex-report?file=${encodeURIComponent(name)}`,
