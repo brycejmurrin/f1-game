@@ -50,6 +50,9 @@ MCP_ARGS=(
   --viewport "844x390"
   --chromeArg=--no-sandbox
   --chromeArg=--use-angle=swiftshader
+  # Match playwright.config.js: without this, HeadlessChrome exposes
+  # navigator.gpu but requestAdapter() returns null → WGX fails "no adapter".
+  --chromeArg=--enable-unsafe-webgpu
 )
 
 local_ok() {

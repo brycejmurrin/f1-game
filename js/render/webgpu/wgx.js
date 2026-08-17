@@ -177,7 +177,12 @@ const WGX = (function () {
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
   const SSAO_FORMAT  = "r8unorm";       // AO half-res (composite samples .r; GLX r8)
-  const POST_HDR_FORMAT = "rg11b10ufloat"; // bloom/godray (GLX R11F_G11F_B10F)
+  // Bloom/godray HDR scratch. GLX uses R11F_G11F_B10F; WebGPU's matching
+  // `rg11b10ufloat` is NOT color-renderable on SwiftShader/Dawn software
+  // (measured 2026-08-17: CreateRenderPipeline → "not color renderable" →
+  // uncaptured error → create() refuses even though post build try/catches).
+  // rgba16float is core-renderable everywhere; half-res mips keep the cost small.
+  const POST_HDR_FORMAT = "rgba16float";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
   // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
@@ -278,7 +283,11 @@ const WGX = (function () {
   };
   const MAT_TEX_LAYERS = 17;
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
-  const MSAA_COUNT = WGX_LITE ? 1 : 2;
+  // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu; Dawn agrees.)
+  // GLX caps at 2× via blitFramebuffer, but sampleCount:2 is illegal in WebGPU.
+  // Desktop defaults to 4; create() may drop to 1 on software adapters
+  // (SwiftShader MSAA resolve has produced blank/white frames in probe).
+  let MSAA_COUNT = WGX_LITE ? 1 : 4;
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -380,6 +389,35 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
+      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
+      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
+      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
+      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
+      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
+      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Sync signals only — never await requestAdapterInfo() (has hung create()
+      // with no timeout on Dawn/SwiftShader).
+      let _softAdapter = false;
+      try {
+        const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+        const info = adapter.info || null;
+        const blob = info ? JSON.stringify(info).toLowerCase() : "";
+        // Empty adapter.info is the SwiftShader/Dawn software fingerprint on
+        // Chrome 148 (hardware adapters report vendor/device/architecture).
+        const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+        _softAdapter = !!(adapter.isFallbackAdapter
+            || infoEmpty
+            || /HeadlessChrome/i.test(ua)
+            || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+      } catch (_) { /* treat as hardware */ }
+      let _allowSoft = false;
+      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
+      if (_softAdapter && !_allowSoft) {
+        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
+      }
+      // sampleCount 4 resolveTarget frames have also come back blank on
+      // software when the escape hatch is set — force MSAA 1.
+      if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
       // treats the phone timer as absent; Safari Mac is the same GPU.
@@ -1292,7 +1330,23 @@ const WGX = (function () {
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       const w = Math.min(maxDim, Math.max(1, Math.round(canvas.clientWidth * dpr * renderScale)));
       const h = Math.min(maxDim, Math.max(1, Math.round(canvas.clientHeight * dpr * renderScale)));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
+        // configured swapchain. Drawing into a stale getCurrentTexture() still
+        // "succeeds" (gpuErrors stay 0) but HeadlessChrome/SwiftShader composites
+        // a blank/white canvas — measured 2026-08-17 with present() running
+        // hundreds of times per second and agentview coverage healthy. Reconfigure
+        // on every buffer-size change (no-op cost vs create()).
+        if (ctx) {
+          try {
+            ctx.configure({
+              device, format, alphaMode: "opaque",
+              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            });
+          } catch (_) { /* next begin() drops the frame if the swapchain is lost */ }
+        }
+      }
       width = w; height = h; aspect = w / h;
     }
     function setRenderScale(s) {
@@ -1616,12 +1670,25 @@ const WGX = (function () {
       _destroyTargetSet(old);
     }
 
-    // ── buffer helper: create a GPUBuffer initialised from a typed array ──
+    // Geometry is uploaded with queue.writeBuffer, NOT createBuffer with a
+    // mapped-at-creation flag. That path needs a client-visible mapping as
+    // large as the WHOLE buffer, and Dawn throws when that allocation fails:
+    // measured as "createBuffer failed, size (208) is too large for the
+    // implementation when mappedAtCreation == true" for EVERY mesh once the
+    // 35 MB chunked scenery buffer has exhausted the mappable pool.
+    // writeBuffer stages through Dawn's own ring buffer in bounded chunks.
     function _mkBuffer(data, usage) {
-      const size = (data.byteLength + 3) & ~3;   // pad to 4 (mappedAtCreation req.)
-      const buf = device.createBuffer({ size, usage, mappedAtCreation: true });
-      new data.constructor(buf.getMappedRange()).set(data);
-      buf.unmap();
+      const size = (data.byteLength + 3) & ~3;   // writeBuffer: size multiple of 4
+      const buf = device.createBuffer({ size, usage: usage | GPUBufferUsage.COPY_DST });
+      if (data.byteLength === size) {
+        device.queue.writeBuffer(buf, 0, data);
+      } else {
+        // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
+        // requires a multiple of 4 bytes — pad a one-shot copy.
+        const pad = new Uint8Array(size);
+        pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+        device.queue.writeBuffer(buf, 0, pad);
+      }
       return buf;
     }
 
@@ -3486,7 +3553,14 @@ const WGX = (function () {
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _fail("canvas has no webgpu context");
-      ctx.configure({ device, format, alphaMode: "opaque" });
+      // COPY_SRC lets a future present-readback / software blit path sample the
+      // swapchain; RENDER_ATTACHMENT is the required draw target. Reconfigure
+      // again from resize() whenever canvas.width/height change.
+      ctx.configure({
+        device, format, alphaMode: "opaque",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      resize();   // pick up clientWidth now that the context owns the canvas
     } catch (e) {
       return _fail("context configure threw: " + ((e && e.message) || e));
     }

@@ -316,7 +316,7 @@ test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variati
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
-  assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
+  assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rgba16float"/);
   assert.match(wgx, /pBlurHDR = fsPipe\(_Post\.BLUR, POST_HDR_FORMAT/);
 });
 

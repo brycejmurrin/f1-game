@@ -201,6 +201,12 @@ function makeGpuHarness(opts = {}) {
       gpu: {
         requestAdapter: async () => ({
           features: { has: (name) => name === "timestamp-query" },
+          // Non-empty info = "hardware" for WGX's software-adapter gate.
+          // Real Dawn SwiftShader often reports {}.
+          info: opts.softAdapter
+            ? {}
+            : { vendor: "test", architecture: "test", device: "mock-gpu" },
+          isFallbackAdapter: !!opts.softAdapter,
           requestDevice: async () => {
             device.features = { has: (name) => name === "timestamp-query" };
             return device;
@@ -572,7 +578,7 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(gfx.gpuMs(), -1);
   gfx.gpuTimer(true);
   assert.equal(gfx.gpuTimer().on, true);
-  assert.equal(gfx.msaa(), 2);
+  assert.equal(gfx.msaa(), 4);
   const maps = gfx.materialMapState();
   assert.equal(maps.albedo, false);
   assert.equal(maps.layers, 0);
@@ -785,24 +791,41 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   assert.doesNotMatch(POST_SOURCE, /textureSampleLevel\(depthTex,\s*depthSamp/);
   // Slim gate is WGX_LITE (phone OR WebKit OR a prior device.lost), not
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
-  // stack there. WGX cannot: timestamp-query + MSAA 2× rgba16float is what
+  // stack there. WGX cannot: timestamp-query + MSAA 4× rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
   // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  // sampleCount must be 1 or 4 in WebGPU (not GLX's 2×).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
   assert.match(WGX_SOURCE, /if \(!adapter\) adapter = await navigator\.gpu\.requestAdapter\(\)/);
   assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && !!\(adapter\.features/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 2/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
 test("desktop harness still takes the full WGX stack (GLX-parity)", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
-  assert.equal(gfx.msaa(), 2, "Chrome desktop keeps MSAA 2, same as GLX IS_MOBILE=false");
+  assert.equal(gfx.msaa(), 4, "WebGPU desktop MSAA is 4× (sampleCount 1|4 only; GLX uses 2×)");
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("software / empty-info adapter refuses create (white-canvas gate)", async () => {
+  const h = makeGpuHarness({ softAdapter: true });
+  const gfx = await h.create();
+  assert.equal(gfx, null);
+  const fail = h.WGX.lastFailure();
+  assert.ok(fail && /software WebGPU adapter/i.test(fail.reason), fail && fail.reason);
+});
+
+test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async () => {
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapter: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "escape hatch must still boot WGX");
+  assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
 });
 
 test("Safari UA takes the slim WGX stack (msaa 1, no timestamp)", async () => {
@@ -995,6 +1018,26 @@ test("WGSL derivative uniform control flow: hoisted to fragment entry and fw1 re
   assert.doesNotMatch(CHUNKS_SOURCE, /fw1\s*\(/, "no calls to fw1 should remain in CHUNKS_SOURCE");
   assert.match(CHUNKS_SOURCE, /let\s+fwWpos\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.wpos\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.wpos\s*\)\s*\);/, "fwWpos must be hoisted to uniform control flow at fs_main entry");
   assert.match(CHUNKS_SOURCE, /let\s+fwTrk\s*=\s*abs\s*\(\s*dpdx\s*\(\s*in\.trk\s*\)\s*\)\s*\+\s*abs\s*\(\s*dpdy\s*\(\s*in\.trk\s*\)\s*\);/, "fwTrk must be hoisted to uniform control flow at fs_main entry");
+
+  // Geometry upload must not use mappedAtCreation — Dawn's mappable pool
+  // exhausts on the ~35 MB chunked scenery buffer and then fails even 208-byte
+  // meshes (measured 2026-08-17; white world with HUD only).
+  assert.doesNotMatch(WGX_SOURCE, /createBuffer\(\{[^}]*mappedAtCreation\s*:\s*true/,
+    "_mkBuffer must use queue.writeBuffer, not mappedAtCreation");
+  assert.match(WGX_SOURCE, /queue\.writeBuffer\(buf/, "_mkBuffer must writeBuffer the payload");
+
+  // Every dpdx/dpdy in LIT's fs_main must sit before the first `if (` — SwiftShader
+  // rejects derivatives after any non-uniform branch (measured 2026-08-17).
+  const fsIdx = CHUNKS_SOURCE.indexOf("fn fs_main");
+  assert.ok(fsIdx >= 0, "LIT fs_main must exist");
+  const fsBody = CHUNKS_SOURCE.slice(fsIdx, fsIdx + 2500);
+  const firstIf = fsBody.search(/\bif\s*\(/);
+  assert.ok(firstIf > 0, "fs_main should contain a branch");
+  const before = fsBody.slice(0, firstIf);
+  const after = fsBody.slice(firstIf);
+  assert.match(before, /\bdpdx\s*\(/, "at least one dpdx before first if");
+  assert.doesNotMatch(after, /\bdpdx\s*\(/, "no dpdx after first if in fs_main head");
+  assert.doesNotMatch(after, /\bdpdy\s*\(/, "no dpdy after first if in fs_main head");
 });
 
 test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async () => {
