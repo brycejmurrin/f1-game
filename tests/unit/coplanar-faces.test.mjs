@@ -74,6 +74,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // sessions independently measured 16 in isolated worktrees and each assumed it
 // was their own merge. A cap left behind reads exactly like a regression you
 // caused.
+//
+// 2026-08-17 pine S4 remesh: hockenheim 53→54 (one new spot from scaled
+// forestEdge canopies). monza 12→11, istanbul 6→5, mugello 1→0 — lower.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
