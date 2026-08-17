@@ -20,7 +20,13 @@ sampled in `fs_main` with `textureSample` (implicit LOD + anisotropy, same
 as GLX `texture()`) before any non-uniform branch; other layers still use
 `textureSampleLevel`. Pack upload is `writeTexture` of raw RGBA8 bytes —
 `copyExternalImageToTexture` into `rgba8unorm` linearises the mean-128
-asphalt scan and breaks `albedo * tex * 2.0`.
+asphalt scan and breaks `albedo * tex * 2.0`. 2026-08-17 later: a split
+`float32` + `float32x3` at offsets 36/40 of the stride-52 VBO was spec-legal
+but Dawn delivered 0 for both — every fragment read `matId=0` / `trk=0`, so
+asphalt never ran and `roadMarkings` gated off. Packed as one `float32x4`
+(`mat, s, x, hw`) at `@location(3)` on a **dedicated stride-16 GPUBuffer**
+(slot 1). Same-VBO `setVertexBuffer(..., 36)` also delivered 0 — validators
+treat `offset + stride * vertexCount` as past the end of a tightly packed VBO.
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -507,9 +513,11 @@ No API research left:
   blend already exists on glow.
 - **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
   into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
-- **`trk` / road markings** — extend `VERTEX_LAYOUT` with `@location(4) trk: vec3`.
-  Today's "always stride 40" comment has to give; meshes without `trk` keep
-  a zero-filled extra float[3] or a second pipeline.
+- **`trk` / road markings** — packed with `mat` as `@location(3) float32x4`
+  (`mat, s, x, hw`) on a dedicated stride-16 vertex buffer (`mesh.abuf`).
+  A split `float32`+`float32x3` at the tail of stride 52, and a same-VBO
+  bind at byte 36, were both dropped by Dawn (every mesh shaded FLAT, paint
+  vanished). Meshes without `trk` keep a zero-filled extra float[3] in `abuf`.
 - **Heat haze / car-paint SSR** — composite / SSR-consume ports from
   `js/render/shaders/post.js`.
 

@@ -564,8 +564,7 @@ fn vs_main(
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
-  @location(3) aMat : f32,
-  @location(4) aTrk : vec3<f32>,
+  @location(3) aMatTrk : vec4<f32>,   // .x = matId, .yzw = trk (s, x, hw)
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -586,8 +585,8 @@ fn vs_main(
   o.col  = col;
   o.wpos = wp.xyz;
   o.dist = length(wp.xyz - F.eye.xyz);
-  o.matId = aMat;               // flat — procedural material key (Phase 4)
-  o.trk = aTrk;
+  o.matId = aMatTrk.x;          // flat — procedural material key (Phase 4)
+  o.trk = aMatTrk.yzw;
   o.clip = F.viewProj * wp;
   return o;
 }

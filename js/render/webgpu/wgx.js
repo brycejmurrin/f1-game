@@ -11,7 +11,7 @@
  *   - adapter / device acquisition (async); context configure(); DPR resize;
  *     device-lost reload — unchanged from Phase 1.
  *   - REAL mesh geometry: createMesh / createChunkedMesh build interleaved
- *     GPUBuffers (stride 52 = pos3/nrm3/col3/mat1/trk3) + index buffers; per-chunk
+ *     GPUBuffers (stride 52 = pos3/nrm3/col3 + packed matTrk4) + index buffers; per-chunk
  *     AABBs kept for cull. free* call buffer.destroy().
  *   - A LIT render pass into an RGBA16F HDR scene texture (+ depth24plus depth):
  *       * FRAME uniform buffer (viewProj/eye/sun/ambient/sky/fog/tune scalars)
@@ -247,17 +247,24 @@ const WGX = (function () {
   // ── vertex layout: interleaved [pos3, nrm3, col3, mat1, trk3], stride 52 ──
   // NB: unlike GLX (which keeps mat-less meshes at stride 36), WGX ALWAYS stores
   // the 10th float (mat, default 0) plus a zero-filled trk3 so a single pipeline
-  // vertex layout serves every mesh — the shader declares @location(3/4)
-  // unconditionally.
-  const VERTEX_STRIDE = 52;   // pos3 nrm3 col3 mat1 trk3
-  const VERTEX_LAYOUT = {
+  // vertex layout serves every mesh. mat+trk are ALSO uploaded as a dedicated
+  // stride-16 GPUBuffer bound at slot 1 (@location(3) float32x4 = mat, s, x, hw).
+  // A 4th attribute in the pos/nrm/col slot was dropped by Dawn; binding the
+  // same VBO at byte 36 also delivered 0 (offset + stride*N exceeds buffer size
+  // on some validators). A separate GPUBuffer with offset 0 is the remaining bind.
+  const VERTEX_STRIDE = 52;   // pos3 nrm3 col3 + packed matTrk (mat, s, x, hw)
+  const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
-      { shaderLocation: 3, offset: 36, format: "float32" },
-      { shaderLocation: 4, offset: 40, format: "float32x3" },
+    ],
+  };
+  const VERTEX_ATTR_LAYOUT = {
+    arrayStride: 16,
+    attributes: [
+      { shaderLocation: 3, offset: 0, format: "float32x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -1537,7 +1544,7 @@ const WGX = (function () {
       }
       p = device.createRenderPipeline({
         layout: litLayout,
-        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
+        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_POS_LAYOUT, VERTEX_ATTR_LAYOUT, INSTANCE_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
         // GLX default: CCW front, cull back. But WebGPU flips NDC-Y → framebuffer-Y
         // relative to WebGL (framebuffer origin is top-left, y-down), which REVERSES
@@ -2123,15 +2130,30 @@ const WGX = (function () {
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
       const inter = new Float32Array(vCount * 13);
+      const attr = new Float32Array(vCount * 4);
       for (let i = 0; i < vCount; i++) {
         const o = i * 13;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
         inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
         inter[o+9] = mat ? mat[i] : 0;
-        if (trk) { inter[o+10] = trk[i*3]; inter[o+11] = trk[i*3+1]; inter[o+12] = trk[i*3+2]; }
+        attr[i * 4] = inter[o + 9];
+        if (trk) {
+          inter[o+10] = trk[i*3]; inter[o+11] = trk[i*3+1]; inter[o+12] = trk[i*3+2];
+          attr[i * 4 + 1] = inter[o + 10];
+          attr[i * 4 + 2] = inter[o + 11];
+          attr[i * 4 + 3] = inter[o + 12];
+        }
       }
-      return { vert: inter, idx, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", count: idx.length };
+      if (vCount > 8000 && trk) {
+        try {
+          Log.info("gfx", "interleave road-sized", {
+            vCount, mat5: attr[5 * 4],
+            trk5: [attr[5 * 4 + 1], attr[5 * 4 + 2], attr[5 * 4 + 3]],
+          });
+        } catch (_) { /* harness */ }
+      }
+      return { vert: inter, attr, idx, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", count: idx.length };
     }
 
     // ── Resources (Phase 2) ──
@@ -2154,16 +2176,18 @@ const WGX = (function () {
     }
     function createMesh(data) {
       const b = _interleave(data);
-      let vbuf = null, ibuf = null;
+      let vbuf = null, abuf = null, ibuf = null;
       try {
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
+        abuf = _mkBuffer(b.attr, GPUBufferUsage.VERTEX);
         ibuf = _mkBuffer(b.idx,  GPUBufferUsage.INDEX);
       } catch (e) {
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (abuf) abuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);
-        return { _wgx: "mesh", vbuf: null, ibuf: null, count: 0, indexFormat: b.indexFormat, chunks: null };
+        return { _wgx: "mesh", vbuf: null, abuf: null, ibuf: null, count: 0, indexFormat: b.indexFormat, chunks: null };
       }
-      return { _wgx: "mesh", vbuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
+      return { _wgx: "mesh", vbuf, abuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
     // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
     // index buffer, matching the DECAL shader vertex layout (js/render/webgpu/wgsl-fx.js).
@@ -2206,11 +2230,15 @@ const WGX = (function () {
       const b = _interleave(data);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexFormat = big ? "uint32" : "uint16";
-      let vbuf = null;
-      try { vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX); }
-      catch (e) {
+      let vbuf = null, abuf = null;
+      try {
+        vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
+        abuf = _mkBuffer(b.attr, GPUBufferUsage.VERTEX);
+      } catch (e) {
+        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (abuf) abuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+        return { _wgx: "chunked", vbuf: null, abuf: null, chunks: [], count: 0, indexFormat };
       }
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
@@ -2239,11 +2267,12 @@ const WGX = (function () {
         // Partial chunk set under memory pressure: release everything — a
         // half-uploaded prop mesh must not pin buffers on a struggling device.
         try { vbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (abuf) abuf.destroy(); } catch (_) { /* already invalid */ }
         for (const c of chunks) { try { c.ibuf.destroy(); } catch (_) { /* already invalid */ } }
         _allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+        return { _wgx: "chunked", vbuf: null, abuf: null, chunks: [], count: 0, indexFormat };
       }
-      return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
+      return { _wgx: "chunked", vbuf, abuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
@@ -2343,10 +2372,16 @@ const WGX = (function () {
       } catch (_) { return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */ }
     }
 
-    function freeMesh(m) { if (!m) return; if (m.vbuf) m.vbuf.destroy(); if (m.ibuf) m.ibuf.destroy(); }
+    function freeMesh(m) {
+      if (!m) return;
+      if (m.vbuf) m.vbuf.destroy();
+      if (m.abuf) m.abuf.destroy();
+      if (m.ibuf) m.ibuf.destroy();
+    }
     function freeChunkedMesh(m) {
       if (!m) return;
       if (m.vbuf) m.vbuf.destroy();
+      if (m.abuf) m.abuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
       if (m.chunks) for (let i = 0; i < m.chunks.length; i++) m.chunks[i].ibuf.destroy();
     }
@@ -2676,9 +2711,16 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
+    // Slot 0 = pos/nrm/col (stride 52), slot 1 = dedicated mat+trk (stride 16),
+    // slot 2 = instance (identity for non-instanced draws).
+    function _bindLitVerts(pass, vbuf, instBuf, abuf) {
+      pass.setVertexBuffer(0, vbuf);
+      pass.setVertexBuffer(1, abuf);
+      pass.setVertexBuffer(2, instBuf || identInstanceBuf);
+    }
 
     function draw(mesh, model, opts) {
-      if (!litPass || !mesh || !mesh.vbuf) return;
+      if (!litPass || !mesh || !mesh.vbuf || !mesh.abuf) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, opts);
@@ -2686,14 +2728,13 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, mesh.vbuf);
-      litPass.setVertexBuffer(1, identInstanceBuf);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.abuf);
       litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
     }
 
     function drawChunked(mesh, model, opts) {
-      if (!litPass || !mesh || !mesh.vbuf) return;
+      if (!litPass || !mesh || !mesh.vbuf || !mesh.abuf) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, opts);
@@ -2701,8 +2742,7 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, mesh.vbuf);
-      litPass.setVertexBuffer(1, identInstanceBuf);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.abuf);
       if (!mesh.chunks) {
         litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
         litPass.drawIndexed(mesh.count);
@@ -3726,7 +3766,7 @@ const WGX = (function () {
       return n;
     }
     function drawInstanced(batch, opts) {
-      if (!litPass || !batch || !batch.vbuf || !batch.instances) return;
+      if (!litPass || !batch || !batch.vbuf || !batch.abuf || !batch.instances) return;
       const n = batch.visible === undefined ? batch.instances : batch.visible;
       if (n <= 0) return;
       const slot = _drawSlot++;
@@ -3745,8 +3785,7 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, batch.vbuf);
-      litPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
+      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.abuf);
       litPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
       litPass.drawIndexed(batch.count, n);
     }

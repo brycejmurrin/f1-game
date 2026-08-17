@@ -819,7 +819,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /-0\.94201624/);
   assert.match(CHUNKS_SOURCE, /lampShadowTex/);
   assert.match(CHUNKS_SOURCE, /aInst0/);
-  assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(CHUNKS_SOURCE, /aMatTrk/);
+  assert.match(WGX_SOURCE, /VERTEX_ATTR_LAYOUT/);
+  assert.match(WGX_SOURCE, /arrayStride: 16/);
+  assert.match(WGX_SOURCE, /setVertexBuffer\(1, abuf\)/);
+  assert.match(WGX_SOURCE, /abuf = _mkBuffer\(b\.attr/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
