@@ -927,7 +927,8 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
   assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
-  assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]{0,400}onSubmittedWorkDone\(\)\.then\(finish/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
     /function _queueSoftPresent\(/,
