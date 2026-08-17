@@ -134,7 +134,7 @@ one first.
 
 `js/render/gfx.js` selects a backend; three implement one surface: **GLX**
 (WebGL2, the reference), **WGX** (WebGPU, feature-detected, falls back to GLX),
-**TLX** (three.js r184/TSL, opt-in via `apex26.gfxBackend`). The fallbacks are
+**TLX** (three.js r185.1/TSL, opt-in via `apex26.gfxBackend`). The fallbacks are
 honest, and the two deferred backends (~550 KB nobody-runs code) are excluded
 from the eager load with the three-way agreement asserted by
 `load-order.test.mjs`.

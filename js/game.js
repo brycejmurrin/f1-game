@@ -112,7 +112,7 @@ function loadBackendScripts(files) {
   });
 }
 function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.184.0/three.webgpu.min.js", "vendor/three-0.184.0/three.tsl.min.js"]) {
+  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
     const el = document.createElement("link");
     el.rel = "modulepreload";
     el.href = href;

@@ -13,7 +13,7 @@ cache-first for immutable `?v=N` assets.
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends (WGX/TLX + `vendor/three-0.184.0`), dynamic-import
+**DEFERRED** backends (WGX/TLX + `vendor/three-0.185.1`), dynamic-import
 vendors, self-hosted fonts.
 
 **Cache name.** `apex26-{build}` from `version.json`. `activate` deletes older

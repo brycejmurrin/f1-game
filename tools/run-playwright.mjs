@@ -12,7 +12,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
-  // ES modules (vendor/rapier-0.19.3, vendor/three-0.184.0): Chromium enforces
+  // ES modules (vendor/rapier-0.19.3, vendor/three-0.185.1): Chromium enforces
   // a JavaScript MIME type for module scripts — octet-stream imports are
   // rejected outright, so .mjs must be mapped or dynamic import() fails.
   ".mjs": "text/javascript; charset=utf-8",

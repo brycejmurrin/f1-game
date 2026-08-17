@@ -225,7 +225,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
-| `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
+| `"three"` | **TLX** | three.js r185.1 + TSL; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
@@ -286,8 +286,8 @@ GLX stays the default. Nothing here flips that.
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
-game.js. Vendored three r184 lives OUTSIDE `js/` at top-level
-`vendor/three-0.184.0/` (the load-order test walks `js/**`; an un-versioned
+game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
+`vendor/three-0.185.1/` (the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
 specifiers to that dir (invisible to the load-order regex and the sw.js precache

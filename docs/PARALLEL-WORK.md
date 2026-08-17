@@ -104,7 +104,7 @@ git worktree list                            # confirm it is gone
   a shared directory corrupts under concurrent installs. After a dependency
   change, `npm ci --prefer-offline` instead.
 - **No submodules to trip over.** Everything third-party is vendored
-  (`vendor/three-0.184.0`, `vendor/jsqr-1.4.0`, `vendor/trystero-0.25.3`,
+  (`vendor/three-0.185.1`, `vendor/jsqr-1.4.0`, `vendor/trystero-0.25.3`,
   `vendor/rapier-0.19.3`), which sidesteps the multiplying-submodule problem
   entirely.
 - **No build step, so no build cache to corrupt** — the single biggest

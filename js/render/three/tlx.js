@@ -1,7 +1,7 @@
 /* Apex 26 — TLX: the three.js/TSL renderer backend (migration milestone 1).
  *
  * Third backend behind the js/render/gfx.js seam (GLX = WebGL2 default,
- * WGX = frozen hand-written WebGPU, TLX = three.js r184 with WebGPURenderer
+ * WGX = frozen hand-written WebGPU, TLX = three.js r185.1 with WebGPURenderer
  * and automatic WebGL2 fallback). Opt-in via localStorage
  * apex26.gfxBackend = "three"; installed by game.js's descriptor-copy onto
  * the GLX object so every direct GLX.* call site and test monkey-patch keeps
@@ -10,7 +10,7 @@
  * ARCHITECTURE (see spike/ADOPTION-PLAN.md + the milestone plan):
  * - This file and its tlx-…/tsl-… siblings are classic IIFE scripts like the
  *   rest of the codebase. The ONLY ES-module content is the vendored three
- *   build in vendor/three-0.184.0/, reached through the inline importmap in
+ *   build in vendor/three-0.185.1/, reached through the inline importmap in
  *   index.html by a dynamic import() inside TLX.create() — so GLX users never
  *   fetch a byte of it and a failed import falls back to GLX via Gfx.create's
  *   never-throw null contract.
@@ -257,7 +257,7 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
-      // r184 keys the TSL node-builder cache on RenderObject.initialCacheKey,
+      // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
       // (shadow primes, env faces, present), so every newly pooled mesh
@@ -640,7 +640,7 @@ const TLX = (function () {
         const o = opts;
         // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
         // every frame): raw in the key it mints a variant per step of the
-        // ramp, and on r184 every cache eviction leaks bindings for shared
+        // ramp, and on r185.1 every cache eviction still leaks bindings for shared
         // textures (three #33952, fixed only in r186). Quantised to 1/32 the
         // full ramp costs ≤33 variants — under the cap, so no evictions —
         // and the ≤0.03 emissive delta is invisible.
@@ -666,13 +666,11 @@ const TLX = (function () {
             // exceeding a soft cap costs some variants, disposing a material
             // that drawList still points at costs the object on screen.
             //
-            // Do NOT call dispose() here on three r184: Material.dispose()
-            // frees shared texture bindings (three #33952, fixed only in r186).
-            // Dropping the Map entry lets the material stay alive for any
-            // drawList still holding it this frame; the TLX destroy() path
-            // disposes the whole cache when the backend tears down. Quantised
-            // emissive (above) already keeps eviction rare — this is the
-            // safety net when a race still blows past 64 keys.
+            // Do NOT call dispose() here: three r185.1 still leaks shared
+            // texture bindGroups on Material.dispose() (issue #33952; PR
+            // #33954 is slated for unpublished r186). Dropping the Map entry
+            // lets the material stay alive for any drawList still holding it
+            // this frame; destroy() disposes the whole cache on teardown.
             for (const [k, v] of matCache) {
               if (v && v.__tlxFrame === _matFrame) continue;
               matCache.delete(k);
