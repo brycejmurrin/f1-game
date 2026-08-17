@@ -4,14 +4,14 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 + `js/render/shaders/` + `js/render/glx/`) and the opt-in native WebGPU backend
 (`js/render/webgpu/wgx.js` + `wgsl-*.js`).
 
-**Status (2026-08): the gap inventory in §3 is implemented** in
-`js/render/webgpu/wgx.js` + `wgsl-*.js`. This file stays as the recipe book
-and the sharp-edge list. WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX
-stays the default. Nothing here flips that.
-The platform assumption that justified the freeze — "Safari cannot run WebGPU"
-— has moved; the *shader-duplication* cost has not. See
-[CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 for the support
-matrix and [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
+**Status (2026-08): most of the §3 inventory is implemented** in
+`js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
+screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
+MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
+Remaining honest look deltas: TAA still off; some FX/noise LOD details.
+WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
+See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
+[ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
 migration plan and four phase build logs under `docs/archive/webgpu/`.
@@ -30,8 +30,8 @@ The gaps fall into three kinds:
 
 | Kind | Examples | What it actually is |
 |---|---|---|
-| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`. Remaining honest gaps are reduced sky (overcast grey-shift, twilight horizon bank, azimuthal gradient) and TAA (still off). |
-| **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray, `params8.x` lamp-fog, roughness env LOD, and `applyMaterial*` are in. |
+| **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Remaining honest gap: TAA (still off). |
+| **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
 | **Plumbing constraint** | MSAA stays at 1 | Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it

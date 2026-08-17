@@ -644,6 +644,24 @@ test("WGX ground mist matches GLX band/strength", () => {
   assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
 });
 
+
+test("WGX full parity batch is wired", () => {
+  assert.match(CHUNKS_SOURCE, /0\.90, 0\.96, 1\.12/);
+  assert.match(CHUNKS_SOURCE, /biasTerm \* F\.params6\.y/);
+  assert.match(CHUNKS_SOURCE, /baseRefl = mix\(0\.14, 0\.72/);
+  assert.match(CHUNKS_SOURCE, /bankThresh/);
+  assert.match(CHUNKS_SOURCE, /U\.p5\.y/);
+  assert.match(POST_SOURCE, /loadCompDepth/);
+  assert.match(POST_SOURCE, /shaftDecay/);
+  assert.match(POST_SOURCE, /carReflect = U\.upVS\.w/);
+  assert.match(WGX_SOURCE, /maxAnisotropy: 4/);
+  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);
+  assert.match(WGX_SOURCE, /_carBoxScale/);
+  assert.match(WGX_SOURCE, /binding: 7, resource: next\.depthSampleView/);
+  assert.match(WGX_SOURCE, /sunShaftDecay/);
+  assert.match(WGX_SOURCE, /f\.lightning/);
+});
+
 test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Clearcoat sun lobe must take KEY LIGHT (lit.js uKeyMul).
   assert.match(CHUNKS_SOURCE, /shadow \* keyMul \* clearcoat/);
