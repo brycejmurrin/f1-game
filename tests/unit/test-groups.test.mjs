@@ -41,6 +41,13 @@ test("every group tools/pick-tests.mjs routes to exists in package.json", () => 
     "a pick-tests rule points at a script that does not exist — rename the rule with the script");
 });
 
+test("test:tooling-fast is the sequential runner (not a parallel node --test dump)", () => {
+  assert.match(pkg.scripts["test:tooling-fast"], /^node tools\/tooling-fast\.mjs\b/,
+    "bunched `node --test file1 file2…` parallelises by default — use tools/tooling-fast.mjs");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/tooling-fast.mjs")),
+    "tools/tooling-fast.mjs must exist (per-file logging + --test-concurrency=1)");
+});
+
 test("pick-tests routes every source directory somewhere", () => {
   // A source tree no rule matches is a change nobody is told to test. Checked
   // at DIRECTORY granularity: individual files fall through to their dir's rule.

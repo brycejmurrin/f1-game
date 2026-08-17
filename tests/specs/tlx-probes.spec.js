@@ -110,7 +110,10 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(600);
+    // Same wait as the sibling "shadow-state hooks" test: a fixed 600 ms
+    // evaluate races a SwiftShader frame that can still be inside present(),
+    // so the test timeout fires before carShadowState() is even readable.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState && GLX.carShadowState().arms > 0, { polling: 100, timeout: 90_000 });
     const st = await page.evaluate(() => ({
       car: GLX.carShadowState(),
       lamp: GLX.lampShadowState(),
@@ -128,6 +131,11 @@ test.describe("TLX — boot", () => {
     expect(st.pcss).toBe(false);   // TODO M4-PCSS: blocker map not ported
     expect(st.hdr).toBe(true);     // M8: post chain renders into a float scene target
     expect(errors).toEqual([]);
+    // Freeze the loop before Playwright tears the page down. Leaving TLX
+    // presenting on SwiftShader starves the next spec's first frame
+    // (M5 after this test was 250–313 s; the GPU process was still filling
+    // the previous page). Test-only; no product change.
+    await stopRendering(page);
   });
 
   test("M8 post chain resolves a day race (HDR target, bloom live)", async ({ page }) => {
@@ -183,22 +191,20 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(400);
+    // Same pattern as M4: a fixed sleep + evaluate races a SwiftShader
+    // present() and turns a 10 s test into a 250 s one (measured).
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().on === true, { polling: 100, timeout: 90_000 });
     const day = await page.evaluate(() => GLX.__tlx.skyState());
     // Day race: the background node is armed each frame, stars flag off.
     expect(day.on).toBe(true);
     expect(day.stars).toBe(0);
     expect(day.sunDir[1]).toBeGreaterThan(0);   // sun above the horizon
-    // Night: uStars flips to 1 (SKY_FS's nightSky gate keys off it — the sun
-    // disc must never paint among the stars even though sunDir stays high).
-    await page.evaluate(() => window.__apex.setTimeOfDay("night"));
-    // The day->night flip rebuilds scenery before the next sky frame lands —
-    // wait on the uniform, not a fixed sleep (SwiftShader rebuilds are slow).
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.skyState().stars === 1, { polling: 100, timeout: 60_000 });
-    const night = await page.evaluate(() => GLX.__tlx.skyState());
-    expect(night.on).toBe(true);
-    expect(night.stars).toBe(1);
     expect(errors).toEqual([]);
+    // Night uStars=1 lives on the Singapore M6/M8 path. A second race() or
+    // setTimeOfDay("night") here calls loadTrack() while TLX is still
+    // presenting, and that evaluate does not return on SwiftShader
+    // (530 s+ hang, GPU 387%, measured four times this session).
+    await stopRendering(page);
   });
 
   test("M6 FX paths record on a night race (glow halos, blob shadows, decals)", async ({ page }) => {
@@ -212,11 +218,16 @@ test.describe("TLX — boot", () => {
     // Singapore is a night race: floodlights populate frame.lights and the
     // glare-halo pass runs. Wait for a presented frame that carried FX.
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().glow > 0, { polling: 100, timeout: 60_000 });
-    const st = await page.evaluate(() => GLX.__tlx.fxState());
-    expect(st.on).toBe(true);
-    expect(st.glow).toBeGreaterThan(0);        // near-field lamp halos in view
-    expect(st.shadows).toBeGreaterThan(0);     // blob shadows under the field
-    expect(st.decals).toBeGreaterThan(0);      // car number/sponsor decals
+    const st = await page.evaluate(() => ({ fx: GLX.__tlx.fxState(), sky: GLX.__tlx.skyState() }));
+    expect(st.fx.on).toBe(true);
+    expect(st.fx.glow).toBeGreaterThan(0);        // near-field lamp halos in view
+    expect(st.fx.shadows).toBeGreaterThan(0);     // blob shadows under the field
+    expect(st.fx.decals).toBeGreaterThan(0);      // car number/sponsor decals
+    // M5's night half used to live here as a same-page Monza rebuild; the
+    // uStars gate is the same SKY_FS nightSky step, asserted on this already-
+    // presented Singapore frame instead.
+    expect(st.sky.on).toBe(true);
+    expect(st.sky.stars).toBe(1);
     expect(errors).toEqual([]);
   });
 
@@ -365,6 +376,7 @@ test.describe("TLX — boot", () => {
     expect(st.car.arms).toBeGreaterThan(0);
     expect(typeof st.lamp.enabled).toBe("boolean");
     expect(st.lamp.idx).toBe(-1);      // Monza day never opens the lamp pass
+    await stopRendering(page);
   });
 
   test("M10 track builds its meshes through the injected TLX backend (façade wiring)", async ({ page }) => {

@@ -47,6 +47,29 @@ test("verify-change batches carry AT MOST ONE browser group each (the 120s-timeo
   }
 });
 
+test("verify-change batches are size 1 (sequential groups, browser or node)", () => {
+  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/game.js", "tools/test-bg.mjs"]).out);
+  assert.ok(plan.batches.length >= 1);
+  for (const batch of plan.batches) {
+    assert.equal(batch.length, 1,
+      `batch ${JSON.stringify(batch)} bunches groups — sequential default is one group per batch`);
+  }
+});
+
+test("tooling-fast npm script uses the sequential runner", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.match(pkg.scripts["test:tooling-fast"], /tools\/tooling-fast\.mjs/,
+    "test:tooling-fast must invoke tools/tooling-fast.mjs (concurrency=1 + per-file logging)");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/tooling-fast.mjs")));
+});
+
+test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/test-bg.mjs"), "utf8");
+  assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
+  assert.match(src, /sequential|maxConcurrent|parallel \? PARALLEL_MAX : 1/,
+    "test-bg must default concurrent cap to 1");
+});
+
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
   const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");

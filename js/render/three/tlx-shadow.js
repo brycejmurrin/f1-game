@@ -69,10 +69,20 @@
     // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx.js), so the
     // OR can only ever be conservative, never wrong.
     const isMobile = !!ctx.isMobile || !!ctx.mobileTier;
+    // Software GL (SwiftShader / llvmpipe / WARP) is fill-bound: a 2048² sun
+    // map plus a 1024² car map is ~5 M depth writes per armed frame, and a
+    // Monza present on CI's headless-shell spent minutes in the GPU process
+    // (measured 2026-08-17: M4/M5/M9 hit the 360 s test budget with the GPU
+    // at 387% and a defunct renderer). Keep the three maps ALLOCATED so
+    // carShadowState().enabled stays true — only the texel count drops.
+    // Real GPUs keep the authored sizes. PCSS blocker is WebGPU-only and
+    // never builds on this path (tlxForceGL), so SUN_SIZE/BLOCKER_SIZE
+    // staying 1:1 is fine.
+    const softwareGL = !!ctx.softwareGL;
 
-    const SUN_SIZE = isMobile ? 1024 : 2048;   // 1024² saves 12 MB on every phone (GLX parity)
-    const CAR_SIZE = 1024;                      // dynamic car-only map (true desktop only)
-    const LAMP_SIZE = 512;                      // nearest-floodlight spot map (true desktop only)
+    const SUN_SIZE = isMobile ? 1024 : (softwareGL ? 512 : 2048);   // 1024² saves 12 MB on every phone (GLX parity)
+    const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
+    const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
     // Shared state, field names 1:1 with GLXShadow's S so tlx.js's state
     // introspection (carShadowState/lampShadowState) and tsl-lit's updateFrame
@@ -143,6 +153,8 @@
         blockerRT.texture.name = "TLXSunBlocker";
         const bmat = new THREE.MeshBasicNodeMaterial();
         bmat.fog = false;
+        bmat.lights = false;
+        bmat.customProgramCacheKey = () => "tlx-blocker";
         // k source texels per dest texel; taps at the block centre ±1 source
         // texel — texel-exact GLX BLOCKER_FS (its vUV lands on the block
         // centre and uSrcTexel offsets one source texel with NEAREST).
@@ -188,6 +200,8 @@
     depthMat.colorNode = TSL.vec3(0.0);
     depthMat.side = THREE.DoubleSide;
     depthMat.fog = false;
+    depthMat.lights = false;
+    depthMat.customProgramCacheKey = () => "tlx-depth";
 
     // ── caster scene + pooled mesh wrappers (the tlx.js draw-list pattern) ──
     const castScene = new THREE.Scene();

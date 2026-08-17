@@ -722,7 +722,28 @@ const WGX = (function () {
     const lightData = new Float32Array(LIGHT_FLOATS);
     const grLightData = new Float32Array(LIGHT_FLOATS);
     const _grSel = [];
-    function _grByD(a, b) { return a.d - b.d; }
+    // Partial select: keep the nearest GR_MAX (=6) without sorting the full
+    // night light list. O(n·k) insertion vs O(n log n) Array.sort — Singapore /
+    // Vegas floodlight counts make the full sort measurable on soft GPUs.
+    function _grKeepNearest(total, k) {
+      const n = Math.min(k, total);
+      for (let i = 1; i < n; i++) {
+        const cur = _grSel[i];
+        let j = i - 1;
+        while (j >= 0 && _grSel[j].d > cur.d) { _grSel[j + 1] = _grSel[j]; j--; }
+        _grSel[j + 1] = cur;
+      }
+      for (let i = n; i < total; i++) {
+        const cur = _grSel[i];
+        if (cur.d >= _grSel[n - 1].d) continue;
+        let j = n - 2;
+        while (j >= 0 && _grSel[j].d > cur.d) j--;
+        const insertAt = j + 1;
+        for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
+        _grSel[insertAt] = cur;
+      }
+      return n;
+    }
     // Per-slot CPU ring (stride = DRAW_STRIDE/4). Filled during the lit pass;
     // one writeBuffer before litPass.end() replaces hundreds of per-draw uploads.
     const DRAW_F32_STRIDE = DRAW_STRIDE >> 2;   // 64
@@ -3171,8 +3192,7 @@ const WGX = (function () {
             else _grSel[i] = { d: dx * dx + dy * dy + dz * dz, o: off, i: i };
           }
           _grSel.length = total;
-          _grSel.sort(_grByD);
-          nL = Math.min(6, total);
+          nL = _grKeepNearest(total, 6);
           const ld = grLightData;
           for (let i = 0; i < nL; i++) {
             const off = _grSel[i].o, b = i * 16;

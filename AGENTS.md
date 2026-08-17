@@ -154,16 +154,22 @@ saved.
 **Fresh-agent bootstrap** (after packages; matches Verification §1):
 
 ```sh
+bash tools/cloud-agent-install.sh
+# equivalent manual steps when the script is not the dashboard install:
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-npm install
+npm install --ignore-scripts --no-audit --prefer-offline
 npx playwright install chromium-headless-shell
 npx playwright install chromium
 ```
 
-(`wgx-validate` / `wgx-capture` need full Chromium — the headless shell has no
-`navigator.gpu`.) Missing Lavapipe: `test -f /usr/share/vulkan/icd.d/lvp_icd.json`
-fails → reinstall `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement
-table and MCP flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
+The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
+handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
+when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
+full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
+`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
+`mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
+flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
 ## Layout
 

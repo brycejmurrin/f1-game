@@ -38,7 +38,8 @@ suites in the background, inspect logs asynchronously, and continue productive
 tasks without waiting.
 
 ```sh
-node tools/test-bg.mjs smoke api collision   # start; returns immediately
+node tools/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
+node tools/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
 tail -f artifacts/logs/smoke.log             # watch one
 node tools/test-bg.mjs --status              # what is running / how it ended
 node tools/test-bg.mjs --wait                # block until all groups finish
@@ -292,7 +293,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
-| `tooling-fast` | the structural half in ~30 s — load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `paths` | output paths are port-scoped and self-creating |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/float-audit.cjs`) |
@@ -1059,6 +1060,22 @@ desktop stack can LOSE the device seconds in (Chrome reports it as
 device-lost, not size). Validation evidence here is exact; pixel evidence now
 exists in-container; PERFORMANCE truth still needs a real GPU.
 
+**TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
+(2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
+load). The remaining group timeouts were GPU fill: M4 left the loop
+presenting, Playwright tore the page down, and M5's first frame sat behind a
+387% GPU process. `setTimeOfDay("night")` / a second `race()` on a live TLX
+page does not return (530 s+ hung `evaluate`, measured four times). Product
+cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
+cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
+lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
+`stopRendering` at the end of M4 so the next spec is not starved. Solo
+verdict after those cuts, M4 still presenting: M4 10.0 s, M5 313.1 s,
+M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
+M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
+`test.slow()` 360 s budget because the env-probe wait is fill-bound on
+SwiftShader even with a quiet GPU; do not widen assertion tolerances.
+
 **Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** A blank headless
 `#game` canvas under WGX is expected on SwiftShader/Lavapipe — use
 `node tools/wgx-capture.mjs` (soft-present readback) or
@@ -1069,3 +1086,20 @@ snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
 three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
+`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
+spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
+endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
+errors. The leftover debug log still had "http cache … cache hit" followed by
+"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
+no tarball bytes, so every package re-fetched in parallel. The same VM's
+`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
+Envoy, so `apt-get update` cannot repair a snapshot that is missing
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
+(skip npm only when `node_modules/<pkg>/package.json` exists — hollow
+directories from a crashed reify are not usable — `--no-audit
+--prefer-offline`, retries; do not fail the build on apt 404 when
+packages are already present).
+Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
+and `cdn.playwright.dev` if a cold snapshot must actually download.
