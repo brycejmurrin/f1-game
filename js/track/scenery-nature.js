@@ -126,10 +126,12 @@ const SceneryNature = (function () {
     //
     // SCENE-GRAPH-PLAN.md §S4: trunk radius and sink used to be AFFINE in h
     // (`0.35 + h*0.02`, fixed −0.5 m), so every height minted its own model
-    // (Spa: 1779 pines → 1779 models, reuse 1.00×). Fix: unit-height
-    // scale-linear mesh + `place.s = [hQ,hQ,hQ]` (h quantised to 0.5 m),
-    // j/lean in integer key bins, NODE_COLOR foliage. Canopy radii are
-    // proportional to h (match old absolute width at h=12).
+    // (Spa: 1779 pines → 1779 models, reuse 1.00×). Fix: unit-Y mesh +
+    // `place.s = [1, hQ, 1]` (h quantised to 0.5 m). XZ stays 1 so canopy
+    // widths stay the old absolute metres — uniform [h,h,h] made tall pines
+    // twice as wide and blew clip/float baselines. hQ stays in the key
+    // because trunk r and the −0.5/hQ sink still depend on it; same-height
+    // trees still instance. j/lean in integer bins, NODE_COLOR foliage.
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist);
@@ -147,30 +149,26 @@ const SceneryNature = (function () {
       const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
         : (sparse ? 3 : 4);
       // Integer bins — never put floats in the key (0.45 → "0.449999…").
-      // Height leaves the key via place.s; only silhouette variants remain.
-      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15, H_REF = 12;
+      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15;
       const hQ = Math.max(H_BIN, Math.round(h / H_BIN) * H_BIN);
+      const hBin = Math.round(hQ / H_BIN);
       const jBin = Math.round(j / J_BIN);
       const jQ = jBin * J_BIN;
       const leanBin = Math.round((lean * side) / L_BIN);
       const leanS = leanBin * L_BIN;
-      // Match old trunk radius at h=12: 0.35+0.24=0.59. Sink 0.04 equals old
-      // −0.5 m after ×h at h=12.5.
-      const TRUNK_K = 0.59 / H_REF, SINK_K = 0.04;
       const NC = TrackGraph.NODE_COLOR;
       ctx.instance(
-        `pine|${jBin}|${leanBin}|${sparse ? 1 : 0}|${tiers}`,
-        { o: a.c, r: a.r, u: a.u, t: a.t, s: [hQ, hQ, hQ], col },
+        `pine|${hBin}|${jBin}|${leanBin}|${sparse ? 1 : 0}|${tiers}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t, s: [1, hQ, 1], col },
         (rec) => {
-          // Unit-height canonical mesh; place.s brings it to hQ.
+          // Unit-Y mesh; XZ is already metres. place.s[1] = hQ restores height.
           rec.mat(MAT.WOOD);
-          rec.cyl([0, -SINK_K, 0], TRUNK_K, 0.4 + SINK_K, [0.30, 0.22, 0.13], 6);
+          rec.cyl([0, -0.5 / hQ, 0], 0.35 + hQ * 0.02, 0.4 + 0.5 / hQ, [0.30, 0.22, 0.13], 6);
           rec.mat(MAT.FOLIAGE);
           let y = 0.3;
           for (let i = 0; i < tiers; i++) {
-            const w = (sparse ? 2.3 : 2.7) / H_REF * jQ * (1 - i * (sparse ? 0.24 : 0.21));
-            // lean lateral matches old lean*(y/h)*1.6 exactly at h=H_REF
-            rec.cone([leanS ? leanS * y * 1.6 / H_REF : 0, y, 0],
+            const w = (sparse ? 2.3 : 2.7) * jQ * (1 - i * (sparse ? 0.24 : 0.21));
+            rec.cone([leanS ? leanS * y * 1.6 : 0, y, 0],
                      w, 0.32, NC, 7);
             y += (sparse ? 0.24 : 0.18) * jQ;
           }
@@ -230,35 +228,35 @@ const SceneryNature = (function () {
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
-      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15, H_REF = 12;
+      const H_BIN = 0.5, J_BIN = 0.1, L_BIN = 0.15;
       const hQ = Math.max(H_BIN, Math.round(h / H_BIN) * H_BIN);
+      const hBin = Math.round(hQ / H_BIN);
       const jBin = Math.round(j / J_BIN);
       const jQ = jBin * J_BIN;
       const leanBin = Math.round(lean / L_BIN);
       const leanQ = leanBin * L_BIN;
       const spBin = Math.round(sp * 10);
       const spQ = spBin / 10;
-      // Unit-height scale-linear mesh (same §S4 pattern as pine). Affine canopy
-      // radii `a + b*h` become `(a/H_REF + b)` at unit height; place.s → hQ.
-      const TRUNK_K = 0.4 / H_REF, SINK_K = 0.04;
-      const lin = (a0, b0) => (a0 / H_REF + b0);
+      // Unit-Y + XZ-metres (same as pine). Affine canopy `a + b*h` stays in
+      // metres on XZ; Y fractions × hQ restore the old stack.
+      const lin = (a0, b0) => (a0 + b0 * hQ);
       const NC = TrackGraph.NODE_COLOR;
       ctx.instance(
-        `tree|${crown}|${jBin}|${leanBin}|${spBin}`,
-        { o: a.c, r: a.r, u: a.u, t: a.t, s: [hQ, hQ, hQ], col },
+        `tree|${crown}|${hBin}|${jBin}|${leanBin}|${spBin}`,
+        { o: a.c, r: a.r, u: a.u, t: a.t, s: [1, hQ, 1], col },
         (rec) => {
           rec.mat(MAT.WOOD);
-          rec.cyl([0, -SINK_K, 0], TRUNK_K, 0.55 + SINK_K, [0.32, 0.23, 0.13], 6);
+          rec.cyl([0, -0.5 / hQ, 0], 0.4, 0.55 + 0.5 / hQ, [0.32, 0.23, 0.13], 6);
           rec.mat(MAT.FOLIAGE);
           // Underside frustum closes the canopy hole (replaces raw emit() fan).
           {
             const usR = lin(3.5, 0.135) * jQ;
-            rec.frustum([0, 0.20, 0], TRUNK_K * 1.2, usR, 0.14, NC, 9);
+            rec.frustum([0, 0.20, 0], 0.4 * 1.2, usR, 0.14, NC, 9);
           }
           if (crown === "vase") {
             rec.cone([0, 0.34, 0], lin(2.1, 0.07) * jQ * spQ, 0.28, NC, 8);
             rec.cone([0, 0.56, 0], lin(3.4, 0.15) * jQ * spQ, 0.28, NC, 9);
-            rec.cone([leanQ / H_REF, 0.78, 0], lin(4.0, 0.17) * jQ * spQ, 0.24, NC, 9);
+            rec.cone([leanQ, 0.78, 0], lin(4.0, 0.17) * jQ * spQ, 0.24, NC, 9);
           } else if (crown === "weeping") {
             rec.cone([0, 0.62, 0], lin(3.6, 0.15) * jQ * spQ, 0.30, NC, 9);
             rec.frustum([0, 0.24, 0], lin(1.4, 0.05) * jQ * spQ,
@@ -270,8 +268,8 @@ const SceneryNature = (function () {
           } else {
             rec.cone([0, 0.28, 0], lin(3.3, 0.13) * jQ * spQ, 0.30, NC, 9);
             rec.cone([0, 0.46, 0], lin(3.7, 0.14) * jQ * spQ, 0.26, NC, 9);
-            rec.cone([leanQ / H_REF, 0.66, 0], lin(2.9, 0.10) * jQ * spQ, 0.26, NC, 8);
-            rec.cone([leanQ * 1.6 / H_REF, 0.82, 0], lin(1.7, 0.06) * jQ * spQ, 0.22, NC, 7);
+            rec.cone([leanQ, 0.66, 0], lin(2.9, 0.10) * jQ * spQ, 0.26, NC, 8);
+            rec.cone([leanQ * 1.6, 0.82, 0], lin(1.7, 0.06) * jQ * spQ, 0.22, NC, 7);
           }
         },
         { kind: "tree", k, side, h });
