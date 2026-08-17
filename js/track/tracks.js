@@ -791,12 +791,14 @@ const Tracks = (function () {
     // note()). opts.buf targets a different accumulator than the props soup:
     // window panes route their unlit half to glassBuf so it draws with the
     // reflective material. opts.unguarded picks the RAW set above.
-    // Default props soup sets `_preferInstance` so full nodes skip the fuse
-    // (S3); glass/alt buffers keep fusing — batches() has no material tag yet.
+    // Default props soup sets `_preferInstance` only when the backend can
+    // actually draw batches (GLX/WGX/TLX). Headless verify/float-audit stubs
+    // omit createInstancedBatch so they keep a full fuse — otherwise support
+    // cells vanish from the soup and every roof reads as floating.
     const instance = (key, place, build, meta, opts) => {
       const buf = (opts && opts.buf) || out;
       const emit = opts && opts.unguarded ? UNGUARDED : GUARDED;
-      if (buf === out) buf._preferInstance = true;
+      if (buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
       const n = graph.instance(key, place, build, meta, emit, buf);
       if (buf === out) buf._preferInstance = false;
       return n;

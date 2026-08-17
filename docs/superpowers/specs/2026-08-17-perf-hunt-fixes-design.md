@@ -27,7 +27,7 @@ Out of scope this PR (authoring / product): thinner cityFront, pine re-param, `?
 | A | Done — `clearStrikes` resets `_perfTier` to floor; unit test |
 | B–D | Done — pairContact/tyre/cars.some + AI ERS order + floodScale/`fl` pools |
 | E | Done — GLX+WGX cullInstances no per-instance `subarray` |
-| F | Done — `_preferInstance` skip-fuse on props soup; `propBatches` + draw/shadow |
+| F | Done — `_preferInstance` skip-fuse when `createInstancedBatch` exists; VM audits keep full fuse |
 | G | Done — road chunk when `envCull` && tier < 3 |
 | H | Done — WGX particle BG + MSAA depthResolve BG cache; cullInstances pack |
 | I | Skipped — shadow depth cull stays off (peter-panning; comments in glx/shadow.js) |
