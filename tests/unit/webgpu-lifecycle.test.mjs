@@ -921,14 +921,20 @@ test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", a
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
-test("soft-present exposes awaitSoftPresent and paces _softBusy until blit lands", () => {
+test("soft-present defers readback when staging buffer is still mapped", () => {
   assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
+  assert.match(WGX_SOURCE, /_softReadDefer/);
   assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
     /_retireFlush[\s\S]{0,400}_softBusy = false/,
     "_softBusy must not clear in _retireFlush — only after putImageData",
+  );
+  assert.doesNotMatch(
+    WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /_softBlitPending = false[\s\S]{0,80}mapState !== "unmapped"\) return/,
+    "must not clear pending then drop the copy when the staging buffer is still mapped",
   );
 });
 
