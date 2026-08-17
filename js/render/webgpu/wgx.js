@@ -779,6 +779,10 @@ const WGX = (function () {
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let identInstanceBuf = null;
     let pParticle = null, pParticleAdd = null, particleBGL = null, particleUBO = null, particleVBO = null, _particleCap = 0;
+    // Cached once (static UBO) — only valid for BOTH pipelines because they
+    // share one EXPLICIT layout; from an auto layout this cache would
+    // invalidate every additive spark draw.
+    let _particleBG = null;
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
     let _fxPipes = { 1: {}, 2: {} };
@@ -1397,6 +1401,11 @@ const WGX = (function () {
             ..._fxMS,
           });
           particleUBO = device.createBuffer({ size: _Fx.PARTICLE_UNIFORM_BYTES, usage: _UCD });
+          // Static layout+UBO — create once; was createBindGroup every drawParticles.
+          _particleBG = device.createBindGroup({
+            layout: particleBGL,   // the explicit shared layout, valid with BOTH pipelines
+            entries: [{ binding: 0, resource: { buffer: particleUBO } }],
+          });
         }
         _fxReady = true;
       } catch (_) { _fxReady = false; /* FX stay no-ops; lit/sky/shadow still run */ }
@@ -1860,6 +1869,7 @@ const WGX = (function () {
       sceneTex = next.sceneTex; depthTex = next.depthTex;
       sceneMSTex = next.sceneMSTex || null; depthMSTex = next.depthMSTex || null;
       sceneMSView = next.sceneMSView || null; depthMSView = next.depthMSView || null;
+      depthResolveBG = null;   // depthMSView changed — recreate on next present
       sceneView = next.sceneView; depthView = next.depthView;
       depthSampleView = next.depthSampleView; blitBindGroup = next.blitBindGroup;
       ssaoTex = next.ssaoTex || null; godrayTex = next.godrayTex || null;
@@ -2848,10 +2858,12 @@ const WGX = (function () {
       _queueOutputProbe();
       if (_passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
-          depthResolveBG = device.createBindGroup({
-            layout: pDepthResolve.getBindGroupLayout(0),
-            entries: [{ binding: 0, resource: depthMSView }],
-          });
+          if (!depthResolveBG) {
+            depthResolveBG = device.createBindGroup({
+              layout: pDepthResolve.getBindGroupLayout(0),
+              entries: [{ binding: 0, resource: depthMSView }],
+            });
+          }
           const dr = encoder.beginRenderPass({
             colorAttachments: [],
             depthStencilAttachment: { view: depthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -3513,9 +3525,11 @@ const WGX = (function () {
       for (const c of batch.cells) {
         if (!_aabbInFrustum(planes, c.mn, c.mx)) continue;
         for (const i of c.idx) {
-          dst.set(src.subarray(i * 16, i * 16 + 16), n * 20);
+          // No src.subarray — per-instance views were GC on Vegas-scale batches.
+          const so = i * 16, dOff = n * 20;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
           if (sc) {
-            dst[n * 20 + 16] = sc[i * 3]; dst[n * 20 + 17] = sc[i * 3 + 1]; dst[n * 20 + 18] = sc[i * 3 + 2];
+            dst[dOff + 16] = sc[i * 3]; dst[dOff + 17] = sc[i * 3 + 1]; dst[dOff + 18] = sc[i * 3 + 2];
           }
           n++;
         }
@@ -3548,12 +3562,15 @@ const WGX = (function () {
       if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) { /* already destroyed */ }
       freeMesh(batch);
     }
-    function castShadowInstanced(batch, model) {
+    const _shadowIdent = new Float32Array(16);   // pooled zero model for castShadowInstanced
+    // Optional `count` matches GLX: default = all instances. Do NOT use
+    // batch.visible — that is the MAIN-camera cull from the prior lit pass and
+    // would drop casters behind the eye that still hit the light frustum.
+    function castShadowInstanced(batch, count) {
       if (!shadowPass || !batch || !batch.vbuf) return;
-      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      const n = count === undefined ? batch.instances : Math.min(count | 0, batch.instances);
       if (n <= 0) return;
-      const zero = new Float32Array(16);
-      if (_shadowSetModel(zero) < 0) return;
+      if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
       shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
       shadowPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
@@ -3584,12 +3601,8 @@ const WGX = (function () {
       const eye = frameEye || [0, 0, 0];
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
       device.queue.writeBuffer(particleUBO, 0, s, 0, 20);
-      const bg = device.createBindGroup({
-        layout: particleBGL,   // shared EXPLICIT layout: valid with BOTH pipelines
-        entries: [{ binding: 0, resource: { buffer: particleUBO } }],
-      });
       litPass.setPipeline(additive && pParticleAdd ? pParticleAdd : pParticle);
-      litPass.setBindGroup(0, bg);
+      if (_particleBG) litPass.setBindGroup(0, _particleBG);
       litPass.setVertexBuffer(0, particleVBO);
       litPass.draw(nVert);
     }

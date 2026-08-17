@@ -39,8 +39,15 @@ const buf = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
 // Identity placement: origin at world zero, axes the world axes.
 const AT = (o) => ({ o, r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] });
 // A guarded-emitter stand-in that accepts everything and records what it saw.
+// Honours out._dryRun / out._absorbOnly the way tracks.js GUARDED emitters do
+// for the S3 prefer-instance path (dry = no write; absorbOnly = no write here
+// since this stand-in has no terrain absorb).
 function emitter(log) {
-  const wrap = (name, fn) => (out, ...args) => { if (log) log.push([name, ...args]); fn(out, ...args); return true; };
+  const wrap = (name, fn) => (out, ...args) => {
+    if (log) log.push([name, ...args]);
+    if (out && (out._dryRun || out._absorbOnly)) return true;
+    fn(out, ...args); return true;
+  };
   return {
     addBox: wrap("box", RAW.addBox), addPrism: wrap("prism", RAW.addPrism),
     addPyramid: wrap("pyramid", RAW.addPyramid), addCyl: wrap("cyl", RAW.addCyl),
@@ -323,6 +330,25 @@ test("batch order is deterministic", () => {
   };
   assert.deepEqual(plain(mk()), plain(mk()));
   assert.deepEqual(plain(mk()), ["alpha", "mid", "zebra"]);
+});
+
+// S3 skip-fuse: when out._preferInstance is set, full nodes leave no soup verts
+// (the GPU batch draws them). bakeOnly / partials still fuse.
+test("_preferInstance skips fuse for full instancable nodes", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  out._preferInstance = true;
+  const emit = emitter();
+  // Two full placements of the same box model — should skip fuse entirely.
+  g.instance("box", AT([0, 0, 0]), (rec) => rec.box([0, 0.5, 0], [1, 1, 1], [1, 1, 1]),
+    { kind: "box" }, emit, out);
+  g.instance("box", AT([4, 0, 0]), (rec) => rec.box([0, 0.5, 0], [1, 1, 1], [1, 1, 1]),
+    { kind: "box" }, emit, out);
+  assert.equal(out.pos.length, 0, "full nodes must not write the props soup");
+  const { batches, bakeOnly } = g.batches();
+  assert.equal(bakeOnly.length, 0);
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0].count, 2);
 });
 
 test("a malformed placement is dropped, not emitted as NaN geometry", () => {
