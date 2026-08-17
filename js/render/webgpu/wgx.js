@@ -564,6 +564,8 @@ const WGX = (function () {
     let softPresentTex = null, softPresentView = null;
     let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
+    let _softBlitGen = 0;
+    const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
       _gpuCanvas = document.createElement("canvas");
@@ -1558,28 +1560,63 @@ const WGX = (function () {
         _softBlitPending = true;
       } catch (_) { /* COPY_SRC withheld — visible canvas stays on last frame */ }
     }
+    function _softBlitNotify() {
+      _softBusy = false;
+      _softBlitGen++;
+      const ws = _softPresentWaiters.splice(0);
+      for (let i = 0; i < ws.length; i++) {
+        try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+      }
+    }
     function _readSoftPresent() {
       if (!_softGpu || !_softBlitPending || !_softBlitBuf || !_displayCtx) return;
       _softBlitPending = false;
       if (_softBlitBuf.mapState !== "unmapped") return;
       if (typeof _softBlitBuf.mapAsync !== "function") return;
+      _softBusy = true;
+      const doMap = function () {
+        try {
+          _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
+            try {
+              const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
+              if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
+                _softImg = _displayCtx.createImageData(width, height);
+              }
+              const img = _softImg;
+              const rowBytes = width * 4;
+              for (let y = 0; y < height; y++) {
+                img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
+              }
+              _displayCtx.putImageData(img, 0, 0);
+            } catch (_) { /* 2D blit failed */ }
+            try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
+            _softBlitNotify();
+          }).catch(function () { _softBlitNotify(); });
+        } catch (_) { _softBlitNotify(); }
+      };
+      // mapAsync waits behind ALL prior submits — start readback only after THIS
+      // frame's copy is on the GPU queue (measured: first visible blit ~2 s late
+      // when begin() kept submitting while an earlier mapAsync was still pending).
       try {
-        _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
-          try {
-            const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
-            if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
-              _softImg = _displayCtx.createImageData(width, height);
-            }
-            const img = _softImg;
-            const rowBytes = width * 4;
-            for (let y = 0; y < height; y++) {
-              img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
-            }
-            _displayCtx.putImageData(img, 0, 0);
-          } catch (_) { /* 2D blit failed */ }
-          try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
-        }).catch(function () { /* mapAsync rejected */ });
-      } catch (_) { /* mapAsync threw */ }
+        device.queue.onSubmittedWorkDone().then(doMap, doMap);
+      } catch (_) { doMap(); }
+    }
+    function awaitSoftPresent(timeoutMs) {
+      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
+      const start = _softBlitGen;
+      if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
+      const ms = timeoutMs != null ? timeoutMs : 15000;
+      return new Promise(function (resolve, reject) {
+        const timer = setTimeout(function () {
+          reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+        }, ms);
+        _softPresentWaiters.push(function (gen) {
+          if (gen > start) {
+            try { clearTimeout(timer); } catch (_) { /* harness */ }
+            resolve(gen);
+          }
+        });
+      });
     }
     function resize() {
       const layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
@@ -2838,14 +2875,9 @@ const WGX = (function () {
         try { _retiredBufs[i].destroy(); } catch (_) { /* already invalid */ }
       }
       _retiredBufs.length = 0;
-      if (_softGpu && !_softBusy) {
-        _softBusy = true;
-        try {
-          device.queue.onSubmittedWorkDone().then(
-            function () { _softBusy = false; },
-            function () { _softBusy = false; });
-        } catch (_) { _softBusy = false; /* keep rendering unpaced */ }
-      }
+      // _softBusy clears in _softBlitNotify after the 2D putImageData — NOT here.
+      // Clearing on submit alone let begin() queue more frames while mapAsync from
+      // the first soft-present copy was still pending (black canvas for ~60 frames).
     }
     function _capFinish(cap) {
       if (!cap) return;
@@ -4225,6 +4257,7 @@ const WGX = (function () {
       // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
+      awaitSoftPresent,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

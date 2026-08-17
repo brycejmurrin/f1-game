@@ -63,10 +63,23 @@ await page.waitForFunction(
   () => { try { const ps = __apex.physState(); return ps && ps.ok !== false; } catch { return false; } },
   null, { polling: 100, timeout: 120000 });
 await page.evaluate(() => { __apex.jump(0.12, 65); __apex.snapCam(); });
-const snaps = [];
-for (let f = 0; f < 90; f++) {
+await page.evaluate(() => { try { __apex.step(1 / 60); } catch (_) {} });
+await page.evaluate(async () => {
+  if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(15000);
+});
+const snap0 = await page.evaluate(async () => {
+  const c = document.getElementById("game");
+  const tmp = document.createElement("canvas");
+  tmp.width = c.width; tmp.height = c.height;
+  tmp.getContext("2d").drawImage(c, 0, 0);
+  const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+  return { frame: 0, canvasPx: [d[0], d[1], d[2], d[3]] };
+});
+console.log(JSON.stringify({ preset, ...snap0 }));
+const snaps = [snap0];
+for (let f = 1; f < 30; f++) {
   await page.evaluate(() => { try { __apex.step(1 / 60); } catch (_) {} });
-  if (f === 29 || f === 59 || f === 89) {
+  if (f === 15 || f === 29) {
     const snap = await page.evaluate(async (fi) => {
       const c = document.getElementById("game");
       const tmp = document.createElement("canvas");

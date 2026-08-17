@@ -921,6 +921,17 @@ test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", a
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
+test("soft-present exposes awaitSoftPresent and paces _softBusy until blit lands", () => {
+  assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
+  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
+  assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
+  assert.doesNotMatch(
+    WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /_retireFlush[\s\S]{0,400}_softBusy = false/,
+    "_softBusy must not clear in _retireFlush — only after putImageData",
+  );
+});
+
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {
   const h = makeGpuHarness({
     ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
