@@ -40,12 +40,29 @@ Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
   drive `__apex`, screenshot, take a heap snapshot, read the console. The
   interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
   `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
+- **Both are reachable two ways, and the MCP way needs no shell.** VERIFIED
+  2026-08-17: the `apex-wrap` MCP server is `ready` and advertises 56 tools — 40
+  `chrome_*` and 16 `tinyfish_*` — so `tinyfish_fetch_content`,
+  `tinyfish_search`, `chrome_navigate_page`, `chrome_evaluate_script` and the
+  rest can be called directly as MCP tools. Use the MCP path for one-off calls
+  and the shell wrappers when you want their added logic (`deploy-check`'s build
+  comparison, `deploy-js --marker`'s verdict, `mcp-cli probe`'s
+  set-pick-then-reload batch). The wrappers are not a fallback for a missing MCP;
+  they are where the repo-specific knowledge lives.
 - **tinyfish MCP** (`mcp__tinyfish__*` or `tinyfish_*` via probe) —
   `fetch_content` / `search` / automation over the public web. For us its main
   testing job is the **post-deploy liveness check**: read the live
   `version.json` and shipped JS. It cannot see the working tree (only public
   URLs), so it is useless for pre-ship verification. Shell:
   `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
+  Two measured limits, both server-side — do not try to fix them in the wrapper:
+  the extracted body is **truncated** (6.1 KB back from a 200 KB `wgx.js`, 9.6 KB
+  from an 11 KB `log.js`; identical through the raw MCP tool with `format: html`
+  and a 90 s budget), so a deep code marker is unverifiable from here — use
+  `deploy-js --marker` for a top-of-file verdict and git provenance for the rest.
+  And the upstream fetch **times out intermittently**, arriving as a SUCCESSFUL
+  JSON-RPC result carrying an `errors[]` payload; the wrapper now asks for a
+  60 s `per_url_timeout_ms` and retries the transient case three times.
 
 ---
 

@@ -144,6 +144,21 @@ test("tinyfish-rpc still reports a genuine parse failure as exit 2", () => {
   assert.match(r.stderr, /could not parse/);
 });
 
+test("tinyfish-mcp.sh asks for a per-URL timeout budget rather than eating the default", () => {
+  // fetch_content accepts per_url_timeout_ms (max 110000) and its default is
+  // short enough that github.io timed out twice in one session. Asking for the
+  // budget is the root-cause fix; the retry loop is the belt.
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /FETCH_TIMEOUT_MS="60000"/);
+  assert.match(src, /--timeout-ms\)/);
+  assert.match(src, /per_url_timeout_ms/);
+  // The version.json fetch behind deploy-check/deploy-js needs it too — that is
+  // the one that actually timed out.
+  assert.match(src, /version\.json.*per_url_timeout_ms/s);
+  const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.match(help.stdout, /--timeout-ms/);
+});
+
 test("tinyfish-mcp.sh retries the live-build fetch and says the body is capped", () => {
   const src = fs.readFileSync(SH, "utf8");
   // The retry loop exists and is bounded (a gate that hangs is its own bug).

@@ -233,6 +233,7 @@ parse_common_flags() {
   FETCH_FORMAT="markdown"
   FETCH_TTL=""
   FETCH_PURPOSE=""
+  FETCH_TIMEOUT_MS="60000"
   DEPLOY_MARKER=""
   local -a rest=()
   while [[ $# -gt 0 ]]; do
@@ -252,6 +253,10 @@ parse_common_flags() {
         ;;
       --marker)
         DEPLOY_MARKER="${2:?--marker needs an ERE pattern}"
+        shift 2
+        ;;
+      --timeout-ms)
+        FETCH_TIMEOUT_MS="${2:?--timeout-ms needs milliseconds (max 110000)}"
         shift 2
         ;;
       --) shift; rest+=("$@"); break ;;
@@ -293,13 +298,19 @@ urls = json.loads("[" + sys.argv[1] + "]")
 fmt = sys.argv[2]
 ttl = sys.argv[3]
 purpose = sys.argv[4]
+timeout_ms = sys.argv[5]
 args = {"urls": urls, "format": fmt}
 if ttl != "":
     args["ttl"] = int(ttl)
 if purpose:
     args["purpose"] = purpose
+# fetch_content takes a per-URL wall-clock budget (max 110000) and defaults to
+# something short enough that github.io timed out twice in one session. Ask for
+# the budget instead of retrying around the default.
+if timeout_ms != "":
+    args["per_url_timeout_ms"] = int(timeout_ms)
 print(json.dumps(args))
-' "$urls_json" "$FETCH_FORMAT" "$FETCH_TTL" "$FETCH_PURPOSE")"
+' "$urls_json" "$FETCH_FORMAT" "$FETCH_TTL" "$FETCH_PURPOSE" "$FETCH_TIMEOUT_MS")"
   local raw
   raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$args_json"'}}')"
   emit_rpc "$raw" unwrap
@@ -327,7 +338,7 @@ cmd_search() {
 # helper exits 3 for exactly that case; anything else is a real answer.
 fetch_live_build() {
   local args_json raw rc attempt
-  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0}))')"
+  args_json="$(python3 -c 'import json; print(json.dumps({"urls":["'"$DEPLOY_BASE"'/version.json"],"format":"markdown","ttl":0,"per_url_timeout_ms":60000}))')"
   for attempt in 1 2 3; do
     raw="$(mcp_post '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_content","arguments":'"$args_json"'}}')"
     LIVE_BUILD_RAW="$raw"
@@ -439,6 +450,9 @@ Fetch flags:
   --format markdown|html|json   (default markdown; html keeps more markup)
   --ttl N                       freshness seconds (0 = prefer live)
   --purpose "..."               optional intent hint for TinyFish
+  --timeout-ms N                per-URL wall-clock budget (default 60000, max
+                                110000) — the default upstream budget is short
+                                enough that github.io times out intermittently
   --json                        print raw JSON-RPC (no unwrap)
 
 deploy-check exits 1 when live build != local version.json (STALE Pages).
