@@ -329,14 +329,23 @@ fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f
   if (hw <= 0.5) { return; }
   let s = trk.x; let x = trk.y;
   let paint = vec3<f32>(0.95, 0.95, 0.97);
-  let aaX = clamp(fwTrk.y, 1e-4, 0.30);
+  // UNCLAMPED lateral footprint drives minification fade. GLX clamps first then
+  // feeds the same value into mip — when fw hits the 0.30 AA ceiling, mip is
+  // exactly 0 and every edge/centre line vanishes. That ceiling is routine on
+  // phone WGX (lite DPR 1.5 + chase grazing), which is why WebGPU tarmac reads
+  // as a bare ribbon while WebGL2 on the same device still shows paint.
+  let fwX = max(fwTrk.y, 1e-4);
+  let aaX = min(fwX, 0.30);
   let dEdge = abs(abs(x) - (hw - 0.10));
   let edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
   let band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
   let ph = fract(s / 7.0);
-  let aaS = clamp(fwTrk.x / 7.0, 1e-4, 0.24);
+  let fwS = max(fwTrk.x, 1e-4);
+  let aaS = min(fwS / 7.0, 0.24);
   let dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
-  let mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  // Soft knee on the RAW footprint: still gone by ~0.65 m/px, but a saturated
+  // AA clamp (fwX==0.30) keeps ~64% amplitude instead of erasing the paint.
+  let mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   let m = max(edge, band * dash) * mip;
   *albedo_ptr = mix(*albedo_ptr, paint, m);
   *rough_ptr = mix(*rough_ptr, 0.55, m);
@@ -1002,7 +1011,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let bleed = lights[i].colBleed.w;
     let cd = dot(-Ld, lights[i].dirVol.xyz);
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
-    lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter (GLX js/render/shaders/lit.js)
+    // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: F.params8.x = uLampFog is 0 in
+    // daylight, so the only consumer is gated — skip the accumulate on day frames.
+    // Uniform CF (params8.x), safe for WGSL.
+    if (F.params8.x > 0.0) {
+      lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
+    }
     let spotD = mix(bleed, 1.0, beam);
     let NoLl = max(dot(N, Ld), 0.0);
     var lampSh = 1.0;

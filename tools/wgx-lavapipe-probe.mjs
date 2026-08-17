@@ -50,6 +50,9 @@ await page.evaluate(() => { __apex.jump(0.12, 65); __apex.snapCam(); });
 await page.evaluate((n) => new Promise((res) => {
   let i = 0; const t = () => (++i > n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
 }), 40);
+await page.evaluate(async () => {
+  if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(15000);
+});
 const out = await page.evaluate(async () => {
   const c = document.getElementById("game");
   const tmp = document.createElement("canvas");

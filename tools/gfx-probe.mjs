@@ -213,15 +213,19 @@ async function runProbeAttempt(attemptNum) {
     await sleep(200);
 
     if (opts.backend === "webgpu") {
-      await retryStep("canvas-pixels", () => page.waitForFunction(() => {
+      await retryStep("canvas-pixels", () => page.evaluate(async () => {
+        if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+          await GLX.awaitSoftPresent(15000);
+        }
         const c = document.getElementById("game");
-        if (!c || c.width < 8) return false;
+        if (!c || c.width < 8) throw new Error("canvas not sized");
         const tmp = document.createElement("canvas");
         tmp.width = c.width; tmp.height = c.height;
         tmp.getContext("2d").drawImage(c, 0, 0);
         const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-        return d[0] + d[1] + d[2] > 30;
-      }, null, { polling: 100, timeout: 90000 }), { attempts: 3, delayMs: 2000 });
+        if (d[0] + d[1] + d[2] <= 30) throw new Error("canvas still black after awaitSoftPresent");
+        return [d[0], d[1], d[2], d[3]];
+      }), { attempts: 3, delayMs: 2000 });
     }
 
     const canvasPath = join(opts.outDir, "canvas.png");

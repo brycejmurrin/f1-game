@@ -226,10 +226,18 @@ function makeGpuHarness(opts = {}) {
           features: { has: (name) => adapterFeatures.includes(name) },
           // Non-empty info = "hardware" for WGX's software-adapter gate.
           // Real Dawn SwiftShader often reports {}.
-          info: opts.softAdapter
-            ? {}
-            : { vendor: "test", architecture: "test", device: "mock-gpu" },
-          isFallbackAdapter: !!opts.softAdapter,
+          info: opts.softAdapterNonEnum
+            ? (() => {
+                const o = {};
+                Object.defineProperty(o, "vendor", { value: "google", enumerable: false });
+                Object.defineProperty(o, "architecture", { value: "swiftshader", enumerable: false });
+                Object.defineProperty(o, "device", { value: "", enumerable: false });
+                return o;
+              })()
+            : (opts.softAdapter
+              ? {}
+              : { vendor: "test", architecture: "test", device: "mock-gpu" }),
+          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -747,6 +755,14 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
   assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
   assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
+  // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
+  assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
+  assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
+  assert.doesNotMatch(
+    CHUNKS_SOURCE,
+    /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
+    "markings mip must not reuse the clamped aaX (phone bare-ribbon death)",
+  );
 });
 
 test("WGX god-ray and env probe match GLX gates", () => {
@@ -891,6 +907,29 @@ test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async (
   const gfx = await h.create();
   assert.ok(gfx, "escape hatch must still boot WGX");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+});
+
+test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
+  // Chrome Lavapipe headed: adapter.info stringifies as "{}" but .architecture is
+  // "swiftshader". Missing this misclassified hardware and skipped soft-present.
+  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
+  const h = makeGpuHarness({ softAdapterNonEnum: true, storage: stored });
+  const gfx = await h.create();
+  assert.ok(gfx, "non-enumerable swiftshader arch must still boot with allowSoftware");
+  assert.equal(gfx.msaa(), 1);
+  assert.match(WGX_SOURCE, /infoBlob = \[dev, ven, arch, desc\]/,
+    "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
+});
+
+test("soft-present exposes awaitSoftPresent and paces _softBusy until blit lands", () => {
+  assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
+  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
+  assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
+  assert.doesNotMatch(
+    WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /_retireFlush[\s\S]{0,400}_softBusy = false/,
+    "_softBusy must not clear in _retireFlush — only after putImageData",
+  );
 });
 
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {

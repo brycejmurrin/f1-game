@@ -301,7 +301,8 @@ const CEILINGS = {
   // propBatches/envCull + WGX software-present merge (split-newline count).
   // -> 8451 GLX survey bugs: lit/env terrainChunked (roadChunked mirror) +
   // _castPropBatchesShadow (light-frustum cull before castShadowInstanced).
-  "js/game.js": 8451,
+  // -> 8475 merge(deploy): survey∪soft-present∪render-audit (split-newline).
+  "js/game.js": 8475,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

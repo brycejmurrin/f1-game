@@ -218,9 +218,15 @@
     // visible set, and instanceMatrix is already packed on the batch handle.
     const iPool = [];
     let iUsed = 0;
+    // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
+    const _castMat = new THREE.Matrix4();
+    // Instanced casters: always the FULL instance set (GLX/WGX contract).
+    // batch.visible is the MAIN-camera cull from the lit pass — using it drops
+    // casters behind the eye that still hit the light frustum. Prefer
+    // srcMatrices (unculled CPU copy); fall back to a full imesh walk.
     function castInstanced(batch) {
       if (!S.depthPassOn || !batch || !batch.geo) return;
-      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      const n = batch.instances | 0;
       if (!(n > 0)) return;
       let m = iPool[iUsed];
       if (!m || (m.userData.tlxInstCap || 0) < batch.instances) {
@@ -235,19 +241,28 @@
       }
       m.geometry = batch.geo;
       m.material = depthMat;
-      // Copy the (possibly culled/repacked) instance matrices from the live
-      // InstancedMesh the main pass owns, or rebuild from packMatrices.
-      if (batch.imesh && batch.imesh.instanceMatrix) {
-        m.instanceMatrix.array.set(batch.imesh.instanceMatrix.array.subarray(0, n * 16));
-        m.instanceMatrix.needsUpdate = true;
-      } else if (batch.packMatrices) {
-        const src = batch.packMatrices;
-        const tmp = new THREE.Matrix4();
-        for (let i = 0; i < n; i++) {
-          tmp.fromArray(src, i * 16);
-          m.setMatrixAt(i, tmp);
+      const dst = m.instanceMatrix.array;
+      const src = batch.srcMatrices;
+      if (src && src.length >= n * 16) {
+        for (let i = 0, o = 0; i < n; i++, o += 16) {
+          for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];
         }
         m.instanceMatrix.needsUpdate = true;
+      } else if (batch.imesh && batch.imesh.instanceMatrix) {
+        // imesh may be camera-repacked — only safe when visible === instances.
+        const isrc = batch.imesh.instanceMatrix.array;
+        const copyN = (batch.visible === undefined || batch.visible >= n) ? n
+          : (batch.visible | 0);
+        for (let i = 0, o = 0; i < copyN; i++, o += 16) {
+          for (let k = 0; k < 16; k++) dst[o + k] = isrc[o + k];
+        }
+        m.instanceMatrix.needsUpdate = true;
+      } else if (batch.packMatrices) {
+        const psrc = batch.packMatrices;
+        for (let i = 0; i < n; i++) {
+          _castMat.fromArray(psrc, i * 16);
+          m.setMatrixAt(i, _castMat);
+        }
       }
       m.count = n;
       m.matrix.identity();

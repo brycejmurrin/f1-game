@@ -418,14 +418,19 @@ const WGX = (function () {
       try {
         const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
         const info = adapter.info || null;
-        const blob = info ? JSON.stringify(info).toLowerCase() : "";
-        // Empty adapter.info is the SwiftShader/Dawn software fingerprint on
-        // Chrome 148 (hardware adapters report vendor/device/architecture).
-        const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+        // GPUAdapterInfo fields are NOT JSON-enumerable — Chrome returns "{}" from
+        // stringify while .vendor/.architecture hold "google"/"swiftshader" on
+        // Lavapipe Xvfb (measured 2026-08-17). Read the properties directly.
+        const dev = info && info.device;
+        const ven = info && info.vendor;
+        const arch = info && info.architecture;
+        const desc = info && info.description;
+        const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
+        const infoEmpty = !info || !(dev || ven || arch);
         _softAdapterLocal = !!(adapter.isFallbackAdapter
             || infoEmpty
             || /HeadlessChrome/i.test(ua)
-            || /swiftshader|llvmpipe|microsoft basic render|soft/.test(blob));
+            || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
       let _allowSoft = false;
@@ -542,7 +547,9 @@ const WGX = (function () {
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
     try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
-    const _softGpu = _softAdapter;
+    // wgxCapture probes must soft-present even when adapter sniffing misses (headed
+    // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
+    const _softGpu = _softAdapter || _outProbeOff;
     if (_softGpu) _outProbeOff = true;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
@@ -556,6 +563,9 @@ const WGX = (function () {
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softBlitBuf = null, _softBlitBPR = 0, _softBlitPending = false, _softW = 0, _softH = 0;
+    let _softImg = null; // pooled ImageData for soft-present CPU blit
+    let _softBlitGen = 0;
+    const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
       _gpuCanvas = document.createElement("canvas");
@@ -713,10 +723,16 @@ const WGX = (function () {
     const grLightData = new Float32Array(LIGHT_FLOATS);
     const _grSel = [];
     function _grByD(a, b) { return a.d - b.d; }
-    const drawData  = new Float32Array(DRAW_FLOATS);
+    // Per-slot CPU ring (stride = DRAW_STRIDE/4). Filled during the lit pass;
+    // one writeBuffer before litPass.end() replaces hundreds of per-draw uploads.
+    const DRAW_F32_STRIDE = DRAW_STRIDE >> 2;   // 64
+    const drawRing = new Float32Array(MAX_DRAWS * DRAW_F32_STRIDE);
+    const drawData = drawRing;   // _writeDraw indexes via slot base; alias keeps call sites short
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
+    const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
+    const _instDrawOpts = { _instanced: true }; // reused; fields overwritten each draw
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
     // Culling frame state.
@@ -1581,25 +1597,63 @@ const WGX = (function () {
         _softBlitPending = true;
       } catch (_) { /* COPY_SRC withheld — visible canvas stays on last frame */ }
     }
+    function _softBlitNotify() {
+      _softBusy = false;
+      _softBlitGen++;
+      const ws = _softPresentWaiters.splice(0);
+      for (let i = 0; i < ws.length; i++) {
+        try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+      }
+    }
     function _readSoftPresent() {
       if (!_softGpu || !_softBlitPending || !_softBlitBuf || !_displayCtx) return;
       _softBlitPending = false;
       if (_softBlitBuf.mapState !== "unmapped") return;
       if (typeof _softBlitBuf.mapAsync !== "function") return;
+      _softBusy = true;
+      const doMap = function () {
+        try {
+          _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
+            try {
+              const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
+              if (!_softImg || _softImg.width !== width || _softImg.height !== height) {
+                _softImg = _displayCtx.createImageData(width, height);
+              }
+              const img = _softImg;
+              const rowBytes = width * 4;
+              for (let y = 0; y < height; y++) {
+                img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
+              }
+              _displayCtx.putImageData(img, 0, 0);
+            } catch (_) { /* 2D blit failed */ }
+            try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
+            _softBlitNotify();
+          }).catch(function () { _softBlitNotify(); });
+        } catch (_) { _softBlitNotify(); }
+      };
+      // mapAsync waits behind ALL prior submits — start readback only after THIS
+      // frame's copy is on the GPU queue (measured: first visible blit ~2 s late
+      // when begin() kept submitting while an earlier mapAsync was still pending).
       try {
-        _softBlitBuf.mapAsync(GPUMapMode.READ).then(function () {
-          try {
-            const mapped = new Uint8Array(_softBlitBuf.getMappedRange());
-            const img = _displayCtx.createImageData(width, height);
-            const rowBytes = width * 4;
-            for (let y = 0; y < height; y++) {
-              img.data.set(mapped.subarray(y * _softBlitBPR, y * _softBlitBPR + rowBytes), y * rowBytes);
-            }
-            _displayCtx.putImageData(img, 0, 0);
-          } catch (_) { /* 2D blit failed */ }
-          try { _softBlitBuf.unmap(); } catch (_) { /* already unmapped */ }
-        }).catch(function () { /* mapAsync rejected */ });
-      } catch (_) { /* mapAsync threw */ }
+        device.queue.onSubmittedWorkDone().then(doMap, doMap);
+      } catch (_) { doMap(); }
+    }
+    function awaitSoftPresent(timeoutMs) {
+      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
+      const start = _softBlitGen;
+      if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
+      const ms = timeoutMs != null ? timeoutMs : 15000;
+      return new Promise(function (resolve, reject) {
+        const timer = setTimeout(function () {
+          reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+        }, ms);
+        _softPresentWaiters.push(function (gen) {
+          if (gen > start) {
+            try { clearTimeout(timer); } catch (_) { /* harness */ }
+            resolve(gen);
+          }
+        });
+      });
     }
     function resize() {
       const layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
@@ -2574,22 +2628,29 @@ const WGX = (function () {
       litPass.draw(3, 1, 0, 0);
     }
 
-    // Write model + material into the per-draw ring slot.
+    // Write model + material into the per-draw CPU ring slot (no GPU upload yet).
     function _writeDraw(slot, model, opts) {
-      const d = drawData;
-      d.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
+      const base = slot * DRAW_F32_STRIDE;
+      const d = drawRing;
+      d.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base);
       const o = opts || {};
-      d[16] = o.emissive  != null ? o.emissive  : 0;
-      d[17] = o.alpha     != null ? o.alpha     : 1;
-      d[18] = o.roughness != null ? o.roughness : 0.7;
-      d[19] = o.metalness != null ? o.metalness : 0;
-      d[20] = o.specular  != null ? o.specular  : 0.5;
-      d[21] = o.detail    != null ? o.detail    : 0;
-      d[22] = o.clearcoat != null ? o.clearcoat : 0;
-      d[23] = o.carPaint  != null ? o.carPaint  : 0;
-      d[24] = o.sparkle   != null ? o.sparkle   : 1;
-      d[25] = o._instanced ? 1 : 0; d[26] = 0; d[27] = 0;
-      device.queue.writeBuffer(drawUBO, slot * DRAW_STRIDE, drawData, 0, DRAW_FLOATS);
+      d[base + 16] = o.emissive  != null ? o.emissive  : 0;
+      d[base + 17] = o.alpha     != null ? o.alpha     : 1;
+      d[base + 18] = o.roughness != null ? o.roughness : 0.7;
+      d[base + 19] = o.metalness != null ? o.metalness : 0;
+      d[base + 20] = o.specular  != null ? o.specular  : 0.5;
+      d[base + 21] = o.detail    != null ? o.detail    : 0;
+      d[base + 22] = o.clearcoat != null ? o.clearcoat : 0;
+      d[base + 23] = o.carPaint  != null ? o.carPaint  : 0;
+      d[base + 24] = o.sparkle   != null ? o.sparkle   : 1;
+      d[base + 25] = o._instanced ? 1 : 0; d[base + 26] = 0; d[base + 27] = 0;
+    }
+    // One (or ranged) writeBuffer for every slot filled this pass — call before
+    // litPass.end(). writeBuffer is queue-ordered before submit, so draws
+    // recorded earlier still see the data.
+    function _flushDrawUBO() {
+      if (!drawUBO || _drawSlot <= 0) return;
+      device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
 
     function draw(mesh, model, opts) {
@@ -2766,6 +2827,7 @@ const WGX = (function () {
         _envFrame = null;
       }
       if (!envCubeTex || !litPass || !_envEncoder) return;
+      _flushDrawUBO();
       litPass.end();
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
@@ -2773,9 +2835,9 @@ const WGX = (function () {
       _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
-        // Remip EVERY completed cycle (GLX generateMipmap parity). Rough paint
-        // samples higher mips; refreshing only mip0 left stale reflections after
-        // the car moved. _rebuildFrameBG stays gated to the first live flip.
+        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+        // !_envProbeLive left mip0 updating while higher LODs froze at the first
+        // capture — lacquer roughness LOD stayed at the start-line reflection.
         _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
@@ -2864,14 +2926,9 @@ const WGX = (function () {
         try { _retiredBufs[i].destroy(); } catch (_) { /* already invalid */ }
       }
       _retiredBufs.length = 0;
-      if (_softGpu && !_softBusy) {
-        _softBusy = true;
-        try {
-          device.queue.onSubmittedWorkDone().then(
-            function () { _softBusy = false; },
-            function () { _softBusy = false; });
-        } catch (_) { _softBusy = false; /* keep rendering unpaced */ }
-      }
+      // _softBusy clears in _softBlitNotify after the 2D putImageData — NOT here.
+      // Clearing on submit alone let begin() queue more frames while mapAsync from
+      // the first soft-present copy was still pending (black canvas for ~60 frames).
     }
     function _capFinish(cap) {
       if (!cap) return;
@@ -2918,7 +2975,7 @@ const WGX = (function () {
       // cannot (see the device.lost handler). Drop the frame state instead.
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       try {
-      if (litPass) { litPass.end(); litPass = null; }
+      if (litPass) { _flushDrawUBO(); litPass.end(); litPass = null; }
       // Acquire the present target at present time — swapchain on hardware, a
       // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
@@ -3060,9 +3117,8 @@ const WGX = (function () {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
         if (invVP && invVP.length >= 16) {
-          const tmp = new Float32Array(16);
-          tmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
-          _mul4(s.subarray(0, 16), tmp, Z01INV);
+          _grInvTmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
+          _mul4(s.subarray(0, 16), _grInvTmp, Z01INV);
         } else s.set(IDENT, 0);
         s.set(_shadowRendered ? shadowLVPData : IDENT, 16);
         s.set(lampArmed ? lampShadowLVPData : IDENT, 32);
@@ -3560,6 +3616,10 @@ const WGX = (function () {
       mesh.instances = n;
       mesh.visible = n;
       mesh._instPacked = packed;
+      // Always retain CPU copies — castShadowInstanced restores the full set
+      // after the lit pass camera-repacks instBuf.
+      mesh.srcMatrices = matrices;
+      mesh.srcColors = colors && colors.length ? colors : null;
       if (opts && opts.cellSize > 0 && n) {
         const cell = opts.cellSize;
         let reach = opts.radius || 0;
@@ -3584,13 +3644,18 @@ const WGX = (function () {
           if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
         }
         mesh.cells = [...buckets.values()];
-        mesh.srcMatrices = matrices;
-        mesh.srcColors = colors && colors.length ? colors : null;
       }
       return mesh;
     }
     function cullInstances(batch, planes) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
+      let sig = 0;
+      for (let pi = 0; pi < 6; pi++) {
+        const p = planes[pi];
+        sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+      }
+      if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
+      if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
       const src = batch.srcMatrices, dst = batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
@@ -3610,6 +3675,8 @@ const WGX = (function () {
       if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
       }
+      batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
+      batch._cullSig0 = sig; batch._cullN0 = n;
       return n;
     }
     function drawInstanced(batch, opts) {
@@ -3618,7 +3685,15 @@ const WGX = (function () {
       if (n <= 0) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      const o = Object.assign({}, opts || {}, { _instanced: true });
+      // Reuse a single opts bag — Object.assign every batch was GC on city tracks.
+      const o = _instDrawOpts;
+      if (opts) {
+        for (const k in o) { if (k !== "_instanced") delete o[k]; }
+        for (const k in opts) o[k] = opts[k];
+      } else {
+        for (const k in o) { if (k !== "_instanced") delete o[k]; }
+      }
+      o._instanced = true;
       _writeDraw(slot, IDENT, o);
       litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
@@ -3642,6 +3717,22 @@ const WGX = (function () {
       if (!shadowPass || !batch || !batch.vbuf) return;
       const n = count === undefined ? batch.instances : Math.min(count | 0, batch.instances);
       if (n <= 0) return;
+      // Full-set cast: lit cull may have camera-repacked instBuf — restore from
+      // srcMatrices so casters behind the eye still hit the light frustum.
+      if (count === undefined && batch.srcMatrices && batch._instPacked &&
+          batch.instBuf && batch.instBuf !== identInstanceBuf) {
+        const src = batch.srcMatrices, dst = batch._instPacked, sc = batch.srcColors;
+        for (let i = 0; i < n; i++) {
+          const so = i * 16, dOff = i * 20;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (sc) {
+            dst[dOff + 16] = sc[i * 3]; dst[dOff + 17] = sc[i * 3 + 1]; dst[dOff + 18] = sc[i * 3 + 2];
+          } else {
+            dst[dOff + 16] = dst[dOff + 17] = dst[dOff + 18] = 1;
+          }
+        }
+        device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+      }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
       shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
@@ -4169,16 +4260,11 @@ const WGX = (function () {
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 
-      // ── Cull-test helpers (GLX parity) ──
-      // The agent world view calls GLX.makeFrustumPlanes/aabbInFrustum directly
-      // so its "what is on screen" answer runs the SAME test the draw path runs.
-      // These are the identical Gribb–Hartmann helpers already used above by
-      // drawChunked, exported in GLX's shape (six fresh Float32Array(4) planes,
-      // inside = a*x+b*y+c*z+d >= 0) — GLX allocates a fresh set for exactly
-      // this caller rather than sharing the per-frame scratch, so do the same.
-      makeFrustumPlanes(viewProj) {
-        const p = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                   new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+      // Cull-test helpers (GLX parity). Optional `out` reuses a caller pool for
+      // the race prop-batch path; omit it for agentview (fresh planes).
+      makeFrustumPlanes(viewProj, out) {
+        const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+                          new Float32Array(4), new Float32Array(4), new Float32Array(4)];
         _extractPlanes(viewProj, p);
         return p;
       },
@@ -4224,6 +4310,7 @@ const WGX = (function () {
       // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
+      awaitSoftPresent,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

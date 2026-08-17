@@ -524,21 +524,19 @@
       // the whole race — got NO procedural relief on this backend at all.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
-      // DERIVATIVES ARE UNCONDITIONAL — same rule as roadMarkings(): fwidth
-      // inside a non-uniform If is a hard WGSL compile error on WebGPU TLX.
-      // Coords + footprints hoist to Fn entry; branches only consume them.
+      // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
+      // inside If(inRange)/If(matWallLike) is non-uniform CF → hard WGSL error
+      // on TLX-WebGPU. Hoist footprints; branches only consume them.
       const an0 = abs(N);
       const hc0 = select(an0.x.greaterThan(an0.z), wp.z, wp.x).toVar();
       const y0 = wp.y.toVar();
-      const p0 = wp.xz;
-      const fp = max(fwidth(hc0), fwidth(y0)).toVar();
-      const fpG = max(fwidth(p0.x), fwidth(p0.y)).toVar();
-      const aaFade = clamp(fp.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
-      const aaG = clamp(fpG.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
+      const fwWall = max(fwidth(hc0), fwidth(y0)).toVar();
+      const fwGround = max(fwidth(wp.x), fwidth(wp.z)).toVar();
       If(inRange.and(bumpFade.greaterThan(0.005)), () => {
         If(matWallLike(mid), () => {
-          // fwidth-AA fade on the (hc,y) world footprint — grazing-angle moiré
-          // guard (the aaFade 0.04/0.22 constants in lit.js).
+          const hc = hc0;
+          const y = y0;
+          const aaFade = clamp(fwWall.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
           If(aaFade.greaterThan(0.005), () => {
             const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
             const e = 0.05;
@@ -559,6 +557,7 @@
           // probe epsilon and the 3-tap gradient aliases into crawling moire.
           // The fade only ever REDUCES bump, so head-on grass/sand/rock are
           // unchanged.
+          const aaG = clamp(fwGround.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
           If(aaG.greaterThan(0.005), () => {
             const e = 0.22;
             const h0 = matBumpHeight(mid, p0);
@@ -611,13 +610,11 @@
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
       const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
+      const uv = matTexUV(mid, N, wp).toVar();
+      const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
+      const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       If(live.and(fade.greaterThan(0.005)), () => {
-        const uv = matTexUV(mid, N, wp).toVar();
-        // Same grazing-angle minification guard as the procedural bump: at a
-        // shallow angle a pixel spans many texels, the mip chain flattens the
-        // tangent normal, and the remainder aliases into crawling moiré.
-        const fp = max(fwidth(uv.x), fwidth(uv.y));
-        const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
         If(aa.greaterThan(0.005), () => {
           const nt = matNormalNode.sample(uv).depth(int(mid));
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
@@ -715,23 +712,22 @@
       const near = clamp(vd.sub(26.0).div(64.0).oneMinus(), 0.0, 1.0).toVar();   // fine: near field
       // Includes ASPHALT(16) — see the applyMaterialNormal note above.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5)).and(mid.notEqual(15.0));
-      // DERIVATIVES ARE UNCONDITIONAL — same rule as roadMarkings(): hoist every
-      // fwidth() to Fn entry, then consume the widths inside material branches.
+      // World footprints + fwidth BEFORE the inRange/far gate (varying CF).
       const an = abs(normalize(nrm)).toVar();
       const wall = an.y.lessThan(0.6);
       const hc = select(an.x.greaterThan(an.z), wp.z, wp.x).toVar();
       const y = wp.y.toVar();
-      const fwY125 = fwidth(y.div(1.25)).toVar();
       const fwHc = fwidth(hc).toVar();
       const fwY = fwidth(y).toVar();
-      const fwHcPw = fwidth(hc.div(1.6)).toVar();
-      const fwYPh = fwidth(y.div(1.4)).toVar();
+      const fwY125 = fwidth(y.div(1.25)).toVar();
+      const fwHcPw = fwidth(hc.div(1.6)).toVar();   // glass pw=1.6
+      const fwYPh = fwidth(y.div(1.4)).toVar();     // glass ph=1.4
       const fwHc035 = fwidth(hc.div(0.35)).toVar();
-      const ty = fract(y.div(0.34)).toVar();
-      const fwTy = fwidth(ty).toVar();
       const fwHc13 = fwidth(hc.mul(1.3)).toVar();
       const fwY13 = fwidth(y.mul(1.3)).toVar();
-      const fwRidge = fwidth(hc.mul(7.5)).toVar();
+      const fwTy = fwidth(fract(y.div(0.34))).toVar();
+      const ridgePhase0 = abs(hc).mul(5.5).toVar();
+      const fwRidge = fwidth(ridgePhase0).toVar();
       If(inRange.and(far.greaterThan(0.001)), () => {
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
           albedo.mulAssign(vnoise(wp.xz.mul(0.09).add(y.mul(0.05))).sub(0.5).mul(0.16).mul(far).add(1.0));
@@ -804,6 +800,7 @@
           albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
           rough.assign(clamp(rough.sub(far.mul(0.10)), 0.05, 1.0));
         }).ElseIf(mid.equal(12.0), () => {  // ROOF — ridged courses, warm bands
+          const ty = fract(y.div(0.34));
           const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/shaders/lit.js)
           const shade = sin(ty.mul(3.14159)).mul(shadeAA);
           albedo.mulAssign(shade.mul(0.16).add(0.88));
@@ -877,11 +874,13 @@
         N.assign(normalize(N));
 
         // ── ground micro-normal relief (uDetail — js/render/shaders/lit.js) ───────────
+        // Hoist xz footprint before the detail If (uniform gate, but keep the
+        // roadMarkings discipline so a future non-uniform gate cannot poison WGSL).
+        const mnFp = max(fwidth(wp.x), fwidth(wp.z)).toVar();
         If(matU.detail.greaterThan(0.001), () => {
           const mnFade = clamp(vd.sub(25.0).div(70.0).oneMinus(), 0.0, 1.0)
             .mul(U.wetness.mul(0.75).oneMinus()).toVar();
           // footprint fade — grazing-angle crawl guard (0.15/0.70 constants)
-          const mnFp = max(fwidth(wp.x), fwidth(wp.z));
           mnFade.mulAssign(clamp(mnFp.sub(0.15).div(0.70).oneMinus(), 0.0, 1.0));
           If(mnFade.greaterThan(0.01), () => {
             const mnp = wp.xz.mul(1.7);
@@ -987,10 +986,10 @@
           const pm = smoothstep(0.52, 0.72, patchM);
           albedo.mulAssign(pm.mul(0.05).mul(min(matU.detail.mul(4.0), 1.0)).oneMinus());
           const crackFade = clamp(vd.sub(18.0).div(45.0).oneMinus(), 0.0, 1.0).toVar();
+          // fwidth(cr) must be unconditional — crackFade is a varying gate.
+          const cr = abs(vnoise(gxz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
+          const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();
           If(crackFade.greaterThan(0.01), () => {
-            const cr = abs(vnoise(gxz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
-            // fwidth-AA on the crack-ridge threshold (js/render/shaders/lit.js)
-            const crAA = max(float(0.075), fwidth(cr).add(0.015));
             const crack = smoothstep(0.015, crAA, cr).oneMinus()
               .mul(smoothstep(0.40, 0.70, vnoise(gxz.mul(0.11).add(7.7))));
             albedo.mulAssign(crack.mul(0.30).mul(crackFade).mul(min(matU.detail.mul(4.0), 1.0)).oneMinus());
@@ -1124,8 +1123,11 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // fog in-scatter share (consumed by the fog stack below)
-              lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
+              // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: U.lampFog is 0 by day,
+              // so skip the accumulate (uniform CF — safe for TSL→WGSL).
+              If(U.lampFog.greaterThan(0.0), () => {
+                lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
+              });
               const NoLl = max(dot(N, Ld), 0.0).toVar();
               // Per-lamp shadow for the one mapped floodlight (js/render/shaders/lit.js):
               // perspective divide, slope-boosted constant bias (perspective

@@ -42,20 +42,9 @@ async function probeOnce(preset) {
   await page.evaluate((n) => new Promise((res) => {
     let i = 0; const t = () => (++i > n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
   }), 30);
-  await page.waitForFunction(() => {
-    const c = document.getElementById("game");
-    if (!c || c.width < 8) return false;
-    const ctx2d = c.getContext("2d");
-    if (ctx2d) {
-      const d = ctx2d.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-      return d[0] + d[1] + d[2] > 30;
-    }
-    const tmp = document.createElement("canvas");
-    tmp.width = c.width; tmp.height = c.height;
-    tmp.getContext("2d").drawImage(c, 0, 0);
-    const d = tmp.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-    return d[0] + d[1] + d[2] > 30;
-  }, null, { polling: 100, timeout: 60000 });
+  await page.evaluate(async () => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(15000);
+  });
   const stats = await page.evaluate(async () => {
     const c = document.getElementById("game");
     const tmp = document.createElement("canvas");
@@ -93,6 +82,7 @@ await page.evaluate(() => { __apex.race("montreal"); __apex.go(); });
 await page.waitForFunction(() => { try { const p = __apex.physState(); return p && p.ok !== false; } catch { return false; } }, null, { polling: 100, timeout: 120000 });
 await page.evaluate(() => { __apex.jump(0.12, 65); __apex.snapCam(); });
 await page.evaluate(n => new Promise(r => { let i=0; const t=()=>(++i>n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }), 30);
+await page.evaluate(async () => { if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(15000); });
 const stats = await page.evaluate(async () => { const c=document.getElementById("game"); const t=document.createElement("canvas"); t.width=c.width;t.height=c.height; t.getContext("2d").drawImage(c,0,0); const d=t.getContext("2d").getImageData(c.width>>1,c.height>>1,1,1).data; const ad=await navigator.gpu.requestAdapter(); return { backend: __apex.diag({download:false}).env.backend, gpuErrors: WGX?WGX.gpuErrors():null, canvasPx:[d[0],d[1],d[2],d[3]], adapterInfo: ad?.info||null }; });
 console.log(JSON.stringify(stats));
 await browser.close(); await shutdown();
