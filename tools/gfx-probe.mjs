@@ -325,7 +325,9 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       cam: opts.cam,
       logPath,
       ...payload,
-      files: ["canvas.png", "page-hud.png", "state.json", "probe.log"],
+      files: opts.backend === "webgpu"
+        ? ["canvas.png", "frame.png", "page-hud.png", "state.json", "probe.log"]
+        : ["canvas.png", "page-hud.png", "state.json", "probe.log"],
     };
     writeFileSync(join(opts.outDir, "state.json"), JSON.stringify(result, null, 2));
     log("done", "PASS", { attempt, backend: payload.backend });
