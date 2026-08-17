@@ -23,7 +23,13 @@
  *
  * The rules below are deliberately COARSE and biased toward running too much.
  * A rule that is too narrow is a missed regression; a rule that is too wide
- * costs minutes. When in doubt, widen.
+ * costs 10-40 MINUTES of serialized SwiftShader per extra browser group —
+ * groups run one at a time on a four-core box, so "too wide" is measured in
+ * wall-clock hours, not minutes. Resolve the tension at the RUN, not the
+ * rule: when in doubt widen the rule, but cap what you actually execute
+ * (AGENTS.md's verification policy: two browser groups per change, the rest
+ * named as not-run) and prefer tools/select-specs.mjs for a finer per-spec
+ * cut when the group is much bigger than the change.
  *
  * `tests/unit/test-groups.test.mjs` asserts every group named here exists in
  * package.json, so a renamed script cannot leave a rule pointing at nothing.
