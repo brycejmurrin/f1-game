@@ -1381,7 +1381,9 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
 });
 
 test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
-  const storage = new Map();
+  // Same ladder as device.lost: a default-rung boot climbs slim/minimal first.
+  // Start on the minimal rung so the cap's destination is GLX, not a reload.
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
   const session = new Map();
   let reloads = 0;
   const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
