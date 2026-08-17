@@ -5,27 +5,45 @@ description: Use when driving the LIVE game or the DEPLOYED site interactively w
 
 # Probing the live game with the MCPs
 
-Two MCP browsers sit alongside the Playwright suite. Neither replaces it — the
-suite is 111 specs + 76 node suites, parallelised, asserted, retried, CI-gated.
-These are **interactive** instruments: one browser, driven a call at a time, for
-the question you can't be bothered to write a `scratch/*.mjs` for, and for the one
-thing the suite never checks — the **deployed artifact**.
+Two upstream MCP servers sit alongside the Playwright suite. Neither replaces
+it — the suite is 113 Playwright specs + 95 `node --test` unit suites,
+parallelised, asserted, retried, CI-gated. These are **interactive** instruments:
+one call at a time for the question you can't be bothered to write a
+`scratch/*.mjs` for, and for the one thing the suite never checks — the
+**deployed artifact**.
 
-- **Chrome DevTools MCP** (`mcp__chrome-devtools__*`) — a real `HeadlessChrome`
-  with **WebGL2 via SwiftShader** (the same renderer the suite uses; measured:
-  `ANGLE (…SwiftShader…)`). It reaches `http://127.0.0.1:<port>` (your working
-  tree) — but **NOT the deployed site from this container**: MEASURED
-  2026-08-13, `navigate_page` to `https://brycejmurrin.github.io/f1-game/` dies
-  `net::ERR_TUNNEL_CONNECTION_FAILED`, the same egress proxy that gives `curl`
-  a 403 CONNECT on that host. (This file previously claimed it reached both;
-  it does not here.) For anything on the DEPLOYED artifact use tinyfish, which
-  fetches server-side from its own network. This is the canvas-**visible** probe:
-  render a track/car, drive `__apex`, screenshot, take a heap snapshot, read the
-  console. The interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`.
-- **tinyfish MCP** (`mcp__tinyfish__*`) — `fetch_content` / `search` over the
-  public web. For us its one testing job is the **post-deploy liveness check**:
-  read the live `version.json` / `index.html`. It cannot see the working tree
-  (only public URLs), so it is useless for pre-ship verification.
+**Unified entry (preferred in cloud agents):** `tools/probe-mcp.py` wraps
+**every** upstream tool under stable prefixes and is registered in `.mcp.json`
+as `probe` (`python3 tools/probe-mcp.py serve`). When the session catalog lacks
+`mcp__chrome-devtools__*` / `mcp__tinyfish__*`, use:
+
+```
+python3 tools/probe-mcp.py list-tools
+python3 tools/probe-mcp.py call chrome_navigate_page '{"url":"http://127.0.0.1:3456/"}'
+python3 tools/probe-mcp.py call tinyfish_fetch_content \
+  '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
+```
+
+Or the host MCP tools `chrome_*` / `tinyfish_*` from the `probe` server.
+
+- **Chrome DevTools MCP** (`mcp__chrome-devtools__*` or `chrome_*` via probe) —
+  a real `HeadlessChrome` with **WebGL2 via SwiftShader** (the same renderer the
+  suite uses; measured: `ANGLE (…SwiftShader…)`). It reaches
+  `http://127.0.0.1:<port>` (your working tree) — but **NOT the deployed site
+  from this container**: MEASURED 2026-08-13, `navigate_page` to
+  `https://brycejmurrin.github.io/f1-game/` dies `net::ERR_TUNNEL_CONNECTION_FAILED`,
+  the same egress proxy that gives `curl` a 403 CONNECT on that host. For
+  anything on the DEPLOYED artifact use tinyfish, which fetches server-side from
+  its own network. This is the canvas-**visible** probe: render a track/car,
+  drive `__apex`, screenshot, take a heap snapshot, read the console. The
+  interactive twin of `scratch/ai-shot.mjs` / `playwright-probe`. Shell:
+  `tools/chrome-devtools-mcp.sh`, `tools/cdmcp-cli.py`, `tools/mcp-cli.mjs`.
+- **tinyfish MCP** (`mcp__tinyfish__*` or `tinyfish_*` via probe) —
+  `fetch_content` / `search` / automation over the public web. For us its main
+  testing job is the **post-deploy liveness check**: read the live
+  `version.json` and shipped JS. It cannot see the working tree (only public
+  URLs), so it is useless for pre-ship verification. Shell:
+  `tools/tinyfish-mcp.sh` (`ensure` / `deploy-check` / `deploy-js`).
 
 ---
 
@@ -522,18 +540,37 @@ framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
 ## tinyfish MCP — post-deploy liveness check
 
 The whole suite tests the working tree; **nothing verifies the shipped artifact**.
-After a Pages deploy, confirm the live site actually serves the build you shipped:
+After a Pages deploy, confirm the live site actually serves the build you shipped.
+
+Prefer the shell helper (works in cloud agents where `mcp__tinyfish__*` is not
+in the session catalog):
+
+```
+./tools/tinyfish-mcp.sh ensure
+./tools/tinyfish-mcp.sh deploy-check
+# → live=N local=M OK   or   live=N local=M STALE (exit 1)
+./tools/tinyfish-mcp.sh deploy-js js/log.js
+# → shipped source at ?v=<live> (marker-grep path; index.html strips <script>)
+./tools/tinyfish-mcp.sh fetch --ttl 0 \
+  "https://brycejmurrin.github.io/f1-game/js/<path>.js?v=<N>"
+```
+
+Or via MCP tools when the host has them wired (`.mcp.json` → `:3711` after
+`./tools/tinyfish-mcp.sh start`):
 
 ```
 mcp__tinyfish__fetch_content
   urls: ["https://brycejmurrin.github.io/f1-game/version.json"]
 ```
+
 Expect `{ "build": <N> }` matching the `version.json` you pushed. A stale build
 here means the Pages deploy lagged or failed (measured 2026-08-12: live was 971
 while the repo was 1089 — a real lag the local suite could never have caught).
-Fetch `index.html` too and grep the `?v=` tags if you suspect a partial deploy.
-`run_web_automation` can go further — boot the deployed page and assert `__apex`
-responds — but for a smoke check the static fetch is enough and far cheaper.
+`deploy-check` now compares live vs local and exits 1 on mismatch.
+
+Fetch `index.html` too only for readable content — TinyFish's content extract
+**strips `<script>` tags**, so `?v=` cache-bust markers are not there. Grep a
+shipped JS URL with `?v=<live>` instead.
 
 **Go further than `version.json`: fetch the shipped JS and grep it for your
 change.** A matching build number only proves Pages published *a* build with
@@ -549,6 +586,7 @@ code was demonstrably deployed — the fetcher had rendered it `d /= k \\* k`.
 Any pattern containing `*`, `_` or backticks needs the raw text checked
 (`python3 -c "print(repr(t[i-200:i+200]))"` around a nearby unescaped anchor)
 before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
+Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
 
 tinyfish `search` is for external grounding (research), not testing.
 
@@ -557,6 +595,8 @@ tinyfish `search` is for external grounding (research), not testing.
 ## The one-line summary
 
 Playwright asserts the working tree in batch; **Chrome DevTools MCP looks at the
-working tree live**; **tinyfish looks at the deployed site**. Keep the first in
-CI, reach for the second when a scratch script is overkill, reach for the third
-after every ship — and never let the second render while the first is running.
+working tree live**; **tinyfish looks at the deployed site**; **`probe-mcp`
+wraps every tool from both** (`chrome_*` / `tinyfish_*`) for hosts that only
+expose one MCP entry. Keep Playwright in CI, reach for Chrome/probe when a
+scratch script is overkill, reach for tinyfish/probe after every ship — and
+never let Chrome render while Playwright is running.

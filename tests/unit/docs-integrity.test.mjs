@@ -342,6 +342,10 @@ test("CLAUDE.md's matTexMix default matches TUNE_DEFS", () => {
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
   assert.ok(!/`matTexMix`[^\n]*`def: 0`/.test(section) || !on,
     "CLAUDE.md still claims matTexMix has def: 0");
+  // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
+  // trap sent agents hunting a missing port that already shipped.
+  assert.doesNotMatch(section, /WGX does not/);
+  assert.match(section, /GLX,\s*\n?TLX, and WGX implement it|GLX,\s*TLX, and WGX implement it/);
 
   // …and the same claim, outside the slice. The check above reads only the text
   // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook

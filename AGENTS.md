@@ -21,7 +21,7 @@ tools/README.md                       # test-asserted index of all 60+ tools
 
 Reference: `docs/TESTING.md` (groups, specs, fixtures, philosophy, and the
 operational field notes behind every rule below). The suite is 113 Playwright
-specs plus 93 `node --test` unit suites; the browser half runs on SwiftShader
+specs plus 95 `node --test` unit suites; the browser half runs on SwiftShader
 and is slow. The rules:
 
 - **`npm install` FIRST on a fresh container** — a missing `node_modules`
@@ -107,8 +107,9 @@ js/game.js              entry: game loop, physics, AI, race flow; owns closure
 js/render/              Gfx façade → GLX (WebGL2, default; core + glx/ passes) +
                         shaders/ (GLSL as data), gltf.js, assets.js (baked pack
                         loader, always falls back to procedural). DEFERRED (no
-                        script tag, injected at boot): webgpu/ WGX (frozen, not
-                        at parity), three/ TLX (opt-in apex26.gfxBackend="three")
+                        script tag, injected at boot): webgpu/ WGX (deferred
+                        opt-in; API near GLX, look gaps remain), three/ TLX
+                        (opt-in apex26.gfxBackend="three")
 js/track/               tracks (shell) spline mesh geom graph space surface
                         markings models themes landmark-kit circuit-kit
                         geo-paths maps + scenery-{data,nature,city,structures,
@@ -208,8 +209,8 @@ anything near game.js.
 `assets/pack/`: PBR material arrays — one `TEXTURE_2D_ARRAY` whose layer index
 IS the `MAT` id; blended (`albedo * tex.rgb * 2.0`) so tint and wear survive.
 **Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.)
-Every failure degrades to the procedural look; boot never awaits assets. GLX
-and TLX implement it; WGX does not. `tools/assets.mjs verify` gates licences.
+Every failure degrades to the procedural look; boot never awaits assets. GLX,
+TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 

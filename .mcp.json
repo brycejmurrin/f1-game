@@ -6,6 +6,10 @@
     "chrome-devtools": {
       "command": "tools/chrome-devtools-mcp.sh",
       "args": ["run"]
+    },
+    "probe": {
+      "command": "python3",
+      "args": ["tools/probe-mcp.py", "serve"]
     }
   }
 }

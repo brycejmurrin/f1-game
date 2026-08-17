@@ -139,9 +139,9 @@ case "${1:-run}" in
   chrome-path) echo "$CHROME" ;;
   clone) cmd_clone ;;
   build) cmd_build ;;
-  *)
+  -h|--help|help)
     cat <<EOF
-Chrome DevTools MCP — local clone helper
+Chrome DevTools MCP — local clone helper (working-tree browser probe)
 
   $0 clone     Clone $REPO_URL → scratch/chrome-devtools-mcp and build
   $0 build     Rebuild existing clone
@@ -150,8 +150,15 @@ Chrome DevTools MCP — local clone helper
   $0 status    Show paths and clone state
   $0 chrome-path
 
-Requires Chromium: npx playwright install chromium
+For the deployed site use tools/tinyfish-mcp.sh (ensure / deploy-check / deploy-js),
+not this browser — github.io is blocked from this container's Chromium.
+
+Falls back to npx chrome-devtools-mcp@latest when the local clone is missing.
 EOF
+    ;;
+  *)
+    echo "Unknown: ${1:-}" >&2
+    "$0" help >&2
     exit 1
     ;;
 esac

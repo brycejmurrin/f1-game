@@ -34,10 +34,9 @@
  * from its own state. The way through is user scope, which does not go via
  * project trust:
  *
- *   claude mcp add chrome-devtools --scope user -- \
- *     npx -y chrome-devtools-mcp@latest --headless --isolated \
- *     --executablePath /opt/pw-browsers/chromium \
- *     --chromeArg=--no-sandbox --chromeArg=--use-angle=swiftshader
+ *   Prefer the repo wrapper (detects Chromium, SwiftShader args, local clone):
+ *     tools/chrome-devtools-mcp.sh run
+ *   Or register that script with `claude mcp add` / `.mcp.json` (already wired).
  *
  * NEVER RUN THIS WHILE A PLAYWRIGHT GROUP OR THE LAYOUT AUDIT IS IN FLIGHT. A
  * live page here holds ~20% CPU; on a 4-core box that starves the other run and
@@ -53,13 +52,17 @@
  * returns whatever it returns; JSON.stringify the result to keep it readable.
  */
 import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const WRAPPER = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
 
 const calls = JSON.parse(process.argv[2] || "[]");
 
-const srv = spawn("npx", ["-y", "chrome-devtools-mcp@latest", "--headless", "--isolated",
-  "--executablePath", "/opt/pw-browsers/chromium",
-  "--chromeArg=--no-sandbox", "--chromeArg=--use-angle=swiftshader"],
-  { stdio: ["pipe", "pipe", "pipe"] });
+// Route through the repo wrapper (same as cdmcp-cli.py / .mcp.json). Do not
+// hard-code a Playwright browser path — this box may only ship Google Chrome.
+const srv = spawn(WRAPPER, ["run"], { stdio: ["pipe", "pipe", "pipe"] });
 
 let buf = "";
 const pending = new Map();
