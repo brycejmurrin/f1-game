@@ -445,3 +445,30 @@ test("changing preset drops a pending TIER verify", () => {
   assert.ok(gov.tier() >= Math.max(before, 1),
     `no revert may fire across a user quality change — was ${before}, now ${gov.tier()}`);
 });
+
+test("a CPU-bound device sheds features instead of looping on a scale lever that cannot help", () => {
+  // dt is genuinely slow and NOT coupled to render scale: the CPU-bound case,
+  // where cutting resolution buys nothing. The cheap frame every 20th tick is
+  // what separates this from the externally-capped case above (a cap shows the
+  // SAME dt on every frame), so the governor is right to degrade here — the
+  // question is WHICH lever it reaches for.
+  //
+  // Before the fix it reached for the only one that cannot help, forever: the
+  // tier ladder lives in the `else` of "did setRenderScale move?", and
+  // setRenderScale only refuses at the 0.5 clamp or its 0.02 dead zone, so
+  // `stepped` was true on every attempt and the ladder was never evaluated —
+  // while the causal check reverted each of those steps for buying nothing.
+  // Net: a slow device that shed NOTHING. Measured on an iPhone at
+  // Bahrain/night, build 1284: WebGL2 sat at scale 0.80 / tier 0 / 23 fps
+  // while WebGPU and three.js, where the scale lever did bite, reached tier 2
+  // and ran at 60 and 40 fps — the slowest backend shedding the least work.
+  // dt responds to TIER but not to SCALE — the shape of a draw-call/CPU-bound
+  // frame. Modelling a cost that responds to NEITHER would be the capped-clock
+  // case above, where shedding nothing is the correct answer.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
+  assert.ok(PerfGov.tier() > 0,
+    `the feature ladder must be reachable once the scale lever is proven useless, got tier ${PerfGov.tier()}`);
+  assert.ok(scale() > 0.5,
+    "and it must not have ground the resolution to the floor on the way there");
+});

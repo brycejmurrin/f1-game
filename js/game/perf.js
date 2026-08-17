@@ -30,6 +30,25 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+// The scale lever is INEFFECTIVE on this device right now — set when a
+// scale-down step was reverted for buying nothing, cleared once a tier has been
+// shed (the next rung may change that) or once headroom returns.
+//
+// Without it the ladder cannot be reached on a CPU-bound frame. The degrade
+// branch sheds a tier only in the `else` of "did setRenderScale move?", and
+// setRenderScale only refuses at the 0.5 clamp or its 0.02 dead zone — so while
+// the scale can still nominally step, `stepped` is true every time and the
+// tier branch is never evaluated. On a frame whose cost is not fill-bound,
+// every one of those steps is then reverted by the verify below for failing to
+// improve the EMA, and the governor loops forever on the one lever that cannot
+// help while shedding nothing. Measured on an iPhone at Bahrain/night, build
+// 1284, 25 s per backend: WebGL2 sat at scale 0.80 / tier 0 / 23 fps, while
+// WebGPU and three.js — where the scale lever did bite — reached tier 2 and ran
+// at 60 and 40 fps. The slowest backend was shedding the least work.
+//
+// "Reverted for buying nothing" is the honest signal that the lever is wrong,
+// and it is already computed; this just stops throwing it away.
+let _scaleFutile = false;
 
 // THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
 // a 60 Hz display can go" — it silently assumed the frame INTERVAL is a proxy
@@ -235,8 +254,15 @@ function tick(dtMs) {
     const failed = v.up ? (_frameEMA > v.ema + VERIFY_MARGIN)
                         : (_frameEMA > v.ema - VERIFY_MARGIN);
     if (failed) {
-      if (v.kind === "scale") _gfx.setRenderScale(v.prev);
-      else _perfTier = v.prev;
+      if (v.kind === "scale") {
+        _gfx.setRenderScale(v.prev);
+        // A DOWN step that bought nothing means this frame is not fill-bound,
+        // so stepping the scale again would revert again. Fall through to the
+        // feature ladder on the next evaluation instead of re-testing a lever
+        // this device has just answered for. (An UP step failing says the
+        // opposite — there was no headroom — and implies nothing about fill.)
+        if (!v.up) _scaleFutile = true;
+      } else _perfTier = v.prev;
       _govCool = VERIFY_COOL;
       return;
     }
@@ -265,7 +291,7 @@ function tick(dtMs) {
     // chasing the constant, and tests/unit/perf-governor.test.mjs:38 already
     // calls that boolean "the real gfx contract PerfGov.tick() relies on".
     let stepped = false;
-    if (_autoRes && cur > 0.5) stepped = !!_gfx.setRenderScale(cur - 0.1);
+    if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
@@ -281,8 +307,13 @@ function tick(dtMs) {
       // Skipping to floor+1 guarantees every step is one that can be felt.
       _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
       _perfTier = Math.max(_perfTier, _floorTier()) + 1; _govCool = 90; _downHold = 600;
+      // A shed rung changes what the frame is bound BY, so let the scale lever
+      // prove itself again from the new baseline rather than staying latched
+      // off for the session on one old measurement.
+      _scaleFutile = false;
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
+    _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
     // headroom is real, and the same _pendingVerify machinery that reverts a
     // useless cut reverts a premature restore one evaluation later — without
