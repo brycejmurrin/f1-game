@@ -174,10 +174,10 @@ driver **code** so a driver keeps their ratings when the market moves them.
 | Axis | Feeds |
 |---|---|
 | `pace` | AI speed and qualifying — weighted heaviest in `overall()` |
-| `craft` | wheel-to-wheel |
-| `awareness` | incidents and penalties |
+| `craft` | OT fire rate, late-brake, adaptive lane (`ai-drive.js`); permanent pass/defend pull (inlined in `game.js`) |
+| `awareness` | incidents/penalties **and** follow gap, contact yield, stuck dig-out, ERS bank, street OT scale/pull |
 | `consistency` | **variance, not speed** — it narrows the band around a driver's pace |
-| `experience` | races started; damps development |
+| `experience` | races started; damps development **and** steer smoothing / unstuck panic / OT hesitation |
 
 It is deliberately not in `js/car/teams.js`: that file is the verified real-world
 grid and is loaded by `tools/carview.html` through the manifest's `CARVIEW` subset,

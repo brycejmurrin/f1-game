@@ -524,12 +524,9 @@ function deployTaper(c) {
 }
 function isErsDeploying(c) {
   if (!c) return false;
-  // OVERTAKE deploys for FREE (see the deploy block), so it counts as deploying
-  // on a flat battery too — gating this on energy would drop the ERS lamp, the
-  // engine note and the tail-light flash for exactly the 4 s the car is at its
-  // loudest. BOOST alone still needs charge.
-  if (!(c.otT > 0) && (c.energy <= 0 || !c.boostOn)) return false;
-  return DEPLOY_A * deployTaper(c) > 0.4;
+  // Live flag from the deploy block — covers human BOOST, AI wantBoost, and
+  // free OVERTAKE. Do not re-derive from boostOn alone: AI never sets boostOn.
+  return !!c.deploying;
 }
 function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
 function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
@@ -1585,7 +1582,9 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
-        aiBrakeT: 0, lane,
+        // lanePref is the grid home line; adaptLane biases around it and must
+        // not accumulate forever into ±0.85 under pack traffic.
+        lane, lanePref: lane,
       });
     });
   });
@@ -3631,7 +3630,7 @@ function updateCar(c, dt, ranked) {
                           blockerGap: blocker ? blockerGap : gapAhead * (c.speed || 1),
                           gapAhead: gapAhead * (c.speed || 1),
                           roomL, roomR, speed: c.speed,
-                          aheadSpeed: ahead ? ahead.speed : (blocker ? blocker.speed : c.speed),
+                          aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
                           kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
                           street: !!track.street,
                         }));
@@ -3914,6 +3913,7 @@ function updateCar(c, dt, ranked) {
     // freer side so midfield trains fan out instead of locking one line forever.
     c.lane = AiDrive.adaptLane(c.lane, {
       traits: aiT, nearby: nearbyN, roomL, roomR,
+      baseLane: c.lanePref != null ? c.lanePref : c.lane,
     }, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
