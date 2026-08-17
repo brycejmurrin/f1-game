@@ -741,6 +741,12 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
   const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
   assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+  // Sparse asphalt cracks ported from GLX lit.js (were dropped in WGX Block 1b).
+  assert.match(CHUNKS_SOURCE, /Sparse cracks \(GLX lit\.js\)/);
+  assert.match(CHUNKS_SOURCE, /crAA = max\(0\.075, 0\.015 \+ max\(fwWpos\.x, fwWpos\.z\) \* 0\.9\)/);
+  // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
+  assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
+  assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
 });
 
 test("WGX god-ray and env probe match GLX gates", () => {
