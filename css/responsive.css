@@ -207,6 +207,19 @@ body.desktop #pm-calib { display: none !important; }
 }
 .rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
 .rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
+.rotate-inner { display: grid; justify-items: center; gap: 0.8rem; max-width: 28rem; }
+.rotate-actions { display: flex; justify-content: center; gap: 0.65rem; margin-top: 0.45rem; }
+.rotate-actions button {
+  min-height: var(--tap-min); padding: 0 1rem;
+  border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.1); color: #fff;
+  font: inherit; font-weight: 800; letter-spacing: 0.035em;
+}
+.rotate-actions button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+/* OPEN CONTROLS pauses the race and temporarily yields this z-9000 blocker to
+   the existing How to Play sheet. Closing help restores the blocker/focus if
+   the phone is still portrait. */
+body.rotate-help-open #rotate-device { display: none !important; }
 
 /* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing
    more than height > width, so this opaque z-9000 sheet also fired on a rotated
@@ -218,6 +231,8 @@ body.desktop #pm-calib { display: none !important; }
    is not. */
 @media (orientation: portrait) and (pointer: coarse) and (max-width: 743px) {
   body.in-race #rotate-device { display: flex; }
+  .rotate-actions { width: min(100%, 22rem); }
+  .rotate-actions button { flex: 1 1 0; }
 }
 
 } /* @layer overlays */

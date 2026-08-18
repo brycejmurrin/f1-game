@@ -249,6 +249,21 @@ test("Settings uses labelled category tabs with matching panels", () => {
   assert.match(html, /id="pm-category-tabs"[^>]*role="tablist"/);
 });
 
+test("portrait race blocker is an actionable accessible dialog", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(html, /id="rotate-device"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  assert.match(html, /id="rotate-device"[^>]*aria-labelledby="rotate-title"[^>]*aria-describedby="rotate-detail"/);
+  assert.match(html, /Turn off rotation lock, then rotate your phone\./,
+    "guidance must not tell a portrait-locked player to enable rotation lock");
+  assert.match(html, /id="rotate-controls"/);
+  assert.match(html, /id="rotate-exit"/);
+  assert.match(game, /\$\("rotate-controls"\)\.onclick[\s\S]*?setPaused\(true\)/,
+    "Controls must pause before yielding the blocker to help");
+  assert.match(game, /\$\("rotate-exit"\)\.onclick\s*=\s*\(\)\s*=>\s*quitToMenu\(\)/,
+    "Exit Race must use the real session cleanup path");
+});
+
 test("Circuit filters are not nested in a listbox and circuits expose button state", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");

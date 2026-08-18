@@ -2555,6 +2555,7 @@ function startRace() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   // (#soundbtn rides #overlay now — see css/overlays.css for why.)
   document.body.classList.add("in-race");
+  syncRotateBlocker(true);
   holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
@@ -3092,12 +3093,33 @@ function clearMenuScreens() {
   garageReturn = "select";
 }
 
+const rotateBlockMql = window.matchMedia
+  ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)")
+  : { matches: false };
+function syncRotateBlocker(moveFocus) {
+  const box = $("rotate-device");
+  if (!box) return false;
+  const active = document.body.classList.contains("in-race") && rotateBlockMql.matches
+    && !document.body.classList.contains("rotate-help-open");
+  box.setAttribute("aria-hidden", active ? "false" : "true");
+  if (active && moveFocus) requestAnimationFrame(() => {
+    const first = $("rotate-controls");
+    if (first && document.body.classList.contains("in-race") && rotateBlockMql.matches) first.focus();
+  });
+  return active;
+}
+if (rotateBlockMql.addEventListener)
+  rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
+else if (rotateBlockMql.addListener)
+  rotateBlockMql.addListener(() => syncRotateBlocker(true));
+
 function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
-  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race");
+  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race", "rotate-help-open");
+  syncRotateBlocker(false);
   dropRaceWake();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
@@ -7595,7 +7617,20 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // #pmsettings in z-index, so it lays over the settings menu and DONE returns
 // there with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
-$("htp-close").onclick = () => { els.howtoplay.hidden = true; };
+$("htp-close").onclick = () => {
+  els.howtoplay.hidden = true;
+  const fromRotate = document.body.classList.contains("rotate-help-open");
+  document.body.classList.remove("rotate-help-open");
+  if (fromRotate) syncRotateBlocker(true);
+};
+$("rotate-controls").onclick = () => {
+  setPaused(true);
+  document.body.classList.add("rotate-help-open");
+  syncRotateBlocker(false);
+  els.howtoplay.hidden = false;
+  const close = $("htp-close"); if (close) close.focus();
+};
+$("rotate-exit").onclick = () => quitToMenu();
 // Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.
