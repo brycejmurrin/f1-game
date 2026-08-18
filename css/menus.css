@@ -1024,7 +1024,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+@media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
 /* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
    a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
 #ss-inner[data-density="compact"] { --pair-at: 2000px; }
@@ -1108,51 +1109,37 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
-/* A notched phone in landscape can leave the single-column list only ~140px
-   tall. Spending two control rows here hid the first actual circuit entirely.
-   Keep the filter and search on one row only in that exact compact/wide mode;
-   portrait and the roomy paired catalogue retain the easier two-row layout. */
+/* Compact stacked landscape: one pan-x toolbar. --fit-at can inflate local
+   width past a px query while the row is still starving, so this keys on
+   density. Chips keep intrinsic width; search will not shrink below 12rem. */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
+  position: static;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+  display: none;
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  min-width: max-content;
   padding-inline: calc(var(--gap) * 0.55);
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-  flex: 1 1 9rem;
-  min-width: 9rem;
+  flex: 1 0 12rem;
+  min-width: 12rem;
 }
 /* The sticky filter already names SEASON and CLASSICS. Repeating that group
    heading directly below it costs the only circuit row on a short landscape
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
   display: none;
-}
-/* At 175–200% a landscape phone gives the sheet less than 360 local px. Four
-   controls cannot shrink into that width without their labels overlapping.
-   Keep one touch-height row, preserve each control's intrinsic width, and make
-   the toolbar itself horizontally pannable. The redundant group heading drops
-   here so the first actual circuit still fits below the toolbar. */
-@container sheet (max-width: 360px) {
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
-    position: static;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
-    display: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-    flex: 0 0 auto;
-    min-width: max-content;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-    flex: 0 0 9rem;
-  }
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }
@@ -1403,4 +1390,242 @@ body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
 body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
+
+/* ---------- menu redesign: original red / charcoal identity ---------- */
+#overlay {
+  background:
+    radial-gradient(70% 90% at 12% 12%, rgba(225, 6, 0, 0.22), transparent 58%),
+    linear-gradient(135deg, #07080b 0%, #121318 55%, #08090c 100%);
+}
+#overlay::after {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none;
+  opacity: .22;
+  background: repeating-linear-gradient(105deg, transparent 0 84px, rgba(255,255,255,.035) 85px, transparent 86px);
+}
+#menu-brand {
+  position: relative;
+  width: min(78vw, 620px);
+  align-items: flex-start;
+  padding: clamp(var(--pad), 3vw, calc(var(--pad) * 1.75)) clamp(var(--pad), 4vw, calc(var(--pad) * 2.4));
+  border: 1px solid rgba(255,255,255,.11);
+  border-left: 5px solid var(--red);
+  border-radius: 4px;
+  background: linear-gradient(115deg, rgba(255,255,255,.07), rgba(255,255,255,.015)), rgba(8,9,12,.76);
+  box-shadow: 18px 18px 0 rgba(225,6,0,.08), 0 24px 70px rgba(0,0,0,.35);
+  backdrop-filter: blur(14px);
+}
+#title { align-self: flex-start; letter-spacing: .1em; }
+#subtitle { margin-top: var(--gap); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: .12em; }
+#menu-meta { align-items: flex-start; margin-top: calc(var(--pad) * 0.82); }
+#disclaimer { text-align: left; }
+#menu-buttons { width: min(78vw, 620px); gap: var(--gap); }
+#menu-hero, #menu-primary, #menu-secondary { width: 100%; }
+#menu-hero {
+  padding: calc(var(--gap) / 3);
+  border: 1px solid rgba(225,6,0,.48);
+  border-radius: 4px;
+  background: linear-gradient(105deg, #e10600, #a80500 70%, #7b0400);
+  box-shadow: 10px 10px 0 rgba(0,0,0,.28);
+}
+#menu-hero .bigbtn { min-height: 64px; justify-content: flex-start; text-align: left; background: transparent; border: 0; box-shadow: none; }
+#menu-hero .btn-ico { width: 1.35em; height: 1.35em; }
+#menu-primary { gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) / 3); border: 1px solid rgba(255,255,255,.1); border-radius: 4px; background: rgba(0,0,0,.22); }
+#menu-primary .bigbtn { min-height: 48px; border: 1px solid rgba(255,255,255,.12); border-radius: 3px; background: rgba(255,255,255,.055); }
+#menu-primary .bigbtn:hover, #menu-primary .bigbtn:focus-visible { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.34); }
+#menu-secondary { gap: calc(var(--gap) * 2 / 3); padding-top: calc(var(--gap) / 6); }
+#menu-secondary .bigbtn { min-height: 38px; border-radius: 3px; border-color: rgba(255,255,255,.15); background: transparent; }
+#menu-secondary .bigbtn:hover, #menu-secondary .bigbtn:focus-visible { background: rgba(225,6,0,.13); border-color: rgba(225,6,0,.55); }
+
+/* Dialogs share the home material but each receives a single accent cue. */
+#pausemenu .sheet { border-top: 3px solid var(--red); box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+#pausemenu .sheet-head h2, #pmsettings .sheet-head h2 { letter-spacing: .16em; }
+#pmsettings .sheet { border-top: 3px solid #7ab8ff; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+#pm-category-tabs { border-bottom: 1px solid rgba(255,255,255,.1); }
+#pm-category-tabs button.active { box-shadow: inset 0 -2px 0 #7ab8ff; }
+#select .sheet, #career .sheet { box-shadow: 0 24px 70px rgba(0,0,0,.4); }
+#select .sheet-head, #career .sheet-head { border-bottom: 2px solid var(--red); }
+
+/* ---------- race-control composition ---------- */
+:root {
+  --menu-panel: rgba(16, 18, 24, .86);
+  --menu-panel-hi: rgba(255, 255, 255, .075);
+  --menu-line: rgba(255, 255, 255, .13);
+  --menu-data: #7bd7d0;
+}
+#menu-buttons {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "primary secondary";
+  align-items: start;
+  column-gap: var(--gap);
+  row-gap: var(--gap);
+}
+#menu-hero { grid-area: hero; }
+#menu-primary { grid-area: primary; }
+#menu-secondary { grid-area: secondary; }
+#menu-primary::before, #menu-secondary::before {
+  display: block;
+  margin: 0 0 calc(var(--gap) / 2) calc(var(--gap) / 3);
+  color: var(--menu-data);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .2em;
+}
+#menu-primary::before { content: "QUICK GRID"; }
+#menu-secondary::before { content: "RACE CONTROL"; }
+#menu-primary, #menu-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  padding: var(--gap);
+  border: 1px solid var(--menu-line);
+  border-radius: 5px;
+  background: var(--menu-panel);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+#menu-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#menu-primary .bigbtn, #menu-secondary .bigbtn {
+  margin: 0;
+  min-width: 0;
+  border-color: var(--menu-line);
+  background: var(--menu-panel-hi);
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+#menu-primary .bigbtn:hover, #menu-primary .bigbtn:focus-visible,
+#menu-secondary .bigbtn:hover, #menu-secondary .bigbtn:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(123,215,208,.11);
+  border-color: rgba(123,215,208,.52);
+}
+#menu-primary .bigbtn:nth-child(2n) { border-left-color: rgba(225,6,0,.34); }
+#menu-secondary .bigbtn { justify-content: flex-start; }
+#menu-secondary .btn-ico { color: var(--menu-data); }
+#menu-brand::after {
+  content: "SEASON HUB / ONLINE";
+  position: absolute; top: 14px; right: 16px;
+  color: var(--menu-data);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .16em;
+}
+#soundbtn { border-color: rgba(123,215,208,.38); color: var(--menu-data); }
+
+/* Shared panel treatment for the deeper screens. */
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet {
+  border-color: var(--menu-line);
+  background: linear-gradient(145deg, rgba(26,29,37,.97), rgba(10,11,15,.97));
+}
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-head {
+  min-height: 58px;
+  padding-inline: clamp(var(--pad), 2.5vw, calc(var(--pad) * 1.27));
+  background: linear-gradient(90deg, rgba(225,6,0,.16), transparent 70%);
+}
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-head h2 { letter-spacing: .14em; }
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-foot {
+  border-top: 1px solid var(--menu-line);
+  background: rgba(0,0,0,.18);
+}
+
+@media (max-width: 700px) {
+  #menu-buttons { grid-template-columns: 1fr; grid-template-areas: "hero" "primary" "secondary"; }
+  #menu-brand::after { position: static; align-self: flex-end; margin-top: var(--gap); }
+  #menu-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #menu-primary .bigbtn, #menu-secondary .bigbtn { transition: none; }
+}
+
+/* ---------- shared dashboard components ---------- */
+.menu-status-item {
+  display: grid;
+  gap: calc(var(--gap) / 3);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: calc(var(--gap) * 0.75) var(--gap);
+  border-left: 2px solid rgba(123, 215, 208, .65);
+  background: rgba(123, 215, 208, .055);
+}
+.menu-status-label {
+  color: rgba(242, 242, 245, .48);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .16em;
+}
+.menu-status-item strong {
+  color: var(--text);
+  font-size: var(--fs-micro);
+  letter-spacing: .08em;
+}
+#menu-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  width: 100%;
+  margin-top: calc(var(--pad) * 0.82);
+}
+#menu-meta { margin-top: var(--gap); }
+#menu-hero::before {
+  content: "NEXT SESSION";
+  display: block;
+  padding: calc(var(--gap) * 2 / 3) var(--gap) 0;
+  color: rgba(255,255,255,.68);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .18em;
+}
+#menu-hero .bigbtn { min-height: 58px; }
+#menu-hero .mb-label { font-size: 1.12em; letter-spacing: .08em; }
+#menu-hero #mb-career-sub:not(:empty)::before { content: "CURRENT SAVE  /  "; color: rgba(255,255,255,.62); }
+
+@media (max-width: 700px) {
+  #menu-status { gap: calc(var(--gap) / 2); }
+  .menu-status-item { flex: 1 1 0; min-width: 0; padding: calc(var(--gap) * 2 / 3); }
+  .menu-status-item strong { font-size: var(--fs-micro); }
+}
+
+/* Short landscape is height-constrained, not width-constrained. Compress the
+   context layer first so the actionable panels keep their touch floor. */
+@media (orientation: landscape) and (max-height: 620px) {
+  #overlay { gap: 10px; align-content: safe center; }
+  #menu-brand { padding-block: 12px; }
+  #menu-status { margin-top: 10px; }
+  .menu-status-item { padding-block: 6px; }
+  #menu-meta { margin-top: 8px; }
+  #menu-hero .bigbtn { min-height: 48px; }
+  #menu-primary .bigbtn, #menu-secondary .bigbtn { min-height: 40px; }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  #menu-status { display: none; }
+  #menu-brand { padding-block: 9px; }
+  #subtitle { margin-top: 3px; }
+  #menu-meta { margin-top: 5px; }
+  #menu-buttons { row-gap: 6px; }
+  #menu-primary, #menu-secondary { padding: 7px; }
+  #menu-primary::before, #menu-secondary::before { margin-bottom: 4px; }
+}
+
+/* Medium landscape has two columns, but neither column may retain the desktop
+   620px floor. Size them from the viewport so 844x390 and 667x375 do not
+   overlap or push the control rail off-screen. */
+@media (orientation: landscape) and (max-width: 1100px) {
+  #menu-brand,
+  #menu-buttons { width: min(calc(46 * var(--vwz)), 100%); }
+  #menu-brand { padding-inline: clamp(14px, 2.5vw, 30px); }
+  #menu-status { gap: 5px; }
+  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: 8px; }
+}
 } /* @layer components */

@@ -156,29 +156,11 @@ body.desktop #pm-calib { display: none !important; }
   #minimap { width: 140px; height: 140px; }
 }
 
-/* sectors: smaller on short landscape screens so they clear the cam/pause buttons */
-@media (orientation: landscape) and (max-height: 560px) {
-  /* `top` deliberately NOT re-declared. It used to pull the box UP to 52px to
-     reclaim vertical air, which defeated the stated purpose of this very rule —
-     #pausebtn reaches y=60 on touch, so 52 was an 8px collision, worse than the
-     56px base it overrode. The base is now derived from --tap (css/hud.css) and
-     clears the buttons by construction at every scale, so a second hard-coded
-     constant here can only drift away from it again. The font/padding trim is
-     what this breakpoint actually wants. (--fs-micro is deploy's token swap,
-     kept.) */
-  #hud-sectors { font-size: var(--fs-micro); padding: 3px 6px; }
-  /* Arm's-length landscape (play shape ~393 tall): reclaim air above the dock
-     without shrinking thumb targets — tap floors stay on the >700px ladder. */
-  #minimap { width: 96px; height: 96px; }
-  /* minimap is 96px here — gaps dock beside it (10+96+8), top-aligned with it by
-     the base rule. Nothing about the 200% end of the HUD SIZE range fits a
-     393px-tall phone and no placement here can fix that: at 852x393 @200%
-     `#minimap` already overlaps `.hud-top` with `.hud-gaps` removed from the
-     comparison entirely. */
-  .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
-  .hud-top { gap: 6px; }
-  .hud-box { padding: 4px 7px; }
-}
+/* Short-landscape HUD shrink used to live here behind
+   `(orientation: landscape) and (max-height: 560px)`. That query is zoom-blind
+   and duplicated `body[data-density="compact"]` in css/hud.css (852×393 is
+   already body compact at --compact-at 600). Spacing tokens for #overlay stay
+   in css/tokens.css. */
 
 /* The keyboard focus ring lives in css/tokens.css (@layer base). It was here,
    in @layer overlays, where it out-ranked every component-level focus override

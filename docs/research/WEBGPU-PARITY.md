@@ -30,10 +30,14 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
   WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
   `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
-  `roadChunkLamps` (WebGL2 only); `pcssPen` on three.js phones / software GL.
+  `roadChunkLamps` (WebGL2 only — WGX/TLX have no per-draw lamp upload).
+  `pcssPen` on three.js phones / software WebGL2, and on a desktop
+  PCSS-off fallback, now scales the fixed Poisson R (identity at 80);
+  true PCSS still needs the blocker.
 
 Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
-(no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
+(no wetness remul; `aoV²` + `min(gateSrc/0.20)` **once** — a deploy merge
+had redeclared `gateSrc` and Dawn refused the SSR module); WGX SSR `sinT` Nv
 fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX
 corrugation AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking
 mip uses unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso /
@@ -68,11 +72,17 @@ as 0 on the **road** VBO — cars were fine. Every road fragment read
 `matId=0` / `trk=0`, so asphalt never ran and `roadMarkings` gated off.
 `vertex_index` on that ribbon also stayed 0 (`drawIndexed` and large
 `draw`), so a per-vertex storage array always returned the grass skirt at
-slot 0. Interpolators after location 3 are dropped. WGX now uploads a
-world-XZ centerline LUT (`_makeRoadLUT`, magic 12345) on group 2;
-`trkFromWorld` rebuilds `(mat, s, x, hw)` from `wpos` so asphalt + paint
-do not depend on the broken attribute. Vertex colour stays the real
-albedo (packing into RGB greys the grass shoulders).
+slot 0. Interpolators after location 3 are dropped. Interleaving
+`(mat,s,x,hw)` onto the pos VBO (stride 52) **and** a second stride-16
+vertex buffer at `@location(3)` both zeroed the attr **and** broke pos
+fetch (dark gantry blit, sky ~`(31,18,38)` vs day ~`(93,104,122)`). Slot 0
+stays stride 36. VS rebuilds `(mat, s, x, hw)` from the 32×32 centerline
+LUT and packs `(s, x, hw)` into interpolator location 3 **xyz** (Dawn has
+dropped `.w` of that location — a `hw > 0.5` gate fell back to per-fragment
+nearest-bin and chopped the dashes). `fs_main` uses `in.matTrk.xyz` on
+road draws. LUT `trkFromWorld` stays `buryRibbon` + material fallback.
+Vertex colour stays the real albedo (packing into RGB greys the grass
+shoulders).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -245,7 +255,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 | **Instancing** | Full family; `TrackGraph.batches()` consumer | Full family (`createInstancedBatch` … `castShadowInstanced`) | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
 | **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
 | **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Ported (`applyMaterial` / `applyMaterialNormal`) | Shader | No new API |
-| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Vertex stride 52 + `aTrk` + `roadMarkings()` | Layout + shader | Extra `float32x3` attribute |
+| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Interpolated VS LUT `(s,x,hw)` in loc-3 xyz; no 4th vertex attr | Shader | Pack xyz; do not gate on interpolator `.w` |
 | **Heat haze** | Composite `uHaze*` | Composite `dirtFx.yzw` + time | Shader | Composite uniform |
 | **SSR car-paint** | Scene `.a` tag in composite | Scene alpha tags car-paint (`select(alpha, 0.35, …)`) | Shader | Restore the `.a` path |
 | **SSAO denoise** | Separable blur | Shared 5-tap `BLUR` (H then V) | Shader | Same kernel as GLX `BLUR_FS` |

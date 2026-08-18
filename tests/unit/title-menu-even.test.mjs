@@ -31,4 +31,6 @@ test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   assert.doesNotMatch(menus, /min\(calc\(42 \* var\(--vwz\)\), 300px\)/);
   assert.match(responsive, /32 \* var\(--vwz\)/);
   assert.doesNotMatch(responsive, /clamp\(320px, calc\(24 \* var\(--vwz\)\), 420px\)/);
+  assert.doesNotMatch(menus, /minmax\(0, 1\.35fr\)/);
+  assert.doesNotMatch(menus, /43vw|53vw/);
 });

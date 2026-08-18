@@ -217,7 +217,11 @@
   animation: flag-vsc-pulse 1s ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
 @keyframes flag-vsc-pulse { 0%,100% { opacity: 0.72; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { #hud-flag.flag-vsc { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #hud-flag.flag-vsc { animation: none; }
+  #hud-tach.redline #hud-rpm-fill,
+  #hud-ot.ot-armed { animation: none; }
+}
 #hud-sectors {
   position: fixed;
   /* DERIVED FROM --tap, not the old hard-coded 56 — the same fix, on the other
@@ -247,6 +251,17 @@
 .sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; }
 .sec-lbl { font-weight: 800; font-size: var(--fs-micro); letter-spacing: 0.1em; min-width: 16px; }
 .sec-val { color: #e8e8ee; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+
+/* Short local height (UI SIZE included): tighten HUD clusters so 200% HUD on
+   852×393 does not stack minimap, chips, and pause. Viewport max-height cannot
+   see zoom; body[data-density] is the same hook as the menus (body --compact-at
+   600). Insets still divide by --hud-z. Do not redeclare #hud-sectors top. */
+body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
+body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
+body[data-density="compact"] #minimap { width: 96px; height: 96px; }
+body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
+body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
+body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 
 /* ---------- start lights ---------- */
 #lights {
@@ -291,6 +306,10 @@
    usable while a dialog is open anyway — you cannot fly a paused game — so the
    whole fly-cam overlay stands down until it closes. */
 body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
+/* Pause owns paused navigation. JS already hideCamPicker()s on setPaused; this
+   is the CSS twin so #campicker cannot paint in the dim beside the pause card
+   if the hidden attribute lags. Same :has() as #photo-controls above. */
+body:has(.screen.dim:not([hidden])) #campicker { display: none; }
 /* Same moment: stand the race chrome down while a dim dialog is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still

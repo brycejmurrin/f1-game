@@ -570,6 +570,13 @@ body.hud-hidden #hud-restore { display: block; }
   background: rgba(225, 6, 0, 0.75);
   border-color: rgba(255, 255, 255, 0.35);
 }
+/* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
+   max-height gate — 852×393 is already body compact (body --compact-at 600). */
+body[data-density="compact"] #campicker {
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.75);
+  width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
+}
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
    un-hid it on every NON-RACE screen — so a title-screen control floated over
    the top-right corner of the garage, the circuit picker, career and the data
@@ -588,18 +595,24 @@ body.hud-hidden #hud-restore { display: block; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 
 /* ---------- how to play ---------- */
-/* Five landmarks turn a very long reference into something browsable. The
-   rail lives in the fixed sheet head, so it remains available while the <dl>
-   owns the one vertical scroller. It pans sideways only when local width is
-   genuinely too small; links never wrap into a second row of chrome. */
+/* Five landmarks turn a very long reference into something browsable. On a
+   tall sheet the rail is a horizontal strip under the title; on a wide sheet
+   it becomes a left contents rail. The <dl> owns the one vertical scroller
+   either way. Links never wrap into a second row of chrome. */
+#howtoplay-inner {
+  --fit-at: 200px;
+  /* Head, contents strip, body, foot — four rows so the nav can live as a
+     sheet child (wide rail) without creating an implicit extra track. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
 #htp-contents {
   display: flex; align-items: center; justify-content: flex-start;
-  gap: calc(var(--gap) * 0.4); min-width: 0; flex: 1 1 auto;
+  gap: calc(var(--gap) * 0.4); min-width: 0;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none;
 }
-#howtoplay-inner { --fit-at: 200px; }
 /* Auto margin right-aligns the rail only while every link fits. When it
    overflows the margin collapses to zero, leaving CONTROLS at the reachable
    scroll origin; `justify-content:flex-end` instead placed that origin at a
@@ -634,6 +647,45 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
   background: var(--red); border-color: var(--red); color: #fff;
+}
+/* Wide sheets: contents as a left rail, body is still the only vertical scroller
+   for the reference itself. data-shape is the sheet's own aspect, not viewport
+   orientation. */
+#howtoplay-inner[data-shape="wide"] {
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#howtoplay-inner[data-shape="wide"] > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+#howtoplay-inner[data-shape="wide"] > #htp-contents {
+  grid-column: 1; grid-row: 2;
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+  padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+#howtoplay-inner[data-shape="wide"] > #htp-contents > :first-child { margin-inline-start: 0; }
+#howtoplay-inner[data-shape="wide"] > .sheet-body { grid-column: 2; grid-row: 2; min-width: 0; }
+#howtoplay-inner[data-shape="wide"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+/* Compact keeps the horizontal strip: a side rail on a short landscape sheet
+   spends the scarce axis on chrome. Density is local height, so UI SIZE 200%
+   on an 852×393 phone stays a strip even though the sheet is wide-shaped. */
+#howtoplay-inner[data-density="compact"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+#howtoplay-inner[data-density="compact"] > #htp-contents {
+  grid-column: auto; grid-row: auto;
+  flex-direction: row; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: pan-x;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  border-right: none;
+}
+#howtoplay-inner[data-density="compact"] > .sheet-head,
+#howtoplay-inner[data-density="compact"] > .sheet-body,
+#howtoplay-inner[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
 }
 #howtoplay dl {
   display: grid;
@@ -904,27 +956,27 @@ body.hud-hidden #hud-restore { display: block; }
    Give the body the height previously spent on a second action bar and keep the
    escape action in the title band. This matters most at UI SIZE 200%, where a
    landscape phone has only ~170 local vertical pixels. */
-#vsfriend .sheet[data-density="compact"] { position: relative; }
-#vsfriend .sheet[data-density="compact"] > #vs-head {
+#vsfriend-inner[data-density="compact"] { position: relative; }
+#vsfriend-inner[data-density="compact"] > #vs-head {
   padding-right: calc(var(--pad) + var(--tap));
 }
-#vsfriend .sheet[data-density="compact"] > .sheet-foot {
+#vsfriend-inner[data-density="compact"] > .sheet-foot {
   position: absolute; top: calc(var(--pad) * 0.18); right: var(--pad); z-index: 3;
   display: block; padding: 0; background: none;
 }
-#vsfriend .sheet[data-density="compact"] > .sheet-foot::before { display: none; }
-#vsfriend .sheet[data-density="compact"] #vs-close {
+#vsfriend-inner[data-density="compact"] > .sheet-foot::before { display: none; }
+#vsfriend-inner[data-density="compact"] #vs-close {
   min-width: var(--tap); min-height: var(--tap-min); padding: 0 var(--gap);
   font-size: var(--fs-micro); line-height: 1;
 }
-#vsfriend .sheet[data-density="compact"] #vs-pick {
+#vsfriend-inner[data-density="compact"] #vs-pick {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
 }
-#vsfriend .sheet[data-density="compact"] #vs-pick > .bigbtn {
+#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn {
   min-height: var(--tap-min); padding: var(--gap); font-size: var(--fs-2);
 }
-#vsfriend .sheet[data-density="compact"] #vs-pick > .vs-hint,
-#vsfriend .sheet[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
+#vsfriend-inner[data-density="compact"] #vs-pick > .vs-hint,
+#vsfriend-inner[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
 
 /* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
    ~390px to spend, and a preview that needs scrolling is a preview you cannot
@@ -955,7 +1007,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
 
-@media (min-width: 620px) {
+@container sheet (min-width: 620px) {
   #vsfriend .vs-two {
     display: grid;
     grid-template-columns: 1fr 1fr;

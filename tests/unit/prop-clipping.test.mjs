@@ -69,6 +69,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // the old mesh kept width ~2.7 m at every h — and grow into along() prisms
 // and neighbouring crowns. clip-audit --why on hockenheim: addCone (replay
 // pine) × circuit along() prisms. Measured and locked; suzuka shrank 9→8.
+//
+// zandvoort 24 → 31 (2026-08-18): same e1c1cb2f sceneryStartFrac drop.
+// clip-audit --why: 31 severe spots (45 total, 228 pairs). Placement
+// rotated with the S/F; not a leftover-sweep or WGX change. Locked.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );

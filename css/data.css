@@ -15,10 +15,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* In short landscape, stretch to fill full height (phone rotated) */
-@media (orientation: landscape) and (max-height: 560px) {
-  .dh-overlay { align-items: stretch; }
-}
+/* Short local viewport (UI SIZE included): stretch to fill. Viewport
+   max-height cannot see zoom; body[data-density] is measured in the same
+   units the card's CSS is written in. */
+body[data-density="compact"] .dh-overlay { align-items: stretch; }
 
 .dh-card {
   width: min(760px, 100%);
@@ -49,22 +49,18 @@
   overflow: hidden;
   box-shadow: var(--edge), var(--lift-2);
 }
-/* Short landscape: card fills full height, no extra radius on top (flush with safe area) */
-@media (orientation: landscape) and (max-height: 560px) {
-  .dh-card { min-height: 0; height: 100%; max-height: none; border-radius: var(--r-md); }
-}
 /* DESKTOP: size to the content instead of to the screen.
    "Always fill most of the viewport" is right on a phone, where the hub IS the
    screen. On a desktop it forced every tab to 900px tall no matter how little it
    had to show — EXPORT ended after ~460px and left 525px of empty card below it,
    TELEMETRY about 450px before a driver is picked. A floor keeps the card from
    collapsing to a sliver (and from jumping around as you switch tabs); the cap
-   is unchanged, so the long tabs still scroll inside. */
-@media (min-width: 900px) and (min-height: 700px) {
-  .dh-card {
-    min-height: 420px;
-    max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
-  }
+   is unchanged, so the long tabs still scroll inside.
+   --wide-at / --compact-at are local (zoom-aware); the old min-width/min-height
+   media query could not see UI SIZE. */
+body[data-width="wide"][data-density="normal"] .dh-card {
+  min-height: 420px;
+  max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
 }
 
 .dh-header {
@@ -140,7 +136,10 @@
    chrome keeps the destination strip and loading state from consuming the
    entire work area while every target still paints at least 24 CSS px. */
 body[data-density="compact"] .dh-header { padding: 0 var(--gap); }
-body[data-density="compact"] .dh-card { min-height: 0; height: 100%; max-height: 100%; }
+body[data-density="compact"] .dh-card {
+  min-height: 0; height: 100%; max-height: 100%;
+  border-radius: var(--r-md);
+}
 body[data-density="compact"] .dh-title { font-size: var(--fs-4); }
 body[data-density="compact"] .dh-close {
   width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min);
@@ -159,16 +158,17 @@ body[data-density="compact"] .dh-race-sub {
    gesture makes the hub's information architecture undiscoverable. All six
    labels fit comfortably in two equal columns, so trade one extra tab row for
    a complete overview. Landscape keeps the single horizontal strip because
-   its scarce axis is height, not width. */
-@media (orientation: portrait) and (max-width: 480px) {
-  .dh-tabs {
+   its scarce axis is height, not width. Orientation is a real viewport fact;
+   width uses the zoom-aware body flag (--wide-at) instead of max-width: 480px. */
+@media (orientation: portrait) {
+  body[data-width="narrow"] .dh-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow-x: hidden;
     overscroll-behavior-x: auto;
     touch-action: pan-y;
   }
-  .dh-tab { width: 100%; min-width: 0; padding-inline: 8px; }
+  body[data-width="narrow"] .dh-tab { width: 100%; min-width: 0; padding-inline: 8px; }
 }
 
 .dh-content {
@@ -180,10 +180,7 @@ body[data-density="compact"] .dh-race-sub {
   padding: 16px calc(var(--gap) * 1.5);
   display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
 }
-/* Tighter padding on small phones */
-@media (max-width: 480px) {
-  .dh-content { padding: var(--gap) 14px; }
-}
+body[data-width="narrow"] .dh-content { padding: var(--gap) 14px; }
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
 .dh-section {
@@ -198,9 +195,8 @@ body[data-density="compact"] .dh-race-sub {
   gap: 14px; padding: 32px var(--gap); color: #9a9aa5;
   flex: 1;  /* grow to fill the content area so the card always looks full */
 }
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-loading, .dh-error { padding: 14px var(--gap); }
-}
+body[data-density="compact"] .dh-loading,
+body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-spinner {
   width: 34px; height: 34px; border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.15);
@@ -233,14 +229,14 @@ body[data-density="compact"] .dh-race-sub {
 .dh-race-time { font-size: var(--fs-1); color: #7a7a85; margin-top: 2px; }
 .dh-race-date { font-size: var(--fs-2); color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 50px; white-space: nowrap; }
 /* Hide local time on very narrow phones to save vertical space */
-@media (max-width: 400px) { .dh-race-time { display: none; } }
+body[data-width="narrow"] .dh-race-time { display: none; }
 .dh-race-next { background: rgba(225, 6, 0, 0.1); border-radius: var(--r-md); }
 .dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: #e10600; color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 .dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 
 /* standings */
 .dh-standings { gap: calc(var(--gap) * 1.5); }
-@media (min-width: 620px) { .dh-standings { flex-direction: row; align-items: flex-start; } }
+body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-start; }
 .dh-standings-col { flex: 1; min-width: 0; }
 /* A standings row is a RANKING, and it was rendering as a list of text. Three
    changes, all cheap:
@@ -403,15 +399,11 @@ body[data-density="compact"] .dh-race-sub {
   display: inline-block; width: 44px; height: 6px; border-radius: var(--r-xs);
   background: linear-gradient(90deg in oklab, #2222ff, #ccb4cc, #ff2222);
 }
-/* On landscape phone, cap the track map smaller so content doesn't overflow */
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-canvas.dh-map { max-width: 220px; }
-}
-/* Portrait phone: smaller track map so the lap view needs little-to-no
-   scrolling (paddings tightened next to the .dh-telem-* base rules below) */
-@media (orientation: portrait) and (max-width: 620px) {
-  .dh-canvas.dh-map { max-width: 256px; max-width: min(256px, 34dvh); }
-}
+/* Short local viewport: cap the track map so content doesn't overflow.
+   Narrow (zoom-aware) portrait-ish cards use a slightly larger cap. Compact
+   wins when both apply — height is the scarce axis. */
+body[data-width="narrow"] .dh-canvas.dh-map { max-width: min(256px, 34dvh); }
+body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px var(--gap); font-size: var(--fs-2); color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
   display: inline-flex; align-items: center; gap: 5px;
@@ -460,7 +452,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-ratebtn.dh-active { background: rgba(225, 6, 0, 0.18); border-color: var(--red, #e10600); color: #fff; }
 .dh-thint { font-size: var(--fs-2); color: #7a7a85; font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
-@media (max-width: 420px) { .dh-thint { display: none; } }
+body[data-width="narrow"] .dh-thint { display: none; }
 .dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
 .dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
 
@@ -596,50 +588,38 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   padding: calc(var(--gap) * 0.5) 8px; font: inherit; font-size: var(--fs-3);
   max-width: 220px; min-width: 0;
 }
-/* On portrait, selects take full width so they don't truncate meeting/session names */
-@media (max-width: 520px) {
-  .dh-pick-field { width: 100%; }
-  .dh-pick-select { max-width: none; width: 100%; }
-}
+/* Narrow local width: selects take full width so they don't truncate names */
+body[data-width="narrow"] .dh-pick-field { width: 100%; }
+body[data-width="narrow"] .dh-pick-select { max-width: none; width: 100%; }
 
-/* Slightly smaller pill tabs on very small phones */
-@media (max-width: 480px) {
-  .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
-}
+body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
 
-/* Last Race table: hide less-critical columns on narrow screens so the table fits */
-@media (max-width: 520px) {
-  .dh-th-team, .dh-td-team { display: none; }
-}
-@media (max-width: 400px) {
-  .dh-th-grid, .dh-td-grid { display: none; }
-}
-/* Landscape phone: also hide team column (card is wide but height is limited) */
-@media (orientation: landscape) and (max-height: 520px) {
-  .dh-th-team, .dh-td-team { display: none; }
-}
+/* Last Race: hide secondary columns before they can overflow. Driver, position,
+   time/status, and points remain. Compact landscape is often still "wide" in
+   --wide-at units, so density also drops TEAM. */
+body[data-width="narrow"] .dh-th-team,
+body[data-width="narrow"] .dh-td-team { display: none; }
+body[data-width="narrow"] .dh-th-grid,
+body[data-width="narrow"] .dh-td-grid { display: none; }
+body[data-density="compact"] .dh-th-team,
+body[data-density="compact"] .dh-td-team { display: none; }
 
-/* Last Race: tighten table cell padding on portrait */
-@media (max-width: 520px) {
-  .dh-table td, .dh-table thead th { padding: calc(var(--gap) * 0.5) 4px; }
-  .dh-td-time { width: auto; font-size: var(--fs-micro); }
-  .dh-td-pts { width: 28px; }
-}
+body[data-width="narrow"] .dh-table td,
+body[data-width="narrow"] .dh-table thead th { padding: calc(var(--gap) * 0.5) 4px; }
+body[data-width="narrow"] .dh-td-time { width: auto; font-size: var(--fs-micro); }
+body[data-width="narrow"] .dh-td-pts { width: 28px; }
 
-/* Standings: in landscape phone the two columns appear side-by-side with tighter rows */
-@media (orientation: landscape) and (max-height: 560px) {
-  .dh-row { padding: 4px 4px; font-size: var(--fs-2); }
-  .dh-pts { min-width: 36px; }
-  .dh-gap { min-width: 30px; }
-}
+body[data-density="compact"] .dh-row { padding: 4px 4px; font-size: var(--fs-2); }
+body[data-density="compact"] .dh-pts { min-width: 36px; }
+body[data-density="compact"] .dh-gap { min-width: 30px; }
 
-/* ── Schedule 2-column grid in landscape ──────────────── */
+/* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
 .dh-race-grid { display: flex; flex-direction: column; }
-@media (orientation: landscape) and (max-height: 560px) {
+body[data-density="compact"][data-width="wide"] .dh-race-grid {
   /* minmax(0, …), not 1fr: a bare 1fr floors each column at its longest race
      name's min-content width, so a wide GP title pushed the grid ~10px past the
      card edge. The 0 floor lets the cell shrink and the name ellipsize. */
-  .dh-race-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--gap); }
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--gap);
 }
 
 /* ── Session picker: GP + session selects side-by-side ── */
@@ -660,42 +640,35 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-split-L { padding-bottom: 4px; }
 .dh-split-R { padding-top: 4px; }
 
-/* Landscape: left pane = fixed-width sidebar; right pane = scrollable main */
-@media (orientation: landscape) and (max-height: 520px) {
-  /* Remove outer content padding and overflow so panes control their own */
-  body[data-width="wide"] .dh-content.dh-has-split {
-    padding: 0;
-    overflow: hidden;
-  }
-  body[data-width="wide"] .dh-split {
+/* Short+wide local viewport: left pane = sidebar; right pane = scrollable main.
+   Viewport landscape+max-height could not see UI SIZE. */
+body[data-density="compact"][data-width="wide"] {
+  .dh-content.dh-has-split { padding: 0; overflow: hidden; }
+  .dh-split {
     flex-direction: row;
     height: 100%;
     overflow: hidden;
     gap: 0;
   }
-  body[data-width="wide"] .dh-split-L {
+  .dh-split-L {
     width: 260px;
     flex-shrink: 0;
     overflow-y: auto;
-    /* what .pane gives every other scroll region in the app */
     overscroll-behavior-y: contain; touch-action: pan-y;
     overflow-x: hidden;
     padding: 10px var(--gap);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     gap: 8px;
   }
-  body[data-width="wide"] .dh-split-R {
+  .dh-split-R {
     flex: 1;
     overflow-y: auto;
-    /* what .pane gives every other scroll region in the app */
     overscroll-behavior-y: contain; touch-action: pan-y;
     overflow-x: hidden;
     padding: 10px 14px;
     min-width: 0;
     gap: 10px;
   }
-
-  /* Compact picker in left pane */
   .dh-split-L .dh-picker {
     margin-bottom: 0;
     padding-bottom: 8px;
@@ -706,32 +679,20 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-split-L .dh-pick-fields { flex-direction: column; gap: 5px; }
   .dh-split-L .dh-pick-label { font-size: var(--fs-micro); }
   .dh-split-L .dh-pick-select { padding: 4px calc(var(--gap) * 0.5); font-size: var(--fs-2); }
-
-  /* Compact session info card in left pane */
   .dh-split-L .dh-livecard { gap: 2px; }
   .dh-split-L .dh-live-title { font-size: var(--fs-micro); gap: 5px; }
   .dh-split-L .dh-live-sub { font-size: var(--fs-1); line-height: 1.3; }
   .dh-split-L .dh-live-type { font-size: var(--fs-micro); }
-
-  /* Compact control bar in left pane */
   .dh-split-L .dh-livecontrols { gap: 5px; flex-wrap: nowrap; margin-bottom: 0; }
   .dh-split-L .dh-livebtn { padding: 4px 8px; font-size: var(--fs-1); }
   .dh-split-L .dh-live-updated { font-size: var(--fs-micro); }
-
-  /* Driver chips compact in left pane */
   .dh-split-L .dh-driverpick { gap: calc(var(--gap) * 0.25); margin: 0; }
   .dh-split-L .dh-dchip { padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); font-size: var(--fs-micro); border-left-width: 2px; }
-
-  /* Weather grid 2 columns in right pane */
   .dh-split-R .dh-wx-grid { grid-template-columns: repeat(2, 1fr); gap: calc(var(--gap) * 0.5); }
   .dh-split-R .dh-wx-cell { padding: calc(var(--gap) * 0.5) 8px; }
   .dh-split-R .dh-wx-value { font-size: var(--fs-4); }
-
-  /* Last race header compact (single line) */
   #dh-lr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: calc(var(--gap) * 0.5); }
   .dh-lr-name { font-size: 15px; }
-
-  /* Gauge dashboard tighter */
   .dh-dash { gap: calc(var(--gap) * 0.5); padding: 8px 10px; }
   .dh-gval { font-size: 17px; }
 }
@@ -814,24 +775,46 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   display: flex; flex-direction: column; gap: 10px;
   padding: 0 16px 14px;
 }
-/* Portrait phone: tighter popup padding (pairs with the smaller map above) */
-@media (orientation: portrait) and (max-width: 620px) {
-  .dh-telem-main { padding: 10px var(--gap); gap: 8px; }
-  .dh-telem-side { padding: 0 var(--gap) 10px; gap: 8px; }
-}
+body[data-width="narrow"] .dh-telem-main { padding: 10px var(--gap); gap: 8px; }
+body[data-width="narrow"] .dh-telem-side { padding: 0 var(--gap) 10px; gap: 8px; }
 
-/* Landscape: chart in left column, gauges + map in right sidebar */
-@media (orientation: landscape) and (max-height: 560px) {
-  /* Keep the safe-area inset (this rule used to flatten it to 5px, putting the
-     trace panel back under a landscape notch); just trim the extra breathing
-     room a short screen can't spare. */
-  .dh-tpopup { padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+/* Wide local viewport: chart left, gauges + map right. Compact chrome stays
+   density-keyed so UI SIZE 200% on a landscape phone still tightens the header. */
+body[data-width="wide"] {
+  .dh-tpopup-body { flex-direction: row; overflow: hidden; }
+  .dh-telem-main {
+    flex: 1; min-width: 0;
+    overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior-y: contain; touch-action: pan-y;
+  }
+  .dh-telem-side {
+    flex-shrink: 0;
+    overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior-y: contain; touch-action: pan-y;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+body[data-width="wide"][data-density="compact"] {
+  .dh-telem-main { padding: 10px var(--gap); gap: 7px; }
+  .dh-telem-side { width: 200px; padding: 10px var(--gap); gap: 8px; }
+  .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
+  .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
+  .dh-telem-side .dh-gval { font-size: 15px; }
+  .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
+}
+body[data-width="wide"][data-density="normal"] {
+  .dh-telem-main { padding: var(--gap) 14px; }
+  .dh-telem-side { width: 340px; padding: var(--gap) 14px; }
+  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, 42dvh); }
+  .dh-telem-main .dh-canvas { max-width: none; }
+  .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
+}
+body[data-density="compact"] {
   .dh-tpopup-card {
     max-height: calc(100svh - var(--sat) - var(--sab));
     border-radius: var(--r-md);
     width: 100%;
   }
-  /* Ultra-slim one-line header so the chart column gets the height */
   .dh-tpopup-hdr { padding: 2px 10px; gap: 8px; }
   .dh-tpopup-title {
     font-size: var(--fs-2); flex-direction: row; align-items: baseline; gap: 8px; min-width: 0;
@@ -839,74 +822,10 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-tpopup-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dh-tpopup-sub { font-size: var(--fs-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dh-tpopup .dh-close { width: 34px; height: 34px; font-size: var(--fs-4); border-radius: var(--r-sm); }
-  .dh-tpopup-body {
-    flex-direction: row;
-    overflow: hidden;
-  }
-  .dh-telem-main {
-    flex: 1; min-width: 0;
-    overflow-y: auto; overflow-x: hidden;
-    /* what .pane gives every other scroll region in the app */
-    overscroll-behavior-y: contain; touch-action: pan-y;
-    padding: 10px var(--gap);
-    gap: 7px;
-  }
-  .dh-telem-side {
-    width: 200px; flex-shrink: 0;
-    overflow-y: auto; overflow-x: hidden;
-    /* what .pane gives every other scroll region in the app */
-    overscroll-behavior-y: contain; touch-action: pan-y;
-    padding: 10px var(--gap);
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    gap: 8px;
-  }
-  /* Compact legend rows in landscape popup */
   .dh-tpopup .dh-legend { gap: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-1); margin-top: -4px; }
   .dh-tpopup .dh-legend-item { padding: 2px 4px; }
-  /* Compact transport in landscape popup */
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
   .dh-tpopup .dh-thint { display: none; }
   .dh-tpopup .dh-tbtn { padding: 5px calc(var(--pad) * 0.5); font-size: var(--fs-micro); }
-  /* Compact gauges in side panel */
-  .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
-  .dh-telem-side .dh-gval { font-size: 15px; }
-  .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
-  /* Track map fits the sidebar */
-  .dh-telem-side .dh-canvas.dh-map { max-width: 176px; }
-}
-
-/* DESKTOP: the same chart-left / gauges-and-map-right split.
-   It was scoped to short landscape only, so on a desktop everything stacked in
-   one column and the track map — a fixed 320px canvas — sat at the bottom of an
-   858px-wide area with ~270px of empty space on either side of it, below a chart
-   that had already stopped. The window is wide here, so use it; the sidebar is
-   roomier than the phone's 200px because there is no reason not to be. */
-@media (min-width: 1000px) and (min-height: 640px) {
-  .dh-tpopup-body { flex-direction: row; overflow: hidden; }
-  .dh-telem-main {
-    flex: 1; min-width: 0;
-    overflow-y: auto; overflow-x: hidden;
-    /* what .pane gives every other scroll region in the app */
-    overscroll-behavior-y: contain; touch-action: pan-y;
-    padding: var(--gap) 14px;
-  }
-  .dh-telem-side {
-    width: 340px; flex-shrink: 0;
-    overflow-y: auto; overflow-x: hidden;
-    /* what .pane gives every other scroll region in the app */
-    overscroll-behavior-y: contain; touch-action: pan-y;
-    padding: var(--gap) 14px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  /* the map is the sidebar's centrepiece — let it use the full column */
-  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, 42dvh); }
-  /* The trace chart is drawn at the column's real width but every .dh-canvas is
-     displayed through a 600px cap, so on a wide column it was rendered at ~900px
-     and then scaled back down to 600 — sharp, but sitting in a half-empty
-     column. Uncap it here and the chart fills the space it was already drawn for
-     (the canvas keeps its own aspect, so it grows in height to match). */
-  .dh-telem-main .dh-canvas { max-width: none; }
-  /* wider card so the split has something to split */
-  .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
 }
 } /* @layer overlays */

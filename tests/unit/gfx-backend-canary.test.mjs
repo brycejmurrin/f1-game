@@ -1129,8 +1129,86 @@ test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/game/lighting.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
     "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
-  assert.doesNotMatch(lighting, /three\.js WebGL2 keeps a fixed-radius kernel/,
-    "that sentence is stale after the R16F color-depth blocker");
+  assert.doesNotMatch(lighting, /this slider does nothing on that path only/,
+    "phones / software WebGL2 now scale Poisson R — do not call the slider a no-op");
+  assert.match(lighting, /scales the fixed Poisson radius/,
+    "help must name the software/phone R-scale so the slider is not a mystery");
+});
+
+test("GLX present reuses scratch vectors and skip-equals grade", () => {
+  const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /const _ONE3 = \[1, 1, 1\]/,
+    "neutral grade / sunColor fallback must not allocate [1,1,1] per frame");
+  assert.match(post, /const _NEGZ = \[0, 0, -1\]/,
+    "sunVS fallback must not allocate [0,0,-1] per frame");
+  assert.match(post, /uf3\(compU\.uGradeShadow, "gradeShadow"/,
+    "split-tone grade must use the skip-equal helper, not raw uniform3fv");
+  assert.doesNotMatch(post, /uniform3fv\(compU\.uGradeShadow/,
+    "do not bypass _compUf for uGradeShadow");
+});
+
+test("WGX COMPOSITE declares ssrWet and does not remul wetness", () => {
+  // d6c8fa17 dropped `let ssrWet = U.lift.w` and left `if (ssrWet > 0.001)` —
+  // Dawn rejected the identifier and shed COMPOSITE. Deploy re-declares the
+  // let so a leftover use compiles; wetness still lives in the SSR pass .a,
+  // so the consume gate must not remultiply it.
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /let ssrWet = U\.lift\.w/,
+    "COMPOSITE must declare ssrWet so Dawn does not reject a leftover use");
+  assert.doesNotMatch(post, /ssrWet \* ssrRefl/,
+    "do not remultiply wetness * reflect — that zeros dry sheen");
+  assert.match(post, /if \(ssrRefl > 0\.001 \|\| ssrCar > 0\.001\)/,
+    "SSR consume gate is reflect || carReflect, not the wetness lane");
+});
+
+test("WGX bloom final upsample overwrites mip0 like GLX/TLX", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /loadOp: last \? "clear" : "load"/,
+    "mip0 upsample must clear (overwrite the sharp bright-pass), not load+add");
+});
+
+test("WGX screen sun-shaft is zero when bloom is shed", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /shaftMul = \(bloomAmt > 0 && sun && sun\.shaft > 0\)/,
+    "shaft pass reads the bloom chain — producer must say 0 when bloomAmt is 0");
+});
+
+test("WGX godray requires invViewProj like GLX/TLX", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /godrayBG && lastFrame && lastFrame\.invViewProj/,
+    "haveGR without invVP marches IDENT world rays");
+});
+
+test("TLX godray uses partial nearest-K, not a full sort", () => {
+  const tlx = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /function _grKeepNearest/,
+    "TLX must share the GLX/WGX partial-select helper");
+  assert.match(tlx, /grNL = _grKeepNearest\(total, 6\)/,
+    "uploader cap must stay 6 (TSL march bound)");
+  assert.doesNotMatch(tlx, /_grSel\.sort\(/,
+    "do not full-sort the floodlight list every night frame");
+});
+
+test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tsl, /R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/,
+    "blocker-off path must scale R by pcssPen/80 (identity at the shipped def)");
+  assert.match(tsl, /\}\)\.Else\(\(\) => \{/,
+    "desktop blocker-on / PCSS-off path must also scale R (not freeze at 3.0)");
+  assert.equal((tsl.match(/R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/g) || []).length, 2,
+    "both the no-blocker else and the PCSS-off Else must scale R");
+});
+
+test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
+  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(glx, /if \(uBounceK > 0\.0\)/,
+    "GLX lamp bounce must skip when LAMP BOUNCE is 0");
+  assert.match(wgsl, /if \(F\.params3\.x > 0\.0\)/,
+    "WGX lamp bounce must skip when bounceK is 0");
+  assert.match(tsl, /If\(U\.bounceK\.greaterThan\(0\.0\)/,
+    "TLX lamp bounce must skip when bounceK is 0");
 });
 
 test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
@@ -1236,6 +1314,12 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "binary refine must be 4 like GLX, not 5");
   assert.match(post, /min\(gateSrc \/ 0\.20, 1\.0\)/,
     "SSR pass must apply the dry-sheen fade once so COMPOSITE can trust .a");
+  assert.match(post, /let ssrWet = U\.lift\.w/,
+    "COMPOSITE must declare wetness (U.lift.w) before the SSR consume gate");
+  assert.equal((post.match(/let gateSrc/g) || []).length, 1,
+    "do not redeclare gateSrc — Dawn refuses SSR and sheds the whole post chain");
+  assert.equal((post.match(/min\(gateSrc \/ 0\.20, 1\.0\)/g) || []).length, 1,
+    "a merge leftover applied the dry damp twice (and squared the sheen)");
 });
 
 test("WGX SAA widens roughness before wet like GLX", () => {

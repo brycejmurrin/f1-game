@@ -263,7 +263,7 @@
        25-case matrix could find it. There are no coordinates here at all.
        The bar is pointer-events:none (as #hud is) and only the BUTTONS opt back
        in, so the empty middle still passes drags through to the canvas — which
-       touch steering needs, since it steers by dragging the screen halves.
+       touch steering needs, since it steers by an anchored drag on the canvas.
        js/game.js fills the two docks (see layoutDocks): a control genuinely
        changes side between modes — the throttle is left-thumb in tilt and
        right-thumb in buttons mode — which is the one thing CSS cannot express. -->
@@ -425,7 +425,12 @@
        them ~90px apart. Nested, there is no second row for the gap to open in. -->
   <div id="menu-brand">
     <h1 id="title">APEX&nbsp;26</h1>
-    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics &middot; tilt to steer</p>
+    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics</p>
+    <div id="menu-status" aria-label="Season overview">
+      <div class="menu-status-item"><span class="menu-status-label">SEASON</span><strong>2026</strong></div>
+      <div class="menu-status-item"><span class="menu-status-label">CALENDAR</span><strong>24 ROUNDS</strong></div>
+      <div class="menu-status-item"><span class="menu-status-label">INPUT</span><strong>TILT READY</strong></div>
+    </div>
     <div id="menu-meta">
       <!-- The master sound toggle lives IN the title composition, not floating
            over the app. It used to be `position: fixed` at the top-right corner
@@ -613,7 +618,7 @@
      no infrastructure. The codes are long because they carry a full ICE-gathered
      SDP, compressed — hence copy buttons rather than an expectation of typing. -->
 <dialog id="vsfriend" class="screen dim" data-esc-close="vs-close" aria-labelledby="dlg-vsfriend" hidden>
-  <div class="sheet">
+  <div id="vsfriend-inner" class="sheet">
     <div id="vs-head" class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
     <div class="sheet-body pane" id="vs-body">
 
@@ -1128,29 +1133,41 @@
   <div id="howtoplay-inner" class="sheet">
     <div class="sheet-head">
       <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
-      <nav id="htp-contents" aria-label="How to play sections">
-        <a href="#htp-controls">CONTROLS</a>
-        <a href="#htp-racing">RACING</a>
-        <a href="#htp-setup">SETUP</a>
-        <a href="#htp-modes">MODES</a>
-        <a href="#htp-friends">FRIENDS</a>
-      </nav>
     </div>
+    <nav id="htp-contents" aria-label="How to play sections">
+      <a href="#htp-controls">CONTROLS</a>
+      <a href="#htp-racing">RACING</a>
+      <a href="#htp-setup">SETUP</a>
+      <a href="#htp-modes">MODES</a>
+      <a href="#htp-friends">FRIENDS</a>
+    </nav>
     <dl class="sheet-body pane">
       <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>
         Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
         Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
         Brake <span class="key">S</span> / <span class="key">&darr;</span> &nbsp;
-        Boost <span class="key">Space</span> &nbsp;
+        Boost <span class="key">Space</span> tap to toggle &nbsp;
         Overtake <span class="key">X</span> &nbsp;
         Active aero <span class="key">Z</span> &nbsp;
-        Camera <span class="key">C</span><br>
-        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> &nbsp;
-        Pause <span class="key">P</span> / <span class="key">Esc</span>
+        Camera <span class="key">C</span> cycles<br>
+        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> when <span class="key">GEARS: MANUAL</span><br>
+        Pause <span class="key">P</span> &nbsp; Back <span class="key">Esc</span> (pauses only if nothing is open)<br>
+        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop. <span class="key">ADAPTIVE BUTTONS</span> in ADVANCED slows the keys at speed
+      </dd>
+      <dt>CONTROLLER</dt>
+      <dd>
+        Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
+        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
+        <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
       </dd>
       <dt>TOUCH / MOBILE</dt>
-      <dd>Pick <span class="key">STEER</span> in <span class="key">SETTINGS</span> (pause &rarr; SETTINGS): TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In touch mode the car accelerates for you &mdash; just steer and brake; BUTTONS mode has its own <span class="key">GAS</span> pedal</dd>
+      <dd>
+        Pause &rarr; <span class="key">SETTINGS</span> &rarr; <span class="key">STEER</span> cycles TILT / BUTTONS / TOUCH.
+        <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. <span class="key">GEARS: MANUAL</span> (tilt only — BUTTONS already uses both thumbs) puts the shifter left and the pedals right. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS.
+        <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> in ADVANCED (1 is OFF) makes that heavier at speed.
+        <br><span class="key">TOUCH</span> &mdash; drag on the track from where you put your finger (a tap does not steer). The car accelerates on its own; <span class="key">BRAKE</span> stays left. No GAS pedal
+      </dd>
       <dt id="htp-racing">&#9889; BOOST</dt>
       <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
       <dt>&#8646; ACTIVE AERO</dt>
@@ -1160,13 +1177,13 @@
       <dt>OVERTAKE</dt>
       <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 electrical overtaking aid that replaced DRS. Because it IS the overtaking aid it carries DRS's safety rules: nothing on the opening lap (it wakes when the leader starts lap 2) and nothing under a caution. The chip reads <span class="key">NO OVERTAKE</span> when it is switched off rather than merely unarmed</dd>
       <dt>GEARS</dt>
-      <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span>. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
+      <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span> when thumbs are free (desktop, or TILT on a phone). Shift up near the redline, down for corner exits. BUTTONS and TOUCH on a phone stay automatic so a thumb is free. The tachometer + gear indicator sit bottom-centre</dd>
       <dt id="htp-setup">&#127909; CAMERA</dt>
-      <dd>Tap the <span class="key">CAM</span> button (top-right) to open the picker &mdash; 13 modes from CHASE and COCKPIT to HELI, TRACKSIDE and CINEMATIC &mdash; or press <span class="key">C</span> to cycle them. Your choice is remembered</dd>
+      <dd>Tap <span class="key">CAM</span> or press <span class="key">C</span> to cycle 13 views &mdash; CHASE, COCKPIT, TV SIDE, CINEMATIC and the rest. Hold CAM about a third of a second, or right-click it, for the picker. Your choice is remembered</dd>
       <dt>&#9881; SETTINGS</dt>
-      <dd>Pause (<span class="key">P</span> / <span class="key">Esc</span> or the <span class="key">&#10074;&#10074;</span> button) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
+      <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
       <dt>&#127918; CHANGE STEERING</dt>
-      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles the input method (tilt / buttons / touch). <span class="key">ADVANCED STEERING</span> opens presets (RELAX / STANDARD / PRO) plus sliders for sensitivity, driving help, steer lock and the racing line. Everything applies instantly and is saved</dd>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens presets (RELAX / STANDARD / PRO) plus sliders for sensitivity, driving help, steer lock, the racing line, and <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF). Everything applies instantly and is saved</dd>
       <dt>&#128161; LIGHTING</dt>
       <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
       <dt>&#128266; SOUND &amp; HUD</dt>
@@ -1274,6 +1291,13 @@
       <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
         <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
+    </div>
+
+    <h3 class="adv-sec">BUTTON INPUT <span>on-screen arrows and keys</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">OFF</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="1" aria-label="Adaptive buttons"></label>
+      <p class="adv-help">How much the steer buttons act like analog triggers. OFF = the current fixed snap. Higher = heavier at speed (a tap is a smaller correction) and more ease from sliding the thumb back. SPEED STEER still picks the speed that feels heavy.</p>
     </div>
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
@@ -1585,8 +1609,8 @@
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
     <div class="sheet-foot balanced-row">
-      <button id="ct-reset">RESET CAM</button>
-      <button id="ct-reset-all">RESET ALL</button>
+      <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
+      <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
       <button id="ct-close" class="bigbtn">DONE</button>
     </div>
   </div>
@@ -1649,11 +1673,11 @@
 <script crossorigin="anonymous" src="js/log.js?v=747fd54ee135"></script>
 <script crossorigin="anonymous" src="js/mat4.js?v=b23181bec2d9"></script>
 <script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=c1ba6bde9659"></script>
-<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=92200b4e3ea2"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=ebb22078d312"></script>
 <script crossorigin="anonymous" src="js/render/shaders/sky.js?v=cfc01f7896cc"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=6b8cf3c8af2b"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=c6eed5f2c3ab"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=cb6d6c9bb806"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=3e22996bff9a"></script>
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=547889e83602"></script>
 <script crossorigin="anonymous" src="js/render/glx/chunked.js?v=9460f26a728e"></script>
 <script crossorigin="anonymous" src="js/render/glx.js?v=67cfbd1db497"></script>
@@ -1668,7 +1692,7 @@
 <script crossorigin="anonymous" src="js/render/gltf.js?v=02a852e70fbc"></script>
 <script crossorigin="anonymous" src="js/render/assets.js?v=5266ec266ee4"></script>
 <script crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
-<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=4672cd68f9cc"></script>
+<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=a09d233223d8"></script>
 <script crossorigin="anonymous" src="js/track/geo-paths.js?v=05c9d5fca14c"></script>
 <script crossorigin="anonymous" src="js/track/geom.js?v=32be243006c6"></script>
 <script crossorigin="anonymous" src="js/track/scenery-data.js?v=b9b8afefa90e"></script>
@@ -1698,7 +1722,7 @@
 <script crossorigin="anonymous" src="js/circuits/interlagos.js?v=bc5b1ab793b9"></script>
 <script crossorigin="anonymous" src="js/circuits/vegas.js?v=a973b33137c9"></script>
 <script crossorigin="anonymous" src="js/circuits/madrid.js?v=101420f73a43"></script>
-<script crossorigin="anonymous" src="js/circuits/zandvoort.js?v=5c58238c669d"></script>
+<script crossorigin="anonymous" src="js/circuits/zandvoort.js?v=5b9528e62922"></script>
 <script crossorigin="anonymous" src="js/circuits/jeddah.js?v=5427e420097a"></script>
 <script crossorigin="anonymous" src="js/circuits/albert_park.js?v=edb49995df83"></script>
 <script crossorigin="anonymous" src="js/circuits/shanghai.js?v=363c245f31e4"></script>
@@ -1730,7 +1754,7 @@
 <script crossorigin="anonymous" src="js/track/tracks.js?v=98bee03ac52a"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=f2e4a159a971"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=e7f55b9a1b43"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=a46edadea4cb"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=bef1f47f90ff"></script>
 <script crossorigin="anonymous" src="js/game/audio.js?v=0dbf0fd9ae15"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=9f17baa46dab"></script>
@@ -1750,7 +1774,7 @@
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=5617a732481e"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=22c84084eb8f"></script>
 <script crossorigin="anonymous" src="js/game/light-store.js?v=0bb4bffb5e43"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=4a6660e10524"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=517a947361fb"></script>
@@ -1760,27 +1784,27 @@
 <script crossorigin="anonymous" src="js/game/career.js?v=3b09a418d6be"></script>
 <script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
-<script crossorigin="anonymous" src="js/game/ai-drive.js?v=b5d98ad9f09f"></script>
+<script crossorigin="anonymous" src="js/game/ai-drive.js?v=8f08a841957c"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=987588b2c761"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=7f8aebf0e917"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=e7668ee033b3"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=eaf9b3f6f824"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=12d9bca64754"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
-<script crossorigin="anonymous" src="js/game/tuner.js?v=6218d97c1559"></script>
-<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=2e3deae9bdd9"></script>
-<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=80438bfb565e"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=647bc13307be"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=1ac37b5b0651"></script>
+<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=64dd8a16a603"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=56df3cedd95b"></script>
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=9c423fbdc9ba"></script>
@@ -1794,7 +1818,7 @@
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=3ae2fe90b769"></script>
 <script crossorigin="anonymous" src="js/game/agentview-raster.js?v=16273e78276f"></script>
 <script crossorigin="anonymous" src="js/game/agentview.js?v=95cfa3552b50"></script>
-<script crossorigin="anonymous" src="js/game/apex.js?v=d6b36573d546"></script>
+<script crossorigin="anonymous" src="js/game/apex.js?v=485df649b7c0"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=8f6fcefd27aa"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=264a9657f294"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=efc8fb13f42f"></script>
@@ -1806,5 +1830,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=bea1f6bd97bb"></script>
+<script crossorigin="anonymous" src="js/game.js?v=bde514473777"></script>
 </body></html>
