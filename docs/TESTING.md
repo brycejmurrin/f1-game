@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 110 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 111 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -819,6 +819,7 @@ what it covers.
 | `ghost.test.mjs` | ghost lap recording, forward-progress filtering, pose lookup at(t) and inverse lookup timeAt(s) with boundary clamps |
 | `career.spec.js` | the save and its six slots, the mode axes, the hub, a settled round, ratings, the R&D garage, MY TEAM, objectives/contracts/rollover, reliability, EXTRA FUNDS never raising the fitted cap, the facility, the hire's contract, sponsors — and that career development never reaches a Grand Prix |
 | `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, the grid being the qualifying order car-for-car, every round qualifying, and no classification leaking into the race |
+| `quali-persist.test.mjs` | driven `qualiOrder` survives sheet reopen (`clear()` is memory-only, `begin()` restores names/gaps, all-AI and NetPlay do not persist) |
 | `data-lifecycle.spec.js` | data hub session plumbing — meeting/year/session/driver responses own their option lists |
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare and cross-session (one driver's race vs quali) |
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
