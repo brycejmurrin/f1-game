@@ -106,6 +106,15 @@ test("a phone-width card is never torn into two columns", () => {
   }
 });
 
+test("a 340px card seats a tall circuit beside its caption", () => {
+  // iPad landscape at 150%: stacking used 240px of map plus a 175px caption
+  // in a 378px card, clipping the last fact chip. Side-by-side fits both.
+  const p = planPreview({ cardInnerW: 347, sectionH: 412, labelH: 21,
+    infoH: 175, padY: 20, gap: 10, aspect: BAHRAIN });
+  assert.equal(p.shape, "beside");
+  assert.ok(p.slotW >= 120 && p.slotH >= 170);
+});
+
 test("the slot always honours the circuit's aspect and its own caps", () => {
   for (const card of [DESKTOP, DESKTOP_175, PHONE]) {
     for (const a of [JEDDAH, MONZA, BAHRAIN, 1.0, BAKU, SINGAPORE, 2.5]) {

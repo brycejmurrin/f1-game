@@ -19,6 +19,21 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => document.getElementById("mb-race").click());
   await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20,
     null, { polling: 100, timeout: 10_000 });
+  await page.evaluate(() => new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const initialMap = await page.evaluate(() => {
+    const map = /** @type {HTMLCanvasElement} */ (document.getElementById("sel-preview-map"));
+    const r = map.getBoundingClientRect();
+    const zoom = map.currentCSSZoom || 1;
+    const bufferAspect = map.width / Math.max(1, map.height);
+    const boxAspect = (r.width / zoom) / Math.max(1, r.height / zoom);
+    return {
+      buffer: [map.width, map.height],
+      skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
+    };
+  });
+  expect(Math.min(...initialMap.buffer)).toBeGreaterThan(8);
+  expect(initialMap.skew).toBeLessThan(0.03);
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. That reproducibly enters the compact single-column layout; at the
   // default size this viewport correctly retains the roomy paired catalogue.
@@ -54,6 +69,28 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   expect(compactCatalogue.oneRow).toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
+  // At the slider maximum the toolbar becomes horizontally pannable and stops
+  // being sticky, so vertical scrolling can still reveal real circuit rows.
+  await page.evaluate(() => {
+    window.__apex.uiScale(200);
+    window.SheetShape?.reclassify();
+  });
+  await page.evaluate(() => new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const maxScaleCatalogue = await page.evaluate(() => {
+    window.SheetShape?.reclassify();
+    const list = document.getElementById("sel-tracks");
+    const filter = document.getElementById("sel-track-filter");
+    list.scrollTop = filter.scrollHeight;
+    const lr = list.getBoundingClientRect();
+    const rr = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
+    return {
+      horizontalToolbar: filter.scrollWidth > filter.clientWidth,
+      firstVisible: Math.max(0, Math.min(lr.bottom, rr.bottom) - Math.max(lr.top, rr.top)),
+    };
+  });
+  expect(maxScaleCatalogue.horizontalToolbar).toBe(true);
+  expect(maxScaleCatalogue.firstVisible).toBeGreaterThanOrEqual(24);
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
