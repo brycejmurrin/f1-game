@@ -177,12 +177,15 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP on Cloud.** Cursor Cloud does not auto-load repo `.mcp.json`. The host
-catalog is not the game's `probe` / `tinyfish` / `chrome-devtools` servers.
-Default Cloud path: `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind
-working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent
-`deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
-Never run Chrome MCP while Playwright is running.
+**MCP.** Keep **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
+serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
+Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
+servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
+host catalog is empty (this Cloud dashboard often is), fall back to
+`./tools/apex-tools-mcp.sh call`. TinyFish: `./tools/tinyfish-mcp.sh
+deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`. Do not attach
+`mcp-probe` for a `version.json` check. Never run Chrome MCP while Playwright
+is running.
 
 ## Layout
 
@@ -291,8 +294,9 @@ same surface from a shell.
   post-deploy / public-web worker (no Chrome, no Playwright).
 - **Cursor** loads the same Claude paths; thin always-on pointer:
   `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
-  `.cursor/skills/` or agents under `.cursor/agents/`. Cloud sessions do not
-  auto-load `.mcp.json` — use the shell wrappers (see §Cursor Cloud).
+  `.cursor/skills/` or agents under `.cursor/agents/`. Keep `apex-tools` in
+  root `.mcp.json` so a host that loads the repo catalog can call it; if the
+  session catalog is empty, use the shell wrappers (see §MCP).
 
 ## Area references (load on demand)
 

@@ -57,6 +57,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/report-server.test.mjs",
   "tests/unit/tinyfish-mcp.test.mjs",
   "tests/unit/probe-mcp.test.mjs",
+  "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   "tests/unit/component-inventory.test.mjs",

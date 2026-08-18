@@ -501,14 +501,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   font-weight: 700;
   letter-spacing: 0.06em;
 }
-/* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean,
+/* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, minimap, cam/pause buttons and the touch pads —
-   leaving only the small restore eye. Tapping it brings everything back. */
+   leaving the restore eye. The METRICS overlay stays up so a debug session
+   can hide the HUD without losing the live readouts. */
 body.hud-hidden #hud,
 body.hud-hidden #btn-cam,
 body.hud-hidden #pausebtn,
-body.hud-hidden .touchbtn,
-body.hud-hidden #game-metrics { display: none !important; }
+body.hud-hidden .touchbtn { display: none !important; }
 #hud-restore {
   position: fixed;
   top: calc(8px + var(--sat));

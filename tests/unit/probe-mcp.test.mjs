@@ -26,6 +26,7 @@ test("probe-mcp.py exists and is executable-ish", () => {
 test(".mcp.json registers probe as the unified stdio bridge", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-tools",
     "chrome-devtools",
     "probe",
     "tinyfish",
@@ -34,6 +35,8 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
+  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
 });
 
 test("probe-mcp help lists serve / list-tools / call / status", () => {

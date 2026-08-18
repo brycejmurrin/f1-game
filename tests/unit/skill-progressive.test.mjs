@@ -307,6 +307,7 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
   assert.match(text, /verify-agent/);
   assert.match(text, /mcp-probe/);
   assert.match(text, /tinyfish-mcp\.sh|probe-mcp\.py/);
+  assert.match(text, /apex-tools-mcp\.sh/);
   assert.match(text, /does \*\*not\*\* auto-load|does not auto-load/i);
 });
 
@@ -328,6 +329,12 @@ test("file-family skills declare Cursor paths; cross-cutting skills do not", () 
     const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
     assert.equal(fm.paths, undefined, `${name} is cross-cutting — leave paths unset`);
   }
+});
+
+test("check-changes names the apex-tools MCP wrap", () => {
+  const text = fs.readFileSync(path.join(SKILLS, "check-changes/SKILL.md"), "utf8");
+  assert.match(text, /apex-tools-mcp\.sh/);
+  assert.match(text, /apex_verify_change_fast/);
 });
 
 test("AGENTS.md points at mcp-probe recipes for renderer probes", () => {
