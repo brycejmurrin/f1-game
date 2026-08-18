@@ -382,7 +382,12 @@ const CEILINGS = {
   // 2766 -> 2800: 2026 realism — extra sidepod stations, floor LE teeth,
   // underwing fences, reverse-P inlet, beveled halo. Still under 2400/1500.
   // 2800 -> 2851: recipe-gated duct / wakeboard / floor-slot kits.
-  "js/car/car3d.js": 2851,
+  // 2851 -> 2887: recipe-gated 2026 halo furniture (beveled blade, winglet,
+  // T-cam stalks, windscreen fairing). Defaults stay 0 / 2392 body.
+  // 2887 -> 3322: recipe-gated part-realism (exhaust lip/shield, fuel hatch/vent,
+  // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
+  // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
+  "js/car/car3d.js": 3322,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
