@@ -1052,6 +1052,7 @@ const Input = (function () {
 
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    try { Log.info("input", "steerMode " + steerMode); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
       btnSteerVal = 0; btnSteerT = 0;
