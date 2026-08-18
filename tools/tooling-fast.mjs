@@ -54,6 +54,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/floodmast-lamp-register.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  "tests/unit/css-play.test.mjs",
   "tests/unit/report-server.test.mjs",
   "tests/unit/tinyfish-mcp.test.mjs",
   "tests/unit/probe-mcp.test.mjs",
