@@ -668,7 +668,7 @@ Six more expose the ACTIVE AERO trade, which is otherwise applied deep inside
 | `vmaxNow` | this car's top-speed ceiling INCLUDING the X-mode gain |
 | `aeroGrip` | the aero-load grip term at the current speed — `1 + DOWNFORCE × aeroDf × (v/vTop)²` |
 | `aeroDf` | the downforce multiplier alone: 1 shut, `1 − xDfLoss` fully open |
-| `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`, 0.5 for a car with no parts (every AI) |
+| `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`; AI uses the works FACTORY_PRESETS load, 0.5 only if unset |
 | `xVmaxGain` / `xDfLoss` | the two halves of the trade for THIS car, interpolated by `aeroLoad` |
 
 Six more cover the ERS part's grip on the battery and the overtake window:
