@@ -1091,6 +1091,11 @@ snapshot Saved. Default `--backend three` stays on WebGL2 (`tlxForceGL=1`)
 because three's WebGPU path dies on SwiftShader `mappedAtCreation`. To
 probe three's own WebGPU backend in-container: `--backend three --tlx-webgpu
 --lavapipe` (Dawn via the Mesa ICD; still not a real-GPU pixel oracle).
+Lavapipe **does** boot three's WebGPU path (SwiftShader Dawn still dies on
+`mappedAtCreation`). A missing `instanceColor` left a 12-byte dummy at
+slot 5; `DrawIndexed` with count>1 failed validation and `#game` stayed
+black — `createInstancedBatch` now always allocates `instanceColor` to
+the instance cap. `gfx-probe --tlx-webgpu` fails on a blank canvas.
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

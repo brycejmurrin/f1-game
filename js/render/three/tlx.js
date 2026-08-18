@@ -736,9 +736,16 @@ const TLX = (function () {
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         imesh.userData.tlxInstCap = n;
-        if (colors && colors.length) {
-          imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-          imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        // Always allocate instanceColor to the instance cap. three's WebGPU
+        // backend still binds a 12-byte (1-instance) dummy at slot 5 / stride
+        // 12 when instanceColor is missing; DrawIndexed(..., count>1) then
+        // fails validation and the Lavapipe canvas stays black. WebGL2 ignored
+        // the dummy. Fill white when the batch has no per-instance colours.
+        imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+        imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        if (!(colors && colors.length)) {
+          const ca = imesh.instanceColor.array;
+          for (let i = 0; i < ca.length; i++) ca[i] = 1;
         }
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;

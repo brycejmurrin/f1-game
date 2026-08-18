@@ -301,6 +301,31 @@ async function runProbeAttempt(attemptNum) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
       }
     } else {
+      if (opts.tlxWebgpu) {
+        // three's WebGPU path can bind and still paint a black swapchain
+        // (instance-buffer validation). Fail like the WGX visible-canvas gate
+        // instead of reporting PASS on a HUD-only frame.
+        await retryStep("tlx-webgpu-pixels", () => page.evaluate(() => {
+          const g = document.getElementById("game");
+          if (!g) throw new Error("no #game");
+          const gl = g.getContext("webgl2") || g.getContext("webgl");
+          // WebGPU owns the canvas — read via 2d copy from a screenshot path
+          // is the Playwright locator below. Here just reject a 2d-blank if
+          // three soft-presents; otherwise check backing store via drawImage.
+          const tmp = document.createElement("canvas");
+          tmp.width = Math.min(64, g.width || 64);
+          tmp.height = Math.min(64, g.height || 64);
+          const ctx = tmp.getContext("2d");
+          ctx.drawImage(g, 0, 0, tmp.width, tmp.height);
+          const id = ctx.getImageData(0, 0, tmp.width, tmp.height);
+          let max = 0;
+          for (let i = 0; i < id.data.length; i += 4) {
+            const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
+            if (l > max) max = l;
+          }
+          if (max < 8) throw new Error("TLX WebGPU #game blank (maxLuma=" + max + ")");
+        }), { attempts: 2, delayMs: 2000 });
+      }
       await retryStep("screenshot-canvas", () =>
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
     }

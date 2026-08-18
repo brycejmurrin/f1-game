@@ -588,6 +588,19 @@ test("TLX pins the sky material before the HDR scene render, not only the canvas
     "HDR target render must pin the TSL sky or a missed compile leaves the Color clear");
 });
 
+test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
+  // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
+  // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf("function createInstancedBatch");
+  assert.notEqual(at, -1, "createInstancedBatch moved");
+  const body = src.slice(at, at + 2200);
+  assert.match(body, /instanceColor\s*=\s*new THREE\.InstancedBufferAttribute/,
+    "instanceColor must be allocated for every batch, not only when colors[] is present");
+  assert.doesNotMatch(body, /if\s*\(\s*colors && colors\.length\s*\)\s*\{[\s\S]{0,200}instanceColor/,
+    "do not gate instanceColor allocation on colors[] — that is the WebGPU dummy-buffer trap");
+});
+
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
   // scene.matrixWorldAutoUpdate is false; three uploads matrixWorld as the
   // model matrix. Writing only `.matrix` left cars/flaps/shadows at identity —
