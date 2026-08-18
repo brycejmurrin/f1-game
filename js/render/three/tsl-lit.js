@@ -1002,6 +1002,9 @@
           });
         });
 
+        // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
+        const Nsaa = vec3(N).toVar();
+
         // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
@@ -1074,10 +1077,10 @@
           rough.assign(packedPaint.w);
         }
 
-        // ── specular AA: widen roughness by the normal's screen-space
-        //    variance (js/render/shaders/lit.js). Drop with a comment if TSL fights it —
-        //    it did not: dFdx/dFdy on the anchored N compile clean. ───────────
-        const saaDx = dFdx(N), saaDy = dFdy(N);
+        // ── specular AA: widen roughness by the pre-material normal's
+        //    screen-space variance (WGX geo+peel mix). dFdx(N) after the
+        //    wall bump dulls brick/concrete vs WebGPU. ───────────
+        const saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
         const saaVar = dot(saaDx, saaDx).add(dot(saaDy, saaDy)).toVar();
         rough.assign(min(1.0, sqrt(rough.mul(rough).add(saaVar.mul(0.35)))));
         const a = rough.mul(rough).toVar();

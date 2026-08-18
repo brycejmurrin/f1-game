@@ -112,8 +112,10 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
-- **GLX:** full reference — MSAA 2× desktop, PCSS, car/lamp shadows,
-  TrackGraph instancing, MAT arrays.
+- **GLX:** full reference — MSAA 4× desktop (2 then 0 if the HDR format
+  cannot), PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+  SAA snapshots N after peel and before wall/MAT bump so brick/concrete
+  match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). Env cube uses a dedicated 4×-aniso
@@ -122,8 +124,9 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the
   same present() (not next-frame LIT). SAA hoists object-space peel in
   uniform CF and mixes that variance with geometric N by `carPaint`
-  (`dpdx` after a non-uniform matId branch is illegal WGSL; terrain
-  bump still cannot enter SAA).
+  (`dpdx` after a non-uniform matId branch is illegal WGSL). GLX/TLX
+  now snapshot the same pre-material N — wall bump stays out of SAA
+  on all three backends.
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed
