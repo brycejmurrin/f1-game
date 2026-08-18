@@ -1,0 +1,23 @@
+[
+  { "optionId": "brembo_evo", "visual": { "caliper": 1 } },
+  { "optionId": "six_piston", "visual": { "caliper": 2 } },
+  { "optionId": "ceramic", "visual": { "caliper": 1 } },
+  { "optionId": "carbon", "visual": { "caliper": 1 } },
+  { "optionId": "ventilated", "visual": { "caliper": 1 } },
+  { "optionId": "carbon_mag", "visual": { "caliper": 1 } },
+  { "optionId": "scoop_wrap", "visual": { "caliper": 1 } },
+  { "optionId": "cryo_pack", "visual": { "caliper": 2 } },
+  { "optionId": "dual_caliper", "visual": { "caliper": 1 } },
+  { "optionId": "regen_brakes", "visual": { "caliper": 1 } },
+  { "optionId": "sig_ferrari_brembo", "visual": { "caliper": 1 } },
+  { "optionId": "sig_haas_carbonmag", "visual": { "caliper": 1 } },
+  { "optionId": "sig_mercedes_discs", "visual": { "caliper": 1 } },
+  { "optionId": "sig_aston_carbon", "visual": { "caliper": 1 } },
+  { "optionId": "sig_mclaren_brakes", "visual": { "caliper": 2 } },
+  { "optionId": "sig_redbull_brakes", "visual": { "caliper": 2 } },
+  { "optionId": "sig_alpine_brakes", "visual": { "caliper": 1 } },
+  { "optionId": "sig_racingbulls_brakes", "visual": { "caliper": 1 } },
+  { "optionId": "sig_williams_brakes", "visual": { "caliper": 1 } },
+  { "optionId": "sig_audi_brakes", "visual": { "caliper": 1 } },
+  { "optionId": "sig_cadillac_brakes", "visual": { "caliper": 1 } }
+]
