@@ -31,6 +31,8 @@ function load(opts) {
     document: undefined,
     window: undefined,
     requestAnimationFrame: undefined,
+    PerfGov: opts.PerfGov,
+    __apex: opts.apex,
   };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -69,4 +71,42 @@ test("turning metrics on raises the log buffer so the overlay tail fills", () =>
   M.set(true);
   assert.equal(Log.level().buffer, "debug");
   assert.equal(Log.level().console, "warn");
+  M.set(false);
+  assert.equal(Log.level().buffer, "info", "OFF restores the buffer it raised");
+});
+
+test("snapshot keeps frame EMA off the governor budget", () => {
+  const { M } = load({
+    PerfGov: { fpsEMA: () => 16.7, floorMs: () => 22.2, tier: () => 2 },
+  });
+  const s = M.snapshot();
+  assert.equal(s.ms, 16.7);
+  assert.equal(s.budget, 22.2);
+  assert.equal(s.fps, 59.9);
+  assert.equal(s.tier, 2);
+});
+
+test("snapshot uses probe(), never obs()", () => {
+  let obs = 0, probe = 0;
+  const { M } = load({
+    apex: {
+      obs() { obs++; return { speedKph: 99, s: 1, x: 2 }; },
+      probe() { probe++; return { speed: 20, s: 12.5, x: -0.4 }; },
+      timing() { return { lap: 3, pos: 4, total: 20, gear: 6, energy: 0.5 }; },
+    },
+  });
+  const s = M.snapshot();
+  assert.equal(obs, 0);
+  assert.equal(probe, 1);
+  assert.equal(s.speedKph, 72);
+  assert.equal(s.s, 12.5);
+  assert.equal(s.x, -0.4);
+  assert.equal(s.lap, 3);
+});
+
+test("overlay sits below the top-right chrome, not on the minimap", () => {
+  const { M } = load({});
+  assert.match(M.PANEL_STYLE, /right:\s*8px/);
+  assert.match(M.PANEL_STYLE, /top:\s*140px/);
+  assert.doesNotMatch(M.PANEL_STYLE, /left:\s*8px/);
 });

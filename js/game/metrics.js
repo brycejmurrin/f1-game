@@ -25,6 +25,17 @@ let _lastPaint = 0;
 let _panel = null;
 let _btn = null;
 let _keysBound = false;
+let _raisedBuffer = null;
+
+// Below #pausebtn / #btn-cam (z 14, top-right) and #hud-sectors. Left/top-8
+// sat on the minimap and the POS/LAP/TIME row. pointer-events:none so a
+// collision with a later HUD chip still clicks through.
+const PANEL_STYLE = "position:fixed;right:8px;top:140px;z-index:12;margin:0;padding:8px 10px;" +
+  "font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
+  "color:#d8ffe0;background:rgba(6,10,8,.72);border:1px solid rgba(90,180,110,.35);" +
+  "border-radius:6px;pointer-events:none;white-space:pre;text-align:left;" +
+  "max-width:min(46ch,calc(100vw - 16px));max-height:min(70vh,28em);overflow:hidden;" +
+  "text-shadow:0 1px 0 #000";
 
 function read() {
   try {
@@ -42,7 +53,7 @@ function on() {
 function snapshot() {
   const out = {
     on: on(),
-    fps: null, ms: null, scale: null, tier: null, backend: "",
+    fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
     state: "", track: "", session: "",
     lap: null, pos: null, total: null,
     speedKph: null, gear: null, energy: null, s: null, x: null,
@@ -52,7 +63,7 @@ function snapshot() {
     if (typeof PerfGov !== "undefined") {
       const ema = PerfGov.fpsEMA && PerfGov.fpsEMA();
       if (ema > 0) { out.fps = +(1000 / ema).toFixed(1); out.ms = +ema.toFixed(1); }
-      if (PerfGov.floorMs) out.ms = +PerfGov.floorMs().toFixed(1);
+      if (PerfGov.floorMs) out.budget = +PerfGov.floorMs().toFixed(1);
       if (PerfGov.tier) out.tier = PerfGov.tier();
     }
   } catch (_) { /* governor not booted */ }
@@ -61,7 +72,7 @@ function snapshot() {
       const p = __apex.perf();
       if (p && p.ok !== false) {
         if (p.fps != null) out.fps = p.fps;
-        if (p.floorMs != null) out.ms = p.floorMs;
+        if (p.floorMs != null) out.budget = p.floorMs;
         if (p.scale != null) out.scale = p.scale;
         if (p.tier != null) out.tier = p.tier;
       }
@@ -96,17 +107,18 @@ function snapshot() {
       }
     }
   } catch (_) { /* timing needs player.px */ }
+  // probe() is one Tracks.sample. obs() adds walls, a 3-point lookahead,
+  // field sort, and reward terms — too much for a 4 Hz overlay.
   try {
-    if (typeof __apex !== "undefined" && __apex.obs) {
-      const o = __apex.obs();
+    if (typeof __apex !== "undefined" && __apex.probe) {
+      const o = __apex.probe();
       if (o) {
-        out.speedKph = o.speedKph;
-        out.s = o.s;
-        out.x = o.x;
-        if (out.gear == null) out.gear = o.gear;
+        if (o.speed != null) out.speedKph = +(o.speed * 3.6).toFixed(1);
+        if (o.s != null) out.s = o.s;
+        if (o.x != null) out.x = o.x;
       }
     }
-  } catch (_) { /* obs needs player.px */ }
+  } catch (_) { /* probe needs player + track */ }
   try {
     if (typeof Log !== "undefined")
       out.logs = Log.records({ limit: 8 }).map((r) => r.level[0] + " " + r.ns + " " + r.msg);
@@ -120,13 +132,7 @@ function ensurePanel() {
   el.id = "game-metrics";
   el.setAttribute("aria-live", "polite");
   el.setAttribute("aria-label", "Debug metrics");
-  // Above #hud (z 10), below pause chrome (14+) and every :modal.
-  el.style.cssText = "position:fixed;left:8px;top:8px;z-index:12;margin:0;padding:8px 10px;" +
-    "font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
-    "color:#d8ffe0;background:rgba(6,10,8,.72);border:1px solid rgba(90,180,110,.35);" +
-    "border-radius:6px;pointer-events:none;white-space:pre;" +
-    "max-width:min(46ch,calc(100vw - 16px));max-height:min(70vh,28em);overflow:hidden;" +
-    "text-shadow:0 1px 0 #000";
+  el.style.cssText = PANEL_STYLE;
   document.body.appendChild(el);
   _panel = el;
   return el;
@@ -146,8 +152,8 @@ function paintOverlay() {
   const s = snapshot();
   const lines = [
     "METRICS   `  or  F9  or  SETTINGS",
-    "fps " + fmt(s.fps) + "   frame " + fmt(s.ms) + " ms   scale " + fmt(s.scale),
-    "tier " + fmt(s.tier) + "   gfx " + fmt(s.backend || null),
+    "fps " + fmt(s.fps) + "   frame " + fmt(s.ms) + " ms   budget " + fmt(s.budget) + " ms",
+    "scale " + fmt(s.scale) + "   tier " + fmt(s.tier) + "   gfx " + fmt(s.backend || null),
     (s.track || "menu") + "  " + (s.session || s.state || "") +
       "  lap " + fmt(s.lap) + "  P" + fmt(s.pos) + (s.total != null ? "/" + s.total : ""),
     "v " + fmt(s.speedKph) + " km/h  g" + fmt(s.gear) +
@@ -186,10 +192,23 @@ function set(v) {
   try { localStorage.setItem(KEY, next ? "1" : "0"); } catch (_) { /* private mode: session-only */ }
   try { Log.info("game", "metrics " + (next ? "on" : "off")); } catch (_) { /* Log not loaded */ }
   if (next) {
-    try { if (typeof Log !== "undefined") Log.level("buffer:debug"); } catch (_) { /* keep shipped thresholds */ }
+    try {
+      if (typeof Log !== "undefined") {
+        const cur = Log.level().buffer;
+        if (Log.LEVELS[cur] < Log.DEBUG) {
+          _raisedBuffer = cur;
+          Log.level("buffer:debug");
+        }
+      }
+    } catch (_) { /* keep shipped thresholds */ }
     paintOverlay();
     startLoop();
   } else {
+    try {
+      if (typeof Log !== "undefined" && _raisedBuffer)
+        Log.level("buffer:" + _raisedBuffer);
+    } catch (_) { /* leave whatever the player set */ }
+    _raisedBuffer = null;
     paintOverlay();
   }
   paintBtn(_btn);
@@ -239,5 +258,5 @@ if (typeof document !== "undefined") {
   else initUI();
 }
 
-return { KEY, on, set, toggle, snapshot };
+return { KEY, on, set, toggle, snapshot, PANEL_STYLE };
 })();
