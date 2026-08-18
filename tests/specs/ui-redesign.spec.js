@@ -19,6 +19,34 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => document.getElementById("mb-race").click());
   await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20,
     null, { polling: 100, timeout: 10_000 });
+  // Match a landscape iPhone's notched safe area. In the compact single-column
+  // selector the filter must not consume the whole list viewport: a real
+  // circuit needs to be visible before the player scrolls either nested pane.
+  await page.evaluate(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--sal", "59px"); root.setProperty("--sar", "59px");
+    root.setProperty("--sab", "21px");
+  });
+  await page.waitForFunction(() => {
+    const sel = document.getElementById("sel-inner");
+    return sel?.dataset.pair === "off" && sel.dataset.density === "compact";
+  }, null, { polling: 50, timeout: 5_000 });
+  const compactCatalogue = await page.evaluate(() => {
+    const list = document.getElementById("sel-tracks").getBoundingClientRect();
+    const first = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
+    const controls = [...document.querySelectorAll("#sel-track-filter .sel-chip, #sel-track-search")]
+      .map((el) => el.getBoundingClientRect());
+    return {
+      firstVisible: Math.max(0, Math.min(list.bottom, first.bottom) - Math.max(list.top, first.top)),
+      oneRow: Math.max(...controls.map((r) => r.top)) - Math.min(...controls.map((r) => r.top)) < 2,
+    };
+  });
+  expect(compactCatalogue.oneRow).toBe(true);
+  expect(compactCatalogue.firstVisible).toBeGreaterThanOrEqual(24);
+  await page.evaluate(() => {
+    const root = document.documentElement.style;
+    root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
+  });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.focus(); input.value = "monaco";
