@@ -335,6 +335,15 @@ test("check-changes names the apex-tools MCP wrap", () => {
   const text = fs.readFileSync(path.join(SKILLS, "check-changes/SKILL.md"), "utf8");
   assert.match(text, /apex-tools-mcp\.sh/);
   assert.match(text, /apex_verify_change_fast/);
+  assert.match(text, /AGENT-SURFACE\.md/);
+});
+
+test("skills README and AGENTS.md point at the wrap map", () => {
+  const skills = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
+  const agents = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
+  assert.match(skills, /AGENT-SURFACE\.md/);
+  assert.match(agents, /AGENT-SURFACE\.md/);
+  assert.match(skills, /A skill is when\/how/);
 });
 
 test("AGENTS.md points at mcp-probe recipes for renderer probes", () => {

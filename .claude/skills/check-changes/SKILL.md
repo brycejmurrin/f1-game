@@ -21,6 +21,7 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 `--fast` or a single started batch, then read
 `artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
 
+Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 
 ```sh

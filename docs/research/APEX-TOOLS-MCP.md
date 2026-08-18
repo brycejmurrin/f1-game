@@ -1,5 +1,9 @@
 # Apex Tools MCP — design
 
+**Agent map (what is wrapped, which skill, never-wrap):**
+[`docs/AGENT-SURFACE.md`](../AGENT-SURFACE.md). This file is the refuse table
+and week-by-week pin history.
+
 Hosted MCP that wraps committed CLIs under `tools/` against the **local
 working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.

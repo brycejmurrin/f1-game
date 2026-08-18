@@ -4,6 +4,10 @@ Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/verify-track.cjs`, and `npm run test:*` groups.
 
+**A skill is when/how, not the command.** The CLI lives under `tools/`. Some
+CLIs are pinned as `apex_*` MCP tools; most are not. Full map (four MCP
+servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
+
 Descriptions say **when** to load the skill; bodies carry the workflow.
 
 | Skill | Use it when |
@@ -51,7 +55,8 @@ The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture
 changes are validated visually, not just asserted.
 
 **Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
-live canvas → `mcp-probe`. Do not attach `mcp-probe` for a version.json check.
+live canvas → `mcp-probe`; local CLI pins → `apex-tools`. Do not attach
+`mcp-probe` for a version.json check. Wrap table: `docs/AGENT-SURFACE.md`.
 
 Output paths: batch/test under `artifacts/`, human-reviewed captures under
 `scratch/` (see `AGENTS.md`).

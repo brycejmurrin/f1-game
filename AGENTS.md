@@ -21,6 +21,7 @@ node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgete
 node tools/test-bg.mjs <groups>     # run browser groups in the background
 node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
 tools/README.md                     # test-asserted index of all 60+ tools
+docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
 ## Verification — scale it to the change
@@ -177,7 +178,10 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP.** Keep **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
+**MCP.** Four servers, one job each — map in `docs/AGENT-SURFACE.md`.
+`apex-tools` (`apex_*`) pins local `tools/` CLIs; `probe` is `chrome_*` /
+`tinyfish_*`; chrome-devtools is the live canvas; tinyfish is Pages. Keep
+**`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
 serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
 Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
 servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
@@ -286,7 +290,8 @@ same surface from a shell.
 ## Agent extensions (skills / subagents)
 
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
-  `.claude/skills/README.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
+  `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
+  `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
   `deploy-research` (do not attach `mcp-probe` for a version.json check).
   Pre-push: `verify-agent`.
 - **Subagents** (isolated context): `.claude/agents/` — index in
@@ -300,7 +305,8 @@ same surface from a shell.
 
 ## Area references (load on demand)
 
-Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
+Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
+`docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
 (`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
 (GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
 `docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
