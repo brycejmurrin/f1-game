@@ -708,9 +708,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
   if (!ff) { N = -N; }
-  // Road ribbon: buildRoad writes upOf = cross(right, tangent). If a
-  // winding / frontFace mismatch marked the tops back-facing, the line
-  // above lights the underside (featureless grey slab). Re-orient to +up.
+  // Road ribbon: buildRoad writes upOf = cross(right, tangent). Expanded
+  // winding makes the tops back-facing under frontFace cw, so the line
+  // above would light the underside. Keep N pointing track-up.
   if (isRoadDraw && N.y < 0.0) { N = -N; }
   applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, roadNrmPack, roadPackOn);
 

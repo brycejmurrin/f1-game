@@ -2233,11 +2233,12 @@ const WGX = (function () {
       const ev = new Float32Array(n * VERTEX_FLOATS);
       const ea = new Float32Array(n * 4);
       for (let i = 0; i < n; i++) {
-        // Keep buildRoad winding (CCW from above). WGX frontFace is cw to
-        // undo the NDC-Y flip, so those tops are front faces. Swapping the
-        // last two verts made them back-facing; fs_main then negated the
-        // authored track-up normals and lit the underside.
-        const v = idx[i], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
+        // Swap each triangle's last two verts so the ribbon fills under
+        // frontFace cw + cull back. Those faces then count as back-facing;
+        // fs_main must NOT negate the authored track-up normals (N.y < 0
+        // restore) or the tops light as the underside.
+        const flip = (i % 3 === 1) ? 1 : (i % 3 === 2) ? -1 : 0;
+        const v = idx[i + flip], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
         for (let k = 0; k < VERTEX_FLOATS; k++) ev[o + k] = vert[so + k];
         ea[ao] = attr[sao]; ea[ao + 1] = attr[sao + 1];
         ea[ao + 2] = attr[sao + 2]; ea[ao + 3] = attr[sao + 3];
