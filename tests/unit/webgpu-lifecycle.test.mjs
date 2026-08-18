@@ -935,7 +935,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /function holdSoftPresent/);
   assert.match(WGX_SOURCE, /apex26\.wgxHoldPresent/);
   assert.match(CHUNKS_SOURCE, /o\.trk = pulled\.yzw/);
-  assert.match(CHUNKS_SOURCE, /@interpolate\(linear\) trk : vec3<f32>/);
+  assert.match(CHUNKS_SOURCE, /@location\(3\)       trk : vec3<f32>/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /@interpolate\(linear\) trk/);
   assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5 && !isRoadDraw/);
   assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
   assert.match(CHUNKS_SOURCE, /dpdx\(in\.trk\)/);

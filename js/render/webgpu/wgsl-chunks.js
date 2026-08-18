@@ -646,10 +646,10 @@ struct VSOut {
   @location(0)       nrm   : vec3<f32>,
   @location(1)       col   : vec3<f32>,
   @location(2)       wpos  : vec3<f32>,
-  // vec3, not vec4: Dawn drops location-3 .w and that poisoned interpolated s
-  // (measured shattered / stair-stepped dashes). linear = noperspective so
-  // track-space s is not perspective-divided into steps.
-  @location(3) @interpolate(linear) trk : vec3<f32>,
+  // vec3, not vec4: Dawn drops location-3 .w and that poisoned interpolated s.
+  // Default perspective — @interpolate(linear) shattered dashes at chase
+  // angle (measured).
+  @location(3)       trk : vec3<f32>,
   @location(4) @interpolate(flat) matId : f32,
   @location(5)       objPos : vec3<f32>,
 };
