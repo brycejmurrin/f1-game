@@ -56,6 +56,30 @@ const GLXPost = (function () {
     const _grPos = new Float32Array(18), _grCol = new Float32Array(18),
           _grRad = new Float32Array(6), _grDir = new Float32Array(18),
           _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
+    // Tuner-knob upload cache (PERF-FINDINGS §3). Composite grade scalars do
+    // not change mid-frame; skip equal re-uploads. Per-frame values (sunUV,
+    // flare, exposure, grainTime, haze) still go up every present().
+    const _compUf = Object.create(null);
+    function uf1(loc, key, v) {
+      if (!loc) return;
+      if (_compUf[key] !== v) { gl.uniform1f(loc, v); _compUf[key] = v; }
+    }
+    function uf3(loc, key, x, y, z) {
+      if (!loc) return;
+      const k1 = key + ".y", k2 = key + ".z";
+      if (_compUf[key] !== x || _compUf[k1] !== y || _compUf[k2] !== z) {
+        gl.uniform3f(loc, x, y, z);
+        _compUf[key] = x; _compUf[k1] = y; _compUf[k2] = z;
+      }
+    }
+    function uf4(loc, key, a, b, c, d) {
+      if (!loc) return;
+      const k1 = key + ".1", k2 = key + ".2", k3 = key + ".3";
+      if (_compUf[key] !== a || _compUf[k1] !== b || _compUf[k2] !== c || _compUf[k3] !== d) {
+        gl.uniform4f(loc, a, b, c, d);
+        _compUf[key] = a; _compUf[k1] = b; _compUf[k2] = c; _compUf[k3] = d;
+      }
+    }
     // Partial select nearest-K (match WGX): avoid sorting the full floodlight list.
     function _grKeepNearest(total, k) {
       const n = Math.min(k, total);
@@ -95,6 +119,7 @@ const GLXPost = (function () {
       fxaaProg = link(POST_VS, FXAA_FS);
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
+      for (const k in _compUf) delete _compUf[k];
       brightU = locs(brightProg, ["uScene", "uThreshold"]);
       blurU = locs(blurProg, ["uTex", "uDir"]);
       downU = locs(downProg, ["uTex", "uTexel", "uKaris"]);
@@ -697,30 +722,30 @@ const GLXPost = (function () {
       // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
       // shipped grade so a missing tune object changes nothing.
       const CT = opts && opts.tune || null;
-      gl.uniform4f(compU.uTone0,
+      uf4(compU.uTone0, "tone0",
         CT && CT.blacks != null ? CT.blacks : 0,
         CT && CT.shadows != null ? CT.shadows : 0,
         CT && CT.midtones != null ? CT.midtones : 0,
         CT && CT.highlights != null ? CT.highlights : 0);
-      gl.uniform4f(compU.uTone1,
+      uf4(compU.uTone1, "tone1",
         CT && CT.whites != null ? CT.whites : 0,
         CT && CT.toe != null ? CT.toe : 0,
         CT && CT.shoulder != null ? CT.shoulder : 0, 0);
-      gl.uniform3f(compU.uLift,
+      uf3(compU.uLift, "lift",
         CT && CT.liftR != null ? CT.liftR : 0,
         CT && CT.liftG != null ? CT.liftG : 0,
         CT && CT.liftB != null ? CT.liftB : 0);
-      gl.uniform3f(compU.uGamma,
+      uf3(compU.uGamma, "gamma",
         CT && CT.gammaR != null ? CT.gammaR : 1,
         CT && CT.gammaG != null ? CT.gammaG : 1,
         CT && CT.gammaB != null ? CT.gammaB : 1);
-      gl.uniform3f(compU.uGain,
+      uf3(compU.uGain, "gain",
         CT && CT.gainR != null ? CT.gainR : 1,
         CT && CT.gainG != null ? CT.gainG : 1,
         CT && CT.gainB != null ? CT.gainB : 1);
-      gl.uniform1f(compU.uContrast,   CT && CT.contrast   != null ? CT.contrast   : 1.12);
-      gl.uniform1f(compU.uVibrance,   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
-      gl.uniform1f(compU.uSaturation, CT && CT.saturation != null ? CT.saturation : 1.0);
+      uf1(compU.uContrast,   "contrast",   CT && CT.contrast   != null ? CT.contrast   : 1.12);
+      uf1(compU.uVibrance,   "vibrance",   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
+      uf1(compU.uSaturation, "saturation", CT && CT.saturation != null ? CT.saturation : 1.0);
       // Skip the whole HDR lift/gamma/gain/tone block when every knob sits at
       // neutral (the shipped default): applyHdrGrade is then a mathematical
       // no-op, but it still cost ~20 ALU incl. 4-5 transcendentals on every
@@ -733,11 +758,11 @@ const GLXPost = (function () {
         (CT.gammaG != null && CT.gammaG !== 1) || (CT.gammaB != null && CT.gammaB !== 1) ||
         (CT.gainR != null && CT.gainR !== 1) || (CT.gainG != null && CT.gainG !== 1) ||
         (CT.gainB != null && CT.gainB !== 1));
-      gl.uniform1f(compU.uHdrGradeOn, _hg ? 1.0 : 0.0);
-      gl.uniform1f(compU.uTint,       CT && CT.tint       != null ? CT.tint       : 0.0);
-      gl.uniform1f(compU.uVignette,   CT && CT.vignette   != null ? CT.vignette   : 0.80);
-      gl.uniform1f(compU.uVigSoft,    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);
-      gl.uniform1f(compU.uBloomKnee,  CT && CT.bloomKnee  != null ? CT.bloomKnee  : 0.5);
+      uf1(compU.uHdrGradeOn, "hdrGradeOn", _hg ? 1.0 : 0.0);
+      uf1(compU.uTint,       "tint",       CT && CT.tint       != null ? CT.tint       : 0.0);
+      uf1(compU.uVignette,   "vignette",   CT && CT.vignette   != null ? CT.vignette   : 0.80);
+      uf1(compU.uVigSoft,    "vigSoft",    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);
+      uf1(compU.uBloomKnee,  "bloomKnee",  CT && CT.bloomKnee  != null ? CT.bloomKnee  : 0.5);
       // opts.carReflect is the governor shed (tier ≥ 2 → 0). Must win over the
       // tuner default: po.reflect = 0 is also the DRY-session value, so pairing
       // uCarReflect to po.reflect would kill car-paint SSR on every dry lap.
@@ -745,44 +770,44 @@ const GLXPost = (function () {
       // lampVol operand-pair bug — car pixels still enter the ~36-fetch march.
       gl.uniform1f(compU.uCarReflect, opts && opts.carReflect != null ? opts.carReflect
         : (CT && CT.carReflect != null ? CT.carReflect : 0.05));
-      gl.uniform1f(compU.uCarGloss, CT && CT.carGloss != null ? CT.carGloss : 1.0);
+      uf1(compU.uCarGloss, "carGloss", CT && CT.carGloss != null ? CT.carGloss : 1.0);
       // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
-      gl.uniform1f(compU.uChromAb,    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
-      gl.uniform1f(compU.uGrain,      CT && CT.grain      != null ? CT.grain      : 0.0);
+      uf1(compU.uChromAb,    "chromAb",    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
+      uf1(compU.uGrain,      "grain",      CT && CT.grain      != null ? CT.grain      : 0.0);
       gl.uniform1f(compU.uGrainTime,  F.time);
-      gl.uniform1f(compU.uSharpen,    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
-      gl.uniform1f(compU.uBlackLift,  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
-      gl.uniform1f(compU.uWhitePoint, CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
+      uf1(compU.uSharpen,    "sharpen",    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
+      uf1(compU.uBlackLift,  "blackLift",  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
+      uf1(compU.uWhitePoint, "whitePoint", CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
       // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
-      gl.uniform1f(compU.uAcesA, CT && CT.acesA != null ? CT.acesA : 2.51);
-      gl.uniform1f(compU.uAcesB, CT && CT.acesB != null ? CT.acesB : 0.03);
-      gl.uniform1f(compU.uAcesC, CT && CT.acesC != null ? CT.acesC : 2.43);
-      gl.uniform1f(compU.uAcesD, CT && CT.acesD != null ? CT.acesD : 0.59);
-      gl.uniform1f(compU.uAcesE, CT && CT.acesE != null ? CT.acesE : 0.14);
+      uf1(compU.uAcesA, "acesA", CT && CT.acesA != null ? CT.acesA : 2.51);
+      uf1(compU.uAcesB, "acesB", CT && CT.acesB != null ? CT.acesB : 0.03);
+      uf1(compU.uAcesC, "acesC", CT && CT.acesC != null ? CT.acesC : 2.43);
+      uf1(compU.uAcesD, "acesD", CT && CT.acesD != null ? CT.acesD : 0.59);
+      uf1(compU.uAcesE, "acesE", CT && CT.acesE != null ? CT.acesE : 0.14);
       gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
       // SUN-SHAFT REACH / FLARE STREAK knobs (defaults reproduce the shipped look).
-      gl.uniform1f(compU.uShaftDecay,  CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
+      uf1(compU.uShaftDecay, "shaftDecay", CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
       // Reach scales with the SCREEN SUN-SHAFT knob, sub-linearly so the shipped
       // value (1) keeps the shipped radius and turning it up genuinely extends the
       // rays instead of only brightening a fixed disc. sqrt keeps 4x strength at a
       // 2x radius rather than blowing the pass across the whole frame.
       const _shaftMul = (opts && opts.tune && opts.tune.sunShaftMul != null) ? opts.tune.sunShaftMul : 1;
-      gl.uniform1f(compU.uShaftSpread, Math.sqrt(Math.max(0.05, _shaftMul)));
-      gl.uniform1f(compU.uFlareStreak, CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
-      gl.uniform1f(compU.uFlareStreak2, CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
+      uf1(compU.uShaftSpread, "shaftSpread", Math.sqrt(Math.max(0.05, _shaftMul)));
+      uf1(compU.uFlareStreak, "flareStreak", CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
+      uf1(compU.uFlareStreak2, "flareStreak2", CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
       // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}
       // computed by the caller from the player tailpipe projection; absent = off).
       const hz = opts && opts.haze;
       gl.uniform2f(compU.uHazeUV, hz ? hz.u : -9, hz ? hz.v : -9);
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
-      gl.uniform1f(compU.uSsrThick,   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
+      uf1(compU.uSsrThick,   "ssrThick",   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
       // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
       // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
       gl.uniform1i(compU.uDirt, 5);
-      gl.uniform1f(compU.uLensDirt, CT && CT.lensDirt != null ? CT.lensDirt : 0.15);
+      uf1(compU.uLensDirt, "lensDirt", CT && CT.lensDirt != null ? CT.lensDirt : 0.15);
       // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
       // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
