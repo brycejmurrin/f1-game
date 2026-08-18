@@ -1627,3 +1627,19 @@ test("drawParticles never destroys the VBO mid-frame (retire, flush after submit
   assert.match(WGX_SOURCE, /_retireFlush\(\)/,
     "present must flush retired buffers after submit");
 });
+
+test("shadow caster capacity follows the draw ring and uploads once per pass", () => {
+  // Dense graph-instanced tracks exceed forty model batches. A fixed 40-slot
+  // ring returned -1 and silently skipped every later caster; Singapore lost
+  // roughly ten model classes from its directional/moon shadow map.
+  assert.match(WGX_SOURCE, /const SHADOW_SLOTS = MAX_DRAWS;/,
+    "shadow capacity must cover the renderer's full per-pass draw ceiling");
+  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
+  assert.ok(write, "shadow model staging writer exists");
+  assert.doesNotMatch(write[0], /queue\.writeBuffer/,
+    "one queue write per caster must not return");
+  assert.match(WGX_SOURCE, /function _flushShadowModels\([\s\S]*?queue\.writeBuffer/,
+    "the used shadow-model prefix must be uploaded once before submit");
+  assert.match(WGX_SOURCE, /shadow caster ring overflow/,
+    "a future capacity regression must be diagnosed rather than silently dropping casters");
+});
