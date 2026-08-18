@@ -55,7 +55,7 @@
 
   function lit(THREE, TSL, ctx) {
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, attribute, texture, cubeTexture,
+      Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
       float, int, vec2, vec3, vec4,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
@@ -637,7 +637,7 @@
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
-    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeo]) => {
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
@@ -645,7 +645,10 @@
         .and(matTexInPack(mid))
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
-      const uv = matTexUV(mid, N, wp).toVar();
+      // Axis from the GEOMETRIC varying (GLX matTexUV uses vNrm), not the
+      // already-bumped N — a brick bump flipping the dominant axis rotates
+      // the scan 90° against the procedural grain.
+      const uv = matTexUV(mid, nGeo, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
@@ -712,8 +715,11 @@
       const s = float(trkIn.x).toVar();
       const x = float(trkIn.y).toVar();
       const hw = float(trkIn.z).toVar();
-      // Hoisted derivatives — see the note above.
-      const aaX = clamp(fwidth(x), 1e-4, 0.30).toVar();
+      // Hoisted derivatives — see the note above. MIP uses the RAW
+      // footprint (WGX/GLX roadMarkings) so a saturated 0.30 AA ceiling
+      // keeps paint instead of erasing it.
+      const fwX = max(fwidth(x), 1e-4).toVar();
+      const aaX = min(fwX, 0.30).toVar();
       const aaS = clamp(fwidth(s).div(7.0), 1e-4, 0.24).toVar();
       const albedo = vec3(albedoIn).toVar();
       const rough = float(roughIn).toVar();
@@ -729,8 +735,8 @@
       const dash = smoothstep(aaS.mul(-1.0).add(0.25), aaS.add(0.25), abs(ph.sub(0.25))).oneMinus().toVar();
 
       // Sub-pixel minification: fade amplitude rather than let a half-covered
-      // band strobe.
-      const mip = clamp(aaX.sub(0.06).div(0.24).oneMinus(), 0.0, 1.0).toVar();
+      // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
+      const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
       // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
       // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
       const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();
@@ -767,7 +773,7 @@
       const fwHc13 = fwidth(hc.mul(1.3)).toVar();
       const fwY13 = fwidth(y.mul(1.3)).toVar();
       const fwTy = fwidth(fract(y.div(0.34))).toVar();
-      const ridgePhase0 = abs(hc).mul(5.5).toVar();
+      const ridgePhase0 = hc.mul(7.5).toVar();
       const fwRidge = fwidth(ridgePhase0).toVar();
       If(inRange.and(far.greaterThan(0.001)), () => {
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
@@ -901,7 +907,13 @@
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
         const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
-        const matA = float(attribute("mat", "float")).toVar();       // vMat
+        // Flat like GLX `flat out float vMat` — a smooth interpolate of
+        // brick(2)/glass(3) on a shared edge smears ids. FLAG wave stays
+        // on the per-vertex attribute (fract(aMat) is a VS weight).
+        const matFlat = varying(attribute("mat", "float"), "vMatFlat");
+        matFlat.setInterpolation(THREE.InterpolationSamplingType.FLAT,
+          THREE.InterpolationSamplingMode.FIRST);
+        const matA = float(matFlat).toVar();                         // vMat
         // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
         // non-chunked mesh. Anchored here with the other varyings per the
         // standing rule, because roadMarkings() takes derivatives of it.
@@ -1008,7 +1020,7 @@
         // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nvary));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard

@@ -13,17 +13,21 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **TAA** still off (no history resolve — do not enable Halton jitter alone).
   GLX has no TAA either; this is not a live GLX↔WGX mismatch.
 - **TLX MSAA** stays off (no resolved depth for post).
-- **WGX composite SSR** (`wgsl-post.js`): `roadK = wetness * reflect` after
-  `po.reflect` is already `wetness * ssrWetMul` (or dry 0.07/0.08). Dry
-  roads get `roadK = 0` (no night sheen); wet is double-scaled. GLX applies
-  `uReflect` once and keeps dry sheen. Also missing GLX `sinT` Nv fallback
-  (`post.js`) and `min(gateSrc/0.20)`.
-- **Wet vs SAA order:** GLX widens roughness then wets; WGX wets then SAA.
-- **TLX `mat` is smooth-interpolated** (`attribute("mat")`); GLX is
-  `flat in float vMat`. Mixed brick/glass chunked walls smear.
 - **TLX car SSR tag** cannot write 0.35 into alpha (three treats it as
   coverage). Needs MRT — not a one-target port.
-- SAA / MAT-aniso / desktop GLX 4× MSAA / peel-then-bump are matched.
+- **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
+  ribbon VBOs). Not portable without reopening that defect.
+- **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
+  `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
+  reopens terrain-over-road on SwiftShader.
+
+Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
+(no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
+fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX FS
+`mat` is `flat`; TLX baked wall UVs use geometric `Nvary`; TLX corrugation
+AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking mip uses
+unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso / desktop
+GLX 4× MSAA / peel-then-bump stay matched.
 
 SAA mixes geometric N with a uniform-CF peel hoist on all three backends
 (material/wall bump stays out of SAA). Every baked MAT layer (walls

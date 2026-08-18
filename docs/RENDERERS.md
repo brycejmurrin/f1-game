@@ -118,7 +118,8 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
-  history resolve is sub-pixel shimmer). Env cube uses a dedicated 4×-aniso
+  history resolve is sub-pixel shimmer) plus the software-GPU road `+0.08`
+  lift (GLX uses polygonOffset only). Env cube uses a dedicated 4×-aniso
   sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
   SSAO uses the GLX/TLX `K[0..7]` fan and skips taps at strength 0.
   `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the
@@ -136,7 +137,8 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 - **TLX:** TrackGraph instancing via `THREE.InstancedMesh`; PCSS blocker map
   on WebGPU (`textureLoad` depth) and desktop WebGL2 (R16F `TSL.depth` color);
   phones / software GL keep fixed `R = 3.0`. Software sky fallback is a
-  zenith→horizon mix, not a flat lid. MSAA still off + FXAA (three does not
+  zenith→horizon mix, not a flat lid. FS `mat` is a flat varying (GLX
+  `flat out float vMat`); FLAG wave stays per-vertex. MSAA still off + FXAA (three does not
   expose a resolved depth for the post chain); 8-bit post
   stays on when half-float is missing (GLX RGBA8 path), env cube 4× aniso.
   THREE PATH: WEBGPU must not call `getContext("webgl2")` on `#game` after
