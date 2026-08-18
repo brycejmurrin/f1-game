@@ -1087,6 +1087,18 @@ test("pcssPen help names desktop three.js WebGL2 as live", () => {
     "help must name the software/phone R-scale so the slider is not a mystery");
 });
 
+test("GLX present reuses scratch vectors and skip-equals grade", () => {
+  const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /const _ONE3 = \[1, 1, 1\]/,
+    "neutral grade / sunColor fallback must not allocate [1,1,1] per frame");
+  assert.match(post, /const _NEGZ = \[0, 0, -1\]/,
+    "sunVS fallback must not allocate [0,0,-1] per frame");
+  assert.match(post, /uf3\(compU\.uGradeShadow, "gradeShadow"/,
+    "split-tone grade must use the skip-equal helper, not raw uniform3fv");
+  assert.doesNotMatch(post, /uniform3fv\(compU\.uGradeShadow/,
+    "do not bypass _compUf for uGradeShadow");
+});
+
 test("WGX COMPOSITE does not reference undeclared ssrWet", () => {
   // d6c8fa17 dropped `let ssrWet = U.lift.w` with the wetness remul but left
   // `if (ssrWet > 0.001 || …)` — Dawn rejects the identifier and sheds
@@ -1130,6 +1142,10 @@ test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/,
     "blocker-off path must scale R by pcssPen/80 (identity at the shipped def)");
+  assert.match(tsl, /\}\)\.Else\(\(\) => \{/,
+    "desktop blocker-on / PCSS-off path must also scale R (not freeze at 3.0)");
+  assert.equal((tsl.match(/R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/g) || []).length, 2,
+    "both the no-blocker else and the PCSS-off Else must scale R");
 });
 
 test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
@@ -1247,6 +1263,10 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "binary refine must be 4 like GLX, not 5");
   assert.match(post, /min\(gateSrc \/ 0\.20, 1\.0\)/,
     "SSR pass must apply the dry-sheen fade once so COMPOSITE can trust .a");
+  assert.equal((post.match(/let gateSrc/g) || []).length, 1,
+    "do not redeclare gateSrc — Dawn refuses SSR and sheds the whole post chain");
+  assert.equal((post.match(/min\(gateSrc \/ 0\.20, 1\.0\)/g) || []).length, 1,
+    "a merge leftover applied the dry damp twice (and squared the sheen)");
 });
 
 test("WGX SAA widens roughness before wet like GLX", () => {

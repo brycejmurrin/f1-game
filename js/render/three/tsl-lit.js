@@ -414,6 +414,11 @@
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
                 const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
                 R.assign(mix(float(1.5), float(6.0), pen));
+              }).Else(() => {
+                // Desktop WebGL2 / WebGPU: blocker exists but PCSS is off
+                // (far LOD, or S.pcssEnabled flipped false). Keep SHADOW
+                // SOFTEN live — same R-scale as the no-blocker path.
+                R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
               });
             } else {
               // Phones / software WebGL2: no blocker (no TSL.depth sun RT).

@@ -1318,10 +1318,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
   amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
   amt = clamp(amt * cover, 0.0, select(0.80, 0.85, carDom));
-  // Dry-session damp (GLX/TLX gateSrc): faint uReflect stays a sheen, not a
-  // full dark mirror. Car-paint damps by carReflect, not the road's strength.
-  let gateSrc = select(strength, carReflect, carDom);
-  amt = amt * min(gateSrc / 0.20, 1.0);
   return vec4<f32>(reflCol, amt);
 }`;
 
