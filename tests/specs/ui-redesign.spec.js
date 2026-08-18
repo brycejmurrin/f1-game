@@ -374,6 +374,15 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // it from pause → settings → MORE at 200% on the short landscape sheet.
   await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
   await page.setViewportSize({ width: 852, height: 393 });
+  const compactHud = await page.evaluate(() => {
+    const mm = document.getElementById("minimap");
+    return {
+      density: document.body.dataset.density,
+      mmCss: mm ? getComputedStyle(mm).width : "",
+    };
+  });
+  expect(compactHud.density, "short landscape body density").toBe("compact");
+  expect(compactHud.mmCss).toBe("96px");
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
@@ -508,6 +517,88 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
   expect(wideHelp.density).not.toBe("compact");
   expect(wideHelp.navLeftOfBody).toBe(true);
   expect(wideHelp.sameBand).toBe(true);
+});
+
+test("Career guide contents rail and standings leftover height", async ({ page }) => {
+  await waitReady(page);
+
+  // Standings is season-gated on the title. Unhide and open: the body is the
+  // one pane scroller and must not carry a zoom-blind 55svh cap.
+  await page.setViewportSize({ width: 852, height: 393 });
+  await page.evaluate(() => {
+    document.getElementById("mb-standings").hidden = false;
+    document.getElementById("mb-standings").click();
+    window.SheetShape?.reclassify();
+  });
+  await page.waitForSelector("#standings:not([hidden])");
+  const standings = await page.evaluate(() => {
+    const body = document.getElementById("standings-body");
+    return {
+      maxH: getComputedStyle(body).maxHeight,
+      minH: getComputedStyle(body).minHeight,
+      bodyOY: getComputedStyle(body).overflowY,
+    };
+  });
+  expect(standings.maxH).toBe("none");
+  expect(standings.minH).toBe("0px");
+  expect(["auto", "scroll", "overlay"]).toContain(standings.bodyOY);
+  await page.evaluate(() => document.getElementById("standings-close").click());
+
+  // Modes screen → HOW CAREER WORKS. The 560px guide is landscape-shaped on a
+  // mid desktop (wide rail) and tall on phone portrait (strip above the body).
+  await page.click("#mb-career");
+  await page.waitForSelector("#cr-guide-driver");
+  await page.setViewportSize({ width: 1100, height: 580 });
+  await page.click("#cr-guide-driver");
+  await page.waitForSelector("#career-guide:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const wideGuide = await page.evaluate(() => {
+    const sheet = document.querySelector("#career-guide .sheet");
+    const nav = document.getElementById("cg-contents").getBoundingClientRect();
+    const body = document.getElementById("cg-body").getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      density: sheet.dataset.density,
+      links: document.querySelectorAll("#cg-contents a").length,
+      navLeftOfBody: nav.right <= body.left + 2,
+      sameBand: Math.abs(nav.top - body.top) < 80,
+    };
+  });
+  expect(wideGuide.links).toBeGreaterThan(4);
+  expect(wideGuide.shape, JSON.stringify(wideGuide)).toBe("wide");
+  expect(wideGuide.density).not.toBe("compact");
+  expect(wideGuide.navLeftOfBody).toBe(true);
+  expect(wideGuide.sameBand).toBe(true);
+
+  await page.click('#cg-contents a[href="#cg-qualifying"]');
+  await page.waitForFunction(() => {
+    const body = document.getElementById("cg-body");
+    const target = document.getElementById("cg-qualifying");
+    if (!body || !target) return false;
+    const br = body.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    return body.scrollTop > 0 && tr.top >= br.top - 1 && tr.bottom <= br.bottom + 1;
+  }, null, { polling: 100, timeout: 5_000 });
+
+  await page.evaluate(() => document.getElementById("cg-back").click());
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.click("#cr-guide-driver");
+  await page.waitForSelector("#career-guide:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const tallGuide = await page.evaluate(() => {
+    const sheet = document.querySelector("#career-guide .sheet");
+    const nav = document.getElementById("cg-contents").getBoundingClientRect();
+    const body = document.getElementById("cg-body").getBoundingClientRect();
+    const first = document.querySelector("#cg-contents a")?.getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      navAboveBody: nav.bottom <= body.top + 1,
+      firstReachable: !!(first && first.left >= nav.left - 1 && first.right <= nav.right + 1),
+    };
+  });
+  expect(tallGuide.shape).not.toBe("wide");
+  expect(tallGuide.navAboveBody).toBe(true);
+  expect(tallGuide.firstReachable).toBe(true);
 });
 
 test("balanced control rows derive their shape from local room", async ({ page }) => {

@@ -278,7 +278,7 @@ one obvious scroll region.
    category/mode chips `scrollIntoView`. Camera RESET titles name their scope.
    COPY VALUES uses local `--svhz`, not `40svh`.
 4. Journeys: Career, Season, Race-a-friend, Data Hub, results/help/history.
-   **In progress (2026-08-18).** Data Hub short-height chrome keys on
+   **Done (2026-08-18).** Data Hub short-height chrome keys on
    `body[data-density]` / `body[data-width]` (zoom-aware), not
    `orientation + max-height`. Portrait 2×3 destinations keep orientation as a
    viewport fact and use `data-width=narrow`. VS Friend sheet is
@@ -287,8 +287,19 @@ one obvious scroll region.
    pan-x row. How to Play contents is a left rail on `data-shape=wide` sheets and
    a horizontal strip when compact. Compact stacked Circuit Select pans the
    filter on density (not a local max-width query); search keeps a 12rem floor.
-   Career and Season setup declare `--fit-at` like Settings.
+   Career and Season setup declare `--fit-at` like Settings. Leftover overlays
+   (`#career-offers`, `#career-history`, `#career-guide`, `#quali`) inherit
+   `--fit-at` onto the anonymous `.sheet`. Guide/history contents is the How to
+   Play twin (`#cg-contents` / `#ch-contents`). Session sheets (`#results`,
+   `#standings`, `#race-settings`, `#audioset`, `#pausemenu`) declare `--fit-at`;
+   `#standings-body` uses leftover sheet-grid height (`min-height: 0`, no `55svh`).
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
+   **In progress (2026-08-18).** Compact HUD keys on `body[data-density]`
+   (`#minimap` 96px, tighter gaps) and still zooms with `--hud-z`, never
+   `--ui-scale`. `#campicker` stands down while a dim sheet is open. Photo-mode
+   restore remains `#pc-restore`. `prefers-reduced-motion` also kills tach/OT
+   pulses. Leftover: `css/responsive.css` still has a landscape `max-height:
+   560px` HUD shrink (overlays layer wins on 852×393).
 6. Final matrix: all screens, scales, inputs, screenshots, performance and
    accessibility checks; then cache/version bump as the final production edit.
 

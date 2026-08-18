@@ -150,8 +150,9 @@ most-shared class in the project and had no entry at all:
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
 - `.sheet-head` — `components` + `overlays`
-- `.sheet-body` — `components` + `overlays`. How to Play places the shared body
-  on the sheet grid for the wide contents rail.
+- `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and
+  Career history place the shared body on the sheet grid for the wide contents
+  rail (`#htp-contents` / `#cg-contents` / `#ch-contents`).
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`
