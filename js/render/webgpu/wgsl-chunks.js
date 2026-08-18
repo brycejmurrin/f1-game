@@ -97,6 +97,22 @@ fn svnoise(p_in: vec2<f32>) -> f32 {
 fn ignoise(p: vec2<f32>) -> f32 {
   return fract(52.9829189 * fract(dot(p, vec2<f32>(0.06711056, 0.00583715))));
 }
+// Object-space orange-peel (GLX LIT_FS / TLX tsl-lit). Surface-family
+// svnoise (hash21), not sky vnoise (hash2) — GLX interpolates surfaceNoise
+// which redefines vnoise. amt=1 is the full wobble; SAA hoists that at
+// fs_main top (uniform CF) then mixes by per-fragment carPaint.
+fn paintPeelN(N: vec3<f32>, objPos: vec3<f32>, vDist: f32, amt: f32) -> vec3<f32> {
+  let pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
+  let puv = objPos.xz * 34.0 + objPos.y * 29.0;
+  let fuv = objPos.xz * 130.0 + objPos.y * 111.0;
+  let pe = 0.09;
+  let pb0 = svnoise(puv) * 0.6 + svnoise(fuv) * 0.4;
+  let pbx = (svnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + svnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
+  let pby = (svnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + svnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
+  let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+  let pB = cross(N, pT);
+  return normalize(N + (pT * pbx + pB * pby) * (0.22 * amt * pFade));
+}
 fn matScale(mid: i32) -> f32 {
   if (mid < 0 || mid > 16) { return 0.0; }
   return MatS.s[mid / 4][mid % 4];
@@ -585,7 +601,7 @@ ${matLib}
 // uniformly lit while WebGL2 showed cloud shadows crossing the track.
 fn cloudFBM(p_in: vec2<f32>) -> f32 {
   var p = p_in; var s = 0.0; var a = 0.5;
-  for (var i = 0; i < 2; i = i + 1) { s = s + a * vnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
+  for (var i = 0; i < 2; i = i + 1) { s = s + a * svnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
   return s;
 }
 fn cloudShadow(wp: vec3<f32>) -> f32 {
@@ -692,15 +708,18 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
   let roadPackOn = F.params8.w > 0.001 && matScale(16) > 0.0;
   let topNgeo = normalize(in.nrm);
-  // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
-  // N is written inside applyMaterialNormal, which is non-uniform in matId, and
-  // a dpdx after that branch is the NaN-white-road class. Geometric N is the
-  // uniform stand-in — SAA/clearcoat under-count orange-peel vs GLX; that is
-  // a look gap, not a compile defect.
+  // GLX takes dFdx(N) AFTER orange-peel + applyMaterialNormal. The matId
+  // bump is non-uniform — a dpdx after that branch is the NaN-white-road
+  // class. Peel is a function of interpolators only, so hoist it here
+  // (uniform CF), take both geometric and peel derivatives, then mix SAA
+  // by per-fragment carPaint. Clearcoat stays on geometric N (GLX Ngeo).
+  let Npeel = paintPeelN(topNgeo, in.objPos, vDist, 1.0);
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
-  let saaDx = dpdx(topNgeo);
-  let saaDy = dpdy(topNgeo);
+  let saaDxGeo = dpdx(topNgeo);
+  let saaDyGeo = dpdy(topNgeo);
+  let saaDxPeel = dpdx(Npeel);
+  let saaDyPeel = dpdy(Npeel);
   // Floor + detail terrain bury the ribbon on SwiftShader-Dawn. Punch the
   // LUT tarmac footprint (onRibbon is hw+2.4, the verge — not the berms).
   // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
@@ -775,9 +794,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
       let e = 0.22;
-      let h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
-      let hx = vnoise(mnp + vec2<f32>(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(e * 3.9, 0.0)) * 0.3;
-      let hz = vnoise(mnp + vec2<f32>(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(0.0, e * 3.9)) * 0.3;
+      let h0 = svnoise(mnp) * 0.7 + svnoise(mnp * 3.9) * 0.3;
+      let hx = svnoise(mnp + vec2<f32>(e, 0.0)) * 0.7 + svnoise(mnp * 3.9 + vec2<f32>(e * 3.9, 0.0)) * 0.3;
+      let hz = svnoise(mnp + vec2<f32>(0.0, e)) * 0.7 + svnoise(mnp * 3.9 + vec2<f32>(0.0, e * 3.9)) * 0.3;
       N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * ((detail * 0.4 * mnFade) / e));
     }
   }
@@ -790,18 +809,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // shimmer live on the panels. Keyed to OBJECT space (in.objPos / GLX vObjPos)
   // so the peel does not swim as the car translates. Distance-faded.
   if (carPaint > 0.001) {
-    let pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
-    if (pFade > 0.01) {
-      let puv = in.objPos.xz * 34.0 + in.objPos.y * 29.0;
-      let fuv = in.objPos.xz * 130.0 + in.objPos.y * 111.0;
-      let pe = 0.09;
-      let pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
-      let pbx = (vnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + vnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
-      let pby = (vnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + vnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
-      let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
-      let pB = cross(N, pT);
-      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
-    }
+    N = paintPeelN(N, in.objPos, vDist, carPaint);
   }
   let V = normalize(F.eye.xyz - in.wpos);
   let L = F.sunDir.xyz;
@@ -849,17 +857,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (detail > 0.0) {
     let wp = in.wpos.xz;
     let fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
-    let n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
+    let n = svnoise(wp * 0.35) * 0.60 + svnoise(wp * 2.1) * 0.40 * fineFade;
     albedo = albedo * (1.0 + (n - 0.5) * detail);
-    patchM = vnoise(wp * 0.055 + vec2<f32>(9.1));
+    patchM = svnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
     // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
     let crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
-    let cr = abs(vnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+    let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
     let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
     let crack = (1.0 - smoothstep(0.015, crAA, cr))
-              * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + vec2<f32>(7.7)));
+              * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
     albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
@@ -885,7 +893,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let wmid = i32(vMatId + 0.5);
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
-    let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
+    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
     // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
     // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
@@ -910,9 +918,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
   // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
   // every lamp lobe, so on a night track it is the difference between 48 stable
-  // highlights and 48 flickering ones. Computed using saaDx/saaDy taken in top-level
-  // uniform control flow to guarantee WGSL specification compliance.
-  let saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  // highlights and 48 flickering ones. Geometric + peel derivatives are
+  // taken in top-level uniform CF; mix by carPaint (paint gets peel SAA,
+  // terrain bump still cannot — applyMaterialNormal is non-uniform).
+  let saaVarGeo = dot(saaDxGeo, saaDxGeo) + dot(saaDyGeo, saaDyGeo);
+  let saaVarPeel = dot(saaDxPeel, saaDxPeel) + dot(saaDyPeel, saaDyPeel);
+  let saaVar = mix(saaVarGeo, saaVarPeel, saturate(carPaint));
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
 
   let a = rough * rough;

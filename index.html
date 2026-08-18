@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1383">
+<meta name="apex-build" content="1385">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -81,12 +81,8 @@
       .then(function (v) {
         if (!v || !v.build || v.build <= loaded) return;
         var key = "apex26.shellReloadedTo";
-        var bust = new URLSearchParams(location.search).get("b");
-        // Only consume the one-shot after this document IS the busted shell.
-        // Setting it before location.replace burned the guard when the SW
-        // returned Response.error() and left the player on the stale page.
-        if (bust && String(loaded) === bust) sessionStorage.setItem(key, bust);
-        if (sessionStorage.getItem(key) === String(v.build)) return;
+        if (sessionStorage.getItem(key) === String(v.build)) return;  // already tried this build
+        sessionStorage.setItem(key, String(v.build));
         // Query busts the cached shell. KEEP THE HASH: dropping it silently
         // destroyed VS FRIEND invite links (#vs=CODE) opened on a stale shell —
         // the one visitor class guaranteed to hit this reload path.
@@ -294,7 +290,7 @@
   <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
 </div>
 
-<div id="announce" hidden role="status" aria-live="polite"></div>
+<div id="announce" hidden></div>
 
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
@@ -1750,7 +1746,7 @@
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=74c75aabd309"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=5617a732481e"></script>
 <script crossorigin="anonymous" src="js/game/light-store.js?v=0bb4bffb5e43"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=4a6660e10524"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=517a947361fb"></script>
@@ -1807,5 +1803,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=97852ab04e82"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=7926f9cd9434"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=db35d92a7c80"></script>
-<script crossorigin="anonymous" src="js/game.js?v=7ea054835ee8"></script>
+<script crossorigin="anonymous" src="js/game.js?v=712f94ca1776"></script>
 </body></html>

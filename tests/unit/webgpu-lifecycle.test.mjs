@@ -475,6 +475,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
   assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
+  assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
+    "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
   const h = makeGpuHarness();
@@ -813,9 +815,11 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Road micro-normal footprint fade (grazing crawl guard).
   assert.match(CHUNKS_SOURCE, /mnFpAbs/);
   // Detail grain before roadMarkings so paint stays crisp.
-  const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
+  const grain = CHUNKS_SOURCE.indexOf("patchM = svnoise(wp * 0.055");
   const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
   assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+  assert.match(CHUNKS_SOURCE, /patchM = svnoise\(wp \* 0\.055/,
+    "LIT grain must use surface-family svnoise (GLX surfaceNoise), not sky vnoise");
   // Sparse asphalt cracks ported from GLX lit.js (were dropped in WGX Block 1b).
   assert.match(CHUNKS_SOURCE, /Sparse cracks \(GLX lit\.js\)/);
   assert.match(CHUNKS_SOURCE, /crAA = max\(0\.075, 0\.015 \+ max\(fwWpos\.x, fwWpos\.z\) \* 0\.9\)/);

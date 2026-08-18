@@ -314,7 +314,10 @@ const CEILINGS = {
   // (drop the leftover xVis 16/s lag; AI no longer draws baked wheels on
   // the chassis attitude matrix). Split-newline count after the pose mirror
   // moved to the end of updateCar so it follows the s advance.
-  "js/game.js": 8593,
+  // -> 8606 factory-signature field wheels (tyre/brake/rim from getFactorySetup)
+  // on the planted spinning path — the old baked AI look, without gluing
+  // tyres to chassis attitude.
+  "js/game.js": 8606,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

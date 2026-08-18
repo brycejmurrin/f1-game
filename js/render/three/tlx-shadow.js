@@ -28,7 +28,7 @@
  * LessEqualCompare == GLX's LINEAR + COMPARE_REF_TO_TEXTURE), WGSL
  * textureSampleCompare on WebGPU.
  *
- * PCSS blocker map (closes TODO M4-PCSS, WebGPU backend only): GLX builds a
+ * PCSS blocker map (closes TODO M4-PCSS): GLX builds a
  * 512² R16F min-of-4 blocker map from the sun depth texture through a
  * COMPARE-OFF sampler object (js/render/glx/shadow.js). three has no per-use
  * sampler override — a texture with compareFunction set is ALWAYS declared
@@ -76,9 +76,9 @@
     // (measured 2026-08-17: M4/M5/M9 hit the 360 s test budget with the GPU
     // at 387% and a defunct renderer). Keep the three maps ALLOCATED so
     // carShadowState().enabled stays true — only the texel count drops.
-    // Real GPUs keep the authored sizes. PCSS blocker is WebGPU-only and
-    // never builds on this path (tlxForceGL), so SUN_SIZE/BLOCKER_SIZE
-    // staying 1:1 is fine.
+    // Real GPUs keep the authored sizes. PCSS blocker skips software GL
+    // (tlxForceGL keeps the fixed-R look); desktop WebGL2 uses the R16F
+    // color path. SUN_SIZE/BLOCKER_SIZE staying 1:1 here is fine.
     const softwareGL = !!ctx.softwareGL;
 
     const SUN_SIZE = isMobile ? 1024 : (softwareGL ? 512 : 2048);   // 1024² saves 12 MB on every phone (GLX parity)
