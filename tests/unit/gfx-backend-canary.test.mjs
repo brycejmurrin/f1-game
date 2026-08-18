@@ -620,7 +620,23 @@ test("presentStatus names the three screenshot paths in plain language", () => {
   G.applyThreePath("webgl2", { noReload: true });
   assert.match(G.presentStatus(), /pinned to WebGL2/);
   G.applyThreePath("auto", { noReload: true });
-  assert.match(G.presentStatus(), /stays on three's WebGL2/);
+  assert.match(G.presentStatus(), /can be WebGPU or three WebGL2/);
+  assert.equal(G.threePathLabel("auto"), "AUTO");
+  assert.equal(G.liveThreeApi(), null);
+
+  ctx.GLX = {
+    __tlx: { backendState() { return { api: "webgpu" }; } },
+    softPresent() { return true; },
+  };
+  assert.equal(G.liveThreeApi(), "webgpu");
+  assert.equal(G.threePathLabel("auto"), "AUTO (WEBGPU)");
+  assert.match(G.presentStatus(), /AUTO is WebGPU/);
+
+  ctx.GLX.__tlx.backendState = () => ({ api: "webgl2" });
+  ctx.GLX.softPresent = () => false;
+  assert.equal(G.liveThreeApi(), "webgl2");
+  assert.equal(G.threePathLabel("auto"), "AUTO (WEBGL2)");
+  assert.match(G.presentStatus(), /AUTO is three WebGL2/);
 });
 
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {

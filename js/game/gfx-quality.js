@@ -241,8 +241,30 @@ function readThreePath() {
   } catch (_) { /* blocked storage: AUTO */ }
   return "auto";
 }
+function liveThreeApi() {
+  if (readBackend() !== "three") return null;
+  try {
+    const tlx = typeof GLX !== "undefined" && GLX && GLX.__tlx;
+    if (tlx && typeof tlx.backendState === "function") {
+      const s = tlx.backendState();
+      if (s && (s.api === "webgpu" || s.api === "webgl2")) return s.api;
+    }
+  } catch (_) { /* paint before TLX is live */ }
+  try {
+    const g = typeof document !== "undefined" ? document.getElementById("game") : null;
+    const eng = g && typeof g.getAttribute === "function" ? g.getAttribute("data-engine") : "";
+    if (/webgl2/i.test(eng || "")) return "webgl2";
+    if (/webgpu/i.test(eng || "")) return "webgpu";
+  } catch (_) { /* no canvas yet */ }
+  return null;
+}
 function threePathLabel(v) {
-  return v === "webgl2" ? "WEBGL2" : v === "webgpu" ? "WEBGPU" : "AUTO";
+  if (v === "webgl2") return "WEBGL2";
+  if (v === "webgpu") return "WEBGPU";
+  const live = (v === "auto") ? liveThreeApi() : null;
+  if (live === "webgpu") return "AUTO (WEBGPU)";
+  if (live === "webgl2") return "AUTO (WEBGL2)";
+  return "AUTO";
 }
 function applyThreePath(next, opts) {
   try {
@@ -336,7 +358,14 @@ function presentStatus() {
       }
       return "THREE.JS is pinned to WebGPU. AUTO 2D-blits the LDR target on software GPUs so screenshots work. SCREENSHOTS: NATIVE leaves the swapchain black." + live;
     }
-    return "THREE.JS AUTO: tries WebGPU when navigator.gpu exists (phones/Safari use a lite stack). If WebGPU is missing or this tab already lost it, AUTO stays on three's WebGL2 — not game WEBGL2. THREE PATH: WEBGL2 / WEBGPU pins one path.";
+    const api = liveThreeApi();
+    if (api === "webgpu") {
+      return "THREE.JS AUTO is WebGPU (phones/Safari use a lite stack)." + (live ? live : " Software GPUs 2D-blit the LDR target so screenshots work.");
+    }
+    if (api === "webgl2") {
+      return "THREE.JS AUTO is three WebGL2 — still TLX, not game WEBGL2. THREE PATH: WEBGPU pins three WebGPU.";
+    }
+    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing or this tab already lost WebGPU.";
   }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
@@ -427,7 +456,7 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO tries WebGPU, then three WebGL2 if GPU is missing or this tab already lost WebGPU. WEBGL2 = pin three WebGL2. WEBGPU = pin three WebGPU (no silent WebGL).");
+    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists. WEBGL2 / WEBGPU pin one path.");
   const shotBtn = addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",
@@ -603,6 +632,6 @@ if (typeof document !== "undefined") {
 return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, clearRendererStorage,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
-  THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel,
+  THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
   readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot };
 })();
