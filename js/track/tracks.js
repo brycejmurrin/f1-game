@@ -880,7 +880,9 @@ const Tracks = (function () {
     // from the road, so without this, distant hills/skylines would sit over open
     // sky (reading as "floating"). Tucked just under the ribbon's far edge so it
     // only shows through the gap beyond it. Coloured from the circuit's ground.
-    {
+    // WGX: skip — this fused props box is the brown chase void (hard lamp
+    // triangles on two 1600 m faces). Distant fill is the floor mesh instead.
+    if (!(G && typeof G.roadLutReady === "function")) {
       let gx = 0, gz = 0;
       for (let i = 0; i < n; i++) { gx += px[i]; gz += pz[i]; }
       gx /= n; gz /= n;

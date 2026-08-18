@@ -2449,6 +2449,16 @@ const WGX = (function () {
       const srcIdx = data.idx;
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
+      // Road/ribbon (has trk): stay on createMesh's expanded 4095-vert pieces.
+      // Chunked hasTrk uploaded a second expanded VBO per cell; those draws
+      // never covered the chase canvas even with always-pass + no frustum cull.
+      if (data.trk && data.trk.length >= vCount * 3) {
+        const m = createMesh(data);
+        m.chunks = null;
+        if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
+        if (!data._keepPositions) { data.pos = null; data.idx = null; }
+        return m;
+      }
       const b = _interleave(data);
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
       if (lut) _rememberRoadLut(lut);

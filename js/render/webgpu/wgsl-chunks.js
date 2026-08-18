@@ -694,10 +694,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
   let saaDy = dpdy(topNgeo);
-  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn (the brown
-  // void). Punch holes on the LUT footprint. Gated on buryRibbon (mat2.w)
-  // so cars/props on the tarmac are not discarded.
-  if (D.mat2.w > 0.5 && !isRoadDraw && fromWorld.w > 0.5) {
+  // Floor + detail terrain + the scenery addBox slab (the 1.6 km props
+  // "universal ground") bury the ribbon on SwiftShader-Dawn. Punch the LUT
+  // footprint on buryRibbon draws, and also on huge-footprint triangles
+  // (the slab is two 1600 m faces — cars/barriers stay under ~2 m).
+  let bury = D.mat2.w > 0.5;
+  let slab = max(fwWpos.x, fwWpos.z) > 6.0;
+  if ((bury || slab) && !isRoadDraw && fromWorld.w > 0.5) {
     discard;
   }
 
