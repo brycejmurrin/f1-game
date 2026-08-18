@@ -431,8 +431,9 @@ reload, and why RESET is per-condition rather than global.
   (`tests/unit/light-grid.test.mjs`). CPU knobs bake into `frame.*` /
   `frameSky.*` / `present()` opts in `js/game.js` and reach all three.
   Honest gaps (help text already says so): `perChunkLights` and
-  `roadChunkLamps` are WebGL2-only; `pcssPen` is a no-op on three.js
-  phones / software GL.
+  `roadChunkLamps` are WebGL2-only. `pcssPen` on three.js phones /
+  software WebGL2 scales the fixed Poisson radius (not distance-based
+  PCSS).
 - **preset** — ✓ when shipped presets override this knob for some condition.
 
 ## Every shipped value is reachable on its own slider

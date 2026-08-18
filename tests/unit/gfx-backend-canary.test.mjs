@@ -1081,8 +1081,67 @@ test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/game/lighting.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
     "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
-  assert.doesNotMatch(lighting, /three\.js WebGL2 keeps a fixed-radius kernel/,
-    "that sentence is stale after the R16F color-depth blocker");
+  assert.doesNotMatch(lighting, /this slider does nothing on that path only/,
+    "phones / software WebGL2 now scale Poisson R — do not call the slider a no-op");
+  assert.match(lighting, /scales the fixed Poisson radius/,
+    "help must name the software/phone R-scale so the slider is not a mystery");
+});
+
+test("WGX COMPOSITE does not reference undeclared ssrWet", () => {
+  // d6c8fa17 dropped `let ssrWet = U.lift.w` with the wetness remul but left
+  // `if (ssrWet > 0.001 || …)` — Dawn rejects the identifier and sheds
+  // COMPOSITE to a tonemap blit (godray/bloom/grade all gone).
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(post, /\bssrWet\b/,
+    "COMPOSITE must not name ssrWet — wetness already lives in the SSR pass .a");
+  assert.match(post, /if \(ssrRefl > 0\.001 \|\| ssrCar > 0\.001\)/,
+    "SSR consume gate is reflect || carReflect, not the removed wetness lane");
+});
+
+test("WGX bloom final upsample overwrites mip0 like GLX/TLX", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /loadOp: last \? "clear" : "load"/,
+    "mip0 upsample must clear (overwrite the sharp bright-pass), not load+add");
+});
+
+test("WGX screen sun-shaft is zero when bloom is shed", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /shaftMul = \(bloomAmt > 0 && sun && sun\.shaft > 0\)/,
+    "shaft pass reads the bloom chain — producer must say 0 when bloomAmt is 0");
+});
+
+test("WGX godray requires invViewProj like GLX/TLX", () => {
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /godrayBG && lastFrame && lastFrame\.invViewProj/,
+    "haveGR without invVP marches IDENT world rays");
+});
+
+test("TLX godray uses partial nearest-K, not a full sort", () => {
+  const tlx = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /function _grKeepNearest/,
+    "TLX must share the GLX/WGX partial-select helper");
+  assert.match(tlx, /grNL = _grKeepNearest\(total, 6\)/,
+    "uploader cap must stay 6 (TSL march bound)");
+  assert.doesNotMatch(tlx, /_grSel\.sort\(/,
+    "do not full-sort the floodlight list every night frame");
+});
+
+test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tsl, /R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/,
+    "blocker-off path must scale R by pcssPen/80 (identity at the shipped def)");
+});
+
+test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
+  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(glx, /if \(uBounceK > 0\.0\)/,
+    "GLX lamp bounce must skip when LAMP BOUNCE is 0");
+  assert.match(wgsl, /if \(F\.params3\.x > 0\.0\)/,
+    "WGX lamp bounce must skip when bounceK is 0");
+  assert.match(tsl, /If\(U\.bounceK\.greaterThan\(0\.0\)/,
+    "TLX lamp bounce must skip when bounceK is 0");
 });
 
 test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {

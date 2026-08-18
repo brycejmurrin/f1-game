@@ -56,6 +56,7 @@ const GLXPost = (function () {
     const _grPos = new Float32Array(18), _grCol = new Float32Array(18),
           _grRad = new Float32Array(6), _grDir = new Float32Array(18),
           _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
+    const _sunUV = [-2, -2];
     // Partial select nearest-K (match WGX): avoid sorting the full floodlight list.
     function _grKeepNearest(total, k) {
       const n = Math.min(k, total);
@@ -641,7 +642,8 @@ const GLXPost = (function () {
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
       // Project sun direction to screen UV for lens flare
-      let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
+      let flareStr = 0, sunShaft = 0;
+      _sunUV[0] = -2; _sunUV[1] = -2;
       if (F.sunDir && F.viewProj) {
         const s = F.sunDir;
         // Treat sun as infinitely distant: clip pos = VP * (sunDir, 0)
@@ -650,7 +652,8 @@ const GLXPost = (function () {
         const cy = vp[1]*s[0] + vp[5]*s[1] + vp[9]*s[2];
         const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
         if (cw > 0) {
-          sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
+          _sunUV[0] = cx / cw * 0.5 + 0.5;
+          _sunUV[1] = cy / cw * 0.5 + 0.5;
           // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
           // the opposite of the old height-scaled version that vanished at sunset.
           // Gate flare + shafts by the sun's actual BRIGHTNESS, not just elevation:
@@ -670,7 +673,7 @@ const GLXPost = (function () {
           if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
         }
       }
-      gl.uniform2fv(compU.uSunUV, sunUV);
+      gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
       gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;

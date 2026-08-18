@@ -271,7 +271,27 @@
 
     // God-ray lamp-selection scratch (present() only) — no per-frame allocs.
     const _grSel = [];
-    const _grByD = (a, b) => a.d - b.d;
+    // Partial select nearest-K (GLX glx/post.js / WGX) — avoid sorting the
+    // full floodlight list every haveGR + lampVol frame.
+    function _grKeepNearest(total, k) {
+      const n = Math.min(k, total);
+      for (let i = 1; i < n; i++) {
+        const cur = _grSel[i];
+        let j = i - 1;
+        while (j >= 0 && _grSel[j].d > cur.d) { _grSel[j + 1] = _grSel[j]; j--; }
+        _grSel[j + 1] = cur;
+      }
+      for (let i = n; i < total; i++) {
+        const cur = _grSel[i];
+        if (cur.d >= _grSel[n - 1].d) continue;
+        let j = n - 2;
+        while (j >= 0 && _grSel[j].d > cur.d) j--;
+        const insertAt = j + 1;
+        for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
+        _grSel[insertAt] = cur;
+      }
+      return n;
+    }
 
     // Last-presented-frame block states (__tlx.postState()).
     const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false };
@@ -368,14 +388,13 @@
             const s = _grSel[i]; if (s) { s.d = d; s.o = oi; } else _grSel[i] = { d, o: oi };
           }
           _grSel.length = total;
-          _grSel.sort(_grByD);
           // 6, not 12 — the TSL beam march is bounded at 6 (tsl-post.js Loop
           // end: int(6)). grLampIdx below is a position in THIS ordering, so a
           // mapped floodlight sorting 7th-12th produced a lampShadowIdx the
           // march can never equal: its beam glowed straight through cars and
           // walls instead of being carved by them, on any dense floodlit
           // section. Same defect GLX carried until glx/post.js was cut to 6.
-          grNL = Math.min(6, total);
+          grNL = _grKeepNearest(total, 6);
           for (let i = 0; i < grNL; i++) {
             const oi = _grSel[i].o;
             // Map the record holding this frame's spot-shadow map to its slot

@@ -30,7 +30,9 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
   WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
   `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
-  `roadChunkLamps` (WebGL2 only); `pcssPen` on three.js phones / software GL.
+  `roadChunkLamps` (WebGL2 only — WGX/TLX have no per-draw lamp upload).
+  `pcssPen` on three.js phones / software WebGL2 now scales the fixed
+  Poisson R (identity at 80); true PCSS still needs the blocker.
 
 Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
 (no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
