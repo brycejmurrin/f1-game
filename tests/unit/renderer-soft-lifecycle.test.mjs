@@ -142,10 +142,13 @@ test("TLX and WGX remove timed-out software-present waiters", () => {
 
 test("WGX soft present permits one staging read and drops pre-resize pixels", () => {
   const src = read("js/render/webgpu/wgx.js");
+  assert.match(src, /let _softBlitSeq = 0/);
   assert.match(src, /let _softDisplayPending = false, _softDisplayEpoch = 0/);
   assert.match(src, /if \(_softDisplayPending\) return null/);
-  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, epoch: _softDisplayEpoch \}/);
-  assert.match(src, /epoch === _softDisplayEpoch && _displayCanvas[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
+  // seq stamps the newest blit so a late mapAsync cannot paint an older frame
+  // after a newer encode won the pending slot (cache 1342+).
+  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch \}/);
+  assert.match(src, /epoch === _softDisplayEpoch && seq === _softBlitSeq &&[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
   assert.match(src, /const release = function \(\) \{ _softDisplayPending = false; \}/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
   assert.match(resize, /if \(sizeChanged\) \{\s*_softDisplayEpoch\+\+/);
