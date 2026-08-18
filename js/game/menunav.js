@@ -230,14 +230,13 @@ window.MenuNav = (function () {
     // Nothing ahead in the band. Vertically that means the end of a column or a
     // list, and it WRAPS — the select screen's left column bottoms out at START,
     // which is also the last focusable element in the sheet, so without a wrap
-    // ArrowDown just dead-ends there. Chip rows already left at their ends
-    // above; everything else wrapping in BOTH axes means a pad D-pad / stick
-    // press always lands somewhere, same as a key, instead of dying at an edge.
-    if (edge) return edge;
-    // No band at all (an isolated control, or the end of a wrapping grid row):
-    // DOM order, which on these screens is reading order — and which is what
-    // carries ArrowRight from the last tile of a team-picker row onto the first
-    // tile of the next. Wrap so Left from the first item is never a no-op.
+    // ArrowDown just dead-ends there. Sideways it must NOT wrap inside the band
+    // (a chip row would teleport you back to its first chip and feel stuck);
+    // chip rows already leave at their ends above.
+    if (dy && edge) return edge;
+    // No band, or a sideways end: DOM / reading order. Wrap so Left from the
+    // first item and Right from the last are never a no-op — a pad D-pad press
+    // always lands somewhere.
     const i = list.indexOf(from);
     const n = list.length;
     const j = i + (sign > 0 ? 1 : -1);
