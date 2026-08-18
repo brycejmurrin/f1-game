@@ -347,7 +347,7 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
+// Auto-throttle: enabled only in touch steering mode (the canvas drag occupies
 // the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
@@ -3862,7 +3862,7 @@ function updateCar(c, dt, ranked) {
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
-    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
@@ -8565,7 +8565,7 @@ Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
-    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+    + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);

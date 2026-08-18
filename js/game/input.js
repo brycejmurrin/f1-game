@@ -509,7 +509,7 @@ const Input = (function () {
         break;
       case "KeyE":
         if (down && !e.repeat) shiftUpPressed = true; break;
-      case "KeyQ": case "ShiftLeft":
+      case "KeyQ": case "ShiftLeft": case "ShiftRight":
         if (down && !e.repeat) shiftDownPressed = true; break;
       case "KeyC":
         if (down && !e.repeat) cameraCyclePressed = true; break;

@@ -253,6 +253,30 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.match(game, /function setPaused\(p\) \{[\s\S]*?hideCamPicker\(\)/);
 });
 
+test("How to Play names every input and drops the retired screen-half lie", () => {
+  const html = read("index.html");
+  const start = html.indexOf('id="howtoplay"');
+  const end = html.indexOf('id="advanced"');
+  assert.ok(start > 0 && end > start, "howtoplay sheet is in the shell");
+  const htp = html.slice(start, end);
+  assert.match(htp, /<dt id="htp-controls">PC \/ KEYBOARD<\/dt>/);
+  assert.match(htp, /<dt>CONTROLLER<\/dt>/);
+  assert.match(htp, /<dt>TOUCH \/ MOBILE<\/dt>/);
+  assert.match(htp, /ADAPTIVE BUTTONS/);
+  assert.match(htp, /TV SIDE/);
+  assert.match(htp, /tap to toggle/);
+  assert.match(htp, /pauses only if nothing is open/);
+  assert.match(htp, /drag on the track/);
+  assert.match(htp, /a tap does not steer/);
+  assert.match(htp, /deny switches to BUTTONS/);
+  assert.match(htp, /GEARS: MANUAL<\/span> only works here/);
+  assert.match(htp, /triggers are analog/);
+  assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
+  const game = read("js/game.js");
+  assert.match(game, /autoThrottle\(\) \? 1 : Math\.max\(0, Input\.throttleLevel\(\)\)/,
+    "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
+});
+
 test("How to Play exposes pinned semantic jump landmarks", () => {
   const html = read("index.html");
   const css = read("css/overlays.css");
