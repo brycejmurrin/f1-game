@@ -24,11 +24,28 @@ knocked four knobs' own defaults off their grids; the guard caught it.
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
 sampled file list) gives all 183 knobs a consumer on the shipping (GLX) path —
 **zero unwired**. The deferred backends are no longer excluded: `node tools/tune-backend-audit.mjs`
-checks name presence plus missing-`tune` fallbacks on GLX / WGX / TLX
-(`tests/unit/tune-backend-parity.test.mjs`). Recorded GLX-only knobs:
-`perChunkLights`, `roadChunkLamps`. SETTINGS steppers that are not TUNE_DEFS
-(GRAPHICS / RENDERER / THREE PATH / SCREENSHOTS) live in `js/game/gfx-quality.js`
-and apply to whichever backend is bound.
+is a three-pass lattice (`tests/unit/tune-backend-parity.test.mjs`):
+
+1. **Name** — every portable knob is mentioned on the GLX / WGX / TLX trees.
+2. **Fallback** — a missing `tune` field reads `TUNE_DEFS.def`, not a silent 0
+   (the WGX `carReflect` 0-vs-0.05 class).
+3. **Consume** — each of the 73 uniforms is a live identifier in that backend's
+   shader tree (comment-stripped). Packed WGX/TLX locals that rename the GLSL
+   `u` are listed in `SHADER_ALIAS`; `fogDensityMul` / `mistDensity` are
+   `CPU_FOLD` (multiplied into the uploaded fog/mist field in the packer).
+
+Recorded GLX-only knobs: `perChunkLights`, `roadChunkLamps`. Honest no-op:
+`pcssPen` does nothing on TLX phone/software GL (fixed-radius kernel); it is
+live on GLX, WGX, TLX desktop WebGL2, and TLX WebGPU.
+
+SETTINGS look steppers that are not TUNE_DEFS live in `js/game/gfx-quality.js`
+and `js/game.js` (RESOLUTION). GRAPHICS / RESOLUTION / RENDERER apply to
+whichever backend is bound (`PerfGov.setUserTier` → `po.reflect` /
+`po.carReflect` / `po.bloom` / `po.ssao` / `po.godray` / `po.contact` /
+`po.lampVol`, and `gfx.setRenderScale`). THREE PATH is TLX-only; SCREENSHOTS
+is WGX + TLX-WebGPU (GLX already paints `#game`). CAMERA TUNER (7 knobs in
+`js/game/cam-tune.js`) and AUDIO / steer sliders are CPU-only and
+backend-agnostic.
 
 The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):

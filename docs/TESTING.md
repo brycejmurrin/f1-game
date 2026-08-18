@@ -869,7 +869,7 @@ what it covers.
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
 | `lighting-reapply.test.mjs` | every tuner knob consumed only inside `applyRaceSettings()` is listed in `APPLY_RACE_IDS`, or its slider silently does nothing until an unrelated TIME/WEATHER change |
-| `tune-backend-parity.test.mjs` | every `TUNE_DEFS` slider is named on GLX / WGX / TLX, and a missing-`tune` numeric fallback matches the shipped `def` (`tools/tune-backend-audit.mjs`; GLX-only: `perChunkLights`, `roadChunkLamps`) |
+| `tune-backend-parity.test.mjs` | every `TUNE_DEFS` slider is named on GLX / WGX / TLX, a missing-`tune` fallback matches the shipped `def`, and each uniform is a live shader identifier (`tools/tune-backend-audit.mjs`; also GRAPHICS shed / RESOLUTION `setRenderScale`; GLX-only: `perChunkLights`, `roadChunkLamps`) |
 | `lighting-rebuild.test.mjs` | every tuner knob consumed only inside `buildTrackLights()` carries `rebuild:true`, or its slider is invisible until the next track load |
 | `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |

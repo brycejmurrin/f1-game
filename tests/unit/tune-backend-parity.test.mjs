@@ -1,5 +1,6 @@
-// Every LIGHTING TUNER slider must be seen on GLX / WGX / TLX, and a missing
-// `frame.tune` field must fall back to TUNE_DEFS.def — not a silent 0.
+// Every LIGHTING TUNER slider must be seen on GLX / WGX / TLX, a missing
+// `frame.tune` field must fall back to TUNE_DEFS.def — not a silent 0 —
+// and each uniform must be a live identifier in that backend's shader tree.
 //
 // THE BUG THIS EXISTS FOR. docs/LIGHTING-TUNER-SLIDERS.md audited all 183
 // knobs on the shipping GLX path and then excluded the deferred backends.
@@ -11,7 +12,10 @@
 // Run: node --test tests/unit/tune-backend-parity.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rows, gaps, fbGaps, GLX_ONLY } from "../../tools/tune-backend-audit.mjs";
+import {
+  rows, gaps, fbGaps, consumeGaps, shedMiss, scaleMiss,
+  GLX_ONLY, CPU_FOLD, SHADER_ALIAS, RECORDED_NOOP, SETTINGS_LOOK, SHED_OPTS,
+} from "../../tools/tune-backend-audit.mjs";
 
 test("TUNE_DEFS still has the full lighting-tuner lattice", () => {
   assert.ok(rows.length >= 180, `registry shrank to ${rows.length}`);
@@ -37,4 +41,33 @@ test("missing-tune fallbacks match TUNE_DEFS.def on every backend", () => {
   assert.equal(fbGaps.length, 0,
     "a backend's `T.id != null ? T.id : N` (or k/gk default) is not the shipped def:\n" +
     fbGaps.map((r) => `  ${r.id} def=${r.def} ${r.fbMiss.join(" ")}`).join("\n"));
+});
+
+test("every portable uniform is a live identifier in the GLX / WGX / TLX shader tree", () => {
+  assert.equal(consumeGaps.length, 0,
+    "a uniform is packed in JS but the shader never reads it (add a SHADER_ALIAS rename or wire the knob):\n" +
+    consumeGaps.map((r) => `  ${r.id} missing ${r.consumeMiss.join(",")}`).join("\n"));
+});
+
+test("SHADER_ALIAS / CPU_FOLD / RECORDED_NOOP ids still exist in TUNE_DEFS", () => {
+  const ids = new Set(rows.map((r) => r.id));
+  for (const id of [...Object.keys(SHADER_ALIAS), ...CPU_FOLD, ...RECORDED_NOOP.map((n) => n.id)]) {
+    assert.ok(ids.has(id), `${id} left TUNE_DEFS — drop it from the consume allowlists`);
+  }
+});
+
+test("GRAPHICS feature-shed fields are read on every present() path", () => {
+  assert.deepEqual(shedMiss, [],
+    "a GRAPHICS / PerfGov shed (po.reflect / carReflect / bloom / ssao / godray / contact / lampVol) is missing from a backend present():\n" +
+    shedMiss.join("\n"));
+  assert.equal(SHED_OPTS.length, 7);
+});
+
+test("RESOLUTION setRenderScale exists on GLX, WGX, and TLX", () => {
+  assert.deepEqual(scaleMiss, []);
+});
+
+test("SETTINGS look steppers stay the five display controls", () => {
+  assert.deepEqual(SETTINGS_LOOK.map((s) => s.id),
+    ["gfxPreset", "resMode", "gfxBackend", "threePath", "screenshots"]);
 });
