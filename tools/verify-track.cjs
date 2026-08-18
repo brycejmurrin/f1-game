@@ -203,6 +203,15 @@ function verifyTrack(id) {
   // scenery pass produced nothing even if validation passed.
   if (props === 0) throw new Error("props mesh is EMPTY — the circuit has no scenery");
 
+  // Per-circuit prop-vert ratchet. Vegas is the fleet outlier (~1.83 M);
+  // iOS starts jetting the page near ~100 MB of interleaved GPU buffer.
+  // Unlisted circuits stay uncapped — this is a tripwire on the known hog,
+  // not a fleet budget.
+  const PROP_VERT_CAP = { vegas: 1850000 };
+  if (PROP_VERT_CAP[id] && props > PROP_VERT_CAP[id]) {
+    throw new Error(`${id} props ${props} verts exceed cap ${PROP_VERT_CAP[id]}`);
+  }
+
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain}) — ${total} total`);
 }
 

@@ -327,7 +327,13 @@ const CEILINGS = {
   // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
   // 8601 -> 8600: factory aero/ERS on AI + houseStyle call sites (net −1).
   // Union with snapGameCam soft-present invalidate measured 8600.
-  "js/game.js": 8600,
+  // 8600 -> 8635: lazy AGENT_FILES / wantAgentSurface() / bootAgentSurface.
+  // The three files left FULL (~350 KB) so github.io players never parse them;
+  // the loader table + gate have to live next to BACKEND_FILES (same DAG
+  // injector). window.__apex = null is the eval-time latch the global
+  // registry pins on this file; ApexApi.create stays call-time after the
+  // inject. Bug-explaining growth at the boot site, not a feature.
+  "js/game.js": 8635,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -382,7 +388,12 @@ const CEILINGS = {
   // 2766 -> 2800: 2026 realism — extra sidepod stations, floor LE teeth,
   // underwing fences, reverse-P inlet, beveled halo. Still under 2400/1500.
   // 2800 -> 2851: recipe-gated duct / wakeboard / floor-slot kits.
-  "js/car/car3d.js": 2851,
+  // 2851 -> 2887: recipe-gated 2026 halo furniture (beveled blade, winglet,
+  // T-cam stalks, windscreen fairing). Defaults stay 0 / 2392 body.
+  // 2887 -> 3322: recipe-gated part-realism (exhaust lip/shield, fuel hatch/vent,
+  // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
+  // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
+  "js/car/car3d.js": 3322,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -409,7 +420,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2933, // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
+  "js/track/tracks.js": 2940, // 2933 -> 2940: foundation() falls back to Tracks.terrainY when the 30 m build grid misses a flatTerrain shelf (Montreal pier sat 2.72 m above the ribbon the spec samples). // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
 };
 
 test("the big modules are not growing unnoticed", () => {

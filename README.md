@@ -144,7 +144,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 ## Testing & development
 
 The project ships a **Playwright test suite** — 113 Playwright specs — plus
-123 `node --test` unit suites, covering rendering, physics, UI across screens,
+124 `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
@@ -156,7 +156,7 @@ tail -f artifacts/logs/smoke.log             # watch one live
 node tools/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:fast                            # quick subset (~3 min)
+npm run test:fast                            # smoke + collisions + steering (browser; minutes on SwiftShader)
 npm test -- tests/specs/autopilot.spec.js          # single file
 node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```

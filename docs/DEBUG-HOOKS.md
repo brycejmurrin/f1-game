@@ -528,19 +528,23 @@ pass through. This is the reliable way to get state out of a real device —
 `copy()` only resolves at top-level console scope and the clipboard API needs
 document focus.
 
-### `gpuTimer(on?) → {supported, on, ms}`
+### `gpuTimer(on?) → {supported, on, ms, software}`
 Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
 starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.
 `ms` is the GPU-side cost of a recent frame (`-1` until a result lands, a few
-frames after enabling, or when unsupported). This is the GPU-side counterpart to
-the `perf-profile` CPU flame chart — use it to tell whether a spike is GPU-bound
-(fill/fragment) or CPU-bound before optimising. **Chrome/Android only**: the
-extension is absent on iOS Safari (`supported:false`) and yields garbage under
-SwiftShader (CI), where GPU_DISJOINT stays set and readings are dropped to `-1`.
+frames after enabling, or when unsupported). `software` is `ms < 0`: no sample
+yet, the extension is absent, or the backend is a software rasterizer
+(SwiftShader / Lavapipe). Do not treat a negative `ms` as a GPU millisecond —
+on a real device after a few timed frames `software` goes false and `ms` is the
+sample. This is the GPU-side counterpart to the `perf-profile` CPU flame chart —
+use it to tell whether a spike is GPU-bound (fill/fragment) or CPU-bound before
+optimising. **Chrome/Android only**: the extension is absent on iOS Safari
+(`supported:false`) and yields garbage under SwiftShader (CI), where
+GPU_DISJOINT stays set and readings stay at `-1` (`software:true`).
 ```js
 __apex.race("vegas"); __apex.gpuTimer(true);
 // drive a few frames on a busy night circuit, then:
-__apex.gpuTimer();   // → { supported:true, on:true, ms:6.2 }
+__apex.gpuTimer();   // → { supported:true, on:true, ms:6.2, software:false }
 ```
 
 ### `groundY(f, lat?) → {x, z, roadY, terrainY, gap}`
@@ -2087,7 +2091,8 @@ Three things to know:
 - **`screenPct` is null unless `inFrame`.** A point on the eye plane has `w→0`
   and projects to coordinates like `27629%`. That is correct projective maths
   and useless, so it isn't shipped. Corners behind you are still listed, with
-  `behindCamera: true` and a bearing near ±180° — "T2 is 80 m behind you" is
+  `behindCamera: true` when `|bearingDeg| > 90` (behind the look direction,
+  not merely behind the near plane) — "T2 is 80 m behind you" is
   exactly what an agent needs after a spin.
 
 

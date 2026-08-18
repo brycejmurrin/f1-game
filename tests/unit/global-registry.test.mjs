@@ -6,7 +6,7 @@
  * every global it references is assigned by SOME file that loads first. The
  * post-extraction ritual was "grep the removed symbols" — this test replaces
  * it with the real reference graph from tools/scan-globals.mjs (espree +
- * eslint-scope over every manifest FULL + DEFERRED file, scanned LIVE — no
+ * eslint-scope over every manifest FULL + DEFERRED + LAZY_AGENT file, scanned LIVE — no
  * artifacts/ state, works from a fresh clone).
  *
  * Rules, with the currently-known violations FROZEN as baselines in the
@@ -80,7 +80,7 @@ const KNOWN_EXTERNAL_READS = {
   ],
   "js/game/perf.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/game/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
-  "js/game.js": ["__APEX_BUILD", "__apexReportError"],      // so the scan cannot see the writer
+  "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
 };
 

@@ -1632,6 +1632,65 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
+test("shadow model UBO flushes once per pass (not per cast)", () => {
+  // Lit draws already batch via _flushDrawUBO. Shadow used to upload 16
+  // floats per castShadow* (sun + car + lamp). WebGPU Fundamentals:
+  // fill one typed array, one writeBuffer, dynamic offsets at setBindGroup.
+  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeShadowModel exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeShadowModel must only fill the CPU ring — no per-cast queue upload");
+  assert.match(WGX_SOURCE, /function _flushShadowModelUBO/,
+    "one flush must exist, matching the lit _flushDrawUBO shape");
+  assert.match(WGX_SOURCE, /shadowModelRing/,
+    "CPU ring must exist (SHADOW_SLOTS × 64 floats)");
+  for (const name of ["shadowEnd", "carShadowEnd", "lampShadowEnd"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 900);
+    assert.match(body, /_flushShadowModelUBO\(\)/, name + " must flush the shadow model ring");
+    const flushAt = body.indexOf("_flushShadowModelUBO()");
+    const submitAt = body.indexOf("queue.submit");
+    assert.ok(flushAt >= 0 && submitAt > flushAt, name + " must flush before submit");
+  }
+  const set = WGX_SOURCE.match(/function _shadowSetModel\([\s\S]*?\n    \}/);
+  assert.ok(set, "_shadowSetModel exists");
+  assert.doesNotMatch(set[0], /setBindGroup\([^)]*\[slot/,
+    "_shadowSetModel must not allocate a fresh offset array per cast");
+});
+
+test("quad FX and decal UBOs flush once per lit pass (not per stamp)", () => {
+  // Blob shadows (~field size) and car decals used per-slot writeBuffer into
+  // already-dynamic-offset rings. Same leftover shape as the shadow model
+  // flush: fill a CPU ring, one upload before litPass.end().
+  const write = WGX_SOURCE.match(/function _writeQuadFx\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeQuadFx exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeQuadFx must only fill quadFxRing — no per-stamp queue upload");
+  const withoutFlush = WGX_SOURCE
+    .replace(/function _flushQuadFxUBO\([\s\S]*?\n    \}/, "")
+    .replace(/function _flushDecalUBO\([\s\S]*?\n    \}/, "");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(quadFxUBO/,
+    "quadFxUBO must be written only from _flushQuadFxUBO");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(decalUBO/,
+    "decalUBO must be written only from _flushDecalUBO");
+  assert.match(WGX_SOURCE, /function _flushLitRings/,
+    "draw + quad + decal rings must flush together so an End site cannot forget one");
+  for (const name of ["envFaceEnd", "present"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 1400);
+    assert.match(body, /_flushLitRings\(\)/, name + " must flush all lit rings");
+    const flushAt = body.indexOf("_flushLitRings()");
+    const endAt = body.indexOf("litPass.end()");
+    assert.ok(flushAt >= 0 && endAt > flushAt, name + " must flush before litPass.end()");
+  }
+  const stamp = WGX_SOURCE.match(/function _drawQuadStamp\([\s\S]*?\n    \}/);
+  assert.ok(stamp, "_drawQuadStamp exists");
+  assert.doesNotMatch(stamp[0], /setBindGroup\([^)]*\[slot/,
+    "_drawQuadStamp must not allocate a fresh offset array per stamp");
+});
+
 test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
   // H then V (and times>1) into one uniform region before submit left every
   // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.

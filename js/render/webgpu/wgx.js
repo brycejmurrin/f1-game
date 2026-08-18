@@ -243,6 +243,7 @@ const WGX = (function () {
   const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
+  const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
   // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
@@ -882,7 +883,12 @@ const WGX = (function () {
     let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
         shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
     let _shadowRendered = false, _shadowLightVP = null;
-    const shadowLVPData = new Float32Array(16), shadowModelData = new Float32Array(16);
+    const shadowLVPData = new Float32Array(16);
+    // Per-slot CPU ring (stride = SHADOW_MODEL_STRIDE/4). Filled during the
+    // shadow pass; one writeBuffer in _flushShadowModelUBO() replaces N
+    // per-cast uploads. Same shape as drawRing / _flushDrawUBO.
+    const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
+    const _shadowDynOff = [0];   // reused dynamic-offset scratch (was a fresh [slot*stride] per cast)
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
@@ -961,7 +967,13 @@ const WGX = (function () {
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
     let _fxQuadSlot = 0, _fxDecalSlot = 0;
     const FX_QUAD_SLOTS = 64, FX_DECAL_SLOTS = 128, FX_STRIDE = 256;
-    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4
+    const FX_F32_STRIDE = FX_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
+    // CPU rings for blob/mark + decal. Filled per stamp; one writeBuffer each
+    // in _flushLitRings() before litPass.end() (same shape as drawRing).
+    const quadFxRing = new Float32Array(FX_QUAD_SLOTS * FX_F32_STRIDE);
+    const decalFxRing = new Float32Array(FX_DECAL_SLOTS * FX_F32_STRIDE);
+    const _fxQuadDynOff = [0], _fxDecalDynOff = [0];
+    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 — glow still uses this scratch
     // Camera-facing glow billboard corner template (mirror GLX _glowCorners).
     const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
 
@@ -3201,6 +3213,21 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
+    function _flushQuadFxUBO() {
+      if (!quadFxUBO || _fxQuadSlot <= 0) return;
+      device.queue.writeBuffer(quadFxUBO, 0, quadFxRing, 0, _fxQuadSlot * FX_F32_STRIDE);
+    }
+    function _flushDecalUBO() {
+      if (!decalUBO || _fxDecalSlot <= 0) return;
+      device.queue.writeBuffer(decalUBO, 0, decalFxRing, 0, _fxDecalSlot * FX_F32_STRIDE);
+    }
+    // All three lit-pass rings share one encoder. Flush together before end()
+    // so a future End site cannot upload draws and forget FX (or the reverse).
+    function _flushLitRings() {
+      _flushDrawUBO();
+      _flushQuadFxUBO();
+      _flushDecalUBO();
+    }
     // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
     // authored buffer; bury/floor keep the world LUT (magic 12345).
@@ -3457,7 +3484,7 @@ const WGX = (function () {
         _envFrame = null;
       }
       if (!envCubeTex || !litPass || !_envEncoder) return;
-      _flushDrawUBO();
+      _flushLitRings();
       litPass.end();
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
@@ -3601,7 +3628,7 @@ const WGX = (function () {
       // cannot (see the device.lost handler). Drop the frame state instead.
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
       try {
-      if (litPass) { _flushDrawUBO(); litPass.end(); litPass = null; }
+      if (litPass) { _flushLitRings(); litPass.end(); litPass = null; }
       // Acquire the present target at present time — swapchain on hardware, a
       // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
@@ -4011,14 +4038,22 @@ const WGX = (function () {
     // the later lit pass that samples it. All current casters use MAT_IDENT, but
     // model is honoured via a dynamic-offset ring (one slot per castShadow* call).
     function _writeShadowModel(slot, model) {
-      shadowModelData.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
-      device.queue.writeBuffer(shadowModelUBO, slot * SHADOW_MODEL_STRIDE, shadowModelData, 0, 16);
+      const src = model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT;
+      shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
+    }
+    // One writeBuffer for every slot filled this pass — call before
+    // shadowPass.end(). writeBuffer is queue-ordered before submit, so
+    // draws recorded earlier still see the data (same rule as _flushDrawUBO).
+    function _flushShadowModelUBO() {
+      if (!shadowModelUBO || _shadowSlot <= 0) return;
+      device.queue.writeBuffer(shadowModelUBO, 0, shadowModelRing, 0, _shadowSlot * SHADOW_MODEL_F32_STRIDE);
     }
     function _shadowSetModel(model) {
       const slot = _shadowSlot++;
       if (slot >= SHADOW_SLOTS) return -1;
       _writeShadowModel(slot, model);
-      shadowPass.setBindGroup(1, shadowModelBindGroup, [slot * SHADOW_MODEL_STRIDE]);
+      _shadowDynOff[0] = slot * SHADOW_MODEL_STRIDE;
+      shadowPass.setBindGroup(1, shadowModelBindGroup, _shadowDynOff);
       return slot;
     }
     function shadowBegin(lightVP) {
@@ -4105,6 +4140,7 @@ const WGX = (function () {
     }
     function shadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
 
       // Run blocker map min-reduction pass (WebGL2 parity uBlockerMap)
@@ -4153,6 +4189,7 @@ const WGX = (function () {
     }
     function carShadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
@@ -4182,6 +4219,7 @@ const WGX = (function () {
     }
     function lampShadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
@@ -4498,11 +4536,11 @@ const WGX = (function () {
     // size = (w, l, p2, p3): BLOB -> (w,l, softInner 0.25, peakAlpha 0.45);
     // MARK -> (w,l, peakAlpha 0.38, 0).
     function _writeQuadFx(slot, model, w, l, p2, p3) {
-      const s = fxScratch;
-      s.set(frameVPGpu, 0);
-      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 16);
-      s[32] = w; s[33] = l; s[34] = p2; s[35] = p3;
-      device.queue.writeBuffer(quadFxUBO, slot * FX_STRIDE, s, 0, 36);
+      const base = slot * FX_F32_STRIDE;
+      const s = quadFxRing;
+      s.set(frameVPGpu, base);
+      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base + 16);
+      s[base + 32] = w; s[base + 33] = l; s[base + 34] = p2; s[base + 35] = p3;
     }
     function _drawQuadStamp(pipeline, model, w, l, p2, p3) {
       if (!_fxReady || !litPass || !pipeline) return;
@@ -4510,7 +4548,8 @@ const WGX = (function () {
       if (slot >= FX_QUAD_SLOTS) return;
       _writeQuadFx(slot, model, w, l, p2, p3);
       litPass.setPipeline(pipeline);
-      litPass.setBindGroup(0, quadFxBG, [slot * FX_STRIDE]);
+      _fxQuadDynOff[0] = slot * FX_STRIDE;
+      litPass.setBindGroup(0, quadFxBG, _fxQuadDynOff);
       litPass.setVertexBuffer(0, quadFxVBO);
       litPass.draw(6, 1, 0, 0);
     }
@@ -4601,9 +4640,10 @@ const WGX = (function () {
       if (!_fxReady || !litPass || !pDecal || !mesh || !mesh.vbuf || !tex || !tex.view) return;
       const slot = _fxDecalSlot++;
       if (slot >= FX_DECAL_SLOTS) return;
-      const s = fxScratch, o = opts || {};
-      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
-      s.set(frameVPGpu, 16);
+      const base = slot * FX_F32_STRIDE;
+      const s = decalFxRing, o = opts || {};
+      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base);
+      s.set(frameVPGpu, base + 16);
       const sd = frameSunDir || [0.3,0.6,0.5];
       const Td = frameTune || null;
       const kM = Td && Td.keyMul != null ? Td.keyMul : 1;
@@ -4613,16 +4653,15 @@ const WGX = (function () {
       const askyRaw = frameAmbSky || [0.3,0.32,0.36], agrRaw = frameAmbGround || [0.2,0.19,0.18];
       const asky = [askyRaw[0] * ambM, askyRaw[1] * ambM, askyRaw[2] * ambM];
       const agr = [agrRaw[0] * ambM, agrRaw[1] * ambM, agrRaw[2] * ambM];
-      s[32] = sd[0]; s[33] = sd[1]; s[34] = sd[2]; s[35] = 0;
-      s[36] = sc[0]; s[37] = sc[1]; s[38] = sc[2]; s[39] = 0;
-      s[40] = asky[0]; s[41] = asky[1]; s[42] = asky[2]; s[43] = 0;
-      s[44] = agr[0];  s[45] = agr[1];  s[46] = agr[2];  s[47] = 0;
+      s[base + 32] = sd[0]; s[base + 33] = sd[1]; s[base + 34] = sd[2]; s[base + 35] = 0;
+      s[base + 36] = sc[0]; s[base + 37] = sc[1]; s[base + 38] = sc[2]; s[base + 39] = 0;
+      s[base + 40] = asky[0]; s[base + 41] = asky[1]; s[base + 42] = asky[2]; s[base + 43] = 0;
+      s[base + 44] = agr[0];  s[base + 45] = agr[1];  s[base + 46] = agr[2];  s[base + 47] = 0;
       const uvr = o.uvRect || null;
-      s[48] = uvr ? uvr[0] : 0; s[49] = uvr ? uvr[1] : 0; s[50] = uvr ? uvr[2] : 1; s[51] = uvr ? uvr[3] : 1;
+      s[base + 48] = uvr ? uvr[0] : 0; s[base + 49] = uvr ? uvr[1] : 0; s[base + 50] = uvr ? uvr[2] : 1; s[base + 51] = uvr ? uvr[3] : 1;
       const tint = o.tint || null;
-      s[52] = tint ? tint[0] : 1; s[53] = tint ? tint[1] : 1; s[54] = tint ? tint[2] : 1;
-      s[55] = o.glow || 0;
-      device.queue.writeBuffer(decalUBO, slot * FX_STRIDE, s, 0, 56);
+      s[base + 52] = tint ? tint[0] : 1; s[base + 53] = tint ? tint[1] : 1; s[base + 54] = tint ? tint[2] : 1;
+      s[base + 55] = o.glow || 0;
       let bg = tex._wgxDecalBG;
       if (!bg) {
         bg = device.createBindGroup({ layout: fxDecalLayout, entries: [
@@ -4633,7 +4672,8 @@ const WGX = (function () {
         tex._wgxDecalBG = bg;
       }
       litPass.setPipeline(pDecal);
-      litPass.setBindGroup(0, bg, [slot * FX_STRIDE]);
+      _fxDecalDynOff[0] = slot * FX_STRIDE;
+      litPass.setBindGroup(0, bg, _fxDecalDynOff);
       litPass.setVertexBuffer(0, mesh.vbuf);
       litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);

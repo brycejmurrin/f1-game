@@ -121,10 +121,9 @@ async function precacheAssetLists() {
     }
   }
   // Cache API put during install makes V8 build a "full" code cache of every
-  // script (v8.dev). These three are the eager __apex / agentview surface —
-  // they stay parser-blocking in index.html, but must not be install-precached.
-  // The fetch handler already cache.put on first miss (progressive / normal
-  // code cache). Do NOT add them to optional: that is still install-time put.
+  // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
+  // suspenders if a tag is re-added. Do NOT add them to optional: that is
+  // still an install-time put. Fetch-miss still cache.put on first use.
   for (const u of [...essential]) {
     if (u.includes("js/game/apex.js") ||
         u.includes("js/game/agentview.js") ||

@@ -185,58 +185,31 @@ Four decisions that solve their problem unusually well:
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
-**2026-08-17 parallel survey** (new candidates, not yet worked): see
-[`research/SURVEY-BUGS-PERF-2026-08-17.md`](research/SURVEY-BUGS-PERF-2026-08-17.md)
-— WGX shared-`writeBuffer` before submit, career finished-season `trackIdx =
--1`, Singapore `lapMirror` portal supports, VSC/SC player pace, net contact vs
-`predict()`, GLX env-probe frustum restore, TLX `fwidth` in non-uniform TSL
-`If`. Items below remain the standing register until a fix wave absorbs them.
+**2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
+the next intended `game.js` extractions in
+[`research/CLEANUP-SWEEP-2026-08-18.md`](research/CLEANUP-SWEEP-2026-08-18.md).
 
-- **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
-  allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
-  failing — it wants a geometry fix, not a wider tolerance. It spent part of
-  2026-08 hidden behind a stale count assertion in the same spec that failed
-  first; with the count re-pinned, the pier assertion is visible again and the
-  product question it asks is still unanswered.
-- **`hud-layout` `notched-landscape` — FIXED, validated 25/25 across all four
-  viewports.** `#hud-sectors`' top offset is now derived from `var(--tap)`
-  (`css/hud.css`) instead of a hard-coded 56, and the short-landscape override
-  that pulled it UP to 52 is gone (`css/responsive.css`). Kept below for the
-  diagnosis, which is the reusable part. All six variants
-  (tilt/buttons/touch × auto/manual gears) fail with three layout problems where
-  the spec expects none; the other viewport rows pass, so it is the VIEWPORT —
-  852×393 with real safe-area insets (`sal 59, sar 59, sab 21`) — not the input
-  mode. Confirmed PRE-EXISTING at `d7a1158` by an A/B on a quiet box, both sides
-  via `tools/test-solo.mjs` (which refuses to start above its load gate):
-  `HEAD` 6/6 fail at 20.3–22.1 s, base worktree 6/6 fail at 21.7–22.8 s. No
-  timeouts on either side — these are assertion failures, not contention. Repro:
-  `node tools/test-solo.mjs tests/specs/hud-layout.spec.js -g notched-landscape`.
+**2026-08-17 parallel survey** (provenance; several items absorbed): see
+[`research/SURVEY-BUGS-PERF-2026-08-17.md`](research/SURVEY-BUGS-PERF-2026-08-17.md).
+Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
+`lapMirror` portal remaps have landed in code. Remaining survey leftovers live
+on the 08-18 perf-hunt board, not this register.
 
-  **Diagnosed — one collision, and it IS player-visible.** A `--reporter=list`
-  run gives the actual payload: `hudClash: ["#hud-sectors+pausebtn"]` (a single
-  pair; the "Received +3" in the live reporter is diff LINES, not items). The
-  arithmetic: `#pausebtn` is `width/height: var(--tap)` at `top: calc(8px + …)`
-  (`css/overlays.css:477`), so on touch — where `--tap: 52px`
-  (`css/tokens.css:405`) — it spans y 8→60. `#hud-sectors` is pinned at
-  `top: calc(56px + …)` (`css/hud.css:156`). **A 4 px overlap.** The 56px
-  constant works against the 44px desktop `--tap` (44+8 = 52 < 56) and stops
-  holding at 52. `css/overlays.css:492` records a sibling of the same bug class
-  ("on touch (--tap: 52px) CHASE overlapped…"), so this is a known trap, not a
-  novel one.
-
-  Why it matters more than the portrait case the spec already dismissed: that
-  one (`.hud-top`+`#pausebtn`, a measured 8.7px collision) is unreachable
-  behind the full-screen `z-index: 9000` `#rotate-device` block, which is why
-  `HUD_LANDSCAPE_ONLY` exists and why the spec author correctly refused to move
-  CSS nobody could see move. In LANDSCAPE `#rotate-device` is not up, so this
-  collision is on screen: the sector splits sit on the pause button on a
-  notched phone. The fix is to derive the sectors' offset from the button's
-  real box (`8px + var(--tap) + gap`) instead of the hard-coded 56 — which
-  leaves desktop unchanged (44+8+4 = 56) and moves touch down 8px. Note also
-  that the two elements scale the safe-area inset differently (`#hud-sectors`
-  divides `--sar`/`--sat` by `--hud-scale`, `#pausebtn` does not), so they
-  additionally drift apart at non-default HUD SIZE — worth settling in the same
-  pass.
+- **Montreal: a bridge support floats 2.72 m off the ground — FIXED in
+  engine + circuit.** `foundation()` now falls back to `Tracks.terrainY` when
+  the build-time 30 m triangle grid misses a `flatTerrain` shelf, and the
+  casino footbridge opts out of `overheadSpan`'s auto-legs (`supports: false`)
+  so the custom piers are the only feet. Browser spec not re-run in this
+  session (load).
+- **`hud-layout` `notched-landscape` — FIXED.** `#hud-sectors` top is
+  `calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z))` in
+  `css/hud.css` (the old hard-coded 56 was desktop-`--tap` only and overlapped
+  `#pausebtn` by 4 px on touch). The short-landscape override that pulled it
+  UP to 52 is gone. Diagnosis that still applies: never pin HUD chrome to a
+  pixel constant when a sibling is sized from `--tap`; convert the unscaled
+  sum into the zoomed element's units (`--hud-z`) or the pair drifts at
+  non-default HUD SIZE. Portrait `.hud-top`/`#pausebtn` overlap stays
+  excluded — it sits behind `#rotate-device`.
 - **`menu-keyboard` › "left/right move along a chip row without leaving it" is
   red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
   block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
@@ -246,11 +219,12 @@ journal; this is what remains.
   dialog regression above owns "Tab cannot escape the track-detail dialog" — so
   the file is worth one pass rather than two separate fixes. It is the only
   failure in `test:ui`, which otherwise runs 100/100.
-- **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
-  `indianapolis` 4.74 m over the road against a 0.2 m cap
-  (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
-  spec's own header calls "fully clean (max=0)", so this is a regression, not a
-  residual.
+- **`props-over-road` on COTA and Indianapolis — geometry fix landed;
+  browser re-measure not run in this session.** COTA's amphitheater now emits
+  from its declared origin (the 8 m declared-vs-built offset). Indianapolis
+  shortens the oval stand and colour-band chords that covered the infield at
+  racing 0.33. Re-measure with `tools/measure-props-over-road.mjs` before
+  treating the spec as green.
 
   **Both offenders are located and are the same class: a big bespoke
   `structure`, not foliage, barriers or lighting.** Measured with
@@ -288,10 +262,12 @@ journal; this is what remains.
   `center = vadd(vadd(a.c, a.r, 8), a.u, 13)` and emits its stage deck at the
   anchor, so the tested box sits 8 m further from the circuit than the geometry.
   `modelGroup` now measures this (`diagnostics.escaped`, read via
-  `__apex.modelDiagnostics()`): the amphitheater escapes its declared box by
+  `__apex.modelDiagnostics()`): the amphitheater escaped its declared box by
   **9.0 m along the RIGHT axis** — laterally, toward the track — which is the
-  4.79 m of geometry over the racing line. Reported, not rejected: enforcing
-  would delete authored scenery across 40 circuits on an unmeasured rule.
+  4.79 m of geometry over the racing line. The amphitheater now emits from
+  that declared origin, and `modelGroup` re-runs the road preflight on the
+  **emitted** oriented box (lateral footprint only — vertical apron slack is
+  still a diagnostic, not a delete).
 
   **Indianapolis is NOT this bug.** Same instrument: 15 of its 21 groups escape
   their declared bounds, but every one is vertical (≤0.44 m aprons/greens) and
@@ -313,8 +289,8 @@ journal; this is what remains.
   310,000, justified in the spec's own comment — but Vegas builds 1,825,925
   prop vertices (~80 MB of GPU buffer at the real interleave, against the
   ~100 MB where iOS jetsams the page) with **no cap at all**.
-  `verify-track.cjs` already computes the number; the gate is a threshold plus
-  the existing ratchet pattern.
+  `verify-track.cjs` now fails `vegas` above 1 850 000 prop verts (measured
+  ~1.83 M + slack). Other circuits stay uncapped.
 - **The banked-reference measurement error is fixed locally, not durably.**
   Monza's 0.294 and Spa's 0.525 "terrain over road" readings were one root
   cause — probes measured against the unbanked centreline where `bankZones`
@@ -327,11 +303,10 @@ journal; this is what remains.
   should be reconsidered on its remaining merits.
 - **A19 residue.** `css/overlays.css` still carries mutually inconsistent
   measured cluster widths in comments (the "467px" family) of which at least
-  two are stale. The hud-layout coverage gap
-  is closed for landscape (`HUD_LANDSCAPE_ONLY` now checks `.hud-top`,
-  `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait is deliberately excluded,
-  with the measured `.hud-top`/pausebtn overlap documented as unreachable
-  behind the full-screen `#rotate-device` block.
+  two are historical measurements of the pre-grid flex strip. Landscape
+  hud-layout coverage is closed (`HUD_LANDSCAPE_ONLY` checks `.hud-top`,
+  `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait overlap stays excluded
+  behind `#rotate-device`.
 - **A13 zoom/rect sites — closed.** `js/game/css-zoom.js` (`CssZoom`) is the
   shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
   `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
@@ -349,32 +324,19 @@ here and their narratives are in the archived journal — so what is left is wha
 survived a fix wave, plus what that session's own gates surfaced. Listed
 most-load-bearing first.
 
-- **A possible curvature-sign inconsistency**, flagged independently by three
-  surveyors. The measured convention is `+k = LEFT` (`js/track/spline.js`, the
-  `bankingProfile` fix, `js/game.js`, and the agent `CONVENTIONS` string all
-  agree), but a stale `findCorners` header (`js/track/mesh.js`) reads
-  `+ = right`, and several sites encode that reading: `buildKerbs` (which feeds
-  `onKerb()` physics), the tyre-barrier pass and corner/braking signage in
-  `tracks.js`, and the agent camera's outside-of-corner azimuth in
-  `js/game/apex.js` (`cinematic()`/`tourShots`). They are mutually consistent,
-  which is why nothing caught it — and the tracks ship with passing autopilot
-  laps and visual specs, so the physics-facing signs are most likely correct and
-  the *comments* are the drift. **Do not flip any sign without a rendered lap
-  that shows kerbs/barriers on the wrong side** — settle it by observation, not
-  by grep. If real, it puts kerbs and tyre walls on the inside of every corner.
-  The 2026-08-13 barrier fix stayed deliberately **vertical only** for this
-  reason: it moved wall heights onto the banking pivot and touched no lateral
-  term and no sign.
-- **The wall clamp is bypassed while `IncidentSim` owns the car.** A wall hit of
-  severity ≥34 hands the car to the incident window, and the ownership check in
-  `js/game.js`'s barrier step then skips the clamp entirely — so the player
-  tumbles through the barrier instead of being held by it. Player-only, RNG-free
-  and **pre-existing**: `tests/specs/collisions-deep.spec.js` fails 2/2 at the
-  session-start commit with the identical values, and the spec now isolates the
-  clamp through the sanctioned `__apex.incident` flags-off path so it tests the
-  clamp rather than the takeover. The product question is untouched: should
-  `wallAt` remain an outer bound during an R2 takeover, or is passing through
-  the barrier the intended cost of a launch?
+- **Curvature-sign convention — SETTLED (`+k = LEFT`).** `js/track/spline.js`
+  `curvatureRaw`, `findCorners` / `buildKerbs` in `js/track/mesh.js`,
+  `js/game.js`, and the agent `CONVENTIONS` string all agree. Historical
+  "+ = right" wording was comment drift; the physics-facing signs were already
+  the measured convention. **Still do not flip any sign without a rendered
+  lap** — the 2026-08-13 barrier fix stayed deliberately vertical-only for
+  that reason.
+- **The wall clamp is bypassed while `IncidentSim` owns the car — FIXED.**
+  Product: `wallAt` stays the outer bound during R2 (the side-world has no
+  barrier colliders). `postStep` now clamps `tf.x` and writes `px`/`pz` from
+  the clamped `(s,x)`. `updateCar` still skips its own clamp while `owns()`
+  is set — that is correct; the write-back is the remaining authority.
+  Unit-tested in `tests/unit/incident-gate.test.mjs`.
 - **Red Bull Ring's barrier coverage — FIXED (2026-08-13), and the mechanism
   was general.** tightFrac 0.225 was not missing dressing: sceneryRange()
   collapsed every authored full-lap span to zero width (wrap01(1) === 0)
@@ -384,13 +346,10 @@ most-load-bearing first.
   Verified: fleet A/B shows redbull only (0.225 -> 1.000), characterization
   + redbull-foundation + tiny + guards all green.
 
-- **`__apex.scene()` disagrees with its own spec about corners behind the
-  camera.** `tests/specs/agent-view.spec.js` asserts `|bearingDeg| > 120` for a
-  corner flagged `behindCamera`; Monza measures **108.1°**, and the value is
-  stable across camera states (107.7° before a `snapCam()`), so it is not a
-  flake — it is a genuine disagreement between the bearing convention the spec
-  encodes and the one the code computes. Neither side should move before the
-  convention is settled.
+- **`__apex.scene()` behind-camera bearing — SETTLED.** `behindCamera` means
+  `|bearingDeg| > 90` (behind the look direction), not `project() === null`
+  (behind the near plane). The spec asserts `> 90`. Monza's first behind
+  corner at ~108° now flags correctly.
 - **Title-screen CLS — FIXED, and the method is the point.** The title screen
   used to paint in the wrong shape and relay out: `body[data-density]` picks
   `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
@@ -426,17 +385,17 @@ most-load-bearing first.
   (`ahead.pts` v^2/R) with a matching speed bound — Monza 251 -> 1543 m,
   Interlagos 1119 m, spec 5/5 green, floors untouched.
 
-- **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
-  `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
-  `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
-  `parts-catalog` join the known `ui-audit` gallery as assertion-light. The banked-reference measurement error (fixed in the Monza and
-  Spa foundation specs with a local `Tracks.banking()` term) is still latent in
-  **Zandvoort's** foundation spec and ~12 others whose probes miss a bankZone —
-  the durable `groundY`/`overRoad` fix above is what retires the whole class.
-  `tests/unit/coplanar-faces.test.mjs` kept the `>= 24` roster floor its sibling
-  `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
-  drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
-  regexes.
+- **Test-quality gaps** (from the whole-`tests/` read). The
+  `ui-button-touch` "throttle button visible" never-fail (`if (count > 0)`
+  around its only `expect`) is **FIXED** — the expect is now unconditional.
+  `menu-survey` and `parts-catalog` still join the known `ui-audit` gallery as
+  assertion-light. The banked-reference measurement error (fixed in the Monza
+  and Spa foundation specs with a local `Tracks.banking()` term) is still
+  latent in **Zandvoort's** foundation spec and ~12 others whose probes miss a
+  bankZone — the durable `groundY`/`overRoad` fix above is what retires the
+  whole class. `tests/unit/coplanar-faces.test.mjs` now pins the sweep length
+  to the circuit roster (the old `>= 24` floor is gone). The lone `.test.cjs`
+  suite is invisible to the doc-count regexes.
 - **A lapped driver's LIVE row — FIXED (2026-08-13).** `intervals()` now passes
   "+1 LAP"/"+2 LAPS" through as a string (null was indistinguishable from
   missing data) and `live.js` renders a string `timeDiff` as a bar-less

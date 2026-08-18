@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 123 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 124 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -387,7 +387,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 60 of 111 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 61 of 113 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -737,6 +737,7 @@ what it covers.
 | `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
+| `debris-step-skip.test.mjs` | source contract for DebrisWorld's two-tier idle: skip `world.step(_events)` when live bodies are asleep and no car is in `FURN_WAKE_M`, but keep `_ageAndCullPool` + panel `force = 0` so `marbleGrip()` and `PANEL_IDLE_DESPAWN_S` stay honest |
 | `debris-hazard-hint.test.mjs` | `projectHazard` in `js/game/debrisworld.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
 | `spline-project-height.test.mjs` | `Tracks.project` in `js/track/spline.js` searches in XZ only, so on a circuit that crosses ITSELF it cannot tell the two legs apart even in principle — the information was absent, not mis-weighted. Pins the optional `wy` argument that adds a height term: on suzuka's crossover (~2.6 m apart in XZ, ~8.3 m in Y) a body on the upper deck displaced toward the road beneath projects onto the WRONG leg at every offset tried without it, ~2368 m away in arc, and onto the right one at all of them with it. Carries an anti-vacuity assertion that the flat search must still be wrong somewhere, and checks that away from the crossover the two forms agree exactly, so existing callers are unaffected |
 | `f1-track-accuracy.spec.js` | `CircuitPaths` OSM traces vs a pinned subset of real GeoJSON outlines (direction, shape) |

@@ -12,7 +12,7 @@
  * Every js/ file is a "use strict" IIFE assigning one global; load order is
  * hand-maintained in tools/manifest.cjs with HARD_EDGES naming the eval-time
  * dependencies. Nothing derived those edges from the code until now. This
- * scanner parses every FULL + DEFERRED file with espree, resolves references
+ * scanner parses every FULL + DEFERRED + LAZY_AGENT file with espree, resolves references
  * with eslint-scope, and reports per file:
  *
  *   assigns      globals the file creates AT EVAL TIME. Two idioms:
@@ -263,16 +263,18 @@ export function scanSource(src, file) {
 // Repo scan.
 
 export function listFiles() {
+  const lazy = (manifest.LAZY_AGENT || []).slice();
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),
-    all: [...manifest.FULL, ...Object.values(manifest.DEFERRED).flat()],
+    lazy,
+    all: [...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...lazy],
   };
 }
 
-/** Scan every FULL + DEFERRED file. Returns { files, order, assignedBy, graph }. */
+/** Scan every FULL + DEFERRED + LAZY_AGENT file. Returns { files, order, assignedBy, graph }. */
 export function scanRepo(root = ROOT) {
-  const { full, deferred, all } = listFiles();
+  const { full, deferred, lazy, all } = listFiles();
   const files = new Map();
   const errors = [];
   for (const rel of all) {
@@ -293,19 +295,19 @@ export function scanRepo(root = ROOT) {
       assignedBy.get(nm).push(rec.file);
     }
 
-  return { full, deferred, all, files, assignedBy, errors };
+  return { full, deferred, lazy, all, files, assignedBy, errors };
 }
 
 /** Serializable graph: reads filtered to module globals; the rest kept as
  *  externalReads evidence. */
 export function buildGraph(scan) {
-  const { full, deferred, files, assignedBy, errors } = scan;
+  const { full, deferred, lazy = [], files, assignedBy, errors } = scan;
   const isModuleGlobal = (nm) => assignedBy.has(nm);
   const out = { generatedAt: new Date().toISOString(), fileCount: files.size, errors, files: {}, globals: {}, evalEdges: [] };
   for (const [nm, owners] of [...assignedBy].sort()) out.globals[nm] = owners;
 
   const index = new Map(full.map((f, i) => [f, i]));
-  for (const rel of [...full, ...Object.values(deferred).flat()]) {
+  for (const rel of [...full, ...Object.values(deferred).flat(), ...lazy]) {
     const r = files.get(rel);
     if (!r) continue;
     const filt = (set) => [...set].filter(isModuleGlobal).sort();
@@ -339,10 +341,10 @@ export function buildGraph(scan) {
 // --check: toposort + manifest-edge coverage.
 
 export function checkGraph(scan) {
-  const { full, deferred, files, assignedBy } = scan;
+  const { full, deferred, lazy = [], files, assignedBy } = scan;
   const index = new Map(full.map((f, i) => [f, i]));
   const deferredSet = new Set(Object.values(deferred).flat());
-  const report = { toposort: [], deferredProvided: [], hardEdges: [], deferredEdges: [] };
+  const report = { toposort: [], deferredProvided: [], hardEdges: [], deferredEdges: [], lazyEdges: [] };
 
   // (a) FULL order is a valid topological sort of the derived eval edges:
   // every eval-read has SOME provider at an earlier-or-same index. ("Some",
@@ -375,6 +377,13 @@ export function checkGraph(scan) {
     for (const rel of group)
       check(rel, (f) => (index.has(f) ? -1 : gi.has(f) ? gi.get(f) : null));
   }
+  if (lazy.length) {
+    const gi = new Map(lazy.map((f, i) => [f, i]));
+    // a lazy file may read anything in FULL (always evaluated first) or
+    // anything earlier in LAZY_AGENT.
+    for (const rel of lazy)
+      check(rel, (f) => (index.has(f) ? -1 : gi.has(f) ? gi.get(f) : null));
+  }
 
   // (b) Manifest edge coverage: is each hand-recorded [before, after] pair
   // derivable, and at what strength?
@@ -395,6 +404,8 @@ export function checkGraph(scan) {
     report.hardEdges.push({ before, after, ...classify(before, after) });
   for (const [before, after] of manifest.DEFERRED_EDGES)
     report.deferredEdges.push({ before, after, ...classify(before, after) });
+  for (const [before, after] of (manifest.LAZY_EDGES || []))
+    report.lazyEdges.push({ before, after, ...classify(before, after) });
 
   return report;
 }
@@ -449,6 +460,13 @@ function main() {
     console.log(`  DEFERRED_EDGES ${manifest.DEFERRED_EDGES.length} rows: ` +
       Object.entries(dcounts).map(([k, v]) => `${v} ${k}`).join(", "));
     for (const e of report.deferredEdges.filter((e) => e.verdict !== "eval"))
+      console.log(`    [${e.verdict}] ${e.before} -> ${e.after}` +
+        (e.via && e.via.length ? `  via ${e.via.join(",")}` : ""));
+    const lcounts = {};
+    for (const e of report.lazyEdges) lcounts[e.verdict] = (lcounts[e.verdict] || 0) + 1;
+    console.log(`  LAZY_EDGES ${(manifest.LAZY_EDGES || []).length} rows: ` +
+      Object.entries(lcounts).map(([k, v]) => `${v} ${k}`).join(", "));
+    for (const e of report.lazyEdges.filter((e) => e.verdict !== "eval"))
       console.log(`    [${e.verdict}] ${e.before} -> ${e.after}` +
         (e.via && e.via.length ? `  via ${e.via.join(",")}` : ""));
     if (report.deferredProvided.length) {

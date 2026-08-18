@@ -1840,7 +1840,7 @@ test.describe("visible()", () => {
     }
   });
 
-  test("a corner behind the camera is kept, flagged, and bears ~180 deg", async ({ page }) => {
+  test("a corner behind the camera is kept, flagged, and bears past 90 deg", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     await renderFrames(page);
     const cs = await page.evaluate(() => window.__apex.scene({ visible: true }).corners);
@@ -1848,7 +1848,9 @@ test.describe("visible()", () => {
     expect(behind).toBeTruthy();
     expect(behind.screenPct).toBeNull();
     expect(behind.inFrame).toBe(false);
-    expect(Math.abs(behind.bearingDeg)).toBeGreaterThan(120);
+    // behindCamera is look-direction (|bearing| > 90), not clip-space w.
+    // Monza from frac 0.05 measures ~108° on the first behind corner.
+    expect(Math.abs(behind.bearingDeg)).toBeGreaterThan(90);
   });
 
   test("headless is flagged, because the frame is then stale", async ({ page }) => {

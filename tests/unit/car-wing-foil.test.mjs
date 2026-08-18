@@ -123,6 +123,34 @@ test("2026 body keeps a scooped pod, floor teeth, under-fences and a beveled hal
   assert.match(SRC, /inlet\.width \* 0\.48/);
 });
 
+test("recipe-gated part knobs are inert at 0 and each deforms the mesh", () => {
+  const bare = Car3D.build(C1, C2, { noWheels: true });
+  const probe = (cat, visual) => Car3D.build(C1, C2, {
+    noWheels: true,
+    parts: { [cat]: 1, _visual: { [cat]: Object.assign({ id: "probe", tier: 1 }, visual) } },
+  });
+  const same = (a, b) => a.idx.length === b.idx.length
+    && a.pos.every((v, i) => Math.abs(v - b.pos[i]) < 1e-6);
+  const knobs = [
+    ["engine", { scoopLip: 0 }, { scoopLip: 2 }],
+    ["exhaust", { lip: 0, shield: 0 }, { lip: 2 }],
+    ["exhaust", { lip: 0, shield: 0 }, { shield: 1 }],
+    ["fuel", { filler: 0, hatch: 0, vent: 0 }, { hatch: 1 }],
+    ["fuel", { filler: 0, hatch: 0, vent: 0 }, { vent: 1 }],
+    ["gearbox", { heatFins: 0, ribs: 0 }, { heatFins: 5 }],
+    ["gearbox", { heatFins: 0, ribs: 0 }, { ribs: 3 }],
+    ["floor", { plank: 0, gurney: 0, scroll: 0 }, { plank: 1 }],
+    ["floor", { plank: 0, gurney: 0, scroll: 0 }, { gurney: 1 }],
+    ["floor", { plank: 0, gurney: 0, scroll: 0 }, { scroll: 1 }],
+    ["ers", { led: null, conduit: 0, blister: 0 }, { blister: 2 }],
+    ["suspension", { heave: 0, rocker: 0, push: 0, pull: 0 }, { heave: 1 }],
+  ];
+  for (const [cat, off, on] of knobs) {
+    assert.ok(same(probe(cat, off), bare), `${cat} ${JSON.stringify(off)} must match default body`);
+    assert.ok(!same(probe(cat, { ...off, ...on }), bare), `${cat} ${JSON.stringify(on)} should add faces`);
+  }
+});
+
 test("factory SIGNATURE wings stay heavier than a stripped low-drag kit", () => {
   const byId = Object.fromEntries(Teams.LIST.map((t) => [t.id, t]));
   const factory = (id) => tris(Car3D.build(C1, C2, {

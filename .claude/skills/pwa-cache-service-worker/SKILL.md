@@ -48,7 +48,6 @@ during a Playwright run.
 ```sh
 npm run test:service-worker
 npm run test:tooling-fast
-node tools/test-bg.mjs service-worker
 ```
 
 Related: **bump-cache**, **check-changes**.
