@@ -250,6 +250,10 @@
         m.frustumCulled = false;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.userData.tlxInstCap = batch.instances;
+        // Do not set instanceColor. The lit batch already carries an
+        // InstancedBufferAttribute `color` on the shared geometry; a second
+        // instance-rate colour slot is what Dawn rejected at slot 5
+        // (mcp-probe 2026-08-18). Depth only needs instanceMatrix.
         iPool[iUsed] = m;
         castScene.add(m);
       }
@@ -384,6 +388,7 @@
       S.lampArmed = false;
     }
 
+    try { Log.info("gfx", "TLX shadow init"); } catch (_) { /* harness */ }
     return {
       S,
       sunSize: SUN_SIZE,

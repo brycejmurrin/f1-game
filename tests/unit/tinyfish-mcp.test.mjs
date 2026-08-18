@@ -47,6 +47,7 @@ test("tinyfish-mcp.sh and tinyfish-rpc.py exist", () => {
 test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-tools",
     "chrome-devtools",
     "probe",
     "tinyfish",
@@ -56,6 +57,8 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["run"]);
   assert.equal(cfg.mcpServers.probe.command, "python3");
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
+  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
 });
 
 test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {

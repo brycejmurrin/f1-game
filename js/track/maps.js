@@ -135,6 +135,7 @@ const TrackMaps = (function () {
   // Build the outline + corner list once from the spline engine, then cache.
   function compute(def) {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
+    Log.info("track", "maps compute " + def.id);
     let out = null;
     try {
       // Centreline-only build: the minimap needs the spline (positions, tangents,

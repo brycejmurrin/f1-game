@@ -48,7 +48,7 @@ const Ghost = (function () {
   function saveStore(o) {
     try {
       if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(o));
-    } catch (e) { /* storage full / disabled — ghost is best-effort */ }
+    } catch (e) { Log.warn("car", "ghost save fail"); }
   }
 
   // Call when a circuit is loaded. Pulls that circuit's stored best lap (if any)
@@ -59,6 +59,7 @@ const Ghost = (function () {
     best = (g && g.s && g.s.length >= MIN_SAMPLES) ? g : null;
     rec = null;
     lastSampleT = -1;
+    Log.info("car", "ghost load " + id + (best ? " ok" : " none"));
   }
 
   function hasGhost() { return !!best; }
@@ -96,6 +97,7 @@ const Ghost = (function () {
         const store = loadStore();
         store[trackId] = best;
         saveStore(store);
+        Log.info("car", "ghost save " + trackId);
       }
       return true;
     }

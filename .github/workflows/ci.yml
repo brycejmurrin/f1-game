@@ -557,10 +557,12 @@ jobs:
   driving-model:
     name: Driving model (characterization traces)
     runs-on: ubuntu-latest
-    # 42 s measured in CI (run 31197770813, step 7). 10 covers a cold runner
-    # and a browser install; if this ever approaches the cap, the trace count
-    # grew and the number here needs re-measuring, not raising.
-    timeout-minutes: 10
+    # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
+    # consumed entirely by an uncached Chromium install on run 32083395969, so
+    # the characterization never started and Pages was blocked. Keep the same
+    # lockfile-keyed browser cache as smoke and leave enough room for a genuine
+    # cold install on a slow shared runner.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -568,6 +570,11 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #

@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
@@ -34,6 +35,7 @@ const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 function tuneDefs() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb; vm.createContext(sb);
+  seedLog(sb);
   vm.runInContext(read("js/game/lighting.js").replace(/^const\b/gm, "var"), sb);
   return sb.LightTune.TUNE_DEFS;
 }

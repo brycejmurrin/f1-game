@@ -8,6 +8,7 @@ const Photomode = (function () {
   "use strict";
 
 function create(G) {
+Log.info("game", "Photomode.create");
 // Stable bindings from the game.js closure.
 const { $, gfx, photoCam, photoKeys, photoMouse, photoMove, photoLook,
         applyResMode, ltKey, persistLightTune, applyLightTune,
@@ -71,6 +72,7 @@ function updatePhotoCam(dt) {
 // from any angle. Only the race HUD is hidden (body.photo-mode) to declutter.
 function enterPhotoMode() {
   if (G.photoMode) return;
+  Log.info("game", "Photomode.enter");
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   G.photoMode = true;
   // Lock resolution while flying (no governor stepping — every scale change
@@ -89,6 +91,7 @@ function enterPhotoMode() {
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
+  Log.info("game", "Photomode.exit");
   G.photoMode = false;
   G.dbgCam = null;                          // hand the game camera back
   document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");

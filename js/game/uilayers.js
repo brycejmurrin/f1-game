@@ -181,7 +181,10 @@ window.UiLayers = (function () {
      game.js) this reads false, which is the safe answer: Escape falls through
      to the layer handler instead of pausing something that is not running. */
   let raceGetter = null;
-  function setRaceGetter(fn) { raceGetter = typeof fn === "function" ? fn : null; }
+  function setRaceGetter(fn) {
+    raceGetter = typeof fn === "function" ? fn : null;
+    try { Log.info("ui", "UiLayers.raceGetter " + (raceGetter ? "on" : "off")); } catch (_) { /* Log absent in isolated VM */ }
+  }
   function inRace() { return !!(raceGetter && raceGetter()); }
 
   return { LAYER_IDS, top, anyOpen, shown, inRace, setRaceGetter };

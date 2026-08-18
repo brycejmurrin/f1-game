@@ -21,6 +21,25 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 `--fast` or a single started batch, then read
 `artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
 
+Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
+
+```sh
+./tools/apex-tools-mcp.sh call apex_status '{}'
+./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/apex-tools-mcp.sh call apex_verify_track '{"id":"monza"}'
+./tools/apex-tools-mcp.sh call apex_wgx_validate_static '{}'
+./tools/apex-tools-mcp.sh call apex_select_specs '{"since":"HEAD~1"}'
+./tools/apex-tools-mcp.sh call apex_assets_verify '{}'
+./tools/apex-tools-mcp.sh call apex_float_audit '{"id":"monza"}'
+./tools/apex-tools-mcp.sh call apex_select_recall '{}'
+./tools/apex-tools-mcp.sh call apex_cache_bump_only '{"since":"HEAD~1"}'
+./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
+```
+
+Browser wraps (`apex_eval` / `apex_shot` / `apex_carshot` / …) take the lock —
+call `apex_status` first. Never wrap `test-bg` start/`--wait`.
+
 Pieces underneath:
 
 ```sh

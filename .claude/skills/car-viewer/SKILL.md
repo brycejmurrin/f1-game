@@ -17,6 +17,8 @@ cockpit/hood on a circuit → **playwright-probe** `shot.mjs`.
 ## Prereq
 
 ```sh
+./tools/apex-tools-mcp.sh call apex_status '{}'
+./tools/apex-tools-mcp.sh call apex_carshot '{"tod":"day","out":"artifacts/tmp/apex-carshot.jpg"}'
 python3 -m http.server 3456        # or: npx serve -l 3456 .
 node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all

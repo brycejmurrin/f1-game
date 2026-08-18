@@ -36,6 +36,7 @@ device/feature miss, not "WGX has no pack."
 |---|---|
 | `node tools/assets.mjs bake-synthetic` | Regenerate pack, no network |
 | `node tools/assets.mjs verify` | Licence allow-list, md5, 8 MB budget |
+| `./tools/apex-tools-mcp.sh call apex_assets_verify '{}'` | Same pin; never bake |
 | `__apex.assets()` | `{ supported, pack, uploaded, tier, layers, error, … }` |
 | `__apex.matTex(v?)` | Blend 0..1; same as `lightTune({ matTexMix })` |
 

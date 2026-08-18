@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.url), "utf8");
 const musicSource = await readFile(new URL("../../js/game/music-lib.js", import.meta.url), "utf8");
@@ -28,6 +29,7 @@ test("a stopped QR attempt disposes a camera stream that arrives late", async ()
     setInterval() { intervals++; return intervals; },
     clearInterval() {},
   });
+  seedLog(context);
   vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
   const scanner = context.__scan.create();
   const video = { srcObject: null, setAttribute() {}, play: () => Promise.resolve() };
@@ -55,6 +57,7 @@ test("a canceled QR attempt cannot arm an interval after video.play settles", as
     },
     jsQR() {}, setInterval() { intervals++; return intervals; }, clearInterval() {},
   });
+  seedLog(context);
   vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
   const scanner = context.__scan.create();
   const started = scanner.start({ srcObject: null, setAttribute() {}, play: () => playing.promise }, () => {});
@@ -77,6 +80,7 @@ test("a decoder that loads without registering is retried", async () => {
     },
     setInterval, clearInterval,
   });
+  seedLog(context);
   vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
   const scanner = context.__scan.create();
   const first = scanner.start({}, () => {});
@@ -99,6 +103,7 @@ test("an IndexedDB open that succeeds after timeout closes its orphan handle", a
     URL: { createObjectURL() {}, revokeObjectURL() {} }, Map,
   });
   context.window = context;
+  seedLog(context);
   vm.runInContext(musicSource, context);
   const init = context.MusicLib.init();
   timers.shift()();
@@ -122,9 +127,10 @@ test("a timed-out API fetch releases the shared queue", async () => {
     },
     AbortController, Response,
     localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
-    Log: { warn() {} }, Date,
+    Date,
     setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {},
   });
+  seedLog(context);
   vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
   const first = context.__api.weather(1, 0).catch((e) => e);
   const second = context.__api.positions(1, 0);
@@ -144,6 +150,33 @@ test("a timed-out API fetch releases the shared queue", async () => {
   await second;
 });
 
+test("API auth failures never fall back to stale cached data", async () => {
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const key = "apex26.api." + url;
+  const stale = JSON.stringify({ t: 1, data: [{ rainfall: 99 }] });
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: false, status: 403,
+      headers: { get: () => null },
+      text: async () => JSON.stringify({ detail: "Not authenticated" }),
+    }),
+    AbortController,
+    localStorage: {
+      length: 1,
+      getItem: (k) => k === key ? stale : null,
+      setItem() {}, key: () => key, removeItem() {},
+    },
+    Log: { warn() {} }, Date, setTimeout, clearTimeout,
+  });
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+
+  await assert.rejects(context.__api.weather(7, 0), (err) => {
+    assert.equal(err.status, 403);
+    assert.match(err.message, /Not authenticated/);
+    return true;
+  });
+});
+
 function dataApiHarness(responses, initial = new Map()) {
   const calls = [], sets = [];
   let keyCalls = 0, now = Date.parse("2026-07-26T14:45:00Z");
@@ -159,13 +192,13 @@ function dataApiHarness(responses, initial = new Map()) {
     console, Date: ClockDate, Map, Set, Object, Array, JSON, Math, Number,
     isFinite, parseFloat, encodeURIComponent, AbortController,
     setTimeout, clearTimeout, localStorage: storage,
-    Log: { warn() {} },
     fetch: async (url) => {
       calls.push(String(url));
       const body = responses.shift();
       return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
     },
   });
+  seedLog(context);
   vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
   return { api: context.__api, calls, sets, keyCalls: () => keyCalls };
 }

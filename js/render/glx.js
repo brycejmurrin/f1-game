@@ -370,6 +370,7 @@ const GLX = (function () {
       gl,
       MOBILE_TIER,
       IS_MOBILE,
+      ctxGone,
       useProg, bindVAO, setBlend, setDepthMask,
       compile, link, locs,
       toF32, createMesh, litMaterial,
@@ -523,6 +524,7 @@ const GLX = (function () {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     resize();
+    Log.info("gfx", "GLX context ready");
     return true;
   }
 
@@ -663,6 +665,7 @@ const GLX = (function () {
 
   // Textured decal mesh: interleaved [x,y,z, nx,ny,nz, u,v], stride 32 (no colour).
   function createTexMesh(data) {
+    if (ctxGone()) return null;
     const pos = toF32(data.pos), nrm = toF32(data.nrm), uv = toF32(data.uv);
     const vCount = pos.length / 3;
     const big = vCount > 65535;
@@ -694,6 +697,7 @@ const GLX = (function () {
   }
   // Upload a canvas / ImageBitmap / ImageData as an RGBA texture (mipmapped, clamped).
   function createTexture(src) {
+    if (ctxGone()) return null;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -724,7 +728,7 @@ const GLX = (function () {
   // manifest. Returns null rather than throwing on any failure — a missing or
   // malformed pack must degrade to the shipping look, never break the render.
   function createTextureArray(size, images, layers) {
-    if (!size || !images) return null;
+    if (ctxGone() || !size || !images) return null;
     const n = layers || MAT_TEX_LAYERS;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
@@ -816,7 +820,7 @@ const GLX = (function () {
   // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
   let _decalVPToken = -1;
   function drawDecal(mesh, modelMat, tex, opts) {
-    if (!decalProg || !mesh || !tex) return;
+    if (ctxGone() || !decalProg || !mesh || !tex) return;
     useProg(decalProg);
     gl.uniformMatrix4fv(decalU.uModel, false, modelMat);
     // Frame-constant uniforms once per frame (same token pattern as
@@ -1506,7 +1510,7 @@ const GLX = (function () {
   // prop batches; tests/specs/instanced-draw.spec.js) passes alpha 1 — route
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
-    if (!batch || !batch.instances) return;
+    if (ctxGone() || !batch || !batch.instances) return;
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
@@ -1613,6 +1617,7 @@ const GLX = (function () {
   }
 
   function drawShadow(modelMat, w, l) {
+    if (ctxGone()) return;
     useProg(shadowProg);
     if (_shadowVPToken !== _frameToken) {
       gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
@@ -1631,6 +1636,7 @@ const GLX = (function () {
   }
 
   function drawMark(modelMat, w, l) {
+    if (ctxGone()) return;
     useProg(markProg);
     if (_markVPToken !== _frameToken) {
       gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
@@ -1652,6 +1658,7 @@ const GLX = (function () {
   // trail — replaces up to 120 per-mark drawMark calls. Returns false if the
   // batch path is unavailable (caller falls back to per-mark drawMark).
   function drawSkidBatch(verts, vertCount, dirty) {
+    if (ctxGone()) return true; // no-op; per-mark fallback would also fail
     if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
     useProg(markBatchProg);
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
@@ -1681,7 +1688,7 @@ const GLX = (function () {
   // participates in bloom. `str` scales halo brightness (0 disables).
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
-    if (!glowProg || !lights || !lights.length || !(str > 0)) return;
+    if (ctxGone() || !glowProg || !lights || !lights.length || !(str > 0)) return;
     const nL = (lights.length / 15) | 0;  // stride-15 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
@@ -1754,7 +1761,7 @@ const GLX = (function () {
   // Must be called while the HDR scene target is bound (before present) so
   // particles tone-map and bloom with the scene.
   function drawParticles(data, floatCount, additive) {
-    if (!particleProg || !data || !(floatCount > 0) || !frameEye) return;
+    if (ctxGone() || !particleProg || !data || !(floatCount > 0) || !frameEye) return;
     useProg(particleProg);
     gl.uniformMatrix4fv(particleU.uViewProj, false, frameViewProj);
     gl.uniform3fv(particleU.uEye, frameEye);
@@ -1778,7 +1785,7 @@ const GLX = (function () {
   }
 
   function freeMesh(mesh) {
-    if (!mesh) return;
+    if (!mesh || ctxGone()) return;
     if (_activeVAO === mesh.vao) { gl.bindVertexArray(null); _activeVAO = null; }
     gl.deleteBuffer(mesh.ib);
     gl.deleteBuffer(mesh.vbo);

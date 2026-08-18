@@ -73,6 +73,13 @@ const NetNostr = (function () {
 
   const available = () => typeof WebSocket !== "undefined";
 
+  function nostrLog(r) {
+    if (r && r.ok) Log.info("net", "nostr ok");
+    else if (r && (r.error === "stopped" || r.error === "cancelled")) Log.info("net", "nostr " + r.error);
+    else Log.warn("net", "nostr fail " + ((r && r.error) || "error"));
+    return r;
+  }
+
   // The room id must not be the code: room ids are visible to relays, and a
   // room id that contained the code would hand the codes out. Hash it, and use
   // a different salt from the topic hash elsewhere so the two cannot be
@@ -215,17 +222,18 @@ const NetNostr = (function () {
    */
   async function directExchange(opts) {
     const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
+    Log.info("net", "nostr start");
     if (!available()) {
-      return { ok: false, error: "unsupported",
-               message: "This browser cannot reach the room service." };
+      return nostrLog({ ok: false, error: "unsupported",
+               message: "This browser cannot reach the room service." });
     }
     let mod;
     try { mod = await load(); }
     catch (e) {
       const why = (e && (e.message || String(e))) || "unknown";
-      return { ok: false, error: "no_module", detail: why,
+      return nostrLog({ ok: false, error: "no_module", detail: why,
                message: "Could not load the room service (" + why.slice(0, 90) + ")."
-                      + " Use the invite link or QR instead." };
+                      + " Use the invite link or QR instead." });
     }
 
     // WHICH SIDE ARE WE? The one that does NOT reply. `reply` is the guest's
@@ -262,6 +270,7 @@ const NetNostr = (function () {
         done = true;
         clearInterval(tick); clearInterval(repost);
         shut();
+        nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
         if (onFail) { try { onFail(r); } catch (e) {} }
       };
@@ -406,6 +415,7 @@ const NetNostr = (function () {
       // as the Trystero path did.
       if (onJoiner && !settled) {
         settled = true;
+        nostrLog({ ok: true, subscribed: true });
         resolve({
           ok: true, subscribed: true,
           rotate: (next) => {
@@ -433,13 +443,14 @@ const NetNostr = (function () {
     let legacy = false;
     try { legacy = localStorage.getItem("apex26.nostrTrystero") === "true"; } catch (e) {}
     if (!legacy) return directExchange(opts);
+    Log.info("net", "nostr start");
     // send/reply are the two-party pair this started as. mintOffer+onJoiner are
     // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
     // with an offer of its own, rather than resolving on the first one.
     const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
     if (!available()) {
-      return { ok: false, error: "unsupported",
-               message: "This browser cannot reach the room service." };
+      return nostrLog({ ok: false, error: "unsupported",
+               message: "This browser cannot reach the room service." });
     }
     let mod;
     try { mod = await load(); }
@@ -451,9 +462,9 @@ const NetNostr = (function () {
       // the truth was a plain 404, because the deploy workflow never staged
       // vendor/. Naming the exception would have pointed straight at it.
       const why = (e && (e.message || String(e))) || "unknown";
-      return { ok: false, error: "no_module", detail: why,
+      return nostrLog({ ok: false, error: "no_module", detail: why,
                message: "Could not load the room service (" + why.slice(0, 90) + ")."
-                      + " Use the invite link or QR instead." };
+                      + " Use the invite link or QR instead." });
     }
 
     let room = null;
@@ -547,6 +558,7 @@ const NetNostr = (function () {
         clearInterval(rebroadcast);
         restoreWarn();
         leave();
+        nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
         // Already answered, so the only way to report this is the callback the
         // caller gave us.
@@ -803,6 +815,7 @@ const NetNostr = (function () {
             // settled, NOT done: the room is open and the relay probe, the join
             // timeout and the cancellation tick all have to keep running.
             settled = true;
+            nostrLog({ ok: true, subscribed: true });
             resolve({
               ok: true, subscribed: true,
               // Called once a guest has taken the current offer: an SDP offer

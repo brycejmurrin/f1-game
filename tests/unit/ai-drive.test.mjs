@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -13,6 +14,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // global object — read it back by evaluating its name (same as career-settle).
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
+  seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/game/ai-drive.js"), "utf8"), ctx,
     { filename: "js/game/ai-drive.js" });

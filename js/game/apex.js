@@ -807,12 +807,11 @@ const api = {
     if (!G.track || !G.cars || !G.cars.length) return false;
     const c = (idx <= 0 || !G.cars[idx]) ? (G.player || G.cars[0]) : G.cars[idx];
     if (!c) return false;
-    // Derive world position from Frenet coords (s, x) — AI cars don't carry px/pz,
-    // only HUMAN-driven ones do. This works for all cars.
+    // World pose when mirrored (player + field); else Frenet (s, x).
     const s = ((c.s % G.track.total) + G.track.total) % G.track.total;
     Tracks.sample(G.track, s, smp);
-    const cx = (c.human && c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
-    const cz = (c.human && c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
+    const cx = (c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
+    const cz = (c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
     const cyf = smp.p[1] + h;
     // Heading basis: a human car has a real yaw (c.head); AI uses the tangent.
     const hd = (c.human && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);

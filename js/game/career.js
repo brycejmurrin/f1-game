@@ -400,6 +400,7 @@ function start(opts) {
                        tier: hired.tier, salary: hired.ask, left: 1, pending: null }];
   }
   career.deal = newDeal(team, 1);
+  Log.info("game", "Career.start flavour=" + flavour + " team=" + teamId);
   return save();
 }
 
@@ -901,6 +902,7 @@ function settleRound(order, player) {
   // closes its window.
   const sponsorPay = settleSponsor();
   save();
+  Log.info("game", "Career.settleRound pos=" + pos + (dnf ? " dnf=" + dnf : ""));
   return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
            money: career.money, rep: career.rep };
 }
@@ -914,7 +916,7 @@ function gridSeats() {
   const out = [];
   for (const team of Teams.LIST) {
     if (team.custom && team.id !== career.team) continue;
-    team.drivers.forEach((d, i) => {
+    gridDrivers(team).forEach((d, i) => {
       const id = seasonDriverId(team.id, i);
       out.push({ id, team, seat: i, driver: seatDriver(team.id, i, d) });
     });
@@ -1215,6 +1217,7 @@ function acceptOffer(i) {
   };
   career.offers = [];
   save();
+  Log.info("game", "Career.acceptOffer team=" + team.id + " years=" + o.years);
   return career.deal;
 }
 

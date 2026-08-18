@@ -21,6 +21,7 @@ const CamTunerPanel = (function () {
 let _refresh = null;
 
 function create(G) {
+Log.info("game", "CamTunerPanel.create");
 const { $, els } = G;
 const { CAM_MODES } = GameTables;
 const DEFS = CamTune.defs();
@@ -123,6 +124,7 @@ function refreshCamTunePanel() {
 }
 function isOpen() { return !$("camtune").hidden; }
 function openCamTuner() {
+  Log.info("game", "CamTunerPanel.open");
   buildCamTunePanel();
   $("camtune").hidden = false;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
@@ -130,6 +132,7 @@ function openCamTuner() {
   applyLive();
 }
 function closeCamTuner(showPauseMenu) {
+  Log.info("game", "CamTunerPanel.close");
   $("camtune").hidden = true;
   document.body.classList.remove("lt-open");
   if (showPauseMenu && G.paused) els.pmsettings.hidden = false;   // back to the settings menu

@@ -196,6 +196,9 @@ const Assets = (function () {
     _uploaded = true;
     _tier = wantLow && mats.low ? "low" : "high";
     _err = null;
+    let n = 0;
+    for (let i = 0; i < present.length; i++) if (present[i]) n++;
+    Log.info("assets", "pack loaded layers=" + n);
     return true;
   }
 

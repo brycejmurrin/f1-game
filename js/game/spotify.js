@@ -236,7 +236,10 @@ window.SpotifyMusic = (function () {
         code_challenge_method: "S256", code_challenge: challenge,
         state: st, scope: SCOPES,
       }).toString());
-    }).catch(() => setStatus("error", "Could not start the Spotify sign-in on this browser."));
+    }).catch((e) => {
+      Log.warn("audio", "Spotify sign-in failed: " + ((e && e.message) || e));
+      setStatus("error", "Could not start the Spotify sign-in on this browser.");
+    });
   }
 
   // Strip only OUR params, so any other query the game was launched with
@@ -343,16 +346,25 @@ window.SpotifyMusic = (function () {
       // The SDK calls one global hook. Chain any existing handler rather than
       // stomping it — another script (or a second call here) may own it.
       const prev = window.onSpotifyWebPlaybackSDKReady;
+      let timer = null;
+      const cleanup = function () {
+        if (timer !== null) clearTimeout(timer);
+        s.onerror = null;
+      };
       window.onSpotifyWebPlaybackSDKReady = function () {
         if (typeof prev === "function") { try { prev(); } catch (e) {} }
+        cleanup();
         res();
       };
       const s = document.createElement("script");
       s.src = SDK_URL;
       s.async = true;
-      s.onerror = () => rej(new Error("blocked"));
+      s.onerror = () => { cleanup(); rej(new Error("blocked")); };
       document.head.appendChild(s);
-      setTimeout(() => rej(new Error("timeout")), 20000);
+      timer = setTimeout(() => { cleanup(); rej(new Error("timeout")); }, 20000);
+    }).catch((err) => {
+      sdkPromise = null;
+      throw err;
     });
     return sdkPromise;
   }
@@ -1172,6 +1184,7 @@ window.SpotifyMusic = (function () {
   }
 
   function init() {
+    Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
     // auto-connect here even with a live token: booting the SDK is exactly the
@@ -1208,6 +1221,7 @@ window.SpotifyMusic = (function () {
     openPanel() {
       const p = el("spotifypanel");
       if (p) p.hidden = false;
+      Log.info("audio", "SpotifyMusic.openPanel");
       render();
       if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
     },

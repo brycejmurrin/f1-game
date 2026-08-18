@@ -402,6 +402,7 @@ const GLTF = (function () {
     const col = new Float32Array(colOut);
     const big = vertBase > 65535;
     const idx = big ? new Uint32Array(idxOut) : new Uint16Array(idxOut);
+    if (Log.enabled("assets", Log.DEBUG)) Log.debug("assets", "glb verts=" + vertBase);
     return { pos, nrm, col, idx };
   }
 

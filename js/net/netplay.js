@@ -414,9 +414,13 @@ const NetPlay = (function () {
       peerResult = null;
       resultWaitFrom = null;
       if (!opts.transport && !opts.session) {
+        Log.warn("net", "play start fail no_transport");
         return { ok: false, error: "no_transport", message: "No connection to race over." };
       }
-      if (!G.track) return { ok: false, error: "no_track", message: "Load a track before starting a session." };
+      if (!G.track) {
+        Log.warn("net", "play start fail no_track");
+        return { ok: false, error: "no_track", message: "Load a track before starting a session." };
+      }
 
       role = opts.role === "host" ? "host" : "guest";
       peerProfile = opts.peerProfile || null;
@@ -482,6 +486,7 @@ const NetPlay = (function () {
       }
       if (!localCar || !remotes.size) {
         session = null;
+        Log.warn("net", "play start fail no_slot");
         return { ok: false, error: "no_slot", message: "Could not find a grid slot for both drivers." };
       }
       separateGrid();
@@ -502,6 +507,7 @@ const NetPlay = (function () {
       // "my circuit is built and my loop is about to run again". That is the
       // fact the host needs before it can name lights-out.
       if (role === "guest") { try { broadcast(EV.ARMED, {}); } catch (e) {} }
+      Log.info("net", "play start " + role + " n=" + remotes.size);
       // remoteId stays singular for the callers and tests that read it — it is
       // the FIRST rival, which is the only one there is until Phase C. remoteIds
       // is the shape to read from now on.
@@ -652,6 +658,7 @@ const NetPlay = (function () {
       if (!active) return false;
       active = false;
       lastReason = reason || "local";
+      Log.info("net", "play stop " + lastReason);
       handBackToAI(reason && reason !== "local" ? reason : null);
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.

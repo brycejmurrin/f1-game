@@ -30,10 +30,10 @@ Four traps, each of which has cost a run:
   does that; setting it as a separate command probes the default and looks like
   the backend silently ignoring you.
 - **`--backend three` pins three to WebGL2** (`apex26.tlxForceGL=1`, what
-  `tests/specs/tlx-probes.spec.js` sets). TLX auto-picks three's WebGPU backend on
-  Chromium desktop, and under SwiftShader that path dies inside three's own
-  `mappedAtCreation` buffer upload — which reads as a TLX regression and is not
-  one. `--tlx-webgpu` opts in deliberately.
+  `tests/specs/tlx-probes.spec.js` sets). `--tlx-auto` leaves the pin unset
+  (THREE PATH: AUTO — WebGPU when `navigator.gpu` works). `--tlx-auto-gl`
+  is AUTO after `apex26.tlxAutoGL=1` (three WebGL2, still TLX — not game
+  GLX). `--tlx-webgpu` pins three's WebGPU path.
 
 What a clean WGX boot looks like: no `WGX` console line at all,
 `WGX.gpuErrors()` 0, and `sessionStorage["apex26.gfxBound"]` ABSENT — that key

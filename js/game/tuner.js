@@ -9,6 +9,7 @@ const TunerPanel = (function () {
   "use strict";
 
 function create(G) {
+Log.info("game", "TunerPanel.create");
 const { TUNE_DEFS, LT } = LightTune;
 // Stable helpers from the game.js closure.
 const { $, els, ltKey, setLightTune, persistLightTune } = G;
@@ -294,6 +295,7 @@ function refreshLightTunePanel() {
   ltDisarm();
 }
 $("pm-lighting").onclick = () => {
+  Log.info("game", "TunerPanel.open");
   buildLightTunePanel();
   _ltPrevTOD = __apex.setTimeOfDay();   // capture the race's real conditions
   _ltPrevWx = __apex.weather();
@@ -304,6 +306,7 @@ $("pm-lighting").onclick = () => {
   els.pmsettings.hidden = true;     // unobstructed live preview (opened from settings)
 };
 function closeLightTuner(showPauseMenu) {
+  Log.info("game", "TunerPanel.close");
   if (G.photoMode) exitPhotoMode();
   _ltUndo = null; ltDisarm();   // the copy's one-step revert does not outlive the panel
   // Restore the race's real time & weather (preview was transient).

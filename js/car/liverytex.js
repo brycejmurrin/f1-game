@@ -994,6 +994,7 @@ const LiveryTex = (function () {
   // ── main ─────────────────────────────────────────────────────────────────
   function buildAtlas(teamId, colors, numberOverride, isPlayer) {
     ensureLogos();   // first atlas (race start / garage) kicks logo prefetch
+    Log.info("car", "livery " + (teamId || "?"));
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;

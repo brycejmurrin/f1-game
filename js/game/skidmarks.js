@@ -24,6 +24,7 @@ const SKID_CULL = 170 * 170;
 const STAMP_EVERY = 5;
 
 function create(_G) {
+  Log.info("game", "SkidMarks.create");
   const marks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
   let active = 0;               // how many marks are live (grows to MAX_SKID then stays)
   let idx = 0;

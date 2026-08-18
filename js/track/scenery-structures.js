@@ -15,6 +15,7 @@ const SceneryStructures = (function () {
             addBox, addCyl, addFrustum, addPrism, RAW, blockAt, recordBarrier,
             groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
+    Log.info("scenery", "scenery-structures dress " + (def && def.id));
     const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
 
     // ---------- linear track furniture (run along the track from s0→s1) ----------

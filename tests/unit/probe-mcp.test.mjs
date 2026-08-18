@@ -26,6 +26,7 @@ test("probe-mcp.py exists and is executable-ish", () => {
 test(".mcp.json registers probe as the unified stdio bridge", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-tools",
     "chrome-devtools",
     "probe",
     "tinyfish",
@@ -34,6 +35,8 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
+  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
 });
 
 test("probe-mcp help lists serve / list-tools / call / status", () => {
@@ -268,6 +271,19 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
     "the documented `npx serve` redirects /index.html, so probes must use the root URL");
 });
 
+test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe ICD", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx-probe.mjs"), "utf8");
+  assert.match(src, /--tlx-webgpu/);
+  assert.match(src, /--lavapipe/);
+  assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
+  assert.match(src, /WEBGPU_LAVAPE_CHROMIUM_ARGS/);
+  assert.match(src, /WEBGPU_LAVAPE_ENV/);
+  assert.match(src, /opts\.backend === "webgpu" \|\| opts\.tlxWebgpu/,
+    "--tlx-webgpu must wait on GLX.awaitSoftPresent like the WGX path");
+  assert.doesNotMatch(src, /no TLX soft-present/,
+    "do not excuse a black TLX WebGPU #game — soft-present is the gate");
+});
+
 test("mcp-cli exits non-zero when an MCP tool returns isError", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-cli-"));
   const wrapper = path.join(dir, "mock-mcp.mjs");
@@ -305,15 +321,20 @@ process.stdin.on("data", chunk => {
   }
 });
 
-test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {
-  // tlx.js auto-picks three's WebGPU backend on Chromium desktop. Under
-  // SwiftShader that path dies in three's own buffer upload, so the default
-  // pin matches tests/specs/tlx-probes.spec.js rather than handing back a
-  // broken renderer that reads as a TLX regression.
+test("probe --backend three pins three to WebGL2 unless --tlx-webgpu / --tlx-auto", () => {
+  // Default pin matches tests/specs/tlx-probes.spec.js (CI WebGL2).
+  // --tlx-webgpu forces three's WebGPU path; --tlx-auto leaves the pin unset.
+  // --tlx-auto-gl is AUTO after the stay-GL latch (three WebGL2, still TLX).
   assert.match(dryRun("--backend", "three")[1].arguments.function,
     /apex26\.tlxForceGL", "1"/);
   assert.match(dryRun("--backend", "three", "--tlx-webgpu")[1].arguments.function,
     /apex26\.tlxForceGL", "0"/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto")[1].arguments.function,
+    /removeItem\("apex26\.tlxForceGL"\)/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto-gl")[1].arguments.function,
+    /apex26\.tlxAutoGL", "1"/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto-gl")[1].arguments.function,
+    /removeItem\("apex26\.tlxForceGL"\)/);
   // The pin is three-only: it must not appear for the other backends.
   for (const b of ["webgl2", "webgpu"]) {
     assert.doesNotMatch(dryRun("--backend", b)[1].arguments.function, /tlxForceGL/);

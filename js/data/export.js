@@ -249,11 +249,14 @@ const DataExport = (function () {
       running = true; result = null; dlBtn.disabled = true; logs.length = 0;
       gatherBtn.textContent = "Gathering…";
       log("Gathering " + sel.year + " — this can take ~10 min…");
+      Log.info("data", "export gather " + sel.year);
       gatherStartLines(sel.year, log).then(function (res) {
         result = res; dlBtn.disabled = false;
         log("Ready to download.");
+        Log.info("data", "export gather done");
       }).catch(function (e) {
         log("ERROR: " + (e && e.message || e));
+        Log.warn("data", "export gather fail");
       }).then(function () { running = false; gatherBtn.textContent = "Gather"; });
     });
 

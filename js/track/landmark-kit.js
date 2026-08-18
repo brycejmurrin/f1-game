@@ -26,6 +26,7 @@ const LandmarkKit = (function () {
   }
 
   function create(primitives) {
+    Log.info("track", "landmark-kit create");
     const p = primitives || {};
 
     function emit(callback, args) {

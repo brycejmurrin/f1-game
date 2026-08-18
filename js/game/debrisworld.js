@@ -194,7 +194,10 @@ function _load() {
       _loadState = 2;
       _active = _enabled;
     }))
-    .catch((e) => { _loadState = -1; _loadErr = String(e); _active = false; });
+    .catch((e) => {
+      _loadState = -1; _loadErr = String(e); _active = false;
+      Log.warn("game", "DebrisWorld load failed: " + ((e && e.message) || e));
+    });
 }
 
 function setEnabled(on) {
@@ -206,6 +209,7 @@ function setEnabled(on) {
 }
 
 function create(ctx) {
+  Log.info("game", "DebrisWorld.create");
   G = ctx;
   // Default ON, as originally intended — and worth recording why it spent
   // builds 897-902 off.
@@ -461,6 +465,7 @@ function buildWorld(track, cars) {
   }
   _worldTrack = track;
   _worldGen++;   // a rebuilt world invalidates any incident-sim takeover (checked via worldGen())
+  Log.info("game", "DebrisWorld.buildWorld cars=" + cars.length);
 }
 
 // Derive a ≤cap near-apex cone list from the loaded circuit's curated turn

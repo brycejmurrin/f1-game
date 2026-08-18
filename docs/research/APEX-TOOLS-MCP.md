@@ -5,7 +5,40 @@ working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.
 
 Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
-`tools/probe-mcp.py`. **Not implemented.**
+`tools/probe-mcp.py`. **Catalog finished** (`tools/apex-tools-mcp.mjs` + `.sh` +
+`tools/apex-tools-mcp.json`). Live Chromium is occupancy-gated; CI covers
+mock/`dryRun` plus HTTP loopback. `.mcp.json` stdio → `serve`; HTTP is
+`serve-http` on `127.0.0.1:3713`.
+
+Measured 2026-08-18 (this container, loadavg ~0.1): `apex_eval` monza
+`a.info()` via `./tools/apex-tools-mcp.sh call` — `ok`, 12061 ms, lock
+released after. `apex_status` then `playwright.live === false`.
+
+Week-3 live tree (same container, no Chromium): `apex_select_specs`
+`since=HEAD~8` 322 ms `ok`; `apex_assets_verify` 40 ms `verify: OK`;
+`apex_float_audit` monza 895 ms `clusters: 0`.
+
+Week-4 live tree: `apex_select_recall` 739 ms `ok` (5 cases, no silent
+miss); `apex_cache_bump_only` since=HEAD~1 28 ms `ok` with CLI exit 1
+(`pure:false`, empty diff); `apex_aero_zone_turns` monza 78 ms;
+`apex_startline_snap` monza 30 ms.
+
+Live locked browser (2026-08-18): `apex_carshot` after `apex_status`
+(lock free, chrome down, `playwright.live === false`) — first boot died
+at `waitForFunction(__apex)` under `--use-gl=angle`; after pinning
+carshot to SwiftShader like `apex-eval`, `ok` in 16862 ms, 7.4 KB JPEG,
+lock released. `apex_agent` monza `world` 33020 ms `ok` (apiVersion 1);
+`apex_quick_validate` 3089 ms `QUICK-VALIDATE OK`; lock released after
+each. HTTP `127.0.0.1:3713/healthz` → `{ok:true, tools:30, bind:127.0.0.1}`.
+`apex_graph_parity` monza `BASE=HEAD~1` 1552 ms exact.
+
+Keep **root `.mcp.json`** (Cloud / Claude / this agent) and **`.cursor/mcp.json`**
+(Cursor `agent mcp`) in lockstep — same four servers, `type: "stdio"` on the
+local ones. `agent mcp` (2026.08.11) reads `.cursor/mcp.json`;
+`${workspaceFolder}` in `command` spawned as a literal path (`ENOENT`);
+relative `tools/apex-tools-mcp.sh` works. After `agent mcp enable apex-tools`:
+`ready`; `list-tools` → **30** `apex_*`. `agent -p` needs login. When the
+Cloud host catalog is empty, `./tools/apex-tools-mcp.sh call`.
 
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
@@ -24,7 +57,7 @@ TinyFish `ensure()` threw. Every wrap target is Node. Name collision
 |---|---|
 | **Name** | `apex-tools` (`serverInfo.name`: `apex-tools-mcp`) |
 | **Lives** | `tools/apex-tools-mcp.mjs` + `tools/apex-tools-mcp.sh` |
-| **Transport** | stdio (Cursor). Cloud default is `./tools/apex-tools-mcp.sh call` (repo `.mcp.json` is not auto-loaded). Optional HTTP `127.0.0.1:3713` is **not** required for v1. |
+| **Transport** | stdio. **Root `.mcp.json` stays** (Cloud / Claude / this agent). Cursor CLI/IDE also loads **`.cursor/mcp.json`**. Same four servers, lockstepped. HTTP `127.0.0.1:3713` via `serve-http`. If the host catalog is empty: `./tools/apex-tools-mcp.sh call`. Lockstep names: `tools/apex-tools-mcp.json`. |
 | **SDK** | Hand-rolled JSON-RPC like `probe-mcp.py` — **no npm MCP SDK**, no build step |
 | **Prefix** | `apex_*` only |
 | **CLI** | `help` / `status` / `list-tools` / `call <name> '<json>'` / `serve` |
@@ -71,7 +104,7 @@ harness binds its own loopback port.
 | Tool | CLI | Pin |
 |---|---|---|
 | `apex_verify_track` | `verify-track.cjs <id>` or `--all` | VM only (`TRACK_VM`) |
-| `apex_verify_change_fast` | `verify-change.mjs --fast --json` | Never `--wait`. Live `--fast` can exceed ~30 s — MCP timeout ~90 s; CI uses mock/`dryRun` only. |
+| `apex_verify_change_fast` | `verify-change.mjs --fast --json` | Never `--wait`. Exit 2 (`verdict: partial`, fast phase passed, browser groups not-run) is `ok:true` + `exit:2`. Exit 1 (`fail`) stays `ok:false`. Live `--fast` can exceed ~30 s — MCP timeout 180 s; CI uses mock/`dryRun` only. |
 | `apex_wgx_validate_static` | `wgx-validate.mjs --static` | Source invariants; live Dawn is week-2 |
 | `apex_pick_tests` | `pick-tests.mjs --json` | **Never `--bg`** (that prints `test-bg` start lines) |
 | `apex_bump_cache_check` | `bump-cache.mjs --check --json` | Never `--apply` / `--at` / `--merge` |
@@ -82,16 +115,59 @@ Every call accepts `dryRun`. `--plan` is not a separate tool: `dryRun` on
 `dryRun` / mock of that tool **must not** emit `test-bg` or a group name as
 something to start.
 
-Leave out of both weeks (agents already have them as CLIs): `select-specs`,
-`assets.mjs verify`, `carshot`, `wgx-shot`, `quick-validate`, `float-audit` /
-`clip-audit`.
-
 ---
 
 ## Week-2 (lock first)
 
 `apex_eval`, `apex_shot`, `apex_survey_track`, `apex_gfx_probe`,
 `apex_wgx_validate`, `apex_wgx_capture`, `apex_ui_survey`, `apex_agent`.
+
+---
+
+## Week-3 (more catalog)
+
+Tree (no lock — same gate as week-1):
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_select_specs` | `select-specs.mjs --since <ref> --json` | Requires `since`. Never `--bg`. |
+| `apex_assets_verify` | `assets.mjs verify` | Never `bake*` / `fetch` / `import-pack` |
+| `apex_float_audit` | `float-audit.cjs <id>\|--all --json` | Never `--clip` / `--foliage` |
+| `apex_clip_audit` | `clip-audit.cjs <id>\|--all --json` | No `--depth` / `--adj` (CLI defaults) |
+| `apex_coplanar_audit` | `coplanar-audit.cjs <id>\|--all --json` | No `--gap` / `--area` / `--fight` |
+| `apex_track_verts` | `track-verts.cjs` or `--diff <path>` | `--diff` path must stay under `artifacts/` or `scratch/` |
+
+Browser (lock + occupancy, same as week-2):
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_carshot` | `car/carshot.mjs [az] [tod] [teamIdx] [out]` | `out` under `artifacts/` / `scratch/` |
+| `apex_wgx_shot` | `wgx-shot.mjs [track] [--lite] [--cam] [--out]` | No `--url`. `out` contained. |
+| `apex_quick_validate` | `quick-validate.mjs` | **No port** (self-boots) |
+
+Output paths on every wrap (`--out`, carshot dest, `--diff`) are refused with
+`path_escaped` unless they resolve under `artifacts/` or `scratch/`.
+Dispatch keys off `kind` (`tree` vs `browser`), not the week-1 name set — a
+new tree tool must not take the lock.
+
+## Week-4 (more tree CLIs)
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_select_recall` | `select-recall.mjs --json` | Replay only |
+| `apex_cache_bump_only` | `cache-bump-only.mjs <since> --json` | Requires `since`. Exit 1 (not a pure bump) is `ok:true` + `exit:1` |
+| `apex_rotate_markings_check` | `rotate-markings.cjs --check` | Never `--write` |
+| `apex_startline_snap` | `startline-snap.cjs --json [ids…]` | JSON |
+| `apex_startline_probe` | `startline-probe.cjs --json` | Optional `--calibrate` / `--snap` / `--frac` |
+| `apex_aero_zone_turns` | `aero-zone-turns.cjs <id>\|--all` | TRACK_VM |
+
+| `apex_graph_parity` | `BASE=<ref> graph-parity.cjs <id>\|--all` | **`base` required** (never vacuous HEAD-vs-clean) |
+
+HTTP `serve-http` binds `127.0.0.1:3713` only (`APEX_MCP_HTTP_PORT` override).
+Catalog lockstep: `tools/apex-tools-mcp.json` (stdio + http + tool names).
+
+Still not wrapped (use the CLI): `wgx-gallery` (batch Chromium). chrome-devtools
+stdio occupancy gap stays documented.
 
 All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 
@@ -145,18 +221,20 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
 | `cdmcp-*`, `mcp-cli.mjs`, `chrome-devtools-mcp.sh` | Probe / chrome-devtools |
 | `assets.mjs bake*`, `tests-split --apply`, `rotate-markings --write` | Writers |
-| `graph-parity` as a default tool | Needs `BASE=`; vacuous-refuse on a clean tree (exit 2) |
+| `graph-parity` without `BASE=` | Vacuous-refuse on a clean tree (exit 2). Wrapped only as `apex_graph_parity` with required `base`. |
 
 ---
 
 ## Registration
 
-Fourth `.mcp.json` server: `command` → `tools/apex-tools-mcp.sh`,
-`args` → `["serve"]`. Same-commit updates:
+Fourth server in both catalogs: root `.mcp.json` (Claude Code) and
+`.cursor/mcp.json` (Cursor CLI/IDE, `type: "stdio"`). `command` →
+`tools/apex-tools-mcp.sh`, `args` → `["serve"]`. Same-commit updates:
 
 - 3-key lists in `tests/unit/probe-mcp.test.mjs` and
   `tests/unit/tinyfish-mcp.test.mjs` become
   `["apex-tools", "chrome-devtools", "probe", "tinyfish"]`
+- `.cursor/mcp.json` locksteps those four names + apex-tools argv (`type: stdio`)
 - `apex-tools-mcp.sh help` in `tests/unit/tools-runnable.test.mjs`
 - AGENTS Cloud path lists `./tools/apex-tools-mcp.sh` next to
   `tinyfish-mcp.sh` / `probe-mcp.py`
@@ -180,3 +258,6 @@ Assert:
   `github_io_blocked` (no fetch)
 - `isError` preserved on tool failure (not a JSON-RPC `error`)
 - stdout is JSON-RPC only (no log lines)
+- week-3: `select-specs` requires `--since --json`; `assets verify` never
+  bake; float/clip pin `--json` and default tunables; tree tools ignore
+  the lock; `path_escaped` / `port_not_supported`
