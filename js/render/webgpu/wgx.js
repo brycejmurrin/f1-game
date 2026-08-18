@@ -3038,17 +3038,49 @@ const WGX = (function () {
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
       let drew = 0, culled = 0;
+      let nearCull = 0, nearDraw = 0;
+      const nearR = 80;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) { culled++; continue; }
-        if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) { culled++; continue; }
+        const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
+        const isNear = dist2 < nearR * nearR;
+        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
+          culled++;
+          if (isNear) nearCull++;
+          continue;
+        }
+        if (cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
         _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
         _drawGeom(litPass, ch);
         drew++;
+        if (isNear) nearDraw++;
       }
       // #region agent log
       if (opts && opts.surfaceId === 16) {
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({ hypothesisId: "D", location: "wgx.js:drawChunked", message: "road chunks drawn", data: { drew, culled, total: chunks.length, cd }, timestamp: Date.now() }); } catch (_) {}
+        try {
+          const sample = [];
+          for (let i = 0; i < Math.min(3, chunks.length); i++) {
+            const ch = chunks[i];
+            sample.push({ min: ch.min && ch.min.slice(0, 3), max: ch.max && ch.max.slice(0, 3), count: ch.count, hasVbuf: !!ch.vbuf });
+          }
+          // find chunk nearest eye
+          let bestI = 0, bestD = Infinity;
+          for (let i = 0; i < chunks.length; i++) {
+            const d = _aabbDist2(chunks[i].min, chunks[i].max, ex, ey, ez);
+            if (d < bestD) { bestD = d; bestI = i; }
+          }
+          const nb = chunks[bestI];
+          (window.__wgxDbg = window.__wgxDbg || []).push({
+            hypothesisId: "D", location: "wgx.js:drawChunked", message: "road chunks drawn",
+            data: {
+              drew, culled, total: chunks.length, cd, nearDraw, nearCull,
+              eye: [ex, ey, ez], nearestDist: Math.sqrt(bestD),
+              nearest: nb && { min: nb.min && nb.min.slice(0, 3), max: nb.max && nb.max.slice(0, 3), count: nb.count, inFrustum: !cull || _aabbInFrustum(_fcPlanes, nb.min, nb.max) },
+              sample,
+            },
+            timestamp: Date.now(),
+          });
+        } catch (_) {}
       }
       // #endregion
     }
