@@ -92,3 +92,14 @@ test("openf1 and jolpica guard a missing path instead of fetching garbage", () =
     assert.match(m[0], /ok:\s*false/);
   }
 });
+
+test("jump synchronises the HUD instead of depending on the next animation frame", () => {
+  const game = read("js/game.js");
+  const apex = read("js/game/apex.js");
+  assert.match(game, /refreshHud:\s*\(\.\.\.a\)\s*=>\s*updateHud\(\.\.\.a\)/,
+    "the shared facade must expose the real HUD updater through a deferred binding");
+  const jump = apex.match(/jump\(frac, speed, lateral\) \{[\s\S]*?\n  \},/);
+  assert.ok(jump, "jump body not found");
+  assert.match(jump[0], /G\.refreshHud\(false\)/,
+    "jump must publish its state to the HUD synchronously for frozen/headless probes");
+});

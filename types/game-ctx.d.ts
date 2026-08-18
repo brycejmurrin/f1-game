@@ -537,6 +537,8 @@ interface GameCtx {
   readonly wireId: (c: CarState) => number;
   /** UI SIZE / HUD SIZE — see __apex.uiScale. */
   readonly setScale: (key: string, prop: string, v: number) => ScaleState;
+  /** Publish current race state to the HUD/minimap immediately. */
+  readonly refreshHud: (force?: boolean) => void;
 
   // ── The waiting room reuses the real menus rather than reimplementing them ─
   readonly setNetRoom: (on: boolean) => void;

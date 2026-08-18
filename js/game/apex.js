@@ -153,6 +153,11 @@ const api = {
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
     // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
     G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
+    // Keep the dev/test hook synchronous from the caller's point of view. On a
+    // loaded CI runner the next animation frame can be delayed for seconds;
+    // jump() has already committed the authoritative state, so refresh the HUD
+    // (including the minimap) now instead of exposing a stale frame to probes.
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(false);
     return { s: G.player.s, total: G.track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,

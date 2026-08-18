@@ -2987,6 +2987,9 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
+  // Debug teleports can run while a headless/SwiftShader frame is starved.
+  // Let apex.js synchronise its observable HUD state without waiting for rAF.
+  refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
