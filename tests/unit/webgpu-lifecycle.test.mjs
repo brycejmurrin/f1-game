@@ -901,7 +901,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /if \(o && o\.buryRibbon && _roadLutBG\) g2 = _roadLutBG;/);
+  assert.match(WGX_SOURCE, /if \(o && o\.surfaceId === 16 && attrBG\) g2 = attrBG;/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
@@ -909,10 +910,10 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
   assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
+  assert.match(WGX_SOURCE, /Road pieces bind authored mat\+trk/);
+  assert.match(WGX_SOURCE, /pieces\.push\(_meshFromPull\(vert, attr, n, b\.indexFormat\)\)/);
   assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
-  assert.match(CHUNKS_SOURCE, /abs\(fromWorld\.y\) < fromWorld\.z - 0\.45/);
-  assert.match(CHUNKS_SOURCE, /useWorldTrk = isRoadDraw && fromWorld\.w > 0\.5/);
-  assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /Authored VS \(s, x, hw, mat\) on the ribbon/);
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
   assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
@@ -931,7 +932,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
-  assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /trkFromWorld\(in\.wpos\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");

@@ -650,16 +650,10 @@ fn vs_main(
   // ribbon VBOs. Rebuild mat+trk from the centerline LUT / storage[vid].
   var pulled = vec4<f32>(0.0);
   if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
-  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
-    let wt = trkFromWorld(wp.xyz);
-    if (wt.w > 0.5) {
-      // Interior tarmac only. Kerbs / grass / skirts keep MAT 0 + vertex colour.
-      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
-      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
-    }
-    // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
-    // fight and then buried cars, AI, and fence feet in the tarmac.
-  }
+  // Road pieces bind authored mat+trk (group 2, vertex_index). Do not
+  // overwrite with the world LUT — nearest-bin s/x warps paint + tarmac.
+  // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
+  // fight and then buried cars, AI, and fence feet in the tarmac.
   o.matTrk = pulled;
   o.matId = pulled.x;
   o.trk = pulled.yzw;
@@ -678,19 +672,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
   let fromWorld = trkFromWorld(in.wpos);
-  // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
-  let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  let useWorldTrk = isRoadDraw && fromWorld.w > 0.5;
-  let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
-  // Per-fragment LUT class — interpolating 0↔16 across the asphalt lip
-  // would mid-triangle-switch applyMaterial the same way packed col.x did.
-  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
-  let classified = select(in.matTrk.x, select(0.0, 16.0, lutAsphalt), useWorldTrk);
+  // Authored VS (s, x, hw, mat) on the ribbon — GLX aTrk / aMat parity.
+  let vTrk = in.matTrk.yzw;
+  let classified = in.matTrk.x;
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
+  let fwTrk = fwTrkAttr;
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
   // branches. textureSample gets implicit LOD + anisotropy — the GLX

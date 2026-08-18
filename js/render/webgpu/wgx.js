@@ -2243,10 +2243,9 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        // Raw RGB. Packing MAT into col.x (16 + albedo) interpolates 16→0
-        // across every asphalt/grass triangle and sawtooths fract(R) — that
-        // was the warped tarmac. Dawn still zeros a 4th attr; asphalt vs
-        // verge is classified in WGSL from the LUT (abs(x) < hw - 0.45).
+        // Raw RGB. Packing MAT into col.x interpolates 16→0 across the
+        // asphalt lip and sawtooths the tarmac. Dawn zeros a 4th vertex
+        // attr; road pieces bind authored mat+trk as group-2 storage.
         inter[o + 6] = col[i * 3];
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
@@ -2317,12 +2316,11 @@ const WGX = (function () {
       });
       return { sbuf, attrBG };
     }
-    // World-XZ spatial LUT for the road ribbon. Group-2 used to be a per-vertex
-    // mat+trk array indexed by vertex_index — that index stays 0 on this
-    // adapter's drawIndexed (and on large non-indexed draws), so every
-    // fragment read a grass skirt. The LUT is 32×32 cells × 16 centerline
-    // samples; fs_main finds the nearest sample to wpos.xz and rebuilds
-    // (mat, s, lateral x, hw). Magic 12345 marks a LUT vs a dummy/attr buffer.
+    // World-XZ spatial LUT for buryRibbon only (floor/terrain hole). Road
+    // pieces bind a per-vertex mat+trk array (vertex_index on 4095-vert
+    // non-indexed draws). Sharing this LUT on the ribbon reconstructed s/x
+    // from a 32×32 XZ grid and warped paint + tarmac. Magic 12345 marks a
+    // LUT vs a dummy/attr buffer.
     function _makeRoadLUT(pos, trk, matArr) {
       const posA = toF32(pos), trkA = toF32(trk);
       const vCount = (posA.length / 3) | 0;
@@ -2446,7 +2444,8 @@ const WGX = (function () {
               if (n <= 0) continue;
               const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
-              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
+              // Per-vertex attr — do not share the world LUT (that warps s).
+              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
             return {
@@ -2454,7 +2453,7 @@ const WGX = (function () {
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
             };
           }
-          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat, lut);
+          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat);
           return Object.assign({ _wgx: "mesh" }, m);
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
@@ -3026,10 +3025,14 @@ const WGX = (function () {
     }
     // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index).
-    function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
+    function _bindLitVerts(pass, vbuf, instBuf, attrBG, o) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+      // Road pieces bind authored mat+trk. The world LUT is buryRibbon only.
+      let g2 = attrBG || zeroAttrBG;
+      if (o && o.buryRibbon && _roadLutBG) g2 = _roadLutBG;
+      if (o && o.surfaceId === 16 && attrBG) g2 = attrBG;
+      pass.setBindGroup(2, g2);
     }
 
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
@@ -3065,12 +3068,12 @@ const WGX = (function () {
       if (mesh.pieces) {
         for (let i = 0; i < mesh.pieces.length; i++) {
           const p = mesh.pieces[i];
-          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o);
           _drawGeom(litPass, p);
         }
         return;
       }
-      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o);
       _drawGeom(litPass, mesh);
     }
 
@@ -3091,12 +3094,12 @@ const WGX = (function () {
         if (mesh.pieces) {
           for (let i = 0; i < mesh.pieces.length; i++) {
             const p = mesh.pieces[i];
-            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o);
             _drawGeom(litPass, p);
           }
           return;
         }
-        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o);
         _drawGeom(litPass, mesh);
         return;
       }
@@ -3120,7 +3123,7 @@ const WGX = (function () {
           continue;
         }
         if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
-        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
+        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o);
         _drawGeom(litPass, ch);
         drew++;
         if (isNear) nearDraw++;
@@ -4166,7 +4169,7 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
+      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG, o);
       _drawGeom(litPass, batch, n);
     }
     function freeInstancedBatch(batch) {
