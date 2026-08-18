@@ -2,8 +2,8 @@
 /**
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
- * Fourth .mcp.json server (beside tinyfish / chrome-devtools / probe). Never
- * chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * Fifth .mcp.json server (beside tinyfish / chrome-devtools / probe /
+ * playwright). Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md
  *
  *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve
@@ -40,11 +40,13 @@ const UI_VIEWPORTS = "ios-iphone-landscape";
 const UI_JOBS = 1;
 
 // Design §Locking known gap — v1 mutex is MCP-owned. chrome-devtools stdio
-// does not answer :3712/healthz. apex_status reports it; it does not close it.
+// and playwright MCP do not answer :3712/healthz. apex_status reports them.
 const KNOWN_GAP = {
   chromeDevtoolsStdio:
     "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
-  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
+  playwrightMcpStdio:
+    "Cursor .mcp.json playwright (@playwright/mcp) is a fifth browser and does not answer :3712/healthz",
+  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs", "playwright-mcp"],
 };
 
 function toolKind(entry) {

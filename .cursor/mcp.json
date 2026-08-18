@@ -5,6 +5,11 @@
       "command": "tools/apex-tools-mcp.sh",
       "args": ["serve"]
     },
+    "playwright": {
+      "type": "stdio",
+      "command": "tools/playwright-mcp.sh",
+      "args": ["run"]
+    },
     "tinyfish": {
       "url": "http://127.0.0.1:3711/mcp"
     },

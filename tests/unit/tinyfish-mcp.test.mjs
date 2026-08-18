@@ -49,6 +49,7 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "playwright",
     "probe",
     "tinyfish",
   ]);
@@ -59,6 +60,8 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
 });
 
 test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
@@ -356,4 +359,11 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(CD_SH, "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
   assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
+});
+
+test("Playwright MCP network fallback is pinned to the audited release", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8");
+  assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
+  assert.doesNotMatch(src, /@playwright\/mcp@latest/);
+  assert.doesNotMatch(src, /0\.0\.0\.0/);
 });

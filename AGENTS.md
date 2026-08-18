@@ -92,8 +92,8 @@ Session shape — this is what controls both wall time and waiting:
 2. `render({what:"view"|"map"|"circuit"|"car"})` — the character raster of the
    3D scene. Stale under `headless(true)`; `snapCam()` REQUIRED after
    `park()`/`jump()`.
-3. DOM/a11y snapshot (chrome-devtools MCP) — menu/HUD work only; the canvas is
-   invisible to it.
+3. DOM/a11y snapshot (Playwright MCP `browser_snapshot` / `browser_resize` /
+   `browser_evaluate`, or chrome-devtools) — menu/HUD work only; hide `#game`.
 4. Pixel screenshot — visual sign-off only, never an assertion source. For
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
@@ -179,10 +179,12 @@ flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
 **MCP.** Keep **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
 serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
-Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
-servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
+Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same five
+servers, lockstepped (`apex-tools`, `playwright`, `tinyfish`, `chrome-devtools`,
+`probe`). `agent mcp enable apex-tools` then `list-tools`. If the
 host catalog is empty (this Cloud dashboard often is), fall back to
-`./tools/apex-tools-mcp.sh call`. TinyFish: `./tools/tinyfish-mcp.sh
+`./tools/apex-tools-mcp.sh call`. Playwright UI survey:
+`./tools/playwright-mcp.sh`. TinyFish: `./tools/tinyfish-mcp.sh
 deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`. Do not attach
 `mcp-probe` for a `version.json` check. Never run Chrome MCP while Playwright
 is running.

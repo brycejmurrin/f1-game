@@ -54,15 +54,18 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools as the fourth stdio server", () => {
+test(".mcp.json registers apex-tools and playwright in the five-server catalog", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "playwright",
     "probe",
     "tinyfish",
   ]);
+  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
@@ -106,7 +109,9 @@ test("apex_status reports the chrome-devtools stdio known gap", () => {
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.match(body.knownGap.chromeDevtoolsStdio, /3712/);
+  assert.match(body.knownGap.playwrightMcpStdio, /playwright/);
   assert.ok(body.knownGap.outsideLock.includes("layout-audit"));
+  assert.ok(body.knownGap.outsideLock.includes("playwright-mcp"));
 });
 
 test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only", () => {

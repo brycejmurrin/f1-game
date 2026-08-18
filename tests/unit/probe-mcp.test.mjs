@@ -28,6 +28,7 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "playwright",
     "probe",
     "tinyfish",
   ]);
@@ -37,6 +38,8 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
 });
 
 test("probe-mcp help lists serve / list-tools / call / status", () => {
