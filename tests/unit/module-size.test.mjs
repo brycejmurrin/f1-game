@@ -327,11 +327,13 @@ const CEILINGS = {
   // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
   // 8601 -> 8600: factory aero/ERS on AI + houseStyle call sites (net −1).
   // Union with snapGameCam soft-present invalidate measured 8600.
-  // 8600 -> 8630: lazy AGENT_FILES / wantAgentSurface() / boot inject. The
-  // three files left FULL (~350 KB) so github.io players never parse them;
+  // 8600 -> 8635: lazy AGENT_FILES / wantAgentSurface() / bootAgentSurface.
+  // The three files left FULL (~350 KB) so github.io players never parse them;
   // the loader table + gate have to live next to BACKEND_FILES (same DAG
-  // injector). Bug-explaining growth at the boot site, not a feature.
-  "js/game.js": 8630,
+  // injector). window.__apex = null is the eval-time latch the global
+  // registry pins on this file; ApexApi.create stays call-time after the
+  // inject. Bug-explaining growth at the boot site, not a feature.
+  "js/game.js": 8635,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

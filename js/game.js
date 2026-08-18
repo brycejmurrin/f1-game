@@ -8612,10 +8612,17 @@ requestAnimationFrame(tick);
 //   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
 // The __apex dev/test API lives in js/game/apex.js (ApexApi.create(G)).
 // Injected only when wantAgentSurface() — Pages players never download it.
-if (wantAgentSurface()) {
+// game.js eval-assigns window.__apex (the one-global the registry pins on this
+// file) and bootAgentSurface fills it after the lazy inject. ApexApi itself is
+// a call-time read: an eval-time ApexApi.create is a ReferenceError on the
+// player path and a FULL toposort miss in scan-globals.
+window.__apex = null;
+async function bootAgentSurface() {
+  if (!wantAgentSurface()) return;
   await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
   if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
 }
+await bootAgentSurface();
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built.
