@@ -1,0 +1,46 @@
+[
+  {
+    "optionId": "sig_mercedes_cpit",
+    "visual": { "haloBlade": 2, "haloWing": 1, "camPods": 1, "screen": 0 }
+  },
+  {
+    "optionId": "sig_ferrari_cpit",
+    "visual": { "haloBlade": 2, "haloWing": 1, "camPods": 0, "screen": 1 }
+  },
+  {
+    "optionId": "sig_mclaren_cpit",
+    "visual": { "haloBlade": 1, "haloWing": 1, "camPods": 2, "screen": 1 }
+  },
+  {
+    "optionId": "sig_redbull_cpit",
+    "visual": { "haloBlade": 0, "haloWing": 1, "camPods": 1, "screen": 0 }
+  },
+  {
+    "optionId": "sig_alpine_cpit",
+    "visual": { "haloBlade": 1, "haloWing": 1, "camPods": 0, "screen": 0 }
+  },
+  {
+    "optionId": "sig_racingbulls_cpit",
+    "visual": { "haloBlade": 0, "haloWing": 0, "camPods": 1, "screen": 1 }
+  },
+  {
+    "optionId": "sig_haas_cpit",
+    "visual": { "haloBlade": 0, "haloWing": 1, "camPods": 0, "screen": 0 }
+  },
+  {
+    "optionId": "sig_williams_cpit",
+    "visual": { "haloBlade": 1, "haloWing": 0, "camPods": 2, "screen": 1 }
+  },
+  {
+    "optionId": "sig_audi_cpit",
+    "visual": { "haloBlade": 2, "haloWing": 0, "camPods": 1, "screen": 1 }
+  },
+  {
+    "optionId": "sig_astonmartin_cpit",
+    "visual": { "haloBlade": 2, "haloWing": 1, "camPods": 1, "screen": 1 }
+  },
+  {
+    "optionId": "sig_cadillac_cpit",
+    "visual": { "haloBlade": 1, "haloWing": 0, "camPods": 1, "screen": 0 }
+  }
+]
