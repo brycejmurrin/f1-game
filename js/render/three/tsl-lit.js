@@ -17,12 +17,11 @@
  * convention (y flipped once here; the texture node's flipY re-flips on the
  * GL backend — the same double-flip three's own shadow code relies on).
  *
- * PCSS blocker search HAS landed on the WebGPU backend (M4-PCSS closed):
- * tlx-shadow.js builds the 512² min-of-4 blocker map with sampler-free
- * textureLoad reads and the sun branch below scales the Poisson radius
- * R = mix(1.5, 6.0, pen) from the receiver-blocker gap. The WebGL2 fallback
- * backend has no blocker map (compare-on textures can't be re-read plain in
- * GLSL) and keeps the fixed R=3 — GLX's own blocker-off radius.
+ * PCSS blocker search HAS landed on WebGPU (textureLoad depth) and desktop
+ * WebGL2 (R16F TSL.depth color — texelFetch is legal on a color texture).
+ * The sun branch scales R = mix(1.5, 6.0, pen) from the receiver-blocker
+ * gap. Phones and software GL keep the fixed R=3 — GLX's own blocker-off
+ * radius.
  *
  * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
  * builds the cube target and drives setEnvStr() from the probe-ready state,
