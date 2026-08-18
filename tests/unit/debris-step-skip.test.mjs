@@ -47,9 +47,9 @@ test("asleep-skip helpers exist and share the despawn path with the WASM tick", 
 test("step() skips world.step on the asleep path and zeros panel force first", () => {
   const step = extractFn(SRC, "step");
   const skipAt = step.indexOf("if (!_needSolve");
-  const wasmAt = step.indexOf("world.step");
+  const wasmAt = step.indexOf("world.step(_events)");
   assert.ok(skipAt >= 0, "tier-2 skip must gate on !_needSolve");
-  assert.ok(wasmAt > skipAt, "world.step must stay on the needSolve path, after the skip return");
+  assert.ok(wasmAt > skipAt, "world.step(_events) must stay on the needSolve path, after the skip return");
   const skipBody = step.slice(skipAt, step.indexOf("_tick++"));
   assert.match(skipBody, /_stepSkips\+\+/);
   assert.match(skipBody, /_ageAndCullPool/);
