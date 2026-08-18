@@ -869,9 +869,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   /* One row for .pm-group-h so the side-by-side rail can reserve the same
      strip and put CONTROLS on the same top edge as GEARS / HIDE HUD. */
   --pm-head-row: calc(clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5)) * 1.2 + 4px);
-  --pm-box-gap: 6px;
+  --pm-after-head: 6px;
 }
-#pmsettings-inner[data-density="compact"] { --pm-box-gap: 4px; }
+#pmsettings-inner[data-density="compact"] { --pm-after-head: 4px; }
 @media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;
@@ -1066,7 +1066,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #pm-category-tabs {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    padding: calc(var(--pm-head-row) + var(--pm-box-gap)) 0 0;
+    padding: calc(var(--pm-head-row) + var(--pm-after-head)) 0 0;
     background: transparent;
   }
   #pm-category-tabs > button {
