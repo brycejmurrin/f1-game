@@ -792,7 +792,7 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // implicit LOD + anisotropy — GLX texture() parity. Must sit BEFORE the
   // front_facing branch (that is already non-uniform).
   const roadSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, roadUv, 16)");
-  const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff) { N = -N; }");
+  const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff && !isRoadDraw) { N = -N; }");
   assert.ok(roadSample > 0 && ffBranch > roadSample,
     "asphalt textureSample must be hoisted before the front_facing branch");
   assert.match(CHUNKS_SOURCE, /if \(mid == 16 && roadPackOn\)/);
