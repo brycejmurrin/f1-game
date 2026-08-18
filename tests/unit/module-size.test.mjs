@@ -374,7 +374,10 @@ const CEILINGS = {
   // 2734 -> 2739: the cockpit wing's placement is now a recorded measurement
   // (screen rect at canvas res + what ate the other 13k px), not a guess.
   // 2739 -> 2741: lifecycle Log.info at car mesh build (ns "car").
-  "js/car/car3d.js": 2741,
+  // 2741 -> 2757: sharper wing foil (knife-TE sample + outboard span split) and
+  // beveled endplates/canards — same mesh for GLX/WGX/TLX, paid from the 2.4k
+  // default-body headroom. Raised deliberately.
+  "js/car/car3d.js": 2757,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

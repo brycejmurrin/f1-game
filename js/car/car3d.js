@@ -211,11 +211,11 @@ const Car3D = (function () {
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
   // ── Wing element section ────────────────────────────────────────────────────
-  // Chordwise stations from leading to trailing edge, PACKED TOWARD THE LEADING
-  // EDGE: an aerofoil's whole shape happens in its first third, and evenly
-  // spaced stations spend their budget on the flat rear half while leaving the
-  // nose a visible chamfer instead of a curve.
-  const FOIL_T = [0, 0.08, 0.28, 0.60, 1];
+  // Chordwise stations from leading to trailing edge. Packed at BOTH ends: the
+  // first third still owns the nose radius, and 0.84 keeps the last sixth a
+  // knife rather than a 40 % linear fade from mid-chord to the TE (the look
+  // that read as a rounded plank, especially on GLX/WGX paint).
+  const FOIL_T = [0, 0.08, 0.28, 0.60, 0.84, 1];
   // Half-thickness distribution, normalised to peak at 1. t^0.5 gives the
   // square-root nose growth that reads ROUND at four stations; (1-t)^1.1 runs
   // out to a genuinely sharp trailing edge. Thickness reaching zero at both ends
@@ -225,19 +225,19 @@ const Car3D = (function () {
   // Camber as a fraction of chord. F1 wings are INVERTED, so the mean line bows
   // DOWN off the chord line and the suction side is the underside.
   const FOIL_CAMBER = 0.05;
-  // Wing element split into centre + outboard thirds so sweep, taper and tip
-  // rise alter the actual planform rather than only stacking more rectangles.
+  // Wing element split into a flat centre plus TWO outboard samples per side so
+  // sweep, taper and tip rise read as a hard planform, not three stacked boards.
   //
   // Each element is a CLOSED, CAMBERED SECTION — blunt leading edge, real
   // underside, sharp trailing edge. It used to be a single double-sided quad per
   // third: six triangles for a whole wing element, with `thick` doing nothing but
   // offsetting that sheet upward. That is fine head-on and falls apart the moment
   // anything looks along the span or watches an element rotate, which is exactly
-  // what ACTIVE AERO made it do — a plank pivoting in mid-air. The section costs
-  // 48 triangles instead of 6 and the whole car is still ~2.2k against a 2.4k
-  // ceiling, so it is bought with headroom that already existed.
+  // what ACTIVE AERO made it do — a plank pivoting in mid-air. Five span
+  // segments × five chord intervals is 100 triangles (was 48); the default body
+  // still sits under the 2.4k ceiling on the headroom that bought the foil.
   function addWingFoil(out, spec, col, surface) {
-    const half = spec.half, inner = half * 0.34;
+    const half = spec.half, inner = half * 0.34, mid = half * 0.67;
     const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
     const rise = spec.rise || 0, thick = spec.thick;
     const dz = spec.zLead - spec.zTrail, dy = spec.yTrail - spec.yLead;
@@ -261,7 +261,7 @@ const Car3D = (function () {
         h: thick * 0.5 * foilThick(t),
       };
     };
-    const segments = [[-half, -inner], [-inner, inner], [inner, half]];
+    const segments = [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
     for (const [x0, x1] of segments) {
       for (let i = 0; i < FOIL_T.length - 1; i++) {
         const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
@@ -308,6 +308,13 @@ const Car3D = (function () {
       if (side > 0) addQuad(out, fs, rs, rt, ft, col, surface);
       else          addQuad(out, ft, rt, rs, fs, col, surface);
     }
+  }
+  // Plate with the same 45° crown the bodywork already uses. Thin endplates and
+  // canards otherwise flash as a single aliased edge; the bevel is the running
+  // highlight that makes a wing look cut rather than boxed.
+  function addBeveledSpan(out, front, rear, b, col, colFront, surface, frontSurface) {
+    addSpan(out, front, rear, col, colFront, surface, frontSurface);
+    if (b > 0) addTopBevel(out, front, rear, b, col, surface);
   }
 
   function addBeamBetween(out, p0, p1, th, col, surface) {
@@ -2352,23 +2359,30 @@ const Car3D = (function () {
       // Main endplate: a swept plate rising up-and-outboard (the outwash flick) —
       // moderated in height so it reads as a real 3-D structure without towering
       // over the wing (it was ~1.5× too tall and looked detached from the plane).
-      addSpan(out, { z: 2.66, x: epX,                 y: 0.135, w: epW, h: PLATE.hF },
-                   { z: 1.98, x: epX + s*PLATE.kick,  y: 0.245, w: epW, h: PLATE.hR }, c2);
+      // `t` pinches the crown into a ridge so the plate is a cut fence, not a box.
+      addBeveledSpan(out,
+        { z: 2.66, x: epX,                y: 0.135, w: epW, h: PLATE.hF, t: 0.62 },
+        { z: 1.98, x: epX + s*PLATE.kick, y: 0.245, w: epW, h: PLATE.hR, t: 0.78 },
+        Math.min(0.014, epW * 0.28), c2);
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
       addBox(out, epX + s*(PLATE.footW * 0.23), 0.050, 2.30, PLATE.footW, 0.016, PLATE.footZ, c1);
       // Tall-plate variant carries a bridging spar across the crown, tying the
       // top of the arch back to the outer flap tip.
       if (PLATE.arch) {
-        addSpan(out, { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
-                     { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 }, c1);
+        addBeveledSpan(out,
+          { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
+          { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
+          0.008, c1);
       }
       // Canard / dive-plane cascade on the outer face of the endplate.
       const nCan = aCasc;
       for (let i = 0; i < nCan; i++) {
         const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
-        addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
-                     { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 }, c1);
+        addBeveledSpan(out,
+          { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
+          { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 },
+          0.010, c1);
       }
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
@@ -2386,8 +2400,10 @@ const Car3D = (function () {
         if (aVane >= 2) addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);  // inner fence
         if (aVane >= 3) {
           // Curved triple cascade: a swept forward vane + a canted footplate vane.
-          addSpan(out, { z: 1.28, x: s*0.70, y: 0.28, w: 0.02, h: 0.20 },
-                       { z: 0.98, x: s*0.62, y: 0.24, w: 0.02, h: 0.26 }, CARBON);
+          addBeveledSpan(out,
+            { z: 1.28, x: s*0.70, y: 0.28, w: 0.02, h: 0.20 },
+            { z: 0.98, x: s*0.62, y: 0.24, w: 0.02, h: 0.26 },
+            0.008, CARBON);
           addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
         }
       }
@@ -2417,17 +2433,17 @@ const Car3D = (function () {
       // Tall SLIM swept endplates with a louvre cut-out cluster near the rear edge
       // and a painted team-color top rail along the crown.
       for (const s of [-1, 1]) {
-        addSpan(out,
-          { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.045, h: _ep.front.sy },
-          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.045, h: _ep.rear.sy },
-          DARK);
+        addBeveledSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.040, h: _ep.front.sy, t: 0.58 },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.040, h: _ep.rear.sy, t: 0.72 },
+          0.012, DARK);
         // Louvre detail: a stack of thin recessed slots near the top-rear corner.
         for (let i = 0; i < 4; i++)
           addBox(out, s*0.515, epCY + epSY*0.5 - 0.07 - i*0.06, -2.30, 0.018, 0.016, 0.18, INTAKE);
-        addSpan(out,
-          { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.050, h: 0.022 },
-          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.050, h: 0.022 },
-          c2, null, SURFACES.paint);
+        addBeveledSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.046, h: 0.018, t: 0.70 },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.046, h: 0.018, t: 0.85 },
+          0.006, c2, null, SURFACES.paint);
       }
       // Clean swept two/three-element rear wing (leading edge low/forward →
       // trailing edge high/back). Main plane sits on the endplate centreline.
