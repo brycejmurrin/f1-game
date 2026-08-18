@@ -1057,8 +1057,10 @@ paths. Do not re-open those from the hunt file.
 
 **Taken 2026-08-18:** WGX `_flushShadowModelUBO` — one `writeBuffer` per
 shadow pass, same ring as `_flushDrawUBO`. Same pass also batched
-`_writeQuadFx` / `drawDecal` via `_flushLitRings()`. Optional leftover:
-defer the 350 KB agent surface (PWA memory).
+`_writeQuadFx` / `drawDecal` via `_flushLitRings()`. `apex.js` +
+`agentview*` are `LAZY_AGENT` (no tagged script; Pages players skip
+~350 KB). DebrisWorld skips `world.step` when live bodies are asleep and
+no car is in `FURN_WAKE_M`, with JS despawn + panel `force = 0` hoisted.
 
 ## 4. Recorded negative results
 
