@@ -1611,10 +1611,10 @@ const WGX = (function () {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
-      // Road ribbon: always-pass (still writes depth). The stadium floor +
-      // terrain write first and win on SwiftShader-Dawn even with a negative
-      // bias. Must still write depth — skyLate draws after the world and
-      // would erase a no-Z ribbon wherever the floor was discarded.
+      // Optional always-pass (opts.decal). The road must NOT use this —
+      // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
+      // punch a LUT hole; the road uses less-equal + bias and still writes
+      // depth so skyLate cannot erase it.
       const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
@@ -3036,8 +3036,10 @@ const WGX = (function () {
       if (o.surfaceId === 16) {
         // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
         // CCW after that flip and were culled to a pair of edge lines.
+        // Do NOT mark decal/always-pass: that stamps ribbon depth over
+        // walls and tyres drawn later (they look sunk into the tarmac).
+        // Floor/terrain already punch a LUT hole; bias + 8 cm lift win the rest.
         extra.doubleSided = true;
-        extra.decal = true;
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
     }

@@ -561,11 +561,11 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let dCenter = sqrt(bestD);
   // Prefer perpendicular distance when a real tangent exists. Point-distance
   // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
-  // so the nearest centerline sample can be > hw+2.4 away along-track.
-  // Lateral slack is the grass verge (~2.2 m), not 8 m — a wider hole ate
-  // the inner terrain rails (berms / elevation). Along-track LUT coarseness
-  // still uses +8 on point-distance when no tangent exists.
-  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 2.4, tangOk);
+  // so the nearest centerline sample can sit far along-track.
+  // Hole is tarmac + kerb lip only (~0.55 m). hw+2.4 ate the barrier line
+  // and the first terrain rail (verge / berms at ~hw+2.2). Without a tangent,
+  // a circle of radius hw+0.8 stays on the ribbon — hw+8 ate a disk of walls.
+  let onRibbon = select(dCenter <= hw + 0.8, abs(x) <= hw + 0.55, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
   // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
@@ -699,12 +699,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
   let saaDy = dpdy(topNgeo);
-  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn. Punch the
-  // LUT tarmac footprint (onRibbon is hw+2.4, the verge — not the berms).
-  // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
+  // Floor + terrain only. The 1600 m scenery slab is skipped on WGX
+  // (G.roadLutReady); a screen-footprint "slab" test also punched long
+  // barrier / grandstand faces that sit on the ribbon.
   let bury = D.mat2.w > 0.5;
-  let slab = max(fwWpos.x, fwWpos.z) > 6.0;
-  if ((bury || slab) && !isRoadDraw && fromWorld.w > 0.5) {
+  if (bury && !isRoadDraw && fromWorld.w > 0.5) {
     discard;
   }
 
