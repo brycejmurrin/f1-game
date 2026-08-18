@@ -27,15 +27,18 @@ let _btn = null;
 let _keysBound = false;
 let _raisedBuffer = null;
 
-// Below #pausebtn / #btn-cam (z 14, top-right) and #hud-sectors. Left/top-8
-// sat on the minimap and the POS/LAP/TIME row. pointer-events:none so a
-// collision with a later HUD chip still clicks through.
-const PANEL_STYLE = "position:fixed;right:8px;top:140px;z-index:12;margin:0;padding:8px 10px;" +
+// Below #pausebtn / #btn-cam (z 14) and the zoomed #hud-sectors stack
+// (visual top 8+tap+4+sat, ~80px tall at 100% HUD). z 11 so .touchbtn
+// (z 12) paints on top if a short landscape still overlaps the dock.
+const PANEL_STYLE = "position:fixed;right:8px;" +
+  "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + 80px * var(--hud-scale, 1));" +
+  "z-index:11;margin:0;padding:8px 10px;" +
   "font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
   "color:#d8ffe0;background:rgba(6,10,8,.72);border:1px solid rgba(90,180,110,.35);" +
   "border-radius:6px;pointer-events:none;white-space:pre;text-align:left;" +
-  "max-width:min(46ch,calc(100vw - 16px));max-height:min(70vh,28em);overflow:hidden;" +
-  "text-shadow:0 1px 0 #000";
+  "max-width:min(46ch,calc(100vw - 16px));" +
+  "max-height:min(28em,calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - 80px * var(--hud-scale, 1) - 96px));" +
+  "overflow:hidden;text-shadow:0 1px 0 #000";
 
 function read() {
   try {
@@ -56,7 +59,7 @@ function snapshot() {
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
     state: "", track: "", session: "",
     lap: null, pos: null, total: null,
-    speedKph: null, gear: null, energy: null, s: null, x: null,
+    speedKph: null, speedIsDash: false, gear: null, energy: null, s: null, x: null,
     logs: [],
   };
   try {
@@ -107,13 +110,23 @@ function snapshot() {
       }
     }
   } catch (_) { /* timing needs player.px */ }
+  // HUD km/h is dashKph (vStd*3.6), not raw ground*3.6. Read the painted
+  // digit so the overlay matches the LCD without growing apex.js.
+  try {
+    if (typeof document !== "undefined") {
+      const n = document.getElementById("hud-speed-n");
+      const v = n && parseFloat(n.textContent);
+      if (isFinite(v)) { out.speedKph = v; out.speedIsDash = true; }
+    }
+  } catch (_) { /* no HUD (VM / menu) */ }
   // probe() is one Tracks.sample. obs() adds walls, a 3-point lookahead,
   // field sort, and reward terms — too much for a 4 Hz overlay.
   try {
     if (typeof __apex !== "undefined" && __apex.probe) {
       const o = __apex.probe();
       if (o) {
-        if (o.speed != null) out.speedKph = +(o.speed * 3.6).toFixed(1);
+        if (out.speedKph == null && o.speed != null)
+          out.speedKph = +(o.speed * 3.6).toFixed(1);
         if (o.s != null) out.s = o.s;
         if (o.x != null) out.x = o.x;
       }
@@ -146,7 +159,9 @@ function fmt(v, digits) {
 function paintOverlay() {
   const el = ensurePanel();
   if (!el) return;
-  if (!on()) { el.hidden = true; return; }
+  const hudHidden = typeof document !== "undefined" && document.body &&
+    document.body.classList.contains("hud-hidden");
+  if (!on() || hudHidden) { el.hidden = true; return; }
   el.hidden = false;
   const s = snapshot();
   const lines = [
@@ -155,7 +170,8 @@ function paintOverlay() {
     "scale " + fmt(s.scale) + "   tier " + fmt(s.tier) + "   gfx " + fmt(s.backend || null),
     (s.track || "menu") + "  " + (s.session || s.state || "") +
       "  lap " + fmt(s.lap) + "  P" + fmt(s.pos) + (s.total != null ? "/" + s.total : ""),
-    "v " + fmt(s.speedKph) + " km/h  g" + fmt(s.gear) +
+    "v " + fmt(s.speedKph) + (s.speedIsDash ? " km/h" : " km/h gnd") +
+      "  g" + fmt(s.gear) +
       "  s " + fmt(s.s, 1) + "  x " + fmt(s.x, 2) +
       "  ers " + fmt(s.energy, 2),
     "— log —",

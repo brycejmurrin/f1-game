@@ -122,9 +122,22 @@ test("snapshot uses probe(), never obs()", () => {
   assert.equal(s.lap, 3);
 });
 
-test("overlay sits below the top-right chrome, not on the minimap", () => {
+test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   const { M } = load({});
   assert.match(M.PANEL_STYLE, /right:\s*8px/);
-  assert.match(M.PANEL_STYLE, /top:\s*140px/);
+  assert.match(M.PANEL_STYLE, /--tap/);
+  assert.match(M.PANEL_STYLE, /--hud-scale/);
+  assert.match(M.PANEL_STYLE, /z-index:11/);
   assert.doesNotMatch(M.PANEL_STYLE, /left:\s*8px/);
+  assert.doesNotMatch(M.PANEL_STYLE, /top:\s*140px/);
+});
+
+test("snapshot prefers the HUD dashKph digit over ground*3.6", () => {
+  const { M } = load({
+    apex: { probe() { return { speed: 20, s: 1, x: 0 }; } },
+  });
+  // VM has no document — probe fallback is ground km/h.
+  const gnd = M.snapshot();
+  assert.equal(gnd.speedKph, 72);
+  assert.equal(gnd.speedIsDash, false);
 });
