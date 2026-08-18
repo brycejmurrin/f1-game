@@ -589,6 +589,7 @@ const WGX = (function () {
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
+    let _softDisplayPending = false, _softDisplayEpoch = 0;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1711,10 +1712,15 @@ const WGX = (function () {
     }
     function _softDisplayEncode() {
       if (!_softGpu || !_displayCtx || !softPresentTex || !encoder) return null;
+      // A software map can lag many frames. Never allocate another full-frame
+      // staging buffer until the current one has mapped or failed; the next
+      // rendered frame will naturally become the newest readback.
+      if (_softDisplayPending) return null;
+      let buf = null;
       try {
         const w = width, h = height;
         const bpr = (w * 4 + 255) & ~255;
-        const buf = device.createBuffer({
+        buf = device.createBuffer({
           size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });
         encoder.copyTextureToBuffer(
@@ -1722,47 +1728,70 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: bpr, rowsPerImage: h },
           [w, h, 1]
         );
-        return { buf, bpr, w, h };
-      } catch (_) { return null; }
+        _softDisplayPending = true;
+        return { buf, bpr, w, h, epoch: _softDisplayEpoch };
+      } catch (_) {
+        try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
+        return null;
+      }
     }
     function _softDisplayFinish(cap) {
-      if (!cap || !_displayCtx) return;
-      const { buf, bpr, w, h } = cap;
+      if (!cap) return;
+      const { buf, bpr, w, h, epoch } = cap;
+      const release = function () { _softDisplayPending = false; };
+      if (!_displayCtx) {
+        try { buf.destroy(); } catch (_) { /* device dying */ }
+        release();
+        return;
+      }
       const finish = function () {
         try {
           buf.mapAsync(GPUMapMode.READ).then(function () {
             try {
               const src = new Uint8Array(buf.getMappedRange());
-              let maxPx = 0;
-              if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
-                _softImg = _displayCtx.createImageData(w, h);
-              }
-              const img = _softImg;
-              for (let y = 0; y < h; y++) {
-                const s = y * bpr, d = y * w * 4;
-                for (let x = 0; x < w; x++) {
-                  const si = s + x * 4, di = d + x * 4;
-                  const r = src[si], g = src[si + 1], b = src[si + 2];
-                  img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
-                  if ((r + g + b) > maxPx) maxPx = r + g + b;
+              // A resize can complete while mapAsync is pending. Drain/destroy
+              // the old buffer, but never paint its stale dimensions.
+              if (epoch === _softDisplayEpoch && _displayCanvas &&
+                  _displayCanvas.width === w && _displayCanvas.height === h) {
+                let maxPx = 0;
+                if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+                  _softImg = _displayCtx.createImageData(w, h);
                 }
-              }
-              if (maxPx >= 8) {
-                _displayCtx.putImageData(img, 0, 0);
-                _softBlitNotify();
+                const img = _softImg;
+                for (let y = 0; y < h; y++) {
+                  const s = y * bpr, d = y * w * 4;
+                  for (let x = 0; x < w; x++) {
+                    const si = s + x * 4, di = d + x * 4;
+                    const r = src[si], g = src[si + 1], b = src[si + 2];
+                    img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
+                    if ((r + g + b) > maxPx) maxPx = r + g + b;
+                  }
+                }
+                if (maxPx >= 8) {
+                  _displayCtx.putImageData(img, 0, 0);
+                  _softBlitNotify();
+                }
               }
             } catch (_) { /* 2D blit failed */ }
             try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
-          }).catch(function () {
+            release();
+          }, function () {
             try { buf.destroy(); } catch (_) { /* device dying */ }
+            release();
           });
         } catch (_) {
           try { buf.destroy(); } catch (_) { /* device dying */ }
+          release();
         }
       };
       try {
         device.queue.onSubmittedWorkDone().then(finish, finish);
       } catch (_) { finish(); }
+    }
+    function _softDisplayAbort(cap) {
+      if (!cap) return;
+      try { cap.buf.destroy(); } catch (_) { /* submit rejected / device dying */ }
+      _softDisplayPending = false;
     }
     function _softBlitNotify() {
       _softBlitGen++;
@@ -1777,15 +1806,19 @@ const WGX = (function () {
       if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
+        let waiter = null;
         const timer = setTimeout(function () {
+          const i = _softPresentWaiters.indexOf(waiter);
+          if (i >= 0) _softPresentWaiters.splice(i, 1);
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
-        _softPresentWaiters.push(function (gen) {
+        waiter = function (gen) {
           if (gen > start) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
             resolve(gen);
           }
-        });
+        };
+        _softPresentWaiters.push(waiter);
       });
     }
     function resize() {
@@ -1800,6 +1833,7 @@ const WGX = (function () {
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
+        _softDisplayEpoch++;
         canvas.width = w; canvas.height = h;
         // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
         // configured swapchain. Reconfigure on every buffer-size change.
@@ -3418,7 +3452,8 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
-        device.queue.submit([encoder.finish()]);
+        try { device.queue.submit([encoder.finish()]); }
+        catch (e) { _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
         _softDisplayFinish(disp);
@@ -3740,7 +3775,8 @@ const WGX = (function () {
       }
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
-      device.queue.submit([encoder.finish()]);
+      try { device.queue.submit([encoder.finish()]); }
+      catch (e) { _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
       _softDisplayFinish(disp);

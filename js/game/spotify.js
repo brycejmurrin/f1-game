@@ -73,6 +73,11 @@ window.SpotifyMusic = (function () {
   let results = [];            // playlist search hits
   let title = "", artist = "";
   const subs = [];
+  // A refresh token may rotate on use. Every caller that discovers the same
+  // expired access token must share one request, or a slower invalid_grant for
+  // the old token can erase the fresh token written by the winning request.
+  let refreshInFlight = null;
+  let refreshTokenInFlight = null;
 
   /* ---------------- storage (raw, not GameStore) ----------------
      Deliberately not GameStore.store: this must be queryable before game.js has
@@ -172,7 +177,18 @@ window.SpotifyMusic = (function () {
     if (!t) return Promise.resolve(null);
     if (t.expires_at && Date.now() < t.expires_at - 60000) return Promise.resolve(t.access_token);
     if (!t.refresh_token) { clearToken(); return Promise.resolve(null); }
-    return refresh(t.refresh_token);
+    if (refreshInFlight && refreshTokenInFlight === t.refresh_token) return refreshInFlight;
+    const token = t.refresh_token;
+    let shared;
+    shared = refresh(token).finally(() => {
+      if (refreshInFlight === shared) {
+        refreshInFlight = null;
+        refreshTokenInFlight = null;
+      }
+    });
+    refreshTokenInFlight = token;
+    refreshInFlight = shared;
+    return shared;
   }
 
   function refresh(refreshToken) {
@@ -182,17 +198,30 @@ window.SpotifyMusic = (function () {
       grant_type: "refresh_token", refresh_token: refreshToken, client_id: cid,
     })).then((j) => {
       if (!j) return null;
-      if (j.error) {
+      const refreshError = j.error || (typeof j.access_token === "string" && j.access_token
+        ? null : "bad_response");
+      if (refreshError) {
         // invalid_grant = app revoked, or the refresh token was rotated away.
-        // Retrying would just spin; drop it and report disconnected.
-        clearToken();
-        teardown();
-        explained = true;
-        setStatus("configured", j.error === "invalid_grant"
-          ? "Spotify session expired or the app was revoked. Press CONNECT to sign in again."
-          : "Could not refresh the Spotify session (" + j.error + "). Press CONNECT.");
+        // Only erase the token that actually failed. An older request resolving
+        // after a successful rotation must never delete its replacement.
+        const current = readToken();
+        if (refreshError === "invalid_grant" && current && current.refresh_token === refreshToken) {
+          clearToken();
+          teardown();
+          explained = true;
+          setStatus("configured",
+            "Spotify session expired or the app was revoked. Press CONNECT to sign in again.");
+        } else if (current && current.refresh_token === refreshToken) {
+          // Network, rate-limit and malformed/temporary responses are retryable.
+          // Keep the long-lived refresh token so the next action can recover.
+          setStatus("configured", "Could not refresh the Spotify session (" + refreshError + "). Try again in a moment.");
+        }
         return null;
       }
+      // The app id or token may have changed while fetch was in flight. Do not
+      // resurrect credentials from an obsolete session over the new owner.
+      const current = readToken();
+      if (!current || current.refresh_token !== refreshToken) return null;
       // Spotify ROTATES refresh tokens: when a new one comes back the old one
       // dies with it, so persist whatever arrived and keep the old as fallback.
       writeToken({
@@ -678,7 +707,12 @@ window.SpotifyMusic = (function () {
   function connectRemote() {
     setStatus("connecting", "Looking for your Spotify devices…");
     return validToken().then((t) => {
-      if (!t) { setStatus("configured", "No Spotify session. Press CONNECT to sign in."); return; }
+      if (!t) {
+        setStatus("configured", readToken()
+          ? "Could not renew the Spotify session. Check your connection and try again."
+          : "No Spotify session. Press CONNECT to sign in.");
+        return;
+      }
       state = "connected";
       setStatus("connected", "Connected. Pick a device and a playlist, then press PLAY.");
       installBackend();
@@ -892,8 +926,11 @@ window.SpotifyMusic = (function () {
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
     return validToken().then((t) => {
       if (!t) {
-        setStatus("configured", "No Spotify session on this device. Press CONNECT to sign in.");
-        return { ok: false, reason: "no-token", debug: d };
+        const retained = !!readToken();
+        setStatus("configured", retained
+          ? "Could not renew the Spotify session. Check your connection and try again."
+          : "No Spotify session on this device. Press CONNECT to sign in.");
+        return { ok: false, reason: retained ? "refresh-failed" : "no-token", debug: d };
       }
       return fetch(API + "/me", { headers: { Authorization: "Bearer " + t } })
         .then((r) => r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })))
@@ -957,9 +994,13 @@ window.SpotifyMusic = (function () {
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve(); }
     if (state === "connected") return Promise.resolve();
     if (mode() === "remote") {
-      return validToken().then((t) => (t ? connectRemote() : beginAuth()));
+      return validToken().then((t) => t ? connectRemote()
+        : (readToken() ? setStatus("configured",
+          "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
     }
-    return validToken().then((t) => (t ? bootPlayer() : beginAuth()));
+    return validToken().then((t) => t ? bootPlayer()
+      : (readToken() ? setStatus("configured",
+        "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
   }
 
   // Local revoke only — Spotify has no browser-side revoke endpoint, so the

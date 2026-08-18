@@ -49,11 +49,16 @@ const store = {
   // inferred from a player's reload.
   set(k, v) {
     const key = "apex26." + k;
+    let durable = true;
     try { localStorage.setItem(key, JSON.stringify(v)); }
-    catch (e) { noteBroken(e, "write " + k); }
+    catch (e) { durable = false; noteBroken(e, "write " + k); }
     this._cache.set(key, v);
     this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
     this.rev++;
+    // Most callers only need the session value and deliberately ignore this.
+    // Destructive migrations are different: they must not erase their source
+    // until the replacement is known to have reached durable storage.
+    return durable;
   },
   // A key-scoped generation lets domain owners detect that THEIR backing value
   // moved without treating an unrelated preference write as a save conflict.

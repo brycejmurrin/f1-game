@@ -119,7 +119,8 @@ export const RULES = [
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
   [/^js\/game\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
-  [/^js\/game\/(audio|music-lib|spotify)\.js/, ["audio", "lifecycle-unit"], ""],
+  [/^js\/game\/(audio|music-lib)\.js/, ["audio", "lifecycle-unit"], ""],
+  [/^js\/game\/spotify\.js/, ["audio", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
   // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
   // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
   [/^js\/game\/audio-panel\.js/, ["audio", "ui"], "mixer panel: audio behaviour + menu DOM"],

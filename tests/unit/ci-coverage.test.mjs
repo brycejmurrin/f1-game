@@ -107,19 +107,25 @@ test("Pages workflow calls use a unique CI concurrency key", () => {
 });
 
 test("an obsolete Pages run cannot deploy after a newer commit", () => {
+  const preflight = pagesWorkflow.split("\n  current-tip:")[1].split("\n  deploy:")[0];
   const deploy = pagesWorkflow.split("\n  deploy:")[1];
+  assert.doesNotMatch(preflight, /^\s+environment:/m,
+    "the cheap tip check must not create a github-pages deployment record");
+  assert.match(preflight, /deploy: \$\{\{ steps\.tip\.outputs\.deploy \}\}/);
+  assert.match(deploy, /needs: current-tip/);
+  assert.match(deploy, /if: needs\.current-tip\.outputs\.deploy == 'true'/,
+    "an already-obsolete run must skip the environment job entirely");
+  assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
   assert.match(deploy, /git fetch --no-tags origin/);
   assert.match(deploy, /TIP=\$\(git rev-parse/);
-  assert.match(deploy, /\[ "\$TIP" = "\$GITHUB_SHA" \]/);
-  assert.match(deploy, /echo "deploy=false" >> "\$GITHUB_OUTPUT"/);
-  for (const step of ["actions\/configure-pages@v5", "name: Stage site",
-    "actions\/upload-pages-artifact@v3", "actions\/deploy-pages@v4"]) {
-    const at = deploy.search(new RegExp(step));
-    assert.notEqual(at, -1, `${step} moved or disappeared`);
-    assert.match(deploy.slice(Math.max(0, at - 120), at + 220),
-      /if: steps\.tip\.outputs\.deploy == 'true'/,
-      `${step} must be guarded by the branch-tip verdict`);
-  }
+  assert.match(deploy, /\[ "\$TIP" != "\$GITHUB_SHA" \]/);
+  assert.match(deploy, /REFUSING DEPLOY:[\s\S]*?exit 1/,
+    "a run obsoleted while queued must fail, never become a successful no-op deployment");
+  const recheck = deploy.indexOf("Recheck branch tip inside the Pages lock");
+  const publish = deploy.indexOf("actions/deploy-pages@v4");
+  assert.ok(recheck >= 0 && publish > recheck, "the final tip check must precede publication");
+  assert.doesNotMatch(deploy, /echo "deploy=false"/,
+    "once the environment job starts, obsolete must fail rather than report success");
 });
 
 test("cached browser jobs never enter apt through --with-deps", () => {
@@ -146,9 +152,28 @@ test("ship filter chooses a successful active deployment, not merely the newest 
   assert.doesNotMatch(smoke, /j\[0\].*\.sha.*process\.stdout\.write/);
 });
 
+test("ship filter enforces cache generation against the active deployment", () => {
+  const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
+  assert.match(smoke, /bump-cache\.mjs --check --since "\$LIVE"/);
+  assert.match(smoke, /if ! node tools\/bump-cache\.mjs[\s\S]*?exit 1/,
+    "generation failures must fail CI, not merely fall through to the smoke gate");
+});
+
 test("smoke's command-line timeout is not tripled inside the spec", () => {
   const smokeSpec = fs.readFileSync(new URL("../specs/smoke.spec.js", import.meta.url), "utf8");
   assert.match(ciWorkflow, /test:smoke -- --timeout=420000/);
   assert.doesNotMatch(smokeSpec, /^\s*test\.slow\s*\(/m,
     "test.slow triples the workflow's 420 s per-test timeout");
+});
+
+test("selected's 120 s gate cannot rerun the fixed 420 s smoke spec", () => {
+  const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
+  const selected = ciWorkflow.split("\n  selected:")[1];
+  assert.match(smoke, /test:smoke -- --timeout=420000/);
+  assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
+    "test-only smoke edits must force the fixed shards even though they do not ship");
+  assert.match(selected, /--timeout=120000/);
+  assert.doesNotMatch(selected, /npm test -- .*smoke\.spec\.js.*--timeout=120000/);
+  assert.match(selected, /COVERED BY FIXED BLOCKING GATE/,
+    "the selected report must make its delegated coverage visible");
 });

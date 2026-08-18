@@ -191,20 +191,27 @@ function slot() { return { flavour: slotFlavour, i: slotIdx }; }
 function migrateSlots() {
   const found = [];
   const legacy = store.get("career", null);
-  if (legacy) { found.push(legacy); store.set("career", null); }
+  if (legacy) found.push({ source: "career", value: legacy });
   for (let i = 0; i < SLOTS; i++) {
     const c = store.get("career." + i, null);
-    if (c) { found.push(c); store.set("career." + i, null); }
+    if (c) found.push({ source: "career." + i, value: c });
   }
   if (!found.length) return;
   const next = { driver: 0, myteam: 0 };
-  for (const c of found) {
+  for (const item of found) {
+    const c = item.value;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
     while (next[f] < SLOTS && store.get(slotKey(f, next[f]), null)) next[f]++;
-    if (next[f] >= SLOTS) continue;             // full — the old save is dropped
-    store.set(slotKey(f, next[f]), c);
+    // A full destination is not permission to destroy an otherwise valid save.
+    // Leave the legacy key in place so a later free slot can recover it.
+    if (next[f] >= SLOTS) continue;
+    // COPY, CONFIRM, THEN CLEAR. GameStore keeps a session cache even when
+    // localStorage rejects a write, so observing the value through get() is not
+    // proof it will survive reload. set()'s boolean is the durable-write signal.
+    if (!store.set(slotKey(f, next[f]), c)) continue;
+    store.set(item.source, null);
     next[f]++;
   }
 }
