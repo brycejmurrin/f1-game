@@ -179,7 +179,7 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP.** Five-server map: [`docs/AGENT-SURFACE.md`](docs/AGENT-SURFACE.md).
+**MCP.** Seven-server map: [`docs/AGENT-SURFACE.md`](docs/AGENT-SURFACE.md).
 Keep **`apex-tools` in repo-root `.mcp.json`** (and `.cursor/mcp.json`). Cloud
 host catalog is often empty — then `./tools/apex-tools-mcp.sh call`,
 `./tools/playwright-mcp.sh`, `./tools/tinyfish-mcp.sh`,

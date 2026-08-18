@@ -68,7 +68,15 @@ test("every wrap row has a real CLI (or built-in) and a real skill", () => {
 
 test("server table names the repo five including playwright", () => {
   const doc = read("docs/AGENT-SURFACE.md");
-  for (const name of ["apex-tools", "probe", "chrome-devtools", "tinyfish", "playwright"]) {
+  for (const name of [
+    "apex-tools",
+    "probe",
+    "chrome-devtools",
+    "chrome-devtools-official",
+    "tinyfish",
+    "playwright",
+    "playwright-official",
+  ]) {
     assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
   }
   assert.match(doc, /browser_\*/);
@@ -77,7 +85,9 @@ test("server table names the repo five including playwright", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);

@@ -49,7 +49,9 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);

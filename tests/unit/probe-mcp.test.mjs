@@ -28,7 +28,9 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);

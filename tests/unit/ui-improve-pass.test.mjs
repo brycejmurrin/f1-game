@@ -170,6 +170,8 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   assert.match(tuner, /--rail-at:\s*500px/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="on"\]/);
   assert.doesNotMatch(tuner, /@media \(max-height: 430px\)/);
+  assert.match(tuner, /\[data-density="compact"\]\[data-rail="off"\] #lt-head \{[^}]*display: block/);
+  assert.match(tuner, /#lt-head h2, #ct-head/);
   assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
   assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
   assert.match(menus, /#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row[^{]*\{[^}]*flex-wrap:\s*wrap/);

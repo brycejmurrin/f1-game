@@ -54,13 +54,15 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools and playwright in the five-server catalog", () => {
+test(".mcp.json registers apex-tools and playwright in the seven-server catalog", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);
@@ -74,6 +76,23 @@ test(".mcp.json registers apex-tools and playwright in the five-server catalog",
   assert.equal(catalog.http.bind, "127.0.0.1");
   assert.equal(catalog.http.port, 3713);
   assert.deepEqual(catalog.http.args, ["serve-http"]);
+});
+
+test("official npx catalog pins match the wrapper packages and never @latest", () => {
+  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
+  const pw = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8")
+    .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
+  const cd = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8")
+    .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
+  assert.equal(cfg.mcpServers["playwright-official"].command, "npx");
+  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", pw]);
+  assert.equal(cfg.mcpServers["chrome-devtools-official"].command, "npx");
+  assert.deepEqual(cfg.mcpServers["chrome-devtools-official"].args, ["-y", cd]);
+  assert.deepEqual(cursorCfg.mcpServers["playwright-official"], cfg.mcpServers["playwright-official"]);
+  assert.deepEqual(cursorCfg.mcpServers["chrome-devtools-official"], cfg.mcpServers["chrome-devtools-official"]);
+  assert.doesNotMatch(JSON.stringify(cfg), /@latest/);
+  assert.doesNotMatch(JSON.stringify(cursorCfg), /@latest/);
 });
 
 test(".cursor/mcp.json locksteps the root catalog (Cloud/Claude load .mcp.json)", () => {

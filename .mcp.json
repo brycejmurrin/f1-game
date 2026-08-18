@@ -10,6 +10,11 @@
       "command": "bash",
       "args": ["tools/playwright-mcp.sh", "run"]
     },
+    "playwright-official": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.79"]
+    },
     "tinyfish": {
       "url": "http://127.0.0.1:3711/mcp"
     },
@@ -17,6 +22,11 @@
       "type": "stdio",
       "command": "bash",
       "args": ["tools/chrome-devtools-mcp.sh", "run"]
+    },
+    "chrome-devtools-official": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@1.7.0"]
     },
     "probe": {
       "type": "stdio",

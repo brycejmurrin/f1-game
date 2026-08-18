@@ -15,18 +15,22 @@ need → skill (when / don'ts)
 
 ## MCP servers
 
-**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped five
+**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped seven
 names). Stdio wrappers use `command: bash` + `args: ["tools/apex-tools-mcp.sh", …]`
 because Cursor looks up `command` on `PATH` — a bare `tools/apex-tools-mcp.sh`
-as `command` never starts (measured: only `probe` via `python3` loaded). Cloud
-often does **not** auto-load them — then use the Fallback column.
+as `command` never starts (measured: only `probe` via `python3` loaded). Official
+npx rows pin the same packages as the wrappers (`@playwright/mcp@0.0.79`,
+`chrome-devtools-mcp@1.7.0`) — never `@latest`. Cloud often does **not**
+auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
 | **apex-tools** | `apex_*` | Pin safe flags on committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright** | `browser_*` | Interactive Chromium (resize / DOM snapshot / evaluate). Skill **playwright-probe**. | `./tools/playwright-mcp.sh` |
+| **playwright-official** | `browser_*` | Same upstream MCP via pinned `npx` (no wrapper flags). | `npx -y @playwright/mcp@0.0.79` |
 | **probe** | `chrome_*` / `tinyfish_*` | Passthrough so one catalog reaches Chrome + TinyFish. | `python3 tools/probe-mcp.py` |
 | **chrome-devtools** | (upstream) | Interactive live canvas / DOM / heap. | `tools/chrome-devtools-mcp.sh` |
+| **chrome-devtools-official** | (upstream) | Same upstream MCP via pinned `npx` (no WebGPU wrapper flags). | `npx -y chrome-devtools-mcp@1.7.0` |
 | **tinyfish** | (upstream) | Deployed Pages / public web. | `./tools/tinyfish-mcp.sh deploy-check --tip` |
 
 **Cloud / desktop global catalog.** Cloud Agents do **not** read
@@ -38,7 +42,8 @@ Cloud gets `chrome_*` and `tinyfish_*`. Do **not** add TinyFish as
 `http://127.0.0.1:3711/mcp` in the Cloud dropdown — HTTP MCP is proxied
 outside the VM, so loopback never hits the local proxy. `playwright` and
 `apex-tools` already live in project `.mcp.json`. Never run
-`chrome-devtools` next to `browser_*`.
+`chrome-devtools` / `chrome-devtools-official` next to `browser_*` /
+`playwright-official`.
 
 ```json
 {
