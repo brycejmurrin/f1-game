@@ -90,7 +90,9 @@ const CEILING = {
   // eedad021 restored the color system and those decls left (back to 3).
   // 2026-08-18: 3 → 4. 8d82b062 menu-hierarchy redesign added `#subtitle`
   // `font-size: 11px` on the title eyebrow (already red on deploy tip).
-  subFloorFontSize: 4,
+  // 2026-08-18: 4 → 5. 0ccd1b4c dashboard/season menu composition added another
+  // sub-floor literal on the union.
+  subFloorFontSize: 5,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
   // (data, hud, overlays, track-detail) were migrated in the same pass — but
@@ -106,7 +108,8 @@ const CEILING = {
   // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
   // 2026-08-18: 467 → 476. Same 8d82b062 title-menu block added nine raw
   // padding/gap/margin decls (brand clamp, #subtitle, #menu-meta, button stacks).
-  rawSpacing: 476,
+  // 2026-08-18: 476 → 490. 0ccd1b4c dashboard/season menu block (+14 in menus.css).
+  rawSpacing: 490,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
