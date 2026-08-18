@@ -2279,7 +2279,7 @@ const WGX = (function () {
         return _makeAttrBG(null);
       }
       raw.sort((a, b) => a.s - b.s);
-      const MAX_S = 720;
+      const MAX_S = 2000;
       const step = Math.max(1, Math.ceil(raw.length / MAX_S));
       const samples = [];
       for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);

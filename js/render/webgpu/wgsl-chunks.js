@@ -645,7 +645,7 @@ fn vs_main(
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
     // Near-camera SwiftShader depth precision: coplanar terrain still wins
     // with a smaller lift; 0.20 m clears the ribbon before discard helps.
-    wp.y = wp.y + 0.20;
+    wp.y = wp.y + 0.45;
   }
   o.matTrk = pulled;
   o.matId = pulled.x;
@@ -701,17 +701,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // fromWorld.w already encodes distance-to-centerline <= hw+2.4 — do not
   // re-test reconstructed lateral (degenerate tangents used to skip discard).
   // #region agent log
-  // Restore selective pink: isRoadDraw only (force-all confirmed shader is live).
+  // Pink = road. Cyan = ground footprint that should be discarded (LUT hit).
   if (isRoadDraw) {
     return vec4<f32>(1.0, 0.0, 1.0, 1.0);
   }
-  // #endregion
-
-  // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
-  // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
   if (D.mat2.z < 0.5 && (D.mat1.y > 0.1 || D.mat0.z > 0.9) && fromWorld.w > 0.5) {
-    discard;
+    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
   }
+  // #endregion
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
