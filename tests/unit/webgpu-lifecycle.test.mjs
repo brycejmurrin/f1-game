@@ -475,6 +475,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
   assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
+  assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
+    "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
   const h = makeGpuHarness();

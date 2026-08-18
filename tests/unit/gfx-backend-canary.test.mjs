@@ -1064,6 +1064,28 @@ test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
     "WebGL2 blocker taps the color attachment, WebGPU still textureLoads depth");
 });
 
+test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
+  // A single tap left CAR GLOSS dead on WebGPU and night lamps as hard dots.
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/shaders/post.js");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(post, /gloss\s*:\s*vec4<f32>/,
+    "SsrU must carry carGloss");
+  assert.match(post, /clamp\(\(1\.4 - U\.gloss\.x\) \* 0\.5, 0\.0, 1\.0\)/,
+    "carSoft must match GLX (1.4 - uCarGloss) * 0.5");
+  assert.match(post, /carReflect \* \(0\.006 \+ 0\.030 \* carSoft\)/,
+    "car streak width must match GLX uCarReflect * (0.006 + 0.030 * carSoft)");
+  assert.match(post, /hitDist \/ 25\.0/,
+    "contact hardening must scale the streak by march hit distance");
+  assert.match(glx, /float carSoft = clamp\(\(1\.4 - uCarGloss\) \* 0\.5/,
+    "GLX still owns the carSoft formula — WGX is the port");
+  assert.match(tsl, /float\(1\.4\)\.sub\(C\.carGloss\)\.mul\(0\.5\)/,
+    "TLX still owns the carSoft formula — WGX is the port");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /s\[48\] = \(T && T\.carGloss != null\) \? T\.carGloss : 1\.0/,
+    "WGX must pack carGloss into SsrU gloss.x");
+});
+
 test("WGX SSR is consumed same-frame in COMPOSITE, not next-frame LIT", () => {
   const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /binding\(8\) var ssrPostTex/,

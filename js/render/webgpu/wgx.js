@@ -3480,6 +3480,7 @@ const WGX = (function () {
         const ssrNear = (o.ssrNear != null) ? o.ssrNear : -2.5;
         s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;
         s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear;
+        s[48] = (T && T.carGloss != null) ? T.carGloss : 1.0;   // gloss.x = uCarGloss
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
