@@ -29,6 +29,11 @@
 
 /* ---------- head ---------- */
 #cr-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap); }
+#cr-header canvas[data-sheet-track] {
+  align-self: center;
+  width: min(26%, 7rem);
+  max-height: 3.4rem;
+}
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #cr-sub {
   font-size: var(--label); letter-spacing: 0.12em; font-weight: 700;

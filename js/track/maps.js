@@ -593,8 +593,32 @@ const TrackMaps = (function () {
     return true;
   }
 
+  /* Sheet-head circuit mark. One canvas per head, no extra class — screens
+     style it with `.sheet-head canvas[data-sheet-track]`. Runtime node, so
+     the shell ratchet does not move. */
+  function paintHead(head, def) {
+    if (!head || !def) return null;
+    let canvas = head.querySelector("canvas[data-sheet-track]");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.setAttribute("data-sheet-track", "");
+      canvas.setAttribute("aria-hidden", "true");
+      canvas.width = 280;
+      canvas.height = 160;
+      const meters = head.querySelector("#cr-meters");
+      if (meters) head.insertBefore(canvas, meters);
+      else head.appendChild(canvas);
+    }
+    fitCanvas(canvas, 280, 160, def, false);
+    draw(canvas, def, {
+      color: themeColor(def), startColor: "#e10600",
+      width: 3, pad: 14, corners: false, sectors: false, drs: false
+    });
+    return canvas;
+  }
+
   return {
-    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
+    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, paintHead,
     SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();

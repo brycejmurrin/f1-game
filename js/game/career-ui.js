@@ -1281,12 +1281,24 @@ function create(G) {
     ScrollFade.refresh();
   }
 
+  function paintCareerTrack() {
+    if (typeof TrackMaps === "undefined" || typeof Tracks === "undefined") return;
+    const head = $("cr-header");
+    let def = Tracks.LIST[0];
+    if (Career.active() && typeof Career.trackIndex === "function") {
+      const i = Career.trackIndex();
+      if (Tracks.LIST[i]) def = Tracks.LIST[i];
+    }
+    TrackMaps.paintHead(head, def);
+  }
+
   function openHub() {
     Log.info("ui", "CareerUI.openHub");
     picking = false;
     armedDelete = "";
     build();
     $("career").hidden = false;
+    paintCareerTrack();
   }
   // The title screen routes here when more than one career exists: with two or
   // three on the go, "which one" is the first question, not an afterthought.
@@ -1296,6 +1308,7 @@ function create(G) {
     armedDelete = "";
     build();
     $("career").hidden = false;
+    paintCareerTrack();
   }
   function close() { Log.info("ui", "CareerUI.close"); $("career").hidden = true; }
 

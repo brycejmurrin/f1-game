@@ -1204,7 +1204,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
-#race-settings .sel-chip { font-size: var(--fs-micro); padding: 8px 14px; }
+#race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
 #race-settings .sel-chip.active { background: color-mix(in oklab, var(--red) 26%, transparent); border-color: var(--red); color: #fff; font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {

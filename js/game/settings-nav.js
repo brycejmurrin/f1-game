@@ -43,16 +43,6 @@ const SettingsNav = (function () {
     function paintPreview() {
       const head = document.querySelector("#pmsettings-inner > .sheet-head");
       if (!head || typeof TrackMaps === "undefined" || typeof Tracks === "undefined") return;
-      let canvas = document.getElementById("pm-preview");
-      if (!canvas) {
-        canvas = document.createElement("canvas");
-        canvas.id = "pm-preview";
-        canvas.width = 280;
-        canvas.height = 160;
-        canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-hidden", "true");
-        head.appendChild(canvas);
-      }
       let idx = store.get("track", 0);
       const id = store.get("trackId", null);
       if (id) {
@@ -60,13 +50,7 @@ const SettingsNav = (function () {
         if (found >= 0) idx = found;
       }
       if (!(idx >= 0 && idx < Tracks.LIST.length)) idx = 0;
-      const t = Tracks.LIST[idx];
-      if (!t) return;
-      TrackMaps.fitCanvas(canvas, 280, 160, t, false);
-      TrackMaps.draw(canvas, t, {
-        color: TrackMaps.themeColor(t), startColor: "#e10600",
-        width: 3, pad: 14, corners: false, sectors: false, drs: false
-      });
+      TrackMaps.paintHead(head, Tracks.LIST[idx]);
     }
 
     IDS.forEach((id, index) => {

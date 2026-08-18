@@ -796,7 +796,7 @@ body[data-density="compact"] #campicker {
   margin: 0;
   /* Sized down from the 20px menu default: in a half-width column these wrap
      their label onto two lines and the row grows to fit. */
-  font-size: 14px;
+  font-size: clamp(var(--fs-micro), calc(1.8 * var(--vwz)), var(--fs-4));
   padding: 10px var(--gap);
 }
 /* The QR is the one element on this screen whose job is to be machine-read, so

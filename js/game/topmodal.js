@@ -42,6 +42,7 @@ window.TopModal = (function () {
       try { el.close(); } catch (_) {}
       try { Log.info("ui", "TopModal close #" + (el.id || "?")); } catch (_) { /* Log absent */ }
     }
+    if (wantOpen) paintSheetTrack(el);
   }
 
   function wire(el) {
@@ -80,6 +81,33 @@ window.TopModal = (function () {
     el.addEventListener("close", () => { if (!el.hidden) el.hidden = true; });
 
     sync(el);
+  }
+
+  const SKIP_TRACK = {
+    lighting: 1, camtune: 1, audioset: 1, spotifypanel: 1, howtoplay: 1
+  };
+
+  function circuitFromStore() {
+    if (typeof Tracks === "undefined" || !Tracks.LIST || !Tracks.LIST.length) return null;
+    try {
+      if (typeof GameStore !== "undefined" && GameStore.store) {
+        const id = GameStore.store.get("trackId", null);
+        if (id) {
+          const found = Tracks.LIST.find((t) => t.id === id);
+          if (found) return found;
+        }
+        const idx = GameStore.store.get("track", 0);
+        if (Tracks.LIST[idx]) return Tracks.LIST[idx];
+      }
+    } catch (_) { /* store unread */ }
+    return Tracks.LIST[0];
+  }
+
+  function paintSheetTrack(el) {
+    if (!el || SKIP_TRACK[el.id] || typeof TrackMaps === "undefined") return;
+    const head = el.querySelector(".sheet-head");
+    if (!head) return;
+    TrackMaps.paintHead(head, circuitFromStore());
   }
 
   function scan(root) {

@@ -826,7 +826,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    active panel. High UI sizes must not spend more than one primary control
    row on that navigation (redesign contract). */
 #pmsettings-inner { --fit-at: 300px; }
-#pm-preview {
+.sheet-head canvas[data-sheet-track] {
   flex: 0 0 auto;
   width: min(42%, 10rem);
   height: auto;
@@ -836,7 +836,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: rgba(0, 0, 0, 0.28);
   pointer-events: none;
 }
-#pmsettings-inner[data-density="compact"] #pm-preview {
+.sheet[data-density="compact"] .sheet-head canvas[data-sheet-track] {
   width: min(30%, 6.5rem);
   max-height: 3.2rem;
 }
@@ -1066,6 +1066,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     min-height: var(--tap);
   }
 }
+#advanced-inner .preset-btn,
+#advanced-inner .opt-btn {
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+}
+#advanced-inner .adv-intro,
+#advanced-inner .tune-label {
+  font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
+}
+
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is
    the only button in this foot, so nothing needs to out-shout anything.) */
 
