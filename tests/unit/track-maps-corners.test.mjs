@@ -20,7 +20,7 @@ const MANIFEST = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 function loadTrackMaps() {
   const sandbox = {
-    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
+    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
     isNaN, isFinite, parseInt, parseFloat,
     console: { log() {}, warn() {}, error() {}, info() {}, debug() {} },
   };

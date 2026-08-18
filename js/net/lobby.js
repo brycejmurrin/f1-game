@@ -235,7 +235,7 @@ const NetLobby = (function () {
         } else {
           say("A player left. The rest of you are still in.");
         }
-        renderRoom();
+        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
       return transport;
     }
@@ -1065,6 +1065,7 @@ const NetLobby = (function () {
         G.flow = "gp";
         G.session = "race";
         G.startRace();
+        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         return;
@@ -1107,7 +1108,7 @@ const NetLobby = (function () {
       // `transports` is deliberately KEPT: the raw connections are still the
       // lobby's to report (status()/sdp()) and to close in teardown().
       sessions.clear();
-      if (!started.ok) { say(started.message || "Could not start the session.", true); return; }
+      if (!started.ok) { say(started.message || "Could not start the session.", true); if (G.quitToMenu) G.quitToMenu(); return; }
       // Host names the instant of lights-out; the guest receives it as an
       // event and both drive their countdown to the same moment. Without this
       // each side counts down on its own clock and the grids are released

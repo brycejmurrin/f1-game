@@ -3,7 +3,7 @@
    owns availability and all individual controls. */
 const SettingsNav = (function () {
   "use strict";
-  const IDS = ["controls", "display", "performance", "more"];
+  const IDS = ["controls", "display", "more"];
 
   function create(store, onSelect) {
     Log.info("game", "SettingsNav.create");

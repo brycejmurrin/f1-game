@@ -145,7 +145,6 @@ const FULL = [
   "js/game/perf.js",
   "js/game/gfx-quality.js",
   "js/game/cockpit-opts.js",
-  "js/game/perf-try.js",
   "js/game/metrics.js",
   "js/game/cameras.js",
   "js/game/cam-modes.js",

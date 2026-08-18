@@ -296,7 +296,7 @@ test.describe("UI scale", () => {
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("#pm-tab-display")).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(page.locator("#pm-tab-performance")).toBeFocused();
+    await expect(page.locator("#pm-tab-more")).toBeFocused();
 
     await page.setViewportSize({ width: 390, height: 844 });
     const narrow = await page.evaluate(() => {
@@ -310,8 +310,8 @@ test.describe("UI scale", () => {
 
     await page.locator("#pm-tab-display").focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#pm-tab-performance")).toBeFocused();
-    await expect(page.locator("#pm-panel-performance")).toBeVisible();
+    await expect(page.locator("#pm-tab-more")).toBeFocused();
+    await expect(page.locator("#pm-panel-more")).toBeVisible();
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one

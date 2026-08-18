@@ -103,6 +103,12 @@ test("settleRound refuses a conflicted save before mutating results", () => {
   assert.equal(JSON.parse(disk.get(key)).season.round, 9);
 });
 
+test("career hub BACK hides the title STANDINGS chip from the standalone season", () => {
+  const src = readFileSync(join(ROOT, "js/game/career-ui.js"), "utf8");
+  assert.match(src, /mb-standings.*SeasonCal\.hasProgress\(G\.season\)/);
+  assert.match(src, /\$\("cr-go"\)\.disabled = !!st\.hire \|\| Career\.conflicted\(\)/);
+});
+
 test("outside active play a foreign live-slot save refreshes Career's object", () => {
   const { Career, disk, foreign } = load();
   Career.load();

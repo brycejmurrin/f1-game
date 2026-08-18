@@ -829,7 +829,7 @@ function netReportQuali(driverId, t) {
 // A friend race waits for BOTH laps before it will grid up. Racing someone
 // whose qualifying time never arrived would put them wherever the model
 // guessed, which is the one thing a qualifying session is supposed to stop.
-let qualiNetDone = null;          // the lobby's "now finish starting" callback
+let qualiNetDone = null, qualiHadRivals = false; // lobby finish-start + rival-ever-existed
 function qualiRivalDriverIds() {
   const fromNet = netPlay.rivalDriverIds();
   if (fromNet.length) return fromNet;
@@ -847,7 +847,7 @@ function qualiNetWaiting() {
   // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
   // so somebody who dropped during qualifying stops being waited on.
   const rivals = qualiRivalDriverIds();
-  if (!rivals.length) return false;
+  if (rivals.length) qualiHadRivals = true; if (!rivals.length) return false;
   return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
 
@@ -868,7 +868,7 @@ function refreshQualiGate() {
   // how many were outstanding — so a room of four sat on an unexplained
   // disabled button. The count is already knowable from the same two things
   // the gate itself reads.
-  if (!waiting) { b.textContent = "TO THE GRID"; return; }
+  if (!waiting) { b.textContent = (qualiNetDone && qualiHadRivals && !qualiRivalDriverIds().length) ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID"; return; }
   const rivals = qualiRivalDriverIds();
   const outstanding = rivals.filter((id) => !(qualiPeers.get(id) > 0));
   const left = outstanding.length;
@@ -2251,7 +2251,7 @@ function loadTrack(idx) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3 });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3 });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2461,9 +2461,9 @@ function dropRaceWake() {
 
 function startRace() {
   // Completed seasons are readable, never raceable (also guarded by award()).
-  if (flow === "season" && !SeasonCal.canRace(season)) {
+  if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
-    buildSelect(); els.select.hidden = false;
+    isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3) : (buildSelect(), els.select.hidden = false);
     return false;
   }
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
@@ -2994,10 +2994,10 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali, onPeerQualiLive, openQualiForNet,
+  onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
-  startRace, startWeatherArc, update, wrapS,
+  startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
 
 // Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
@@ -3090,11 +3090,11 @@ function clearMenuScreens() {
 }
 
 function quitToMenu() {
-  PerfGov.sentinelArm(false);   // deliberate exit — not a crash
+  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local");
   closeLightTuner(false);
-  closeCamTuner(false);
+  closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
-  document.body.classList.remove("in-race");
+  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race");
   dropRaceWake();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
@@ -3114,9 +3114,9 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
-  quali.clear(true);   // leave the title without this weekend's grid
+  quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
+  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.abortQuali()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -3710,7 +3710,7 @@ function updateCar(c, dt, ranked) {
   // OVERALL SPEED like the rest.
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
-    if (lvl >= 2) vmax = Math.min(vmax, VMAX * PACE * (lvl === 3 ? 0.45 : 0.6));
+    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl === 3 ? 0.45 : 0.6));
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -5534,7 +5534,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // Camera/probe terrain chunking — same envCull gate as the road ribbon.
     // Shadow path already lazy-builds terrainChunked; reuse that handle.
     let _tMesh = track.meshes.terrain || track.meshes.terrainChunked, _tChunked = !!(_tMesh && _tMesh.chunks && _tMesh.chunks.length);
-    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
+    if (PerfGov.tier() < 3) {
       if (track.meshes.terrainChunked === undefined) {
         track.meshes.terrainChunked = null;
         if (track.terrainGeo && gfx.createChunkedMesh) {
@@ -5566,12 +5566,12 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // same expression but is only assigned under _floodActive, so it is unset by
     // day). Without the tier/latch terms this built a second GPU copy of the road
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
-    // Prefer per-chunk road when lamp knobs ask for it, OR whenever envCull is
-    // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
-    // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
-    // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
+    // Prefer per-chunk road when lamp knobs ask for it, OR whenever the
+    // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
+    // index drop). Lamp path still needs tier < 1; the cull-only path keeps
+    // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
     const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
-      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
+      || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
@@ -5928,8 +5928,11 @@ function render(dt) {
   // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
+  // Sphere that contains the perspective frustum (far-plane corners sit
+  // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
+  const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
   frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
-    : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : _fogCull);
+    : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -6541,8 +6544,11 @@ function render(dt) {
     const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
     if (_envInv) {
       frameSky.invViewProj = _envInv;
-      gfx.drawSky(frameSky);
+      // Same early-Z order as the main camera (opaque → sky). The 64² face
+      // is ~200× smaller, but the sky still filled every pixel the world
+      // then overwrote. Glow stays off on the probe (`false` below).
       drawWorldMeshes(frame, night, wet, _floodEmit, false);
+      gfx.drawSky(frameSky);
       gfx.envFaceEnd(_envFace);
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
@@ -6558,18 +6564,10 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
-  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
-  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
-  // for the OPAQUE half). The glow is what makes this non-trivial: it is
-  // additive with depthMask off, so it writes no depth — leaving the background
-  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
-  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
-  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
-  // visually equivalent — a prop in front of a lamp occludes the halo either
-  // way, by overwrite before or by depth test after.
-  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
-  if (!_skyLate) gfx.drawSky(frameSky);
+  // Late sky: draw AFTER the opaque world so early-Z rejects the SKY_FS
+  // fragments the world overwrites (SKY_VS at depth 1.0, depth writes off
+  // under LEQUAL — result-invariant for the opaque half). Glow is additive
+  // with depthMask off, so it must follow the sky: opaque → sky → glow.
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -6578,13 +6576,9 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
-  if (_skyLate) {
-    gfx.drawSky(frameSky);
-    // Same guard drawWorldMeshes applies to its own glow call, kept identical
-    // so the two paths differ ONLY in ordering.
-    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
-  }
+  drawWorldMeshes(frame, night, wet, _floodEmit, false);
+  gfx.drawSky(frameSky);
+  if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -7884,7 +7878,7 @@ function openQuali(fresh) {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
+  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
@@ -7944,7 +7938,7 @@ $("q-back").onclick = () => {
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNetDone ? (qualiNetDone = null, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
+  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
 };
 
 // ---- customize my team ----
@@ -8301,7 +8295,7 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); }
+  if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
@@ -8339,7 +8333,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
-$("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNetDone) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
@@ -8422,7 +8416,7 @@ $("pm-aero").onclick = () => {
 };
 refreshAeroBtn();
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && state === "race") setPaused(true);
+  if (document.hidden && (state === "race" || state === "count")) setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.

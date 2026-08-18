@@ -117,7 +117,6 @@
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
-
     const PI = 3.14159265359;
 
     /* ── frame + tune uniforms ────────────────────────────────────────────────
@@ -1182,8 +1181,8 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: U.lampFog is 0 by day,
-              // so skip the accumulate (uniform CF — safe for TSL→WGSL).
+              // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
+              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
