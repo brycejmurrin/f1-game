@@ -113,7 +113,7 @@ a non-blank visible blit.
 | **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
 | **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
 | **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | AUTO is WebGPU (phones/Safari included, lite stack). CI still pins WebGL2 (`tlxForceGL=1`). `mappedAtCreation` → `queue.writeBuffer`. Never `getCurrentTexture()` on software. |
 
 Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
 §Measured. Env packages + install: §Cursor Cloud below.
@@ -177,11 +177,14 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP on Cloud.** Cursor Cloud does not auto-load repo `.mcp.json`. The host
-catalog is not the game's `probe` / `tinyfish` / `chrome-devtools` servers.
-Default Cloud path: `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind
-working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent
-`deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
+**MCP on Cloud.** Cursor Cloud does not auto-load repo MCP catalogs. Desktop
+and `agent` CLI load **`.cursor/mcp.json`** (`agent mcp enable apex-tools` then
+`agent mcp list-tools apex-tools`). Root `.mcp.json` is the Claude Code catalog.
+The Cloud host catalog is still not the game's `apex-tools` / `probe` /
+`tinyfish` / `chrome-devtools` servers. Default Cloud path: `./tools/apex-tools-mcp.sh`
+(week-1 `apex_*` CLI wraps), `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a
+behind working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or
+subagent `deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
 Never run Chrome MCP while Playwright is running.
 
 ## Layout

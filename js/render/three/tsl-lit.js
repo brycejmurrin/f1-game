@@ -630,9 +630,12 @@
       const uv = matTexUV(mid, N, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
+      // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
+      // inside those Ifs are the same WGSL derivative_uniformity error as
+      // a hoisted-too-late fwidth (roadMarkings / WGX fs_main).
+      const nt = matNormalNode.sample(uv).depth(int(mid));
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
-          const nt = matNormalNode.sample(uv).depth(int(mid));
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
           const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
           const B = cross(N, T);
@@ -652,9 +655,10 @@
       const wp = vec3(wpIn).toVar();
       const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();
       const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      // UV + sample BEFORE the live/far gate (implicit derivatives).
+      const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp).toVar();
+      const t = matAlbedoNode.sample(uv).depth(int(mid));
       If(live.and(far.greaterThan(0.001)), () => {
-        const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp);
-        const t = matAlbedoNode.sample(uv).depth(int(mid));
         // Multiplicative, exactly as GLX: the per-track tarmac tint, the
         // racing-line rubber wear and the per-vertex grain all have to survive.
         const k = U.matTexMix.mul(far).toVar();
@@ -993,6 +997,11 @@
 
         // ── procedural ground texture + patches + cracks (js/render/shaders/lit.js) ───
         const patchM = float(0.5).toVar();
+        // fwidth(cr) BEFORE the detail If — same hoist as roadMarkings / WGX
+        // fs_main. matU.detail is a uniform today; a per-fragment gate here
+        // would be a derivative_uniformity compile error on TLX-WebGPU.
+        const cr = abs(vnoise(wp.xz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
+        const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();
         If(matU.detail.greaterThan(0.0), () => {
           const gxz = wp.xz;
           const fineFade = clamp(vd.sub(35.0).div(90.0).oneMinus(), 0.0, 1.0);
@@ -1002,9 +1011,6 @@
           const pm = smoothstep(0.52, 0.72, patchM);
           albedo.mulAssign(pm.mul(0.05).mul(min(matU.detail.mul(4.0), 1.0)).oneMinus());
           const crackFade = clamp(vd.sub(18.0).div(45.0).oneMinus(), 0.0, 1.0).toVar();
-          // fwidth(cr) must be unconditional — crackFade is a varying gate.
-          const cr = abs(vnoise(gxz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
-          const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();
           If(crackFade.greaterThan(0.01), () => {
             const crack = smoothstep(0.015, crAA, cr).oneMinus()
               .mul(smoothstep(0.40, 0.70, vnoise(gxz.mul(0.11).add(7.7))));

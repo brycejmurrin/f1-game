@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "apex-tools": {
+      "type": "stdio",
       "command": "tools/apex-tools-mcp.sh",
       "args": ["serve"]
     },
@@ -8,10 +9,12 @@
       "url": "http://127.0.0.1:3711/mcp"
     },
     "chrome-devtools": {
+      "type": "stdio",
       "command": "tools/chrome-devtools-mcp.sh",
       "args": ["run"]
     },
     "probe": {
+      "type": "stdio",
       "command": "python3",
       "args": ["tools/probe-mcp.py", "serve"]
     }

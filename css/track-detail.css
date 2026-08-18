@@ -141,7 +141,10 @@
      56vw still sets the shape on a phone (a 393px-wide screen lands at 220px,
      unchanged); the ceiling now scales with the window it is actually in, so a
      tall one spends its height instead of capping at a phone's worth. */
-  #track-detail-canvas-wrap { flex: none; height: min(56vw, 42svh, 640px); }
+  #track-detail-canvas-wrap {
+    flex: none;
+    height: min(calc(56 * var(--vwz)), calc(42 * var(--svhz)), 640px);
+  }
   #track-detail-panel { display: flex; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px; }
 }
 

@@ -146,11 +146,15 @@ async function cacheRequiredAsset(cache, url) {
 
 async function cacheOptionalAsset(cache, url) {
   let timeout = null;
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
   try {
     const expired = new Promise((resolve) => {
-      timeout = setTimeout(() => resolve(null), 4000);
+      timeout = setTimeout(() => {
+        if (ctrl) ctrl.abort();
+        resolve(null);
+      }, 4000);
     });
-    const res = await Promise.race([fetch(url), expired]);
+    const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
     if (res && res.ok) await cache.put(url, res);
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
   finally { if (timeout !== null) clearTimeout(timeout); }

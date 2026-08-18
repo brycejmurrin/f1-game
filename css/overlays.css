@@ -718,7 +718,7 @@ body.hud-hidden #hud-restore { display: block; }
      phone in portrait showed a 180px code with 276px of raster behind it and
      140px of free width beside it — small for no reason. Landscape is where the
      height cap actually bites, and it still does. */
-  width: min(320px, 82vw, 46svh);
+  width: min(320px, calc(82 * var(--vwz)), calc(46 * var(--svhz)));
   max-width: 100%;              /* the two-column layout can be narrower than 320 */
   height: auto;
   image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
@@ -805,7 +805,7 @@ body.hud-hidden #hud-restore { display: block; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 28svh;
+  max-height: calc(28 * var(--svhz));
   overflow-y: auto; overscroll-behavior-y: contain;
 }
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
@@ -863,7 +863,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #vsfriend .vs-scan video {
   width: min(320px, 90%);
-  height: min(240px, 46svh);
+  height: min(240px, calc(46 * var(--svhz)));
   object-fit: cover;
   border-radius: 8px;
   background: #000;
