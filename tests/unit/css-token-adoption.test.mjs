@@ -112,7 +112,10 @@ const CEILING = {
   // padding/gap/margin decls (brand clamp, #subtitle, #menu-meta, button stacks).
   // 2026-08-18: 476 → 490. 0ccd1b4c dashboard/season menu block (+14 in menus.css).
   // 2026-08-18: 490 → 467. Title-screen tokenisation restored the 467 lock.
-  rawSpacing: 467,
+  // 2026-08-18: 467 → 481. Deploy `45dc6cb1` short-landscape / mid-width
+  // menu compress (css/menus.css) added 14 raw padding/gap/margin decls
+  // and did not remasure the ceiling; the union is 481.
+  rawSpacing: 481,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

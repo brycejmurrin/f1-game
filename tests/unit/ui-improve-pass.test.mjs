@@ -296,6 +296,8 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   assert.match(htp, /<dt>CONTROLLER<\/dt>/);
   assert.match(htp, /<dt>TOUCH \/ MOBILE<\/dt>/);
   assert.match(htp, /ADAPTIVE BUTTONS/);
+  assert.match(htp, /BRAKE CUE/);
+  assert.match(htp, /default ON/);
   assert.match(htp, /TV SIDE/);
   assert.match(htp, /tap to toggle/);
   assert.match(htp, /pauses only if nothing is open/);
