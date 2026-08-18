@@ -262,14 +262,16 @@ self.addEventListener("fetch", (event) => {
     event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith((async () => {
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+      const online = typeof navigator !== "undefined" && navigator.onLine;
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
-        // A timeout (null) while online must not advertise a stale version.json
-        // as network truth — the shell guard then skips reload (v.build <= loaded).
-        const online = typeof navigator !== "undefined" && navigator.onLine;
+        // A timeout (null) or a thrown fetch while online must not advertise a
+        // stale version.json as network truth — the shell guard then skips reload.
         if (res == null && online && (isVersion || req.mode === "navigate")) return Response.error();
-      } catch (_) { /* network rejected — fall through to cache */ }
+      } catch (_) {
+        if (online && (isVersion || req.mode === "navigate")) return Response.error();
+      }
       // Offline: the version request reads the PRECACHED bare key. Without this
       // it fell through to the index.html fallback below and answered a JSON
       // request with the shell's HTML (survivable only because the version

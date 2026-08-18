@@ -147,11 +147,18 @@ test("a driven simulate persists; NetPlay.isOn() does not", () => {
   assert.equal(net.G.season.qualiOrder, undefined, "a friend race must not stamp Career/season");
 });
 
-test("openQuali restores via begin(); friend-race and quit-to-menu forget correctly", () => {
+test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
   assert.match(GAME, /function openQuali\(fresh\)/);
   assert.match(GAME, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
   assert.match(GAME, /openQuali\(true\)/);
-  assert.match(GAME, /quali\.clear\(true\)/);
+  assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
+  assert.doesNotMatch(GAME, /quali\.clear\(true\)/);
+  assert.match(GAME, /RIVAL LEFT — TO THE GRID/);
+  assert.match(GAME, /qualiHadRivals/);
+  assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
+  assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
+  assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
+  assert.match(GAME, /vTop\(\) \* \(lvl === 3 \? 0\.45 : 0\.6\)/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
 });
 

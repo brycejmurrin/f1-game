@@ -1279,6 +1279,7 @@ function create(G) {
     G.flow = "gp"; G.session = "race";
     G.season = G.store.get("season", null);
     G.refreshCareerButton();
+    { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();
   };
   $("cr-garage").onclick = () => { close(); G.openGarage("career"); };

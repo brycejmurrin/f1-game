@@ -829,7 +829,7 @@ function netReportQuali(driverId, t) {
 // A friend race waits for BOTH laps before it will grid up. Racing someone
 // whose qualifying time never arrived would put them wherever the model
 // guessed, which is the one thing a qualifying session is supposed to stop.
-let qualiNetDone = null;          // the lobby's "now finish starting" callback
+let qualiNetDone = null, qualiHadRivals = false; // lobby finish-start + rival-ever-existed
 function qualiRivalDriverIds() {
   const fromNet = netPlay.rivalDriverIds();
   if (fromNet.length) return fromNet;
@@ -847,7 +847,7 @@ function qualiNetWaiting() {
   // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
   // so somebody who dropped during qualifying stops being waited on.
   const rivals = qualiRivalDriverIds();
-  if (!rivals.length) return false;
+  if (rivals.length) qualiHadRivals = true; if (!rivals.length) return false;
   return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
 
@@ -868,7 +868,7 @@ function refreshQualiGate() {
   // how many were outstanding — so a room of four sat on an unexplained
   // disabled button. The count is already knowable from the same two things
   // the gate itself reads.
-  if (!waiting) { b.textContent = "TO THE GRID"; return; }
+  if (!waiting) { b.textContent = (qualiNetDone && qualiHadRivals && !qualiRivalDriverIds().length) ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID"; return; }
   const rivals = qualiRivalDriverIds();
   const outstanding = rivals.filter((id) => !(qualiPeers.get(id) > 0));
   const left = outstanding.length;
@@ -2461,9 +2461,9 @@ function dropRaceWake() {
 
 function startRace() {
   // Completed seasons are readable, never raceable (also guarded by award()).
-  if (flow === "season" && !SeasonCal.canRace(season)) {
+  if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
-    buildSelect(); els.select.hidden = false;
+    isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3) : (buildSelect(), els.select.hidden = false);
     return false;
   }
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
@@ -2994,7 +2994,7 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali, onPeerQualiLive, openQualiForNet,
+  onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS,
@@ -3092,9 +3092,9 @@ function clearMenuScreens() {
 function quitToMenu() {
   PerfGov.sentinelArm(false);   // deliberate exit — not a crash
   closeLightTuner(false);
-  closeCamTuner(false);
+  closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
-  document.body.classList.remove("in-race");
+  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race");
   dropRaceWake();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
@@ -3114,9 +3114,9 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
-  quali.clear(true);   // leave the title without this weekend's grid
+  quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
+  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // and the friend-race gate: a stale one locks every later quali
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -3710,7 +3710,7 @@ function updateCar(c, dt, ranked) {
   // OVERALL SPEED like the rest.
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
-    if (lvl >= 2) vmax = Math.min(vmax, VMAX * PACE * (lvl === 3 ? 0.45 : 0.6));
+    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl === 3 ? 0.45 : 0.6));
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -7878,7 +7878,7 @@ function openQuali(fresh) {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
+  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
@@ -7938,7 +7938,7 @@ $("q-back").onclick = () => {
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNetDone ? (qualiNetDone = null, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
+  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
 };
 
 // ---- customize my team ----
@@ -8295,7 +8295,7 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return;
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); }
+  if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
@@ -8416,7 +8416,7 @@ $("pm-aero").onclick = () => {
 };
 refreshAeroBtn();
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && state === "race") setPaused(true);
+  if (document.hidden && (state === "race" || state === "count")) setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.
