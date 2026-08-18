@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 115 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 116 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -803,6 +803,7 @@ what it covers.
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
+| `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
 | `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
