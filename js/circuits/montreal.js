@@ -70,14 +70,14 @@
       const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
-      const strut = (a, c, rad, col, seg) => {
+      const strut = (a, c, rad, col, seg, target) => {
         const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
         const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
         const up = [d[0] / L, d[1] / L, d[2] / L];
         const ref = Math.abs(up[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
         const right = norm(cross(ref, up));
         const fwd = norm(cross(up, right));
-        addCyl(out, a, rad, L, col, seg || 3, [right, up, fwd]);
+        addCyl(target || out, a, rad, L, col, seg || 3, [right, up, fwd]);
       };
 
       // ── Island Y-level reference constants ────────────────────────────────
@@ -566,15 +566,20 @@
         const a = anchor(K(0.335), -1, 210);
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
+          // At this distance anchor().c follows groundYAt down below the river
+          // bed. The sculpture stands on the far-bank slab at BANK_T, so use an
+          // explicit island-surface origin just like farBank() above.
+          const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
           const STEEL  = [0.78, 0.80, 0.83];
           const STEEL_D = [0.66, 0.68, 0.72];
           modelGroup("montreal-calder-trois-disques", {
-            center: vadd(a.c, a.u, 11), size: [26, 26, 26], basis: b,
+            center: vadd(foot, a.u, 11), size: [26, 26, 26], basis: b,
           }, (stage) => {
             stage._mat = MAT.METAL;
-            // Four plate legs splaying out from the waist. No arbitrary-axis
-            // rotation available here, so each leg is stepped outward as it
-            // descends — at this distance the stagger reads as a lean.
+            // Four round legs splaying out from the waist. Each segment is an
+            // actual arbitrary-axis strut between its intended endpoints; the
+            // previous vertical-frustum approximation jumped sideways between
+            // segments and left two pieces genuinely floating.
             // Each leg gets its OWN spread scale. With all four on identical
             // spreads, legs sharing a dr sat at the same r and legs sharing a
             // dt sat at the same t — either way their side faces landed on one
@@ -595,19 +600,9 @@
                 const f = i / 5, f2 = (i + 1) / 5;
                 const s1 = (1.2 + f * 6.2) * sc, s2 = (1.2 + f2 * 6.2) * sc;
                 const y1 = 10.5 - f * 10.0, y2 = 10.5 - f2 * 10.0;
-                const mid0 = (s1 + s2) / 2;
-                // addFrustum is BASE-anchored (see the addPrism note in
-                // js/track/geom.js) — y2 is the descending leg's true base
-                // (y1 > y2 always, since f2 > f). Positioning at the segment
-                // midpoint floated every segment by ~half its own height.
-                // Base at y2 - 0.2 with radii swapped to match (rBase is now
-                // the y2-end radius, rTop the y1-end radius) keeps the
-                // intended 0.2 m overlap at both ends of [y2-0.2, y1+0.2].
-                addFrustum(stage,
-                  vadd(vadd(vadd(a.c, a.r, dr * mid0), a.t, dt * mid0),
-                       a.u, y2 - 0.2),
-                  0.85 - f2 * 0.22, 0.85 - f * 0.22, Math.abs(y1 - y2) + 0.4,
-                  i % 2 ? STEEL : STEEL_D, 7, b);
+                const p1 = vadd(vadd(vadd(foot, a.r, dr * s1), a.t, dt * s1), a.u, y1);
+                const p2 = vadd(vadd(vadd(foot, a.r, dr * s2), a.t, dt * s2), a.u, y2);
+                strut(p2, p1, 0.78 - f * 0.15, i % 2 ? STEEL : STEEL_D, 7, stage);
               }
             }
             // Waist and body as round members, and ONE disc rather than three.
@@ -620,14 +615,20 @@
             // plate-steel form, and it is the honest trade: the ratchet exists
             // to stop exactly this kind of drift, and a decorative landmark is
             // not worth spending the budget it protects.
-            addFrustum(stage, vadd(a.c, a.u, 11.0), 1.5, 1.1, 2.4, STEEL, 9, b);
+            // The four diagonal leg centres reach ~2.57 m from the waist axis
+            // at their top segment. Their 0.85 m caps therefore stopped just
+            // outside the old 1.5 m waist radius (2.35 m combined): visually
+            // close, but a disconnected floating cluster to the support graph.
+            // A 1.8 m lower waist overlaps those caps without moving the body
+            // or changing its upper silhouette.
+            addFrustum(stage, vadd(foot, a.u, 11.0), 1.8, 1.1, 2.4, STEEL, 9, b);
             // Base was 14.6 vs the first segment's top at 11.0+2.4=13.4 — a
             // 1.2 m gap, over the 0.6 m support slack. Based 0.2 m into the
             // first segment (13.2) and extended to keep the SAME top (20.2,
             // where the disc below already sits comfortably inside it).
-            addFrustum(stage, vadd(a.c, a.u, 13.2), 1.1, 0.7, 7.0, STEEL, 9, b);
+            addFrustum(stage, vadd(foot, a.u, 13.2), 1.1, 0.7, 7.0, STEEL, 9, b);
             const disc = [a.u, a.r, a.t];
-            addCyl(stage, vadd(a.c, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
+            addCyl(stage, vadd(foot, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
             stage._mat = 0;
           });
         }
