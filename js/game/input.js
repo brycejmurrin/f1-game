@@ -391,7 +391,7 @@ const Input = (function () {
     const interactive = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
       tag === "BUTTON" || tag === "A" || (active && active.isContentEditable);
     const hudControl = active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore, .touchbtn");
+      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore, .touchbtn");
     // Guard key PRESSES only: typing in a field or activating a control must not
     // also drive the car. RELEASES are still processed — if a movement key went
     // down with the game focused and focus then moved to a button (e.g. a control

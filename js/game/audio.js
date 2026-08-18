@@ -96,7 +96,7 @@ const GameAudio = (function () {
   let resumeEngine = false;
 
   function clamp01(v) {
-    return M4.clamp(v, 0, 1);
+    return M4.clamp(Number.isFinite(v) ? v : 0, 0, 1);
   }
 
   /* ---------------- iOS audio session ----------------

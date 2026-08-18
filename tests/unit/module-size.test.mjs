@@ -389,7 +389,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2932, // 2931∪2924: noteSuppressed coalesce + WGX skip fused props slab when G.roadLutReady exists. // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED into one scenery warn per build. // +2 WGX: skip the fused props addBox slab. // 2918 -> 2922: lifecycle Log.info at Tracks.build (ns "track").
+  "js/track/tracks.js": 2933, // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
 };
 
 test("the big modules are not growing unnoticed", () => {

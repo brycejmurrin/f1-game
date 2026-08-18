@@ -467,6 +467,7 @@ body.pc-uihidden #game-metrics { display: none !important; }
 @media (hover: hover) { #pc-restore:hover { opacity: 0.95; } }
 #pc-restore:active { opacity: 0.95; }
 body.pc-uihidden #pc-restore { display: block; }
+body.pc-uihidden #hud-restore { display: none !important; }
 /* The one control between a touch-only user and a screen with nothing on it.
    36px is under the 44px Apple asks for and only just over WCAG 2.2 SC 2.5.8's
    24px, which is a bad trade for a button you reach for precisely when every

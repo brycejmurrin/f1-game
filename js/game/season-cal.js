@@ -122,7 +122,7 @@ function resetConfig() { return setConfig(null); }
 // ---------- which flow is running ----------
 // setFlow() in js/game.js is the only writer, alongside its Career.engage() call.
 let flow = "gp";
-function engage(v) { flow = v || "gp"; resolved = null; Log.info("game", "SeasonCal.engage " + flow); }
+function engage(v) { flow = v || "gp"; resolved = null; lastScored = "race"; Log.info("game", "SeasonCal.engage " + flow); }
 // See the header: two gates, deliberately different.
 const calCustom = () => flow !== "career";
 const fmtActive = () => flow === "season";

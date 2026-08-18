@@ -1269,6 +1269,7 @@ function create(G) {
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
+    G.season = G.store.get("season", null);
     G.refreshCareerButton();
     if (G.soundOn) GameAudio.uiSelect();
   };

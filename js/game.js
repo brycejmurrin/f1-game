@@ -4792,13 +4792,13 @@ function updateCar(c, dt, ranked) {
     const lapValid = !c.incidentInvalidLap;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
-      c.lastLap = lapDone;
+      if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       // Tell the rival about our lap. Times are authored by whoever OWNS the
       // car — nobody else can time it — and go over the reliable channel,
       // because a dropped lap time is a wrong RESULT, not a momentary glitch.
-      if (c.local && netPlay.active()) {
+      if (lapValid && c.local && netPlay.active()) {
         netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code });
       }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
@@ -7744,7 +7744,7 @@ function buildRaceSettings() {
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
   for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const active = champ ? on : raceQuali === on;
+    const active = champ ? (SeasonCal.quali() === on) : (raceQuali === on);
     const b = document.createElement("button");
     b.className = "sel-chip" + (active ? " active" : "");
     b.setAttribute("aria-pressed", active ? "true" : "false");
@@ -7852,10 +7852,10 @@ $("rs-go").onclick = () => {
     return;
   }
   if (steerMode === "tilt") enableTilt();
-  // A championship weekend always starts with qualifying, and a one-off does
-  // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
-  // P12 — a quick blast, which is the point of that mode.
-  if (gridFromQuali()) openQuali(); else startRace();
+  // Championship GO follows qualiNext (sprint GP legs skip a second quali).
+  // One-off GO still follows gridFromQuali / the QUALIFYING chip.
+  if ((isChampionship() && SeasonCal.qualiNext(season)) || (!isChampionship() && gridFromQuali())) openQuali();
+  else startRace();
 };
 
 // ── qualifying ───────────────────────────────────────────────────────────────
