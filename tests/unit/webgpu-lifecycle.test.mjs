@@ -1083,7 +1083,8 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /Do NOT destroy the in-flight MAP_READ buffer/);
   assert.match(WGX_SOURCE, /const needGen = _softSceneGen/,
     "awaitSoftPresent waits for a blit at the snapCam scene generation, not a later encode");
-  assert.match(WGX_SOURCE, /_softShownGen >= needGen/);
+  assert.match(WGX_SOURCE, /_softShownGen >= needGen \|\| \(shown0 === 0 && seq > 0\)/);
+  assert.match(WGX_SOURCE, /_softSceneGen < 2 && _softPresentWaiters\.length === 0/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(

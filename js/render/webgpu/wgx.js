@@ -593,6 +593,7 @@ const WGX = (function () {
     let _softDisplayPending = false, _softDisplayEpoch = 0;
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
+    let _softLiveAt = 0;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1719,6 +1720,16 @@ const WGX = (function () {
       // staging buffer until the current one has mapped or failed; the next
       // rendered frame will naturally become the newest readback.
       if (_softDisplayPending) return null;
+      // SwiftShader's first 1280×720 map takes tens of seconds. A gen-1 pits
+      // copy queued at startRace blocks the chase copy until that map settles,
+      // then awaitSoftPresent times out even though a late copy already shows
+      // the day chase. Skip encoding until snapCam has armed gen>=2, a waiter
+      // exists, or 4s have passed (live 2D view during a race).
+      if (_softSceneGen < 2 && _softPresentWaiters.length === 0 && _softBlitShown === 0) {
+        const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
+        if (!_softLiveAt) _softLiveAt = now;
+        if (!now || now - _softLiveAt < 4000) return null;
+      }
       let buf = null;
       try {
         const w = _softW || width, h = _softH || height;
@@ -1841,7 +1852,8 @@ const WGX = (function () {
       // (bumped by snapCam), not a second encode after that blit. Requiring
       // seq > _softBlitSeq timed out when the chase map was already in flight.
       const needGen = _softSceneGen;
-      if (_softBlitShown > 0 && _softShownGen >= needGen) return Promise.resolve(_softBlitShown);
+      const shown0 = _softBlitShown;
+      if (shown0 > 0 && _softShownGen >= needGen) return Promise.resolve(shown0);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
         let waiter = null;
@@ -1851,7 +1863,7 @@ const WGX = (function () {
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
         waiter = function (seq) {
-          if (_softShownGen >= needGen) {
+          if (_softShownGen >= needGen || (shown0 === 0 && seq > 0)) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
             resolve(seq);
             return true;
