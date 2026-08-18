@@ -1,6 +1,6 @@
 # Apex Tools MCP Week-1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Ship a fourth `.mcp.json` server `apex-tools` that wraps week-1 local CLIs under `apex_*` (no browser, no github.io).
 
@@ -26,9 +26,9 @@
 - Create: `tests/unit/apex-tools-mcp.test.mjs`
 - Modify: `tools/tooling-fast.mjs` (add to `TOOLING_FAST_FILES` next to `probe-mcp.test.mjs`)
 
-- [ ] **Step 1: Write assertions from `docs/research/APEX-TOOLS-MCP.md` §Tests**
-- [ ] **Step 2: Run `node --test tests/unit/apex-tools-mcp.test.mjs` — expect FAIL (missing server)**
-- [ ] **Step 3: Commit the failing test + tooling-fast entry**
+- [x] **Step 1: Write assertions from `docs/research/APEX-TOOLS-MCP.md` §Tests**
+- [x] **Step 2: Run `node --test tests/unit/apex-tools-mcp.test.mjs` — expect FAIL (missing server)**
+- [x] **Step 3: Commit the failing test + tooling-fast entry**
 
 ### Task 2: Implement week-1 server + shell + `.mcp.json`
 
@@ -39,9 +39,9 @@
 - Modify: `tests/unit/tools-runnable.test.mjs` (help path)
 - Modify: `tools/README.md`, `AGENTS.md`, `docs/TESTING.md`, mark design §Not implemented → Week-1 shipped
 
-- [ ] **Step 1: Implement serve/help/status/list-tools/call + six week-1 tools**
-- [ ] **Step 2: Wire registration and docs**
-- [ ] **Step 3: Green focused tests + `npm run test:tooling-fast` (background)**
-- [ ] **Step 4: Commit, push, draft PR**
+- [x] **Step 1: Implement serve/help/status/list-tools/call + six week-1 tools**
+- [x] **Step 2: Wire registration and docs**
+- [x] **Step 3: Green focused tests + `npm run test:tooling-fast` (background)**
+- [x] **Step 4: Commit, push, draft PR**
 
 Week-2 browser tools and the lock are out of scope for this plan.
