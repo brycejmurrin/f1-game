@@ -558,7 +558,7 @@ const api = {
     o = o || {};
     if (o.drift != null) G.DRIFT = o.drift;
     if (o.pace != null) G.PACE = o.pace;
-    if (o.speedRef != null) G.STEER_SPEED_REF = o.speedRef;
+    if (o.speedRef != null) { G.STEER_SPEED_REF = o.speedRef; Input.setSteerSpeedRef(o.speedRef); }
     if (o.wheelbase != null) G.WHEELBASE = o.wheelbase;
     if (o.expo != null) G.STEER_EXPO = o.expo;
     if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;

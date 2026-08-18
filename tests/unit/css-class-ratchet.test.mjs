@@ -98,7 +98,12 @@ const CLASS_CEILING = 536;
 // when those switches baked ON; NODE_CEILING stays a max, not a target.
 // +3 2026-08-18: five How-to-Play landmark links and their labelled navigation
 // replace the former undifferentiated long sheet without adding wrapper headings.
-const NODE_CEILING = 1164;
+// +8 2026-08-18: Adaptive Buttons OFF/ON in Advanced → BUTTON INPUT (h3 +
+// label + opt-row + two buttons + help). Reuses existing classes.
+// +30 2026-08-18: How to Play CONTROLS grew a CONTROLLER row and accurate
+// keyboard / phone / camera copy (key chips + the missing pad mapping).
+// Still well under Lighthouse's ~1,400 error band.
+const NODE_CEILING = 1202;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

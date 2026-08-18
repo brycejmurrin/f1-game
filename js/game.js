@@ -342,13 +342,13 @@ let manualMode = store.get("manual", false);   // manual gearbox preference (pla
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
-// Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
-// (no thumbs involved). Touch/button modes on mobile force auto to free thumbs.
+// Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
+// both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
+// hand for a shifter.
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
-// the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
+// Auto-throttle: TOUCH mode only (the canvas drag occupies the thumb).
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
@@ -2567,7 +2567,7 @@ function startRace() {
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
-  const manual = gearsManual();   // only ever true in tilt mode
+  const manual = gearsManual();
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
@@ -2596,9 +2596,9 @@ function showTouchControls(show) {
 }
 
 // Fill the two thumb docks. This is the ONE thing the flex bar cannot express
-// on its own: a control genuinely changes SIDE between modes — the throttle is
-// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
-// the arrows own the left — and CSS cannot move an element to a different
+// on its own: a control genuinely changes SIDE between modes — pedals are
+// left-thumb in tilt AUTO, right-thumb in tilt MANUAL and in buttons (arrows
+// own the left) — and CSS cannot move an element to a different
 // parent. Everything else (spacing, wrapping, centring, never overlapping) is
 // the flex row's job, and there is deliberately not one coordinate here.
 //
@@ -2620,12 +2620,12 @@ function layoutDocks(steerBtns, manual) {
         steer = $("grp-steer"), taps = $("grp-taps");
   const L = [], R = [];
   if (steerBtns) {
-    L.push(steer);            // arrows own the left thumb...
-    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
+    L.push(steer);                                // arrows own the left thumb
+    R.push(taps, pedals);                         // pedals stay right
+  } else if (manual) {
+    L.push(shifts, taps); R.push(pedals);         // tilt+manual: gears L, pedals R
   } else {
-    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
-    R.push(taps);             // the three taps sit inboard...
-    if (manual) R.push(shifts);   // ...of the shift column at the corner
+    L.push(pedals); R.push(taps);                 // auto tilt/touch: pedals left
   }
   // An empty group must not hold a gap in the dock. Hiding it is the whole
   // reason `hidden` on every child is not enough: a flex parent of hidden
@@ -3864,7 +3864,7 @@ function updateCar(c, dt, ranked) {
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
-    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
@@ -8378,7 +8378,7 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // js/game/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).
 
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
-// Disabled — not hidden — otherwise (see the pm-calib note in setSteerMode).
+// Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
   $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
   $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
@@ -8560,7 +8560,7 @@ Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
-    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+    + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);
