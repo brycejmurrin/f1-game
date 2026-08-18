@@ -1,0 +1,46 @@
+[
+  {
+    "optionId": "sig_rb_shortcase",
+    "visual": { "heatFins": 4, "ribs": 1 }
+  },
+  {
+    "optionId": "sig_ferrari_seamless",
+    "visual": { "heatFins": 3, "ribs": 2 }
+  },
+  {
+    "optionId": "sig_williams_longshift",
+    "visual": { "heatFins": 2, "ribs": 0 }
+  },
+  {
+    "optionId": "sig_mercedes_gbox",
+    "visual": { "heatFins": 3, "ribs": 1 }
+  },
+  {
+    "optionId": "sig_mclaren_gbox",
+    "visual": { "heatFins": 4, "ribs": 1 }
+  },
+  {
+    "optionId": "sig_redbull_gbox",
+    "visual": { "heatFins": 0, "ribs": 2 }
+  },
+  {
+    "optionId": "sig_alpine_gbox",
+    "visual": { "heatFins": 0, "ribs": 1 }
+  },
+  {
+    "optionId": "sig_haas_gbox",
+    "visual": { "heatFins": 2, "ribs": 2 }
+  },
+  {
+    "optionId": "sig_audi_gbox",
+    "visual": { "heatFins": 3, "ribs": 1 }
+  },
+  {
+    "optionId": "sig_astonmartin_gbox",
+    "visual": { "heatFins": 4, "ribs": 2 }
+  },
+  {
+    "optionId": "sig_cadillac_gbox",
+    "visual": { "heatFins": 2, "ribs": 2 }
+  }
+]
