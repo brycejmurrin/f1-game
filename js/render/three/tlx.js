@@ -662,9 +662,12 @@ const TLX = (function () {
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); } });
           if (post && !post.enabled()) post = null;
-          // Phone + no renderable float target: ACES/FXAA on 8-bit is the
-          // pale-ground look. Direct-to-canvas (M7) is the working picture.
-          if (post && isMobile && !post.hdrOk()) post = null;
+          // GLX keeps the post chain on an RGBA8 scene when half-float is not
+          // renderable (js/render/glx/post.js). Killing it here dropped ACES,
+          // bloom, SSAO, god-ray, FXAA and SSR on phones that missed the float
+          // target — a bigger look delta than 8-bit ACES. hdrOk() already
+          // accepts EXT_color_buffer_half_float (iOS). The pale-ground look
+          // was fog-as-clear + a missed TSL sky, not this gate.
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
@@ -696,11 +699,13 @@ const TLX = (function () {
         };
         envRT = new THREE.CubeRenderTarget(ENV_SIZE, envOpts);
         envRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant (probe target too)
+        envRT.texture.anisotropy = 4;                    // GLX env cube 4× (grazing clearcoat)
         // A COMPLETE black cube bound whenever the live probe must NOT be
         // sampled: while rendering INTO envRT (feedback-loop guard) and before
         // the first full capture. Cleared black once so it reads as no-mirror.
         envDummy = new THREE.CubeRenderTarget(1, envOpts);
         envDummy.texture.colorSpace = THREE.NoColorSpace;
+        envDummy.texture.anisotropy = 4;
         const _prevTgt = renderer.getRenderTarget();
         const _prevA = renderer.getClearAlpha ? renderer.getClearAlpha() : 1;
         renderer.setClearColor(0x000000, 1);

@@ -56,7 +56,8 @@
  *     (TrackGraph.batches() consumer); cullInstances(batch, planes) narrows
  *     batch.visible to the frustum; drawInstanced(batch, opts);
  *     castShadowInstanced(batch, count); freeInstancedBatch(batch).
- *     GLX + WGX implement the family; TLX exports it as undefined.
+ *     GLX + WGX + TLX implement the family. Software-WebGPU TLX no-ops the
+ *     draws (Dawn encoder poison from InstancedMesh); real GPUs keep them.
  *   createTextureArray(size, images, layers)     TEXTURE_2D_ARRAY whose layer
  *     index IS the MAT id; setMaterialMaps(maps|null) adopts/clears the baked
  *     arrays. assets.js supported() detects the pair (GLX + WGX + TLX).

@@ -833,7 +833,7 @@ const WGX = (function () {
     let g0Layout, g1Layout, g2Layout, litLayout, litModule, skyModule, blitModule;
     let frameUBO, lightSBO, grLightSBO, drawUBO, blitUBO, skyUBO;
     let frameBindGroup, drawBindGroup, skyBindGroup;
-    let skyPipeline, blitPipeline, linearSampler;
+    let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();
 
     // Shadow-pass objects (Phase 3).
@@ -950,6 +950,19 @@ const WGX = (function () {
 
     try {
       linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+      // Env-cube sampler is its own object: GLX puts 4× anisotropy on the cube
+      // so grazing clearcoat rays do not over-blur. envSamp (binding 5) is
+      // shared with SSR + the PCSS blocker — aniso there would smear those.
+      try {
+        envCubeSamp = device.createSampler({
+          magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
+          maxAnisotropy: 4,
+        });
+      } catch (_) {
+        envCubeSamp = device.createSampler({
+          magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
+        });
+      }
 
       // Sun shadow map: a depth texture rendered from the sun's POV, sampled by
       // the LIT shader through a comparison sampler (PCF). Fixed size, created
@@ -1043,6 +1056,8 @@ const WGX = (function () {
             texture: { sampleType: "depth" } },
           { binding: 13, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: "uniform" } },
+          { binding: 14, visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "filtering" } },                            // env cube 4× aniso (GLX)
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -1816,7 +1831,7 @@ const WGX = (function () {
       // EVERY binding, not just frameUBO. WebGPU rejects a bind group whose
       // resource is null — Safari's message is "Member GPUBufferBinding.buffer
       // is required and must be an instance of GPUBuffer" — and the old guard
-      // named only two of the fifteen. init() calls _rebuildFrameBG() straight
+      // named only two of the sixteen. init() calls _rebuildFrameBG() straight
       // after the UBOs are made, ~90 lines BEFORE matScaleUBO, the material
       // views, the blocker view and both extra shadow views exist, so the
       // first call built a group full of nulls and threw out of init. That
@@ -1829,7 +1844,7 @@ const WGX = (function () {
       // it once their resource lands (env probe, setMaterialMaps, and the
       // explicit call at the end of init).
       if (!g0Layout || !frameUBO || !lightSBO || !matScaleUBO) return;
-      if (!shadowView || !shadowSampler || !linearSampler || !nextSsrView) return;
+      if (!shadowView || !shadowSampler || !linearSampler || !envCubeSamp || !nextSsrView) return;
       if (!blockerView || !carShadowView || !lampShadowView) return;
       if (!matAlbedoView || !matNormalView || !matArraySamp) return;
       const base = (cubeView) => ({
@@ -1849,6 +1864,7 @@ const WGX = (function () {
           { binding: 11, resource: matArraySamp },
           { binding: 12, resource: lampShadowView },
           { binding: 13, resource: { buffer: matScaleUBO } },
+          { binding: 14, resource: envCubeSamp },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group

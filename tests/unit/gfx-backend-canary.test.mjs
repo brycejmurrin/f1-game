@@ -170,7 +170,8 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.doesNotMatch(post, /keep hdr=true \(WebGPU is always half-float\)/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /apex26\.gfxTlxFail/);
-  assert.match(tlx, /isMobile && !post\.hdrOk\(\)/);
+  assert.doesNotMatch(tlx, /isMobile && !post\.hdrOk\(\)/,
+    "GLX keeps the 8-bit post chain when half-float is missing; TLX must too");
   assert.match(tlx, /TLX: present failed/);
   assert.match(tlx, /MeshBasicMaterial/);
   assert.match(tlx, /apex26\.gfxClaimFail/);
@@ -859,6 +860,38 @@ test("TLX InstancedMesh always allocates instanceColor to the instance cap", () 
   const castBody = shadow.slice(cast, cast + 1800);
   assert.doesNotMatch(castBody, /m\.instanceColor\s*=/,
     "shadow InstancedMesh must not set instanceColor — the lit geo already has instanced color");
+});
+
+test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () => {
+  // GLX sets TEXTURE_MAX_ANISOTROPY_EXT on the env cube so clearcoat rays at
+  // grazing angles do not over-blur. TLX is per-texture; WGX needs a dedicated
+  // sampler (binding 14) because envSamp is shared with SSR + the PCSS blocker.
+  const glx = read("js/render/glx.js");
+  const envAt = glx.indexOf("gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex)");
+  assert.ok(envAt > 0, "GLX env cube setup moved");
+  assert.match(glx.slice(envAt, envAt + 800), /TEXTURE_MAX_ANISOTROPY_EXT/,
+    "GLX env cube must keep 4× anisotropy");
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /envRT\.texture\.anisotropy\s*=\s*4/,
+    "TLX env cube must match GLX 4× anisotropy");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /envCubeSamp/,
+    "WGX must own a dedicated env-cube sampler");
+  assert.match(wgx, /maxAnisotropy:\s*4/,
+    "WGX env-cube sampler must request 4× anisotropy");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js");
+  assert.match(wgsl, /binding\(14\) var envCubeSamp/,
+    "WGSL must sample the cube through the aniso sampler, not shared envSamp");
+  assert.match(wgsl, /textureSampleLevel\(envCube, envCubeSamp/,
+    "env cube taps must use envCubeSamp");
+  assert.doesNotMatch(wgsl.replace(/^[ \t]*\/\/.*$/gm, ""), /textureSampleLevel\(envCube, envSamp/,
+    "do not sample the cube with the shared SSR/blocker sampler");
+});
+
+test("Gfx seam lists instancing on all three backends", () => {
+  const gfx = read("js/render/gfx.js");
+  assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
+    "gfx.js must not still say TLX exports instancing as undefined");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
