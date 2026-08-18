@@ -28,7 +28,11 @@ function load(opts) {
       removeItem: (k) => { disk.delete(k); },
     },
     location: { search },
-    document: undefined,
+    document: opts.document ? Object.assign({
+      readyState: "loading",
+      addEventListener() {},
+      getElementById() { return null; },
+    }, opts.document) : undefined,
     window: undefined,
     requestAnimationFrame: undefined,
     PerfGov: opts.PerfGov,
@@ -153,5 +157,78 @@ test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
   });
   const gnd = M.snapshot();
   assert.equal(gnd.speedKph, 72);
+  assert.equal(gnd.gndKph, 72);
   assert.equal(gnd.speedIsDash, false);
+});
+
+test("pages persist and URL metricsPage is session-only", () => {
+  const { M, disk } = load({});
+  assert.equal(M.page(), "gov");
+  assert.equal(M.setPage("phys"), "phys");
+  assert.equal(disk.get("apex26.metricsPage"), "phys");
+  assert.equal(M.nextPage(1), "log");
+  assert.equal(M.nextPage(1), "gov");
+  const pinned = load({ store: { "apex26.metricsPage": "car" }, search: "?metricsPage=log" });
+  assert.equal(pinned.M.page(), "log");
+  pinned.M.setPage("gov");
+  assert.equal(pinned.disk.get("apex26.metricsPage"), "car", "URL page must not write storage");
+});
+
+test("a painted HUD 0 does not wipe probe ground speed", () => {
+  const { M } = load({
+    document: { getElementById: (id) => id === "hud-speed-n" ? { textContent: "0" } : null },
+    apex: { probe() { return { speed: 60, s: 10, x: 0 }; } },
+  });
+  const s = M.snapshot();
+  assert.equal(s.dashKph, 0);
+  assert.equal(s.speedKph, 0);
+  assert.equal(s.speedIsDash, true);
+  assert.equal(s.gndKph, 216);
+});
+
+test("snapshot reads physState() and still skips obs()/fieldState()", () => {
+  let obs = 0, field = 0, phys = 0;
+  const { M } = load({
+    apex: {
+      obs() { obs++; return {}; },
+      fieldState() { field++; return []; },
+      probe() { return { speed: 10, s: 1, x: 0 }; },
+      physState() {
+        phys++;
+        return { slipDeg: 2.5, vLat: 0.4, yawRate: 0.1, slipFactor: 0.9, wrongWay: false };
+      },
+    },
+  });
+  const s = M.snapshot();
+  assert.equal(obs, 0);
+  assert.equal(field, 0);
+  assert.equal(phys, 1);
+  assert.equal(s.slipDeg, 2.5);
+  assert.equal(s.vLat, 0.4);
+  assert.equal(s.wrongWay, false);
+});
+
+test("log page filters the tail by namespace and level", () => {
+  const { M, Log } = load({});
+  Log.info("car", "livery ferrari");
+  Log.warn("scenery", "backdrop SUPPRESSED");
+  Log.info("track", "build done monza total=1 n=1 night=false");
+  M.setLogNs("*");
+  M.setLogLvl("warn");
+  const warn = M.snapshot();
+  assert.equal(warn.logNs, "*");
+  assert.equal(warn.logLvl, "warn");
+  assert.ok(warn.logs.some((l) => l.startsWith("w scenery")));
+  assert.ok(!warn.logs.some((l) => l.includes("livery")));
+  M.setLogNs("track");
+  M.setLogLvl("info");
+  const tr = M.snapshot();
+  assert.equal(tr.logs.length, 1);
+  assert.match(tr.logs[0], /build done monza/);
+});
+
+test("HIDE HUD CSS leaves #game-metrics visible", () => {
+  const css = readFileSync(join(ROOT, "css/overlays.css"), "utf8");
+  assert.match(css, /body\.hud-hidden #hud/);
+  assert.doesNotMatch(css, /body\.hud-hidden #game-metrics/);
 });
