@@ -742,10 +742,86 @@ test("the alpha tag that makes canvas opacity load-bearing still exists", () => 
     "still ghost the cars before touching the guards below");
 });
 
+test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
+  // The baked array is 17 layers (MAT 0..16). Car surfaces are 20-27.
+  // GLX/WGX refuse mid>16 before the fetch. TLX used to sample layer=mid
+  // on every car fragment; SwiftShader returns black and the car vanishes
+  // while the road (MAT 16) still draws.
+  const glxLit = read("js/render/shaders/lit.js");
+  assert.match(glxLit, /mid <= 0 \|\| mid > 16/,
+    "GLX matTexUV lost its 1..16 pack gate — re-derive the TLX clamp");
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matTexInPack/,
+    "TLX must name the 1..16 pack gate so car ids cannot enable a live sample");
+  assert.match(src, /lessThanEqual\(16\.0\)/,
+    "the pack gate must refuse mid>16 (car surfaces 20-27)");
+  assert.match(src, /depth\(int\(matTexLayer\(mid\)\)\)/,
+    "the hoisted array sample must clamp the layer, not pass raw mid");
+});
+
+test("TLX pooled meshes write matrixWorld — scene auto-update is off", () => {
+  // scene.matrixWorldAutoUpdate = false so renderer.render() does not walk
+  // the graph. The comment above that flag says every pooled mesh writes
+  // matrixWorld; the shadow caster pool does (tlx-shadow.js cast()). The
+  // visible acquireMesh pool used to write only `matrix`. Reused slots
+  // kept the identity world matrix they were born with (track), so race
+  // cars sat at the origin while the chase camera looked at Monza.
+  const tlx = TLX.replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = tlx.indexOf("function acquireMesh(");
+  assert.ok(at > 0, "acquireMesh is gone");
+  const body = tlx.slice(at, tlx.indexOf("function buildGeometry(", at));
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must stamp matrixWorld — scene auto-update will not");
+  assert.match(body, /matrixWorldAutoUpdate\s*=\s*false/,
+    "pool meshes must not let a later graph walk clobber the stamp");
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "shadow casters are the working reference for this stamp");
+});
+
+test("the SSR tag is not three's opacity socket — that is what made cars vanish", () => {
+  // NodeMaterial.setupDiffuseColor does diffuseColor.a *= opacityNode.
+  // NodeBuilder.isOpaque() is (transparent===false && blending===NormalBlending).
+  // Opaque car paint uses NoBlending so the tag writes verbatim (GLX parity),
+  // which makes isOpaque() FALSE, so a 0.35 opacityNode is left as coverage:
+  // painted bodywork disappears; tyres/carbon/glass (alpha 1) stay. The tag
+  // belongs on outputNode; opacityNode is the real material alpha.
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.doesNotMatch(src, /opacityNode\s*=\s*packed\.a/,
+    "opacityNode = packed.a feeds the 0.35 paint tag into three as coverage");
+  assert.match(src, /opacityNode\s*=\s*packed\.opacity/,
+    "opacityNode must be the real tlxAlpha, not the SSR channel");
+  assert.match(src, /outputNode\s*=\s*packed\.out/,
+    "outputNode must be the shared-graph vec4 (RGB + real alpha)");
+  assert.match(src, /out:\s*vec4\(packed\.rgb,\s*matU\.alpha\)/,
+    "output.a must be tlxAlpha — the 0.35 tag is coverage on NoBlending");
+  assert.doesNotMatch(src, /out:\s*packed(?:\s|,|\})/,
+    "do not emit packed (RGB + tag) as the written vec4");
+  assert.match(src, /opacity:\s*matU\.alpha/,
+    "shared graph must expose matU.alpha as the opacity socket");
+  assert.match(src, /m\.fog\s*=\s*false/,
+    "three scene-fog on top of the lit fog stack darkens bodywork a second time");
+  assert.match(src, /m\.premultipliedAlpha\s*=\s*false/,
+    "premultiply would scale RGB by the tag if it ever re-enters the output");
+});
+
+test("three still treats NoBlending as non-opaque (why the tag cannot live in opacityNode)", () => {
+  // Makes the assertion above NECESSARY. If isOpaque() starts ignoring
+  // blending, NoBlending would force alpha back to 1 and the outputNode
+  // split would be tidy rather than load-bearing — worth knowing which.
+  assert.match(THREE_BUNDLE,
+    /isOpaque\(\)\{const \w+=this\.material;return!1===\w+\.transparent&&\w+\.blending===\w+&&!1===\w+\.alphaToCoverage\}/,
+    "bundled three isOpaque() no longer requires NormalBlending — re-derive " +
+    "whether NoBlending + opacityNode=tag still ghosts cars");
+});
+
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
   assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
     "TLX must pass alpha:false — three's WebGPU backend turns it into " +
     'alphaMode "opaque"');
+  assert.match(rendererParams(), /(^|[{,\s])premultipliedAlpha:\s*false/,
+    "TLX must pass premultipliedAlpha:false — default true premultiplies the " +
+    "SSR tag into car RGB");
 });
 
 test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is not beige)", () => {
