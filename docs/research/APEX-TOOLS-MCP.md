@@ -22,6 +22,12 @@ miss); `apex_cache_bump_only` since=HEAD~1 28 ms `ok` with CLI exit 1
 (`pure:false`, empty diff); `apex_aero_zone_turns` monza 78 ms;
 `apex_startline_snap` monza 30 ms.
 
+Live locked browser (2026-08-18): `apex_carshot` after `apex_status`
+(lock free, chrome down, `playwright.live === false`) — first boot died
+at `waitForFunction(__apex)` under `--use-gl=angle`; after pinning
+carshot to SwiftShader like `apex-eval`, `ok` in 16862 ms, 7.4 KB JPEG,
+lock released.
+
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
 
