@@ -27,6 +27,10 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
   `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
   reopens terrain-over-road on SwiftShader.
+- **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
+  WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
+  `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
+  `roadChunkLamps` (WebGL2 only); `pcssPen` on three.js phones / software GL.
 
 Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
 (no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
