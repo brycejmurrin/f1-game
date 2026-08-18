@@ -560,7 +560,10 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   // Prefer perpendicular distance when a real tangent exists. Point-distance
   // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
   // so the nearest centerline sample can be > hw+2.4 away along-track.
-  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 8.0, tangOk);
+  // Lateral slack is the grass verge (~2.2 m), not 8 m — a wider hole ate
+  // the inner terrain rails (berms / elevation). Along-track LUT coarseness
+  // still uses +8 on point-distance when no tangent exists.
+  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 2.4, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
   // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
@@ -694,10 +697,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
   let saaDy = dpdy(topNgeo);
-  // Floor + detail terrain + the scenery addBox slab (the 1.6 km props
-  // "universal ground") bury the ribbon on SwiftShader-Dawn. Punch the LUT
-  // footprint on buryRibbon draws, and also on huge-footprint triangles
-  // (the slab is two 1600 m faces — cars/barriers stay under ~2 m).
+  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn. Punch the
+  // LUT tarmac footprint (onRibbon is hw+2.4, the verge — not the berms).
+  // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
   let bury = D.mat2.w > 0.5;
   let slab = max(fwWpos.x, fwWpos.z) > 6.0;
   if ((bury || slab) && !isRoadDraw && fromWorld.w > 0.5) {

@@ -2993,9 +2993,6 @@ const WGX = (function () {
     function draw(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
       const o = _litOpts(opts);
-      // Stadium floor + terrain write first and bury the ribbon on
-      // SwiftShader-Dawn (LUT discard and always-pass were not enough).
-      if (o.buryRibbon) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
@@ -3018,7 +3015,6 @@ const WGX = (function () {
     function drawChunked(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
       const o = _litOpts(opts);
-      if (o.buryRibbon) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
