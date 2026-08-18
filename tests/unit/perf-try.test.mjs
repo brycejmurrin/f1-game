@@ -103,9 +103,10 @@ test("env-probe radial cull is 300 m without a toggle", () => {
   assert.doesNotMatch(wgx, /_perfWgsl|typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
 
   const tlx = read("js/render/three/tlx.js");
-  assert.match(tlx, /_envCullM = _envSvCull > 0 \? Math\.min\(_envSvCull, 300\) : 300/);
-  assert.match(tlx, /chunkedSys\.cull\(rec\.chunked, faceVP, _envEye, _envCullM\)/);
-  assert.match(tlx, /function _restoreEnvCull\(/);
+  assert.match(tlx, /const ENV_CULL_M = 300/);
+  assert.match(tlx, /frame\.cullDist = _envSvCull > 0 \? Math\.min\(_envSvCull, ENV_CULL_M\) : ENV_CULL_M/);
+  assert.match(tlx, /chunkedSys\.cull\(rec\.chunked, faceVP, faceEye, faceCull\)/);
+  assert.match(tlx, /function _restoreEnvFrame\(/);
   assert.doesNotMatch(tlx, /typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
 });
 
