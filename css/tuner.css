@@ -544,7 +544,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
-    display: grid; grid-template-columns: minmax(0, 1fr);
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     overflow: hidden;
   }
@@ -552,16 +552,24 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
     display: contents;
   }
   /* Compact already means the sheet is short in its own units. A viewport
-     max-height query cannot see zoom, so hiding the title belongs here, not
-     in @media (max-height). The dialog stays named by its outer a11y contract. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-head, #ct-head) {
+     max-height query cannot see zoom, so hide only redundant title chrome.
+     Lighting's head also owns FREE CAMERA and must remain actionable. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-head {
+    display: block; grid-column: 1; grid-row: 1; margin: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-head h2, #ct-head) {
     display: none;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] .lt-tabs { grid-row: 1; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
-    grid-row: 2; min-height: 0;
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] .lt-tabs {
+    grid-column: 2; grid-row: 1; min-width: 0;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot { grid-row: 3; }
+  #camtune-inner[data-density="compact"][data-rail="off"] .lt-tabs { grid-column: 1 / -1; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
+    grid-column: 1 / -1; grid-row: 2; min-height: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    grid-column: 1 / -1; grid-row: 3;
+  }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
     min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
     font-size: var(--fs-micro); white-space: nowrap;
