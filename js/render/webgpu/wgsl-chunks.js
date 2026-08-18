@@ -617,6 +617,7 @@ struct VSOut {
   @location(4) @interpolate(flat) matId : f32,
   @location(5)       trk   : vec3<f32>,
   @location(6) @interpolate(flat) vid : f32,
+  @location(7)       objPos : vec3<f32>,
 };
 
 @vertex
@@ -657,6 +658,7 @@ fn vs_main(
   o.nrm  = nm * aNrm;
   o.col  = col;
   o.wpos = wp.xyz;
+  o.objPos = aPos;              // object space: paint flake / orange-peel (GLX vObjPos)
   o.clip = F.viewProj * wp;
   return o;
 }
@@ -781,14 +783,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let Ngeo = N;
   // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/render/shaders/lit.js).
   // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
-  // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
-  // object-position varying yet, so we key to world pos — faithful-but-reduced (a
-  // touch of texture-swim, invisible at the 0.22 amplitude). Distance-faded.
+  // shimmer live on the panels. Keyed to OBJECT space (in.objPos / GLX vObjPos)
+  // so the peel does not swim as the car translates. Distance-faded.
   if (carPaint > 0.001) {
     let pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
     if (pFade > 0.01) {
-      let puv = in.wpos.xz * 34.0 + in.wpos.y * 29.0;
-      let fuv = in.wpos.xz * 130.0 + in.wpos.y * 111.0;
+      let puv = in.objPos.xz * 34.0 + in.objPos.y * 29.0;
+      let fuv = in.objPos.xz * 130.0 + in.objPos.y * 111.0;
       let pe = 0.09;
       let pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
       let pbx = (vnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + vnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
@@ -1192,15 +1193,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes
   // only when its facet half-aligns with the sun. sparkle DEFAULTS TO 1, so the
   // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
-  // (carPaint=0) and the dark carbon/tyre parts stay untouched. GLX cells in object
-  // space (vObjPos); reduced to world space here (no object-pos varying yet).
+  // (carPaint=0) and the dark carbon/tyre parts stay untouched. Cells in object
+  // space (in.objPos / GLX vObjPos) so glitter stays welded to the bodywork.
   if (carPaint > 0.001 && litNoL > 0.0 && sparkle > 0.001) {
     var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
     spFade = spFade * smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
     if (spFade > 0.01) {
-      let cell = floor(in.wpos * 45.0);
-      let h1 = hash3(cell);
-      let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
+      let cell = floor(in.objPos * 220.0);
+      let h1 = hash21(cell.xy + cell.z * 19.7);
+      let h2 = hash21(cell.yz + cell.x * 7.3);
       // Mirror the GLSL finite-basis guard: malformed/degenerate geometry must
       // not feed normalize(0) and spray NaN glints across the paint.
       var nN = vec3<f32>(0.0, 1.0, 0.0);

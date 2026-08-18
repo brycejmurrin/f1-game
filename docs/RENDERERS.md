@@ -117,6 +117,9 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false`). Env cube uses a
   dedicated 4×-aniso sampler (binding 14) so grazing clearcoat matches GLX.
+  Car-paint flake / orange-peel interpolate `objPos` (object space, same
+  34/29 + 130/111 and 220 Hz `hash21` as GLX). SSAO taps the GLX/TLX `K[0..7]`
+  fan.
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed

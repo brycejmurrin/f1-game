@@ -273,6 +273,12 @@ struct SsaoU {
 ${fullscreenTri}
 ${POST_VS}
 
+// First 8 of GLX/TLX K[12] (js/render/shaders/post.js, js/render/three/tsl-post.js).
+const SSAO_K = array<vec2<f32>, 8>(
+  vec2<f32>(0.0, 1.0), vec2<f32>(0.5, 0.866), vec2<f32>(0.866, 0.5), vec2<f32>(1.0, 0.0),
+  vec2<f32>(0.866, -0.5), vec2<f32>(0.5, -0.866), vec2<f32>(0.0, -1.0), vec2<f32>(-0.5, -0.866)
+);
+
 fn ssaoDepth(uv : vec2<f32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(depthTex));
   let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
@@ -314,9 +320,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   var occ = 0.0;
   for (var i = 0; i < 8; i = i + 1) {
-    // Even angular spread; the per-pixel rotation decorrelates neighbours.
-    let ka = (f32(i) + 0.5) / 8.0 * 6.2832;
-    let kb = vec2<f32>(cos(ka), sin(ka));
+    // GLX/TLX fan (not an even 2π ring) + the same per-pixel rotation.
+    let kb = SSAO_K[i];
     let k  = vec2<f32>(kb.x * ca - kb.y * sa, kb.x * sa + kb.y * ca);
     let suv = clamp(in.uv + k * scr, vec2<f32>(0.001), vec2<f32>(0.999));
     let S = ssaoViewPos(suv);

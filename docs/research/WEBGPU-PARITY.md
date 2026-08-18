@@ -9,6 +9,8 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
+Car-paint orange-peel / flake now key to `objPos` (GLX `vObjPos`, 220 Hz +
+`hash21`); SSAO uses the GLX/TLX `K[0..7]` fan instead of an even 2π ring.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
 (`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`

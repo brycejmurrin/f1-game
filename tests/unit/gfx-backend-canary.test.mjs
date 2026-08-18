@@ -888,6 +888,43 @@ test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () 
     "do not sample the cube with the shared SSR/blocker sampler");
 });
 
+test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
+  // World-space cells swam as the car translated (floor(wpos*45) + hash3).
+  // GLX / TLX weld glitter to vObjPos / positionGeometry at 220 Hz + hash21.
+  const chunks = read("js/render/webgpu/wgsl-chunks.js");
+  const lit = read("js/render/shaders/lit.js");
+  const tsl = read("js/render/three/tsl-lit.js");
+  assert.match(chunks, /@location\(7\)\s+objPos\s*:\s*vec3<f32>/,
+    "LIT VSOut must carry object-space position (GLX vObjPos)");
+  assert.match(chunks, /o\.objPos\s*=\s*aPos/,
+    "vs_main must write aPos into objPos, not the world-space wp");
+  assert.match(chunks, /in\.objPos\.xz \* 34\.0 \+ in\.objPos\.y \* 29\.0/,
+    "orange-peel coarse scale must match GLX vObjPos.xz * 34");
+  assert.match(chunks, /in\.objPos\.xz \* 130\.0 \+ in\.objPos\.y \* 111\.0/,
+    "orange-peel fine scale must match GLX vObjPos.xz * 130");
+  assert.match(chunks, /floor\(in\.objPos \* 220\.0\)/,
+    "flake cells must use the GLX 220 Hz object-space grid");
+  assert.match(chunks, /hash21\(cell\.xy \+ cell\.z \* 19\.7\)/,
+    "flake hash must match GLX hash21(cell.xy + cell.z * 19.7)");
+  assert.doesNotMatch(chunks.replace(/^[ \t]*\/\/.*$/gm, ""), /floor\(in\.wpos \* 45\.0\)/,
+    "do not cell flake in world space — that is the swim");
+  assert.match(lit, /vObjPos = aPos/,
+    "GLX still keys paint to object space — WGX is the port");
+  assert.match(tsl, /positionGeometry/,
+    "TLX still keys paint to object space — WGX is the port");
+});
+
+test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
+  const post = read("js/render/webgpu/wgsl-post.js");
+  assert.match(post, /const SSAO_K = array<vec2<f32>, 8>/,
+    "WGX SSAO must name the shared 8-tap fan");
+  assert.match(post, /vec2<f32>\(0\.0, 1\.0\).*vec2<f32>\(-0\.5, -0\.866\)/s,
+    "kernel must be the first 8 of GLX K[12]");
+  assert.doesNotMatch(post.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /\(f32\(i\) \+ 0\.5\) \/ 8\.0 \* 6\.2832/,
+    "do not rebuild an even 2π ring — that is the look gap vs GLX/TLX");
+});
+
 test("Gfx seam lists instancing on all three backends", () => {
   const gfx = read("js/render/gfx.js");
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
