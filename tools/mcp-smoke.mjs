@@ -26,6 +26,15 @@ const CHROME_BIN = path.join(
 const TINYFISH_ENV = path.join(ROOT, "scratch/tinyfish-mcp-server/.env");
 const TINYFISH_KEY_URL = "https://agent.tinyfish.ai/home";
 
+function tinyfishFallback() {
+  if (process.env.TINYFISH_NO_FALLBACK === "1") return false;
+  const sh = path.join(ROOT, "tools/tinyfish-mcp.sh");
+  if (!fs.existsSync(sh)) return false;
+  const prefix = "sk-" + "tinyfish-";
+  return new RegExp(`^\\s*TINYFISH_KEY_FALLBACK=${prefix}\\S+`, "m")
+    .test(fs.readFileSync(sh, "utf8"));
+}
+
 function tinyfishKey() {
   if ((process.env.TINYFISH_API_KEY || "").trim()) {
     return { present: true, via: "env" };
@@ -35,6 +44,9 @@ function tinyfishKey() {
     if (/^\s*TINYFISH_API_KEY=\S+/m.test(text)) {
       return { present: true, via: "env-file" };
     }
+  }
+  if (tinyfishFallback()) {
+    return { present: true, via: "fallback" };
   }
   return { present: false, via: "missing", url: TINYFISH_KEY_URL };
 }
@@ -67,7 +79,7 @@ export function smokePlan() {
     {
       server: "tinyfish",
       argv: ["bash", path.join(ROOT, "tools/tinyfish-mcp.sh"), "help"],
-      note: "help only — ensure / deploy-check need TINYFISH_API_KEY",
+      note: "help only — ensure / deploy-check need a key (shell / .env / fallback)",
     },
   ];
 }

@@ -74,19 +74,31 @@ test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
   assert.match(src, /TINYFISH_API_KEY/);
   assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
   assert.match(src, /chrome-devtools-mcp\.sh" clone/);
+  assert.match(src, /tinyfish-mcp\.sh" setup/);
+  assert.match(src, /ensure_mcp_clones/);
+  assert.match(src, /APEX_SKIP_TINYFISH_SETUP/);
   assert.ok(!src.includes("sk-" + "tinyfish-"));
   assert.ok(!src.includes("BAKED" + "_KEY"));
 });
 
 test("mcp-smoke names the TinyFish home URL when the key is missing", () => {
   assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
+  const r = run(["--dry-run"], { TINYFISH_API_KEY: "", TINYFISH_NO_FALLBACK: "1" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
+  assert.notEqual(body.tinyfishKey.via, "fallback");
   if (!body.tinyfishKey.present) {
     assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
     assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
   }
+});
+
+test("mcp-smoke treats the tracked fallback as a present key", () => {
+  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.tinyfishKey.present, true);
+  assert.ok(["fallback", "env-file"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
 });
 
 test("tracked source never embeds a TinyFish key", () => {

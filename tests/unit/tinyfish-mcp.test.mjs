@@ -71,17 +71,21 @@ test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
   assert.match(r.stdout, /--format/);
   assert.match(r.stdout, /--tip/);
   assert.match(r.stdout, /version\.json/);
-  assert.match(r.stdout, /required; never embedded/);
+  assert.match(r.stdout, /TINYFISH_KEY_FALLBACK/);
+  assert.match(r.stdout, /TINYFISH_NO_FALLBACK/);
   assert.match(r.stdout, /https:\/\/agent\.tinyfish\.ai\/home/);
 });
 
-test("TinyFish requires injected credentials and ensure names the missing setup", () => {
+test("TinyFish tracked fallback + TINYFISH_NO_FALLBACK missing-key path", () => {
   const src = fs.readFileSync(SH, "utf8");
   const credentialPrefix = "sk-" + "tinyfish-";
   const legacyFallbackName = "BAKED" + "_KEY";
-  assert.ok(!src.includes(legacyFallbackName) && !src.includes(credentialPrefix),
-    "tracked source must never contain a reusable TinyFish credential");
+  assert.ok(!src.includes(legacyFallbackName), "legacy BAKED_KEY name must stay gone");
+  assert.match(src, /TINYFISH_KEY_FALLBACK=/);
+  assert.match(src, new RegExp(credentialPrefix));
+  assert.match(src, /TINYFISH_NO_FALLBACK/);
   assert.match(src, /TINYFISH_API_KEY/);
+  assert.match(src, /persist_env/);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-tinyfish-missing-"));
   try {
@@ -93,6 +97,7 @@ test("TinyFish requires injected credentials and ensure names the missing setup"
         ...process.env,
         TINYFISH_API_KEY: "",
         TINYFISH_MCP_REPO: missingRepo,
+        TINYFISH_NO_FALLBACK: "1",
       },
     });
     assert.notEqual(noKey.status, 0);
@@ -100,6 +105,18 @@ test("TinyFish requires injected credentials and ensure names the missing setup"
     assert.match(noKeyText, /TINYFISH_API_KEY is not set/);
     assert.match(noKeyText, /https:\/\/agent\.tinyfish\.ai\/home/);
     assert.doesNotMatch(noKeyText, /api-keys/);
+
+    const viaFallback = spawnSync("bash", [SH, "ensure"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        TINYFISH_API_KEY: "",
+        TINYFISH_MCP_REPO: missingRepo,
+      },
+    });
+    assert.notEqual(viaFallback.status, 0);
+    assert.match(`${viaFallback.stdout}\n${viaFallback.stderr}`, /Missing build.*run: .* setup/s);
 
     const r = spawnSync("bash", [SH, "ensure"], {
       cwd: ROOT,
@@ -117,6 +134,59 @@ test("TinyFish requires injected credentials and ensure names the missing setup"
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("start persists the resolved key into the gitignored .env", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-tinyfish-persist-"));
+  try {
+    const repo = path.join(dir, "fake-tinyfish");
+    fs.mkdirSync(path.join(repo, "dist"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "dist/index.js"), "// stub\n");
+    const r = spawnSync("bash", [SH, "start"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: 15000,
+      env: {
+        ...process.env,
+        TINYFISH_API_KEY: "",
+        TINYFISH_MCP_REPO: repo,
+      },
+    });
+    const envFile = path.join(repo, ".env");
+    assert.ok(fs.existsSync(envFile), `expected persist:\n${r.stdout}\n${r.stderr}`);
+    const prefix = "sk-" + "tinyfish-";
+    assert.match(fs.readFileSync(envFile, "utf8"), new RegExp(`^TINYFISH_API_KEY=${prefix}`, "m"));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("only tools/tinyfish-mcp.sh may embed the tracked TinyFish fallback", () => {
+  const prefix = "sk-" + "tinyfish-";
+  const skip = new Set(["node_modules", ".git", "scratch", "artifacts", "dist"]);
+  const hits = [];
+  function walk(dir) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(ent.name)) continue;
+      const p = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        walk(p);
+        continue;
+      }
+      if (!/\.(md|sh|mjs|cjs|py|json|mdc|txt)$/.test(ent.name)) continue;
+      const rel = path.relative(ROOT, p);
+      if (rel === "tools/tinyfish-mcp.sh") continue;
+      const text = fs.readFileSync(p, "utf8");
+      if (text.includes(prefix)) hits.push(rel);
+    }
+  }
+  for (const rel of ["tools", "tests", "docs", ".claude", ".cursor", "AGENTS.md", "CLAUDE.md", ".mcp.json"]) {
+    const p = path.join(ROOT, rel);
+    if (!fs.existsSync(p)) continue;
+    if (fs.statSync(p).isDirectory()) walk(p);
+    else if (fs.readFileSync(p, "utf8").includes(prefix)) hits.push(rel);
+  }
+  assert.deepEqual(hits, [], "TinyFish fallback belongs only in tools/tinyfish-mcp.sh");
 });
 
 test("tinyfish-rpc live-build extracts N from nested version.json RPC", () => {
