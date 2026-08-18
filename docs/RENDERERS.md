@@ -120,8 +120,10 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
   SSAO uses the GLX/TLX `K[0..7]` fan and skips taps at strength 0.
   `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the
-  same present() (not next-frame LIT). SAA still uses geometric N (`dpdx`
-  after a non-uniform matId branch is illegal WGSL).
+  same present() (not next-frame LIT). SAA hoists object-space peel in
+  uniform CF and mixes that variance with geometric N by `carPaint`
+  (`dpdx` after a non-uniform matId branch is illegal WGSL; terrain
+  bump still cannot enter SAA).
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed

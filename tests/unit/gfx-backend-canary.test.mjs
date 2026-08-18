@@ -898,10 +898,14 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
     "LIT VSOut must carry object-space position (GLX vObjPos)");
   assert.match(chunks, /o\.objPos\s*=\s*aPos/,
     "vs_main must write aPos into objPos, not the world-space wp");
-  assert.match(chunks, /in\.objPos\.xz \* 34\.0 \+ in\.objPos\.y \* 29\.0/,
+  assert.match(chunks, /fn paintPeelN\(/,
+    "orange-peel must live in a helper so SAA can hoist it in uniform CF");
+  assert.match(chunks, /objPos\.xz \* 34\.0 \+ objPos\.y \* 29\.0/,
     "orange-peel coarse scale must match GLX vObjPos.xz * 34");
-  assert.match(chunks, /in\.objPos\.xz \* 130\.0 \+ in\.objPos\.y \* 111\.0/,
+  assert.match(chunks, /objPos\.xz \* 130\.0 \+ objPos\.y \* 111\.0/,
     "orange-peel fine scale must match GLX vObjPos.xz * 130");
+  assert.match(chunks, /svnoise\(puv\) \* 0\.6 \+ svnoise\(fuv\) \* 0\.4/,
+    "peel must use surface-family svnoise (hash21), not sky vnoise (hash2)");
   assert.match(chunks, /floor\(in\.objPos \* 220\.0\)/,
     "flake cells must use the GLX 220 Hz object-space grid");
   assert.match(chunks, /hash21\(cell\.xy \+ cell\.z \* 19\.7\)/,
@@ -912,6 +916,24 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
     "GLX still keys paint to object space — WGX is the port");
   assert.match(tsl, /positionGeometry/,
     "TLX still keys paint to object space — WGX is the port");
+});
+
+test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /let Npeel = paintPeelN\(topNgeo, in\.objPos, vDist, 1\.0\)/,
+    "peel normal for SAA must be computed at fs_main top (uniform CF)");
+  assert.match(chunks, /let saaDxPeel = dpdx\(Npeel\)/,
+    "SAA must take peel derivatives, not only geometric N");
+  assert.match(chunks, /mix\(saaVarGeo, saaVarPeel, saturate\(carPaint\)\)/,
+    "paint fragments get peel SAA; carbon/rubber stay on geometric N");
+});
+
+test("pcssPen help names desktop three.js WebGL2 as live", () => {
+  const lighting = read("js/game/lighting.js");
+  assert.match(lighting, /three\.js desktop WebGL2/,
+    "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
+  assert.doesNotMatch(lighting, /three\.js WebGL2 keeps a fixed-radius kernel/,
+    "that sentence is stale after the R16F color-depth blocker");
 });
 
 test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
