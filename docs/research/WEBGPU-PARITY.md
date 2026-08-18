@@ -15,6 +15,11 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **TLX MSAA** stays off (no resolved depth for post).
 - **TLX car SSR tag** cannot write 0.35 into alpha (three treats it as
   coverage). Needs MRT — not a one-target port.
+- **TLX FS `mat` stays smooth** and baked wall UVs still key off the
+  shading N. A TSL `varying().setInterpolation(FLAT)` (and a 5-arg
+  `applyMaterialTexNormal` that passed geometric `Nvary`) compiled on
+  three r185 / software GL but the garage turntable drew nothing.
+  GLX remains `flat out float vMat`.
 - **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
   ribbon VBOs). Not portable without reopening that defect.
 - **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
@@ -23,11 +28,11 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 
 Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
 (no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
-fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX FS
-`mat` is `flat`; TLX baked wall UVs use geometric `Nvary`; TLX corrugation
-AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking mip uses
-unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso / desktop
-GLX 4× MSAA / peel-then-bump stay matched.
+fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX
+corrugation AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking
+mip uses unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso /
+desktop GLX 4× MSAA / peel-then-bump stay matched. TLX flat-`mat` and
+geometric baked UVs were reverted — they blanked the garage car.
 
 SAA mixes geometric N with a uniform-CF peel hoist on all three backends
 (material/wall bump stays out of SAA). Every baked MAT layer (walls

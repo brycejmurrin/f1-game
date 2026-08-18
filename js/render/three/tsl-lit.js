@@ -55,7 +55,7 @@
 
   function lit(THREE, TSL, ctx) {
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
+      Fn, If, Loop, Break, uniform, uniformArray, attribute, texture, cubeTexture,
       float, int, vec2, vec3, vec4,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
@@ -637,7 +637,7 @@
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
-    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeo]) => {
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
@@ -645,10 +645,7 @@
         .and(matTexInPack(mid))
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
-      // Axis from the GEOMETRIC varying (GLX matTexUV uses vNrm), not the
-      // already-bumped N — a brick bump flipping the dominant axis rotates
-      // the scan 90° against the procedural grain.
-      const uv = matTexUV(mid, nGeo, wp).toVar();
+      const uv = matTexUV(mid, N, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
@@ -907,13 +904,11 @@
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
         const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
-        // Flat like GLX `flat out float vMat` — a smooth interpolate of
-        // brick(2)/glass(3) on a shared edge smears ids. FLAG wave stays
-        // on the per-vertex attribute (fract(aMat) is a VS weight).
-        const matFlat = varying(attribute("mat", "float"), "vMatFlat");
-        matFlat.setInterpolation(THREE.InterpolationSamplingType.FLAT,
-          THREE.InterpolationSamplingMode.FIRST);
-        const matA = float(matFlat).toVar();                         // vMat
+        // Smooth attribute, same as before the garage-blank regression.
+        // GLX is `flat out float vMat`; a TSL `varying().setInterpolation(FLAT)`
+        // compiled but the garage turntable drew nothing (software GL / three
+        // r185). FLAG wave still reads the per-vertex attribute in the VS.
+        const matA = float(attribute("mat", "float")).toVar();       // vMat
         // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
         // non-chunked mesh. Anchored here with the other varyings per the
         // standing rule, because roadMarkings() takes derivatives of it.
@@ -1020,7 +1015,7 @@
         // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nvary));
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard

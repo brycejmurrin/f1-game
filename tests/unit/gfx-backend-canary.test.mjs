@@ -1200,18 +1200,14 @@ test("WGX SAA widens roughness before wet like GLX", () => {
     "wet must recompute a after polishing, like GLX lit.js");
 });
 
-test("TLX FS mat is flat, baked UVs use Nvary, corrugation AA is hc*7.5", () => {
+test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)", () => {
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tsl, /varying\(attribute\("mat", "float"\), "vMatFlat"\)/,
-    "FS classification must be a flat varying, not a smooth attribute");
-  assert.match(tsl, /InterpolationSamplingType\.FLAT/,
-    "flat interpolation must be set (brick/glass shared edges smear otherwise)");
+  assert.match(tsl, /const matA = float\(attribute\("mat", "float"\)\)\.toVar\(\)/,
+    "FS must read attribute(mat) directly — varying()+FLAT made the garage car vanish");
+  assert.doesNotMatch(tsl, /InterpolationSamplingType\.FLAT/,
+    "do not setInterpolation(FLAT) on mat — three r185 compiled it and drew nothing");
   assert.match(tsl, /const matA = attribute\("mat", "float"\)/,
     "FLAG VS wave must keep the per-vertex attribute (fract(aMat) weight)");
-  assert.match(tsl, /matTexUV\(mid, nGeo, wp\)/,
-    "baked normal UVs must key off geometric N, not the bumped shading N");
-  assert.match(tsl, /applyMaterialTexNormal\(surfaceId, N, wp, vd, Nvary\)/,
-    "call site must pass Nvary as the UV axis");
   assert.match(tsl, /const ridgePhase0 = hc\.mul\(7\.5\)/,
     "corrugation fwidth must match GLX hc*7.5, not abs(hc)*5.5");
 });
@@ -1259,6 +1255,14 @@ test("Gfx seam lists instancing on all three backends", () => {
   const gfx = read("js/render/gfx.js");
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
     "gfx.js must not still say TLX exports instancing as undefined");
+});
+
+test("TLX garage (no proj) paints the canvas, not the HDR scene target", () => {
+  // Setup preview only sends viewProj. The HDR RT stayed black on software
+  // GL (viz=scene was empty) so the turntable vanished while GLX was fine.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(src, /if \(post && _postF\.proj\)/,
+    "post chain must require begin() proj — garage frames must not render into sceneRT");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
