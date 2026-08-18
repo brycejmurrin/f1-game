@@ -1,6 +1,6 @@
 # Testing reference
 
-113 root Playwright spec files (`tests/specs/*.spec.js`) + 119 `node --test` unit suites
+113 root Playwright spec files (`tests/specs/*.spec.js`) + 120 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -709,6 +709,7 @@ what it covers.
 | `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
 | `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
 | `understeer-cue.spec.js` | the front-axle saturation haptic: it fires when the front stops answering the steering, stays quiet under gentle input, below the 1.5 m/s floor and off-track, repeats no faster than its cooldown allows, tightens with saturation depth, and at the same DEPTH in the grip envelope responds identically at any PACE |
+| `brake-cue.test.mjs` | braking CUE math in `js/game/brake-cue.js`: slider 1 is OFF, urgency is 0 when the apex is already made, braking already done cuts the pulse, and the function returns 0..1 never a brake command |
 | `steer-migration.spec.js` | the `STEER_SCHEMA` store migration LADDER — v2's one-time `drivingHelp`/`raceLine` reset runs for a stale store; v3's RACE PACE regrid maps all ten old notches onto the 19-notch geometric grid and leaves a store that never set one alone; every step is a NO-OP at or above its own version (so a schema bump cannot re-apply an earlier step and discard a choice the player made after it), and no step touches `steerRate`/`steerSmooth` |
 | `gamepad.spec.js` | gamepad mapping — driving (steer/throttle/brake/boost/overtake/camera) and, once a menu is open, the UWP-parity menu-nav mapping (D-pad+stick→arrows with hold-repeat, A→click, B→Escape including the native-`<dialog>` `cancel`-event seam, triggers→PageUp/PageDown, bumpers→horizontal paging) with a regression guard that driving is unaffected |
 

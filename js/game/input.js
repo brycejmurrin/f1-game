@@ -38,7 +38,7 @@ const Input = (function () {
   let KEY_RAMP_IN = 6;        // steer units/s toward full lock
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
                               // is a request to stop, and should be answered)
-  // ADAPTIVE BUTTONS (Advanced → BUTTON INPUT). A 0..1 mix, not a switch:
+  // ADAPTIVE BUTTONS (STEERING & ASSISTS sheet; default mid). A 0..1 mix, not a switch:
   // 0 = the fixed rates above; 1 = the missing RATE half of SPEED STEER, for
   // digital sources only. The full curve is the same hyperbola as lockTaper
   // (`1 / (1 + vStd / STEER_SPEED_REF)`); the slider blends toward it so a

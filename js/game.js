@@ -7248,8 +7248,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
-  Input.poll();   // refresh gamepad state once per frame (before the paused gate
-                  // so the Start/Menu button can also un-pause)
+  Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.

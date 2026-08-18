@@ -20,14 +20,14 @@ Sections are unnumbered on purpose: numbering rots the moment one is inserted.
 | Decision | Status |
 |---|---|
 | **Never ship traction control or ABS** — no longitudinal slip model exists for either to act on | Settled. Reopening needs a slip model first, not a menu entry |
-| **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | Designed, not yet built |
+| **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | **CUE shipped** (2026-08-18). LIGHT/FULL takeover is still not built |
 | **The braking cue is a pulse RATE, not a pitch ramp**, with a player-set lookahead | Designed. Corrects my first instinct |
 | **A FULL braking level brakes for corners only**, never to avoid rear-ending | Designed |
 | **RACE PACE becomes geometric** — `pace(n) = 1.06^(n-14)`, 19 notches, 6.0 %/notch, default down to 0.84 | **Shipped.** Live boot 2026-08-18: `tuning().pace === 0.84` |
 | **Its readout must not be km/h** — `dashKph` divides pace out, so the dial reads ~259 km/h at every setting | Settled |
 | **Value-preserving migration is honest** — worst case **2.89 %**, under half a new notch | Verified by calculation, per-notch table in `PHASE-C-SLIDER-DESIGN.md`. Old 9 and old 10 both land on new 18: the one lossy pair, and it must be LOGGED rather than silent |
 | **Do not rename the racing-line assist** — already matches the industry's Off/Corners/Full | Settled |
-| **Speed-sensitive steering is two halves** — lock taper on SPEED STEER; rate half is Adaptive Buttons, default OFF, not the same knob | **Split-shipped.** Live probe 2026-08-18: rateIn stays 6.0 with Adaptive OFF at 72 dial; full mix drops it to 2.199 (432 ms to 95 %) |
+| **Speed-sensitive steering is two halves** — lock taper on SPEED STEER; rate half is Adaptive Buttons, default OFF, not the same knob | **Split-shipped; default now ON (notch 6)** so keys/arrows get the rate half without opening Advanced |
 | **SPEED STEER is inert at speed** — was a 1.9-point spread under `max(0.4, 1 − v/ref)` | **Fixed** (hyperbola, ref 15..75). Live 2026-08-18: lock kept @72 dial is 17.2 / 36.7 / 51.0 % (n1/n5/n10) = **33.8 points**. On-tarmac yawRate n10/n1 = **2.94×** |
 | **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 3.6; notches 6-10 run 2.97 → 1.90 m | **Shipped** 4.4 → 2.6 m. Live boot: `tuning().wheelbase === 3.6` |
 | **SMOOTHING should map linearly in LAG, not in Hz** — steps run 7.2 ms at one end to 132.6 ms at the other, and the top is 398 ms | **Shipped** 55 → 195 ms |
@@ -656,13 +656,10 @@ helps still off — presets-first still matches the industry table in
 
 ### What is still worth building (unchanged, now with live reasons)
 
-1. **Braking CUE** (pulse rate + lookahead). The ellipse already rewards
-   trail-braking; the miss on a touch device is *when*, not *whether* the
-   car can rotate.
-2. **Put the rate half where people look.** Either default Adaptive Buttons
-   to mid (notch 6, the old ON migration target) for digital steer, or fold
-   mix into SPEED STEER as the 2026-08 note specified. Leaving it at OFF in
-   Advanced hides the half of speed-sensitivity digital inputs actually need.
+1. **Braking CUE — shipped 2026-08-18** (`js/game/brake-cue.js`). Pulse rate
+   + lookahead slider (1 = OFF). LIGHT/FULL takeover is still not built.
+2. **Rate half on the simple sheet — shipped.** Adaptive Buttons defaults to
+   notch 6 and sits next to Racing Line, not inside Advanced.
 3. **Do not ship TC / ABS.** `slipFactor` under throttle is already ~1.0.
 4. **Do not raise ROAD_FOLLOW's default.** Hands-off with help on is a
    different driver.
