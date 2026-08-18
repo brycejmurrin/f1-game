@@ -1206,10 +1206,24 @@ const TLX = (function () {
 
       function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
-        if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
+        if (!m) {
+          m = new THREE.Mesh(geo, unlitMat);
+          m.matrixAutoUpdate = false;
+          m.matrixWorldAutoUpdate = false;
+          m.frustumCulled = false;
+          meshPool[poolUsed] = m;
+        }
         m.geometry = geo;
         m.material = material || fallbackMat();
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
+        // scene.matrixWorldAutoUpdate is false (see the Scene() block): three
+        // will not derive matrixWorld from matrix. Writing only `matrix`
+        // leaves every reused pool slot at the world transform it had when
+        // the slot was first born — identity, because those slots start as
+        // track. Race cars then render at the origin; the garage car is
+        // *at* the origin, which is why that path looked fine. Shadow
+        // casters already copy (tlx-shadow.js cast()); match that.
+        m.matrixWorld.copy(m.matrix);
         m.visible = true;
         poolUsed++;
         if (!m.parent) scene.add(m);

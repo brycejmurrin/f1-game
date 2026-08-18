@@ -758,6 +758,26 @@ test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
     "the hoisted array sample must clamp the layer, not pass raw mid");
 });
 
+test("TLX pooled meshes write matrixWorld — scene auto-update is off", () => {
+  // scene.matrixWorldAutoUpdate = false so renderer.render() does not walk
+  // the graph. The comment above that flag says every pooled mesh writes
+  // matrixWorld; the shadow caster pool does (tlx-shadow.js cast()). The
+  // visible acquireMesh pool used to write only `matrix`. Reused slots
+  // kept the identity world matrix they were born with (track), so race
+  // cars sat at the origin while the chase camera looked at Monza.
+  const tlx = TLX.replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = tlx.indexOf("function acquireMesh(");
+  assert.ok(at > 0, "acquireMesh is gone");
+  const body = tlx.slice(at, tlx.indexOf("function buildGeometry(", at));
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must stamp matrixWorld — scene auto-update will not");
+  assert.match(body, /matrixWorldAutoUpdate\s*=\s*false/,
+    "pool meshes must not let a later graph walk clobber the stamp");
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "shadow casters are the working reference for this stamp");
+});
+
 test("the SSR tag is not three's opacity socket — that is what made cars vanish", () => {
   // NodeMaterial.setupDiffuseColor does diffuseColor.a *= opacityNode.
   // NodeBuilder.isOpaque() is (transparent===false && blending===NormalBlending).
