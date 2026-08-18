@@ -249,16 +249,6 @@
         m.matrixAutoUpdate = false;
         m.frustumCulled = false;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        // Same dummy-buffer trap as createInstancedBatch: missing
-        // instanceColor binds 12 bytes at slot 5; DrawIndexed count>1
-        // fails validation and poisons the frame encoder (Lavapipe).
-        m.instanceColor = new THREE.InstancedBufferAttribute(
-          new Float32Array(batch.instances * 3), 3);
-        m.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        {
-          const ca = m.instanceColor.array;
-          for (let i = 0; i < ca.length; i++) ca[i] = 1;
-        }
         m.userData.tlxInstCap = batch.instances;
         // Do not set instanceColor. The lit batch already carries an
         // InstancedBufferAttribute `color` on the shared geometry; a second

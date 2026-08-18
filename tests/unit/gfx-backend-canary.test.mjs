@@ -766,7 +766,7 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\) && sky\.fallbackNode/,
+  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\(\)\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
@@ -842,19 +842,23 @@ test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opac
 test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
   // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
   // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
+  // Deploy's fix: an InstancedBufferAttribute named `color` on the geometry
+  // (`_instColorAttr`). Do NOT also set imesh.instanceColor — NodeMaterial
+  // multiplies that into colorNode and binds a second 12-byte dummy at slot 5.
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = src.indexOf("function createInstancedBatch");
   assert.notEqual(at, -1, "createInstancedBatch moved");
   const body = src.slice(at, at + 2200);
-  assert.match(body, /instanceColor\s*=\s*new THREE\.InstancedBufferAttribute/,
-    "instanceColor must be allocated for every batch, not only when colors[] is present");
-  assert.doesNotMatch(body, /if\s*\(\s*colors && colors\.length\s*\)\s*\{[\s\S]{0,200}instanceColor/,
-    "do not gate instanceColor allocation on colors[] — that is the WebGPU dummy-buffer trap");
-  const shadow = read("js/render/three/tlx-shadow.js");
+  assert.match(body, /_instColorAttr\(\s*imesh/,
+    "every batch must get an instanced color attribute, not only when colors[] is present");
+  assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
+    "do not also set imesh.instanceColor — that is the slot-5 dummy-buffer trap");
+  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const cast = shadow.indexOf("function castInstanced");
   assert.notEqual(cast, -1, "castInstanced moved");
-  assert.match(shadow.slice(cast, cast + 1800), /instanceColor\s*=\s*new THREE\.InstancedBufferAttribute/,
-    "shadow InstancedMesh must also allocate instanceColor — a 12-byte dummy poisons the whole frame encoder");
+  const castBody = shadow.slice(cast, cast + 1800);
+  assert.doesNotMatch(castBody, /m\.instanceColor\s*=/,
+    "shadow InstancedMesh must not set instanceColor — the lit geo already has instanced color");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
