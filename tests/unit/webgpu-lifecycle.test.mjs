@@ -1632,6 +1632,33 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
+test("shadow model UBO flushes once per pass (not per cast)", () => {
+  // Lit draws already batch via _flushDrawUBO. Shadow used to upload 16
+  // floats per castShadow* (sun + car + lamp). WebGPU Fundamentals:
+  // fill one typed array, one writeBuffer, dynamic offsets at setBindGroup.
+  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeShadowModel exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeShadowModel must only fill the CPU ring — no per-cast queue upload");
+  assert.match(WGX_SOURCE, /function _flushShadowModelUBO/,
+    "one flush must exist, matching the lit _flushDrawUBO shape");
+  assert.match(WGX_SOURCE, /shadowModelRing/,
+    "CPU ring must exist (SHADOW_SLOTS × 64 floats)");
+  for (const name of ["shadowEnd", "carShadowEnd", "lampShadowEnd"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 900);
+    assert.match(body, /_flushShadowModelUBO\(\)/, name + " must flush the shadow model ring");
+    const flushAt = body.indexOf("_flushShadowModelUBO()");
+    const submitAt = body.indexOf("queue.submit");
+    assert.ok(flushAt >= 0 && submitAt > flushAt, name + " must flush before submit");
+  }
+  const set = WGX_SOURCE.match(/function _shadowSetModel\([\s\S]*?\n    \}/);
+  assert.ok(set, "_shadowSetModel exists");
+  assert.doesNotMatch(set[0], /setBindGroup\([^)]*\[slot/,
+    "_shadowSetModel must not allocate a fresh offset array per cast");
+});
+
 test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
   // H then V (and times>1) into one uniform region before submit left every
   // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.

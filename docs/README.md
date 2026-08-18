@@ -84,7 +84,7 @@ sit in this table was indexed by nothing and moved to
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
 | [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey at tip 46554737. **Leftovers after 1421:** next row. |
-| [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. Still open: WGX shadow `writeBuffer` per cast. TLX count, content-hash, typed accumulators taken on deploy. |
+| [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX shadow `writeBuffer` per cast taken 2026-08-18. Optional leftover: defer `apex.js` / `agentview*` (PWA memory). |
 | [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). Five-server catalog includes `playwright` → `tools/playwright-mcp.sh`; HTTP `127.0.0.1:3713`. |
 
 The four workflows' verbatim per-agent output now lives together in

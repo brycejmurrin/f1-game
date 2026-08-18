@@ -243,6 +243,7 @@ const WGX = (function () {
   const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
+  const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
   // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
@@ -882,7 +883,12 @@ const WGX = (function () {
     let shadowUBO, shadowModelUBO, shadowG0Layout, shadowG1Layout, shadowModule,
         shadowPipeline, shadowG0BindGroup, shadowModelBindGroup;
     let _shadowRendered = false, _shadowLightVP = null;
-    const shadowLVPData = new Float32Array(16), shadowModelData = new Float32Array(16);
+    const shadowLVPData = new Float32Array(16);
+    // Per-slot CPU ring (stride = SHADOW_MODEL_STRIDE/4). Filled during the
+    // shadow pass; one writeBuffer in _flushShadowModelUBO() replaces N
+    // per-cast uploads. Same shape as drawRing / _flushDrawUBO.
+    const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
+    const _shadowDynOff = [0];   // reused dynamic-offset scratch (was a fresh [slot*stride] per cast)
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
@@ -4008,14 +4014,22 @@ const WGX = (function () {
     // the later lit pass that samples it. All current casters use MAT_IDENT, but
     // model is honoured via a dynamic-offset ring (one slot per castShadow* call).
     function _writeShadowModel(slot, model) {
-      shadowModelData.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, 0);
-      device.queue.writeBuffer(shadowModelUBO, slot * SHADOW_MODEL_STRIDE, shadowModelData, 0, 16);
+      const src = model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT;
+      shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
+    }
+    // One writeBuffer for every slot filled this pass — call before
+    // shadowPass.end(). writeBuffer is queue-ordered before submit, so
+    // draws recorded earlier still see the data (same rule as _flushDrawUBO).
+    function _flushShadowModelUBO() {
+      if (!shadowModelUBO || _shadowSlot <= 0) return;
+      device.queue.writeBuffer(shadowModelUBO, 0, shadowModelRing, 0, _shadowSlot * SHADOW_MODEL_F32_STRIDE);
     }
     function _shadowSetModel(model) {
       const slot = _shadowSlot++;
       if (slot >= SHADOW_SLOTS) return -1;
       _writeShadowModel(slot, model);
-      shadowPass.setBindGroup(1, shadowModelBindGroup, [slot * SHADOW_MODEL_STRIDE]);
+      _shadowDynOff[0] = slot * SHADOW_MODEL_STRIDE;
+      shadowPass.setBindGroup(1, shadowModelBindGroup, _shadowDynOff);
       return slot;
     }
     function shadowBegin(lightVP) {
@@ -4102,6 +4116,7 @@ const WGX = (function () {
     }
     function shadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
 
       // Run blocker map min-reduction pass (WebGL2 parity uBlockerMap)
@@ -4150,6 +4165,7 @@ const WGX = (function () {
     }
     function carShadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
@@ -4179,6 +4195,7 @@ const WGX = (function () {
     }
     function lampShadowEnd() {
       if (!shadowPass) return;
+      _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
       device.queue.submit([shadowEncoder.finish()]);
       shadowEncoder = null;
