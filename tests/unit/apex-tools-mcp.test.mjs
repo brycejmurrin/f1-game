@@ -531,6 +531,16 @@ test("apex_cache_bump_only live classify stays ok when the CLI exits 1", () => {
   assert.equal(typeof body.out?.pure, "boolean");
 });
 
+test("apex_verify_change_fast classifies --fast partial (exit 2) as ok", () => {
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.match(
+    src,
+    /name === "apex_verify_change_fast" \? new Set\(\[0, 2\]\)/,
+    "partial is the success outcome of --fast when browser groups remain",
+  );
+  assert.match(src, /name === "apex_cache_bump_only" \? new Set\(\[0, 1\]\)/);
+});
+
 test("apex_quick_validate port → port_not_supported", () => {
   const r = callCli("apex_quick_validate", { dryRun: true, port: 3477 });
   assert.equal(r.status, 1, r.stderr);

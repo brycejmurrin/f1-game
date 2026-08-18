@@ -25,7 +25,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.4.0";
+const SERVER_VERSION = "1.4.1";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -1397,7 +1397,12 @@ function dispatch(name, args = {}) {
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || allAudit || (name === "apex_aero_zone_turns" && args.all);
   const timeoutMs = longTree ? 180000 : 60000;
-  const allowExit = name === "apex_cache_bump_only" ? new Set([0, 1]) : null;
+  // Classified non-zero: cache-bump-only exit 1 = "not a pure bump";
+  // verify-change --fast exit 2 = verdict partial (fast phase passed,
+  // remaining browser groups are not-run — never treat that as a tool crash).
+  const allowExit = name === "apex_cache_bump_only" ? new Set([0, 1])
+    : name === "apex_verify_change_fast" ? new Set([0, 2])
+    : null;
   return runSpawn(argv, { timeoutMs, allowExit, env });
 }
 

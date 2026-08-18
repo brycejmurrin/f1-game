@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.4.0"
+    "version": "1.4.1"
   },
   "prefix": "apex_",
   "stdio": {

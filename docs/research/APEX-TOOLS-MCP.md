@@ -96,7 +96,7 @@ harness binds its own loopback port.
 | Tool | CLI | Pin |
 |---|---|---|
 | `apex_verify_track` | `verify-track.cjs <id>` or `--all` | VM only (`TRACK_VM`) |
-| `apex_verify_change_fast` | `verify-change.mjs --fast --json` | Never `--wait`. Live `--fast` can exceed ~30 s — MCP timeout ~90 s; CI uses mock/`dryRun` only. |
+| `apex_verify_change_fast` | `verify-change.mjs --fast --json` | Never `--wait`. Exit 2 (`verdict: partial`, fast phase passed, browser groups not-run) is `ok:true` + `exit:2`. Exit 1 (`fail`) stays `ok:false`. Live `--fast` can exceed ~30 s — MCP timeout 180 s; CI uses mock/`dryRun` only. |
 | `apex_wgx_validate_static` | `wgx-validate.mjs --static` | Source invariants; live Dawn is week-2 |
 | `apex_pick_tests` | `pick-tests.mjs --json` | **Never `--bg`** (that prints `test-bg` start lines) |
 | `apex_bump_cache_check` | `bump-cache.mjs --check --json` | Never `--apply` / `--at` / `--merge` |
