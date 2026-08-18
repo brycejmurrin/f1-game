@@ -516,7 +516,7 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(14) var envCubeSamp : sampler;            // 4× aniso, GLX env cube
 @group(1) @binding(0) var<uniform> D : DrawU;
 @group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
-// Reconstruct (mat, s, x, hw) from world XZ via the 64×64×16 centerline LUT
+// Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
 // uploaded by WGX._makeRoadLUT. Magic 12345 distinguishes a LUT from the
 // dummy / per-vertex attr buffer. Uniform 16-iteration loop — no data-
 // dependent break — so the caller may take dpdx of the result.

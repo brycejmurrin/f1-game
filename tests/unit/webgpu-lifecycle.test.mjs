@@ -909,8 +909,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
   assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
-  assert.match(WGX_SOURCE, /const GW = 64, GH = 64, SLOT = 16/);
-  assert.match(WGX_SOURCE, /const MAX_S = 8000/);
+  assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
+  assert.match(WGX_SOURCE, /const MAX_S = 2000/);
   assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
   assert.match(CHUNKS_SOURCE, /useWorldTrk = isRoadDraw && fromWorld\.w > 0\.5/);
   assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);

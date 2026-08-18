@@ -2309,7 +2309,7 @@ const WGX = (function () {
       });
       return { sbuf, attrBG };
     }
-    // World-XZ spatial LUT (64×64×16). Group-2 used to be a per-vertex
+    // World-XZ spatial LUT (32×32×16). Group-2 used to be a per-vertex
     // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
     // vertex attr zeros (and breaks pos) even on piece VBOs. Magic 12345
     // marks a LUT vs a dummy/attr buffer.
@@ -2337,16 +2337,14 @@ const WGX = (function () {
         return _makeAttrBG(null);
       }
       raw.sort((a, b) => a.s - b.s);
-      // Denser than 2000/32² — nearest-bin s/x was the warped paint. Cap
-      // still fits one storage buffer; cells keep 16 along-track samples.
-      const MAX_S = 8000;
+      const MAX_S = 2000;
       const step = Math.max(1, Math.ceil(raw.length / MAX_S));
       const samples = [];
       for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);
       const pad = 24;
       minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
       const extX = Math.max(maxX - minX, 1), extZ = Math.max(maxZ - minZ, 1);
-      const GW = 64, GH = 64, SLOT = 16;
+      const GW = 32, GH = 32, SLOT = 16;
       const cells = new Array(GW * GH);
       for (let i = 0; i < cells.length; i++) cells[i] = [];
       const bin = (s, gx, gz) => {
