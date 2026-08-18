@@ -845,6 +845,7 @@ const GLXPost = (function () {
     }
 
     postEnabled = setup();   // best-effort; false -> render straight to screen
+    Log.info("gfx", "GLX post init on=" + (postEnabled ? 1 : 0));
 
     return {
       enabled: () => postEnabled,

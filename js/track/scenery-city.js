@@ -25,6 +25,7 @@ const SceneryCity = (function () {
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd, kitOf,
             anchor, along, massBlocked, massAdd } = ctx;
+    Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
     // neonFacade(): the shared, DETAILED night facade for both building kinds —

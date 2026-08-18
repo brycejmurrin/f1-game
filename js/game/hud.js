@@ -13,6 +13,7 @@ const { IDLE_RPM, MAX_RPM } = GameTables;
 const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 function create(G) {
+Log.info("ui", "GameHud.create");
 
 const els = G.els;
 const mm = els.minimap.getContext("2d");

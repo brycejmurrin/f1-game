@@ -13,6 +13,7 @@ const Menus = (function () {
   "use strict";
 
 function create(G) {
+Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
 const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
 
@@ -67,6 +68,7 @@ function setTeamPicker(open, host) {
   // Build on open, not on every buildSelect(). The tiles used to be filled in
   // by buildSelect alone, so opening the sheet from the garage straight off the
   // title screen — where buildSelect has never run — showed an empty sheet.
+  Log.info("ui", "Menus.setTeamPicker " + (open ? "open" : "close"));
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
   if (open) ScrollFadeRefresh();
@@ -600,6 +602,7 @@ function openTrackDetail() {
 
   // Crossfade into the full-screen circuit-detail modal (progressive
   // enhancement; the content above is already populated while hidden).
+  Log.info("ui", "Menus.open track-detail");
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
   const wrap = document.getElementById("track-detail-canvas-wrap");

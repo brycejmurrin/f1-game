@@ -216,9 +216,11 @@ const GameAudio = (function () {
     // init is only ever called from a user gesture
     if (ctx) {
       resumeIfNeeded(true);
+      Log.info("audio", "GameAudio.init state=" + (ctx && ctx.state));
       return;
     }
     if (!createCtx()) return;
+    Log.info("audio", "GameAudio.init state=" + (ctx && ctx.state));
 
     if (!listenersAttached) {
       listenersAttached = true;
@@ -260,6 +262,7 @@ const GameAudio = (function () {
       p.then(() => {
         rebuildTries = 0;
         lastFailedResume = 0;
+        Log.info("audio", "GameAudio.resume state=" + (ctx && ctx.state));
       }).catch((err) => {
         // A refused resume is THE cause of "there is no sound at all", and it
         // used to leave no record of any kind.

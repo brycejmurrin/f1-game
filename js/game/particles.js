@@ -35,6 +35,7 @@ let _vertB = null;          // additive group (sparks)
 const _CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 
 function init(gfx) {
+  Log.info("game", "Particles.init");
   _gfx = gfx;
   // Tight pool on the mobile memory tier: fewer live quads, same behaviour.
   MAX = gfx && gfx.mobileTier ? 96 : 256;

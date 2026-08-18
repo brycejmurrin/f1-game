@@ -33,8 +33,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // netplay.js closes over NetSnapshot and NetSession as globals, so they have to
 // exist by the time create() runs. Loading the real ones (rather than stubbing)

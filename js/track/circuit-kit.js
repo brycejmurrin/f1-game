@@ -62,6 +62,7 @@ const CircuitKit = (function () {
   }
 
   function create(dependencies) {
+    Log.info("track", "circuit-kit create");
     const deps = dependencies || {};
     const models = deps.models || {};
     const landmarks = deps.landmarks || {};

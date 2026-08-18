@@ -226,6 +226,7 @@ window.MusicLib = (function () {
 
   function init() {
     if (readyPromise) return readyPromise;
+    Log.info("audio", "MusicLib.init");
     readyPromise = readAll().then((recs) => {
       recs.sort((a, b) => (a.added || 0) - (b.added || 0));
       const entries = [];
@@ -235,7 +236,10 @@ window.MusicLib = (function () {
       });
       if (entries.length) call("addTracks", entries);
       render();
-    }).catch(() => { usable = false; cache = []; readyPromise = null; render(); });
+    }).catch((e) => {
+      usable = false; cache = []; readyPromise = null; render();
+      Log.warn("audio", "MusicLib.init failed: " + ((e && e.message) || e));
+    });
     // A run that found no usable store is not a result worth remembering
     // either — the next add() should get a fresh attempt.
     readyPromise = readyPromise.then((v) => { if (!usable) readyPromise = null; return v; });

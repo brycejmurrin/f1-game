@@ -578,6 +578,7 @@ const WGX = (function () {
       }
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
+      try { Log.info("gfx", "WGX soft-present on"); } catch (_) { /* harness */ }
     }
     function _wgxEscalate(why) {
       if (_outProbeOff) {
@@ -3329,7 +3330,10 @@ const WGX = (function () {
       }
 
       } catch (postE) {
-        try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+        if (_postReady) {
+          try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+          _postReady = false;
+        }
         _tonemapBlit(exposure);
       }
 
@@ -4230,6 +4234,7 @@ const WGX = (function () {
 
     const noop = function () {};
     _runtimeReady = true;
+    try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
 
     return {
       // ── Lifecycle / capability ──

@@ -37,8 +37,10 @@ window.TopModal = (function () {
     // on a closed one is a no-op — so both directions are guarded.
     if (wantOpen && !el.open) {
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
+      try { Log.info("ui", "TopModal open #" + (el.id || "?")); } catch (_) { /* Log absent */ }
     } else if (!wantOpen && el.open) {
       try { el.close(); } catch (_) {}
+      try { Log.info("ui", "TopModal close #" + (el.id || "?")); } catch (_) { /* Log absent */ }
     }
   }
 
@@ -152,6 +154,7 @@ window.TopModal = (function () {
   }
 
   function init() {
+    Log.info("ui", "TopModal.init");
     scan();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);

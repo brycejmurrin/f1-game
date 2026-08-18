@@ -1919,6 +1919,7 @@ const TLX = (function () {
       try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
       try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
       _lastFailure = null;
+      try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)

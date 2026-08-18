@@ -3562,8 +3562,8 @@ function resolveCollisions(ranked, dt) {
   const useBuckets = ranked.length > 12;
   let nB = 0;
   if (useBuckets) nB = _colFillBuckets(ranked);
-  else if (Log.enabled("phys", "debug")) {
-    Log.debug("phys", "resolveCollisions all-pairs n=" + ranked.length);
+  else if (Log.enabled("game", Log.DEBUG)) {
+    Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
   }
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;

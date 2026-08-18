@@ -384,6 +384,7 @@
       S.lampArmed = false;
     }
 
+    try { Log.info("gfx", "TLX shadow init"); } catch (_) { /* harness */ }
     return {
       S,
       sunSize: SUN_SIZE,

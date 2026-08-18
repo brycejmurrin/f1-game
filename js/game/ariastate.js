@@ -110,6 +110,7 @@ window.AriaState = (function () {
   };
 
   function init() {
+    Log.info("game", "AriaState.init");
     const obs = new MutationObserver((records) => {
       for (const r of records) {
         // Only a class flip or a new subtree can change a group's state; the

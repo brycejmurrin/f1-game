@@ -31,6 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
 
@@ -79,6 +80,7 @@ function loadChunked(gl) {
   const code = fs.readFileSync(SRC, "utf8");
   const ctx = { console };
   vm.createContext(ctx);
+  seedLog(ctx);
   vm.runInContext(code + "\n;globalThis.__GLXChunked = GLXChunked;", ctx);
   return ctx.__GLXChunked.init({
     gl,

@@ -6,6 +6,7 @@ const SettingsNav = (function () {
   const IDS = ["controls", "display", "performance", "more"];
 
   function create(store, onSelect) {
+    Log.info("game", "SettingsNav.create");
     let current = store.get("settingsCategory", "controls");
     if (!IDS.includes(current)) current = "controls";
 
@@ -30,6 +31,7 @@ const SettingsNav = (function () {
         panel.hidden = !on;
       });
       store.set("settingsCategory", id);
+      Log.info("game", "SettingsNav.show " + id);
       if (focus) document.getElementById("pm-tab-" + id).focus();
       const body = document.getElementById("pm-category-tabs").parentElement;
       if (body) body.scrollTop = 0;
