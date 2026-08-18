@@ -74,7 +74,10 @@ became a `_LO`/`_HI` pair interpolated by it. AI cars now carry their works
 has no resolved setup falls back to 0.5 via `aeroLoadOf`. `AiDrive.houseStyle`
 reads `team.stats` (career `tdev` via `Career.teamStats` baked as `c.houseStats`),
 then seat 0 attacks / seat 1 holds; `ordersMul` stops #2 diving #1 and lets #1
-through. Measured end to end:
+through. AI corner `vLim` now scales with that same `aeroLoad` (±8 % at the
+catalog ends); harvest/overcharge maps shift `wantBoost`; hold cars mix less
+racing line and may keep Z-mode. Player `mods.braking` now reaches `axEstTarget`
+so garage brakes spend the friction ellipse. Measured end to end:
 
 | aero part | load | top speed | downforce given up | net grip at 70 m/s |
 |---|---|---|---|---|

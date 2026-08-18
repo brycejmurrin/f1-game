@@ -363,6 +363,41 @@ test("consistency widens the brake band without moving the mid default", () => {
   assert.ok(aceDec.brakeLvl > midDec.brakeLvl, "ace commits sooner");
 });
 
+test("factory wing and hold change the AI corner limit; midpoint stays put", () => {
+  const samples = [{ d: 40, k: 0.02, bank: 0 }];
+  const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
+  const midLim = A.brakeTarget(base);
+  assert.equal(A.brakeTarget({ ...base, aeroLoad: 0.5 }), midLim);
+  assert.ok(A.brakeTarget({ ...base, aeroLoad: 1 }) > midLim, "ground-effect carries more");
+  assert.ok(A.brakeTarget({ ...base, aeroLoad: 0 }) < midLim, "low-drag brakes earlier");
+  const holdTeam = { stats: { speed: 80, accel: 80, cornering: 96, braking: 94 } };
+  assert.ok(A.brakeTarget({ ...base, team: holdTeam }) < midLim, "hold cars brake earlier");
+});
+
+test("ERS map and wantX: harvest banks, attack opens X", () => {
+  const bankish = {
+    traits: ace, energy: 0.3, kAhead60: 0.001, otActive: false, towCar: false, chaser: false,
+  };
+  const fringe = { ...bankish, energy: 0.51 };
+  assert.equal(A.wantBoost(bankish), false);
+  assert.equal(A.wantBoost(fringe), false, "midpoint still banks at 0.51");
+  assert.equal(A.wantBoost({ ...fringe, ersDeploy: 1 }), true, "overcharge spends at 0.51");
+  assert.equal(A.wantBoost({ ...bankish, ersRegen: 1 }), false, "harvest still banks");
+  assert.equal(A.wantX({}), true);
+  assert.equal(A.wantX({ armed: false }), false);
+  assert.equal(A.wantX({ energy: 0.12 }), false);
+  assert.equal(A.wantX({ energy: 0.12, catching: true }), true);
+  const att = { stats: { speed: 96, accel: 96, cornering: 80, braking: 80 } };
+  assert.equal(A.wantX({ energy: 0.18, team: att }), true);
+});
+
+test("hold cars mix less racing line; omitted hold keeps the street/permanent defaults", () => {
+  assert.equal(A.racingLineMix(false), 0.55);
+  assert.equal(A.racingLineMix(true), 0.32);
+  assert.ok(A.racingLineMix(false, 0.6) < 0.55);
+  assert.ok(A.racingLineMix(true, 0.6) < 0.32);
+});
+
 test("adaptLane on streets will not crawl toward a tight wall", () => {
   const tight = A.adaptLane(0, {
     traits: mid, nearby: 4, roomL: 0.4, roomR: 1.5, baseLane: 0, street: true,
