@@ -12,6 +12,10 @@ outranks the file until RESET.
 
 Live knob work without a paste → **lighting-tuner**.
 
+Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
+`node .claude/skills/bake-lighting/merge-proposals.mjs` (validates + merges;
+does not bump cache). Never let a subagent write `light-presets.js`.
+
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 
 **Never hand `bake.mjs` a partial object.** It replaces the entire
