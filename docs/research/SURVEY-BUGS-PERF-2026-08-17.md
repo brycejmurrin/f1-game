@@ -1,5 +1,14 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
+**Status (2026-08-18):** Re-checked against cache 1388. Most of the priority
+board's *perf* items have shipped (WGX blur/particle overwrite, draw-UBO flush,
+god-ray top-6, GLX env-probe frustum, `antialias: false`, envCull terrain,
+lazy LIST points, Δprog reject, arc-bucket). Do not treat this file as the
+live leftover list — use
+[PERF-HUNT-2026-08-18.md](PERF-HUNT-2026-08-18.md) and
+[PERF-FINDINGS.md](../PERF-FINDINGS.md) §3 (2026-08-18). Pine unit-Y reuse
+stays **reverted**.
+
 **Status (2026-08-17 deferred pass):** Remaining survey items landed on
 `cursor/survey-deferred-tests-8ee4` — collision arc-bucket broadphase, marble
 cap/rest/far trim, WGX draw-UBO flush (already on tip) + god-ray top-6 partial

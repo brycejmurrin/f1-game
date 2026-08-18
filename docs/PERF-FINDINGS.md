@@ -1034,6 +1034,39 @@ order per round, and report the MINIMUM as well as the median — the fastest a
 run has actually gone is the least contaminated estimate, which is the same
 argument `PerfGov._floorMs` already makes about frame intervals.
 
+### Added 2026-08-18 — hunt after the 08-17 board shipped
+
+Re-walked the 08-17 survey against cache **1388** with TinyFish + Context7 +
+countable Node hooks (`chunk-reach.cjs`, `verify-track.cjs` `buildContext` →
+`track.graph.stats()` / `batches()`). Physics profile was **not** re-run:
+`apex_status` showed host Playwright MCP occupying the box. Full board, do-not-
+re-fix list, and ranked leftovers:
+[research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md).
+
+Boot wall **recount (this commit):** **154** `src=` tags, **5,894,854 B**
+(5.89 MB). `js/circuits` **1,729,972 B / 29.3 %**; `js/game` **2,097,776 B /
+35.6 %**. `apex.js` + `agentview*` is still **349,677 B** of eager
+dev/test surface. Circuit IIFE parse is still cheap; `tracks.js` LIST `points`
+is already a lazy getter (the 24 ms all-40 Catmull-Rom boot cost is **taken**).
+
+God-ray top-6, lamp heap, draw-UBO one-flush, blur dynamic offsets, particle
+ping-pong, envCull+terrain chunk, Δprog pre-reject, arc-bucket, GLX
+`bufferSubData` grow-once, and lazy LIST points are **taken**. Do not re-open
+them from the 08-17 board.
+
+The leftovers that still count work (not SwiftShader ms):
+
+1. **WGX shadow model `writeBuffer` per cast** — lit path already uses a CPU
+   ring + one `_flushDrawUBO`; `_writeShadowModel` still uploads every
+   `castShadow*` slot. Fundamentals: one `writeBuffer` for the ring beats N.
+2. **TLX shadow ignores the light-frustum `count`** — `game.js`
+   `_castPropBatchesShadow` passes `cullInstances(batch, planes)`; TLX
+   `castShadowInstanced(batch)` drops the second arg and copies the **full**
+   `srcMatrices` set. Vegas graph: **78,951** instances / 30 batches.
+3. **Per-file content hash** instead of a global `?v=N` (convention; throws
+   away V8 code cache on every CSS edit). Prep: `readyState !== "complete"`
+   before any `defer` experiment.
+
 ## 4. Recorded negative results
 
 Do not re-investigate these; they were checked and are fine.
