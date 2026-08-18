@@ -269,12 +269,20 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   assert.match(htp, /drag on the track/);
   assert.match(htp, /a tap does not steer/);
   assert.match(htp, /deny switches to BUTTONS/);
-  assert.match(htp, /GEARS: MANUAL<\/span> only works here/);
+  assert.match(htp, /GEARS: MANUAL<\/span> \(tilt only/);
+  assert.match(htp, /shifter left and the pedals right/);
   assert.match(htp, /triggers are analog/);
   assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
   const game = read("js/game.js");
   assert.match(game, /autoThrottle\(\) \? 1 : Math\.max\(0, Input\.throttleLevel\(\)\)/,
     "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
+  assert.match(game, /steerMode === "tilt" \|\| !Input\.touchControlsNeeded\(\)/,
+    "phone MANUAL gears stay tilt-only — BUTTONS already owns both thumbs");
+  assert.match(game, /L\.push\(shifts, taps\); R\.push\(pedals\)/,
+    "tilt+manual puts the shifter left and the pedals right");
+  const nav = read("js/game/menunav.js");
+  assert.match(nav, /return n \? list\[\(\(j % n\) \+ n\) % n\] : null/,
+    "menu arrows wrap in every direction so a pad press is never a no-op");
 });
 
 test("How to Play exposes pinned semantic jump landmarks", () => {

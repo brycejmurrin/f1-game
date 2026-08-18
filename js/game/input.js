@@ -900,20 +900,23 @@ const Input = (function () {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   }
 
-  // D-pad OR the left stick, past the same dead zone steering uses. Only one
+  // D-pad OR either stick, past the same dead zone steering uses. Only one
   // direction at a time — whichever axis (or digital pair) is further past
   // the zone wins ties toward vertical, an arbitrary but consistent choice.
+  // Right stick is a fallback so a player who reaches for it still moves.
   function padNavDirOf(pad) {
     if (btnDown(pad, 12)) return "up";
     if (btnDown(pad, 13)) return "down";
     if (btnDown(pad, 14)) return "left";
     if (btnDown(pad, 15)) return "right";
-    const ax = (pad.axes && pad.axes.length > 0) ? pad.axes[0] : 0;
-    const ay = (pad.axes && pad.axes.length > 1) ? pad.axes[1] : 0;
-    const mx = Math.abs(ax) >= PAD_DEADZONE ? Math.abs(ax) : 0;
-    const my = Math.abs(ay) >= PAD_DEADZONE ? Math.abs(ay) : 0;
-    if (!mx && !my) return null;
-    return my >= mx ? (ay < 0 ? "up" : "down") : (ax < 0 ? "left" : "right");
+    const ax = pad.axes || [];
+    const stick = (x, y) => {
+      const mx = Math.abs(x) >= PAD_DEADZONE ? Math.abs(x) : 0;
+      const my = Math.abs(y) >= PAD_DEADZONE ? Math.abs(y) : 0;
+      if (!mx && !my) return null;
+      return my >= mx ? (y < 0 ? "up" : "down") : (x < 0 ? "left" : "right");
+    };
+    return stick(ax[0] || 0, ax[1] || 0) || stick(ax[2] || 0, ax[3] || 0);
   }
 
   // A → activate. Synthetic events do NOT get a browser's native "Enter/Space

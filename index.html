@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1424">
+<meta name="apex-build" content="1425">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -1154,12 +1154,12 @@
       <dd>
         Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
         <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
-        <br>Menus: stick / D-pad move, <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
+        <br>Menus: either stick / D-pad move in every direction, <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
       </dd>
       <dt>TOUCH / MOBILE</dt>
       <dd>
         Pause &rarr; <span class="key">SETTINGS</span> &rarr; <span class="key">STEER</span> cycles TILT / BUTTONS / TOUCH.
-        <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS. On a phone, <span class="key">GEARS: MANUAL</span> only works here.
+        <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. <span class="key">GEARS: MANUAL</span> (tilt only — BUTTONS already uses both thumbs) puts the shifter left and the pedals right. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS.
         <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> in ADVANCED (1 is OFF) makes that heavier at speed.
         <br><span class="key">TOUCH</span> &mdash; drag on the track from where you put your finger (a tap does not steer). The car accelerates on its own; <span class="key">BRAKE</span> stays left. No GAS pedal
       </dd>
@@ -1749,7 +1749,7 @@
 <script crossorigin="anonymous" src="js/track/tracks.js?v=98bee03ac52a"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=f2e4a159a971"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=e7f55b9a1b43"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=38884d134c60"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=8967c3f301a3"></script>
 <script crossorigin="anonymous" src="js/game/audio.js?v=0dbf0fd9ae15"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=9f17baa46dab"></script>
@@ -1790,7 +1790,7 @@
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=e7668ee033b3"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=eaf9b3f6f824"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=fecbf726a858"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
@@ -1825,5 +1825,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=882c01f7c69d"></script>
+<script crossorigin="anonymous" src="js/game.js?v=f5c261f5f6d9"></script>
 </body></html>
