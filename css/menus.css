@@ -15,77 +15,6 @@
   overflow: visible;
 }
 
-/* ---------- visual identities ----------
-   Each menu gets a different material language while sharing the same semantic
-   controls. These overrides intentionally live at the end of the component
-   layer so the state-specific art direction is easy to tune in one place. */
-
-/* HOME: black-label launch card with a hot red editorial accent. */
-#overlay {
-  background:
-    linear-gradient(115deg, rgba(255,255,255,.025) 0 1px, transparent 1px 48px),
-    radial-gradient(80% 70% at 15% 15%, rgba(225,6,0,.24), transparent 58%),
-    linear-gradient(135deg, #09090c 0%, #151116 48%, #07080b 100%);
-}
-#overlay::before {
-  content: "// 26.01 / NIGHT GRID";
-  position: fixed; top: 28px; left: 32px;
-  color: rgba(255,255,255,.38); font: 700 10px/1 ui-monospace, SFMono-Regular, monospace;
-  letter-spacing: .18em;
-}
-#menu-brand {
-  border: 0; border-left: 4px solid #e10600; border-radius: 0;
-  background: rgba(12,12,16,.64); box-shadow: 18px 18px 0 rgba(225,6,0,.08);
-  backdrop-filter: blur(16px);
-}
-#title { letter-spacing: .12em; text-transform: uppercase; }
-#subtitle { font-family: ui-monospace, SFMono-Regular, monospace; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
-#menu-hero { background: linear-gradient(100deg, #e10600, #9d0500); border: 0; border-radius: 2px; box-shadow: 10px 10px 0 rgba(0,0,0,.32); }
-#menu-hero .bigbtn { background: transparent; border: 0; box-shadow: none; text-align: left; justify-content: flex-start; }
-#menu-primary { background: transparent; border: 0; padding: 0; }
-#menu-primary .bigbtn { background: rgba(255,255,255,.075); border: 1px solid rgba(255,255,255,.16); border-radius: 2px; }
-#menu-secondary { background: transparent; border: 0; padding: 0; }
-#menu-secondary .bigbtn { border-radius: 999px; border-color: rgba(255,255,255,.16); }
-
-/* PAUSE: cockpit status panel, with amber operational controls. */
-#pausemenu { background: rgba(7,10,12,.78); }
-#pausemenu .sheet { border: 1px solid rgba(242,174,72,.42); border-top: 4px solid #f2ae48; background: linear-gradient(145deg,#111719,#0a0d0e); box-shadow: 20px 20px 0 rgba(0,0,0,.24); }
-#pausemenu .sheet-head { background: rgba(242,174,72,.08); }
-#pausemenu .sheet-head h2 { color: #f2ae48; letter-spacing: .18em; }
-#pausemenu .sheet-body button { border-radius: 3px; border-color: rgba(242,174,72,.22); background: rgba(255,255,255,.045); }
-#pausemenu .sheet-body button:first-child { background: #f2ae48; color: #15100a; border-color: #f2ae48; }
-
-/* SETTINGS: cool instrument console, deliberately unlike the warm pause state. */
-#pmsettings { background: rgba(5,12,22,.82); }
-#pmsettings .sheet { border: 1px solid rgba(73,184,255,.36); background: linear-gradient(145deg,#0a1623,#081018); }
-#pmsettings .sheet-head { border-bottom-color: rgba(73,184,255,.18); }
-#pmsettings .sheet-head h2 { color: #72c9ff; letter-spacing: .2em; }
-#pm-category-tabs { gap: 6px; padding: 6px; background: rgba(73,184,255,.07); border: 1px solid rgba(73,184,255,.18); }
-#pm-category-tabs button { border: 0; border-radius: 2px; color: rgba(210,236,255,.62); background: transparent; }
-#pm-category-tabs button.active { color: #07111c; background: #72c9ff; }
-#pmsettings .pm-group { border-left: 2px solid #72c9ff; padding-left: 14px; }
-#pmsettings .pm-group-h { color: #72c9ff; font: 700 11px/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: .16em; }
-#pmsettings .pm-group button, #pmsettings .tune-row { border-color: rgba(114,201,255,.2); background: rgba(114,201,255,.045); }
-
-/* SELECT: bright race-engineering board, using white panels and green telemetry. */
-#select { background: linear-gradient(135deg,rgba(222,231,227,.9),rgba(167,185,180,.9)); }
-#select .sheet { color: #14221f; background: #e9f0ed; border: 0; box-shadow: 16px 16px 0 rgba(24,53,48,.18); }
-#select .sheet-head { background: #14221f; color: #eff8f3; }
-#select .sheet-head h2 { color: #eff8f3; letter-spacing: .14em; }
-#select .pair-side, #select .pair-main { background: rgba(255,255,255,.62); border: 1px solid rgba(20,34,31,.13); }
-#select .sel-label { color: #1a8b63; letter-spacing: .15em; }
-#select .bigbtn:not(.alt) { background: #1a8b63; border-color: #1a8b63; }
-#select .bigbtn.alt { color: #14221f; border-color: rgba(20,34,31,.25); background: transparent; }
-
-/* CAREER: paper-planner season desk, warmer and more human than SELECT. */
-#career { background: rgba(39,29,20,.72); }
-#career .sheet { color: #30261d; background: #f1e6d1; border: 1px solid #c5a77c; box-shadow: 14px 14px 0 rgba(36,24,14,.2); }
-#career .sheet-head { background: #d8b77f; border-bottom: 1px dashed #96744b; }
-#career .sheet-head h2, #career .sel-label, #career h3 { color: #30261d; }
-#career .pane { background: rgba(255,250,239,.52); border-color: rgba(91,62,29,.2); }
-#career .bigbtn:not(.alt) { background: #b84b2e; border-color: #b84b2e; }
-#career .bigbtn.alt { color: #604429; border-color: #a88458; background: transparent; }
-
 /* ---------- main menu ---------- */
 /* UI SCALE reaches the title screen through its CHILDREN, not through #overlay
    itself: this element carries the safe-area padding (below), and zooming that
@@ -102,7 +31,7 @@
   /* The brand block and the button column are two SEPARATE things; 2px between
      them read as one run-on block, which is why the disclaimer looked like a
      caption on the CAREER button rather than the last line of the small print. */
-  gap: clamp(18px, 3.8vh, 36px);
+  gap: clamp(20px, 4vh, 40px);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   /* CENTRED UNTIL IT DOES NOT FIT, then top-aligned and scrollable.
      `align-content: center` in a grid that overflows pushes content past BOTH
@@ -170,26 +99,13 @@
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
-#menu-hero {
-  display: grid;
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background:
-    linear-gradient(180deg, rgba(232, 0, 45, 0.08), rgba(232, 0, 45, 0.02)),
-    rgba(0, 0, 0, 0.16);
-  border: 1px solid rgba(232, 0, 45, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
+#menu-hero { display: grid; }
 /* Four modes normally settle into 2x2, but the row is content-driven: feature
    availability can hide/add an action without leaving a half-empty grid cell. */
 #menu-primary {
   --balance-basis: 45%;
   --balance-min: 40%;
   gap: calc(var(--gap) * 0.7);
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background: rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -228,12 +144,6 @@
    fill its final line without a state-specific selector. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
 #menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
-#menu-secondary {
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -245,41 +155,15 @@
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
-#menu-brand {
-  align-items: center;
-  gap: 12px;
-  padding: clamp(18px, 2.2vw, 28px) clamp(20px, 2.6vw, 30px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: calc(var(--r-lg) + 10px);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
-    rgba(0, 0, 0, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 60px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(10px);
-}
+#menu-brand { align-items: center; }
 /* The small print is ONE step below the wordmark — near enough to belong to it,
    far enough not to read as a third title line. The step is a stated margin
    rather than whatever the audio line happened to reserve: #audiostate is empty
    until tilt is granted (or denied), and its `min-height: 16px` used to hold a
    phantom band open between the subtitle and the disclaimer, which is what left
    the disclaimer floating in the middle of nothing on a desktop. */
-#menu-meta {
-  margin-top: 16px;
-  gap: 6px;
-  width: 100%;
-  align-items: center;
-}
-#audiostate {
-  color: var(--dim);
-  font-size: var(--fs-micro);
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+#menu-meta { margin-top: 16px; gap: 6px; }
+#audiostate { color: var(--dim); font-size: var(--fs-micro); }
 #audiostate:empty { display: none; }
 /* NO `align-self` HERE — the chip must follow #menu-meta's own alignment, which
    is `center` in portrait and `flex-start` in landscape. Pinning it to
@@ -290,7 +174,7 @@
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
 #soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
-#disclaimer { color: var(--dim); font-size: var(--fs-micro); margin: 0; text-align: center; flex-basis: 100%; }
+#disclaimer { color: var(--dim); font-size: var(--fs-micro); margin: 0; }
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
 .build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
@@ -1510,50 +1394,240 @@ body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
 body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 
-/* ---------- visual identities (final state overrides) ---------- */
+/* ---------- menu redesign: original red / charcoal identity ---------- */
 #overlay {
   background:
-    linear-gradient(115deg, rgba(255,255,255,.025) 0 1px, transparent 1px 48px),
-    radial-gradient(80% 70% at 15% 15%, rgba(225,6,0,.24), transparent 58%),
-    linear-gradient(135deg, #09090c 0%, #151116 48%, #07080b 100%);
+    radial-gradient(70% 90% at 12% 12%, rgba(225, 6, 0, 0.22), transparent 58%),
+    linear-gradient(135deg, #07080b 0%, #121318 55%, #08090c 100%);
 }
-#overlay::before { content: "// 26.01 / NIGHT GRID"; position: fixed; top: 28px; left: 32px; color: rgba(255,255,255,.38); font: 700 10px/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: .18em; }
-#menu-brand { border: 0; border-left: 4px solid #e10600; border-radius: 0; background: rgba(12,12,16,.64); box-shadow: 18px 18px 0 rgba(225,6,0,.08); backdrop-filter: blur(16px); }
-#title { letter-spacing: .12em; text-transform: uppercase; }
-#subtitle { font-family: ui-monospace, SFMono-Regular, monospace; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
-#menu-hero { background: linear-gradient(100deg, #e10600, #9d0500); border: 0; border-radius: 2px; box-shadow: 10px 10px 0 rgba(0,0,0,.32); }
-#menu-hero .bigbtn { background: transparent; border: 0; box-shadow: none; text-align: left; justify-content: flex-start; }
-#menu-primary, #menu-secondary { background: transparent; border: 0; padding: 0; }
-#menu-primary .bigbtn { background: rgba(255,255,255,.075); border: 1px solid rgba(255,255,255,.16); border-radius: 2px; }
-#menu-secondary .bigbtn { border-radius: 999px; border-color: rgba(255,255,255,.16); }
-#pausemenu { background: rgba(7,10,12,.78); }
-#pausemenu .sheet { border: 1px solid rgba(242,174,72,.42); border-top: 4px solid #f2ae48; background: linear-gradient(145deg,#111719,#0a0d0e); box-shadow: 20px 20px 0 rgba(0,0,0,.24); }
-#pausemenu .sheet-head { background: rgba(242,174,72,.08); }
-#pausemenu .sheet-head h2 { color: #f2ae48; letter-spacing: .18em; }
-#pausemenu .sheet-body button { border-radius: 3px; border-color: rgba(242,174,72,.22); background: rgba(255,255,255,.045); }
-#pausemenu .sheet-body button:first-child { background: #f2ae48; color: #15100a; border-color: #f2ae48; }
-#pmsettings { background: rgba(5,12,22,.82); }
-#pmsettings .sheet { border: 1px solid rgba(73,184,255,.36); background: linear-gradient(145deg,#0a1623,#081018); }
-#pmsettings .sheet-head h2 { color: #72c9ff; letter-spacing: .2em; }
-#pm-category-tabs { gap: 6px; padding: 6px; background: rgba(73,184,255,.07); border: 1px solid rgba(73,184,255,.18); }
-#pm-category-tabs button { border: 0; border-radius: 2px; color: rgba(210,236,255,.62); background: transparent; }
-#pm-category-tabs button.active { color: #07111c; background: #72c9ff; }
-#pmsettings .pm-group { border-left: 2px solid #72c9ff; padding-left: 14px; }
-#pmsettings .pm-group-h { color: #72c9ff; font: 700 11px/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: .16em; }
-#pmsettings .pm-group button, #pmsettings .tune-row { border-color: rgba(114,201,255,.2); background: rgba(114,201,255,.045); }
-#select { background: linear-gradient(135deg,rgba(222,231,227,.9),rgba(167,185,180,.9)); }
-#select .sheet { color: #14221f; background: #e9f0ed; border: 0; box-shadow: 16px 16px 0 rgba(24,53,48,.18); }
-#select .sheet-head { background: #14221f; color: #eff8f3; }
-#select .sheet-head h2 { color: #eff8f3; letter-spacing: .14em; }
-#select .pair-side, #select .pair-main { background: rgba(255,255,255,.62); border: 1px solid rgba(20,34,31,.13); }
-#select .sel-label { color: #1a8b63; letter-spacing: .15em; }
-#select .bigbtn:not(.alt) { background: #1a8b63; border-color: #1a8b63; }
-#select .bigbtn.alt { color: #14221f; border-color: rgba(20,34,31,.25); background: transparent; }
-#career { background: rgba(39,29,20,.72); }
-#career .sheet { color: #30261d; background: #f1e6d1; border: 1px solid #c5a77c; box-shadow: 14px 14px 0 rgba(36,24,14,.2); }
-#career .sheet-head { background: #d8b77f; border-bottom: 1px dashed #96744b; }
-#career .sheet-head h2, #career .sel-label, #career h3 { color: #30261d; }
-#career .pane { background: rgba(255,250,239,.52); border-color: rgba(91,62,29,.2); }
-#career .bigbtn:not(.alt) { background: #b84b2e; border-color: #b84b2e; }
-#career .bigbtn.alt { color: #604429; border-color: #a88458; background: transparent; }
+#overlay::after {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none;
+  opacity: .22;
+  background: repeating-linear-gradient(105deg, transparent 0 84px, rgba(255,255,255,.035) 85px, transparent 86px);
+}
+#menu-brand {
+  position: relative;
+  width: min(78vw, 620px);
+  align-items: flex-start;
+  padding: clamp(var(--pad), 3vw, calc(var(--pad) * 1.75)) clamp(var(--pad), 4vw, calc(var(--pad) * 2.4));
+  border: 1px solid rgba(255,255,255,.11);
+  border-left: 5px solid var(--red);
+  border-radius: 4px;
+  background: linear-gradient(115deg, rgba(255,255,255,.07), rgba(255,255,255,.015)), rgba(8,9,12,.76);
+  box-shadow: 18px 18px 0 rgba(225,6,0,.08), 0 24px 70px rgba(0,0,0,.35);
+  backdrop-filter: blur(14px);
+}
+#title { align-self: flex-start; letter-spacing: .1em; }
+#subtitle { margin-top: var(--gap); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: .12em; }
+#menu-meta { align-items: flex-start; margin-top: calc(var(--pad) * 0.82); }
+#disclaimer { text-align: left; }
+#menu-buttons { width: min(78vw, 620px); gap: var(--gap); }
+#menu-hero, #menu-primary, #menu-secondary { width: 100%; }
+#menu-hero {
+  padding: calc(var(--gap) / 3);
+  border: 1px solid rgba(225,6,0,.48);
+  border-radius: 4px;
+  background: linear-gradient(105deg, #e10600, #a80500 70%, #7b0400);
+  box-shadow: 10px 10px 0 rgba(0,0,0,.28);
+}
+#menu-hero .bigbtn { min-height: 64px; justify-content: flex-start; text-align: left; background: transparent; border: 0; box-shadow: none; }
+#menu-hero .btn-ico { width: 1.35em; height: 1.35em; }
+#menu-primary { gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) / 3); border: 1px solid rgba(255,255,255,.1); border-radius: 4px; background: rgba(0,0,0,.22); }
+#menu-primary .bigbtn { min-height: 48px; border: 1px solid rgba(255,255,255,.12); border-radius: 3px; background: rgba(255,255,255,.055); }
+#menu-primary .bigbtn:hover, #menu-primary .bigbtn:focus-visible { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.34); }
+#menu-secondary { gap: calc(var(--gap) * 2 / 3); padding-top: calc(var(--gap) / 6); }
+#menu-secondary .bigbtn { min-height: 38px; border-radius: 3px; border-color: rgba(255,255,255,.15); background: transparent; }
+#menu-secondary .bigbtn:hover, #menu-secondary .bigbtn:focus-visible { background: rgba(225,6,0,.13); border-color: rgba(225,6,0,.55); }
+
+/* Dialogs share the home material but each receives a single accent cue. */
+#pausemenu .sheet { border-top: 3px solid var(--red); box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+#pausemenu .sheet-head h2, #pmsettings .sheet-head h2 { letter-spacing: .16em; }
+#pmsettings .sheet { border-top: 3px solid #7ab8ff; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+#pm-category-tabs { border-bottom: 1px solid rgba(255,255,255,.1); }
+#pm-category-tabs button.active { box-shadow: inset 0 -2px 0 #7ab8ff; }
+#select .sheet, #career .sheet { box-shadow: 0 24px 70px rgba(0,0,0,.4); }
+#select .sheet-head, #career .sheet-head { border-bottom: 2px solid var(--red); }
+
+/* ---------- race-control composition ---------- */
+:root {
+  --menu-panel: rgba(16, 18, 24, .86);
+  --menu-panel-hi: rgba(255, 255, 255, .075);
+  --menu-line: rgba(255, 255, 255, .13);
+  --menu-data: #7bd7d0;
+}
+#menu-buttons {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "primary secondary";
+  align-items: start;
+  column-gap: var(--gap);
+  row-gap: var(--gap);
+}
+#menu-hero { grid-area: hero; }
+#menu-primary { grid-area: primary; }
+#menu-secondary { grid-area: secondary; }
+#menu-primary::before, #menu-secondary::before {
+  display: block;
+  margin: 0 0 calc(var(--gap) / 2) calc(var(--gap) / 3);
+  color: var(--menu-data);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .2em;
+}
+#menu-primary::before { content: "QUICK GRID"; }
+#menu-secondary::before { content: "RACE CONTROL"; }
+#menu-primary, #menu-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  padding: var(--gap);
+  border: 1px solid var(--menu-line);
+  border-radius: 5px;
+  background: var(--menu-panel);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+#menu-secondary { grid-template-columns: 1fr; }
+#menu-primary .bigbtn, #menu-secondary .bigbtn {
+  margin: 0;
+  min-width: 0;
+  border-color: var(--menu-line);
+  background: var(--menu-panel-hi);
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+#menu-primary .bigbtn:hover, #menu-primary .bigbtn:focus-visible,
+#menu-secondary .bigbtn:hover, #menu-secondary .bigbtn:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(123,215,208,.11);
+  border-color: rgba(123,215,208,.52);
+}
+#menu-primary .bigbtn:nth-child(2n) { border-left-color: rgba(225,6,0,.34); }
+#menu-secondary .bigbtn { justify-content: flex-start; }
+#menu-secondary .btn-ico { color: var(--menu-data); }
+#menu-brand::after {
+  content: "SEASON HUB / ONLINE";
+  position: absolute; top: 14px; right: 16px;
+  color: var(--menu-data);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .16em;
+}
+#soundbtn { border-color: rgba(123,215,208,.38); color: var(--menu-data); }
+
+/* Shared panel treatment for the deeper screens. */
+:is(#pausemenu, #pmsettings, #select, #career) .sheet {
+  border-color: var(--menu-line);
+  background: linear-gradient(145deg, rgba(26,29,37,.97), rgba(10,11,15,.97));
+}
+:is(#pausemenu, #pmsettings, #select, #career) .sheet-head {
+  min-height: 58px;
+  padding-inline: clamp(var(--pad), 2.5vw, calc(var(--pad) * 1.27));
+  background: linear-gradient(90deg, rgba(225,6,0,.16), transparent 70%);
+}
+:is(#pausemenu, #pmsettings, #select, #career) .sheet-head h2 { letter-spacing: .14em; }
+:is(#pausemenu, #pmsettings, #select, #career) .sheet-foot {
+  border-top: 1px solid var(--menu-line);
+  background: rgba(0,0,0,.18);
+}
+
+@media (max-width: 700px) {
+  #menu-buttons { grid-template-columns: 1fr; grid-template-areas: "hero" "primary" "secondary"; }
+  #menu-brand::after { position: static; align-self: flex-end; margin-top: var(--gap); }
+  #menu-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #menu-primary .bigbtn, #menu-secondary .bigbtn { transition: none; }
+}
+
+/* ---------- shared dashboard components ---------- */
+.menu-status-item {
+  display: grid;
+  gap: calc(var(--gap) / 3);
+  min-width: 92px;
+  padding: calc(var(--gap) * 0.75) var(--gap);
+  border-left: 2px solid rgba(123, 215, 208, .65);
+  background: rgba(123, 215, 208, .055);
+}
+.menu-status-label {
+  color: rgba(242, 242, 245, .48);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .16em;
+}
+.menu-status-item strong {
+  color: var(--text);
+  font-size: var(--fs-micro);
+  letter-spacing: .08em;
+}
+#menu-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  width: 100%;
+  margin-top: calc(var(--pad) * 0.82);
+}
+#menu-meta { margin-top: var(--gap); }
+#menu-hero::before {
+  content: "NEXT SESSION";
+  display: block;
+  padding: calc(var(--gap) * 2 / 3) var(--gap) 0;
+  color: rgba(255,255,255,.68);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: .18em;
+}
+#menu-hero .bigbtn { min-height: 58px; }
+#menu-hero .mb-label { font-size: 1.12em; letter-spacing: .08em; }
+#menu-hero #mb-career-sub:not(:empty)::before { content: "CURRENT SAVE  /  "; color: rgba(255,255,255,.62); }
+
+@media (max-width: 700px) {
+  #menu-status { gap: calc(var(--gap) / 2); }
+  .menu-status-item { flex: 1 1 0; min-width: 0; padding: calc(var(--gap) * 2 / 3); }
+  .menu-status-item strong { font-size: var(--fs-micro); }
+}
+
+/* Short landscape is height-constrained, not width-constrained. Compress the
+   context layer first so the actionable panels keep their touch floor. */
+@media (orientation: landscape) and (max-height: 620px) {
+  #overlay { gap: 10px; align-content: safe center; }
+  #menu-brand { padding-block: 12px; }
+  #menu-status { margin-top: 10px; }
+  .menu-status-item { padding-block: 6px; }
+  #menu-meta { margin-top: 8px; }
+  #menu-hero .bigbtn { min-height: 48px; }
+  #menu-primary .bigbtn, #menu-secondary .bigbtn { min-height: 40px; }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  #menu-status { display: none; }
+  #menu-brand { padding-block: 9px; }
+  #subtitle { margin-top: 3px; }
+  #menu-meta { margin-top: 5px; }
+  #menu-buttons { row-gap: 6px; }
+  #menu-primary, #menu-secondary { padding: 7px; }
+  #menu-primary::before, #menu-secondary::before { margin-bottom: 4px; }
+}
+
+/* Medium landscape has two columns, but neither column may retain the desktop
+   620px floor. Size them from the viewport so 844x390 and 667x375 do not
+   overlap or push the control rail off-screen. */
+@media (orientation: landscape) and (max-width: 1100px) {
+  #menu-brand { width: min(43vw, 520px); }
+  #menu-buttons { width: min(53vw, 620px); }
+  #menu-brand { padding-inline: clamp(14px, 2.5vw, 30px); }
+  #menu-status { gap: 5px; }
+  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: 8px; }
+}
 } /* @layer components */

@@ -879,6 +879,13 @@ const GameAudio = (function () {
     blip(660, "square", 0.08, 0.004, 0.05);
   }
 
+  // BRAKE CUE: same click every time — the SIGNAL is the pulse rate, not pitch
+  // (docs/research/DRIVING-CONTROLS-RESEARCH.md, Forza BDA). `urgency` is unused
+  // on purpose so a future LIGHT/FULL level can share the voice.
+  function brakeCue(_urgency) {
+    blip(520, "square", 0.07, 0.003, 0.045);
+  }
+
   function uiSelect() {
     blip(880, "square", 0.13, 0.005, 0.09);
   }
@@ -1200,6 +1207,7 @@ const GameAudio = (function () {
     lap,
     finish,
     uiTick,
+    brakeCue,
     uiSelect,
     penalty,
     startRain,

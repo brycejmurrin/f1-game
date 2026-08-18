@@ -141,6 +141,7 @@ const FULL = [
   "js/game/photomode.js",
   "js/game/tuner.js",
   "js/game/cam-tuner.js",
+  "js/game/brake-cue.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/gfx-quality.js",
@@ -336,6 +337,7 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/mat4.js", "js/game/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/mat4.js", "js/game/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/game/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];

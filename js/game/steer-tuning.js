@@ -10,6 +10,7 @@ function create(G) {
 Log.info("input", "SteerTuning.create");
 // Stable helpers from the game.js closure.
 const { $, store, clamp } = G;
+if (window.BrakeCue && BrakeCue.create) BrakeCue.create(G);
 
 // Every 1..10 knob's DOM range (index.html: min="1" max="10") — named so the
 // clamp below and the slider markup cannot silently drift apart.
@@ -37,7 +38,8 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
 //  pm-adaptbtn ADAPTIVE BUTTONS 1..10 mix of the digital-steer rate half of
-//                             SPEED STEER + analog travel. v1 = OFF.
+//                             SPEED STEER + analog travel. v1 = OFF, default 6.
+//  pm-brakecue BRAKE CUE      1 = OFF; 2..10 = pulse-rate cue + lookahead.
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 // The car is planted (understeer-only): DRIFT defaults to 0 so the rear never
 // steps out — overcooking a corner washes the front wide, it never snaps round.
@@ -121,16 +123,20 @@ function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2 },
+              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2,
+              adaptiveButtons: 8, brakeCue: 8 },
   standard: { tiltDeg: 6, steerSmooth: 6, steerRate: 5,
-              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 1, raceLine: 0 },
+              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 1, raceLine: 0,
+              adaptiveButtons: 6, brakeCue: 6 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
-              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0 },
+              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
+              adaptiveButtons: 4, brakeCue: 4 },
 };
 const PRESET_STORE = {  // slider store-key  ->  preset field
   tiltDeg: "tiltDeg", steerSmooth: "steerSmooth",
   steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
   steerSpeed: "steerSpeed", drivingHelp: "drivingHelp", raceLine: "raceLine",
+  adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue",
 };
 
 // ---- simplified ("macro") controls ----
@@ -335,8 +341,9 @@ const STEER_MIGRATIONS = [
   // The first ship was a boolean (0 = off, 1 = on). The slider's 1 is OFF, so
   // leaving a stored 1 alone would silently turn the feature off for anyone who
   // had switched it on. 0 and 1 are the only values that boolean ever wrote.
-  // A store with NO key is left alone: the new default (notch 1 = OFF) applies
-  // through store.get() and writing 1 here would pin today's default forever.
+// A store with NO key is left alone: store.get() applies the live default
+// (notch 6 = mid strength as of 2026-08-18). Writing 1 here would pin the
+// old OFF default forever.
   { to: 4, apply() {
       const from = store.get("adaptiveButtons", null);
       if (from === 0) migSet(4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
@@ -371,7 +378,7 @@ function applySteerTuning() {
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", 1), SLIDER_MIN, SLIDER_MAX);
+  const adapt   = clamp(store.get("adaptiveButtons", 6), SLIDER_MIN, SLIDER_MAX);
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
@@ -383,6 +390,8 @@ function applySteerTuning() {
   Input.setAdaptiveButtons(adaptMixFromSlider(adapt));
   Input.setSteerSpeedRef(G.STEER_SPEED_REF);
   G.raceLineAssist = line / 5;
+  const cue = clamp(store.get("brakeCue", 6), SLIDER_MIN, SLIDER_MAX);
+  if (window.BrakeCue) BrakeCue.setLevel(cue);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
@@ -390,6 +399,7 @@ function applySteerTuning() {
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
   if ($("pm-adaptbtn")) { $("pm-adaptbtn").value = adapt; $("pm-adaptbtn-v").textContent = adaptLabel(adapt); }
+  if ($("pm-brakecue")) { $("pm-brakecue").value = cue; $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(cue) : (cue <= 1 ? "OFF" : "CUE " + cue); }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -432,6 +442,11 @@ if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("adaptiveButtons", v);
   Input.setAdaptiveButtons(adaptMixFromSlider(v));
   $("pm-adaptbtn-v").textContent = adaptLabel(v);
+};
+if ($("pm-brakecue")) $("pm-brakecue").oninput = (e) => {
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("brakeCue", v);
+  if (window.BrakeCue) BrakeCue.setLevel(v);
+  $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(v) : (v <= 1 ? "OFF" : "CUE " + v);
 };
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);

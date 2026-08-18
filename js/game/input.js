@@ -38,7 +38,7 @@ const Input = (function () {
   let KEY_RAMP_IN = 6;        // steer units/s toward full lock
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
                               // is a request to stop, and should be answered)
-  // ADAPTIVE BUTTONS (Advanced → BUTTON INPUT). A 0..1 mix, not a switch:
+  // ADAPTIVE BUTTONS (STEERING & ASSISTS sheet; default mid). A 0..1 mix, not a switch:
   // 0 = the fixed rates above; 1 = the missing RATE half of SPEED STEER, for
   // digital sources only. The full curve is the same hyperbola as lockTaper
   // (`1 / (1 + vStd / STEER_SPEED_REF)`); the slider blends toward it so a
@@ -90,7 +90,8 @@ const Input = (function () {
   let padThrottleVal = 0;
   let padBrakeVal = 0;
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
-  const PAD_DEADZONE = 0.14;   // left-stick centre slop (ignored, then re-scaled)
+  const PAD_DEADZONE = 0.14;   // driving left-stick centre slop (ignored, then re-scaled)
+  const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
   // gamepad MENU navigation (see the mapping table above pollGamepad). The pad
   // has no OS key-repeat, so a held D-pad/stick direction is turned back into
@@ -98,6 +99,8 @@ const Input = (function () {
   // cadence, mirrored from typical desktop OS defaults.
   let padNavDir = null;           // held direction while a menu is open, or null
   let padNavNextT = 0;            // nowMs() of the next synthesized repeat
+  let padNavSeeded = false;       // one ArrowDown seed per open-menu session
+  let padNavSeedLayer = null;     // UiLayers.top() we last seeded for (layer change re-arms)
   const PAD_NAV_DELAY_MS = 450;   // delay before the first repeat
   const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
   const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
@@ -844,6 +847,8 @@ const Input = (function () {
       padThrottleVal = 0; padBrakeVal = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padNavDir = null;
+      padNavSeeded = false;
+      padNavSeedLayer = null;
       return;
     }
     padConnected = true;
@@ -876,6 +881,8 @@ const Input = (function () {
       padNavPoll(pad);
     } else {
       padNavDir = null;   // fresh hold-timer the next time a menu opens
+      padNavSeeded = false;
+      padNavSeedLayer = null;
       // edge-triggered actions reuse the same latches the keyboard sets.
       if (btnEdge(pad, 2)) boostTogglePressed = true;
       if (btnEdge(pad, 3)) overtakePressed = true;
@@ -900,7 +907,8 @@ const Input = (function () {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   }
 
-  // D-pad OR either stick, past the same dead zone steering uses. Only one
+  // D-pad OR either stick, past PAD_NAV_DEADZONE (larger than the driving
+  // zone so a resting stick does not creep through the menu). Only one
   // direction at a time — whichever axis (or digital pair) is further past
   // the zone wins ties toward vertical, an arbitrary but consistent choice.
   // Right stick is a fallback so a player who reaches for it still moves.
@@ -911,12 +919,34 @@ const Input = (function () {
     if (btnDown(pad, 15)) return "right";
     const ax = pad.axes || [];
     const stick = (x, y) => {
-      const mx = Math.abs(x) >= PAD_DEADZONE ? Math.abs(x) : 0;
-      const my = Math.abs(y) >= PAD_DEADZONE ? Math.abs(y) : 0;
+      const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
+      const my = Math.abs(y) >= PAD_NAV_DEADZONE ? Math.abs(y) : 0;
       if (!mx && !my) return null;
       return my >= mx ? (y < 0 ? "up" : "down") : (x < 0 ? "left" : "right");
     };
     return stick(ax[0] || 0, ax[1] || 0) || stick(ax[2] || 0, ax[3] || 0);
+  }
+
+  // The focused control MenuNav would treat as a real target — same FOCUSABLE
+  // selector padActivate already used, so A and the open-menu seed cannot drift.
+  function padFocusableInLayer() {
+    const layer = window.MenuNav && window.MenuNav.activeLayer();
+    if (!layer) return null;
+    const active = document.activeElement;
+    const sel = window.MenuNav.FOCUSABLE;
+    if (active && sel && layer.contains(active) && active.matches && active.matches(sel)) {
+      return active;
+    }
+    return null;
+  }
+
+  // One ArrowDown into MenuNav — the same empty path padActivate used to inline.
+  // MenuNav has no seed helper of its own (it exports activeLayer / FOCUSABLE
+  // only), so this is the one mover; never .focus() a node from here.
+  function padSeedFocus() {
+    if (!window.MenuNav || !window.MenuNav.activeLayer()) return;
+    if (padFocusableInLayer()) return;
+    padDispatchKey("ArrowDown");
   }
 
   // A → activate. Synthetic events do NOT get a browser's native "Enter/Space
@@ -927,17 +957,14 @@ const Input = (function () {
   // direction press), there is nothing to click — seed focus instead, the same
   // way MenuNav's own first arrow press would, so the NEXT press has a target.
   // "One focus visual should always be visible" (research note §8) applies to
-  // A as much as to a direction.
+  // A as much as to a direction — and to the menu-open seed in padNavPoll.
   function padActivate() {
-    const layer = window.MenuNav && window.MenuNav.activeLayer();
-    if (!layer) return;
-    const active = document.activeElement;
-    const sel = window.MenuNav.FOCUSABLE;
-    if (active && sel && layer.contains(active) && active.matches && active.matches(sel)) {
-      active.click();
+    const focused = padFocusableInLayer();
+    if (focused) {
+      focused.click();
       return;
     }
-    padDispatchKey("ArrowDown");
+    padSeedFocus();
   }
 
   // B → Escape/Back. Gated on UiLayers.top() (not MenuNav.activeLayer(), which
@@ -969,8 +996,23 @@ const Input = (function () {
   }
 
   // The menu-open half of pollGamepad(): direction hold-repeat, paging, A, B.
+  // First poll of a newly-open menu (including Start opening pause in the same
+  // frame — onPauseCb runs above this branch) seeds one focus visual so the
+  // player does not have to tap D-pad before they can see where they are.
   function padNavPoll(pad) {
+    const top = window.UiLayers && window.UiLayers.top();
+    if (top !== padNavSeedLayer) {
+      padNavSeedLayer = top || null;
+      padNavSeeded = false;
+    }
     const dir = padNavDirOf(pad);
+    if (!padNavSeeded) {
+      padNavSeeded = true;
+      // A held direction this frame already seeds via MenuNav's first-arrow
+      // path; A on this frame owns the empty path through padActivate. Either
+      // would double-fire if we also dispatched ArrowDown here.
+      if (!dir && !btnEdge(pad, 0)) padSeedFocus();
+    }
     if (dir) {
       const now = nowMs();
       if (dir !== padNavDir) {
@@ -1317,6 +1359,8 @@ const Input = (function () {
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
       padNavDir = null;
+      padNavSeeded = false;
+      padNavSeedLayer = null;
       try { Log.info("input", "gamepad disconnected " + padLogId(e)); }
       catch (_) { /* Log absent */ }
     });
@@ -1354,6 +1398,8 @@ const Input = (function () {
     padBrakeVal = 0;
     padPrevButtons.length = 0;
     padNavDir = null;
+    padNavSeeded = false;
+    padNavSeedLayer = null;
   }
 
   /* THE EDGE LATCHES NEED EMPTYING WHILE NOBODY IS READING THEM.

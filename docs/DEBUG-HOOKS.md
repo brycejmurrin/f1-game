@@ -2608,11 +2608,12 @@ __apex.qualiSim()[0];   // → { pos:1, code:"VER", t:100.958, gap:0, … }
 ```
 
 ### `carAt(i)` — additions
-`code`, `seat`, `tierV`, `skill` and `ratings`. `tierV` and `skill` are the two
+`code`, `seat`, `tierV`, `skill`, `aeroLoad`, `ersDeploy` and `ratings`. `tierV` and `skill` are the two
 multipliers that decide how fast an AI car is allowed to be (`vmax = VMAX · PACE ·
 tierV · skill · difficulty`), so "why is this car quick?" is answerable without
 reading the source. `tierV` folds the team's `TIER_V` together with career team
-development; `skill` is the driver.
+development; `skill` is the driver. `aeroLoad` / `ersDeploy` are the works-car
+wing and ERS map the AI now actually runs (0.5 if unset).
 
 ## Reliability & retirements
 
