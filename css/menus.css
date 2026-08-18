@@ -103,10 +103,13 @@
 /* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
    doors on one line; a lone last child (STANDINGS season) still fills the row
    via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
-#menu-primary {
+#menu-primary, #menu-secondary {
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
+  /* Same track gap so the 2-up play doors and the rooms share one lattice.
+     0.55 on secondary only made that tier ~2–5px narrower on desktop. */
   gap: calc(var(--gap) * 0.7);
+  align-items: stretch;
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -136,15 +139,16 @@
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
-  --balance-basis: calc(50% - 0.5em);
-  --balance-min: calc(50% - 0.5em);
-  gap: calc(var(--gap) * 0.55);
 }
 /* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
    keeps the normal four controls as two pairs, and lets a visible fifth action
    fill its final line without a state-specific selector. width:100% (not auto)
    so a long label wraps inside its half instead of widening its cell. */
-#menu-buttons .bigbtn { margin: 0; width: 100%; }
+#menu-buttons .bigbtn { margin: 0; width: 100%; border-width: 1px; border-style: solid; }
+/* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
+   keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
+   on 1280 before this). Color stays transparent on the red doors. */
+#menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
 #menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
