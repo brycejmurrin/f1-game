@@ -57,7 +57,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
-    root.removeProperty("--ui-scale");
+    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(null);
   });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
@@ -128,13 +128,39 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(stackedSel.active).toBe(true);
   expect(stackedSel.shown).toBeGreaterThan(0);
 
-  // Garage stacked: portrait sheet is under --pair-at 400 — a strip, not a grid.
-  await page.setViewportSize({ width: 390, height: 844 });
+  // Compact-wide garage: 852×393 is over --pair-at 400 but under --compact-at
+  // 480, so without the compact stack the rail/list split still fires.
+  await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("sel-go").click();
   });
+  await page.waitForFunction(() => {
+    const setup = document.getElementById("carsetup");
+    const inner = document.getElementById("cs-inner");
+    return setup && !setup.hidden && inner?.dataset.pair === "off" && inner.dataset.density === "compact";
+  }, null, { polling: 100, timeout: 10_000 });
+  const compactWideGarage = await page.evaluate(() => {
+    const tabsEl = document.getElementById("cs-tabs");
+    const opts = document.getElementById("cs-options");
+    const tcs = getComputedStyle(tabsEl);
+    return {
+      pair: document.getElementById("cs-inner").dataset.pair,
+      density: document.getElementById("cs-inner").dataset.density,
+      tabsOY: tcs.overflowY,
+      tabsOX: tcs.overflowX,
+      optsOY: getComputedStyle(opts).overflowY,
+    };
+  });
+  expect(compactWideGarage.pair).toBe("off");
+  expect(compactWideGarage.density).toBe("compact");
+  expect(["auto", "scroll"]).not.toContain(compactWideGarage.tabsOY);
+  expect(["auto", "scroll"]).toContain(compactWideGarage.tabsOX);
+  expect(["auto", "scroll", "overlay"]).toContain(compactWideGarage.optsOY);
+
+  // Garage stacked: portrait sheet is under --pair-at 400 — a strip, not a grid.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
@@ -314,22 +340,31 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
 
 test("How to Play contents rail jumps within its single scroller", async ({ page }) => {
   await waitReady(page);
-  await page.setViewportSize({ width: 860, height: 560 });
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.evaluate(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--sat", "59px"); root.setProperty("--sab", "34px");
+  });
   await page.click("#mb-help");
   await page.waitForSelector("#howtoplay:not([hidden])");
 
   const before = await page.evaluate(() => {
     const nav = document.getElementById("htp-contents").getBoundingClientRect();
     const body = document.querySelector("#howtoplay .sheet-body").getBoundingClientRect();
+    const first = document.querySelector("#htp-contents a").getBoundingClientRect();
     return {
       links: document.querySelectorAll("#htp-contents a").length,
       navAboveBody: nav.bottom <= body.top + 1,
       bodyOverflow: getComputedStyle(document.querySelector("#howtoplay .sheet-body")).overflowY,
+      firstReachable: first.left >= nav.left - 1 && first.right <= nav.right + 1,
+      navBelowSafeArea: nav.top >= 59,
     };
   });
   expect(before.links).toBe(5);
   expect(before.navAboveBody).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(before.bodyOverflow);
+  expect(before.firstReachable).toBe(true);
+  expect(before.navBelowSafeArea).toBe(true);
 
   await page.click('#htp-contents a[href="#htp-friends"]');
   await page.waitForFunction(() => {
@@ -348,4 +383,45 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
     };
   });
   expect(after.heading).toContain("RACE A FRIEND");
+});
+
+test("balanced control rows derive their shape from local room", async ({ page }) => {
+  await waitReady(page);
+  const report = async (selector) => page.evaluate((sel) => {
+    const host = document.querySelector(sel);
+    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none");
+    const rows = [];
+    for (const el of children) {
+      const r = el.getBoundingClientRect();
+      let row = rows.find((candidate) => Math.abs(candidate.top - r.top) < 2);
+      if (!row) { row = { top: r.top, widths: [] }; rows.push(row); }
+      row.widths.push(r.width);
+    }
+    rows.sort((a, b) => a.top - b.top);
+    const last = rows.at(-1);
+    const box = host.getBoundingClientRect();
+    return {
+      display: getComputedStyle(host).display,
+      rowCounts: rows.map((row) => row.widths.length),
+      lastFill: last && last.widths.length === 1 ? last.widths[0] / box.width : 1,
+    };
+  }, selector);
+
+  // Runtime visibility changes the title group from four to five actions.
+  await page.setViewportSize({ width: 860, height: 560 });
+  await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
+  const title = await report("#menu-secondary");
+  expect(title.display).toBe("flex");
+  expect(title.rowCounts).toEqual([2, 2, 1]);
+  expect(title.lastFill).toBeGreaterThan(0.9);
+
+  // The same primitive makes three settings categories 2 + a full-width final
+  // action when the sheet is locally narrow; no viewport-specific rule decides.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click("#mb-settings");
+  await page.waitForSelector("#pmsettings:not([hidden])");
+  const settings = await report("#pm-category-tabs");
+  expect(settings.display).toBe("flex");
+  expect(settings.rowCounts).toEqual([2, 1]);
+  expect(settings.lastFill).toBeGreaterThan(0.9);
 });

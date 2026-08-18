@@ -101,6 +101,14 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
     "a .pane-pair sheet has no --pair-at, so js/game/sheetshape.js will delete its data-pair and " +
     "the two panes will stack at full height instead of becoming bounded scroll regions. " +
     "Declare it beside the sheet's --sheet-w (620px matches #sel-inner / #cr-inner / #ss-inner).");
+
+  const unstacked = pairs.filter((id) => !new RegExp(
+    "#" + id + "\\[data-density=\"compact\"\\]\\s*\\{[^}]*--pair-at\\s*:\\s*2000px").test(css));
+  assert.deepEqual(unstacked, [],
+    "a .pane-pair sheet keeps its wide --pair-at when compact, so a landscape phone " +
+    "at a raised UI SIZE stays pair-on (clientWidth is still above the threshold) and " +
+    "the stacked one-scroller rules never fire. Raise --pair-at to 2000px on " +
+    "[data-density=compact], same as #cr-inner / #sel-inner / #cs-inner.");
 });
 
 test("stacked season setup has one reachable vertical scroll owner", () => {

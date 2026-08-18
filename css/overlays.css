@@ -540,8 +540,9 @@ body.hud-hidden #hud-restore { display: block; }
   top: calc(8px + var(--tap) + var(--sat));
   right: calc(10px + var(--tap) + 4px + var(--sar));
   z-index: 24;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 84px; --balance-min: 84px;
+  width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
   gap: calc(var(--gap) * 0.5);
   padding: 8px;
   background: rgba(8, 8, 14, 0.92);
@@ -592,12 +593,17 @@ body.hud-hidden #hud-restore { display: block; }
    owns the one vertical scroller. It pans sideways only when local width is
    genuinely too small; links never wrap into a second row of chrome. */
 #htp-contents {
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex; align-items: center; justify-content: flex-start;
   gap: calc(var(--gap) * 0.4); min-width: 0; flex: 1 1 auto;
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none;
 }
+/* Auto margin right-aligns the rail only while every link fits. When it
+   overflows the margin collapses to zero, leaving CONTROLS at the reachable
+   scroll origin; `justify-content:flex-end` instead placed that origin at a
+   negative offset and clipped the first links on a portrait phone. */
+#htp-contents > :first-child { margin-inline-start: auto; }
 #htp-contents::-webkit-scrollbar { display: none; }
 #htp-contents a {
   display: inline-flex; align-items: center; justify-content: center;

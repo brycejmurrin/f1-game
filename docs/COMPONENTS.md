@@ -13,7 +13,7 @@ cannot appear without this document noticing.
 
 ---
 
-## The three primitives, plus one pattern
+## Shared layout primitives
 
 Everything else is built on these. They live in `css/components.css`.
 
@@ -23,6 +23,7 @@ Everything else is built on these. They live in `css/components.css`.
 | `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on |
 | `.pane` | a scroll region that says so — an edge fade on whichever side has more |
 | `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#carsetup` and `#career`. Slots are named by POSITION, not role — see the note in `css/components.css` |
+| `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
 ## Families, and the file that owns each
 
@@ -59,7 +60,7 @@ not.
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
-`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `no-`, `rotate-`,
+`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`) is one file each and needs no map.
 
@@ -98,6 +99,8 @@ file changes a screen owned by another.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
+- `.balanced-row` — `components` + `menus`. Flex wrap that derives its column
+  count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`

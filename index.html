@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1415">
+<meta name="apex-build" content="1418">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=f4cf7875c30f" as="style">
+<link rel="preload" href="css/components.css?v=5853a84c5431" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,12 +40,12 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=f4cf7875c30f">
-<link rel="stylesheet" href="css/tuner.css?v=0757f8663e28" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=74e0fcb86b3e">
-<link rel="stylesheet" href="css/carsetup.css?v=cf2ebcd8b4ca" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/components.css?v=5853a84c5431">
+<link rel="stylesheet" href="css/tuner.css?v=34fc1604e76d" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=13f3d8a7d7eb">
+<link rel="stylesheet" href="css/carsetup.css?v=d170fee234d5" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=39f5a494f72a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=c998e90191df" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
 <link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
@@ -352,7 +352,7 @@
   <div id="pmsettings-inner" class="sheet">
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
-      <div id="pm-category-tabs" role="tablist" aria-label="Settings categories">
+      <div id="pm-category-tabs" class="balanced-row" role="tablist" aria-label="Settings categories">
         <button id="pm-tab-controls" class="active" type="button" role="tab" aria-label="Controls"
           aria-selected="true" aria-controls="pm-panel-controls" tabindex="0">CONTROLS</button>
         <button id="pm-tab-display" type="button" role="tab" aria-label="Display"
@@ -461,7 +461,7 @@
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
-    <div id="menu-secondary">
+    <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
@@ -829,22 +829,22 @@
     <div class="sheet-body pane" id="rs-body">
       <div class="rs-row">
         <h3 class="sel-label" id="rs-laps-label">LAPS</h3>
-        <div id="rs-laps" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-laps-label"></div>
+        <div id="rs-laps" class="chip-row balanced-row" role="group" aria-labelledby="rs-laps-label"></div>
       </div>
       <div class="rs-row">
         <h3 class="sel-label" id="rs-weather-label">WEATHER</h3>
-        <div id="rs-weather" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-weather-label"></div>
+        <div id="rs-weather" class="chip-row balanced-row" role="group" aria-labelledby="rs-weather-label"></div>
       </div>
       <div class="rs-row" id="rs-time-section">
         <h3 class="sel-label" id="rs-time-label">TIME OF DAY</h3>
-        <div id="rs-time" class="chip-row no-orphan-5" role="group" aria-labelledby="rs-time-label"></div>
+        <div id="rs-time" class="chip-row balanced-row" role="group" aria-labelledby="rs-time-label"></div>
       </div>
       <!-- DIFFICULTY lives here with the other race settings, not on the select
            screen: it is a property of the race you are about to start, the same
            as laps and weather. Hidden in a time trial — there is no AI to rate. -->
       <div class="rs-row" id="rs-diff-section">
         <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
-        <div id="rs-diff" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-diff-label"></div>
+        <div id="rs-diff" class="chip-row balanced-row" role="group" aria-labelledby="rs-diff-label"></div>
       </div>
       <!-- RELIABILITY — whether cars can retire. A standing preference like
            DIFFICULTY, and OFF by default so no existing save starts losing cars.
@@ -860,7 +860,7 @@
            is no grid to set. -->
       <div class="rs-row" id="rs-quali-section">
         <h3 class="sel-label" id="rs-quali-label">QUALIFYING LAP</h3>
-        <div id="rs-quali" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-quali-label"></div>
+        <div id="rs-quali" class="chip-row balanced-row" role="group" aria-labelledby="rs-quali-label"></div>
       </div>
       <!-- CAUTIONS — race control's flags: local yellow, VSC, safety car, raised
            when enough debris settles on the racing surface. Genuinely a property
@@ -871,11 +871,11 @@
            alone on track there is nothing to be cautioned about. -->
       <div class="rs-row" id="rs-caution-section">
         <h3 class="sel-label" id="rs-caution-label">CAUTIONS</h3>
-        <div id="rs-caution" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-caution-label"></div>
+        <div id="rs-caution" class="chip-row balanced-row" role="group" aria-labelledby="rs-caution-label"></div>
       </div>
       <div class="rs-row" id="rs-reliab-section">
         <h3 class="sel-label" id="rs-reliab-label">RELIABILITY</h3>
-        <div id="rs-reliab" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-reliab-label"></div>
+        <div id="rs-reliab" class="chip-row balanced-row" role="group" aria-labelledby="rs-reliab-label"></div>
       </div>
     </div>
     <div class="sheet-foot">
@@ -1540,11 +1540,11 @@
            LightStore.copyToTracks (js/game/light-store.js). -->
       <div id="lt-spread"></div>
       <label class="lt-help-toggle"><input id="lt-help-on" type="checkbox"> Show explanations</label>
-      <div id="lt-tabs" class="lt-tabs no-orphan-2" role="tablist" aria-label="Lighting categories"></div>
+      <div id="lt-tabs" class="lt-tabs balanced-row" role="tablist" aria-label="Lighting categories"></div>
     </div>
     <div id="lt-rows" class="pane"></div>
     <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
-    <div class="sheet-foot">
+    <div class="sheet-foot balanced-row">
       <!-- "RESET", not "RESET ALL": the handler drops the LOCAL edits for the
            current track|time-of-day|weather only, and deliberately leaves the
            other conditions and the shipped file untouched. The old label
@@ -1580,11 +1580,11 @@
         <h2>CAMERA TUNER</h2>
       </div>
       <div id="ct-profile"></div>
-      <div id="ct-modes" class="lt-tabs no-orphan-2" role="tablist" aria-label="Camera modes"></div>
+      <div id="ct-modes" class="lt-tabs balanced-row" role="tablist" aria-label="Camera modes"></div>
       <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox"> Show explanations</label>
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
-    <div class="sheet-foot">
+    <div class="sheet-foot balanced-row">
       <button id="ct-reset">RESET CAM</button>
       <button id="ct-reset-all">RESET ALL</button>
       <button id="ct-close" class="bigbtn">DONE</button>
@@ -1786,7 +1786,7 @@
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=9c423fbdc9ba"></script>
 <script crossorigin="anonymous" src="js/game/metrics.js?v=e9c1bf787c95"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=577b77b3b7e7"></script>
-<script crossorigin="anonymous" src="js/game/cam-modes.js?v=1ba7ec239e19"></script>
+<script crossorigin="anonymous" src="js/game/cam-modes.js?v=94d3266248e8"></script>
 <script crossorigin="anonymous" src="js/game/hud.js?v=3d3fc4f75f28"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=c4dafcdffad5"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=eb08e041b1ea"></script>

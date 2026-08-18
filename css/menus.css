@@ -132,16 +132,17 @@
 }
 #mb-career-sub:empty { display: none; }
 #menu-secondary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  --balance-basis: 45%;
+  --balance-min: 40%;
   gap: calc(var(--gap) * 0.55);
 }
-/* STANDINGS only appears mid-season, so this row is four buttons or five — and
-   at five the last one is stranded alone on row three. The generic
-   .no-orphan-2 rule cannot be used here: :nth-child counts HIDDEN elements, so
-   it would widen HOW TO PLAY in the four-button case too. :has() asks the only
-   question that actually matters — is the fifth button showing? */
-#menu-secondary:has(#mb-standings:not([hidden])) > :last-child { grid-column: 1 / -1; }
+/* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
+   keeps the normal four controls as two pairs, and lets a visible fifth action
+   fill its final line without a state-specific selector. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
+#menu-secondary.balanced-row > .bigbtn { width: auto; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -513,6 +514,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
    wide to ~255px with its caption still on one line. The list keeps ~510px,
    which is well clear of where its rows start wrapping. */
 #sel-inner { --pair-at: 620px; --pair-split: minmax(0, 50%); }
+/* SHORT SHEET: stack even when the box is still wide in CSS px. Career already
+   does this (`#cr-inner[data-density="compact"] { --pair-at: 2000px }`). A
+   landscape phone at UI SIZE 150% keeps a ~700px clientWidth, so the 620px
+   pair threshold stays on and the compact preview-band / one-list rules never
+   fire. Density is classified first (sheetshape.js), then pair reads the
+   raised threshold. */
+#sel-inner[data-density="compact"] { --pair-at: 2000px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -988,6 +996,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+/* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
+   a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
+#ss-inner[data-density="compact"] { --pair-at: 2000px; }
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
@@ -1152,16 +1163,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      the full width so they don't leave a dead half-row beside them. */
   #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
 }
-/* Chips on a MODULE, not on flex wrap — at every width, which is why this sits
-   outside the container query above. Every one of these groups has a chip count
-   that does not divide into the row it sits in, so `flex-wrap` left a different
-   ragged hole in each: "57 (FULL)" alone on line two of LAPS, FOG alone under
-   WEATHER, and DIFFICULTY's three chips using a third of a full-width row with
-   the rest empty. Equal columns make every row deliberately full, minmax(0,1fr)
-   keeps them honest at any sheet width, and the chips get bigger tap targets
-   out of it. */
-#rs-laps, #rs-weather, #rs-diff { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-#rs-time { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Every option group is one equal row regardless of how many choices its data
+   supplies. This replaces separate 2/3/5-column modules: adding a weather or
+   difficulty no longer requires matching CSS arithmetic, and no remainder can
+   create a lonely last chip. */
+#race-settings .balanced-row { --balance-basis: 0px; --balance-min: 0px; }
 
 /* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
    how you miss a setting. A landscape phone gives ~285px of body between the
@@ -1188,8 +1194,6 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      row is the thing that pushes everything else down. */
   :where(.sheet[data-density="compact"]) #rs-body #rs-time-section,
   :where(.sheet[data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
-  /* Five chips in a third of the sheet want three across, not five. */
-  :where(.sheet[data-density="compact"]) #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* RACE SETTINGS is seen before every single race, and its labels used to be
      the smallest type in the app at 9px — under the --label floor by a third.
      The chips are also the thing you AIM at here, so undersized type with thin

@@ -658,6 +658,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   --pair-split: minmax(140px, 34%);
   --pair-gap: var(--gap);
 }
+/* SHORT SHEET: stack even when clientWidth stays above 400. A 852×393 phone is
+   compact (--compact-at 480) and still wide enough for pair-on, which keeps the
+   vertical tab rail and starves #cs-options. Density is classified first. */
+#cs-inner[data-density="compact"] { --pair-at: 2000px; }
 
 /* ================= LAYOUT: container queries on the sheet =================
    Not media queries. What the panel can afford is a function of the width it

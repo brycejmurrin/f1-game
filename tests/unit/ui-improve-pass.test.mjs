@@ -60,6 +60,8 @@ test("circuit select stacked uses one list scroller", () => {
     "the track list fills leftover body height from a zero basis");
   assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
     "wide preview column fits instead of scrolling as a second document");
+  assert.match(css, /#sel-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
+    "compact select stacks via --pair-at, same as career");
   assert.doesNotMatch(read("js/game/scrollfade.js"), /"\.pane", "#sel-body"/);
   assert.doesNotMatch(read("js/game/menunav.js"), /\.pane,#sel-body/);
   assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
@@ -77,6 +79,10 @@ test("garage stacked categories are a horizontal strip", () => {
     "stacked tabs pan sideways and override .pane overflow-y");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \{[\s\S]*?overflow-y:\s*auto/,
     "pair-on rail may still scroll vertically");
+  assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
+    "compact garage stacks to the horizontal strip");
+  assert.match(read("css/menus.css"), /#ss-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
+    "compact season stacks via --pair-at, same as career");
   const js = read("js/game/setup-ui.js");
   assert.match(js, /scrollIntoView\(\{ block: "nearest", inline: "center" \}\)/);
 });
@@ -116,7 +122,8 @@ test("garage categories implement one roving tab system", () => {
 test("high-scale settings and Last Race retain useful local width", () => {
   const components = read("css/components.css");
   const data = read("css/data.css");
-  assert.match(components, /@container sheet \(min-width: 380px\) and \(max-width: 519px\)[\s\S]*?repeat\(3/);
+  assert.match(components, /\.balanced-row\s*>\s*:not\(\[hidden\]\)/);
+  assert.doesNotMatch(components, /@container sheet \(min-width: 380px\) and \(max-width: 519px\)/);
   assert.match(data, /\.dh-table\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?table-layout:\s*fixed/);
   assert.doesNotMatch(data, /\.dh-td-driver\s*\{[^}]*display:\s*flex/,
     "a table cell must not opt out of the fixed table layout");
@@ -262,4 +269,28 @@ test("compact Career keeps its mode context instead of ellipsizing it", () => {
   const css = read("css/career.css");
   assert.match(css, /#cr-inner\[data-density="compact"\] #cr-sub\s*\{[\s\S]*?white-space:\s*normal/);
   assert.match(css, /#cr-inner\[data-density="compact"\] #cr-sub\s*\{[\s\S]*?text-overflow:\s*clip/);
+});
+
+test("variable control clusters use one content-driven balanced-row primitive", () => {
+  const html = read("index.html");
+  const components = read("css/components.css");
+  const menus = read("css/menus.css");
+  const tuner = read("css/tuner.css");
+  const camera = read("js/game/cam-modes.js");
+  assert.match(components, /\.balanced-row\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/);
+  assert.match(components, /\.balanced-row > :not\(\[hidden\]\)\s*\{[^}]*flex:\s*1 1 var\(--balance-basis/);
+  for (const id of ["pm-category-tabs", "menu-secondary", "rs-laps", "rs-weather",
+    "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
+  }
+  assert.match(camera, /className = "balanced-row"/);
+  assert.doesNotMatch(html + components + menus + tuner + camera, /no-orphan-[235]/,
+    "column-count-specific orphan patches must not return");
+  assert.doesNotMatch(menus, /#rs-(?:laps|weather|diff|time)[^{}]*grid-template-columns:\s*repeat\([235]/);
+});
+
+test("overflowing Help navigation keeps its first landmark reachable", () => {
+  const css = read("css/overlays.css");
+  assert.match(css, /#htp-contents\s*\{[^}]*justify-content:\s*flex-start/);
+  assert.match(css, /#htp-contents > :first-child\s*\{[^}]*margin-inline-start:\s*auto/);
 });

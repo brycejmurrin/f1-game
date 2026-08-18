@@ -221,14 +221,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
 /* Category tabs — split the 80+ sliders into one group at a time. Part of the
    panel's fixed head (only #lt-rows scrolls), so the chips are always visible. */
-/* A GRID, not flex-wrap. There are twelve lighting categories and thirteen
-   camera modes with labels from "FX" to "NIGHT GLOW & BLOOM", so content-sized
-   chips wrapped into ragged lines that ended on a single stranded chip. Two
-   equal columns give every chip the same target, and .no-orphan-2 (see
-   css/components.css) widens a lonely thirteenth to the full row instead of
-   leaving it hanging. */
+/* A balanced row derives its column count from this panel's local width. There
+   are twelve lighting categories and thirteen camera modes with labels from FX
+   to NIGHT GLOW & BLOOM; fixed two-column grids wasted desktop width and needed
+   child-count arithmetic to rescue a lonely thirteenth chip. */
 .lt-tabs {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 8rem; --balance-min: 7rem;
+  gap: 4px;
   margin: 2px -18px 6px; padding: 6px 18px 8px;
   background: rgba(12, 14, 20, 0.94);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -541,7 +541,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      row and remove redundant explanatory chrome. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
     position: static;
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex; flex-wrap: nowrap;
+    --balance-basis: 0px; --balance-min: 0px;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
     display: grid; grid-template-columns: auto minmax(0, 1fr);
@@ -658,14 +659,12 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-json { grid-column: 2; grid-row: 2; }
   /* The action bar is the foot of the RAIL, so its height comes out of the
-     rail's column and not out of the slider list beside it. Compact, because
-     every pixel it takes here is a pixel of row 1 — which is the sliders.
-     Two columns with DONE spanning both: three flex items at `1 1 84px` in a
-     210px rail wrapped 2 + 1, stranding DONE. Spanning it is the same shape,
-     stated on purpose — and it makes the primary action the widest target. */
+     rail's column and not out of the slider list beside it. The balanced row
+     fits two actions, then grows the final DONE action across the last line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot {
     grid-column: 1; grid-row: 2;
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 5.5rem; --balance-min: 5rem;
     margin-top: 0; gap: 5px; padding: 6px 0 0;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot button {
@@ -678,14 +677,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
        do: --tap-min only floors the axis a thumb needs. */
     padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
   }
-  /* BOTH panels' DONE, not just the lighting one: the camera tuner's foot is
-     #ct-reset / #ct-reset-all / #ct-close, so naming only #lt-close left DONE
-     stranded half-width in the camtune rail — the exact 2 + 1 defect the rule
-     above documents. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot > :is(#lt-close, #ct-close) { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 5.5rem; --balance-min: 5rem;
     overflow: visible; touch-action: auto;
     margin: 2px 0 4px; padding: 0;
     background: none; border-bottom: none;
@@ -693,7 +688,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   /* #ct-modes too — the compact strip above sets nowrap on both chip lists, so
      resetting only #lt-tabs left the camera-mode chips nowrap inside the rail's
      ~100px columns. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-tabs, #ct-modes) .lt-tab { white-space: normal; justify-content: center; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-tabs, #ct-modes) .lt-tab {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+    white-space: normal; justify-content: center;
+  }
   /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
      button and costing the rail a whole extra line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }

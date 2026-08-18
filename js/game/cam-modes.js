@@ -50,9 +50,9 @@ window.CamModes = (function () {
         el.id = "campicker";
         el.setAttribute("role", "menu");
         el.setAttribute("aria-label", "Camera view");
-        // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
-        // no-orphan rule (css/components.css) widens it across the row instead.
-        el.className = "no-orphan-3";
+        // The shared balanced row derives its count from the available width;
+        // REAR CAM fills a lone final line without assuming three columns.
+        el.className = "balanced-row";
         el.hidden = true;
         for (let i = 0; i < CAM_MODES.length; i++) {
           const b = document.createElement("button");
