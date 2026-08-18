@@ -179,6 +179,18 @@ test("a cap-forced drop does not leak its hold into the next race", () => {
     "the new race's first caution flies immediately — no inherited hold");
 });
 
+test("debris going inactive mid-race freezes a flying flag", () => {
+  // reset() on !DebrisWorld.active() flashed GREEN under a still-valid SC
+  // the moment the side-world paused. Freeze; leaving "race" still clears.
+  let active = true;
+  const rc = load({ active: () => active, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3, "safety car flies");
+  active = false;
+  run(rc, 2);
+  assert.equal(rc.info().level, 3, "flag stays up while debris is off");
+});
+
 test("switching the layer off DROPS a flag already flying", () => {
   // Not "stop computing" but "stop computing AND clear". Without the clear the
   // HUD keeps showing a safety car nothing maintains, which reads as a stuck

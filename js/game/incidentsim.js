@@ -357,6 +357,7 @@ const IncidentSim = (function () {
       for (const i of inc.cars.slice()) {
         const c = G.cars && G.cars[i];
         if (!c) { finishCar(inc, i); continue; }
+        if (c.retired || c.finished) { handbackCar(inc, i, true); continue; }
         let pose = null;
         try { pose = DebrisWorld.carBodyPose(i); } catch (e) { pose = null; }
         if (!pose || !fin(pose.x) || !fin(pose.z) || !fin(pose.qw)) { handbackCar(inc, i, true); continue; }

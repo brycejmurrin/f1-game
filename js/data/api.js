@@ -57,6 +57,8 @@ const F1API = (function () {
 
   let queue = Promise.resolve();        // promise chain serializing network hits
   let lastNetAt = 0;                    // time of last actual fetch start
+  const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
+  const FAIL_WARN_MS = 30 * 1000;
   let latestSessionKey = null;          // tracked from latestSession() responses
   let lastCacheSweepAt = -Infinity;
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
@@ -227,11 +229,20 @@ const F1API = (function () {
             // defeating request()'s refusal to serve stale cache on lockouts.
             if (!(e instanceof SyntaxError)) throw e;
           }
-          throw new Error("HTTP " + res.status + " for " + url);
+          const httpErr = new Error("HTTP " + res.status + " for " + url);
+          httpErr.status = res.status;
+          throw httpErr;
         });
       }
       return res.json();
     });
+  }
+
+  function warnFetchFail(name, kind) {
+    const now = Date.now();
+    if (now - (failWarnAt[name] || 0) < FAIL_WARN_MS) return;
+    failWarnAt[name] = now;
+    Log.warn("data", "fetch " + name + " fail" + (kind ? " " + kind : ""));
   }
 
   function request(url, ttl, options) {
@@ -263,10 +274,10 @@ const F1API = (function () {
         const msg = (err && err.message) || "";
         const status = err && err.status;
         if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
-          Log.warn("data", "fetch " + name + " fail stale");
+          warnFetchFail(name, "stale");
           return hit.data;
         }
-        Log.warn("data", "fetch " + name + " fail");
+        warnFetchFail(name, "");
         throw err;
       });
 

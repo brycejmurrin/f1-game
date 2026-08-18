@@ -24,15 +24,16 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/game/incidentsim.js"), "utf8");
 
-function load() {
+function load(over = {}) {
   const promoted = [];
+  const pose = over.pose || null;
   const DebrisWorld = {
     active: () => true,
     rapierReady: () => true,
     worldGen: () => 1,
     promoteCarDynamic: (i) => { promoted.push(i); return true; },
     demoteCarKinematic: () => {},
-    carBodyPose: () => null,
+    carBodyPose: () => pose,
   };
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
@@ -100,4 +101,15 @@ test("default config unchanged: a relV=30 pair still resolves as r2", () => {
   sim.notifyCar(cars[0], cars[1], 30);
   sim.preStep(1 / 60);
   assert.equal(sim.status().lastKind, "r2");
+});
+
+test("postStep hands a finished car back instead of tracking it", () => {
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: 0 };
+  const { sim, cars } = load({ pose });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2);
+  cars[0].finished = true;
+  sim.postStep(1 / 60);
+  assert.equal(sim.status().owned, 1, "the finished car is released");
 });

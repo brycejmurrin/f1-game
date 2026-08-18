@@ -8320,6 +8320,7 @@ function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   const btn = $("pm-hidehud");
   if (btn) btn.textContent = v ? "SHOW HUD" : "HIDE HUD";
+  if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
 $("pm-hidehud").onclick = () => {
   const willHide = !document.body.classList.contains("hud-hidden");

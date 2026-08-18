@@ -61,9 +61,18 @@ window.CamModes = (function () {
         document.body.appendChild(el);
       };
       const sync = () => {
-        for (const b of el.children) b.classList.toggle("active", +b.dataset.idx === G.camMode);
+        for (const b of el.children) {
+          const on = +b.dataset.idx === G.camMode;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        }
       };
-      const show = () => { if (!el) build(); sync(); el.hidden = false; };
+      const show = () => {
+        if (document.body.classList.contains("hud-hidden")) return;
+        if (!el) build();
+        sync();
+        el.hidden = false;
+      };
       const hide = () => { if (el) el.hidden = true; };
       const visible = () => !!el && !el.hidden;
       return { show, hide, visible };

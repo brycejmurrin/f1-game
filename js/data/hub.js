@@ -239,6 +239,8 @@ const DataHub = (function () {
     Log.info("data", "hub close");
     stopLiveAuto();
     closeTelemPopup();
+    state.live = null;
+    state.telemetry = null;
     root.hidden = true;
     openFlag = false;
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -371,16 +373,23 @@ const DataHub = (function () {
     for (let y = Math.max(now, OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) out.push(y);
     return out;
   })();
-  const sel = { year: null, meetingKey: null, sessionKey: null, meta: null };
+  const sel = { year: null, meetingKey: null, sessionKey: null, meta: null, selAt: 0, pinned: false };
+  const SESSION_STALE_MS = 120 * 1000;
 
-  function ensureSession() {
-    if (sel.sessionKey !== null) return Promise.resolve(sel.meta);
+  function ensureSession(force) {
+    const have = sel.sessionKey !== null;
+    const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
+    // A picker choice stays put; an auto-latest pick expires so LIVE can
+    // follow a new session after the previous one ends.
+    if (have && sel.pinned) return Promise.resolve(sel.meta);
+    if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession().then(function (ses) {
       if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;
         sel.meetingKey = ses.meetingKey;
         sel.year = ses.year || YEARS[0];
+        sel.selAt = Date.now();
       }
       return sel.meta;
     });
@@ -414,7 +423,7 @@ const DataHub = (function () {
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
-        sel.year = y; sel.meetingKey = null; sel.sessionKey = null;
+        sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("dh-active", yearRow.children[i] === b);
         }
@@ -446,13 +455,14 @@ const DataHub = (function () {
     gpSel.addEventListener("change", function () {
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
+      sel.pinned = false;
       loadSessions(true);
     });
     sesSel.addEventListener("change", function () {
       if (!sesSel.value) return;
       const m = sesIndex[sesSel.value];
       if (!m) return;
-      sel.sessionKey = m.sessionKey; sel.meta = m;
+      sel.sessionKey = m.sessionKey; sel.meta = m; sel.pinned = true;
       onPick(m);
     });
 
@@ -489,7 +499,7 @@ const DataHub = (function () {
         setSelectOptions(sesSel, ss.map(function (s) {
           return { value: s.sessionKey, label: s.name || s.type || "Session" };
         }), sel.sessionKey);
-        if (userChanged) onPick(sel.meta);
+        if (userChanged) { sel.pinned = true; onPick(sel.meta); }
       }, function () {
         if (myGen !== pickerGen) return;
         ph(sesSel, "error");
