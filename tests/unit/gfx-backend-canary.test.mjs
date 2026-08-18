@@ -620,7 +620,7 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /await renderer\.init\(\);[\s\S]{0,900}game-soft/);
   assert.match(tlx, /function _instColorAttr/);
   assert.match(tlx, /isInstancedBufferAttribute/);
-  assert.match(tlx, /do NOT\s+also set imesh\.instanceColor/);
+  assert.match(tlx, /do NOT[\s\S]{0,40}also set imesh\.instanceColor/);
   assert.match(post, /ldrTarget: \(\) => ldrRT/);
 });
 
