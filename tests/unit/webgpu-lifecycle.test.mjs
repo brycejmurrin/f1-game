@@ -919,7 +919,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, \(authored && attrBG\) \? attrBG : \(_roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG \|\| zeroAttrBG\)/);
   assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
   assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
@@ -933,8 +933,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /const MAX_S = 2000/);
   assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
   assert.match(CHUNKS_SOURCE, /o\.matTrk = vec4<f32>\(pulled\.y, pulled\.z, pulled\.w, pulled\.x\)/);
-  assert.match(CHUNKS_SOURCE, /vTrk = select\(fromWorld\.xyz, in\.matTrk\.xyz, isRoadDraw\)/);
-  assert.doesNotMatch(CHUNKS_SOURCE, /useWorldTrk = isRoadDraw && fromWorld\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
   assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
@@ -1406,7 +1406,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.xyz\)\) \+ abs\(dpdy\(in\.matTrk\.xyz\)\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail

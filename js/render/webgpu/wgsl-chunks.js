@@ -708,21 +708,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrkAttr = abs(dpdx(in.matTrk.xyz)) + abs(dpdy(in.matTrk.xyz));
+  let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let fromWorld = trkFromWorld(in.wpos);
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // (s,x,hw) live in interpolator .xyz — Dawn has dropped .w of location 3
-  // (useVsTrk gated on hw and fell back to per-fragment nearest-bin).
-  let vTrk = select(fromWorld.xyz, in.matTrk.xyz, isRoadDraw);
+  // Per-fragment LUT (s = best.z + ds) when group 2 is the world grid.
+  // Location-3 matTrk.xyz stair-steps on Dawn; location-5 in.trk is the
+  // authored-vertex backup when the LUT miss (fromWorld.w == 0).
+  let useWorldTrk = fromWorld.w > 0.5;
+  let vTrk = select(in.trk, fromWorld.xyz, useWorldTrk);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
   let vsMat = in.matTrk.w;
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = select(fwWorld, fwTrkAttr, isRoadDraw);
+  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // Every baked MAT layer is sampled here in uniform CF with a CONSTANT
   // array index so textureSample can use implicit LOD + anisotropy — the
