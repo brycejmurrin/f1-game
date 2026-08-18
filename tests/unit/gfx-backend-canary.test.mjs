@@ -1147,15 +1147,18 @@ test("GLX present reuses scratch vectors and skip-equals grade", () => {
     "do not bypass _compUf for uGradeShadow");
 });
 
-test("WGX COMPOSITE does not reference undeclared ssrWet", () => {
-  // d6c8fa17 dropped `let ssrWet = U.lift.w` with the wetness remul but left
-  // `if (ssrWet > 0.001 || …)` — Dawn rejects the identifier and sheds
-  // COMPOSITE to a tonemap blit (godray/bloom/grade all gone).
+test("WGX COMPOSITE declares ssrWet and does not remul wetness", () => {
+  // d6c8fa17 dropped `let ssrWet = U.lift.w` and left `if (ssrWet > 0.001)` —
+  // Dawn rejected the identifier and shed COMPOSITE. Deploy re-declares the
+  // let so a leftover use compiles; wetness still lives in the SSR pass .a,
+  // so the consume gate must not remultiply it.
   const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.doesNotMatch(post, /\bssrWet\b/,
-    "COMPOSITE must not name ssrWet — wetness already lives in the SSR pass .a");
+  assert.match(post, /let ssrWet = U\.lift\.w/,
+    "COMPOSITE must declare ssrWet so Dawn does not reject a leftover use");
+  assert.doesNotMatch(post, /ssrWet \* ssrRefl/,
+    "do not remultiply wetness * reflect — that zeros dry sheen");
   assert.match(post, /if \(ssrRefl > 0\.001 \|\| ssrCar > 0\.001\)/,
-    "SSR consume gate is reflect || carReflect, not the removed wetness lane");
+    "SSR consume gate is reflect || carReflect, not the wetness lane");
 });
 
 test("WGX bloom final upsample overwrites mip0 like GLX/TLX", () => {
@@ -1311,6 +1314,8 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "binary refine must be 4 like GLX, not 5");
   assert.match(post, /min\(gateSrc \/ 0\.20, 1\.0\)/,
     "SSR pass must apply the dry-sheen fade once so COMPOSITE can trust .a");
+  assert.match(post, /let ssrWet = U\.lift\.w/,
+    "COMPOSITE must declare wetness (U.lift.w) before the SSR consume gate");
   assert.equal((post.match(/let gateSrc/g) || []).length, 1,
     "do not redeclare gateSrc — Dawn refuses SSR and sheds the whole post chain");
   assert.equal((post.match(/min\(gateSrc \/ 0\.20, 1\.0\)/g) || []).length, 1,

@@ -12,10 +12,13 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
-    sceneryStartFrac: 0.3275,
+    // Scenery / exclusions / boards are racing-from-THIS line (pits at 0,
+    // Tarzan runoff ~0.04, Hugenholtz stand 0.135, Luyendyk 0.915 — T14
+    // apex is 0.9105). The old start was 0.3275. Naming that as
+    // sceneryStartFrac added _sceneryShift and parked the pit complex on
+    // the Hunserug/Scheivlak stretch — same class as the bankZones bug
+    // that put 19° on those sweeps while Hugenholtz ran flat. Do not
+    // re-add it.
     name: "ZANDVOORT",
     gp: "Dutch GP",
     country: "Netherlands",

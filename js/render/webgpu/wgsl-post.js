@@ -847,6 +847,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // gate, fresnel, cover, seam fade, and min(gateSrc/0.20) into .a —
   // remultiplying wetness * reflect here zeros dry sheen (wetness=0) and
   // double-counts wet (po.reflect is already wetness * ssrWetMul).
+  let ssrWet = U.lift.w;
   let ssrRefl = U.gamma.w;
   let ssrCar = U.gain.w;
   // Wetness already lives in the SSR pass .a (min(gateSrc/0.20)). Do not

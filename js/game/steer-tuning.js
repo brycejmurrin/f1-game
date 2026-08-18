@@ -36,6 +36,8 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
+//  pm-adaptbtn ADAPTIVE BUTTONS 1..10 mix of the digital-steer rate half of
+//                             SPEED STEER + analog travel. v1 = OFF.
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 // The car is planted (understeer-only): DRIFT defaults to 0 so the rear never
 // steps out — overcooking a corner washes the front wide, it never snaps round.
@@ -105,6 +107,10 @@ function paceLabel(v) { return Math.round(paceFromSlider(v) * 100) + "%"; }
 // It is now opt-IN: the default is v1 (off), and the range runs 0 .. 0.70.
 function helpFromSlider(v)   { return (v - 1) / 9 * 0.70; }            // 0..0.70 assist gain, v1 = OFF
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
+// ADAPTIVE BUTTONS: v1 is a true zero (the fixed KEY_RAMP), v10 is the full
+// SPEED STEER hyperbola + analog travel. The slider is linear in mix.
+function adaptMixFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
+function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 
 // ---- presets ----
 // Three named bundles drive all the handling sliders at once so a player never
@@ -213,7 +219,7 @@ function refreshMacros() {
 // Log ring buffer whether or not anyone was watching. A migration that quietly
 // changes a player's stored settings and leaves no record is indistinguishable
 // from a bug, both to them and to us.
-const STEER_SCHEMA = 3;
+const STEER_SCHEMA = 4;
 
 // The v2 pace grid. Kept for ONE reader — v3's regrid, which has to know what a
 // stored notch used to mean. Nothing else may call it.
@@ -323,6 +329,19 @@ const STEER_MIGRATIONS = [
         Log.warn("game", `steer schema v3: old pace notches ${shared.join(" and ")} both land on ${to} — the top of the old grid was finer than the new even-6 % one, so those two settings are no longer distinguishable (this one moved ${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
       }
   } },
+
+  // ---- v3 -> v4: ADAPTIVE BUTTONS becomes a 1..10 strength ----
+  //
+  // The first ship was a boolean (0 = off, 1 = on). The slider's 1 is OFF, so
+  // leaving a stored 1 alone would silently turn the feature off for anyone who
+  // had switched it on. 0 and 1 are the only values that boolean ever wrote.
+  // A store with NO key is left alone: the new default (notch 1 = OFF) applies
+  // through store.get() and writing 1 here would pin today's default forever.
+  { to: 4, apply() {
+      const from = store.get("adaptiveButtons", null);
+      if (from === 0) migSet(4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
+      else if (from === 1) migSet(4, "adaptiveButtons", 6, "old ON becomes mid strength");
+  } },
 ];
 
 function migrateSteerStore() {
@@ -340,7 +359,7 @@ function applySteerTuning() {
   // feeds them straight into G.WHEELBASE/G.STEER_MAX_SLIP/G.PACE. A store value
   // outside a knob's range (an edited apex26.steerRate, a downgrade from a build
   // with a wider range) would EXTRAPOLATE rather than clamp — a steerRate of 50
-  // computes a negative wheelbase, not an error. The nine oninput handlers below
+  // computes a negative wheelbase, not an error. The ten oninput handlers below
   // are DOM-clamped by the range input's own min/max and never take this path;
   // this is the one that runs on every boot, reading whatever localStorage holds.
   const rate    = clamp(store.get("steerRate",  5), SLIDER_MIN, SLIDER_MAX);
@@ -352,6 +371,7 @@ function applySteerTuning() {
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
+  const adapt   = clamp(store.get("adaptiveButtons", 1), SLIDER_MIN, SLIDER_MAX);
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
@@ -360,6 +380,8 @@ function applySteerTuning() {
   G.ROAD_FOLLOW    = helpFromSlider(help);
   Input.setTiltSmoothing(cutoffFromSmooth(smooth));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
+  Input.setAdaptiveButtons(adaptMixFromSlider(adapt));
+  Input.setSteerSpeedRef(G.STEER_SPEED_REF);
   G.raceLineAssist = line / 5;
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
@@ -367,6 +389,7 @@ function applySteerTuning() {
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
+  if ($("pm-adaptbtn")) { $("pm-adaptbtn").value = adapt; $("pm-adaptbtn-v").textContent = adaptLabel(adapt); }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -401,7 +424,14 @@ $("pm-lock").oninput = (e) => {
 };
 $("pm-speedsteer").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSpeed", v);
-  G.STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v; clearPreset();
+  G.STEER_SPEED_REF = speedRefFromSlider(v);
+  Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+  $("pm-speedsteer-v").textContent = v; clearPreset();
+};
+if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("adaptiveButtons", v);
+  Input.setAdaptiveButtons(adaptMixFromSlider(v));
+  $("pm-adaptbtn-v").textContent = adaptLabel(v);
 };
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);
@@ -438,6 +468,14 @@ for (const n of ["off", "corner", "full"]) $("pm-line-" + n).onclick = () => {
   store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 };
+// vStd(v) = v * VMAX / vTop() = v / max(PACE, 0.05). Same identity, no
+// game.js growth — adaptive digital rate must track the pace-5 scale the
+// SPEED STEER reference is written on.
+Input.setSpeedProvider(function () {
+  const p = G.player;
+  if (!p) return 0;
+  return Math.abs(p.speed || 0) / Math.max(G.PACE || 1, 0.05);
+});
 // <details> owns open/closed state, keyboard toggling and the "expanded"
 // announcement itself; the native "toggle" event fires on both directions,
 // so this only has to add the click sound.

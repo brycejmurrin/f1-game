@@ -342,13 +342,13 @@ let manualMode = store.get("manual", false);   // manual gearbox preference (pla
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
-// Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
-// (no thumbs involved). Touch/button modes on mobile force auto to free thumbs.
+// Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
+// both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
+// hand for a shifter.
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
-// the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
+// Auto-throttle: TOUCH mode only (the canvas drag occupies the thumb).
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
@@ -2568,7 +2568,7 @@ function startRace() {
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
-  const manual = gearsManual();   // only ever true in tilt mode
+  const manual = gearsManual();
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
@@ -2597,9 +2597,9 @@ function showTouchControls(show) {
 }
 
 // Fill the two thumb docks. This is the ONE thing the flex bar cannot express
-// on its own: a control genuinely changes SIDE between modes — the throttle is
-// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
-// the arrows own the left — and CSS cannot move an element to a different
+// on its own: a control genuinely changes SIDE between modes — pedals are
+// left-thumb in tilt AUTO, right-thumb in tilt MANUAL and in buttons (arrows
+// own the left) — and CSS cannot move an element to a different
 // parent. Everything else (spacing, wrapping, centring, never overlapping) is
 // the flex row's job, and there is deliberately not one coordinate here.
 //
@@ -2621,12 +2621,12 @@ function layoutDocks(steerBtns, manual) {
         steer = $("grp-steer"), taps = $("grp-taps");
   const L = [], R = [];
   if (steerBtns) {
-    L.push(steer);            // arrows own the left thumb...
-    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
+    L.push(steer);                                // arrows own the left thumb
+    R.push(taps, pedals);                         // pedals stay right
+  } else if (manual) {
+    L.push(shifts, taps); R.push(pedals);         // tilt+manual: gears L, pedals R
   } else {
-    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
-    R.push(taps);             // the three taps sit inboard...
-    if (manual) R.push(shifts);   // ...of the shift column at the corner
+    L.push(pedals); R.push(taps);                 // auto tilt/touch: pedals left
   }
   // An empty group must not hold a gap in the dock. Hiding it is the whole
   // reason `hidden` on every child is not enough: a flex parent of hidden
@@ -3365,6 +3365,7 @@ function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
   c.prog += d;
   if (c._prevS != null) c._prevS = wrapS(c._prevS + d);
+  _colShifted = true;
 }
 
 // Collision masses AND separation shares for one pair.
@@ -3393,6 +3394,7 @@ const LCAR = 4.8, WCAR = 2.0;
 const COL_BUCKET_M = LCAR;
 const _colBuckets = [];   // sparse: bucketId → car[]
 const _colBucketIds = []; // compact list of occupied bucket ids this pass
+let _colShifted = false;  // shiftLong this step — skip idle re-buckets
 
 function _colClearBuckets() {
   for (let i = 0; i < _colBucketIds.length; i++) {
@@ -3424,7 +3426,8 @@ function _colFillBuckets(ranked) {
 const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 function sepShares(a, b) {
-  const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1;
+  const hum = AiDrive.humanInvMass(!!track.street);
+  const iA = a.human ? hum : 1, iB = b.human ? hum : 1;
   const netA = netPlay.owns(a), netB = netPlay.owns(b);
   _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
   _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
@@ -3491,7 +3494,7 @@ function collideFx(a, b, impact) {
 // (separate on x, scrub speed); longitudinal => a rear-end (separate along the
 // track, transfer speed rear->front). Mass-weighted, several relaxation passes
 // to settle clusters, then a hard min-separation pass so cars can never render
-// merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
+// merged. The player is "heavier" (AiDrive.humanInvMass) so the AI can't shove them off.
 function _colResolvePair(a, b, last, rubScrub) {
   if (incidentSim.owns(a) || incidentSim.owns(b)) return;
   const ct = pairContact(a, b);
@@ -3605,15 +3608,15 @@ function resolveCollisions(ranked, dt) {
   // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
   const useBuckets = ranked.length > 12;
   let nB = 0;
-  if (useBuckets) nB = _colFillBuckets(ranked);
+  if (useBuckets) { nB = _colFillBuckets(ranked); _colShifted = false; }
   else if (Log.enabled("game", Log.DEBUG)) {
     Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
   }
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
     if (useBuckets) {
-      // Re-bucket each pass: shiftLong moves prog, so adjacency can change.
-      if (pass > 0) nB = _colFillBuckets(ranked);
+      // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
+      if (pass > 0 && _colShifted) { nB = _colFillBuckets(ranked); _colShifted = false; }
       _colForBucketPairs(nB, (a, b) => _colResolvePair(a, b, last, rubScrub));
     } else {
       const fwd = (pass & 1) === 0;
@@ -3633,7 +3636,7 @@ function resolveCollisions(ranked, dt) {
   // tighter boundary no longer causes the old vibration).
   const SLOP = 0.05;
   if (useBuckets) {
-    nB = _colFillBuckets(ranked);
+    if (_colShifted) nB = _colFillBuckets(ranked);
     _colForBucketPairs(nB, (a, b) => _colSepPair(a, b, SLOP));
   } else {
     for (let i = 0; i < ranked.length; i++) {
@@ -3746,7 +3749,7 @@ function updateCar(c, dt, ranked) {
     const L = track.total;
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
-      if (o === c) continue;
+      if (o === c || o.finished) continue;
       let dprog = o.prog - c.prog;
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
@@ -3765,7 +3768,7 @@ function updateCar(c, dt, ranked) {
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-    const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
+    const boxed = AiDrive.isBoxed({ contactT: c.contactT, roomL, roomR, blocker, blockerGap, street: !!track.street });
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
@@ -3862,22 +3865,22 @@ function updateCar(c, dt, ranked) {
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
-    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
-    const samples = [];
+    AiDrive.beginLook();
     let kMax = 0;
     for (let d = 12; d < look; d += 14) {
       const ss = wrapS(c.s + d);
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      samples.push({ d, k: kk, bank: Tracks.bankAngle(track, ss) });
+      AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     const br = AiDrive.brakeDecision({
-      traits: aiT, samples, latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
       roomL, roomR,
@@ -3889,18 +3892,18 @@ function updateCar(c, dt, ranked) {
     // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
     // cap bounds it) but surges the instant we draw out of that car's box. Fades
     // with gap + lateral offset; straight only (the wake is behind the car).
-    if (towCar && !braking && kMax < 0.006 && !track.street) {
+    if (towCar && !braking && kMax < 0.006) {
       const tow = clamp((34 - towGap) / 28, 0, 1) * clamp(1 - Math.abs(towCar.x - c.x) / 4, 0, 1);
-      vmax *= 1 + 0.045 * tow;  // up to +4.5% top speed deep in the wake (~F1 tow)
+      vmax *= 1 + AiDrive.towGain(!!track.street) * tow;
     }
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
-    // cap our pace to it, braking if closing fast, so we tuck behind not ram. On
-    // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
-    // Awareness pads the follow gap (AiDrive.followPad).
+    // cap our pace to it, braking if closing fast, so we tuck behind not ram.
+    // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      const follow = (track.street ? 12 : 6) + AiDrive.followPad(aiT);
+      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
-      if (c.speed > blocker.speed + 3) { braking = true; brakeLvl = 1; }
+      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
+      if (qb) { braking = true; brakeLvl = qb; }
     }
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
@@ -4109,7 +4112,7 @@ function updateCar(c, dt, ranked) {
     // Adaptive preferred lane: under traffic density, slowly bias toward the
     // freer side so midfield trains fan out instead of locking one line forever.
     c.lane = AiDrive.adaptLane(c.lane, {
-      traits: aiT, nearby: nearbyN, roomL, roomR,
+      traits: aiT, nearby: nearbyN, roomL, roomR, street: !!track.street,
       baseLane: c.lanePref != null ? c.lanePref : c.lane,
     }, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -4118,34 +4121,26 @@ function updateCar(c, dt, ranked) {
     // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
     // inside is -x); the racing line aims there.
     const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
     // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
     let overtake = 0;
-    // PERMANENT circuits: a decisive, CRAFT-scaled pull-out that clears the box and
-    // uses the tow. STREET circuits keep the gentler baseline move — tight barriers
-    // punish an over-committed line (it clipped the wall on Monaco) — further
-    // scaled by awareness so careful drivers don't wall. Defend and tow are
-    // permanent-only for the same reason.
-    const otEnh = !track.street;
-    if (blocker && blocker.speed < c.speed + (otEnh ? 5 : 4) && blockerGap < (otEnh ? 16 : 14)) {
-      const side = roomR >= roomL ? 1 : -1;
-      const need = side > 0 ? roomR : roomL;
-      overtake = side * (otEnh
-        ? lerp(0.8, 2.6, clamp(1 - blockerGap / 16, 0, 1)) * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, aiT.craft)
-        : lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1) * AiDrive.streetOtScale(aiT));
+    // OT / defend pulls live in AiDrive (craft on permanents, awareness + open
+    // inside-room on streets). Tow is no longer permanent-only.
+    if (blocker) {
+      overtake = AiDrive.otPull({
+        street: !!track.street, traits: aiT, speed: c.speed,
+        blockerSpeed: blocker.speed, blockerGap, roomL, roomR,
+      });
     }
-    // Defending: a car of similar-or-better pace close behind, a corner ahead, and
-    // clean air in front → take the inside line to cover the obvious passing spot,
-    // scaled by CRAFT. Corner-only (shading on a straight just made the defender
-    // weave and bleed pace); a steady cover that fades as the threat drops back.
     let defend = 0;
-    if (chaser && !blocker && chaserGap < 12 && chaser.speed > c.speed - 3 && Math.abs(kA) > 0.004 && !track.street) {
-      const coverSide = -Math.sign(kA);
-      const coverRoom = coverSide > 0 ? roomR : roomL;   // don't cover INTO a close barrier
-      defend = coverSide * lerp(0.2, 1.1, aiT.craft) * clamp(1 - chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
+    if (chaser && !blocker) {
+      defend = AiDrive.defendPull({
+        street: !!track.street, traits: aiT, speed: c.speed, chaser: true,
+        chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR,
+      });
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
@@ -4153,21 +4148,21 @@ function updateCar(c, dt, ranked) {
     // the same direction (and off the track). Experience softens the panic pull.
     const freer = roomR - roomL;
     const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
-    const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT) : 0;
+    const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT, !!track.street) : 0;
     // Proactive lateral separation: drive toward a minimum side-by-side gap so
     // the field settles into clean, non-overlapping spacing instead of pulling
     // onto one line, overlapping, and bouncing (the side-to-side vibration).
     // Push is proportional to how far INSIDE the min gap a neighbour is, so it
     // ramps up only when too close and fades to nothing once spaced — stable, no
     // oscillation, and it doesn't fight the collision push (same direction).
-    const MIN_GAP = 2.8;
+    const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
     let sep = 0;
     // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
     // that share the same stretch of track.
     const ci2 = (c.rank || 1) - 1;
     const Ltrk = track.total;
     for (let k = 0; k < ranked.length; k++) {
-      if (k === ci2) continue;
+      if (k === ci2 || ranked[k].finished) continue;
       const o = ranked[k];
       let dp = o.prog - c.prog;
       if (!Number.isFinite(dp)) continue;
@@ -4182,7 +4177,8 @@ function updateCar(c, dt, ranked) {
       if (deficit <= 0) continue;
       sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
-    sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
+    const sepMax = AiDrive.sepClamp(!!track.street);
+    sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
     const desiredX = clamp(targetX + overtake + defend + sep + unstuck, -(hw - 0.5), hw - 0.5);
@@ -4511,7 +4507,7 @@ function updateCar(c, dt, ranked) {
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     // Awareness scales how much they yield (AiDrive.contactGive).
-    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT);
+    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT, !!track.street);
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
@@ -4611,7 +4607,7 @@ function updateCar(c, dt, ranked) {
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
-        if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.5 : 0.28);
+        if (!c.wasOnWall) c.speed *= 1 - incidence * AiDrive.wallHitLoss(!!track.street);
         // straighten the nose toward the wall tangent so the car slides along it
         // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
         // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
@@ -4634,7 +4630,7 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        const scrub = pushIn * AiDrive.wallSteerScrub(!!track.street) * dt;
         if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
         else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
@@ -4643,7 +4639,7 @@ function updateCar(c, dt, ranked) {
       // the player just drives off the barrier — no sticky pin, no auto-rescue.
     } else {
       // AI has no world-space heading to slide; clamp + gentle scrub.
-      c.speed = Math.max(0, c.speed - (track.street ? 24 : 12) * dt);
+      c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
     }
     c.wasOnWall = true;
   } else {
@@ -8383,7 +8379,7 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // js/game/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).
 
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
-// Disabled — not hidden — otherwise (see the pm-calib note in setSteerMode).
+// Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
   $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
   $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
@@ -8565,7 +8561,7 @@ Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
-    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+    + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);

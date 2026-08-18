@@ -13,16 +13,16 @@ import { test, expect } from "../helpers/fixtures.js";
 // Build a standard-mapping gamepad with the given left-stick X/Y (axes 0/1)
 // and a sparse {index: value} button map, install it as the sole connected
 // pad, then poll. Returns whatever `read` extracts from the page afterwards.
-async function poll(page, { axisX = 0, axisY = 0, buttons = {}, connected = true } = {}, read) {
+async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, buttons = {}, connected = true } = {}, read) {
   return page.evaluate(
-    ({ axisX, axisY, buttons, connected, readSrc }) => {
+    ({ axisX, axisY, axisRX, axisRY, buttons, connected, readSrc }) => {
       const btns = [];
       for (let i = 0; i < 17; i++) {
         const v = buttons[i] || 0;
         btns.push({ pressed: v >= 0.5, value: v, touched: v > 0 });
       }
       const pad = connected
-        ? { connected: true, mapping: "standard", axes: [axisX, axisY, 0, 0], buttons: btns }
+        ? { connected: true, mapping: "standard", axes: [axisX, axisY, axisRX, axisRY], buttons: btns }
         : null;
       navigator.getGamepads = () => [pad, null, null, null];
       window.dispatchEvent(new Event(connected ? "gamepadconnected" : "gamepaddisconnected"));
@@ -30,7 +30,7 @@ async function poll(page, { axisX = 0, axisY = 0, buttons = {}, connected = true
       // eslint-disable-next-line no-eval
       return (0, eval)("(" + readSrc + ")")();
     },
-    { axisX, axisY, buttons, connected, readSrc: read.toString() }
+    { axisX, axisY, axisRX, axisRY, buttons, connected, readSrc: read.toString() }
   );
 }
 
@@ -218,6 +218,31 @@ test.describe("Gamepad menu navigation", () => {
     await poll(page, { axisY: 1 }, () => true);
     expect(await page.evaluate(() =>
       document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("D-pad left, right and up also seed focus", async ({ page }) => {
+    await openSelectForPad(page);
+    for (const btn of [14, 15, 12]) {
+      await page.evaluate(() => document.activeElement.blur());
+      await poll(page, { buttons: { [btn]: 1 } }, () => true);
+      expect(await page.evaluate(() =>
+        document.getElementById("select").contains(document.activeElement))).toBe(true);
+    }
+  });
+
+  test("the right stick navigates when the left stick is centred", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { axisRY: 1 }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("trigger travel is analog", async ({ page }) => {
+    const rt = await poll(page, { buttons: { 7: 0.4 } }, () => Input.throttleLevel());
+    expect(rt).toBeCloseTo(0.4, 2);
+    const lt = await poll(page, { buttons: { 6: 0.55 } }, () => Input.brakeLevel());
+    expect(lt).toBeCloseTo(0.55, 2);
   });
 
   test("A activates the focused control", async ({ page }) => {

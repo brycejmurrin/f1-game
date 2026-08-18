@@ -323,7 +323,9 @@ const CEILINGS = {
   // 8601 -> 8604: HUD refreshHud for headless teleport (deploy).
   // 8604 -> 8605: title quit closes the camera picker and cancels friend-quali
   // instead of abortQuali-unhiding the lobby.
-  "js/game.js": 8605,
+  // 8605 -> 8599: extract street OT/defend/tow/queue-brake/sep/wall into AiDrive.
+  // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
+  "js/game.js": 8601,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

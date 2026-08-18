@@ -1147,13 +1147,15 @@ Force-rescue the player immediately — same mechanism as the 3-second auto-resc
 `physState()` so a test can confirm the car was repositioned. Returns `false` if
 no race is active.
 
-### `inputState() → {steerMode, key, btn, pad, touchSteer, canvasTouches, holdPointers, throttle, braking}`
+### `inputState() → {steerMode, key, btn, pad, touchSteer, canvasTouches, holdPointers, throttle, braking, adaptiveButtons, speedStd, rateIn}`
 Live per-source input snapshot: which source (keyboard `key`, on-screen buttons
 `btn`, gamepad `pad`, canvas touch) is asserting throttle/brake/steer right now,
 plus `holdPointers` — the pressed-pointer count each on-screen hold button is
 tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
-on" report.
+on" report. `adaptiveButtons` / `adaptiveMix` (0..1) / `speedStd` / `rateIn` are the
+Advanced ADAPTIVE BUTTONS path (digital steer rate blended toward the
+SPEED STEER hyperbola; the slider is how much).
 
 **On-screen variant for a phone with no console:** load the game with
 `?inputdebug=1` (or set `localStorage["apex26.inputDebug"] = "1"`) and a small
