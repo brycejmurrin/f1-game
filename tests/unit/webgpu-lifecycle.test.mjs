@@ -813,9 +813,11 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Road micro-normal footprint fade (grazing crawl guard).
   assert.match(CHUNKS_SOURCE, /mnFpAbs/);
   // Detail grain before roadMarkings so paint stays crisp.
-  const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
+  const grain = CHUNKS_SOURCE.indexOf("patchM = svnoise(wp * 0.055");
   const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
   assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+  assert.match(CHUNKS_SOURCE, /patchM = svnoise\(wp \* 0\.055/,
+    "LIT grain must use surface-family svnoise (GLX surfaceNoise), not sky vnoise");
   // Sparse asphalt cracks ported from GLX lit.js (were dropped in WGX Block 1b).
   assert.match(CHUNKS_SOURCE, /Sparse cracks \(GLX lit\.js\)/);
   assert.match(CHUNKS_SOURCE, /crAA = max\(0\.075, 0\.015 \+ max\(fwWpos\.x, fwWpos\.z\) \* 0\.9\)/);
