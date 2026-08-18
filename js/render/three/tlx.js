@@ -691,6 +691,9 @@ const TLX = (function () {
       // null and every env member a safe no-op (the pre-M9 analytic look).
       // NO sRGB anywhere — NoColorSpace on the cube, the calibration invariant.
       const ENV_SIZE = 64;
+      // Probe draw-distance, metres — GLX ENV_CULL_M. A 64px face is ~1.4 deg/px;
+      // uncapped the cube re-draws the 900 m city. Baked ON (was PerfTry.envCull).
+      const ENV_CULL_M = 300;
       let envRT = null, envDummy = null;
       try {
         const envHdr = !!(post && post.hdrOk());
@@ -1204,12 +1207,20 @@ const TLX = (function () {
       // envReady — until then uEnvStr stays 0 and the cube reads black.
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
-      let _envFrame = null, _envSvCull = 0, _envEye = null, _envCullM = 0;
+      // Software / soft-GPU faces clear black and skip the world. envReady
+      // still latches (M9 parked-race hook), but uEnvStr must stay 0 — a
+      // ready black cube darkens clearcoat (envW absorb) and kills chrome.
+      let _envBlank = false;
+      let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
       const _envInvArr = new Float32Array(16);
+      const _envVPArr = new Float32Array(16);
       const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
-      function _restoreEnvCull() {
-        if (_envFrame) { _envFrame.cullDist = _envSvCull; _envFrame = null; }
-        _envEye = null;
+      function _restoreEnvFrame() {
+        if (!_envFrame) return;
+        _envFrame.viewProj = _envSvVP;
+        _envFrame.eye = _envSvEye;
+        _envFrame.cullDist = _envSvCull;
+        _envFrame = null;
       }
       function ensureEnvCam() {
         if (envCubeCam || !envRT) return;
@@ -1700,8 +1711,10 @@ const TLX = (function () {
         //              drawWorldMeshes(...); envFaceEnd(face); }
         // Returning null (no cube target, or a probe-less setup-preview frame
         // with no viewProj) makes game.js skip the pass — the self-disable
-        // invariant. begin() is NOT called between begin/end, so envFaceEnd
-        // owns the face render and leaves drawList clean for the main pass.
+        // invariant. Full begin() is NOT called here (it would reset the
+        // main-pass camera / post latch); we do mutate frame.viewProj like
+        // GLX/WGX so drawWorldMeshes culls props to THIS face, push lighting
+        // via lit.updateFrame, and envFaceEnd owns the face render.
         envFaceBegin(face, eye, frame) {
           if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
           ensureEnvCam();
@@ -1715,24 +1728,33 @@ const TLX = (function () {
           _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
           _envInvVP.copy(_envVP).invert();
           _envInvVP.toArray(_envInvArr);
-          // Env-probe radial cull (GLX envFaceBegin / WGX): a 64² cube must
-          // not re-draw the 900 m city. Save/restore frame.cullDist; radial
-          // cap is a MIN of the live camera cull when that is already tighter.
+          _envVP.toArray(_envVPArr);
+          // Keep probe VP / eye / cullDist on `frame` until envFaceEnd so
+          // drawWorldMeshes → makeFrustumPlanes(frame.viewProj) culls
+          // propBatches against the face (GLX/WGX envFaceBegin parity).
           _envFrame = frame;
-          _envEye = eye;
-          _envSvCull = (frame.cullDist > 0) ? frame.cullDist : 0;
-          _envCullM = _envSvCull > 0 ? Math.min(_envSvCull, 300) : 300;
-          frame.cullDist = _envCullM;
+          _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
+          frame.viewProj = _envVPArr; frame.eye = eye;
+          frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
+          // Probe runs BEFORE gfx.begin(); without this the cube bakes the
+          // previous frame's sun/fog (or factory defaults on the first faces).
+          if (lit.updateFrame) lit.updateFrame(frame);
           return _envInvArr;
         },
         envFaceEnd(face) {
-          if (!envRT || !envCubeCam || !_envActive) { _envActive = false; _restoreEnvCull(); return; }
+          if (!envRT || !envCubeCam || !_envActive) {
+            _envActive = false;
+            _restoreEnvFrame();
+            return;
+          }
           const faceCam = envCubeCam.children[face & 7];
           // Materialise the world draw-list (sky background node + track meshes
           // — game.js issued NO car/FX draws in the probe pass) into the face.
-          // Chunked records cull against the face frustum + 300 m radial
-          // cap (GLX/WGX envFaceBegin). Restore frame.cullDist after.
-          const faceVP = _envVP.elements;   // set in envFaceBegin for this face
+          // Chunked records cull against the face frustum; radial cap is the
+          // mutated frame.cullDist (ENV_CULL_M, baked ON).
+          const faceVP = _envVPArr;
+          const faceCull = (_envFrame && _envFrame.cullDist) || 0;
+          const faceEye = (_envFrame && _envFrame.eye) || null;
           // Software GL: six world presents into a 64px cube miss the 360 s
           // test budget even after skipping city+sky (measured 2026-08-17:
           // M9 timed out at 424 s with park() done and ready still false —
@@ -1751,8 +1773,12 @@ const TLX = (function () {
             poolUsed = 0;
             _envActive = false;
             envFacesMask |= 1 << (face & 7);
-            if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }
-            _restoreEnvCull();
+            if (envFacesMask === 63) {
+              envFacesMask = 0;
+              envReady = true;
+              _envBlank = true;
+            }
+            _restoreEnvFrame();
             return;
           }
           poolUsed = 0;
@@ -1768,7 +1794,7 @@ const TLX = (function () {
               // (measured 2026-08-17: six full Monza presents into the cube
               // after M5 had already left the GPU process at 387%).
               if (softwareGL || !chunkedSys) continue;
-              const n = chunkedSys.cull(rec.chunked, faceVP, _envEye, _envCullM);
+              const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
               continue;
@@ -1799,7 +1825,7 @@ const TLX = (function () {
           _envActive = false;
           envFacesMask |= 1 << (face & 7);
           if (envFacesMask === 63) {
-            envFacesMask = 0; envReady = true;
+            envFacesMask = 0; envReady = true; _envBlank = false;
             // WebGPU does not gl.generateMipmap a CubeRenderTarget the way
             // WebGL2 does (three.js #31143 / #31639). Without an explicit
             // pass, cubeTexture(..., rough*2.5) samples empty mips and chrome
@@ -1810,12 +1836,12 @@ const TLX = (function () {
               catch (_) { /* backend without cube-mip helper: lod 0 still works */ }
             }
           }
-          _restoreEnvCull();
+          _restoreEnvFrame();
         },
         envProbeReady() { return envReady; },
         // New track/session: the cube still holds the OLD circuit — hold the
         // probe black (uEnvStr 0) until a fresh full cube captures (GLX 1:1).
-        envProbeReset() { envFacesMask = 0; envReady = false; },
+        envProbeReset() { envFacesMask = 0; envReady = false; _envBlank = false; },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
         // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
@@ -1932,7 +1958,7 @@ const TLX = (function () {
             // carEnvCube def 0). Held off while rendering INTO the cube.
             if (lit.setEnvStr) {
               const _T = frame.tune;
-              const _envOn = envRT && envReady && !frame.noEnv && !_envActive;
+              const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
               lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0);
             }
           }
@@ -2204,9 +2230,28 @@ const TLX = (function () {
               // canvas fallback left the HDR scene target on the Color
               // clear whenever the lazy compile missed (software GL).
               pinSkyMaterial();
-              renderer.setRenderTarget(post.sceneTarget());
-              renderer.render(scene, camera);
-              post.present(opts, _postF);
+              // Second HDR attachment carries the 0.35 car-paint tag.
+              // Armed only here: env faces and the canvas fallback are
+              // single-target (mrtNode + setMRT would emit 2 locations).
+              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
+              if (_hadMrt) {
+                renderer.setMRT(TSL.mrt({
+                  output: TSL.output,
+                  ssrTag: TSL.float(1),
+                }));
+              }
+              try {
+                renderer.setRenderTarget(post.sceneTarget());
+                renderer.render(scene, camera);
+                post.present(opts, _postF);
+              } finally {
+                if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+                if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+                if (_hadMrt) renderer.setMRT(_prevMrt || null);
+              }
               if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
             } else {
               paintCanvas();
@@ -2313,7 +2358,7 @@ const TLX = (function () {
           envState() {
             let face = 0;
             while (face < 6 && (envFacesMask & (1 << face))) face++;
-            return { on: !!envRT, face, size: ENV_SIZE, ready: envReady };
+            return { on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank };
           },
           viz: vizMode,
           // Which three backend actually came up, and why — the one question a

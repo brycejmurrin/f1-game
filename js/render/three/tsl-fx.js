@@ -53,7 +53,7 @@
 (function () {
   function fx(THREE, TSL /*, ctx */) {
     const {
-      Fn, uniform, attribute, texture, materialReference,
+      Fn, uniform, attribute, texture, materialReference, mrt,
       float, vec2, vec3, vec4,
       positionGeometry, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, mix, smoothstep, abs,
@@ -85,14 +85,34 @@
       // See tsl-lit.js pinProgram — r184 hashes child-node ids into the
       // program key, so an unpinned FX material recompiles per mesh.
       m.lights = false;
-      m.customProgramCacheKey = () => o.key || "tlx-fx";
+      m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
       return m;
+    }
+
+    // Zero/One on the ssrTag attachment — GLX colorMask(a=false). Without
+    // this, renderer MRT default writes 1 and punches holes in car SSR
+    // under particles and decals.
+    const _tagKeep = {
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.ZeroFactor,
+      blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+      blendEquation: THREE.AddEquation,
+      blendEquationAlpha: THREE.AddEquation,
+    };
+    const _fxMats = [];
+    function trackFx(m) { _fxMats.push(m); return m; }
+    function setSsrMrt(on) {
+      if (typeof mrt !== "function") return;
+      const node = on ? mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep) : null;
+      for (let i = 0; i < _fxMats.length; i++) _fxMats[i].mrtNode = node;
     }
 
     /* ── blob shadow (SHADOW_FS) ────────────────────────────────────────────
      * The shared quad geometry holds the unit xz footprint at y=0.02; vUV =
      * aPos*2 (SHADOW_VS) == positionGeometry.xz*2 here. */
-    const shadowMat = fxMaterial({ offset: true, key: "tlx-fx-blob" });
+    const shadowMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-blob" }));
     shadowMat.colorNode = vec3(0.0);
     shadowMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
@@ -107,7 +127,7 @@
         .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
     /* ── per-mark skid stamp (SHADOW_VS quad + MARK_FS) — the fallback path ── */
-    const markMat = fxMaterial({ offset: true, key: "tlx-fx-mark" });
+    const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
     markMat.colorNode = vec3(0.0);
     markMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
@@ -117,7 +137,7 @@
     /* ── batched skid trail (MARK_BATCH_VS + MARK_FS) ───────────────────────
      * World-space positions (identity model matrix in tlx.js) + a -1..1 "uv"
      * attribute across each stamp. */
-    const skidMat = fxMaterial({ offset: true, key: "tlx-fx-skid" });
+    const skidMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-skid" }));
     skidMat.colorNode = vec3(0.0);
     skidMat.opacityNode = Fn(() => {
       const uvv = vec2(attribute("uv", "vec2")).toVar();        // anchor
@@ -143,7 +163,7 @@
 
     /* ── lamp lens glare (GLOW_VS/FS): additive core + veil ───────────────── */
     const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
-    const glowMat = fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" });
+    const glowMat = trackFx(fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" }));
     glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
     glowMat.colorNode = Fn(() => {
       const c = vec2(attribute("fxCorner", "vec2")).toVar();    // anchor
@@ -176,7 +196,7 @@
       }
       return m;
     }
-    const particleMats = [particleMaterial(false), particleMaterial(true)];
+    const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
 
     /* ── car decals (DECAL_VS/FS) ───────────────────────────────────────────
      * Sun + hemisphere lit so marks sit INTO the paint's shading; uGlow lifts
@@ -240,6 +260,7 @@
         const packed = sharedDecal(glow);
         m.colorNode = packed.rgb;
         m.opacityNode = packed.a;
+        trackFx(m);
         decalCache.set(key, m);
       }
       if (m) m.__tlxFrame = _decalFrame;
@@ -261,7 +282,7 @@
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
     }
 
-    return { shadowMat, markMat, skidMat, glowMat, glowStr, particleMats,
+    return { shadowMat, markMat, skidMat, glowMat, glowStr, particleMats, setSsrMrt,
              decalMaterialFor, updateFrame };
   }
 
