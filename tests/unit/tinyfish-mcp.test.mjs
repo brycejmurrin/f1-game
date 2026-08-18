@@ -365,5 +365,6 @@ test("Playwright MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
   assert.doesNotMatch(src, /@playwright\/mcp@latest/);
-  assert.doesNotMatch(src, /0\.0\.0\.0/);
+  assert.match(src, /never --port \/ 0\.0\.0\.0/);
+  assert.doesNotMatch(src, /npx[\s\S]*--port/);
 });
