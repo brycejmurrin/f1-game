@@ -1,9 +1,10 @@
 # The rendezvous relay (optional)
 
 This is the **only server** in Apex 26, it is **optional**, and the game works
-completely without it. Its whole job is to hold two ~250-byte strings for two
-minutes so that two browsers can find each other with a short room code instead
-of pasting an invite back and forth.
+completely without it. Its whole job is to hold two small encrypted envelopes
+for two minutes so that two browsers can find each other with a short room code
+instead of pasting an invite back and forth. The six-character room code derives
+the browser-side AES-GCM key; the Worker stores only versioned ciphertext.
 
 Once WebRTC connects, every byte of gameplay goes **directly** between the two
 players. The relay never sees another packet.
@@ -23,9 +24,11 @@ GET answer  ◀─────────────
 ...direct P2P from here...
 ```
 
-It is **not** a username system. A code is disposable: nothing is stored,
-nothing is claimed, nothing can be squatted or impersonated, and no personal
-data is retained. There is no account to lose and nothing to moderate.
+It is **not** a username system. A code is disposable: nothing is stored past
+the TTL and no personal data is retained. There is no account to lose and
+nothing to moderate. A random, unguessable owner capability does let the same
+host safely retry or replace its offer without letting another client overwrite
+an active room.
 
 ## Deploy
 
@@ -60,8 +63,13 @@ the SQLite-backed class is the one available on the free plan.
 - No persistence past the TTL: the alarm calls `deleteAll()`, so "nothing is
   retained" is enforced rather than intended.
 - No accounts, usernames, or directory.
-- Payloads are capped at 8 KB so an unauthenticated public endpoint cannot be
-  used as free storage.
+- Plaintext compatibility payloads are capped at 8 KB and encrypted envelopes
+  at 12 KB, so the unauthenticated endpoint cannot be used as bulk storage.
+- The Worker applies a defense-in-depth, per-isolate fixed-window limit before
+  allocating a Durable Object (20 writes and 180 reads per IP per minute). This
+  protects normal deployments without changing the browser protocol, but is not
+  a global distributed-abuse boundary; use a Cloudflare WAF rate-limit rule when
+  operating the endpoint at a scale where account-wide enforcement matters.
 
 ## If you never deploy it
 

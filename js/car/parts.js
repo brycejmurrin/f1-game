@@ -752,6 +752,7 @@ const Parts = (function () {
     return out;
   }
 
+  Log.info("car", "parts catalog n=" + CATALOG.length);
   return {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,

@@ -31,6 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
 
@@ -79,6 +80,7 @@ function loadChunked(gl) {
   const code = fs.readFileSync(SRC, "utf8");
   const ctx = { console };
   vm.createContext(ctx);
+  seedLog(ctx);
   vm.runInContext(code + "\n;globalThis.__GLXChunked = GLXChunked;", ctx);
   return ctx.__GLXChunked.init({
     gl,
@@ -281,4 +283,31 @@ test("createChunkedMesh places trk after mat when both are present", () => {
   assert.equal(vbo.f32[10], 100);
   assert.equal(vbo.f32[11], -2);
   assert.equal(vbo.f32[12], 7.5);
+});
+
+test("production chunking releases render-only source channels but keeps collision/probe positions", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeGrid(6, 6, 30);
+  src._keepFullGeometry = false;
+  src.mat = new Float32Array(src.pos.length / 3);
+  src.trk = new Float32Array(src.pos.length);
+  C.createChunkedMesh(src, 72);
+  assert.ok(src.pos && src.idx, "_keepPositions retains the road/terrain collision inputs");
+  assert.equal(src.nrm, null);
+  assert.equal(src.col, null);
+  assert.equal(src.mat, null);
+  assert.equal(src.trk, null);
+});
+
+test("trackGeometry debug retention preserves every source channel", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeGrid(6, 6, 30);
+  src.mat = new Float32Array(src.pos.length / 3);
+  src.trk = new Float32Array(src.pos.length);
+  src._keepFullGeometry = true;
+  const refs = { pos: src.pos, nrm: src.nrm, col: src.col, mat: src.mat, trk: src.trk, idx: src.idx };
+  C.createChunkedMesh(src, 72);
+  for (const [key, value] of Object.entries(refs)) assert.equal(src[key], value, `${key} must survive debug retention`);
 });

@@ -8,17 +8,25 @@ REPO="$ROOT/scratch/chrome-devtools-mcp"
 BIN="$REPO/build/src/bin/chrome-devtools-mcp.js"
 PATH_FILE="$ROOT/scratch/chrome-devtools-path.env"
 REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
+# Audited live in this repository on 2026-08-17. Pin the network fallback so a
+# fresh machine cannot silently run a different MCP release than CI/tests saw.
+MCP_NPM_PACKAGE="chrome-devtools-mcp@1.7.0"
 
-detect_chrome() {
+# Probe for a Chromium binary. Prints the path and returns 0, or returns 1
+# with no stdout. status/help MUST call this rather than detect_chrome — the
+# latter exits 1, which made `status` unusable on a Mac without /opt/pw-browsers.
+find_chrome() {
   if [[ -n "${CHROMIUM_PATH:-}" && -x "$CHROMIUM_PATH" ]]; then
-    echo "$CHROMIUM_PATH"; return
+    echo "$CHROMIUM_PATH"; return 0
   fi
   if [[ -f "$PATH_FILE" ]]; then
     # shellcheck disable=SC1090
     local saved
     saved="$(source "$PATH_FILE" 2>/dev/null && echo "${CHROMIUM_PATH:-}")"
-    if [[ -n "$saved" && -x "$saved" ]]; then echo "$saved"; return; fi
+    if [[ -n "$saved" && -x "$saved" ]]; then echo "$saved"; return 0; fi
   fi
+  local mac="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  if [[ -x "$mac" ]]; then echo "$mac"; return 0; fi
   local candidates=(
     /opt/pw-browsers/chromium
     /opt/pw-browsers/chromium-*/chrome-linux64/chrome
@@ -33,15 +41,20 @@ detect_chrome() {
       if [[ -x "$glob" ]]; then
         mkdir -p "$(dirname "$PATH_FILE")"
         printf 'CHROMIUM_PATH=%q\n' "$glob" >"$PATH_FILE"
-        echo "$glob"; return
+        echo "$glob"; return 0
       fi
     done
   done
+  return 1
+}
+
+detect_chrome() {
+  local found
+  found="$(find_chrome)" && { echo "$found"; return 0; }
   echo "No Chromium found. Run: npx playwright install chromium" >&2
   exit 1
 }
 
-CHROME="$(detect_chrome)"
 # WebGPU + software-WebGL flags, both MEASURED on Chrome 148 in this container:
 #
 #   --enable-unsafe-webgpu       WGX could not boot at all without it: headless
@@ -56,39 +69,45 @@ CHROME="$(detect_chrome)"
 # navigator.gpu needs a SECURE CONTEXT: it is undefined on about:blank no matter
 # which flags are set, so a WebGPU probe must navigate to http://127.0.0.1 (or
 # https) FIRST. That cost an afternoon; it is not a flag problem.
-MCP_ARGS=(
-  --headless
-  --isolated
-  --executablePath "$CHROME"
-  --memoryDebugging
-  --viewport "844x390"
-)
-# WebGPU flags MUST match tools/webgpu-chrome-args.cjs (harness / wgx-shot).
-# --use-angle=swiftshader alone leaves requestAdapter() null in headless Chrome;
-# the Vulkan/SwiftShader pins are what make navigator.gpu return an adapter.
-while IFS= read -r _wgpu_flag; do
-  MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
-done < <(node "$ROOT/tools/webgpu-chrome-args.cjs" mcp)
-# Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
-# Lavapipe WebGPU (three.js e2e): APEX_CHROME_ARGS="--enable-unsafe-webgpu
-#   --enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE --use-angle=vulkan
-#   --use-vulkan=native --disable-vulkan-surface" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
-#   xvfb-run -a python3 tools/probe-mcp.py call chrome_navigate_page ...
-if [[ -n "${APEX_CHROME_ARGS:-}" ]]; then
-  for _arg in ${APEX_CHROME_ARGS}; do MCP_ARGS+=("--chromeArg=${_arg}"); done
-fi
+build_mcp_args() {
+  local chrome="$1"
+  MCP_ARGS=(
+    --headless
+    --isolated
+    --executablePath "$chrome"
+    --memoryDebugging
+    --viewport "844x390"
+  )
+  # WebGPU flags MUST match tools/webgpu-chrome-args.cjs (harness / wgx-shot).
+  # --use-angle=swiftshader alone leaves requestAdapter() null in headless Chrome;
+  # the Vulkan/SwiftShader pins are what make navigator.gpu return an adapter.
+  while IFS= read -r _wgpu_flag; do
+    MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
+  done < <(node "$ROOT/tools/webgpu-chrome-args.cjs" mcp)
+  # Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
+  # Lavapipe WebGPU (three.js e2e): APEX_CHROME_ARGS="--enable-unsafe-webgpu
+  #   --enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE --use-angle=vulkan
+  #   --use-vulkan=native --disable-vulkan-surface" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+  #   xvfb-run -a python3 tools/probe-mcp.py call chrome_navigate_page ...
+  if [[ -n "${APEX_CHROME_ARGS:-}" ]]; then
+    for _arg in ${APEX_CHROME_ARGS}; do MCP_ARGS+=("--chromeArg=${_arg}"); done
+  fi
+}
 
 local_ok() {
   [[ -f "$BIN" ]] && node "$BIN" --help >/dev/null 2>&1
 }
 
 run_mcp() {
+  local chrome
+  chrome="$(detect_chrome)"
+  build_mcp_args "$chrome"
   if local_ok; then
     exec node "$BIN" "${MCP_ARGS[@]}" "$@"
   fi
   echo "Local clone missing or broken — run: $0 clone && $0 build" >&2
-  echo "Falling back to npx chrome-devtools-mcp@latest" >&2
-  exec npx -y chrome-devtools-mcp@latest "${MCP_ARGS[@]}" "$@"
+  echo "Falling back to npx $MCP_NPM_PACKAGE" >&2
+  exec npx -y "$MCP_NPM_PACKAGE" "${MCP_ARGS[@]}" "$@"
 }
 
 cmd_build() {
@@ -138,14 +157,19 @@ cmd_status() {
   fi
   echo "Bin:   $BIN"
   if local_ok; then echo "Bin:   OK (local clone)"; else echo "Bin:   missing — run: $0 clone"; fi
-  echo "Chrome: $CHROME"
+  local chrome
+  chrome="$(find_chrome || true)"
+  echo "Chrome: ${chrome:-"(not found)"}"
   echo "MCP config: $ROOT/.mcp.json → $0 run"
 }
 
 cmd_verify() {
+  local chrome
+  chrome="$(detect_chrome)"
+  build_mcp_args "$chrome"
   cmd_status
   echo "---"
-  "$CHROME" --version 2>&1 | head -1
+  "$chrome" --version 2>&1 | head -1
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify","version":"1"}}}'
   local tools='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   local out backend="npx"
@@ -162,7 +186,7 @@ case "${1:-run}" in
   run) shift || true; run_mcp "$@" ;;
   verify) cmd_verify ;;
   status) cmd_status ;;
-  chrome-path) echo "$CHROME" ;;
+  chrome-path) detect_chrome ;;
   clone) cmd_clone ;;
   build) cmd_build ;;
   -h|--help|help)
@@ -179,7 +203,7 @@ Chrome DevTools MCP — local clone helper (working-tree browser probe)
 For the deployed site use tools/tinyfish-mcp.sh (ensure / deploy-check / deploy-js),
 not this browser — github.io is blocked from this container's Chromium.
 
-Falls back to npx chrome-devtools-mcp@latest when the local clone is missing.
+Falls back to pinned npx $MCP_NPM_PACKAGE when the local clone is missing.
 EOF
     ;;
   *)

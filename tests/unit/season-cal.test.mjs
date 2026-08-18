@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -41,6 +42,7 @@ function trackDefs() {
 // career-settle.test.mjs).
 function load(stored0) {
   const stored = new Map(Object.entries(stored0 || {}));
+  const subscribers = [];
   const tracks = trackDefs();
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Set, Map, isNaN, isFinite, parseInt, console,
@@ -48,13 +50,18 @@ function load(stored0) {
       store: {
         get: (k, d) => (stored.has(k) ? stored.get(k) : d),
         set: (k, v) => stored.set(k, v),
+        subscribe: (fn) => { subscribers.push(fn); return () => {}; },
       },
     },
     Tracks: tracks,
     Teams: { POINTS },
   });
+  seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/game/season-cal.js"), "utf8"), ctx);
-  return { S: vm.runInContext("SeasonCal", ctx), stored, tracks };
+  return {
+    S: vm.runInContext("SeasonCal", ctx), stored, tracks,
+    foreign: (key) => subscribers.forEach((fn) => fn({ key, foreign: true, clear: key == null })),
+  };
 }
 
 // A classified field, finishing in the order given. `retired` cars are still
@@ -104,6 +111,14 @@ test("setConfig persists the NORMALISED config, not what it was handed", () => {
   S.setConfig({ trackIds: ["monza", "monza", "nope"], laps: 10, points: "classic" });
   assert.deepEqual(stored.get("seasonCfg").trackIds, ["monza"]);
   assert.equal(stored.get("seasonCfg").laps, 10);
+});
+
+test("a foreign calendar write invalidates SeasonCal's own resolved cache", () => {
+  const { S, stored, foreign } = load({ seasonCfg: { trackIds: ["monza"] } });
+  assert.equal(S.track(0).id, "monza");
+  stored.set("seasonCfg", { trackIds: ["kyalami"] });
+  foreign("seasonCfg");
+  assert.equal(S.track(0).id, "kyalami");
 });
 
 // ── the calendar gate ─────────────────────────────────────────────────────────
@@ -226,8 +241,19 @@ test("a no-qualifying sprint weekend grids the GP off the sprint result", () => 
   // Joined, not deep-compared: `grid` is built inside the VM, so its array has
   // the VM realm's prototype and assert/strict's deepEqual rejects it against a
   // host literal that has the same contents. Same trap for teamPts below.
-  const grid = S.grid(sprintResult);
+  const grid = S.grid(sprintResult, season);
   assert.equal(grid.map((c) => c.driverId).join(","), "d2,d0,d1");
+});
+
+test("restarting a season clears the prior weekend's sprint grid", () => {
+  const { S } = load({ seasonCfg: { sprint: true, quali: false } });
+  S.engage("season");
+  const cars = field(3);
+  const old = S.blank();
+  S.award(old, [cars[2], cars[0], cars[1]]);
+  const fresh = S.restart();
+  assert.equal(S.stage(fresh), "sprint");
+  assert.equal(S.grid(cars, fresh), null, "an opening sprint cannot inherit the prior season's result");
 });
 
 test("grid() is null whenever qualifying has already decided the order", () => {
@@ -235,7 +261,7 @@ test("grid() is null whenever qualifying has already decided the order", () => {
   S.engage("season");
   const season = S.blank();
   S.award(season, field(3));
-  assert.equal(S.grid(field(3)), null, "gridUp must fall through to quali.order()");
+  assert.equal(S.grid(field(3), season), null, "gridUp must fall through to quali.order()");
 });
 
 test("a sprint order recorded in a season cannot grid a later Grand Prix", () => {
@@ -243,9 +269,10 @@ test("a sprint order recorded in a season cannot grid a later Grand Prix", () =>
   // startRace() calls grid() for any race that is not coming out of qualifying.
   const { S } = load({ seasonCfg: { sprint: true, quali: false } });
   S.engage("season");
-  S.award(S.blank(), field(3));
+  const season = S.blank();
+  S.award(season, field(3));
   S.engage("gp");
-  assert.equal(S.grid(field(3)), null, "a one-off must not inherit a season's grid");
+  assert.equal(S.grid(field(3), season), null, "a one-off must not inherit a season's grid");
 });
 
 // ── the save ──────────────────────────────────────────────────────────────────
@@ -265,24 +292,46 @@ test("resume repairs a partial save; finished stays; only past-calendar blanks",
   assert.equal(partial.pts.d0, 25, "…and the ones that were there are not touched");
 });
 
+test("a completed season is readable but cannot be scored again", () => {
+  const { S } = load({ seasonCfg: { trackIds: ["monza", "monaco"] } });
+  S.engage("season");
+  const done = S.resume({ round: 2, pts: { d0: 50 }, teamPts: { t0: 50 }, driverCodes: {} });
+  assert.equal(S.canRace(done), false);
+  assert.equal(S.award(done, field(3)), null);
+  assert.equal(done.round, 2);
+  assert.equal(done.pts.d0, 50);
+});
+
+test("resume rejects non-integer rounds and normalises score-map shapes", () => {
+  const { S } = load({ seasonCfg: { trackIds: ["monza", "monaco"] } });
+  S.engage("season");
+  assert.equal(S.resume({ round: 1.5, pts: { d0: 99 } }).round, 0);
+  assert.equal(S.resume({ round: "1", pts: { d0: 99 } }).round, 0);
+  const repaired = S.resume({ round: 1, pts: { d0: "25", bad: Infinity }, teamPts: [], driverCodes: [] });
+  assert.equal(repaired.pts.d0, 25);
+  assert.equal(repaired.pts.bad, undefined);
+  assert.equal(Object.keys(repaired.teamPts).length, 0);
+  assert.equal(Object.keys(repaired.driverCodes).length, 0);
+});
+
 test("sprintOrder persists on the season save and restores on resume", () => {
   const { S } = load({ seasonCfg: { sprint: true, quali: false } });
   S.engage("season");
   const season = S.blank();
   S.award(season, field(3));
   assert.deepEqual(season.sprintOrder, ["d0", "d1", "d2"], "award writes sprintOrder onto the save");
-  assert.ok(S.grid(field(3)), "live module state grids the GP");
+  assert.ok(S.grid(field(3), season), "live module state grids the GP");
   // Simulate a reload: wipe module state by blanking via an out-of-range resume,
   // then restore the mid-weekend save.
   S.resume({ round: 99 });
-  assert.equal(S.grid(field(3)), null, "module state alone is gone after a blanking resume");
+  assert.equal(S.grid(field(3), season), null, "module state alone is gone after a blanking resume");
   const back = S.resume(season);
   assert.equal(back.stage, "race");
   assert.deepEqual(back.sprintOrder, ["d0", "d1", "d2"]);
-  assert.ok(S.grid(field(3)), "restored sprintOrder rebuilds the GP grid");
+  assert.ok(S.grid(field(3), back), "restored sprintOrder rebuilds the GP grid");
   S.award(back, field(3));
   assert.equal(back.sprintOrder, undefined, "GP score clears the persisted order");
-  assert.equal(S.grid(field(3)), null, "…and the module state");
+  assert.equal(S.grid(field(3), back), null, "…and the module state");
 });
 
 test("resume keeps a mid-weekend stage, so a reload cannot re-pay a sprint", () => {

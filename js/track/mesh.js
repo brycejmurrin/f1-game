@@ -534,6 +534,7 @@ const TrackMesh = (function () {
   }
 
   function buildRoad(track) {
+    Log.info("track", "buildRoad start " + (track.def && track.def.id));
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [], mat = [], trk = [];
     const idxArr = [];
@@ -717,6 +718,7 @@ const TrackMesh = (function () {
   }
 
   function buildTerrain(track) {
+    Log.info("track", "buildTerrain start " + (track.def && track.def.id));
     const { n, px, py, pz, hw, total } = track;
     const pos = [], nrm = [], col = [], mat = [];
     const idxArr = [];
@@ -1026,6 +1028,7 @@ const TrackMesh = (function () {
   // every other mesh (road, terrain, props) renders on top of it. It extends far
   // enough to meet the exp2 fog, so the ground reads continuously to the horizon.
   function buildFloor(track) {
+    Log.info("track", "buildFloor start " + (track.def && track.def.id));
     const { n, px, py, pz } = track;
     let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity, pyMin = Infinity;
     for (let k = 0; k < n; k++) {

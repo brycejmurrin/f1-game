@@ -164,8 +164,15 @@ const slotKey = (f, i) => "career." + flavourIn(f) + "." + (i | 0);
 const slotIn = (i) => clamp(i | 0, 0, SLOTS - 1);
 let slotIdx = 0;
 let slotFlavour = "driver";
+let careerRevision = null;
+let careerConflict = false;
+
+const liveSlotKey = () => slotKey(slotFlavour, slotIdx);
+const currentRevision = () => store.keyRevision ? store.keyRevision(liveSlotKey()) : null;
+function armRevision() { careerRevision = currentRevision(); careerConflict = false; }
 
 function data() { return career; }
+function conflicted() { return careerConflict; }
 // A career EXISTS (save on disk). For "career rules apply now", use inCareer().
 function active() { return career != null; }
 // The live save's address. Both halves, because an index alone no longer says
@@ -203,6 +210,20 @@ function migrateSlots() {
 }
 const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
+if (store.subscribe) store.subscribe((change) => {
+  if (!change.foreign) return;
+  if (!change.clear && change.key !== liveSlotKey()) return;
+  if (engaged && career) {
+    careerConflict = true;
+    return;
+  }
+  // Outside an active career there is no unsaved race/garage state to protect,
+  // so follow the winning tab immediately. Active play takes the refusal path in
+  // save() above instead of replacing the object under a running session.
+  career = change.clear ? null : readSlot(slotFlavour, slotIdx);
+  armRevision();
+});
+
 function load() {
   migrateSlots();
   const live = String(store.get("careerSlot", "driver:0")).split(":");
@@ -219,6 +240,7 @@ function load() {
         const c = readSlot(f, i);
         if (c) { slotFlavour = f; slotIdx = i; career = c; setLive(); break outer; }
       }
+  armRevision();
   // migrateCareer() is pure (it must not write, or reading a slot would rewrite
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
@@ -227,14 +249,24 @@ function load() {
 }
 function setLive() { store.set("careerSlot", slotFlavour + ":" + slotIdx); }
 function save() {
-  if (career) store.set(slotKey(slotFlavour, slotIdx), career);
+  if (career) {
+    // A storage event invalidates GameStore's parsed cache, but this module owns a
+    // long-lived object reference. Never write that reference over a newer save
+    // from another tab. There is no meaningful merge for two diverged seasons;
+    // refusing the stale write is the only lossless choice.
+    const now = currentRevision();
+    if (careerConflict || (careerRevision != null && now !== careerRevision)) return career;
+    store.set(liveSlotKey(), career);
+    armRevision();
+  }
   return career;
 }
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
   career = null;
-  store.set(slotKey(slotFlavour, slotIdx), null);
+  store.set(liveSlotKey(), null);
+  armRevision();
 }
 
 // What the picker renders. The LIVE slot is summarised from the in-memory object
@@ -286,12 +318,13 @@ function useSlot(flavour, i) {
   slotFlavour = f; slotIdx = n;
   setLive();
   career = readSlot(f, n);
+  armRevision();
   return career;
 }
 function deleteSlot(flavour, i) {
   const f = flavourIn(flavour), n = slotIn(i);
   store.set(slotKey(f, n), null);
-  if (f === slotFlavour && n === slotIdx) career = null;
+  if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); }
   return true;
 }
 
@@ -318,6 +351,7 @@ function start(opts) {
   slotFlavour = flavour;
   slotIdx = target;
   setLive();
+  armRevision();
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
   const team = Teams.LIST.find((t) => t.id === teamId) || Teams.LIST[Teams.LIST.length - 1];
   const factory = Parts.getFactorySetup(team);
@@ -366,6 +400,7 @@ function start(opts) {
                        tier: hired.tier, salary: hired.ask, left: 1, pending: null }];
   }
   career.deal = newDeal(team, 1);
+  Log.info("game", "Career.start flavour=" + flavour + " team=" + teamId);
   return save();
 }
 
@@ -867,6 +902,7 @@ function settleRound(order, player) {
   // closes its window.
   const sponsorPay = settleSponsor();
   save();
+  Log.info("game", "Career.settleRound pos=" + pos + (dnf ? " dnf=" + dnf : ""));
   return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
            money: career.money, rep: career.rep };
 }
@@ -880,7 +916,7 @@ function gridSeats() {
   const out = [];
   for (const team of Teams.LIST) {
     if (team.custom && team.id !== career.team) continue;
-    team.drivers.forEach((d, i) => {
+    gridDrivers(team).forEach((d, i) => {
       const id = seasonDriverId(team.id, i);
       out.push({ id, team, seat: i, driver: seatDriver(team.id, i, d) });
     });
@@ -1181,6 +1217,7 @@ function acceptOffer(i) {
   };
   career.offers = [];
   save();
+  Log.info("game", "Career.acceptOffer team=" + team.id + " years=" + o.years);
   return career.deal;
 }
 
@@ -1342,7 +1379,7 @@ return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
-  data, active, inCareer, engage, load, save, clear, start, state, rnd, hash,
+  data, active, inCareer, conflicted, engage, load, save, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,

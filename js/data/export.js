@@ -230,6 +230,8 @@ const DataExport = (function () {
     const row = el("div", "dh-export-row");
     const gatherBtn = el("button", "dh-pill dh-active", "Gather");
     const dlBtn = el("button", "dh-pill", "Download");
+    gatherBtn.setAttribute("data-aria-action", "");
+    dlBtn.setAttribute("data-aria-action", "");
     dlBtn.disabled = true;
     row.appendChild(gatherBtn);
     row.appendChild(dlBtn);
@@ -247,11 +249,14 @@ const DataExport = (function () {
       running = true; result = null; dlBtn.disabled = true; logs.length = 0;
       gatherBtn.textContent = "Gathering…";
       log("Gathering " + sel.year + " — this can take ~10 min…");
+      Log.info("data", "export gather " + sel.year);
       gatherStartLines(sel.year, log).then(function (res) {
         result = res; dlBtn.disabled = false;
         log("Ready to download.");
+        Log.info("data", "export gather done");
       }).catch(function (e) {
         log("ERROR: " + (e && e.message || e));
+        Log.warn("data", "export gather fail");
       }).then(function () { running = false; gatherBtn.textContent = "Gather"; });
     });
 

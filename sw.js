@@ -6,7 +6,7 @@
 //   - CORE assets (index.html, css/js it references, manifest, icons) are
 //     discovered by fetching+parsing the shell's OWN <script src>/<link href>
 //     tags at install time — whatever index.html actually loads is what gets
-//     cached, automatically, forever in sync with the existing `?v=N` bump.
+//     cached, automatically, forever in sync with the content-hashed `?v=` tags.
 //   - Everything else (audio/sfx under assets/, the Jolpica/OpenF1 API is
 //     cross-origin and never touched) is cached opportunistically the first
 //     time it's fetched, so a full offline install follows naturally from one
@@ -23,9 +23,15 @@ let _cacheNamePromise = null;
 function currentCacheName() {
   if (_cacheNamePromise) return _cacheNamePromise;
   _cacheNamePromise = fetch("version.json", { cache: "no-store" })
-    .then((r) => r.json())
-    .then((v) => CACHE_PREFIX + (v && v.build ? v.build : "0"))
-    .catch(() => CACHE_PREFIX + "0");
+    .then((r) => {
+      if (!r || !r.ok) throw new Error("Unable to read the deployed build");
+      return r.json();
+    })
+    .then((v) => {
+      const build = Number(v && v.build);
+      if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
+      return CACHE_PREFIX + build;
+    });
   return _cacheNamePromise;
 }
 
@@ -39,6 +45,12 @@ async function precacheAssetLists() {
   // OPTIONAL: TLX is opt-in — install success for GLX users must not depend on
   // ~1 MB of vendor they never run (promote to essential at the Phase D flip).
   const optional = new Set(["manifest.json",
+    // All declared install icons must work offline even though only the 180px
+    // browser favicon is linked from index.html and visible to the tag parser.
+    "icons/icon-180.png",
+    "icons/icon-192.png",
+    "icons/icon-512.png",
+    "icons/icon-maskable-512.png",
     // The two OPT-IN renderer backends. They have no <script> tag any more —
     // js/game.js injects them at boot only when apex26.gfxBackend selects one
     // (tools/manifest.cjs DEFERRED) — so the tag parser below cannot see them.
@@ -112,7 +124,7 @@ async function precacheAssetLists() {
 }
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
-// immutable URLs — the essentials all carry this project's `?v=N` cache-bust,
+// immutable URLs — executable essentials carry a content-derived `?v=` token,
 // and the optionals are version-pinned by PATH (vendor/three-0.185.1/…, the
 // content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
@@ -126,16 +138,26 @@ async function precacheAssetLists() {
 // precacheAssetLists) because index.html is the one genuinely mutable document
 // here and it is the source of truth for the tag list.
 async function cacheRequiredAsset(cache, url) {
-  const res = await fetch(url);
+  const mutable = url === "./" || url === "index.html" || url === "version.json";
+  const res = await fetch(url, mutable ? { cache: "no-store" } : undefined);
   if (!res || !res.ok) throw new Error("Unable to precache essential asset: " + url);
   await cache.put(url, res);
 }
 
 async function cacheOptionalAsset(cache, url) {
+  let timeout = null;
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
   try {
-    const res = await fetch(url);
+    const expired = new Promise((resolve) => {
+      timeout = setTimeout(() => {
+        if (ctrl) ctrl.abort();
+        resolve(null);
+      }, 4000);
+    });
+    const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
     if (res && res.ok) await cache.put(url, res);
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
+  finally { if (timeout !== null) clearTimeout(timeout); }
 }
 
 // Install fan-out, bounded. `Promise.all` over the whole list opened ~190
@@ -242,7 +264,7 @@ self.addEventListener("fetch", (event) => {
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
       try {
         const res = await Promise.race([network, timeout]);
-        if (res) return res;
+        if (res && res.ok) return res;
       } catch (_) { /* network rejected — fall through to cache */ }
       // Offline: the version request reads the PRECACHED bare key. Without this
       // it fell through to the index.html fallback below and answered a JSON
@@ -255,7 +277,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for everything else. Every ?v=N URL is immutable content by
+  // Cache-first for everything else. Every content-hashed ?v= URL is immutable by
   // this project's own cache-busting convention, and audio/sfx never change
   // post-release, so a cache hit is always correct — no revalidation needed.
   event.respondWith((async () => {

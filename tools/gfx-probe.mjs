@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
 //
-// Software adapters (WGX + TLX WebGPU): primary gate is visible #game after
-// GLX.awaitSoftPresent() (soft-present 2D blit). capturePixels readback →
+// Software adapters (WGX + TLX WebGPU): primary gate is visible #game /
+// #game-soft after GLX.awaitSoftPresent() (soft-present 2D blit). THREE
+// pins tlxForceGL=1 unless --tlx-webgpu. capturePixels readback →
 // frame.png is optional and runs AFTER the visible check. Playwright uses
 // tools/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
 //
@@ -308,8 +309,43 @@ async function runProbeAttempt(attemptNum) {
       }
       }
     } else {
+      await retryStep("soft-present", () => page.evaluate(async () => {
+        if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+          await GLX.awaitSoftPresent(15000);
+        }
+      }));
       await retryStep("screenshot-canvas", () =>
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
+      try {
+        const frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
+          if (typeof GLX === "undefined" || !GLX.capturePixels) {
+            throw new Error("no GLX.capturePixels on live backend");
+          }
+          const cap = await Promise.race([
+            GLX.capturePixels(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("capturePixels timeout")), 30000)),
+          ]);
+          const c = document.createElement("canvas");
+          c.width = cap.width; c.height = cap.height;
+          c.getContext("2d").putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+          let sum = 0, max = 0, n = 0;
+          for (let i = 0; i < cap.data.length; i += 401 * 4) {
+            const l = (cap.data[i] + cap.data[i + 1] + cap.data[i + 2]) / 3;
+            sum += l; if (l > max) max = l;
+            n++;
+          }
+          if (max < 8) throw new Error("capturePixels frame blank (maxLuma=" + max + ")");
+          return {
+            png: c.toDataURL("image/png").split(",")[1],
+            width: cap.width, height: cap.height,
+            meanLuma: sum / n, maxLuma: max,
+          };
+        }), { attempts: 1, delayMs: 0 });
+        writeFileSync(join(opts.outDir, "frame.png"), Buffer.from(frameCap.png, "base64"));
+        log("capture", `capturePixels ${frameCap.width}x${frameCap.height} meanLuma=${frameCap.meanLuma.toFixed(1)} maxLuma=${frameCap.maxLuma}`);
+      } catch (e) {
+        log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
+      }
     }
 
     await retryStep("screenshot-page", () =>

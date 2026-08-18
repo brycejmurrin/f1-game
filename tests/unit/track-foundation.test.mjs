@@ -6,7 +6,9 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
+const REQUIRE = (await import("node:module")).createRequire(import.meta.url);
+const MANIFEST = REQUIRE("../../tools/manifest.cjs");
+const { buildContext } = REQUIRE("../../tools/track-build-vm.cjs");
 const P = MANIFEST.PATHS;
 
 // Read one js/ file into a fresh sandbox, converting top-level `const` to `var`
@@ -22,6 +24,7 @@ function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Map, Set };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
+  runInto(ctx, "js/log.js");
   runInto(ctx, "js/mat4.js");
   runInto(ctx, file);
   return sandbox[name];
@@ -295,4 +298,71 @@ test("TrackModels validates complete finite mesh buffers", () => {
   });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /non-finite|index/);
+});
+
+test("envCull build owns one ribbon representation and retains collision geometry", () => {
+  const env = buildContext();
+  const def = env.Tracks.LIST.find((entry) => entry.id === "monza");
+  const build = (mode, chunkedTrackCoords = true) => {
+    const gfx = {
+      chunkedTrackCoords,
+      createMesh: (geo) => ({ kind: "plain", count: geo.idx.length }),
+      createChunkedMesh: (geo) => {
+        const result = mode === "chunked"
+          ? { kind: "chunked", chunks: [{}], count: geo.idx.length }
+          : mode === "small"
+            ? { kind: "small", chunks: null, count: geo.idx.length }
+            : { kind: "failed", chunks: [], count: 0 };
+        // Mirror the production renderer contract: disposable sources go away
+        // during chunking, so this test proves the ribbon flag was set in time.
+        if (!geo._keepPositions) { geo.pos = null; geo.idx = null; }
+        return result;
+      },
+    };
+    return env.Tracks.build(def, { gfx, chunkRibbons: true });
+  };
+  const assertOne = (track, key) => {
+    const plain = track.meshes[key], chunked = track.meshes[key + "Chunked"];
+    assert.equal(Number(!!plain) + Number(!!chunked), 1, `${key} must have one GPU representation`);
+    assert.ok(track[key + "Geo"].pos && track[key + "Geo"].idx, `${key} collision/probe arrays must survive`);
+    assert.equal(track[key + "Geo"]._keepPositions, true, `${key} must arm retention before chunking`);
+  };
+
+  const chunked = build("chunked");
+  for (const key of ["road", "terrain"]) {
+    assertOne(chunked, key);
+    assert.equal(chunked.meshes[key], null);
+    assert.equal(chunked.meshes[key + "Chunked"].kind, "chunked");
+  }
+  const small = build("small");
+  for (const key of ["road", "terrain"]) {
+    assertOne(small, key);
+    assert.equal(small.meshes[key].kind, "small", "small chunk results are already plain fallbacks");
+    assert.equal(small.meshes[key + "Chunked"], null);
+  }
+  const failed = build("failed");
+  for (const key of ["road", "terrain"]) {
+    assertOne(failed, key);
+    assert.equal(failed.meshes[key].kind, "plain", "failed chunk uploads rebuild a plain fallback");
+    assert.equal(failed.meshes[key + "Chunked"], null);
+  }
+  const limited = build("chunked", false);
+  assertOne(limited, "road");
+  assert.equal(limited.meshes.road.kind, "plain", "a backend without chunked track coordinates keeps marked road plain");
+  assert.equal(limited.meshes.roadChunked, null);
+  assertOne(limited, "terrain");
+  assert.equal(limited.meshes.terrain, null);
+  assert.equal(limited.meshes.terrainChunked.kind, "chunked");
+});
+
+test("game keeps the sole prebuilt ribbon usable across envCull and tier changes", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(source, /chunkRibbons:\s*typeof PerfTry[^\n]+PerfTry\.on\("envCull"\)[^\n]+PerfGov\.tier\(\) < 3/);
+  assert.match(source, /track\.meshes\.terrain \|\| track\.meshes\.terrainChunked/);
+  assert.match(source, /track\.meshes\.road \|\| track\.meshes\.roadChunked/);
+  assert.match(source, /_wantRoadChunk = gfx\.chunkedTrackCoords !== false/);
+  assert.match(source, /if \(allow && geo && gfx\.createChunkedMesh\)/);
+  assert.match(source, /"roadChunked", track\.meshes\.road, gfx\.chunkedTrackCoords !== false/);
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });

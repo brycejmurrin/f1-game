@@ -7,6 +7,7 @@ const SteerTuning = (function () {
   "use strict";
 
 function create(G) {
+Log.info("input", "SteerTuning.create");
 // Stable helpers from the game.js closure.
 const { $, store, clamp } = G;
 

@@ -17,6 +17,7 @@ const AgentRaster = (function () {
   "use strict";
 
   function create(ctx) {
+    Log.info("game", "AgentRaster.create");
     // Tracks/M4 are globals reached at call time, exactly as agentview.js
     // reaches them — only closure-scoped helpers need the ctx handshake.
     const { G, fail, resolveCamera, model, corners, nextCorner, carWorld, scr,

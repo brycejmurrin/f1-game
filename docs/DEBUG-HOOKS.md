@@ -122,7 +122,7 @@ Like `park()`, but tilts the camera toward the horizon so sky/clouds are clearly
 visible. Eye 3.5 m up, target 20 m ahead and 34 m higher (~58° up) so the horizon
 drops to the lower third and the frame fills with sky.
 
-### `snapCam() → void`  — **call this before every `jump()`/`park()` screenshot**
+### `snapCam() → void`  — **call this after `jump()`/`park()`, before the screenshot**
 Instantly snap the **player camera mode** (chase, cockpit, …) to its vantage (no
 damping) — every mode, not just chase. Call right after `jump()`/`park()` so the
 very next rendered frame is clean.
@@ -1595,14 +1595,17 @@ await __apex.f1api.lastRace();
 
 ### `openf1(path) → Promise<json>`
 Direct OpenF1 fetch — GETs `https://api.openf1.org/v1` + `path` and returns the
-parsed JSON (uncached, bypasses the F1API queue).
+parsed JSON (uncached, bypasses the F1API queue). With no path, or a path that
+does not start with `/`, returns `{ok:false, error:"missing_path", message, fix}`
+instead of hitting a garbage URL.
 ```js
 await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024");
 ```
 
 ### `jolpica(path) → Promise<json>`
 Direct Jolpica (Ergast-compatible) fetch — GETs `https://api.jolpi.ca/ergast/f1`
-+ `path` and returns the parsed JSON (uncached).
++ `path` and returns the parsed JSON (uncached). Same missing-path guard as
+`openf1()` — a bare `jolpica()` used to throw on the HTML 404 page.
 ```js
 await __apex.jolpica("/circuits/monaco.json");
 ```
@@ -2254,7 +2257,8 @@ discrimination is the property that makes the check worth running.
 ### `render({what:"map", radiusM, cols, northUp}?) → map | typedError`
 
 The **allocentric top-down map** — the companion to `render({what:"view"})`'s
-first-person view, and the text version of `aerial-survey.mjs`. The first-person
+first-person view, and the text companion of a survey-track aerial / topdown
+(not the `--oblique` PNG pass). The first-person
 raster forces a reference-frame shift for any "where am I on the circuit"
 question; the map answers it directly, drawn **car-up** (forward is up) so no rotation is needed to
 drive, or `{northUp:true}` for the world frame.

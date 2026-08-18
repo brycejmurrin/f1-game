@@ -27,31 +27,30 @@
 // Not in any npm group, same as its sibling: it takes minutes and depends on
 // the machine's network stack. Exit 0 = three peers racing, each seeing the
 // other two.
-import { chromium } from "playwright";
-import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
 
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4468;                       // not 4467 — so it can run beside the 2-peer one
 const alive = async () => {
   try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
 };
 const adopted = await alive();
-const srv = adopted ? null : spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
-const stopSrv = () => { if (srv) srv.kill(); };
+if (!adopted) await startStaticServer(ROOT, { port: PORT });
 let up = adopted;
 for (let i = 0; i < 40 && !up; i++) {
   up = await alive();
   if (!up) await new Promise((r) => setTimeout(r, 250));
 }
 console.log("server up:", up, adopted ? "(adopted an existing one)" : "");
-if (!up) { stopSrv(); process.exit(1); }
+if (!up) { await shutdown(); process.exit(1); }
 const log = (...a) => console.log(...a);
 
 // Three pages means two of them are always background tabs, and Chromium
 // throttles a background tab's rAF to a crawl. Fatal and not obviously so: the
 // game loop pumps the transport, so a throttled page stops draining its inbox
 // and the session times out — reading exactly like a network failure.
-const b = await chromium.launch({
-  executablePath: "/opt/pw-browsers/chromium",
+const b = await launchChromium({
   args: [
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -77,7 +76,7 @@ log("three pages booted");
 
 const t0 = Date.now();
 const el = () => ((Date.now() - t0) / 1000).toFixed(1) + "s";
-const die = async (msg) => { log(`\n*** ${msg} ***`); await b.close(); stopSrv(); process.exit(1); };
+const die = async (msg) => { log(`\n*** ${msg} ***`); await shutdown(); process.exit(1); };
 
 // Distinct seats, so nothing is decided by the seat-clash rule and a car can be
 // told apart by who is driving it. Teams.LIST: 1 = Ferrari, 3 = Red Bull,
@@ -284,5 +283,5 @@ log(survived
   ? `\n*** ONE GUEST LEFT, THE RACE CARRIED ON at ${el()} ***`
   : `\n*** a guest leaving took the race down with it ***`);
 
-await b.close(); stopSrv();
+await shutdown();
 process.exit(playing && survived ? 0 : 1);

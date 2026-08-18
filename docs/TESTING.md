@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 100 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 108 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -95,7 +95,7 @@ node tools/select-specs.mjs --since <ref>              # spec list, one per line
 node tools/select-specs.mjs --since <ref> --budget-min 15
 ```
 
-It was built for the advisory CI job but is just as useful interactively; a
+It powers the blocking change-aware CI gate and is just as useful interactively; a
 single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
@@ -277,6 +277,8 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `net` | multiplayer in a browser: car roles, the per-car input seam, the session, the lobby, the waiting room, and the camera SCAN (a real `getUserMedia` against a Y4M of a real QR that Chromium plays as a webcam) |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `service-worker` | the SW's install/fetch/version behaviour |
+| `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
+| `state-unit` | season, storage and career state machines, including cross-tab conflicts |
 
 ### API & agent surfaces
 
@@ -843,6 +845,8 @@ what it covers.
 | `net-authority.test.mjs` | who may declare what: START/CAUTION/RESULT are the host's, over a stub-`G` NetPlay |
 | `net-rendezvous.test.mjs` | the room-code client against a real relay |
 | `net-trystero-api.test.mjs` | the vendored Trystero surface actually used |
+| `net-lobby-lifecycle.test.mjs` | canceled lobby operations, overlapping scanners and late wake-lock grants over deferred promises |
+| `rendezvous-worker.test.mjs` | the actual Durable Object request boundary, including declared and streamed oversized bodies |
 
 ### Tooling & repo contracts
 
@@ -853,6 +857,7 @@ what it covers.
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
+| `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted wheels on `_groundMat`, and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
 | `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality. Also **TLX's canvas must be OPAQUE**: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA, and `present()`'s post-only-death path keeps those materials while painting straight to the canvas — on an alpha-composited canvas the browser reads that tag as opacity and every car's painted bodywork goes 35% see-through for the rest of the session (reported from an iPhone). three needs telling twice: its WebGPU backend honours `alpha:false`, its WebGL backend hardcodes `alpha:true` and only honours a caller-supplied `context`. **Both vendor behaviours are asserted against the bundled three**, so the upgrade that makes half the workaround unnecessary — or the other half insufficient — fails here, next to the reason, rather than becoming another bug report from a phone. Source can prove TLX ASKS for an opaque canvas but never that it GOT one, so the live half is in `tlx-probes.spec.js` |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
@@ -869,6 +874,8 @@ what it covers.
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
 | `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys |
 | `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
+| `career-cross-tab.test.mjs` | an active career refuses to overwrite a newer foreign save, while an idle career refreshes to the winning tab |
+| `async-lifecycle.test.mjs` | late QR streams/video playback, decoder retries, IndexedDB late success and a hung fetch releasing the shared queue |
 | `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/game/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, multi-sample soft brake, adaptive lane — in a VM with no browser |
 | `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
 | `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |
@@ -890,7 +897,7 @@ what it covers.
 | `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so 382 call sites carry a bound that is decoration (353 was the 2026-08-07 freeze; the population fell to 312 as specs were fixed, then the lint's file filter was corrected and 70 pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
-| `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. | guards `tools/select-specs.mjs`, the per-spec selector behind ci.yml's advisory `selected` job. Glob expansion against the real tree, dedupe across groups, the budget cut (every spec lands in selected OR the named skip list — silent truncation would read as "covered"), and that the ADVISORY settings (retries 0, 120 s/test) provably fit more tests than smoke's gate settings — the whole reason the job exists |
+| `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. The same suite guards the per-spec selector behind ci.yml's blocking `selected` job: every unaffordable spec lands in a named skip/exclusion list, and the selected-gate settings (retries 0, 120 s/test) provably fit more tests than smoke's retrying settings. |
 | `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 112 Playwright specs**, with 110 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
@@ -904,11 +911,14 @@ what it covers.
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
+| `metrics.test.mjs` | GameMetrics SETTINGS toggle: default off, persists `apex26.metrics`, `?metrics=1` is session-only, snapshot() never throws without `__apex`, ON raises the log buffer to debug while leaving the console at warn, pages persist (`gov`/`car`/`phys`/`log`), HUD digit and probe ground speed are both kept, and `physState()` is read without calling `obs()` |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has apex-tools + tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), tracked source has no reusable key and `ensure` names its setup prerequisite, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` with an exact fallback version (no live API) |
 | `tools-runnable.test.mjs` | every tool in `tools/` PARSES (`node --check` / `bash -n` / python compile / JSON) and the MCP-facing entry points answer their help path. The README index guards names in both directions but never says the file runs — a tool with a syntax error is indexed, documented and completely inaccessible, and you find out mid-task. Parse-only for the sweep: these tools launch browsers and hit networks |
+| `report-server.test.mjs` | the LAN report collector requires its per-run capability for every read and write, rejects unsafe paths and payloads, and enforces per-request/session storage bounds |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
+| `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
 
 ---
 
@@ -1053,6 +1063,8 @@ returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
+three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
 `node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
@@ -1087,23 +1099,25 @@ visible `#game` via a 2D blit (auto on software adapters +
 `awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. Default `--backend three` stays on WebGL2 (`tlxForceGL=1`)
-because three's WebGPU path dies on SwiftShader `mappedAtCreation`. To
-probe three's own WebGPU backend in-container: `--backend three --tlx-webgpu
---lavapipe` (Dawn via the Mesa ICD; still not a real-GPU pixel oracle).
-Lavapipe **does** boot three's WebGPU path (SwiftShader Dawn still dies on
-`mappedAtCreation`). A missing `instanceColor` left a 12-byte dummy at
-slot 5; `DrawIndexed` with count>1 failed validation — `createInstancedBatch`
-now always allocates `instanceColor` to the instance cap. TLX now
-soft-presents like WGX on software adapters (`#game` stays 2D; three
-renders into `softOutRT`; `readRenderTargetPixelsAsync` → `putImageData`;
-never `setRenderTarget(null)` / `getCurrentTexture()`). InstancedMesh
-draws are skipped on that path: Dawn binds a 16-vertex `color`/`trk`
-buffer as instance-rate and a 1-instance dummy at slot 5, which
-invalidates the whole encoder and leaves only the beige clear.
-`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`
-and does not race a second `capturePixels`. ForceGL (`--backend three`)
-remains the SwiftShader WebGL2 path.
+snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
+THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
+`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
+does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
+those backends (phones and Safari included — lite stack, 8-bit swapchain);
+they must not silently bind GLX. THREE PATH AUTO may land on three
+WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
+tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
+`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`.
+
+**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
+`detectSoftwareGL()` called `#game.getContext("webgl2")` after
+`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
+`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
+context type per canvas for life. Fix: sniff GL only when `forceWebGL`;
+the WebGPU path uses `_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`).
+The 2D overlay must be opaque and force blit alpha to 255 — the SSR
+car-paint tag (0.35) in HDR alpha is not compositor opacity.
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

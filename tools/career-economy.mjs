@@ -20,35 +20,21 @@
 //
 //   node tools/career-economy.mjs            # one season per starter team
 //   node tools/career-economy.mjs --years 3  # follow the arc over three seasons
-import http from "node:http";
-import fs from "node:fs";
-import path from "node:path";
-import { chromium } from "playwright";
+import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
 
 const YEARS = Math.max(1, parseInt((process.argv.find((a) => a.startsWith("--years=")) || "").split("=")[1]
   || (process.argv[process.argv.indexOf("--years") + 1] || ""), 10) || 1);
 
-const ROOT = process.cwd();
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-               ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2",
-               ".svg": "image/svg+xml", ".glb": "model/gltf-binary" };
-const server = http.createServer((q, r) => {
-  let p = decodeURIComponent(q.url.split("?")[0]);
-  if (p === "/") p = "/index.html";
-  fs.readFile(path.join(ROOT, p), (e, b) => {
-    if (e) { r.writeHead(404); r.end(); return; }
-    r.writeHead(200, { "content-type": MIME[path.extname(p)] || "text/javascript" });
-    r.end(b);
-  });
-});
-await new Promise((r) => server.listen(0, r));
-const port = server.address().port;
+const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
-const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
-page.on("pageerror", (e) => console.log("PAGE ERROR:", e.message));
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForFunction(() => window.__apex != null, { timeout: 60000 });
+const srv = await startStaticServer(ROOT);
+let browser;
+try {
+  browser = await launchChromium();
+  const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
+  page.on("pageerror", (e) => console.log("PAGE ERROR:", e.message));
+  await page.goto(srv.url);
+  await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 60000 });
 
 // The catalog's own prices, so every figure below is relative to what the money
 // is actually for rather than to an abstract credit total.
@@ -145,6 +131,6 @@ slower car — that is exactly the bug this tool was written and immediately fou
 RESEARCH_MULT is the single knob — it scales the whole economy against a catalog
 that stays the source of truth for what a part is worth. Re-measure after any
 change to it, to the PRIZE ladder, or to salaryFor.`);
-
-await browser.close();
-server.close();
+} finally {
+  await shutdown();
+}

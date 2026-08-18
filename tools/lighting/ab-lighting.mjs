@@ -19,20 +19,12 @@
 // still exists EXACTLY ONCE in its file, so retuning a constant without
 // updating this catalog fails fast.
 
-import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
-import { pickChromium } from "../harness.mjs";
+import { launchChromium, sleep } from "../harness.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function chrome() {
-  return pickChromium();
-}
 
 // ── Measurement regions (fractions of the 720x405 frame) ────────────────────
 // road: the tarmac band ahead of the car. fogwall: the distant haze block under
@@ -510,8 +502,7 @@ async function main() {
       if (!vals.length) { console.error("sweep needs candidate values, e.g. sweep lamp.radius 24 30 34 40"); process.exit(2); }
       variants = vals.map((v) => ({ label: String(v), replacement: slot.make(v) }));
     }
-    const browser = await chromium.launch({
-      executablePath: chrome(),
+    const browser = await launchChromium({
       args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
     });
     const meterPage = await browser.newPage();
@@ -546,8 +537,7 @@ async function main() {
   const ids = rest.length && rest[0] !== "all" ? rest : KNOBS.map((k) => k.id);
   const knobs = ids.map((id) => KNOBS.find((k) => k.id === id) || (() => { throw new Error("unknown knob " + id); })());
 
-  const browser = await chromium.launch({
-    executablePath: chrome(),
+  const browser = await launchChromium({
     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
   });
   const meterPage = await browser.newPage();

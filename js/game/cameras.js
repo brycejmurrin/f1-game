@@ -9,7 +9,10 @@ const GameCams = (function () {
   "use strict";
 
 let VMAX = 72;              // injected at boot (GameCams.init) — speed normaliser
-function init(opts) { if (opts && opts.vmax) VMAX = opts.vmax; }
+function init(opts) {
+  Log.info("game", "GameCams.init");
+  if (opts && opts.vmax) VMAX = opts.vmax;
+}
 
 const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/mat4.js)
 

@@ -807,12 +807,11 @@ const api = {
     if (!G.track || !G.cars || !G.cars.length) return false;
     const c = (idx <= 0 || !G.cars[idx]) ? (G.player || G.cars[0]) : G.cars[idx];
     if (!c) return false;
-    // Derive world position from Frenet coords (s, x) — AI cars don't carry px/pz,
-    // only HUMAN-driven ones do. This works for all cars.
+    // World pose when mirrored (player + field); else Frenet (s, x).
     const s = ((c.s % G.track.total) + G.track.total) % G.track.total;
     Tracks.sample(G.track, s, smp);
-    const cx = (c.human && c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
-    const cz = (c.human && c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
+    const cx = (c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
+    const cz = (c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
     const cyf = smp.p[1] + h;
     // Heading basis: a human car has a real yaw (c.head); AI uses the tangent.
     const hd = (c.human && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);
@@ -2838,6 +2837,10 @@ const api = {
   // Example: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
   //          __apex.openf1("/location?session_key=9149&driver_number=1")
   openf1(path) {
+    if (typeof path !== "string" || path.charAt(0) !== "/")
+      return Promise.resolve({ ok: false, error: "missing_path",
+        message: "openf1(path) needs a path starting with /",
+        fix: 'await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")' });
     return fetch("https://api.openf1.org/v1" + path).then(r => r.json());
   },
 
@@ -2845,12 +2848,13 @@ const api = {
   // Example: __apex.jolpica("/circuits/monaco.json")
   //          __apex.jolpica("/2024/5/results.json")  (round 5 = Monaco 2024)
   jolpica(path) {
+    if (typeof path !== "string" || path.charAt(0) !== "/")
+      return Promise.resolve({ ok: false, error: "missing_path",
+        message: "jolpica(path) needs a path starting with /",
+        fix: 'await __apex.jolpica("/circuits/monaco.json")' });
     return fetch("https://api.jolpi.ca/ergast/f1" + path).then(r => r.json());
   },
 
-  // fetchTrackOutline(sessionKey, driverNumber?) — fetches OpenF1 location data
-  // for a session and returns normalised {x,z}[] track outline points (≤400 pts).
-  // Find sessionKey via: __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")
   // ── Console diagnostics ────────────────────────────────────────────────────
   // logs(filter?) — the retained log ring (js/log.js).
   //
@@ -3091,6 +3095,9 @@ const api = {
     return d;
   },
 
+  // fetchTrackOutline(sessionKey, driverNumber?) — OpenF1 location rows for a
+  // session, normalised to {x,z}[] (≤400 pts). sessionKey is an OpenF1 key,
+  // not a track id — find it via openf1("/sessions?circuit_short_name=…").
   async fetchTrackOutline(sessionKey, driverNumber) {
     const drv = driverNumber || 1;
     const rows = await fetch(

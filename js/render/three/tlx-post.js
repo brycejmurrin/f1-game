@@ -570,10 +570,15 @@
       }
     }
 
+    try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }
     return {
       enabled: () => true,
       hdrOk: () => hdr,
       sceneTarget: () => sceneRT,
+      // UnsignedByte composite (FXAA input) — the screenshot / soft-present
+      // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
+      // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
+      ldrTarget: () => ldrRT,
       resize,
       present,
       viz,

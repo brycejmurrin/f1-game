@@ -59,7 +59,10 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
   test("starting a race requests the lock", async ({ page }) => {
     await mockWakeLock(page);
     await boot(page);
-    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.evaluate(() => {
+      window.__apex.race("bahrain");
+      window.__apex.race("bahrain"); // a second hold while pending must coalesce
+    });
     await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen"]);
   });
@@ -147,5 +150,84 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     await page.waitForFunction(() => window.__apex.info().track != null);
     await page.evaluate(() => window.__apex.finishRace());
     expect(errors).toEqual([]);
+  });
+
+  test("a lock granted after the race ended is released immediately", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__wakeLog = [];
+      window.__grantWake = null;
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: {
+          request: (type) => {
+            window.__wakeLog.push("request:" + type);
+            return new Promise((resolve) => {
+              window.__grantWake = () => {
+                const listeners = {};
+                resolve({
+                  addEventListener: (ev, cb) => { listeners[ev] = cb; },
+                  release: () => {
+                    window.__wakeLog.push("release");
+                    if (listeners.release) listeners.release();
+                    return Promise.resolve();
+                  },
+                });
+              };
+            });
+          },
+        },
+      });
+    });
+    await boot(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
+    await page.evaluate(() => window.__apex.finishRace());
+    await page.evaluate(() => window.__grantWake());
+    await page.waitForFunction(() => window.__wakeLog.includes("release"));
+    expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
+  });
+
+  test("a late release event from an old sentinel cannot clear its replacement", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__wakeLog = [];
+      window.__wakeSentinels = [];
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: {
+          request: () => {
+            const id = window.__wakeSentinels.length + 1;
+            const listeners = {};
+            const sentinel = {
+              addEventListener: (ev, cb) => { listeners[ev] = cb; },
+              release: () => {
+                window.__wakeLog.push("release:" + id);
+                if (listeners.release) listeners.release();
+                return Promise.resolve();
+              },
+              fire: () => { window.__wakeLog.push("fire:" + id); if (listeners.release) listeners.release(); },
+            };
+            window.__wakeSentinels.push(sentinel);
+            window.__wakeLog.push("request:" + id);
+            return Promise.resolve(sentinel);
+          },
+        },
+      });
+    });
+    await boot(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__wakeSentinels.length === 1);
+    await page.evaluate(async () => {
+      await window.__wakeSentinels[0].release();
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.waitForFunction(() => window.__wakeSentinels.length === 2);
+    await page.evaluate(() => {
+      window.__wakeSentinels[0].fire();
+      window.__apex.finishRace();
+    });
+    await page.waitForFunction(() => window.__wakeLog.includes("release:2"));
+    expect(await page.evaluate(() => window.__wakeLog)).toEqual([
+      "request:1", "release:1", "request:2", "fire:1", "release:2",
+    ]);
   });
 });

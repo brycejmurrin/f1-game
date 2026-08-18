@@ -123,6 +123,32 @@ test.describe("the waiting room", () => {
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
   });
 
+  test("invalid host settings cannot mutate state or inject room markup", async ({ page }) => {
+    await enterRoom(page, "guest");
+    const before = await page.evaluate(() => {
+      window.__settingsXss = 0;
+      return {
+        summary: document.getElementById("vs-race-summary")?.textContent,
+        quali: window.__apex.info().raceQuali,
+      };
+    });
+    await peerSays(page, EV.SETTINGS, {
+      track: 4,
+      laps: '<img id="settings-xss" src=x onerror="window.__settingsXss=1">',
+      weather: "wet", tod: "night", difficulty: "hard", quali: false,
+    });
+
+    await expect(page.locator("#vs-status")).toContainText(/invalid race settings/i);
+    expect(await page.locator("#settings-xss").count()).toBe(0);
+    expect(await page.evaluate(() => window.__settingsXss)).toBe(0);
+    expect(await page.evaluate(() => {
+      return {
+        summary: document.getElementById("vs-race-summary")?.textContent,
+        quali: window.__apex.info().raceQuali,
+      };
+    })).toEqual(before);
+  });
+
   test("GO is what actually starts the guest's race", async ({ page }) => {
     // The slowest test in the group: GO builds an entire circuit, and
     // SwiftShader builds it on the CPU.

@@ -1484,6 +1484,8 @@ const Car3D = (function () {
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
+    const teamId = opts && opts.teamId;
+    Log.info("car", "build" + (teamId ? " " + teamId : ""));
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     // Section bookkeeping for the agent world view (carView({detail:"parts"})).
     // Pure recording — no geometry changes, and the arrays are identical with or

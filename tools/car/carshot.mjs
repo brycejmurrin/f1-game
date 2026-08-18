@@ -11,16 +11,11 @@
 // az: orbit azimuth (0 = behind, 180 = head-on). tod: day|dusk|night|default.
 // teamIdx: Teams.LIST index (0 merc, 1 ferrari, 2 mclaren, ...).
 
-import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { createServer } from "node:net";
+import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { launchChromium, shutdown, sleep, startStaticServer } from "../harness.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const az = Number(process.argv[2] ?? 40);
 const tod = process.argv[3] || "day";
@@ -29,42 +24,37 @@ const defaultOut = join(ROOT, "artifacts", "tmp", "carshot.jpg");
 mkdirSync(join(ROOT, "artifacts", "tmp"), { recursive: true });
 const out = process.argv[5] || defaultOut;
 
-const port = await new Promise((res) => {
-  const s = createServer();
-  s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-});
-const srv = spawn("npx", ["serve", "-l", String(port), "."], { cwd: ROOT, stdio: "ignore" });
-await sleep(1500);
-const exe = ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"].find(existsSync);
-const browser = await chromium.launch({ executablePath: exe, args: ["--use-gl=angle"] });
-const page = await browser.newPage({ viewport: { width: 480, height: 270 } });
-await page.addInitScript((i) => localStorage.setItem("apex26.team", String(i)), teamIdx);
-page.on("pageerror", (e) => console.error("PAGEERROR", String(e).slice(0, 150)));
-await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load" });
-await page.waitForFunction(() => window.__apex, null, { timeout: 30000 });
-await page.evaluate(() => __apex.race("monza"));
-await sleep(2500);
-if (tod !== "default") {
-  await page.evaluate((t) => __apex.setTimeOfDay(t), tod);
-  await sleep(2200);
-}
-await page.evaluate(() => __apex.park(0.55));
-await sleep(300);
-await page.evaluate(() => { __apex.studio(); __apex.hud(false); });
-await page.evaluate((a) => __apex.carOrbit(0, a, 9, 4.2), az);
-await sleep(400);
-// Crop to the car (it fills the frame centre at 4.2 m) and keep the file tiny.
-await page.screenshot({ path: out, type: "jpeg", quality: 62,
-  clip: { x: 96, y: 40, width: 288, height: 190 } });
+const srv = await startStaticServer(ROOT);
+try {
+  const browser = await launchChromium({
+    args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-background-timer-throttling"],
+  });
+  const page = await browser.newPage({ viewport: { width: 480, height: 270 } });
+  await page.addInitScript((i) => localStorage.setItem("apex26.team", String(i)), teamIdx);
+  page.on("pageerror", (e) => console.error("PAGEERROR", String(e).slice(0, 150)));
+  await page.goto(srv.url, { waitUntil: "load" });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 30000 });
+  await page.evaluate(() => __apex.race("monza"));
+  await sleep(2500);
+  if (tod !== "default") {
+    await page.evaluate((t) => __apex.setTimeOfDay(t), tod);
+    await sleep(2200);
+  }
+  await page.evaluate(() => __apex.park(0.55));
+  await sleep(300);
+  await page.evaluate(() => { __apex.studio(); __apex.hud(false); });
+  await page.evaluate((a) => __apex.carOrbit(0, a, 9, 4.2), az);
+  await sleep(400);
+  // Crop to the car (it fills the frame centre at 4.2 m) and keep the file tiny.
+  await page.screenshot({ path: out, type: "jpeg", quality: 62,
+    clip: { x: 96, y: 40, width: 288, height: 190 } });
 
-// Canvas dimensions for the log line (the numeric paint report this once
-// printed was dropped; only the JPEG and the size are the deliverable now).
-const rep = await page.evaluate(() => {
-  const cv = document.querySelector("canvas");
-  return { w: cv.width, h: cv.height };
-});
-const fs = await import("node:fs");
-console.log(`carshot → ${out} (${(fs.statSync(out).size / 1024).toFixed(1)} KB)  az=${az} tod=${tod} team=${teamIdx} canvas=${rep.w}x${rep.h}`);
-await browser.close();
-srv.kill();
+  const rep = await page.evaluate(() => {
+    const cv = document.querySelector("canvas");
+    return { w: cv.width, h: cv.height };
+  });
+  console.log(`carshot → ${out} (${(statSync(out).size / 1024).toFixed(1)} KB)  az=${az} tod=${tod} team=${teamIdx} canvas=${rep.w}x${rep.h}`);
+} finally {
+  await shutdown();
+}
 process.exit(0);

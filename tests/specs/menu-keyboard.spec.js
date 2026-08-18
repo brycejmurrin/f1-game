@@ -178,6 +178,24 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(active).toBe(picked);
   });
 
+  test("circuit filter tabs and selected circuit expose distinct semantics", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    await expect(page.locator("#sel-tracks")).toHaveAttribute("role", "group");
+    await expect(page.locator("#sel-tracks [role=listbox]")).toHaveCount(0);
+    await expect(page.locator("#sel-tracks .track-row[aria-pressed=true]")).toHaveCount(1);
+
+    await page.locator('#sel-track-filter [data-filter="all"]').focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator('#sel-track-filter [data-filter="season"]')).toBeFocused();
+    await expect(page.locator('#sel-track-filter [data-filter="season"]')).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#sel-tracks .trb-classic")).toHaveCount(0);
+
+    await page.locator('.track-row[aria-label="MONZA"]').click();
+    await expect(page.locator('.track-row[aria-label="MONZA"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('#sel-tracks .track-row[aria-pressed="true"]')).toHaveCount(1);
+  });
+
   test("with a race running the arrow keys drive the car, not the menu", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));

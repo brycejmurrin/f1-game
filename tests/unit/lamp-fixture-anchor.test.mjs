@@ -41,6 +41,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -52,6 +53,7 @@ function loadLightTune() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb;
   vm.createContext(sb);
+  seedLog(sb);
   vm.runInContext(readFileSync(path.join(ROOT, "js/game/lighting.js"), "utf8")
     .replace(/^const\b/gm, "var"), sb);
   return sb.LightTune;

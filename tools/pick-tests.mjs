@@ -112,14 +112,14 @@ export const RULES = [
   [/^js\/game\/physics-consts\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["camera"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality)\.js/, ["ui"], "DOM screens"],
+  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|metrics|perf-try|cockpit-opts)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
-  [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes"], ""],
+  [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
-  [/^js\/game\/season-(cal|ui)\.js/, ["modes", "ui"], "calendar + weekend format"],
-  [/^js\/game\/(audio|music-lib|spotify)\.js/, ["audio"], ""],
+  [/^js\/game\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
+  [/^js\/game\/(audio|music-lib|spotify)\.js/, ["audio", "lifecycle-unit"], ""],
   // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
   // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
   [/^js\/game\/audio-panel\.js/, ["audio", "ui"], "mixer panel: audio behaviour + menu DOM"],
@@ -131,12 +131,13 @@ export const RULES = [
   // so a debrisworld edit would otherwise never run its own Node gate.
   [/^js\/game\/(debrisworld|incidentsim)\.js/, ["debris", "collision", "sweeps"], ""],
   [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js/, ["ui"], "visual-only layers"],
-  [/^js\/game\/(store|perf|tables)\.js/, ["api", "modes"], ""],
+  [/^js\/game\/(store|perf|tables)\.js/, ["api", "modes", "state-unit"], ""],
   [/^js\/log\.js/, ["api", "tooling-fast"], "every module logs through it"],
 
   // ── the rest ────────────────────────────────────────────────────────────
+  [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
-  [/^js\/data\//, ["api", "hooks"], "data hub lifecycle + telemetry compare; new-hooks moved to test:hooks in the dedupe"],
+  [/^js\/data\//, ["api", "hooks", "lifecycle-unit"], "data hub lifecycle + telemetry compare; new-hooks moved to test:hooks in the dedupe"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],

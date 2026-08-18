@@ -761,21 +761,67 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 
 /* ---------- settings sub-menu ----------
-   DRIVING / AUDIO / DISPLAY read as three short lists instead of one
-   undifferentiated stack of eleven toggles. The column count is a property of
-   how wide the sheet is, not of the device: one column when narrow, three the
-   moment there is room — which is what stops the landscape phone from hiding
-   MUSIC behind the BACK button. */
-.pm-groups { display: grid; grid-template-columns: 1fr; gap: var(--gap); align-items: start; }
-/* Each column owns its groups and stacks them tight. Replaces a 3x2 grid whose
-   cells were assigned by nth-child with two groups spanning both rows — that
-   forced row 1 to half the tallest column's height and left AUDIO floating
-   above a block of dead space. */
-.pm-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-/* ONE VERTICAL RHYTHM for every settings column. Buttons used `margin: 3px 0`
-   while MORE used grid `gap`, so the first MORE button sat 2px above GEARS /
-   HIDE HUD (MEASURED 1280×800). Flex/grid `gap: 6px` on both stacks — and zero
-   margins on the children — keeps DRIVING / DISPLAY / MORE on the same ladder. */
+   One category at a time. The old responsive column count made every setting
+   visible at once, but the result changed reading order as the sheet crossed a
+   breakpoint and mixed everyday controls with experimental switches and links
+   to other screens. A persistent category rail gives the screen one stable
+   hierarchy at every size. On narrow sheets it becomes a compact 2×2 tab grid;
+   once there is room it sits beside the active panel. */
+#pm-settings-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+#pm-category-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.5);
+  padding-bottom: calc(var(--gap) * 0.6);
+  background: var(--bg);
+}
+/* Four labels fit without truncation once the sheet has this much LOCAL room.
+   Below it the documented 2x2 arrangement keeps CONTROLS and DISPLAY legible. */
+@container sheet (min-width: 420px) and (max-width: 519px) {
+  #pm-category-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+#pm-category-tabs > button {
+  min-width: 0;
+  min-height: var(--tap);
+  margin: 0;
+  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.045);
+  color: var(--muted);
+  font-size: var(--fs-1);
+  font-weight: 750;
+  letter-spacing: .06em;
+}
+#pm-category-tabs > button.active,
+#pm-category-tabs > button[aria-selected="true"] {
+  color: var(--text);
+  border-color: var(--red);
+  background: rgba(232,0,45,.14);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+/* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
+   fills the physical viewport. Keep the aria-label as the accessible name,
+   but paint deliberate compact labels instead of clipping half a word. */
+@container sheet (max-width: 250px) {
+  #pm-tab-controls,
+  #pm-tab-display { font-size: 0; }
+  #pm-tab-controls::after,
+  #pm-tab-display::after { font-size: var(--fs-1); }
+  #pm-tab-controls::after { content: "CTRL"; }
+  #pm-tab-display::after { content: "DISP"; }
+}
+.pm-groups { min-width: 0; }
+.pm-groups > [role="tabpanel"] { min-width: 0; }
+.pm-groups > [role="tabpanel"][hidden] { display: none !important; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
   color: var(--red); font-size: var(--fs-3); font-weight: 700; letter-spacing: 0.11em;
@@ -866,141 +912,41 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   border-radius: var(--r-sm);
   padding: 0 calc(var(--gap) * 0.75);
 }
-/* THE THRESHOLDS ARE DERIVED FROM THE COLUMN, NOT PICKED FOR THE SHEET.
-   A .pm-col needs about 150 own units before its labels start costing more than
-   the column saves. MEASURED by forcing extra columns on a phone and counting
-   what happened to every one of the thirteen buttons:
-
-     column width   wrapped    clipped    scroll
-        318 (1 col)    0/13         0     2.1 screens
-        255 (2 col)    0/13         0     4.2
-        167 (3 col)    4/13         0     3.2
-        153 (2 col)    8/13         0     1.6
-        143 (3 col)    8/13         0     4.3
-        111 (2 col)   11/13         0     2.2
-         93 (2 col)   12/13         4     2.9
-
-   Two things fall out. Doubling the columns NEVER halves the scroll — a wrapped
-   button is twice as tall, so the arrangement gives back most of what it wins;
-   the honest gain is about a quarter, not a half. And below ~110 the labels stop
-   wrapping and start being CUT, which is worse than scrolling: "RESOLUTION:
-   AUTO" truncated loses the value, which is the half you needed.
-   So: 340 seats two columns of ~150, 490 seats three. Both numbers are
-   2*150+gap+padding and 3*150+2*gap+padding, and both were checked against the
-   table above rather than rounded to something tidy.
-   The old 420/620 pair left a portrait phone at the SHIPPED DEFAULT size in one
-   column with 2.1 screens of scroll, 57 units short of a split it could easily
-   afford. */
-/* ---------- the doors, as a row rather than five more list entries ----------
-   Five of this screen's sixteen controls were never settings — ADVANCED
-   STEERING, LIGHTING TUNER, CAMERA TUNER, MUSIC & SOUND, HOW TO PLAY all OPEN
-   something, and the `…` on each already said so. As full-width entries inside
-   the groups they cost about 260 own units, roughly 38% of a ~680-unit body,
-   and two of the four groups (AUDIO, HELP) existed only to hold one of them —
-   a heading as tall as the single control beneath it.
-   A wrapping row instead: at ~150 own units each they seat two or three across
-   instead of stacking five deep, and the two headings go away entirely. They
-   keep `--tap`, because they are still primary targets — this buys height by
-   arranging them, not by shrinking them.
-   INSIDE the scroll region, spanning its columns. Outside it they would be
-   fixed chrome, and a landscape phone at UI SIZE 150% has a 196px body that
-   cannot afford five rows of anything it did not ask for. */
-/* A FULL-WIDTH ROW ONLY WHERE THERE IS ONE COLUMN — measured, after shipping
-   the opposite and watching it regress.
-   In a multi-column grid the body's height is the TALLEST COLUMN. Doors written
-   as ordinary entries add to ONE column each; a row spanning `1 / -1` adds to
-   ALL of them, because it sits below every column and every column has to clear
-   it. MEASURED on a landscape phone at UI SIZE 150%, three columns, 116-unit
-   body: content went 333 -> 361 own units and the scroll 2.87 -> 3.11 screens.
-   The change that helps a stacked sheet hurts a split one, for the same reason
-   in both directions.
-   So: one column, span it — that is the case where the doors were stacking five
-   deep and the row is the whole point (portrait phone at 100%: 780 -> 655 own
-   units, 1.55 -> 1.30 screens). More than one, let it be an ordinary cell that
-   packs beside the groups and adds to only its own column. */
+/* Injected SCREENSHOTS / THREE PATH status — ID-scoped, no new class. */
+#pmsettings-inner .pm-group #pm-gfx-status {
+  margin: calc(var(--gap) * 0.25) 0 0;
+  padding: 0 calc(var(--gap) * 0.4);
+  font-size: var(--fs-2);
+  line-height: 1.35;
+  color: var(--dim);
+}
 .pm-doors {
-  /* GRID, NOT FLEX-WRAP. Flex `1 1 150px` lets a lone last-row door grow to the
-     full row width — MEASURED compact landscape: ADVANCED/LIGHTING/CAMERA/MUSIC
-     were 179px while HOW TO PLAY alone was 732px. `auto-fill` keeps empty tracks
-     so an orphan occupies ONE cell at the shared size instead of stretching.
-     Row gap is 6px to match `.pm-group` — column gap stays the tighter wrap pitch. */
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 6px calc(var(--gap) * 0.6);
-  align-content: start;
-}
-/* The heading takes its own full line and carries the column's top alignment. */
-.pm-doors > .pm-group-h { grid-column: 1 / -1; margin: 0; }
-/* THE RULE BELONGS TO THE SPANNING FORM ONLY. When this nav spans the grid it
-   sits UNDER the groups and a rule reads as a separator; when it is a column of
-   its own it sits BESIDE them, and a top border plus the extra margin pushed its
-   first button a heading's height below DRIVING's and DISPLAY's. Same element,
-   two different jobs, and the divider only makes sense in one of them. */
-@container sheet (max-width: 489px) {
-  .pm-doors {
-    margin-top: var(--gap); padding-top: var(--gap);
-    border-top: 1px solid rgba(255, 255, 255, 0.10);
-  }
-}
-/* 489, the 2/3-column boundary — NOT the 1/2 boundary, which is where this was
-   first written and where it was wrong in the other direction. MEASURED, all
-   four combinations, own units of content and screens of scroll:
-
-                       shipped      spanning     ordinary cell
-     portrait @100     780 / 1.55   655 / 1.30   809 / 1.61
-     landscape @150    333 / 2.87   361 / 3.11   265 / 2.28
-
-   Two columns want the row (the doors were stacking and the row unstacks them);
-   three want a cell (a fourth short column packs beside the groups and adds to
-   nothing). Both readings beat shipped only when the threshold sits between
-   them. Neither is a matter of taste — each cell above is a measurement. */
-@container sheet (max-width: 489px) {
-  .pm-doors { grid-column: 1 / -1; }
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) * 0.5);
 }
 .pm-doors button {
   margin: 0;
   min-width: 0;
 }
-
-@container sheet (min-width: 340px) {
-  .pm-groups { grid-template-columns: 1fr 1fr; }
+@container sheet (min-width: 520px) {
+  #pm-settings-body {
+    grid-template-columns: minmax(145px, 0.28fr) minmax(0, 1fr);
+    gap: calc(var(--gap) * 1.25);
+  }
+  #pm-category-tabs {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+    background: transparent;
+  }
+  #pm-category-tabs > button {
+    text-align: left;
+    justify-content: flex-start;
+    font-size: var(--fs-2);
+  }
 }
-@container sheet (min-width: 490px) {
-  /* Three .pm-col columns, each owning its own groups. This replaced a 3x2
-     grid that assigned cells by nth-child with DRIVING and DISPLAY spanning
-     both rows: a spanning item distributes its height across the rows it
-     covers, so row 1 became half of the tallest column and AUDIO sat above a
-     block of dead space (visible with only two buttons in it). Columns that
-     stack their own content are self-sizing, and adding or moving a group no
-     longer means rewriting grid coordinates. */
-  .pm-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-/* SHORT SHEET USED TO FORCE TWO COLUMNS whenever `data-density="compact"`,
-   beating the 490px three-column container query by specificity. That was
-   written for an older layout; with MORE as a third `.pm-doors` column it is
-   wrong in both directions:
-
-     MEASURED 852×393 (play shape), body scroll screens:
-                         compact→2col (old)   width→3col (now)
-       UI SIZE 100%           1.44                 1.00
-       UI SIZE 115%           1.76                 1.12
-       UI SIZE 150%           2.55                 1.69
-
-   Own width on that phone is ~750 at every scale that still goes compact —
-   well past 490 — so the container query already wants three columns. The
-   unconditional compact override left every zoom ≥~100% stuck at two columns
-   despite clearing the threshold, which is exactly "at certain zoom levels
-   settings should be three columns". Narrow sheets still get 1→2 cols from
-   the @container rules above; doors still span via `(max-width: 489px)`.
-   Compact only tightens gaps / wraps door labels below. */
-/* Compact DISPLAY: drop the disabled/hidden controls' visual weight and tighten
-   the slider rhythm so RESOLUTION clears the first fold on a landscape phone. */
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
-.sheet[data-density="compact"] .pm-doors { gap: 4px calc(var(--gap) * 0.6); }
-/* Compact MORE doors: wrap labels. #pmsettings-inner IS the .sheet, so the
-   selector must be on the same node — `.sheet #pmsettings-inner` never matches.
-   Beats @container `#pmsettings-inner button` nowrap (ID+element). Height grows
-   with wrap; a fixed --tap box clips the second line. */
+.sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {
   white-space: normal;
   text-overflow: clip;
@@ -1017,18 +963,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   line-height: 1.15;
   font-size: var(--fs-3);
 }
-/* THE ELLIPSIS STAYS AT 620 AND DOES NOT FOLLOW THE COLUMN COUNT DOWN.
-   It used to ride along in the same block, which was safe while three columns
-   meant 620/3 ≈ 190 units each — wide enough that `nowrap` costs nothing.
-   Bringing the count down to 490 makes the columns ~163, where the measurement
-   above records 4 of 13 labels WRAPPING. Under `nowrap` those four do not wrap,
-   they get cut — and a settings button reads "RESOLUTION: AUTO", so the half
-   that gets cut is the VALUE. Wrapping to two lines is a cost; losing the answer
-   is a defect. They are separate questions and now they are separate blocks.
-   Keep min-height: the padding shrink is for density, not for shrinking the
-   thumb target — without the floor, MORE doors read 36px on a 52px ladder. */
 @container sheet (min-width: 620px) {
-  #pmsettings-inner button {
+  #pmsettings-inner .pm-groups > [role="tabpanel"] button {
     font-size: var(--fs-2); padding: 8px 6px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     min-height: var(--tap);

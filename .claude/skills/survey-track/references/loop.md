@@ -31,8 +31,10 @@ probe, auto-flagged:
   **sagging** (right for a hill, wrong for a flat island level with water).
 
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
+`--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
+(flag may sit anywhere; `monaco --oblique 0.1,0.5` is valid).
 Numbers-only: `node .claude/skills/survey-track/ground-profile.mjs <id>`.
-One bespoke frame: **playwright-probe** `shot.mjs`. Deeper hooks:
+One bespoke frame: **playwright-probe** `tools/capture/shot.mjs`. Deeper hooks:
 **debug-tracks**. `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 

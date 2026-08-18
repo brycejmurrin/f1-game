@@ -176,6 +176,7 @@ let _userTier = 0;
 function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 
 function init(gfx) {
+  Log.info("game", "PerfGov.init");
   _gfx = gfx;
   // Any phone (isMobile), NOT just the memory-safe STANDARD tier (mobileTier):
   // a device that opted into GRAPHICS: HIGH is the one MOST likely to get

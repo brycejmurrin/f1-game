@@ -40,6 +40,10 @@ const F1API = (function () {
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
   const RETRY_CAP_MS = 25000;  //   delays only eat more quota, so wait longer
+  // A fetch with no deadline owns the shared queue forever. Browser network
+  // stacks can leave a black-holed request pending for minutes, during which
+  // every otherwise unrelated data-hub endpoint is stuck behind it.
+  const FETCH_TIMEOUT_MS = 15000;
 
   const MINUTE = 60 * 1000;
   const HOUR = 60 * MINUTE;
@@ -47,12 +51,14 @@ const F1API = (function () {
   const TTL_STANDINGS = 1 * HOUR;       // standings + last race
   const TTL_LATEST = 10 * MINUTE;       // openf1 latest session (and its data)
   const TTL_HISTORIC = 7 * 24 * HOUR;   // openf1 data for finished, non-latest sessions
+  const CACHE_SWEEP_MS = 5 * MINUTE;     // a response batch must not rescan localStorage per item
 
   const SESSION_FROZEN_MS = 6 * HOUR;   // a weekend session is well over after this
 
   let queue = Promise.resolve();        // promise chain serializing network hits
   let lastNetAt = 0;                    // time of last actual fetch start
   let latestSessionKey = null;          // tracked from latestSession() responses
+  let lastCacheSweepAt = -Infinity;
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
@@ -123,9 +129,15 @@ const F1API = (function () {
   function writeCache(url, data) {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data: data });
-    // Periodic age sweep on every write — cheap relative to a failed quota
-    // surprise mid-session, and keeps windowed blobs from living forever.
-    purgeExpiredCache();
+    // Sweep at most once per batch-sized window. LIVE settles four requests at
+    // once, and parsing every cached telemetry blob four times on the main thread
+    // was more expensive than the writes themselves. Quota recovery below still
+    // forces a sweep immediately, irrespective of this cadence.
+    const now = Date.now();
+    if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
+      purgeExpiredCache();
+      lastCacheSweepAt = now;
+    }
     try {
       localStorage.setItem(key, payload);
       return;
@@ -143,12 +155,50 @@ const F1API = (function () {
 
   /* ---------- queued, cached fetch ---------- */
 
+  function endpointName(url) {
+    const noQ = String(url || "").split("?")[0];
+    if (/driverstandings/i.test(noQ)) return "driverstandings";
+    if (/constructorstandings/i.test(noQ)) return "constructorstandings";
+    if (/\/last\/results/i.test(noQ)) return "last-results";
+    if (/\/meetings/i.test(noQ)) return "meetings";
+    if (/\/sessions/i.test(noQ)) return "sessions";
+    if (/\/position/i.test(noQ)) return "position";
+    if (/\/intervals/i.test(noQ)) return "intervals";
+    if (/\/drivers/i.test(noQ)) return "drivers";
+    if (/\/laps/i.test(noQ)) return "laps";
+    if (/\/car_data/i.test(noQ)) return "car_data";
+    if (/\/location/i.test(noQ)) return "location";
+    if (/\/stints/i.test(noQ)) return "stints";
+    if (/\/pits/i.test(noQ)) return "pits";
+    if (/\/weather/i.test(noQ)) return "weather";
+    if (/\d{4}\.json$/i.test(noQ)) return "schedule";
+    const last = noQ.split("/").filter(Boolean).pop() || "api";
+    return last.replace(/\.json$/i, "").slice(0, 32);
+  }
+
+  function fetchTimed(url) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let timer = null;
+    const timeout = new Promise(function (_resolve, reject) {
+      timer = setTimeout(function () {
+        if (controller) controller.abort();
+        reject(new Error("Request timed out for " + url));
+      }, FETCH_TIMEOUT_MS);
+    });
+    let network;
+    try { network = fetch(url, controller ? { signal: controller.signal } : undefined); }
+    catch (e) { network = Promise.reject(e); }
+    // Promise.race is intentional even with AbortController: a broken fetch
+    // implementation that ignores abort must still release the global queue.
+    return Promise.race([network, timeout]).finally(function () { clearTimeout(timer); });
+  }
+
   // fetch with retry on rate-limit (429) / transient server (5xx) errors. Honours
   // a Retry-After header when present, else exponential backoff. Each wait happens
   // inside the shared queue, so a burst self-throttles instead of hammering 429s.
   function fetchRetry(url, attempt) {
     lastNetAt = Date.now();
-    return fetch(url).then(function (res) {
+    return fetchTimed(url).then(function (res) {
       if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < MAX_RETRY) {
         const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
         const back = isFinite(ra) && ra > 0
@@ -162,8 +212,11 @@ const F1API = (function () {
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
-            if (j.detail) throw new Error(j.detail);
-            if (j.error) throw new Error(j.error);
+            if (j.detail || j.error) {
+              const err = new Error(j.detail || j.error);
+              err.status = res.status;
+              throw err;
+            }
           } catch (e) {
             // A non-JSON error body just falls through to the generic
             // "HTTP <status>" error below; the deliberate detail/error throws
@@ -181,10 +234,13 @@ const F1API = (function () {
     });
   }
 
-  function request(url, ttl) {
+  function request(url, ttl, options) {
+    const cache = !options || options.cache !== false;
+    const quiet = ttl <= 0 || (options && options.cache === false);
+    const name = endpointName(url);
     // ttl <= 0: bypass cache read (still write on success) so live AUTO can
     // refresh every 30 s instead of being stuck behind TTL_LATEST (10 min).
-    const hit = readCache(url);
+    const hit = cache ? readCache(url) : null;
     if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
 
     const job = queue
@@ -197,17 +253,20 @@ const F1API = (function () {
         return fetchRetry(url, 0);
       })
       .then(function (json) {
-        writeCache(url, json);
+        if (cache) writeCache(url, json);
+        if (!quiet) Log.info("data", "fetch " + name + " ok");
         return json;
       })
       .catch(function (err) {
         // Never paper over live-session auth lockouts with stale cache — that
         // makes LIVE look "updated" while silently serving old classification.
         const msg = (err && err.message) || "";
-        if (hit && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
-          Log.warn("data", "apex26: fetch failed, serving stale cache for " + url, err);
+        const status = err && err.status;
+        if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
+          Log.warn("data", "fetch " + name + " fail stale");
           return hit.data;
         }
+        Log.warn("data", "fetch " + name + " fail");
         throw err;
       });
 
@@ -439,6 +498,40 @@ const F1API = (function () {
     });
   }
 
+  // LIVE uses one full snapshot and then server-filtered deltas. These calls are
+  // deliberately memory-only: a new timestamp makes every URL unique, and
+  // persisting those responses would recreate the unbounded window-cache problem
+  // this module's eviction code exists to prevent.
+  function deltaUrl(path, sessionKey, sinceISO) {
+    let url = OPENF1 + path + "?session_key=" + encodeURIComponent(sessionKey);
+    if (sinceISO) url += "&date%3E=" + encodeURIComponent(sinceISO);
+    return url;
+  }
+  function cursorOf(list) {
+    let cursor = null;
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i] && list[i].date;
+      if (typeof d === "string" && (!cursor || d > cursor)) cursor = d;
+    }
+    return cursor;
+  }
+  function livePositions(sessionKey, sinceISO) {
+    return request(deltaUrl("/position", sessionKey, sinceISO), 0, { cache: false }).then(function (list) {
+      const a = arr(list), latest = {}, out = [];
+      for (let i = 0; i < a.length; i++) {
+        const p = a[i];
+        if (!p || p.driver_number === undefined || p.driver_number === null) continue;
+        const prev = latest[p.driver_number];
+        if (!prev || String(p.date || "") >= String(prev.date || "")) latest[p.driver_number] = p;
+      }
+      for (const k in latest) if (Object.prototype.hasOwnProperty.call(latest, k)) {
+        out.push({ num: num(latest[k].driver_number), pos: num(latest[k].position) });
+      }
+      out.sort(function (x, y) { return (x.pos === null ? 99 : x.pos) - (y.pos === null ? 99 : y.pos); });
+      return { values: out, cursor: cursorOf(a) };
+    });
+  }
+
   // Gap to leader per driver — OpenF1 tracks it separately from /position,
   // which carries running order but not the timed gap the LIVE gap bars need.
   function intervals(sessionKey, ttl) {
@@ -469,6 +562,23 @@ const F1API = (function () {
         }
       }
       return out;
+    });
+  }
+
+  function liveIntervals(sessionKey, sinceISO) {
+    return request(deltaUrl("/intervals", sessionKey, sinceISO), 0, { cache: false }).then(function (list) {
+      const a = arr(list), latest = {}, out = {};
+      for (let i = 0; i < a.length; i++) {
+        const iv = a[i];
+        if (!iv || iv.driver_number === undefined || iv.driver_number === null) continue;
+        const prev = latest[iv.driver_number];
+        if (!prev || String(iv.date || "") >= String(prev.date || "")) latest[iv.driver_number] = iv;
+      }
+      for (const k in latest) if (Object.prototype.hasOwnProperty.call(latest, k)) {
+        const raw = latest[k].gap_to_leader;
+        out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
+      }
+      return { values: out, cursor: cursorOf(a) };
     });
   }
 
@@ -608,7 +718,9 @@ const F1API = (function () {
     sessionsForMeeting: sessionsForMeeting,
     weather: weather,
     positions: positions,
+    livePositions: livePositions,
     intervals: intervals,
+    liveIntervals: liveIntervals,
     sessionDrivers: sessionDrivers,
     fastestLap: fastestLap,
     carData: carData,

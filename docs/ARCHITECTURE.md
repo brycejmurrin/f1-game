@@ -77,7 +77,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   headless guards follow the layout automatically.
 - **`tools/extract-module.mjs`** assists further extractions from game.js
   (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
-- **Cache busting is unchanged** — every JS/CSS edit still needs the `?v=N` sed
+- **Cache busting is content-addressed** — every JS/CSS edit still needs the `bump-cache` refresh
   across `index.html` plus the matching `version.json` bump.
 
 ### Deferred follow-ups (known debt, in rough priority order)
@@ -768,7 +768,7 @@ screen, pause menu, data hub root, touch buttons, help modal. Script tags must
 match `tools/manifest.cjs` (asserted by `tests/unit/load-order.test.mjs`).
 `css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
 accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
-every script/style URL with `?v=N`, where `N` is a monotonic per-build integer
+every script/style URL with `?v=<sha256>`, while a separate monotonic shell generation
 (check `index.html` for the current value). `version.json` `{ "build": N }`
 mirrors the same `N`; the shell version guard uses it to force-refresh a stale
 installed PWA.

@@ -33,8 +33,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // netplay.js closes over NetSnapshot and NetSession as globals, so they have to
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
@@ -311,6 +313,7 @@ globalThis.Teams = {
     { id: "chase", name: "Chase", drivers: [{ code: "CH1", name: "C One", num: 5 }, { code: "CH2", name: "C Two", num: 6 }] },
   ],
 };
+globalThis.Tracks = { LIST: Array.from({ length: 6 }, (_, i) => ({ id: "track-" + i })) };
 const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
 
 function lobbyG() {
@@ -421,5 +424,39 @@ test("LOBBY phase: a guest accepts the host's QUALI for any driver", async () =>
     peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
     await settle();
     assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: SETTINGS is validated atomically before guest state changes", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  const snapshot = () => ({
+    track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather,
+    tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty,
+  });
+  try {
+    const before = snapshot();
+    const invalid = [
+      { track: 999 },
+      { laps: '<img src=x onerror="globalThis.pwned=1">' },
+      { weather: "hurricane" },
+      { tod: { toString: "night" } },
+      { difficulty: "impossible" },
+      { quali: 1 },
+      // Atomicity: valid fields alongside one invalid field change nothing.
+      { track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: "yes" },
+    ];
+    for (const payload of invalid) {
+      peerSays("settings", payload);
+      await settle();
+      assert.deepEqual(snapshot(), before, JSON.stringify(payload));
+    }
+
+    peerSays("settings", {
+      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false,
+    });
+    await settle();
+    assert.deepEqual(snapshot(), {
+      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false,
+    });
   } finally { lobby.cancel(); }
 });

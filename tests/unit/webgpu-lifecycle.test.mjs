@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
@@ -186,6 +187,7 @@ function makeGpuHarness(opts = {}) {
       };
     },
   };
+  const windowListeners = new Map();
   const context = vm.createContext({
     console,
     Float32Array,
@@ -202,7 +204,12 @@ function makeGpuHarness(opts = {}) {
     // cannot hold the test runner open.
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
-    window: { devicePixelRatio: 1 },
+    window: {
+      devicePixelRatio: 1,
+      ...(opts.watchCss ? {
+        addEventListener(type, fn) { windowListeners.set(type, fn); },
+      } : {}),
+    },
     localStorage: stored ? {
       getItem: (k) => (stored.has(k) ? stored.get(k) : null),
       setItem: (k, v) => { stored.set(k, String(v)); },
@@ -257,6 +264,7 @@ function makeGpuHarness(opts = {}) {
     GPUMapMode: { READ: 1 },
   });
   context.window.window = context.window;
+  seedLog(context);
   vm.runInContext(`${CHUNKS_SOURCE}\nwindow.WGSLChunks = WGSLChunks;`, context);
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
   vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);
@@ -283,10 +291,40 @@ function makeGpuHarness(opts = {}) {
     failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
+    fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
   };
 }
+
+test("WebGPU caches canvas layout reads until a resize invalidates them", async () => {
+  const h = makeGpuHarness({ watchCss: true });
+  let reads = 0;
+  Object.defineProperty(h.canvas, "clientWidth", {
+    configurable: true, get() { reads++; return 320; },
+  });
+  Object.defineProperty(h.canvas, "clientHeight", {
+    configurable: true, get() { reads++; return 180; },
+  });
+  const gfx = await h.create();
+  const afterCreate = reads;
+
+  gfx.resize();
+  gfx.resize();
+  assert.equal(reads, afterCreate, "unchanged frames must not force canvas layout reads");
+
+  h.fireWindow("resize");
+  gfx.resize();
+  assert.equal(reads, afterCreate + 2, "a real resize refreshes width and height once");
+});
+
+test("software-present pipelines match the rgba8 attachment format", () => {
+  assert.match(WGX_SOURCE, /const _presentFormat = _softGpu \? LDR_FORMAT : format/);
+  assert.match(WGX_SOURCE, /targets: \[\{ format: _presentFormat \}\]/,
+    "tonemap blit must target the actual currentView format");
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*_presentFormat/,
+    "FXAA must target the same soft-present attachment format");
+});
 
 test("post resize keeps old resources valid and cleans partial texture allocation", async () => {
   const h = makeGpuHarness();
@@ -307,6 +345,29 @@ test("post resize keeps old resources valid and cleans partial texture allocatio
     h.textures.slice(beforeAttempt).every((resource) => resource.destroyed),
     "every partial replacement texture must be destroyed",
   );
+});
+
+test("chunked uploads release production source channels and preserve debug sources", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const make = (debug) => {
+    const quads = 1001, pos = [], nrm = [], col = [], idx = [], mat = [], trk = [];
+    for (let q = 0, v = 0; q < quads; q++, v += 4) {
+      const x = q * 0.1;
+      pos.push(x,0,0, x+1,0,0, x+1,0,1, x,0,1);
+      idx.push(v,v+1,v+2, v,v+2,v+3);
+      for (let i = 0; i < 4; i++) { nrm.push(0,1,0); col.push(1,1,1); mat.push(1); trk.push(x,0,6); }
+    }
+    return { pos, nrm, col, idx, mat, trk, _keepPositions: true, _keepFullGeometry: debug };
+  };
+  const prod = make(false);
+  gfx.createChunkedMesh(prod, 72);
+  assert.ok(prod.pos && prod.idx, "collision/probe channels stay resident");
+  for (const key of ["nrm", "col", "mat", "trk"]) assert.equal(prod[key], null);
+
+  const debug = make(true), refs = { ...debug };
+  gfx.createChunkedMesh(debug, 72);
+  for (const key of ["pos", "nrm", "col", "idx", "mat", "trk"]) assert.equal(debug[key], refs[key]);
 });
 
 test("bloom texture is cleaned when its createView allocation fails", async () => {
@@ -893,35 +954,29 @@ test("desktop harness still takes the full WGX stack (GLX-parity)", async () => 
   assert.equal(gfx.lampShadowState().enabled, true);
 });
 
-test("software / empty-info adapter refuses create (white-canvas gate)", async () => {
+test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () => {
   const h = makeGpuHarness({ softAdapter: true });
   const gfx = await h.create();
-  assert.equal(gfx, null);
-  const fail = h.WGX.lastFailure();
-  assert.ok(fail && /software WebGPU adapter/i.test(fail.reason), fail && fail.reason);
-});
-
-test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async () => {
-  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
-  const h = makeGpuHarness({ softAdapter: true, storage: stored });
-  const gfx = await h.create();
-  assert.ok(gfx, "escape hatch must still boot WGX");
+  assert.ok(gfx, "SETTINGS ▸ WEBGPU must stay on WGX on software adapters");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+  assert.equal(h.WGX.lastFailure(), null);
 });
 
 test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
   // Chrome Lavapipe headed: adapter.info stringifies as "{}" but .architecture is
   // "swiftshader". Missing this misclassified hardware and skipped soft-present.
-  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
-  const h = makeGpuHarness({ softAdapterNonEnum: true, storage: stored });
+  const h = makeGpuHarness({ softAdapterNonEnum: true });
   const gfx = await h.create();
-  assert.ok(gfx, "non-enumerable swiftshader arch must still boot with allowSoftware");
+  assert.ok(gfx, "non-enumerable swiftshader arch must still boot WGX");
   assert.equal(gfx.msaa(), 1);
   assert.match(WGX_SOURCE, /infoBlob = \[dev, ven, arch, desc\]/,
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
 test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
+  assert.match(WGX_SOURCE, /localStorage.getItem\("apex26.wgxCapture"\)/);
+  assert.match(WGX_SOURCE, /_capPref === "0" \? false/);
+  assert.match(WGX_SOURCE, /softPresent: \(\) => !!_softGpu/);
   assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
   assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);

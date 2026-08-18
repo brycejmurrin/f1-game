@@ -62,23 +62,38 @@ window.MusicLib = (function () {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise((res) => {
       let r;
+      let settled = false;
+      let timer = null;
+      const finish = (db) => {
+        if (settled) {
+          // A timed-out/blocked open can still succeed later. Its promise has
+          // already degraded to null, so nobody owns this connection; close it
+          // rather than leaking an invisible handle that blocks future upgrades.
+          if (db) { try { db.close(); } catch (e) { /* already closed: no handle remains to release */ } }
+          return;
+        }
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        if (db) db.onversionchange = () => { try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
+        res(db || null);
+      };
       // Merely TOUCHING indexedDB throws in some private-mode builds, and
       // open() can throw SecurityError when storage is disabled by policy.
       try {
-        if (typeof indexedDB === "undefined" || !indexedDB) { res(null); return; }
+        if (typeof indexedDB === "undefined" || !indexedDB) { finish(null); return; }
         r = indexedDB.open(DB_NAME, DB_VERSION);
-      } catch (e) { res(null); return; }
+      } catch (e) { finish(null); return; }
       r.onupgradeneeded = () => {
         const db = r.result;
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
       };
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => res(null);
+      r.onsuccess = () => finish(r.result);
+      r.onerror = () => finish(null);
       // onblocked fires when another tab holds an older version open, and Safari
       // has shipped builds where open() simply never settles. Either way the
       // menu must not wait on it — resolve null and degrade.
-      r.onblocked = () => res(null);
-      setTimeout(() => res(null), OPEN_MS);
+      r.onblocked = () => finish(null);
+      timer = setTimeout(() => finish(null), OPEN_MS);
     }).then((db) => {
       usable = !!db;
       // NEVER CACHE A FAILURE. The likeliest cause is a slow open, not absent
@@ -211,6 +226,7 @@ window.MusicLib = (function () {
 
   function init() {
     if (readyPromise) return readyPromise;
+    Log.info("audio", "MusicLib.init");
     readyPromise = readAll().then((recs) => {
       recs.sort((a, b) => (a.added || 0) - (b.added || 0));
       const entries = [];
@@ -220,7 +236,10 @@ window.MusicLib = (function () {
       });
       if (entries.length) call("addTracks", entries);
       render();
-    }).catch(() => { usable = false; cache = []; readyPromise = null; render(); });
+    }).catch((e) => {
+      usable = false; cache = []; readyPromise = null; render();
+      Log.warn("audio", "MusicLib.init failed: " + ((e && e.message) || e));
+    });
     // A run that found no usable store is not a result worth remembering
     // either — the next add() should get a fresh attempt.
     readyPromise = readyPromise.then((v) => { if (!usable) readyPromise = null; return v; });

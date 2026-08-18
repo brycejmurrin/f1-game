@@ -99,6 +99,27 @@ test("rev bumps on a foreign write, so memoised derivations re-run", () => {
   assert.ok(store.rev > before, "rev is the invalidation signal set() already publishes");
 });
 
+test("keyRevision changes only for the key that moved", () => {
+  const { store, onStorage } = load();
+  const career0 = store.keyRevision("career.driver.0");
+  const track0 = store.keyRevision("track");
+  onStorage(evt("apex26.career.driver.0", "{}"));
+  assert.notEqual(store.keyRevision("career.driver.0"), career0);
+  assert.equal(store.keyRevision("track"), track0);
+  store.set("track", 4);
+  assert.notEqual(store.keyRevision("track"), track0, "local writes move the generation too");
+});
+
+test("subscribers receive named foreign changes and can unsubscribe", () => {
+  const { store, onStorage } = load();
+  const seen = [];
+  const off = store.subscribe((change) => seen.push(change.key));
+  onStorage(evt("apex26.seasonCfg", "{}"));
+  off();
+  onStorage(evt("apex26.track", "1"));
+  assert.deepEqual(seen, ["seasonCfg"]);
+});
+
 test("a foreign clear() drops the whole cache", () => {
   const { store, disk, onStorage } = load();
   disk.set("apex26.career", JSON.stringify({ money: 100 }));

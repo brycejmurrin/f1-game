@@ -14,6 +14,7 @@
    create time would run ~2800 lines early, ahead of CamModes/DataHub. */
 const AudioPanel = (() => {
   function create(G) {
+    Log.info("audio", "AudioPanel.create");
     const { $, els, store } = G;
 
     // (No `hidden = false` here any more: #soundbtn is a child of #overlay, so
@@ -216,6 +217,7 @@ const AudioPanel = (() => {
     // Boot restore — game.js calls this at the old restore position, after the
     // saved settings load and before the first frame.
     function init() {
+      Log.info("audio", "AudioPanel.init sound=" + !!G.soundOn);
       setSound(G.soundOn);
       setMusic(G.musicEnabled);
       // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,

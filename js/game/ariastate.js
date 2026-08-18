@@ -40,6 +40,14 @@ window.AriaState = (function () {
   // listbox option or a tab must NOT also claim to be a toggle button.
   const claimed = (el) =>
     el.hasAttribute("aria-selected") || el.hasAttribute("aria-checked") ||
+    el.hasAttribute("aria-pressed") ||
+    // Some mixed action/toggle toolbars mark their true toggles explicitly so
+    // a neighbouring action (for example LIVE's REFRESH button) is not falsely
+    // announced as an unpressed toggle.
+    el.hasAttribute("data-aria-toggle") ||
+    // A visually emphasized action can share the same `.active` class as a
+    // selected toggle without acquiring toggle semantics of its own.
+    el.hasAttribute("data-aria-action") ||
     el.getAttribute("role") === "option" || el.getAttribute("role") === "tab";
 
   // Buttons already known to be toggles. Once a group has announced itself as
@@ -102,6 +110,7 @@ window.AriaState = (function () {
   };
 
   function init() {
+    Log.info("game", "AriaState.init");
     const obs = new MutationObserver((records) => {
       for (const r of records) {
         // Only a class flip or a new subtree can change a group's state; the

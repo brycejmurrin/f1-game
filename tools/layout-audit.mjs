@@ -36,11 +36,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
-import { pickChromium } from "./harness.mjs";
+import { launchChromium } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const require = createRequire(ROOT + "/");
-const { chromium, devices } = require("playwright");
+const { devices } = require("playwright");
 
 const OUT = path.join(ROOT, "artifacts", "layout-audit");
 const SHOT_DIR = path.join(OUT, "shots");
@@ -966,7 +966,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
-const browser = await chromium.launch({ executablePath: pickChromium(),
+const browser = await launchChromium({
   args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
 
 // ONE BOOT PER VIEWPORT, not one per cell. Booting this game means compiling

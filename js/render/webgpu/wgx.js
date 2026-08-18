@@ -406,12 +406,10 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
-      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
-      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
-      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
-      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
-      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
-      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Software / headless adapters: the native swapchain never composites
+      // (black #game) but the 2D soft-present blit does. SETTINGS ▸ WEBGPU
+      // must stay on WGX here — refusing used to silently bind GLX.
+      // `apex26.gfxWgxAllowSoftware` is a legacy no-op (tools still set it).
       // Sync signals only — never await requestAdapterInfo() (has hung create()
       // with no timeout on Dawn/SwiftShader).
       let _softAdapterLocal = false;
@@ -433,13 +431,8 @@ const WGX = (function () {
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
-      let _allowSoft = false;
-      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
-      if (_softAdapter && !_allowSoft) {
-        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
-      }
-      // sampleCount 4 resolveTarget frames have also come back blank on
-      // software when the escape hatch is set — force MSAA 1.
+      // sampleCount 4 resolveTarget frames come back blank on software —
+      // force MSAA 1. Soft-present (not a GLX fallback) is the visible path.
       if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
@@ -546,11 +539,31 @@ const WGX = (function () {
     let _outProbeBuf = null, _outProbePending = false, _outProbeN = 0, _outBlack = 0;
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
-    try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
+    // SCREENSHOTS setting (SETTINGS ▸ SCREENSHOTS) + probe flag. Session wins
+    // so gfx-probe can override a saved local pref for one tab; local persists
+    // the player's tap. "1" = force 2D blit, "0" = force native swapchain.
+    const _capPref = (function readCapturePref() {
+      try {
+        const s = sessionStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* fall through */ }
+      try {
+        const s = localStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* AUTO */ }
+      return null;
+    })();
+    _outProbeOff = _capPref === "1" || _capPref === "0";
     // wgxCapture probes must soft-present even when adapter sniffing misses (headed
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
-    const _softGpu = _softAdapter || _outProbeOff;
+    // NATIVE ("0") keeps the swapchain so you can see why software screenshots
+    // are black — and turns the output-probe ladder off so black is not a refuse.
+    const _softGpu = _capPref === "0" ? false : (_softAdapter || _capPref === "1");
     if (_softGpu) _outProbeOff = true;
+    // Software-present renders into an rgba8unorm texture, not the preferred
+    // (usually bgra8unorm) swapchain. Every pipeline targeting currentView must
+    // be compiled for the attachment it will actually receive.
+    const _presentFormat = _softGpu ? LDR_FORMAT : format;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
     // on phones/WebKit). WebKit/iOS mapAsync/f16 copy timing false-triggers the
@@ -578,6 +591,34 @@ const WGX = (function () {
       }
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
+      try { Log.info("gfx", "WGX soft-present on"); } catch (_) { /* harness */ }
+    }
+    // CACHED CSS SIZE. resize() runs every frame, but clientWidth/clientHeight
+    // are layout reads. Mirror GLX/TLX: invalidate only when the visible canvas
+    // box or viewport changes, then reuse the last real size between events.
+    const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
+    let _cssW = 0, _cssH = 0, _cssDirty = true;
+    const _markCssDirty = function () { _cssDirty = true; };
+    let _canWatchCss = false;
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", _markCssDirty);
+      window.addEventListener("orientationchange", _markCssDirty);
+      _canWatchCss = true;
+    }
+    if (typeof ResizeObserver === "function" && _layoutCanvas) {
+      try {
+        new ResizeObserver(_markCssDirty).observe(_layoutCanvas);
+        _canWatchCss = true;
+      } catch (_) { /* optional */ }
+    }
+    function _cssSize() {
+      // Zero means the canvas is not laid out yet; keep probing until real.
+      if (!_canWatchCss) _cssDirty = true;
+      if (_cssDirty || _cssW <= 0 || _cssH <= 0) {
+        _cssW = _layoutCanvas.clientWidth;
+        _cssH = _layoutCanvas.clientHeight;
+        _cssDirty = false;
+      }
     }
     function _wgxEscalate(why) {
       if (_outProbeOff) {
@@ -1073,7 +1114,7 @@ const WGX = (function () {
       blitPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: blitModule, entryPoint: "vs_main" },
-        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format }] },
+        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format: _presentFormat }] },
         primitive: { topology: "triangle-list" },
       });
 
@@ -1340,7 +1381,7 @@ const WGX = (function () {
           _blurSlots = BLUR_SLOTS;
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
-        pFXAA      = fsPipe(_Post.FXAA,       format,        null);
+        pFXAA      = fsPipe(_Post.FXAA,       _presentFormat, null);
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
         blurUBO      = device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
@@ -1689,14 +1730,14 @@ const WGX = (function () {
       });
     }
     function resize() {
-      const layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
       // past the 8192 default, and every ensureTargets() alloc (and the
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
-      const w = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientWidth * dpr * renderScale)));
-      const h = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientHeight * dpr * renderScale)));
+      _cssSize();
+      const w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
+      const h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
@@ -2252,6 +2293,10 @@ const WGX = (function () {
         _allocFail("createChunkedMesh", e);
         return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
       }
+      // Release only after the complete chunk upload succeeds. A failed upload
+      // can then fall back to createMesh without finding its source nulled.
+      if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
+      if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
@@ -3325,7 +3370,10 @@ const WGX = (function () {
       }
 
       } catch (postE) {
-        try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+        if (_postReady) {
+          try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+          _postReady = false;
+        }
         _tonemapBlit(exposure);
       }
 
@@ -4022,7 +4070,7 @@ const WGX = (function () {
         });
         // 4×4 keeps copyTextureToBuffer's 256-byte row alignment trivially legal.
         dst = device.createTexture({
-          size: [4, 4], format: format,
+          size: [4, 4], format: _presentFormat,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
         });
         buf = device.createBuffer({ size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -4226,6 +4274,7 @@ const WGX = (function () {
 
     const noop = function () {};
     _runtimeReady = true;
+    try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
 
     return {
       // ── Lifecycle / capability ──
@@ -4243,6 +4292,7 @@ const WGX = (function () {
       mobileTier: MOBILE_TIER,
 
       // ── Resources (Phase 2) ──
+      chunkedTrackCoords: true,
       createMesh,
       createTexMesh,                 // Phase 4 (textured decals)
       createChunkedMesh,
@@ -4328,6 +4378,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
+      softPresent: () => !!_softGpu,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

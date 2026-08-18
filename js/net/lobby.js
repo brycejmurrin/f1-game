@@ -42,6 +42,7 @@ const NetLobby = (function () {
   const CONNECT_TIMEOUT_MS = 60000;
 
   function create(G) {
+    Log.info("net", "lobby create");
     const $ = (id) => document.getElementById(id);
     // CONNECTED transports, one per guest, keyed by the id the host minted for
     // that invite. `transport` below is the one currently being NEGOTIATED —
@@ -71,6 +72,15 @@ const NetLobby = (function () {
     let role = null;
     let pollTimer = null;
     let statusText = "";
+    // Every user-started async flow owns one generation. Camera permission,
+    // relay discovery and ICE gathering can all resolve after the player has
+    // backed out or started a different route; a late continuation must not
+    // repaint the new screen or attach itself to its transport.
+    let operationGeneration = 0;
+    const beginOperation = () => ++operationGeneration;
+    const operationCurrent = (gen) => gen === operationGeneration;
+    const cancelledResult = () => ({ ok: false, error: "cancelled" });
+    const invalidateOperations = () => { operationGeneration++; };
 
     const els = () => ({
       screen: $("vsfriend"),
@@ -209,6 +219,7 @@ const NetLobby = (function () {
         if (s) { try { s.close(); } catch (e) {} }
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
+        Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
@@ -387,6 +398,7 @@ const NetLobby = (function () {
         const dead = st && (st.ice === "failed" || st.connection === "failed");
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
+          Log.warn("net", "connect fail " + secs + "s");
           say(failureMsg(st, secs), true);
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
@@ -406,6 +418,7 @@ const NetLobby = (function () {
     function onConnected(id, t) {
       id = id != null ? id : PEER_ONE;
       t = t || transport;
+      Log.info("net", "peer join " + id);
       say("Connected.");
       transports.set(id, t);
       if (transport === t) { transport = null; pendingId = null; }
@@ -554,6 +567,7 @@ const NetLobby = (function () {
     function openRoom() {
       selfReady = false;
       _ready.clear();
+      Log.info("net", "lobby room");
       show("room");
       // The lobby is a dialog over the menu, and the room is where both players
       // now wait — so it must survive the screens it opens.
@@ -577,17 +591,65 @@ const NetLobby = (function () {
       });
     }
 
+    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog"]);
+    const TIME_OF_DAY = new Set(["default", "dawn", "day", "dusk", "night"]);
+    const DIFFICULTY = new Set(["easy", "normal", "hard"]);
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+    // Treat a SETTINGS event as one atomic value. The host owns the choice, but
+    // it is still a remote peer: accepting five fields and rejecting the sixth
+    // would leave a hybrid setup neither side sent. In particular, laps/time
+    // used to be rendered through innerHTML; type checks here remain a security
+    // boundary as well as a compatibility guard.
+    function normaliseSettings(d) {
+      if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+      const out = {};
+      if (own(d, "track")) {
+        if (!Number.isInteger(d.track) || d.track < 0 || !Tracks.LIST || d.track >= Tracks.LIST.length) return null;
+        out.track = d.track;
+      }
+      if (own(d, "laps")) {
+        // Friend races normally offer 3..the circuit's GP distance. Keep a
+        // little protocol headroom for older/custom builds, but never accept a
+        // fraction, infinity, string or session large enough to be abusive.
+        if (!Number.isInteger(d.laps) || d.laps < 1 || d.laps > 200) return null;
+        out.laps = d.laps;
+      }
+      if (own(d, "quali")) {
+        if (typeof d.quali !== "boolean") return null;
+        out.quali = d.quali;
+      }
+      if (own(d, "weather")) {
+        if (typeof d.weather !== "string" || !WEATHER.has(d.weather)) return null;
+        out.weather = d.weather;
+      }
+      if (own(d, "tod")) {
+        if (typeof d.tod !== "string" || !TIME_OF_DAY.has(d.tod)) return null;
+        out.tod = d.tod;
+      }
+      if (own(d, "difficulty")) {
+        if (typeof d.difficulty !== "string" || !DIFFICULTY.has(d.difficulty)) return null;
+        out.difficulty = d.difficulty;
+      }
+      return out;
+    }
+
     // Guest: adopt the host's race setup wholesale. Any track/laps/weather the
     // guest had chosen is simply overridden for the session.
     function applySettings(d) {
-      if (!d) return;
-      if (typeof d.track === "number") G.trackIdx = d.track;
-      if (d.laps != null) G.raceLaps = d.laps;
-      if (d.quali != null) G.raceQuali = !!d.quali;
-      if (d.weather != null) G.raceWeather = d.weather;
-      if (d.tod != null) G.raceTimeOfDay = d.tod;
-      if (d.difficulty != null) G.difficulty = d.difficulty;
+      const next = normaliseSettings(d);
+      if (!next) {
+        say("The host sent invalid race settings. Your current setup was kept.", true);
+        return false;
+      }
+      if (own(next, "track")) G.trackIdx = next.track;
+      if (own(next, "laps")) G.raceLaps = next.laps;
+      if (own(next, "quali")) G.raceQuali = next.quali;
+      if (own(next, "weather")) G.raceWeather = next.weather;
+      if (own(next, "tod")) G.raceTimeOfDay = next.tod;
+      if (own(next, "difficulty")) G.difficulty = next.difficulty;
       renderRoom();
+      return true;
     }
 
     // Called by game.js when a player comes back from the garage or the race
@@ -795,6 +857,13 @@ const NetLobby = (function () {
       return now - clashSince.get(id) < YIELD_GRACE_MS;
     }
 
+    function span(className, text) {
+      const el = document.createElement("span");
+      el.className = className;
+      el.textContent = text;
+      return el;
+    }
+
     function driverLine(profile, label, ready) {
       const team = TEAM_OF(profile);
       const seat = profile ? (profile.driver || 0) : 0;
@@ -805,10 +874,33 @@ const NetLobby = (function () {
       // The full text stays as a tooltip rather than being lost.
       const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
       const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
-      const swatch = team ? `<span class="vs-swatch" style="background:${css(team.color)}"></span>` : "";
-      return `<span class="vs-who">${label}</span>${swatch}`
-        + `<span class="vs-car" title="${full}">${who}</span>`
-        + `<span class="vs-ready ${ready ? "on" : ""}">${ready ? "READY" : "choosing"}</span>`;
+      const frag = document.createDocumentFragment();
+      frag.appendChild(span("vs-who", label));
+      if (team) {
+        const swatch = span("vs-swatch", "");
+        swatch.style.background = css(team.color);
+        frag.appendChild(swatch);
+      }
+      const car = span("vs-car", who);
+      car.title = full;
+      frag.appendChild(car);
+      frag.appendChild(span("vs-ready" + (ready ? " on" : ""), ready ? "READY" : "choosing"));
+      return frag;
+    }
+
+    function replace(el, node) {
+      while (el.firstChild) el.removeChild(el.firstChild);
+      if (node) el.appendChild(node);
+    }
+
+    function summaryRow(label, value) {
+      const row = document.createElement("div");
+      const dt = document.createElement("dt");
+      const dd = document.createElement("dd");
+      dt.textContent = label;
+      dd.textContent = String(value);
+      row.appendChild(dt); row.appendChild(dd);
+      return row;
     }
 
     function renderRoom() {
@@ -820,12 +912,13 @@ const NetLobby = (function () {
       const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
         ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
       if (e.raceSummary) {
-        e.raceSummary.innerHTML =
-          `<div><dt>Circuit</dt><dd>${track ? (track.name || track.id) : "—"}</dd></div>`
-          + `<div><dt>Laps</dt><dd>${G.raceLaps}</dd></div>`
-          + `<div><dt>Qualifying lap</dt><dd>${G.raceQuali ? "On" : "Off"}</dd></div>`
-          + `<div><dt>Weather</dt><dd>${wx}</dd></div>`
-          + `<div><dt>Time</dt><dd>${tod}</dd></div>`;
+        const frag = document.createDocumentFragment();
+        frag.appendChild(summaryRow("Circuit", track ? (track.name || track.id) : "—"));
+        frag.appendChild(summaryRow("Laps", G.raceLaps));
+        frag.appendChild(summaryRow("Qualifying lap", G.raceQuali ? "On" : "Off"));
+        frag.appendChild(summaryRow("Weather", wx));
+        frag.appendChild(summaryRow("Time", tod));
+        replace(e.raceSummary, frag);
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
@@ -837,7 +930,7 @@ const NetLobby = (function () {
           : "The host chooses the circuit and conditions — and everyone connects through them, so if they leave, the race ends.";
         e.raceNote.hidden = host;
       }
-      if (e.me) e.me.innerHTML = driverLine(localProfile(), "You", selfReady);
+      if (e.me) replace(e.me, driverLine(localProfile(), "You", selfReady));
       // A row per other player. #vs-them is a LIST now, so this builds one
       // .vs-driver per peer rather than overwriting a single fixed row — with
       // one peer it renders exactly what it always did.
@@ -849,19 +942,25 @@ const NetLobby = (function () {
       // READY specs caught.
       if (e.them) {
         const ids = [...peerIds()];
-        const row = (inner) => `<div class="vs-driver">${inner}</div>`;
+        const row = (inner) => {
+          const el = document.createElement("div");
+          el.className = "vs-driver";
+          el.appendChild(inner);
+          return el;
+        };
         // "Them" while there is one other player, because that is what a person
         // says; P2/P3/P4 once there are several, because "them" no longer picks
         // anybody out.
-        e.them.innerHTML = ids.length
-          ? ids.map((k, i) => row(driverLine(
+        const rows = document.createDocumentFragment();
+        if (ids.length) ids.forEach((k, i) => rows.appendChild(row(driverLine(
               // A player who is about to yield this seat is drawn as still
               // choosing rather than as a second copy of somebody else's car.
               // See willYield(): this is the state one round trip early, not a
               // guess, and every screen derives it from the same rank rule.
               willYield(k) ? null : (_peers.get(k) || null),
-              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))).join("")
-          : row(driverLine(null, "Them", false));
+              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))));
+        else rows.appendChild(row(driverLine(null, "Them", false)));
+        replace(e.them, rows);
       }
       if (e.inviteMore) {
         // Only the host invites, and only while there is room. Disabled rather
@@ -1049,11 +1148,15 @@ const NetLobby = (function () {
     // is clicking buttons and scraping textareas, which is exactly the kind of
     // test that fights actionability instead of exercising WebRTC.
     async function host() {
+      const gen = beginOperation();
       await readyIce();
+      if (!operationCurrent(gen)) return cancelledResult();
       show("hosting");
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+      const pending = transport;
       say("Preparing invite… (this can take a few seconds)");
-      const res = await NetHandshake.createInvite(transport, localProfile());
+      const res = await NetHandshake.createInvite(pending, localProfile());
+      if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "Could not create an invite.", true); return res; }
       const e = els();
       if (e.invite) e.invite.value = res.code;
@@ -1089,22 +1192,28 @@ const NetLobby = (function () {
     }
 
     async function join() {
+      const gen = beginOperation();
       // Show the step FIRST: if the transport cannot be created, the error has
       // to land somewhere the player can see, and that is this screen.
       show("joining");
       await readyIce();
+      if (!operationCurrent(gen)) return cancelledResult();
       if (!newTransport("guest")) return;
       say("Paste the invite code they sent you.");
+      return { ok: true };
     }
 
     async function makeAnswer(codeIn) {
+      const gen = beginOperation();
       const e = els();
       const code = codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : "");
       if (codeIn != null && e.inviteIn) e.inviteIn.value = codeIn;
       if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
+      const pending = transport;
       say("Reading invite…");
-      const res = await NetHandshake.acceptInvite(transport, code, localProfile());
+      const res = await NetHandshake.acceptInvite(pending, code, localProfile());
+      if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
       if (res.peer) _peers.set(PEER_ONE, res.peer);
       if (e.answer) e.answer.value = res.code;
@@ -1120,20 +1229,24 @@ const NetLobby = (function () {
     }
 
     async function acceptAnswer(codeIn) {
+      const gen = beginOperation();
       const e = els();
       const code = codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : "");
       if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
       if (!code.trim()) { say("Paste their answer code first.", true); return { ok: false, error: "empty" }; }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
+      const pending = transport;
+      const id = pendingId;
       say("Reading answer…");
-      const res = await NetHandshake.acceptAnswer(transport, code);
+      const res = await NetHandshake.acceptAnswer(pending, code);
+      if (!operationCurrent(gen) || transport !== pending || pendingId !== id) return cancelledResult();
       if (!res.ok) { say(res.message || "That answer could not be read.", true); return res; }
       // Under the id of the connection this answer belongs to, NOT a fixed
       // key. As PEER_ONE, accepting a second guest overwrote the first and
       // ALSO left a phantom "peer" entry that no session ever answers for —
       // so peersReady() could never be true and START was unreachable. Found
       // by tools/net/rtc-e2e-3p, which is the only thing that can see it.
-      if (res.peer) _peers.set(pendingId || PEER_ONE, res.peer);
+      if (res.peer) _peers.set(id || PEER_ONE, res.peer);
       waitForOpen();
       return res;
     }
@@ -1162,9 +1275,13 @@ const NetLobby = (function () {
     }
 
     let scanner = null;
+    let scannerGeneration = 0;
 
     function stopScan() {
-      if (scanner) { scanner.stop(); scanner = null; }
+      scannerGeneration++;
+      const active = scanner;
+      scanner = null;
+      if (active) active.stop();
       const e = els();
       if (e.scan) e.scan.hidden = true;
     }
@@ -1179,14 +1296,30 @@ const NetLobby = (function () {
         return { ok: false, error: "unsupported" };
       }
       stopScan();
+      const gen = scannerGeneration;
       e.scan.hidden = false;
       say("Point the camera at their code…");
-      scanner = NetScan.create();
-      const res = await scanner.start(e.scanVideo, (text) => {
+      const attempt = NetScan.create();
+      scanner = attempt;
+      let delivered = false;
+      const res = await attempt.start(e.scanVideo, (text) => {
+        // A decoder/camera from an older scan may finish after a second scan has
+        // started. It may stop itself, but it must not stop the new scanner,
+        // hide its panel, or deliver into the wrong input.
+        if (scanner !== attempt || scannerGeneration !== gen) { attempt.stop(); return; }
+        delivered = true;
         stopScan();
         say("Got it.");
         deliver(kind, text);
       });
+      if (delivered) return res;
+      if (scanner !== attempt || scannerGeneration !== gen) {
+        // stop() may have run while decoder loading or camera permission was
+        // pending. NetScan.start() can only expose the late stream after its
+        // promise settles, so stop it again here, by identity.
+        attempt.stop();
+        return cancelledResult();
+      }
       if (!res.ok) { stopScan(); say(res.message || "Could not start the camera.", true); }
       return res;
     }
@@ -1319,9 +1452,12 @@ const NetLobby = (function () {
     // opts.quiet   do not repaint the code step — we are already past it
     async function codeHost(opts) {
       opts = opts || {};
+      const gen = beginOperation();
       stopCodeWait();
       await readyIce();
+      if (!operationCurrent(gen)) return cancelledResult();
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+      const initialTransport = transport;
       const code = opts.code || NetRendezvous.makeCode();
       // The room is CLOSED while our own ICE runs and reopened afterwards (see
       // onJoiner), so this path runs twice per guest. The second time we are
@@ -1334,7 +1470,8 @@ const NetLobby = (function () {
         say("Preparing… (this can take a few seconds)");
       }
 
-      const invite = await NetHandshake.createInvite(transport, localProfile());
+      const invite = await NetHandshake.createInvite(initialTransport, localProfile());
+      if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
 
       say("Waiting for them to join…");
@@ -1357,6 +1494,7 @@ const NetLobby = (function () {
           // told NOTHING and watched a spinner — the console knew, the player
           // did not.
           onFail: (r) => {
+            if (!operationCurrent(gen)) return;
             if (!r || r.error === "cancelled" || r.error === "stopped") return;
             // An ADVISORY is a warning about a room that is still running —
             // say it, but do not forget the room, or the next rotate()/stop()
@@ -1365,22 +1503,29 @@ const NetLobby = (function () {
             codeRoom = null;
             say(r.message || "The room service went away. Use the invite link or QR instead.", true);
           },
-          onTick: () => say(sessions.size
-            ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
-            : "Waiting for them to join… (code " + code + ")"),
+          onTick: () => {
+            if (!operationCurrent(gen)) return;
+            say(sessions.size
+              ? "In the room: " + (sessions.size + 1) + ". Still open (code " + code + ")"
+              : "Waiting for them to join… (code " + code + ")");
+          },
           // The first arrival gets the invite already prepared; everyone after
           // gets a fresh transport and a fresh offer.
           // Only called to REPLACE an offer somebody has taken, never per
           // arrival — minting is a whole RTCPeerConnection plus an ICE gather,
           // and doing that on every join is what got us rate-limited.
           mintOffer: async () => {
-            if (sessions.size >= MAX_GUESTS) return null;      // room full
+            if (!operationCurrent(gen) || sessions.size >= MAX_GUESTS) return null;      // stale/full
             await readyIce();
+            if (!operationCurrent(gen)) return null;
             if (!newTransport("host")) return null;
-            const more = await NetHandshake.createInvite(transport, localProfile());
+            const pending = transport;
+            const more = await NetHandshake.createInvite(pending, localProfile());
+            if (!operationCurrent(gen) || transport !== pending) return null;
             return more.ok ? more.code : null;
           },
           onJoiner: async (_who, answer) => {
+            if (!operationCurrent(gen)) return;
             // Each answer ONCE, and only while a handshake is waiting for one.
             // A repeat (relay quirk, a guest retrying) or an answer landing
             // after rotation would otherwise be applied to whatever transport
@@ -1396,7 +1541,10 @@ const NetLobby = (function () {
             // at fault, presents as a permanent "Connecting…".
             if (!transport || !pendingId) return;   // nothing awaiting an answer
             answersSeen.add(answer);
-            const acc = await NetHandshake.acceptAnswer(transport, answer);
+            const pending = transport;
+            const id = pendingId;
+            const acc = await NetHandshake.acceptAnswer(pending, answer);
+            if (!operationCurrent(gen) || transport !== pending || pendingId !== id) return;
             if (!acc.ok) {
               // A rejected answer must not stay blacklisted either: the guest
               // may repost the same string against a transport that is by then
@@ -1405,7 +1553,7 @@ const NetLobby = (function () {
               if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
               return;
             }
-            if (acc.peer && pendingId) _peers.set(pendingId, acc.peer);
+            if (acc.peer) _peers.set(id, acc.peer);
             // GET OUT OF TRYSTERO'S WAY BEFORE OUR OWN ICE RUNS.
             //
             // The rendezvous has done its job the moment an answer is
@@ -1440,6 +1588,10 @@ const NetLobby = (function () {
             // `transports` and pendingId is clear.
           },
         });
+        if (!operationCurrent(gen)) {
+          if (sub && sub.stop) { try { sub.stop(); } catch (e) { /* cancellation is already complete locally */ } }
+          return cancelledResult();
+        }
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
         codeRoom = sub;
         return { ok: true, code, subscribed: true };
@@ -1449,13 +1601,17 @@ const NetLobby = (function () {
       const got = await NetRendezvous.swap({
         code, mine: invite.code, slot: "offer", want: "answer",
         token: codeWait,
-        onTick: () => say("Waiting for them to join… (code " + code + ")"),
+        onTick: () => {
+          if (operationCurrent(gen)) say("Waiting for them to join… (code " + code + ")");
+        },
       });
+      if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!got.ok) {
         if (got.error !== "cancelled") say(got.message, true);
         return got;
       }
-      const acc = await NetHandshake.acceptAnswer(transport, got.payload);
+      const acc = await NetHandshake.acceptAnswer(initialTransport, got.payload);
+      if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
       if (acc.peer) _peers.set(pendingId || PEER_ONE, acc.peer);
       waitForOpen();
@@ -1464,6 +1620,7 @@ const NetLobby = (function () {
 
     // GUEST: fetch the invite the host published, answer it under the same code.
     async function codeJoin(codeIn) {
+      const gen = beginOperation();
       stopCodeWait();
       const e = els();
       const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
@@ -1473,7 +1630,9 @@ const NetLobby = (function () {
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
+      if (!operationCurrent(gen)) return cancelledResult();
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+      const pending = transport;
       say("Looking for that room…");
       // The guest cannot answer until it has SEEN the host's invite, so it
       // hands the exchange a reply function instead of a string: whatever the
@@ -1483,8 +1642,9 @@ const NetLobby = (function () {
       let answered = null;
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
-        onTick: () => say("Looking for that room… (code " + code + ")"),
+        onTick: () => { if (operationCurrent(gen)) say("Looking for that room… (code " + code + ")"); },
         reply: async (inviteCode) => {
+          if (!operationCurrent(gen) || transport !== pending) return null;
           say("Found it — answering…");
           // ANSWER FAST, because the channel carrying it is dying.
           //
@@ -1501,14 +1661,16 @@ const NetLobby = (function () {
           // extra seven buy is stragglers we do not need, at the price of the
           // only route the answer has. So the room-code path gathers briefly
           // and posts while somebody is still listening.
-          const res = await NetHandshake.acceptInvite(transport, inviteCode, localProfile(),
+          const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile(),
             { gatherTimeoutMs: 2500 });
+          if (!operationCurrent(gen) || transport !== pending) return null;
           if (!res.ok) { answered = res; return null; }
           if (res.peer) _peers.set(PEER_ONE, res.peer);
           answered = res;
           return res.code;
         },
       });
+      if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!done.ok) {
         // A reply that failed has the REAL reason (a stale invite, a build
         // mismatch); the exchange only knows that it did not produce a string.
@@ -1549,27 +1711,51 @@ const NetLobby = (function () {
     // never to an error.
     let wake = null;
     let wakeWanted = false;
+    let wakeRequest = null;
+    let wakeGeneration = 0;
+    function releaseWake(lock) {
+      try {
+        const released = lock && lock.release();
+        if (released && typeof released.catch === "function") released.catch(() => {});
+      } catch (e) { /* missing/released wake locks degrade to the sleeping behavior */ }
+    }
     function holdWake() {
       wakeWanted = true;
       try {
-        if (!navigator.wakeLock || wake) return;
-        navigator.wakeLock.request("screen").then((l) => {
+        if (!navigator.wakeLock || wake || wakeRequest) return;
+        const gen = ++wakeGeneration;
+        let pending = null;
+        pending = Promise.resolve(navigator.wakeLock.request("screen")).then((l) => {
+          if (wakeRequest === pending) wakeRequest = null;
+          if (!wakeWanted || gen !== wakeGeneration) {
+            // The lobby closed (or closed and reopened) while permission was in
+            // flight. A late sentinel belongs to that old request and must never
+            // survive into the new screen.
+            releaseWake(l);
+            if (wakeWanted) holdWake();
+            return;
+          }
           wake = l;
-          l.addEventListener("release", () => { wake = null; });
-        }).catch(() => {});
+          l.addEventListener("release", () => { if (wake === l) wake = null; });
+        }).catch(() => { if (wakeRequest === pending) wakeRequest = null; });
+        wakeRequest = pending;
       } catch (e) {}
     }
     function dropWake() {
       wakeWanted = false;
-      try { if (wake) wake.release(); } catch (e) {}
+      wakeGeneration++;
+      const held = wake;
       wake = null;
+      releaseWake(held);
     }
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && wakeWanted) holdWake();
     });
 
     function open() {
+      invalidateOperations();
       holdWake();
+      Log.info("net", "lobby open");
       // Start fetching relay credentials NOW if a credentials URL is
       // configured — connecting comes seconds later, and the fetch usually
       // wins that race, so the first connection attempt already carries relay
@@ -1604,7 +1790,9 @@ const NetLobby = (function () {
     }
 
     function close() {
+      invalidateOperations();
       clearInterval(pollTimer);
+      Log.info("net", "lobby close");
       // Leaving the screen with the camera still running is the failure this
       // module is most careful about — close() is also the SUCCESS path, since
       // the race starts by closing the lobby.
@@ -1686,6 +1874,7 @@ const NetLobby = (function () {
         const inRoom = transports.size > 0;
         const onSubStep = !!(e.roomStep && e.roomStep.hidden);
         if (inRoom && onSubStep) {
+          invalidateOperations();
           dropPending();      // abandon the half-built invite, keep the room
           stopCodeWait();
           show("room");

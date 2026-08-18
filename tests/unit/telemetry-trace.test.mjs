@@ -10,8 +10,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ctx = vm.createContext({});
+seedLog(ctx);
 // js/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
 vm.runInContext(readFileSync("js/mat4.js", "utf8"), ctx, { filename: "mat4.js" });
 vm.runInContext(readFileSync("js/data/telemetry.js", "utf8"), ctx, { filename: "telemetry.js" });
@@ -97,9 +99,11 @@ test("F1API.locationData drops origin rows and unparseable timestamps", async ()
   const api = vm.createContext({
     window: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     fetch: async () => ({ ok: true, json: async () => rows }),
+    setTimeout, clearTimeout, AbortController,
     console,
   });
   api.window = api;
+  seedLog(api);
   vm.runInContext(readFileSync("js/data/api.js", "utf8"), api, { filename: "api.js" });
   const F1API = vm.runInContext("F1API", api);
   const out = await F1API.locationData(9999, 4, null, null);

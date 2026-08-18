@@ -49,9 +49,15 @@ const NetScan = (function () {
       const s = document.createElement("script");
       s.src = VENDOR;
       s.async = true;
-      s.onload = () => (typeof jsQR !== "undefined"
-        ? resolve(true)
-        : reject(new Error("decoder loaded but did not register")));
+      s.onload = () => {
+        if (typeof jsQR !== "undefined") { resolve(true); return; }
+        // A syntactically valid response can still fail to register the global
+        // (a corrupt cache entry, an HTML error page, or a policy-stripped
+        // script). Do not memoise that rejection forever: a later attempt may
+        // arrive after the cache/network has recovered.
+        loading = null;
+        reject(new Error("decoder loaded but did not register"));
+      };
       s.onerror = () => { loading = null; reject(new Error("could not load the QR reader")); };
       document.head.appendChild(s);
     });
@@ -66,19 +72,31 @@ const NetScan = (function () {
     let ctx = null;
     let onCode = null;
     let stopped = true;
+    // Every asynchronous phase belongs to one start attempt. stop() and a newer
+    // start invalidate the token so a late permission response cannot turn the
+    // camera back on after the player has left this screen.
+    let generation = 0;
+
+    function stopTracks(s) {
+      if (!s) return;
+      try { s.getTracks().forEach((t) => t.stop()); } catch (e) { /* a stopped stream has no remaining camera ownership */ }
+    }
 
     function stop() {
+      const wasLive = !stopped && !!stream;
+      generation++;
       stopped = true;
       clearInterval(timer);
       timer = null;
       if (stream) {
         // Every track, not just the first: a constraint set can hand back more
         // than one, and a single live track keeps the camera light on.
-        try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+        stopTracks(stream);
         stream = null;
       }
       if (video) { try { video.srcObject = null; } catch (e) {} video = null; }
       onCode = null;
+      if (wasLive) Log.info("net", "scan stop");
     }
 
     function tick() {
@@ -109,26 +127,36 @@ const NetScan = (function () {
     // ordinary outcome (the player said no) and the caller falls back to paste.
     async function start(videoEl, cb) {
       stop();
+      const attempt = generation;
+      const cancelled = () => ({ ok: false, error: "cancelled", message: "Camera scan cancelled." });
       if (!supported()) {
+        Log.info("net", "scan unsupported");
         return { ok: false, error: "unsupported",
                  message: "This browser cannot use the camera, so paste the code instead." };
       }
       try { await loadDecoder(); }
       catch (e) {
+        if (attempt !== generation) return cancelled();
+        Log.warn("net", "scan fail no_decoder");
         return { ok: false, error: "no_decoder",
                  message: "Could not load the QR reader — paste the code instead." };
       }
+      if (attempt !== generation) return cancelled();
+      let nextStream = null;
       try {
         // environment = the rear camera on a phone. `ideal`, not `exact`: a
         // laptop has only one camera and an exact constraint would fail on it
         // rather than quietly using the one it has.
-        stream = await navigator.mediaDevices.getUserMedia({
+        nextStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" },
                    width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
       } catch (e) {
+        if (attempt !== generation) return cancelled();
         const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        if (denied) Log.info("net", "scan denied");
+        else Log.warn("net", "scan fail no_camera");
         return {
           ok: false,
           error: denied ? "denied" : "no_camera",
@@ -137,6 +165,11 @@ const NetScan = (function () {
             : "No camera available — paste the code instead.",
         };
       }
+      if (attempt !== generation) {
+        stopTracks(nextStream);
+        return cancelled();
+      }
+      stream = nextStream;
       stopped = false;
       video = videoEl;
       onCode = cb;
@@ -146,11 +179,22 @@ const NetScan = (function () {
         // is the pathological case for a GPU-backed canvas.
         ctx = canvas.getContext("2d", { willReadFrequently: true });
       }
+      if (!ctx) {
+        stop();
+        Log.warn("net", "scan fail no_canvas");
+        return { ok: false, error: "no_canvas", message: "Could not start the QR reader — paste the code instead." };
+      }
       video.srcObject = stream;
       video.setAttribute("playsinline", "");    // or iOS takes over the whole screen
       video.muted = true;
       try { await video.play(); } catch (e) { /* autoplay policy; frames still arrive */ }
+      if (attempt !== generation) {
+        // stop() already disposed the committed stream. This guard chiefly
+        // prevents a late play() from arming an interval for a dead attempt.
+        return cancelled();
+      }
       timer = setInterval(tick, DECODE_EVERY_MS);
+      Log.info("net", "scan start");
       return { ok: true };
     }
 

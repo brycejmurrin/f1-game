@@ -99,6 +99,7 @@ function paint(btn, sw) {
 }
 
 function initUI() {
+  Log.info("game", "CockpitOpts.initUI");
   if (typeof document === "undefined") return;
   // Anchor on #pm-res's own section: the DISPLAY group carries no id, and
   // finding it by heading text would break the first time it is renamed.

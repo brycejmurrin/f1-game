@@ -64,6 +64,23 @@ test.describe("Season — mode flags", () => {
       expect(state).toBe("race");
     });
   }
+
+  test("leaving season restores the saved Grand Prix circuit", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.trackId", JSON.stringify("monza"));
+      localStorage.setItem("apex26.track", JSON.stringify(0));
+      localStorage.setItem("apex26.seasonCfg", JSON.stringify({ trackIds: ["monaco"] }));
+    });
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-season").click();
+    await expect(page.locator("#sel-preview-name")).toContainText("Monaco");
+    await page.locator("#sel-back").click();
+    await page.locator("#mb-race").click();
+    await expect(page.locator('.track-row[aria-label="Monza"]')).toHaveAttribute("aria-pressed", "true");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.trackId")))).toBe("monza");
+  });
 });
 
 // ── Points & standings ────────────────────────────────────────────────────────

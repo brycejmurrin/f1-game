@@ -202,6 +202,7 @@ const Tracks = (function () {
   // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
   // GPU. This is the heavy one — only needed to actually render/drive a circuit.
   function build(def, opts) {
+    Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
     // One profile drives terrain generation, floor blending, and scenery
     // grounding. Keeping it on the track also makes diagnostics deterministic.
@@ -221,6 +222,25 @@ const Tracks = (function () {
     track._gfx = G;
     if (G && G.createMesh) {
       track.geometryDiagnostics = [];
+      const chunkRibbons = !!(opts && opts.chunkRibbons && G.createChunkedMesh);
+      const buildRibbon = (geo, key) => {
+        const canChunk = chunkRibbons && (key !== "road" || G.chunkedTrackCoords !== false);
+        if (!canChunk) {
+          track.meshes[key] = G.createMesh(geo);
+          if (chunkRibbons) track.meshes[key + "Chunked"] = null;
+          return;
+        }
+        const mesh = G.createChunkedMesh(geo, 72);
+        const hasChunks = !!(mesh && mesh.chunks && mesh.chunks.length);
+        if (hasChunks) {
+          track.meshes[key] = null;
+          track.meshes[key + "Chunked"] = mesh;
+          return;
+        }
+        // `chunks:null` is a small plain mesh; `chunks:[]` is a failed upload.
+        track.meshes[key] = mesh && mesh.chunks == null ? mesh : G.createMesh(geo);
+        track.meshes[key + "Chunked"] = null;
+      };
       const safe = (name, geo) => {
         const result = TrackModels.validateGeometry(geo);
         track.geometryDiagnostics.push(Object.assign({ name }, result));
@@ -229,20 +249,18 @@ const Tracks = (function () {
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
       track.meshes.floor = G.createMesh(safe("floor", buildFloor(track)));
-      const roadGeo = safe("road", buildRoad(track));
-      track.roadGeo = roadGeo;
-      track.meshes.road = G.createMesh(roadGeo);
+      const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
+      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road");
       const terrainGeo = buildTerrain(track);
-      const terrainSafe = safe("terrain", terrainGeo);
-      track.terrainGeo = terrainSafe;   // validated raw geometry kept for the groundY() debug probe
-      track.meshes.terrain = G.createMesh(terrainSafe);
+      const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
+      track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
       const _props = buildProps(track);
       // Chunked + frustum-culled: the city/props mesh is huge (up to ~5 M verts),
       // and most of it is off-screen each frame — drawing only visible XZ cells
       // (and only shadow-casting cells inside the light frustum) is the big win.
       const propsGeo = safe("props", _props.out);
       track.propsGeo = propsGeo;
-      propsGeo._keepPositions = keepGeometry;
+      propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
       // S3: GPU batches for nodes that skipped the props fuse. Glass stays fused
       // (reflective material). Fall back to empty if the backend has no consumer.
@@ -258,7 +276,7 @@ const Tracks = (function () {
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
-      glassGeo._keepPositions = keepGeometry;
+      glassGeo._keepPositions = glassGeo._keepFullGeometry = keepGeometry;
       // Glass rides the SAME chunk grid as the props: it was one un-culled
       // createMesh draw of every window pane in the whole city, every frame —
       // full clearcoat+env fill for panes behind the camera and past the fog.
@@ -267,6 +285,7 @@ const Tracks = (function () {
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
     }
+    Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
   }
 
@@ -417,6 +436,7 @@ const Tracks = (function () {
   }
 
   function buildProps(track) {
+    Log.info("track", "buildProps start " + (track.def && track.def.id));
     // Static dressing tables (barrier liveries, furniture, crowd/sign/city
     // palettes, building styles) live in js/track/scenery-data.js.
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
@@ -2427,6 +2447,7 @@ const Tracks = (function () {
       rec.measured = true;
       delete rec._m;
     }
+    Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
     return { out, glass: glassBuf, water: waterBuf };
   }
 

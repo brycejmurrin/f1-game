@@ -101,8 +101,9 @@ const GLXChunked = (function () {
       // built — lowers the transient peak on ~5 M-vert street props. `pos` is still
       // needed below for triangle centroids/AABBs, so it's nulled after the bins.
       nrm = col = mat = null;
-      data.nrm = data.mat = null;
-      if (!data._keepPositions) { data.col = null; data.trk = null; }
+      if (data._keepFullGeometry === false) {
+        data.nrm = data.col = data.mat = data.trk = null;
+      }
       // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
       // grid is bounded (tracks span a few km), so pack signed cell coords.
       const buckets = new Map();
@@ -200,7 +201,7 @@ const GLXChunked = (function () {
     // alpha 1 (game.js props/glass materials carry no alpha field); route
     // translucent work through draw() instead.
     function drawChunked(mesh, modelMat, opts) {
-      if (!mesh) return;
+      if ((core.ctxGone && core.ctxGone()) || !mesh) return;
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
@@ -295,7 +296,7 @@ const GLXChunked = (function () {
     // the camera). Runs under the depth program (bound by GLXShadow.shadowBegin).
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
-      if (!SH.depthPassOn || !mesh) return;
+      if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(SH.depthU.uModel, false, model);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
@@ -347,6 +348,7 @@ const GLXChunked = (function () {
       return p;
     }
 
+    Log.info("gfx", "GLX chunked init");
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
              // exported so callers outside the draw path can run the SAME cull
              // test the GPU path runs, rather than reimplementing it and drifting

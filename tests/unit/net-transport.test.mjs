@@ -18,8 +18,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
 const load = (rel, name) =>
   eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 
@@ -117,6 +119,44 @@ test("a throwing message handler cannot take down the transport", () => {
   b.pump(1);
   assert.equal(second, 1, "the surviving handler should still have run");
   assert.equal(b.status, "open", "the transport should still be open");
+});
+
+test("RTC inbox pressure drops state snapshots, never reliable events", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    const got = [];
+    ep.onMessage((kind, data) => got.push([kind, data]));
+    for (let i = 0; i < 80; i++) state.onmessage({ data: "s" + i });
+    for (let i = 0; i < 80; i++) event.onmessage({ data: "e" + i });
+    ep.pump();
+
+    const states = got.filter(([kind]) => kind === fresh.STATE).map(([, data]) => data);
+    const events = got.filter(([kind]) => kind === fresh.EVENT).map(([, data]) => data);
+    assert.equal(states.length, 64, "only the newest bounded snapshot window survives");
+    assert.equal(states[0], "s16");
+    assert.deepEqual(events, Array.from({ length: 80 }, (_, i) => "e" + i),
+      "reliable protocol events must remain complete and ordered");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
 });
 
 // ---------------------------------------------------------------------------

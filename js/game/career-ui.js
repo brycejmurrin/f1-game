@@ -30,6 +30,7 @@ const CareerUI = (function () {
 const STARTER_TIER_MIN = 3;
 
 function create(G) {
+  Log.info("ui", "CareerUI.create");
   const { $, els } = G;
 
   // The new-career form's working state. Not persisted — it only exists between
@@ -1098,8 +1099,8 @@ function create(G) {
     ScrollFade.refresh();
   }
 
-  function openOffers() { buildOffers(); $("career-offers").hidden = false; }
-  function closeOffers() { $("career-offers").hidden = true; }
+  function openOffers() { Log.info("ui", "CareerUI.openOffers"); buildOffers(); $("career-offers").hidden = false; }
+  function closeOffers() { Log.info("ui", "CareerUI.closeOffers"); $("career-offers").hidden = true; }
 
   // ---------- career history (#career-history) ----------
   // The record of everything a career has achieved: the running totals, then the
@@ -1242,6 +1243,7 @@ function create(G) {
   }
 
   function openHub() {
+    Log.info("ui", "CareerUI.openHub");
     picking = false;
     armedDelete = "";
     build();
@@ -1250,12 +1252,13 @@ function create(G) {
   // The title screen routes here when more than one career exists: with two or
   // three on the go, "which one" is the first question, not an afterthought.
   function openSlots() {
+    Log.info("ui", "CareerUI.openSlots");
     picking = true;
     armedDelete = "";
     build();
     $("career").hidden = false;
   }
-  function close() { $("career").hidden = true; }
+  function close() { Log.info("ui", "CareerUI.close"); $("career").hidden = true; }
 
   // ---------- wiring ----------
 

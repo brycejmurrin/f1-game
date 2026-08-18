@@ -5,7 +5,8 @@
 // test makes divergence impossible to ship:
 //   - the <script> sequence must equal MANIFEST.FULL exactly (order included)
 //   - the stylesheet <link> sequence must equal MANIFEST.CSS
-//   - every ?v= value must be identical, and version.json must match it
+//   - every ?v= value must match that asset's content hash
+//   - the shell build meta and version.json generation must match
 //   - every file under js/**/*.js must appear in FULL (no forgotten tags,
 //     no dead files) — catches "created the file but forgot the tag"
 //   - every HARD_EDGES pair must be ordered (eval-time dependencies)
@@ -16,6 +17,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -35,8 +37,8 @@ function parseTags(html, attrRe) {
 const scriptSrcs = parseTags(indexHtml, /<script[^>]*\bsrc="([^"]+)"/g);
 const linkHrefs = parseTags(indexHtml, /<link[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g);
 
-const stripV = (u) => u.replace(/\?v=\d+$/, "");
-const vOf = (u) => { const m = u.match(/\?v=(\d+)$/); return m ? parseInt(m[1], 10) : null; };
+const stripV = (u) => u.replace(/\?v=[A-Za-z0-9._-]+$/, "");
+const vOf = (u) => { const m = u.match(/\?v=([a-f0-9]{12})$/); return m ? m[1] : null; };
 
 test("index.html script sequence equals MANIFEST.FULL", () => {
   assert.deepEqual(scriptSrcs.map(stripV), MANIFEST.FULL);
@@ -46,13 +48,16 @@ test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
   assert.deepEqual(linkHrefs.map(stripV), MANIFEST.CSS);
 });
 
-test("every asset carries the same ?v= and version.json matches", () => {
-  const vs = new Set([...scriptSrcs, ...linkHrefs].map(vOf));
-  assert.equal(vs.size, 1, `mixed ?v= values: ${[...vs].join(", ")}`);
-  const v = [...vs][0];
-  assert.ok(Number.isInteger(v) && v > 0, "assets must carry ?v=N");
+test("every asset carries its content hash and shell generation matches version.json", () => {
+  for (const url of [...scriptSrcs, ...linkHrefs]) {
+    const rel = stripV(url);
+    const expected = createHash("sha256").update(readFileSync(join(ROOT, rel))).digest("hex").slice(0, 12);
+    assert.equal(vOf(url), expected, `${rel} must carry its current content hash`);
+  }
   const versionJson = JSON.parse(readFileSync(join(ROOT, "version.json"), "utf8"));
-  assert.equal(versionJson.build, v, "version.json build must equal the ?v= build");
+  const meta = indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
+  assert.ok(meta, "index.html must declare the shell generation");
+  assert.equal(versionJson.build, Number(meta[1]), "version.json build must equal the shell generation");
 });
 
 test("__APEX_BUILD is derived, not a stale literal", () => {
@@ -61,8 +66,8 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
 });
 
 test("service-worker registration derives the shell build", () => {
-  assert.doesNotMatch(indexHtml, /href\*="\?v=\d+"/,
-    "inline shell code must discover a version, not embed one");
+  assert.match(indexHtml, /meta\[name="apex-build"\]/,
+    "inline shell code must discover the shell generation from metadata");
   assert.match(indexHtml, /register\("sw\.js" \+ \(loaded \? "\?v=" \+ loaded : ""\)\)/,
     "service-worker registration must append the parsed build once");
 });

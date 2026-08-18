@@ -149,6 +149,7 @@ const NetTransport = (function () {
 
     a.status = b.status = "open";
     a._emit("open"); b._emit("open");
+    Log.info("net", "loopback create");
     return [a, b];
   }
 
@@ -442,13 +443,20 @@ const NetTransport = (function () {
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       pc = new PC(cfg);
-    } catch (e) { return null; }
+    } catch (e) {
+      Log.warn("net", "rtc create fail");
+      return null;
+    }
+    Log.info("net", "rtc create");
     const chans = {};
-    // Cap queued messages until pump() drains them. Unreliable STATE is
-    // drop-oldest (keep the newest); EVENT is reliable so we still prefer
-    // shedding state first when the cap bites.
-    const INBOX_CAP = 64;
+    // Cap only queued STATE snapshots until pump() drains them. EVENT is the
+    // reliable protocol stream: dropping START/LAP/RESULT locally after WebRTC
+    // delivered it defeats the channel's entire contract. A backgrounded tab
+    // can legitimately receive more than 64 events before its game loop pumps;
+    // state snapshots are disposable and remain drop-oldest/keep-newest.
+    const STATE_INBOX_CAP = 64;
     let inbox = [];
+    let queuedState = 0;
     let openCount = 0;
 
     // WHAT KIND of candidates we found, which is the difference between two
@@ -473,7 +481,11 @@ const NetTransport = (function () {
       chans[kind] = ch;
       ch.binaryType = "arraybuffer";
       ch.onopen = () => {
-        if (++openCount === CHANNELS.length) { ep.status = "open"; ep._emit("open"); }
+        if (++openCount === CHANNELS.length) {
+          ep.status = "open";
+          Log.info("net", "rtc open");
+          ep._emit("open");
+        }
       };
       ch.onclose = () => {
         if (ep.status === "closed") return;
@@ -481,13 +493,14 @@ const NetTransport = (function () {
       };
       ch.onmessage = (e) => {
         inbox.push({ channel: kind, data: e.data });
-        while (inbox.length > INBOX_CAP) {
-          let dropped = false;
-          // Drop oldest STATE first; keep the newest (just-pushed) packet.
-          for (let i = 0; i < inbox.length - 1; i++) {
-            if (inbox[i].channel === STATE) { inbox.splice(i, 1); dropped = true; break; }
-          }
-          if (!dropped) inbox.shift();
+        if (kind === STATE) queuedState++;
+        while (queuedState > STATE_INBOX_CAP) {
+          // The newest state packet is the useful one. Event packets stay in
+          // their original relative position while the oldest snapshot leaves.
+          const i = inbox.findIndex((m) => m.channel === STATE);
+          if (i < 0) break; // defensive: queuedState and inbox should agree
+          inbox.splice(i, 1);
+          queuedState--;
         }
       };
     }
@@ -530,6 +543,7 @@ const NetTransport = (function () {
         ep._emit("message", m.channel, m.data);
       }
       inbox.length = 0;
+      queuedState = 0;
       return count;
     };
     ep.close = function () {

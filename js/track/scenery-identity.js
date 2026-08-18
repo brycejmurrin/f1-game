@@ -15,6 +15,7 @@ const SceneryIdentity = (function () {
             addBox, addCyl, addFrustum, RAW, rejBox, rejRad, blockAt,
             recordBarrier, onTrack, overheadSpan, every, hash, upOf, vadd,
             anchor, along, building, indexSolid } = ctx;
+    Log.info("scenery", "scenery-identity dress " + (ctx.def && ctx.def.id));
 
     // ── Shared scenery toolkit (identity pass) ──────────────────────────────
     // Cross-track composite helpers. Footprints that must stay OFF the racing

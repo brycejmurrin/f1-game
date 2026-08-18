@@ -39,12 +39,11 @@
  * the code itself, so the code is the secret — the same trust model as the
  * invite code this replaces.
  *
- * THE PRIVATE WORKER PATH IS NOT SEALED. httpPut() posts the invite/answer as
- * plain JSON, so whoever runs worker/rendezvous.js can read the SDP they relay.
- * seal()/open() below implement the fix and ARE now wired on the public
- * room-code path (NetNostr.directExchange calls them on every exchange); only
- * `topicFor` and the private httpPut worker path remain unsealed — see the
- * note on them for the specific blocker.
+ * THE PRIVATE WORKER PATH IS SEALED TOO. httpPut() stores a versioned AES-GCM
+ * envelope under the room code, and a separate random owner capability lets a
+ * host retry without relying on ciphertext equality. The Worker never receives
+ * plaintext SDP; a legacy plaintext record is read only for the two-minute
+ * rolling-deploy window and is never newly written by this build.
  *
  * IT IS A BACKUP OPTION, NOT A REPLACEMENT. The link and QR paths stay primary
  * because they depend on nothing at all, while this leans on servers somebody
@@ -149,6 +148,7 @@ const NetRendezvous = (function () {
       }, opts));
       if (res.status === 404) return ERR("not_found", "Nobody is waiting on that code.");
       if (res.status === 409) return ERR("taken", "That code is already in use — make a new one.");
+      if (res.status === 429) return ERR("rate_limited", "The room service is busy. Wait a minute or use the invite link.");
       if (!res.ok) return ERR("relay", "The room service is not answering. Use the invite link instead.");
       const text = await res.text();
       return { ok: true, body: text ? JSON.parse(text) : null };
@@ -171,16 +171,10 @@ const NetRendezvous = (function () {
   // makes the room code the secret, exactly as the invite code is today. Nobody
   // sweeping the broker learns anything.
   //
-  // seal()/open() ARE wired on the public room-code path — NetNostr.
-  // directExchange seals every exchange. Still unsealed: topicFor (no
-  // production caller) and the private worker path — swap() posts
-  // through httpPut(), which sends plain JSON. The blocker is not the crypto,
-  // it is worker/rendezvous.js's single-writer rule — it rejects a second
-  // `offer` by comparing the STORED payload against the incoming one, and
-  // AES-GCM's random IV makes two seals of the same plaintext differ, so a host
-  // re-posting its own offer would be refused with 409 "code already in use".
-  // Wiring this means changing that comparison (compare a per-host token, not
-  // the bytes) and testing both halves against a deployed Worker.
+  // seal()/open() are shared by BOTH backends. NetNostr carries the bytes
+  // directly; the private Worker carries a `v1.<base64url>` envelope and uses a
+  // separate random owner capability to distinguish a host retry from a second
+  // host. Ciphertext equality cannot do that because AES-GCM uses a fresh IV.
   const SALT = enc().encode("apex26-rendezvous-v1");
 
   async function keyFor(code) {
@@ -225,6 +219,44 @@ const NetRendezvous = (function () {
     }
   }
 
+  function b64url(bytes) {
+    let binary = "";
+    // Real handshakes are a few hundred bytes. Chunking still keeps a malformed
+    // near-limit payload from exceeding apply()/argument limits in a browser.
+    for (let i = 0; i < bytes.length; i += 0x4000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x4000));
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function unb64url(text) {
+    const s = String(text || "").replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(s + "=".repeat((4 - s.length % 4) % 4));
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  }
+
+  async function sealPrivate(code, payload) {
+    return "v1." + b64url(await seal(code, payload));
+  }
+
+  async function openPrivate(code, payload) {
+    // A two-minute legacy mailbox may straddle a deploy. Reading its plaintext
+    // lets the new client reach the normal build-mismatch message instead of
+    // reporting corrupt signalling; every newly written payload is sealed.
+    if (typeof payload !== "string" || !payload) return null;
+    if (!payload.startsWith("v1.")) return payload;
+    try { return await open(code, unb64url(payload.slice(3))); }
+    catch (e) { return null; }
+  }
+
+  function ownerCapability() {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    return b64url(bytes);
+  }
+
   // ---- the two halves -------------------------------------------------------
   // Deliberately the same shape as NetHandshake's: publish a blob, then wait for
   // the other one to appear. What travels is exactly the invite/answer code the
@@ -235,13 +267,26 @@ const NetRendezvous = (function () {
   // TWO BACKENDS, ONE INTERFACE. A private worker when its URL is set (a relay
   // you control beats a stranger's), the public Nostr relay pool otherwise —
   // which is the default, and the reason room codes need nothing deployed.
-  const httpPut = (code, slot, payload) => call(`/r/${normalise(code)}/${slot}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ payload }),
-  });
+  async function httpPut(code, slot, payload, owner) {
+    try {
+      const sealed = await sealPrivate(code, payload);
+      return call(`/r/${normalise(code)}/${slot}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payload: sealed, ...(owner ? { owner } : {}) }),
+      });
+    } catch (e) {
+      return ERR("crypto", "This browser could not protect the room code. Use the invite link instead.");
+    }
+  }
 
-  const httpGet = (code, slot) => call(`/r/${normalise(code)}/${slot}`, { method: "GET" });
+  async function httpGet(code, slot) {
+    const got = await call(`/r/${normalise(code)}/${slot}`, { method: "GET" });
+    if (!got.ok) return got;
+    const payload = got.body && await openPrivate(code, got.body.payload);
+    if (!payload) return ERR("corrupt", "The room service returned an unreadable code. Use the invite link instead.");
+    return { ok: true, body: { payload } };
+  }
 
   // ---- the public-relay backend ---------------------------------------------
   // A Nostr room is LIVE, not a mailbox: unlike a retained MQTT message there
@@ -266,9 +311,11 @@ const NetRendezvous = (function () {
   // still hosts ONE guest, and says so rather than silently taking one player.
   function hostRoom(o) {
     if (usingPrivateRelay()) {
+      Log.warn("net", "room host fail not_supported");
       return Promise.resolve({ ok: false, error: "not_supported",
         message: "Room codes on a private relay take one guest. Use the invite link for the others." });
     }
+    Log.info("net", "room host");
     return NetNostr.exchange({
       code: o.code, send: o.mine, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
@@ -282,11 +329,38 @@ const NetRendezvous = (function () {
   // The private relay keeps the put/get shape (it really is a mailbox); the
   // public one is a live swap. swap() is the interface the lobby uses, and it
   // hides which of the two is underneath.
-  const put = (code, slot, payload) => httpPut(code, slot, payload);
+  // Low-level/test callers get the same retry semantics as swap(): re-posting
+  // the identical offer reuses its capability, while a different offer for the
+  // same code is a distinct claimant and receives 409 from the Worker.
+  const offerOwners = new Map();
+  function ownerFor(code, payload) {
+    const key = normalise(code);
+    const prior = offerOwners.get(key);
+    const owner = prior && prior.payload === payload ? prior.owner : ownerCapability();
+    offerOwners.set(key, { payload, owner });
+    if (offerOwners.size > 128) offerOwners.delete(offerOwners.keys().next().value);
+    return owner;
+  }
+  const put = async (code, slot, payload) => {
+    let owner = null;
+    try {
+      if (slot === "offer") owner = ownerFor(code, payload);
+    } catch (e) {
+      return ERR("crypto", "This browser could not protect the room code. Use the invite link instead.");
+    }
+    return httpPut(code, slot, payload, owner);
+  };
   const get = (code, slot) => httpGet(code, slot);
 
   // Give `mine` to the other side and get theirs back, whichever backend is in
   // play. `slot`/`want` only mean anything to the mailbox backend.
+  function rvLog(action, res) {
+    if (res && res.ok) Log.info("net", action + " ok");
+    else if (res && (res.error === "cancelled")) Log.info("net", action + " cancelled");
+    else Log.warn("net", action + " fail " + ((res && res.error) || "error"));
+    return res;
+  }
+
   async function swap(o) {
     const { code, mine, reply, slot, want, token, onTick } = o;
     if (!usingPrivateRelay()) return nostrExchange(o);
@@ -294,17 +368,22 @@ const NetRendezvous = (function () {
     // for the other side FIRST, then posts what it produced.
     if (reply) {
       const got = await waitFor(code, want, token, onTick);
-      if (!got.ok) return got;
+      if (!got.ok) return rvLog("swap", got);
       let out = null;
       try { out = await reply(got.payload); } catch (e) { out = null; }
-      if (!out) return ERR("reply_failed", "Could not answer that invite.");
-      const posted = await httpPut(code, slot, out);
-      return posted.ok ? { ok: true, payload: got.payload } : posted;
+      if (!out) return rvLog("swap", ERR("reply_failed", "Could not answer that invite."));
+      const posted = await httpPut(code, slot, out, null);
+      return rvLog("swap", posted.ok ? { ok: true, payload: got.payload } : posted);
     }
-    const posted = await httpPut(code, slot, mine);
-    if (!posted.ok) return posted;
+    // Stable across a repeated host attempt with the same code+offer; never
+    // derived from the ciphertext, whose random IV makes repeat seals differ.
+    let owner = null;
+    try { owner = slot === "offer" ? ownerFor(code, mine) : null; }
+    catch (e) { return rvLog("swap", ERR("crypto", "This browser could not protect the room code. Use the invite link instead.")); }
+    const posted = await httpPut(code, slot, mine, owner);
+    if (!posted.ok) return rvLog("swap", posted);
     const got = await waitFor(code, want, token, onTick);
-    return got.ok ? { ok: true, payload: got.payload } : got;
+    return rvLog("swap", got.ok ? { ok: true, payload: got.payload } : got);
   }
 
   // Poll until the other side posts, the caller cancels, or we give up. The

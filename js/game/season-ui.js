@@ -23,6 +23,7 @@ const SeasonUI = (function () {
   "use strict";
 
 function create(G) {
+  Log.info("ui", "SeasonUI.create");
   const { $, els } = G;
 
   // The working copy. Null while the screen is closed — open() takes a fresh
@@ -192,18 +193,23 @@ function create(G) {
     draft.trackIds = draft.trackIds.slice();
     build();
     $("season-setup").hidden = false;
+    Log.info("ui", "SeasonUI.open");
     if (G.soundOn) GameAudio.uiSelect();
   }
-  function close() { $("season-setup").hidden = true; draft = null; }
+  function close() {
+    $("season-setup").hidden = true; draft = null;
+    Log.info("ui", "SeasonUI.close");
+  }
 
   $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
   $("ss-apply").onclick = () => {
+    Log.info("ui", "SeasonUI.apply");
     SeasonCal.setConfig(draft);
     // A NEW calendar is a NEW championship. Points scored over a schedule that
     // no longer exists cannot be carried into one that does — half of them may
     // have been won at circuits the season no longer visits — so the standings
     // reset with the calendar rather than being silently re-indexed.
-    G.season = SeasonCal.blank();
+    G.season = SeasonCal.restart();
     G.store.set("season", G.season);
     G.trackIdx = SeasonCal.trackIndex(0);
     close();

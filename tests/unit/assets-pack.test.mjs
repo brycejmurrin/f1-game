@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -37,6 +38,7 @@ function realMAT() {
   const sandbox = { Math, Array, Float32Array, Object, JSON, console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  seedLog(sandbox);
   // Top-level `const` is block-scoped inside a VM and never lands on the
   // sandbox — the same rewrite tools/verify-track.cjs uses.
   vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
@@ -279,6 +281,7 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   const sandbox = { Math, Array, Float32Array, Object, JSON, console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  seedLog(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "geom.js"), "utf8")
     .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
   const G = sandbox.TrackGeom;
@@ -339,6 +342,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  seedLog(sandbox);
   load("js/render/gltf.js", sandbox);
   load("assets/pack/webbake.js", sandbox);
   assert.equal(typeof sandbox.WebBake.toGLB, "function");
@@ -399,6 +403,7 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     };
     sandbox.window = sandbox;
     vm.createContext(sandbox);
+    seedLog(sandbox);
     vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
       .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
 

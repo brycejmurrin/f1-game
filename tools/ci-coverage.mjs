@@ -1,6 +1,8 @@
-// Reports which Playwright specs CI executes before deploy. Advisory only —
-// not a gate (`artifacts/` is gitignored, so a never-observed gate would
-// fail on every CI run). See docs/archive/research/CAMPAIGN-2026-08.md.
+// Reports CI's two different browser-test contracts: fixed specs that run in
+// the deploy workflow, and the blocking change-aware selection on pushes/PRs.
+// A dynamic gate cannot honestly claim every non-fixed spec, so report its
+// event/base/fail-closed contract separately instead of calling those specs
+// "gated by nothing". See docs/archive/research/CAMPAIGN-2026-08.md.
 //
 //   node tools/ci-coverage.mjs
 //   node tools/ci-coverage.mjs --json
@@ -50,28 +52,50 @@ for (const m of ci.matchAll(/run:\s*(?:npm test --|npx playwright test)\s+([^\n]
   specs.forEach((s) => executed.add(s));
 }
 
-const ungated = ALL_SPECS.filter((s) => !executed.has(s));
+const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
+const selectedAt = ci.indexOf("\n  selected:\n");
+const selectedJob = selectedAt >= 0 ? ci.slice(selectedAt) : "";
+const selectedIf = selectedJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
+const selectionGate = {
+  present: Boolean(selectedJob),
+  blocking: Boolean(selectedJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectedJob),
+  onPush: selectedIf.includes("github.event_name == 'push'"),
+  onPullRequest: selectedIf.includes("github.event_name == 'pull_request'"),
+  onWorkflowCall: selectedIf.includes("github.event_name == 'workflow_call'"),
+  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/.test(selectedJob),
+  failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectedJob)
+    && /no valid comparison base/.test(selectedJob)
+    && /comparison base .* is unreachable/.test(selectedJob),
+  surfacesBudgetSkips: /EXCLUDED \(declares/.test(selectedJob)
+    && /SKIPPED \(over budget\)/.test(selectedJob),
+};
 const report = {
   specsOnDisk: ALL_SPECS.length,
-  specsExecutedByCI: executed.size,
-  specsGatedByNothing: ungated.length,
+  specsInFixedGates: executed.size,
+  specsOutsideFixedGates: outsideFixedGates.length,
   executed: [...executed].sort(),
-  ungated,
+  outsideFixedGates,
+  selectionGate,
   viaGroup, viaPath,
 };
 
 if (process.argv.includes("--json")) {
   console.log(JSON.stringify(report, null, 2));
 } else {
-  console.log(`CI executes ${report.specsExecutedByCI} of ${report.specsOnDisk} Playwright specs ` +
-    `(${((report.specsExecutedByCI / report.specsOnDisk) * 100).toFixed(1)} %).`);
-  console.log(`${report.specsGatedByNothing} specs are gated by NOTHING before deploy.\n`);
+  console.log(`Deploy CI's fixed browser gates execute ${report.specsInFixedGates} of ` +
+    `${report.specsOnDisk} Playwright specs ` +
+    `(${((report.specsInFixedGates / report.specsOnDisk) * 100).toFixed(1)} %).`);
+  console.log(`${report.specsOutsideFixedGates} specs are outside those fixed gates.\n`);
   for (const g of viaGroup) if (g.specs.length) console.log(`  ${g.group}: ${g.specs.join(", ")}`);
   for (const p of viaPath) console.log(`  by path: ${p.specs.join(", ")}`);
-  console.log("\nThis is a REPORT, not a gate. The full suite is ~40 minutes of");
-  console.log("SwiftShader and deliberately does not run here — see the ci.yml header.");
-  console.log("The number matters because a gate nobody looks at drifts silently:");
-  console.log("physics-characterization was in NO job for 175 commits of physics work.");
+  const s = report.selectionGate;
+  console.log(`\nChange-aware selected gate: ${s.blocking ? "BLOCKING" : "NON-BLOCKING"}; ` +
+    `push=${s.onPush}, pull_request=${s.onPullRequest}, workflow_call=${s.onWorkflowCall}.`);
+  console.log(`PR base=${s.usesPullRequestBase ? "explicit" : "missing"}; ` +
+    `invalid base=${s.failsClosedOnInvalidBase ? "fail-closed" : "fail-open"}; ` +
+    `budget skips=${s.surfacesBudgetSkips ? "surfaced" : "silent"}.`);
+  console.log("Exact selected coverage varies by diff and budget; outside-budget specs are named,");
+  console.log("not claimed as executed. The full suite remains a local, change-scaled run.");
 }
 
 export { report, ALL_SPECS, expand, groupSpecs };

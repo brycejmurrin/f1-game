@@ -78,6 +78,7 @@ const QUALI_TRIM = 0.75;
 const EXEC_SPREAD = 0.012;
 
 function create(G) {
+  Log.info("game", "Quali.create");
   const { $ } = G;
 
   // The classification for the session just run: [{driverId, code, name, team,
@@ -243,6 +244,7 @@ function create(G) {
   function simulate(driven) {
     const rows = compute(driven);
     if (rows) classification = rows;
+    Log.info("game", "Quali.simulate n=" + (rows ? rows.length : 0));
     return rows;
   }
 
@@ -325,8 +327,8 @@ function create(G) {
     }
   }
 
-  function open() { build(); $("quali").hidden = false; ScrollFade.refresh(); }
-  function close() { $("quali").hidden = true; }
+  function open() { Log.info("game", "Quali.open"); build(); $("quali").hidden = false; ScrollFade.refresh(); }
+  function close() { Log.info("game", "Quali.close"); $("quali").hidden = true; }
 
   return { simulate, preview, order, results, clear, build, open, close, lapTime, capFor };
 }

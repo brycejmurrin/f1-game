@@ -9,12 +9,12 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | Skill | Use it when |
 |---|---|
 | **survey-track** | End-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile). |
-| **bump-cache** | Any `js/` or `css/` edit (or script/link tag change) — bump `?v=N` and matching `version.json` before commit. |
+| **bump-cache** | Any `js/` or `css/` edit (or script/link tag change) — refresh `?v=<sha256>` hashes and the shell generation in `version.json` before commit. |
 | **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html` + `tools/car/render-car.mjs`. |
-| **check-changes** | Pre-push validation — `verify-change.mjs --fast` (no browsers) or `--plan` + batched `test-bg`; `--wait` only when asked. |
+| **check-changes** | Pre-push validation — `verify-change.mjs --fast` (no browsers) or `--plan` + batched `test-bg`; `--wait` only when asked. Cloud: `./tools/apex-tools-mcp.sh call apex_*`. |
 | **test-timeout-triage** | A Playwright test timed out or hangs — machine vs wait vs budget vs bug, `test-solo.mjs` re-runs, the load-inversion case. |
 | **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
 | **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure. Live version.json → deploy-research. |
@@ -33,7 +33,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
 | **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
 | **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
-| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state, zero-setup tinyfish key). |
+| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state; TinyFish requires one-time setup plus an injected key). Local CLI pins → `apex-tools` / `./tools/apex-tools-mcp.sh`, not this skill. |
 | **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
 | **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
 | **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |
@@ -57,7 +57,7 @@ Output paths: batch/test under `artifacts/`, human-reviewed captures under
 `scratch/` (see `AGENTS.md`).
 
 Design principles:
-- **No build step** — bump `?v=N` + `version.json` on asset edits (`tools/bump-cache.mjs`).
+- **No build step** — refresh `?v=<sha256>` + shell generation in `version.json` on asset edits (`tools/bump-cache.mjs`).
 - **Debug-hooks first** — assert via `__apex`, not brittle magnitudes.
 - **Headless verify-track** — fast pre-push guard for circuit/track engine edits.
 - **Progressive disclosure** — keep `SKILL.md` short (when / entry / hard
@@ -67,6 +67,10 @@ Design principles:
   Official cap is 500 lines
   (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices);
   the project template is thinner. `tests/unit/skill-progressive.test.mjs` holds both.
+  Cursor `paths:` on file-family skills (`webgpu-debug`, `webgl-debug`,
+  `new-track`, `scenery-dress`) so they surface only when matching files are in
+  play; leave it unset on cross-cutting skills (`check-changes`, `bump-cache`,
+  `deploy-merge`).
 - **Description = what + when** — third person, under 1024 chars, must contain
   a trigger (`Use when` / `Use proactively`). Vague descriptions ("helps with
   documents") fail discovery in a 38-skill library.

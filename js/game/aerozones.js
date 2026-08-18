@@ -172,6 +172,7 @@ function runForTurnPair(runs, turns, total, entry) {
 }
 
 function create(G) {
+  Log.info("game", "AeroZones.create");
   let zones = [];                               // [{start, end, len}] in arc metres
 
   // Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
@@ -181,6 +182,7 @@ function create(G) {
   function build() {
     zones = [];
     const track = G.track;
+    Log.info("game", "AeroZones.build track=" + ((track && track.def && track.def.id) || "?"));
     if (!track || !track.total) return zones;
     const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
     const straight = new Array(n);

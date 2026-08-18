@@ -89,24 +89,19 @@ derived from the room code (`seal()`/`open()`, called by
 code, so a relay operator carries bytes it cannot read and the code is the only
 secret.
 
-**That is not yet true of the optional private Worker path.** `httpPut` posts
-the invite/answer as plain JSON, so an operator running `worker/rendezvous.js`
-CAN read the SDP it relays. `seal()`/`open()` implement exactly that sealing
-and are LIVE on the default public path; only `topicFor()` and the private
-`httpPut` Worker path remain unwired — the blocker there is
-`worker/rendezvous.js`'s single-writer rule, which rejects a second
-`offer` by comparing the stored payload against the incoming one. AES-GCM uses a
-random IV, so a host re-posting the SAME offer would produce different bytes and
-be turned away with 409 "that code is already in use". Sealing the Worker path
-means changing that comparison too, and testing both halves against a deployed
-Worker. Until then the private relay is a broker you must TRUST, which is a
-reasonable trade for one you run yourself — but it is a different claim from the
-public path's, and it was previously documented as the same one. A code is DISPOSABLE,
-not an account: nothing stored, claimed, squattable or personal, so it avoids
-everything a username system drags in. It carries the SAME invite/answer
-strings the manual flow uses, so the relay is a courier and never a
-participant. Every call resolves to a typed error, never throws — when the
-relay is down the lobby must fall back to the link/QR, which need nothing.
+The optional private Worker path now uses the same browser-side AES-GCM
+envelope. `httpPut` sends versioned ciphertext and `httpGet` opens it locally,
+so the Worker operator cannot read the SDP it carries. Because a fresh AES-GCM
+IV makes even identical retries produce different bytes, the host also sends a
+separate random owner capability; the Worker uses that stable capability—not
+ciphertext equality—to permit a retry while rejecting another writer. During a
+rolling deployment the client can still read a legacy plaintext record and the
+Worker accepts legacy payloads, but every new private-relay write is sealed. A
+code is DISPOSABLE, not an account: nothing personal is retained and the Worker
+deletes the room after two minutes. It carries the SAME invite/answer strings
+the manual flow uses, so the relay is a courier and never a participant. Every
+call resolves to a typed error, never throws — when the relay is down the lobby
+must fall back to the link/QR, which need nothing.
 Shown even when unconfigured: a feature that hides itself on an unset URL
 guarantees nobody discovers it
 

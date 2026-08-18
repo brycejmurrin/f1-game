@@ -54,8 +54,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/floodmast-lamp-register.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  "tests/unit/report-server.test.mjs",
   "tests/unit/tinyfish-mcp.test.mjs",
   "tests/unit/probe-mcp.test.mjs",
+  "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   "tests/unit/component-inventory.test.mjs",
@@ -80,6 +82,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-layers.test.mjs",
   "tests/unit/module-size.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
+  "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/store-cross-tab.test.mjs",
@@ -109,6 +112,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/metrics.test.mjs",
 ]);
 
 const loadavgLine = () => {

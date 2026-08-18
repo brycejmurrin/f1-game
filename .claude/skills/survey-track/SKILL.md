@@ -10,6 +10,9 @@ real place". Work one circuit at a time.
 
 ```sh
 node tools/survey-track.mjs <id>            # screenshots + flagged ground probe
+node tools/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown + N/E/S/W
+# --oblique may sit anywhere; a comma-list after <id> is fracs (no label required):
+#   survey-track.mjs monaco --oblique 0.1,0.5
 node tools/verify-track.cjs <id>            # after every edit
 node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
 ```
@@ -30,7 +33,8 @@ circuit file; no browser runs).
 
 1. Read the brief — 3–5 highest-leverage fixes.
 2. `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
-   flagged probe (`--` holes, >1 m steps, sag).
+   flagged probe (`--` holes, >1 m steps, sag). Add `--oblique` when you need
+   a bounds-fitted topdown and N/E/S/W high obliques (floating props, floor voids).
 3. Edit dressing in `js/circuits/<id>.js`. New terrain `def` flags need
    `buildTerrain` **and** `groundYAt` plus the `LIST` whitelist in
    `js/track/tracks.js` — that is **engine** work (parent / not
