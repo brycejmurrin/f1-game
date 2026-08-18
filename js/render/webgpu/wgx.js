@@ -593,6 +593,15 @@ const WGX = (function () {
     let _softDisplayPending = false, _softDisplayEpoch = 0;
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
+    // sessionStorage apex26.wgxHoldPresent=1 (set before reload) skips copy+map
+    // until holdSoftPresent(false). The first SwiftShader mapAsync is the only
+    // one that reliably completes; a menu/pits blit first leaves #game on that
+    // frame and hangs the chase map (measured, Chrome MCP evaluate).
+    let _softHold = false;
+    try {
+      _softHold = typeof sessionStorage !== "undefined" &&
+        sessionStorage.getItem("apex26.wgxHoldPresent") === "1";
+    } catch (_) { /* private mode */ }
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1718,7 +1727,7 @@ const WGX = (function () {
       // A software map can lag many frames. Never allocate another full-frame
       // staging buffer until the current one has mapped or failed; the next
       // rendered frame will naturally become the newest readback.
-      if (_softDisplayPending) return null;
+      if (_softHold || _softDisplayPending) return null;
       let buf = null;
       try {
         const w = _softW || width, h = _softH || height;
@@ -1818,6 +1827,16 @@ const WGX = (function () {
       }
       for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
     }
+    function holdSoftPresent(on) {
+      if (on === undefined) return _softHold;
+      _softHold = !!on;
+      try {
+        if (typeof sessionStorage === "undefined") return _softHold;
+        if (_softHold) sessionStorage.setItem("apex26.wgxHoldPresent", "1");
+        else sessionStorage.removeItem("apex26.wgxHoldPresent");
+      } catch (_) { /* private mode */ }
+      return _softHold;
+    }
     function invalidateSoftPresent() {
       if (!_softGpu) return;
       // Bump generation only. Do NOT destroy the in-flight MAP_READ buffer —
@@ -1829,6 +1848,7 @@ const WGX = (function () {
     function softPresentState() {
       return {
         seq: _softBlitSeq, shown: _softBlitShown, pending: _softDisplayPending,
+        hold: _softHold,
         epoch: _softDisplayEpoch, sceneGen: _softSceneGen, shownGen: _softShownGen,
         lastMaxPx: _softLastMaxPx, lastSkip: _softLastSkip,
         display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
@@ -4989,6 +5009,7 @@ const WGX = (function () {
       capturePixels,
       awaitSoftPresent,
       invalidateSoftPresent,
+      holdSoftPresent,
       softPresentState,
       roadLutReady: () => _roadLutReady,
       softPresent: () => !!_softGpu,

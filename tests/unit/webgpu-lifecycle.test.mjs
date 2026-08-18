@@ -931,7 +931,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
   assert.match(WGX_SOURCE, /const MAX_S = 2000/);
-  assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
+  assert.match(CHUNKS_SOURCE, /ox < 3/);
+  assert.match(CHUNKS_SOURCE, /best\.z \+ ds/);
+  assert.match(CHUNKS_SOURCE, /nearPair/);
+  assert.match(WGX_SOURCE, /function holdSoftPresent/);
+  assert.match(WGX_SOURCE, /apex26\.wgxHoldPresent/);
   assert.match(CHUNKS_SOURCE, /o\.matTrk = vec4<f32>\(pulled\.y, pulled\.z, pulled\.w, pulled\.x\)/);
   assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5/);
   assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
@@ -1074,8 +1078,8 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
   assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(/);
-  assert.match(WGX_SOURCE, /if \(_softDisplayPending\) return null/,
-    "only one soft-present mapAsync in flight — late pits readbacks must not overwrite #game");
+  assert.match(WGX_SOURCE, /if \(_softHold \|\| _softDisplayPending\) return null/,
+    "hold + one in-flight map — menu/pits must not consume the only reliable SwiftShader map");
   assert.match(WGX_SOURCE, /function _softDisplayAbort\(/);
   assert.match(WGX_SOURCE, /seq: _softBlitSeq/);
   assert.match(WGX_SOURCE, /sceneGen: _softSceneGen/);

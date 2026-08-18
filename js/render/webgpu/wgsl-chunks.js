@@ -556,28 +556,38 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let gw = max(h1.z, 1.0);
   let gh = max(h1.w, 1.0);
   let uv = clamp((wp.xz - h0.yz) / ext, vec2<f32>(0.0), vec2<f32>(0.999));
-  let gx = u32(uv.x * gw);
-  let gz = u32(uv.y * gh);
-  let base = select(0u, 2u + (gx + gz * u32(gw)) * 16u, gated);
+  let gx = i32(uv.x * gw);
+  let gz = i32(uv.y * gh);
+  let gwi = i32(gw);
+  let ghi = i32(gh);
   var bestD = 1e20;
   var best = vec4<f32>(0.0);
   var best2 = vec4<f32>(0.0);
   var bestD2 = 1e20;
-  for (var i = 0u; i < 16u; i = i + 1u) {
-    let p = matTrkArr[base + i];
-    let d = select(1e20, dot(wp.xz - p.xy, wp.xz - p.xy), gated);
-    let take = d < bestD;
-    best2 = select(best2, best, take);
-    bestD2 = select(bestD2, bestD, take);
-    best = select(best, p, take);
-    bestD = select(bestD, d, take);
-    // Require a spatially distinct second sample — a lone centerline point
-    // left best2 at the origin and produced a garbage tangent, so lateral x
-    // blew past hw and terrain discard never punched the ribbon footprint.
-    let sep = dot(p.xy - best.xy, p.xy - best.xy);
-    let take2 = (d < bestD2) && !take && sep > 0.25;
-    best2 = select(best2, p, take2);
-    bestD2 = select(bestD2, d, take2);
+  // 3×3 cells: a 32×32 bin is tens of metres, so adjacent fragments otherwise
+  // snap to disjoint 16-sample sets and dashed paint stair-steps.
+  for (var oz = 0; oz < 3; oz = oz + 1) {
+    for (var ox = 0; ox < 3; ox = ox + 1) {
+      let cx = u32(clamp(gx + ox - 1, 0, gwi - 1));
+      let cz = u32(clamp(gz + oz - 1, 0, ghi - 1));
+      let base = select(0u, 2u + (cx + cz * u32(gwi)) * 16u, gated);
+      for (var i = 0u; i < 16u; i = i + 1u) {
+        let p = matTrkArr[base + i];
+        let d = select(1e20, dot(wp.xz - p.xy, wp.xz - p.xy), gated);
+        let take = d < bestD;
+        best2 = select(best2, best, take);
+        bestD2 = select(bestD2, bestD, take);
+        best = select(best, p, take);
+        bestD = select(bestD, d, take);
+        // Require a spatially distinct second sample — a lone centerline point
+        // left best2 at the origin and produced a garbage tangent, so lateral x
+        // blew past hw and terrain discard never punched the ribbon footprint.
+        let sep = dot(p.xy - best.xy, p.xy - best.xy);
+        let take2 = (d < bestD2) && !take && sep > 0.25;
+        best2 = select(best2, p, take2);
+        bestD2 = select(bestD2, d, take2);
+      }
+    }
   }
   let tangRaw = best2.xy - best.xy;
   // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
@@ -588,10 +598,19 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let sSign = select(1.0, sign(best2.z - best.z), abs(best2.z - best.z) > 1e-3);
   let tangFwd = tang * sSign;
   let right = vec2<f32>(tangFwd.y, -tangFwd.x);
-  let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
   let ds = select(0.0, dot(wp.xz - best.xy, tangFwd), tangOk);
-  let s = best.z + ds;
-  let hw = best.w;
+  let ds2 = select(0.0, dot(wp.xz - best2.xy, tangFwd), tangOk);
+  let x1 = select(0.0, dot(wp.xz - best.xy, right), tangOk);
+  let x2 = select(0.0, dot(wp.xz - best2.xy, right), tangOk);
+  // Inverse-distance blend of the two nearest samples so s/x do not jump when
+  // the Voronoi winner swaps. Skip the blend across a lap wrap (|Δs| big).
+  let nearPair = tangOk && abs(best2.z - best.z) < 80.0;
+  let w1 = 1.0 / max(sqrt(bestD), 0.08);
+  let w2 = select(0.0, 1.0 / max(sqrt(bestD2), 0.08), nearPair);
+  let invW = 1.0 / max(w1 + w2, 1e-6);
+  let s = ((best.z + ds) * w1 + (best2.z + ds2) * w2) * invW;
+  let x = (x1 * w1 + x2 * w2) * invW;
+  let hw = (best.w * w1 + select(best.w, best2.w, nearPair) * w2) * invW;
   let dCenter = sqrt(bestD);
   // Prefer perpendicular distance when a real tangent exists. Point-distance
   // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
