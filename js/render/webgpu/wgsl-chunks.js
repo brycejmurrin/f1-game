@@ -690,6 +690,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5 && abs(fromWorld.y) <= fromWorld.z + 2.4) {
     discard;
   }
+  // #region agent log
+  // Hot-pink road marker: proves isRoadDraw + fragments surviving depth.
+  if (isRoadDraw) {
+    return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+  }
+  // #endregion
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
