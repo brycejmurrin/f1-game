@@ -372,6 +372,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
   // Lighting tuner is race-only (`pm-lighting` is disabled on the title). Open
   // it from pause → settings → MORE at 200% on the short landscape sheet.
+  await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
   await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => {
     window.__apex.uiScale(200);
