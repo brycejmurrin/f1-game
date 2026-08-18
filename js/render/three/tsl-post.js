@@ -32,7 +32,7 @@
  *         upAdd, upFinal, spread, ssao, godray, composite, fxaa, blit })
  * (spread is the shared blur-step uniform — tlx-post.js drives it every
  * present() from the BLOOM SPREAD knob: `P.spread.value = gk("bloomSpread")`.)
- * ctx = { chunks, shadow, sceneTex, sceneDepthTex, dirtTex, whiteTex,
+ * ctx = { chunks, shadow, sceneTex, sceneTagTex, sceneDepthTex, dirtTex, whiteTex,
  *         blackTex } — REAL texture objects (tlx-post.js creates the targets
  * first). NEVER touches THREE/TSL at script eval — three exists only inside
  * TLX.create().
@@ -66,6 +66,9 @@
     // Fixed input textures (real objects — the scene HDR target + its depth
     // exist before this factory runs; dirt/white/black are 1x1-or-canvas).
     const sceneT = texture(ctx.sceneTex);
+    // Second HDR attachment: 0.35 on car paint, 1 elsewhere. Scene alpha
+    // cannot hold the tag (r185 isOpaque + NoBlending = coverage).
+    const tagT = texture(ctx.sceneTagTex || ctx.sceneTex);
     const depthT = texture(ctx.sceneDepthTex);
     const dirtT = texture(ctx.dirtTex || ctx.blackTex);
     const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
@@ -245,7 +248,7 @@
           const crN = crN0;
           const crL = length(crN).toVar();
           const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
-          If(N.z.lessThan(0.0), () => { N.assign(N.negate()); });
+          // GLX SSAO does not flip N.z — a view-space coin toss darkens walls.
           const radius = float(ssaoU.radius).toVar();
           const occ = float(0.0).toVar();
           // GLX/WGX: skip the 8 dependent depth taps when AO strength is 0
@@ -540,7 +543,7 @@
         // tailpipe; SKIPS car pixels (SSR alpha tag) so the body doesn't waver.
         const hazeUV = vec2(vUV).toVar();
         If(C.hazeStr.greaterThan(0.002), () => {
-          const carHere = smoothstep(0.42, 0.55, sceneT.sample(TL(vUV)).a).oneMinus();
+          const carHere = smoothstep(0.42, 0.55, tagT.sample(TL(vUV)).r).oneMinus();
           If(carHere.lessThan(0.25), () => {
             const hd = vUV.sub(C.hazeUV).sub(vec2(0.0, 0.08)).mul(vec2(3.2, 1.0)).toVar();
             const hm = exp(dot(hd, hd).mul(-70.0)).mul(C.hazeStr).toVar();
@@ -551,8 +554,9 @@
             });
           });
         });
-        const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour + .a SSR tag
+        const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour; tag is tagT
         const c = vec3(scn.rgb).toVar();
+        const tagA = float(tagT.sample(TL(hazeUV)).r).toVar();
         const caDir = vec2(vUV.sub(0.5)).toVar();
 
         // CHROMATIC ABERRATION js/render/shaders/post.js — stays in the hazeUV domain.
@@ -614,7 +618,7 @@
         c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
 
         // ── Wet-road + car-paint screen-space reflection js/render/shaders/post.js ──
-        const carPx = smoothstep(0.42, 0.55, scn.a).oneMinus().toVar();
+        const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
         If(C.ssrOk.greaterThan(0.5)
           .and(C.reflect.greaterThan(0.001).or(carPx.greaterThan(0.3)))
           .and(depthAt(vUV).lessThan(0.9999))

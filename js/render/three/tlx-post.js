@@ -167,11 +167,20 @@
     const sceneDepthTex = new THREE.DepthTexture(1, 1);
     sceneDepthTex.name = "TLXSceneDepth";
     const sceneRT = new THREE.RenderTarget(1, 1, {
-      type: hdrType, depthBuffer: true, depthTexture: sceneDepthTex,
+      type: hdrType, count: 2, depthBuffer: true, depthTexture: sceneDepthTex,
     });
-    sceneRT.texture.name = "TLXSceneHDR";
+    sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
+    // Attachment 1: SSR car-paint tag (0.35). r185 cannot store that in
+    // scene alpha (NoBlending → isOpaque false → output.a is coverage).
+    let sceneTagTex = sceneRT.texture;
+    if (sceneRT.textures && sceneRT.textures[1]) {
+      sceneRT.textures[1].name = "ssrTag";
+      sceneRT.textures[1].generateMipmaps = false;
+      sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
+      sceneTagTex = sceneRT.textures[1];
+    }
     // LDR target: composite output, FXAA input (always allocated — FXAA is
     // the unconditional resolve, like GLX's ldrFBO).
     const ldrRT = makeRT(1, 1, THREE.UnsignedByteType);
@@ -248,7 +257,7 @@
     // ── the TSL pass set (tsl-post.js) — needs the REAL scene textures ─────
     const P = TLXShaders.post(THREE, TSL, {
       chunks: ctx.chunks, shadow,
-      sceneTex: sceneRT.texture, sceneDepthTex,
+      sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
     });
 

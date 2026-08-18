@@ -533,11 +533,10 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   float s = vTrk.x, x = vTrk.y;
   const vec3 paint = vec3(0.95, 0.95, 0.97);
 
-  // Lateral filter width. Clamped for the band only: at a grazing angle
-  // fwidth explodes and an unclamped smoothstep would smear into a wash.
-  // Mip fade uses the RAW footprint (fwX) — feeding the clamp made mip
-  // exactly 0 whenever fw hit 0.30 (routine on phone chase), so every
-  // edge/centre line vanished while WGX on the same device still showed paint.
+  // Lateral filter width. Clamped for the SDF band: at a grazing angle
+  // fwidth explodes and an unclamped band would smear the line into a
+  // wide grey wash. MIP uses the RAW footprint (WGX roadMarkings) so a
+  // saturated 0.30 AA ceiling keeps ~64% paint instead of erasing it.
   float fwX = max(fwidth(x), 1e-4);
   float aaX = min(fwX, 0.30);
 
@@ -555,7 +554,8 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   float dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
 
   // As a marking goes sub-pixel, fade its amplitude rather than let a
-  // half-covered band strobe — the standard minification response.
+  // half-covered band strobe — the standard minification response. Soft
+  // knee on the RAW footprint (same 0.10/0.55 as WGX).
   float mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   float m = max(edge, band * dash) * mip;
 

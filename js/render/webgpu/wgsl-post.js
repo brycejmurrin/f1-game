@@ -843,26 +843,22 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
   c = c * aoV;
 
-  // Same-frame SSR consume (GLX COMPOSITE_FS). present() wrote ssrPostTex
-  // from this frame's HDR+depth; LIT no longer samples last frame. Road
-  // uses wetness * reflect; lacquer uses the 0.35 car-paint alpha tag.
-  let ssrWet = U.lift.w;
+  // Same-frame SSR consume (GLX COMPOSITE_FS). The SSR pass already baked
+  // gate, fresnel, cover, seam fade, and min(gateSrc/0.20) into .a —
+  // remultiplying wetness * reflect here zeros dry sheen (wetness=0) and
+  // double-counts wet (po.reflect is already wetness * ssrWetMul).
   let ssrRefl = U.gamma.w;
   let ssrCar = U.gain.w;
   if (ssrWet > 0.001 || ssrRefl > 0.001 || ssrCar > 0.001) {
     let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
     if (ssr.a > 0.001) {
-      let carPx = 1.0 - smoothstep(0.42, 0.55, sceneA);
-      // ssr.a already carries roadTerm = roadMask * strength (wet * reflect).
-      // Multiplying ssrWet * ssrRefl again made the wet mirror quadratic.
-      let roadK = (1.0 - carPx);
-      let carK = carPx * ssrCar;
-      let ssrK = ssr.a * max(roadK, carK);
-      if (ssrK > 0.001) {
-        let dark = select(0.10, 0.22, carPx > 0.5);
-        let sat = select(0.92, 0.88, carPx > 0.5);
-        c = mix(c, c * dark + ssr.rgb * sat, clamp(ssrK, 0.0, 0.85));
-      }
+      let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
+      let dark = select(0.10, 0.22, carPx > 0.5);
+      let sat = select(0.92, 0.88, carPx > 0.5);
+      // Lagarde ao² on the reflected colour (GLX post.js) — open road
+      // (ao≈1) is untouched; creases stay dark through the mirror.
+      let refl = ssr.rgb * aoV * aoV;
+      c = mix(c, c * dark + refl * sat, clamp(ssr.a, 0.0, 0.85));
     }
   }
 
@@ -1169,7 +1165,15 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // upVS is the ROAD PLANE's normal (game.js builds it from r x t), not world-up:
   // on a gradient the two differ by the slope, and reflect() doubles that error.
   let upVSn = normalize(U.upVS.xyz);
-  var Nv = normalize(cross(dpx, dpy));
+  // CONDITIONING, not absolute magnitude (GLX COMPOSITE_FS / TLX tsl-post).
+  // crvL scales with |dpx|·|dpy|, so at grazing distance the cross stays
+  // large while its DIRECTION is depth-quantization noise. sinT is the
+  // scale-free sine of the angle between the derivatives — fallback to
+  // the road plane when the basis is degenerate at any distance.
+  let crv = cross(dpx, dpy);
+  let crvL = length(crv);
+  let sinT = crvL / max(length(dpx) * length(dpy), 1e-12);
+  var Nv = select(upVSn, crv / max(crvL, 1e-12), crvL > 1e-6 && sinT > 0.08);
   if (Nv.z < 0.0) { Nv = -Nv; }   // face the eye (view space looks down -z)
   // ...and a ground normal's view-space z is ~0 at grazing incidence, so that
   // flip is a coin toss and lands DOWN when the camera pitches up, driving upDot
@@ -1212,7 +1216,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
   var pos = P;
   var prevPos = P;
-  var stepLen = 0.40;
+  var stepLen = 0.55;
   pos = pos + R * (stepLen * ign);           // sub-step start offset per pixel
   var found = false;
   var hitUV = vec2<f32>(0.0);
@@ -1221,7 +1225,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   for (var i = 0; i < 24; i = i + 1) {
     prevPos = pos;
     pos = pos + R * stepLen;
-    stepLen = stepLen * 1.15;
+    stepLen = stepLen * 1.16;
     let sp = ssrProjUV(pos);
     if (sp.z <= 0.0) { break; }              // behind the eye
     let suv = sp.xy;
@@ -1230,7 +1234,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     if (dz > thick && dz < max(5.0, stepLen * 1.5)) {   // step-scaled far-sky reject
       var a = prevPos;
       var b = pos;
-      for (var j = 0; j < 5; j = j + 1) {    // binary refine -> crisp hit
+      for (var j = 0; j < 4; j = j + 1) {    // binary refine -> crisp hit (GLX)
         let mid = (a + b) * 0.5;
         let muv = ssrProjUV(mid).xy;
         if (ssrViewPos(muv).z - mid.z > 0.20) { b = mid; } else { a = mid; }
@@ -1299,6 +1303,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // depth-derivative noise, and this term swings the amount across 0.55..0.97.
   let fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
   var amt = ssrGate * select(0.55 + 0.42 * fres, 0.50 + 0.45 * fres, carDom);
+  // Dry sheen fade (GLX): at faint dry levels (reflect < 0.2) the darker-
+  // mirror substitution reads as a sheen, not dark towers on sunlit tarmac.
+  // Applied HERE so COMPOSITE can consume .a as the mix amount without
+  // remultiplying wetness * reflect.
+  let gateSrc = select(strength, carReflect, carDom);
+  amt = amt * min(gateSrc / 0.20, 1.0);
   // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
   amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
   amt = clamp(amt * cover, 0.0, select(0.80, 0.85, carDom));
