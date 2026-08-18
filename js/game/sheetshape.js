@@ -92,6 +92,45 @@ window.SheetShape = (function () {
    * the fixed footer fixed. */
   const SHORT_DEFAULT = 380, SHORT_HYST = 40;   // hysteresis, same reason as the others
 
+  /* THE FOURTH ANSWER: can this sheet afford the requested UI zoom and still
+   * have a functional content row? Most sheets can simply scroll, but dense
+   * list/detail panels have fixed head + foot chrome around that scroller. On a
+   * 343px landscape viewport, 200% left the Garage with a 9px option pane and
+   * How-to-Play with 30px of reading pane: bigger type had made both LESS
+   * accessible.
+   *
+   * Opt-in with --fit-at, the minimum height the component needs in its own CSS
+   * units. The cap is derived from the host screen's SAFE content box, so it
+   * reacts to orientation, browser chrome and injected notch insets without a
+   * device name or scale-specific media query. It never enlarges a preference;
+   * it only writes --sheet-scale when the requested scale cannot fit. */
+  function classifyFit(el) {
+    const cs = getComputedStyle(el);
+    const at = parseFloat(cs.getPropertyValue("--fit-at"));
+    if (!at) {
+      if (el.style.getPropertyValue("--sheet-scale")) el.style.removeProperty("--sheet-scale");
+      if (el.dataset.fit) delete el.dataset.fit;
+      return;
+    }
+    const host = el.parentElement;
+    if (!host) return;
+    const hs = getComputedStyle(host);
+    const available = host.clientHeight
+      - (parseFloat(hs.paddingTop) || 0) - (parseFloat(hs.paddingBottom) || 0);
+    if (!available) return;
+    const desired = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue("--ui-scale")) || 1;
+    const fitted = Math.max(0.4, Math.min(desired, available / at));
+    const capped = fitted < desired - 0.001;
+    const next = capped ? String(Math.round(fitted * 1000) / 1000) : "";
+    if (el.style.getPropertyValue("--sheet-scale") !== next) {
+      if (next) el.style.setProperty("--sheet-scale", next);
+      else el.style.removeProperty("--sheet-scale");
+    }
+    const state = capped ? "on" : "off";
+    if (el.dataset.fit !== state) el.dataset.fit = state;
+  }
+
   function classifyDensity(el, hOwn) {
     const raw = getComputedStyle(el).getPropertyValue("--compact-at");
     const at = parseFloat(raw) || SHORT_DEFAULT;
@@ -103,6 +142,7 @@ window.SheetShape = (function () {
 
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
+    classifyFit(el);
     const ratio = h / w;
     const was = el.dataset.shape;
     const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")

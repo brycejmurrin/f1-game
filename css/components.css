@@ -127,7 +127,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      and every `@container sheet` breakpoint keep their meaning: at 130% you
      need 30% more REAL width to afford two columns, which is the honest answer.
      A browser without `zoom` renders at 1.0, which is the old behaviour. */
-  zoom: var(--ui-scale);
+  /* A dense screen may declare --fit-at (its minimum functional height in
+     LOCAL units). SheetShape then supplies --sheet-scale only when the safe
+     viewport cannot afford the requested UI size. This keeps a 200% preference
+     on roomy screens but prevents chrome from reducing the actual content pane
+     to zero on a short landscape phone. */
+  zoom: var(--sheet-scale, var(--ui-scale));
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
@@ -140,6 +145,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   /* the query container for every layout decision inside this sheet */
   container: sheet / inline-size;
 }
+/* Every direct region is a grid item. `min-width:auto` would let any region's
+   max-content width enlarge the implicit sheet column even though the outer
+   card remains viewport-sized. Horizontal strips and wrapping content must
+   negotiate inside the card, never resize the card's track. */
+.sheet > :where(.sheet-head, .sheet-body, .sheet-foot) { min-width: 0; }
 /* Head and foot are CHROME: every pixel they take is a pixel the list below
    does not get, and on a 393px-tall screen that is the difference between four
    circuits visible and two. Both are deliberately thin. */
@@ -180,6 +190,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    the heading is never smaller than the floor at any setting. */
 .sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
 .sheet-body {
+  /* Grid items default to min-width:auto, so a max-content child can widen the
+     BODY track even while the sheet itself stays viewport-sized. At 200% UI
+     size the How-to-Play definition grid did exactly that: the sheet painted
+     369px wide while its body/head/foot painted about 749px and were clipped.
+     The sheet owns horizontal containment; its body must be allowed to shrink
+     to that track and let its own content wrap/scroll. */
+  min-width: 0;
   min-height: 0;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
 }

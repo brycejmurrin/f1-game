@@ -599,6 +599,7 @@ body.hud-hidden #hud-restore { display: block; }
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none;
 }
+#howtoplay-inner { --fit-at: 200px; }
 /* Auto margin right-aligns the rail only while every link fits. When it
    overflows the margin collapses to zero, leaving CONTROLS at the reachable
    scroll origin; `justify-content:flex-end` instead placed that origin at a

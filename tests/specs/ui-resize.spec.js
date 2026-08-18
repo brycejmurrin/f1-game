@@ -245,6 +245,34 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     expect((await readState(page)).density, "back to normal when the scale drops").toBe("normal");
   });
 
+  test("extreme UI size yields only enough to keep dense content functional", async ({ page }) => {
+    await page.setViewportSize({ width: 734, height: 343 });
+    await page.goto("/");
+    await waitReady(page);
+    await openGarage(page);
+    await page.evaluate(() => window.__apex.uiScale(200));
+    await page.waitForFunction(() => document.getElementById("cs-inner").dataset.fit === "on",
+      null, { polling: 50, timeout: 5_000 });
+
+    const state = await page.evaluate(() => {
+      const sheet = document.getElementById("cs-inner");
+      const options = document.getElementById("cs-options").getBoundingClientRect();
+      const done = document.getElementById("cs-done").getBoundingClientRect();
+      return {
+        requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        effective: Number(getComputedStyle(sheet).zoom),
+        fit: sheet.dataset.fit,
+        optionsH: options.height,
+        doneOnScreen: done.bottom <= window.innerHeight + 1 && done.top >= 0,
+      };
+    });
+    expect(state.requested).toBe("2");
+    expect(state.fit).toBe("on");
+    expect(state.effective).toBeLessThan(2);
+    expect(state.optionsH).toBeGreaterThanOrEqual(24);
+    expect(state.doneOnScreen).toBe(true);
+  });
+
   test("the density tier reaches the spacing tokens, where a media query cannot",
     async ({ page }) => {
       // css/tokens.css tightens --pad/--gap/--gut behind

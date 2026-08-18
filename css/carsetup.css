@@ -658,6 +658,11 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   --pair-split: minmax(140px, 34%);
   --pair-gap: var(--gap);
 }
+/* Minimum LOCAL height for title/budget, one category row, one usable option
+   row and the action bar. SheetShape converts this to a per-panel zoom cap only
+   when the safe viewport cannot afford the user's requested UI size. */
+@media (orientation: portrait) { #cs-inner { --fit-at: 340px; } }
+@media (orientation: landscape) { #cs-inner { --fit-at: 240px; } }
 /* SHORT SHEET: stack even when clientWidth stays above 400. A 852×393 phone is
    compact (--compact-at 480) and still wide enough for pair-on, which keeps the
    vertical tab rail and starves #cs-options. Density is classified first. */
@@ -1128,6 +1133,23 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
+/* CRITICAL LOCAL WIDTH — at high UI size the stat summary can consume the
+   entire short sheet before the selectable parts appear. This is deliberately
+   a container threshold, not a phone breakpoint: the Garage keeps stats at its
+   normal local width and yields them only when zoom/orientation leaves less
+   than the measured room required by header + tabs + one option + actions.
+   Portrait and landscape have different budgets because portrait owns a tall
+   bottom band while landscape shares the frame with the car. */
+@media (orientation: portrait) {
+  @container sheet (max-width: 300px) {
+    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
+  }
+}
+@media (orientation: landscape) {
+  @container sheet (max-width: 420px) {
+    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
+  }
+}
 /* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
    UI SIZE 150% the head and the foot together came to 2px more than the panel,
    so the grid's 1fr body row collapsed to zero and the 2px landed on .sheet-foot
@@ -1186,6 +1208,10 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      its own pixels to hold its content, and the car band is whatever is left —
      which at 150% is very little, and that is the correct trade. A band nobody
      can read a car in is not worth an option list nobody can reach. */
-  #cs-inner { width: 100%; height: 70%; min-height: 340px; }
+  /* Never let the content floor defeat the screen cap. `100%` resolves in the
+     sheet's local zoomed coordinate space, so the panel keeps 340 own pixels
+     when the viewport can pay for them and otherwise yields at the safe-area
+     edge instead of extending under the home indicator. */
+  #cs-inner { width: 100%; height: 70%; min-height: min(340px, 100%); }
 }
 } /* @layer components */

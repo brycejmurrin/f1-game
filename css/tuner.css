@@ -67,6 +67,7 @@ body:has(#camtune:not([hidden])) {
      repeating this formula. */
   --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
 }
+#lighting-inner, #camtune-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
@@ -696,17 +697,18 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      button and costing the rail a whole extra line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head h2 { font-size: 15px; }
-  /* THREE equal columns for the five chips: 3 + 2, never 4 + 1. This row was
-     flex, so the fifth option (TRACK / CLOUD) wrapped alone onto line two and
-     stretched the full width of the rail, reading as a different kind of
-     control rather than one more chip. The label takes its own full-width row
-     above them. */
+  /* Preview choices pack from their own readable width. At the usual 210px
+     rail five choices become 3 + 2; a future added choice or narrower local
+     panel rebalances without changing a column count. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 3.25rem; --balance-min: 3rem;
     align-items: stretch;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-lbl { grid-column: 1 / -1; width: auto; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row .opt-btn { min-width: 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-lbl { flex: 1 0 100%; width: auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row .opt-btn {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+  }
 
   /* ---------- ...EXCEPT WHILE FLYING: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
      The rail exists to show twelve categories and their sliders side by side,
