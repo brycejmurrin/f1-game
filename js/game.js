@@ -5429,10 +5429,10 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
 // from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
 // per-variant reused objects mutated in place each call (never a stale key).
-const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8] };
-const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8] };
-const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
 const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };

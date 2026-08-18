@@ -487,7 +487,7 @@ struct DrawU {
   model : mat4x4<f32>,        // off  0
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
-  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, _)
+  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, buryRibbon)
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
@@ -694,9 +694,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let ccDy = dpdy(topNgeo);
   let saaDx = dpdx(topNgeo);
   let saaDy = dpdy(topNgeo);
-  // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
-  // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
-  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5) {
+  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn (the brown
+  // void). Punch holes on the LUT footprint. Gated on buryRibbon (mat2.w)
+  // so cars/props on the tarmac are not discarded.
+  if (D.mat2.w > 0.5 && !isRoadDraw && fromWorld.w > 0.5) {
     discard;
   }
 
