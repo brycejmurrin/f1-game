@@ -33,6 +33,7 @@ function parseArgs(argv) {
     cam: "park",
     lite: false,
     iphone: false,
+    tod: null,
     outDir: null,
     retries: 2,
     retryDelayMs: 3000,
@@ -46,6 +47,7 @@ function parseArgs(argv) {
     else if (a === "--out") { o.outDir = next(); skip.add(o.outDir); }
     else if (a === "--retries") o.retries = Math.max(1, parseInt(next(), 10) || 1);
     else if (a === "--retry-delay") o.retryDelayMs = Math.max(0, parseInt(next(), 10) || 0);
+    else if (a === "--tod") { o.tod = next(); skip.add(o.tod); }
     else if (a === "--lite") o.lite = true;
     else if (a === "--iphone") o.iphone = true;
     else if (a === "--help" || a === "-h") {
@@ -182,8 +184,12 @@ async function runProbeAttempt(attemptNum) {
     });
     log("assets", "loadModels done");
 
-    await page.evaluate((id) => { __apex.race(id); __apex.go(); }, opts.track);
-    log("race", `started track=${opts.track}`);
+    await page.evaluate(({ id, tod }) => {
+      if (tod) __apex.race(id, tod, "dry");
+      else __apex.race(id);
+      __apex.go();
+    }, { id: opts.track, tod: opts.tod });
+    log("race", `started track=${opts.track}` + (opts.tod ? ` tod=${opts.tod}` : ""));
 
     await retryStep("track-ready", () => page.waitForFunction(
       () => { try { return !!__apex.info().track; } catch { return false; } },
