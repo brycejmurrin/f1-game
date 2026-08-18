@@ -229,9 +229,15 @@ export function collectDomInfo(opts) {
     };
   };
   const rootEl = document.querySelector(rootSel);
-  const hitEls = sel ? [...document.querySelectorAll(sel)].slice(0, 20) : [];
+  const hitEls = sel ? [...document.querySelectorAll(sel)].filter((el) => {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none") return false;
+    const r = el.getBoundingClientRect();
+    return r.width >= 1 && r.height >= 1;
+  }).slice(0, 20) : [];
   const bodyCs = getComputedStyle(document.body);
   const rootCs = getComputedStyle(document.documentElement);
+  const topEl = window.UiLayers && window.UiLayers.top && window.UiLayers.top();
   return {
     ok: true,
     viewport: innerWidth + "x" + innerHeight,
@@ -243,7 +249,7 @@ export function collectDomInfo(opts) {
       uiScale: rootCs.getPropertyValue("--ui-scale").trim(),
       hudScale: rootCs.getPropertyValue("--hud-scale").trim(),
     },
-    layer: (window.UiLayers && window.UiLayers.top && window.UiLayers.top()) || null,
+    layer: topEl ? { id: topEl.id || "", tag: topEl.tagName.toLowerCase() } : null,
     root: nodeOf(rootEl, true),
     sel,
     hits: hitEls.map((el) => nodeOf(el, false)),

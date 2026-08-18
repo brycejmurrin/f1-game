@@ -92,6 +92,7 @@ test("collectDomInfo is a page-serialisable function (no Node closes)", () => {
   assert.match(src, /getComputedStyle/);
   assert.match(src, /--tap/);
   assert.match(src, /UiLayers/);
+  assert.match(src, /topEl\.id/);
   assert.match(src, /currentCSSZoom/);
   assert.doesNotMatch(src, /\bROOT\b|\b__dirname\b|\bprocess\./);
 });
