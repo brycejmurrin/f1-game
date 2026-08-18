@@ -1560,6 +1560,11 @@ const WGX = (function () {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
+      // Road ribbon: always-pass (still writes depth). The stadium floor +
+      // terrain write first and win on SwiftShader-Dawn even with a negative
+      // bias. Must still write depth — skyLate draws after the world and
+      // would erase a no-Z ribbon wherever the floor was discarded.
+      const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
       // Start-line decals pass [-1, -2]; without this they shimmer at range.
@@ -1568,7 +1573,8 @@ const WGX = (function () {
       const dbS = db ? (db[1] | 0) : 0;
       // Bias offset +32 so road [-8,-16] stays unique (old +8 collided signs).
       const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3)
-                | ((dbC + 32) << 8) | ((dbS + 32) << 16);
+                | ((dbC + 32) << 8) | ((dbS + 32) << 16)
+                | (decal ? (1 << 24) : 0);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -1582,7 +1588,9 @@ const WGX = (function () {
         alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
       };
       const depthStencil = {
-        format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal",
+        format: DEPTH_FORMAT,
+        depthWriteEnabled: !blend,
+        depthCompare: decal ? "always" : "less-equal",
       };
       if (db) {
         depthStencil.depthBias = dbC;
@@ -2955,13 +2963,16 @@ const WGX = (function () {
     // draws second with negative bias. Push detail-bearing ground draws away.
     function _litOpts(opts) {
       const o = opts || {};
+      const extra = {};
       if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
-        return Object.assign({}, o, { depthBias: [3, 6] });
-      // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
-      // CCW after that flip and were culled to a pair of edge lines.
-      if (o.surfaceId === 16 && !o.doubleSided)
-        return Object.assign({}, o, { doubleSided: true });
-      return o;
+        extra.depthBias = [3, 6];
+      if (o.surfaceId === 16) {
+        // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
+        // CCW after that flip and were culled to a pair of edge lines.
+        extra.doubleSided = true;
+        extra.decal = true;
+      }
+      return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
     }
 
     function draw(mesh, model, opts) {
@@ -3001,7 +3012,9 @@ const WGX = (function () {
         _drawGeom(litPass, mesh);
         return;
       }
-      const cull = !!frameViewProj;
+      // Never frustum/radial-cull the road ribbon. A bad near-plane extract
+      // already hid the chase/park chunks once (terrain filled the holes).
+      const cull = !!frameViewProj && o.surfaceId !== 16;
       if (cull) _extractPlanes(frameViewProj, _fcPlanes);
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
@@ -3018,7 +3031,7 @@ const WGX = (function () {
           if (isNear) nearCull++;
           continue;
         }
-        if (cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
+        if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
         _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
         _drawGeom(litPass, ch);
         drew++;

@@ -865,9 +865,12 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
-  assert.match(WGX_SOURCE, /o\.surfaceId === 16 && !o\.doubleSided/);
+  assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
+  assert.match(WGX_SOURCE, /extra\.decal = true/);
+  assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
+  assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
-  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 2\.4, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
+  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 8\.0, tangOk\)/);
   assert.match(CHUNKS_SOURCE, /if \(D\.mat2\.w > 0\.5 && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
   assert.match(WGX_SOURCE, /o\.buryRibbon/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);

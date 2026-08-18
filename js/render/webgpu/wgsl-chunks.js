@@ -560,7 +560,7 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   // Prefer perpendicular distance when a real tangent exists. Point-distance
   // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
   // so the nearest centerline sample can be > hw+2.4 away along-track.
-  let onRibbon = select(dCenter <= hw + 2.4, abs(x) <= hw + 2.4, tangOk);
+  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 8.0, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
   // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
