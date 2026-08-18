@@ -2224,7 +2224,13 @@ const TLX = (function () {
           };
           let painted = false;
           try {
-            if (post) {
+            // Garage / menu frames only send viewProj (no proj/invProj).
+            // Routing those through the HDR scene target left the
+            // turntable black — software GL's half-float FBO never got
+            // the car, and ?viz=scene confirmed the RT itself is empty.
+            // View-space post already self-disables; paint the default
+            // framebuffer like GLX.
+            if (post && _postF.proj) {
               // Same pin as paintCanvas(): three lazily builds the
               // backgroundNode material on first render. Pinning only the
               // canvas fallback left the HDR scene target on the Color

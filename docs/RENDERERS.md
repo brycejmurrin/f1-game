@@ -137,8 +137,10 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 - **TLX:** TrackGraph instancing via `THREE.InstancedMesh`; PCSS blocker map
   on WebGPU (`textureLoad` depth) and desktop WebGL2 (R16F `TSL.depth` color);
   phones / software GL keep fixed `R = 3.0`. Software sky fallback is a
-  zenith→horizon mix, not a flat lid. FS `mat` is a flat varying (GLX
-  `flat out float vMat`); FLAG wave stays per-vertex. MSAA still off + FXAA (three does not
+  zenith→horizon mix, not a flat lid. FS `mat` stays a smooth attribute
+  (`varying()+FLAT` blanked the garage car on three r185). FLAG wave
+  stays per-vertex. Probe-less frames (garage) paint the canvas, not
+  the HDR scene target. MSAA still off + FXAA (three does not
   expose a resolved depth for the post chain); 8-bit post
   stays on when half-float is missing (GLX RGBA8 path), env cube 4× aniso.
   THREE PATH: WEBGPU must not call `getContext("webgl2")` on `#game` after

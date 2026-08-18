@@ -53,7 +53,8 @@ function defs() {
       return m ? Number(m[1]) : undefined;
     };
     const help = (chunk.match(/help:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def"), help };
+    const u = (chunk.match(/\bu:\s*"(\w+)"/) || [])[1];
+    const d = { id: starts[i][1], u, min: num("min"), max: num("max"), step: num("step"), def: num("def"), help };
     if (d.min === undefined || d.step === undefined) continue;
     out.push(d);
   }
@@ -258,6 +259,59 @@ test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
   assert.deepEqual(unknown, [],
     "WGX reads a T.foo that is not a TUNE_DEFS id — the slider is a no-op on WebGPU " +
     "(the upload falls back to a hardcoded default).");
+});
+
+test("TLX k()/gk() keys are TUNE_DEFS ids (no silent fallbacks)", () => {
+  // Same defect class as WGX T.hgAniso: a typo'd gk("hgAniso") would compile,
+  // upload the fallback, and leave the slider dead on three.js only.
+  const ids = new Set(defs().map((d) => d.id));
+  const src = ["js/render/three/tsl-lit.js", "js/render/three/tlx-post.js",
+    "js/render/three/tsl-fx.js", "js/render/three/tsl-sky.js",
+    "js/render/three/tlx.js"].map(read).join("\n");
+  const keys = [...src.matchAll(/\b(?:k|gk)\(\s*["'](\w+)["']/g)].map((m) => m[1]);
+  const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
+  assert.deepEqual(unknown, [],
+    "TLX k()/gk() reads a key that is not a TUNE_DEFS id — the slider is a no-op on three.js.");
+});
+
+test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
+  // A new `u:` knob that ships on GLX only is the project's most persistent
+  // look-drift: the slider moves, two backends ignore it. Name-presence is
+  // the cheap half (upload + consume formulas stay in gfx-backend-canary).
+  const glx = ["js/render/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
+    "js/render/shaders/lit.js", "js/render/shaders/post.js", "js/render/shaders/sky.js"]
+    .map(read).join("\n");
+  const wgx = ["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js"].map(read).join("\n");
+  const tlx = ["js/render/three/tlx.js", "js/render/three/tlx-post.js",
+    "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
+    "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"].map(read).join("\n");
+  const hit = (src, d) => {
+    const names = [d.id, d.u].filter(Boolean);
+    return names.some((n) => src.includes(n));
+  };
+  const missing = [];
+  for (const d of defs().filter((x) => x.u)) {
+    if (!hit(glx, d)) missing.push(`${d.id} (${d.u}) missing on GLX`);
+    if (!hit(wgx, d)) missing.push(`${d.id} (${d.u}) missing on WGX`);
+    if (!hit(tlx, d)) missing.push(`${d.id} (${d.u}) missing on TLX`);
+  }
+  assert.deepEqual(missing, [],
+    "a TUNE_DEFS u: knob is unnamed on a backend — the slider is a no-op there:\n  " +
+    missing.join("\n  "));
+});
+
+test("GLX-only lamp-chunk sliders stay documented as WebGL2-only", () => {
+  // Honest gaps, not forgotten ports: per-chunk lamp upload is a GLX uniform
+  // path WGX/TLX do not have. Help must keep saying that so a dead three.js /
+  // WebGPU thumb is not filed as a backend-parity bug.
+  const byId = new Map(defs().map((d) => [d.id, d]));
+  for (const id of ["perChunkLights", "roadChunkLamps"]) {
+    const d = byId.get(id);
+    assert.ok(d, `${id} missing from TUNE_DEFS`);
+    assert.match(d.help || "", /WebGL2 only/,
+      `${id} help must keep naming the GLX-only upload so the other backends are not a mystery`);
+  }
 });
 
 test("amount-knob defaults are not crushed into the first quarter of the slider", () => {
