@@ -195,6 +195,17 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 
 All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `"*"`).
 
+Visual mcp-probe pass (`look-survey` chase+park+snapCam): night-defaults
+(`bahrain`, `qatar`, `abudhabi`, `jeddah`, `baku`, `vegas`, `singapore`),
+weather-prone greens (`spa`, `silverstone`, `zandvoort`, `interlagos`,
+`nurburgring`, `sepang`), and `monaco`. Cross-cutting from the frames:
+desert/street **nights were flood/neon-hot** with a dusk-orange horizon —
+lamps, bloom, exposure and city glow pulled so the lights own a darker sky.
+Weather-prone **day|dry had drifted toward overcast** — sun/key lifted and
+cloud/fog pulled so rain/overcast stay the murky looks. Dawn on night-default
+tracks was often stadium-lit; sun lifted and floods dimmed. `"*"` unchanged.
+Jeddah night-dry and Baku night-dry had camera/cull misses (re-survey later).
+
 | Track | id | theme | default | status |
 |---|---|---|---|---|
 | Abu Dhabi | `abudhabi` | desert | night | ✅ |
