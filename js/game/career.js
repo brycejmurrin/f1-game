@@ -810,7 +810,10 @@ function objective() {
   // objective into the save and show it on a finished season's hub.
   if (seasonDone()) return null;
   const r = career.season.round;
-  if (!career.obj || career.obj.round !== r) { career.obj = objectiveFor(r); save(); }
+  if (!career.obj || career.obj.round !== r) {
+    if (careerConflict) return career.obj || null;
+    career.obj = objectiveFor(r); save();
+  }
   return career.obj;
 }
 // `ctx` carries everything a check can need: finishing position, points, the
@@ -841,7 +844,7 @@ function prizeFor(pos) {
 // Called from endRace() once the classification is known and championship points
 // have been awarded. `order` is the finishing order; `player` is the player's car.
 function settleRound(order, player) {
-  if (!inCareer() || !player) return null;
+  if (!inCareer() || !player || careerConflict) return null;
   // The calendar has already moved on, so the brief that was live for this race is
   // the PREVIOUS round's. Idempotent: a second call for the same raced round must
   // not re-pay prize/salary/wages (half-written saves + re-entry used to double it).

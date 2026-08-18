@@ -381,7 +381,7 @@ const DataHub = (function () {
     const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
     // A picker choice stays put; an auto-latest pick expires so LIVE can
     // follow a new session after the previous one ends.
-    if (have && sel.pinned) return Promise.resolve(sel.meta);
+    if (have && sel.pinned && !force) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
       if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {

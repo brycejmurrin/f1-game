@@ -1266,7 +1266,7 @@ function getTeamParts(teamId) {
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
-  if (c) { c.fitted = parts; Career.save(); return; }
+  if (c) { if (Career.conflicted && Career.conflicted()) return; c.fitted = parts; Career.save(); return; }
   store.set("parts." + teamId, parts);
 }
 
@@ -2496,6 +2496,7 @@ function startRace() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
@@ -7943,7 +7944,7 @@ $("q-back").onclick = () => {
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  $("race-settings").hidden = false;
+  qualiNetDone ? (qualiNetDone = null, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
 };
 
 // ---- customize my team ----

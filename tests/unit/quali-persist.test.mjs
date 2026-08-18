@@ -62,7 +62,8 @@ function loadQuali(opts = {}) {
     GameTables: { DIFF: { normal: { ai: 1 } } },
     DriverRatings: { get: () => ({ consistency: 90 }) },
     Career: {
-      inCareer: () => false,
+      inCareer: () => !!opts.inCareer,
+      conflicted: () => !!opts.conflicted,
       save() { saved.career = true; },
       data: () => ({ seed: 1 }),
       round: () => 0,
@@ -152,4 +153,27 @@ test("openQuali restores via begin(); friend-race and quit-to-menu forget correc
   assert.match(GAME, /openQuali\(true\)/);
   assert.match(GAME, /quali\.clear\(true\)/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
+});
+
+test("friend-race BACK aborts to the lobby; a null quali grid does not P12-shuffle", () => {
+  assert.match(GAME, /qualiNetDone \? \(qualiNetDone = null/);
+  assert.match(GAME, /netLobby\.abortQuali\(\)/);
+  assert.match(GAME, /if \(!isQuali\(\) && gridFromQuali\(\) && !quali\.order\(cars\)\) \{ openQuali\(\); return false; \}/);
+});
+
+test("order() is null when a live car is missing from the persist", () => {
+  const { q, G } = loadQuali({
+    season: {
+      qualiOrder: [{ id: "p1", t: 69.9, human: true }],
+      round: 0,
+    },
+  });
+  assert.equal(q.order(G.cars), null);
+});
+
+test("persistOrder skips a conflicted career save", () => {
+  const { q, G, saved } = loadQuali({ season: { round: 0 }, inCareer: true, conflicted: true });
+  q.simulate(new Map([["p1", 68.5]]));
+  assert.equal(G.season.qualiOrder, undefined);
+  assert.equal(saved.career, undefined);
 });

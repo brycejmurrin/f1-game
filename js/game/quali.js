@@ -250,6 +250,7 @@ function create(G) {
     // save, and NetPlay.isOn() is the "this is a room, not a championship" bit.
     if (!classification.some((r) => r.human)) return;
     if (typeof NetPlay !== "undefined" && NetPlay.isOn && NetPlay.isOn()) return;
+    if (typeof Career !== "undefined" && Career.conflicted && Career.conflicted()) return;
     s.qualiOrder = classification.map((r) => ({
       id: r.driverId, t: r.t, human: !!r.human,
     }));
