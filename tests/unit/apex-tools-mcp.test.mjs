@@ -82,6 +82,15 @@ test("shell help exits 0", () => {
   assert.match(r.stdout, /apex_/);
 });
 
+test("apex_status reports the chrome-devtools stdio known gap", () => {
+  const r = callCli("apex_status", {});
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.match(body.knownGap.chromeDevtoolsStdio, /3712/);
+  assert.ok(body.knownGap.outsideLock.includes("layout-audit"));
+});
+
 test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only", () => {
   const out = rpc([
     {

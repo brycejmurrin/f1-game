@@ -21,6 +21,19 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 `--fast` or a single started batch, then read
 `artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
 
+Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
+
+```sh
+./tools/apex-tools-mcp.sh call apex_status '{}'
+./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/apex-tools-mcp.sh call apex_verify_track '{"id":"monza"}'
+./tools/apex-tools-mcp.sh call apex_wgx_validate_static '{}'
+```
+
+Week-2 browser wraps (`apex_eval` / `apex_shot` / …) take the lock — call
+`apex_status` first. Never wrap `test-bg` start/`--wait`.
+
 Pieces underneath:
 
 ```sh

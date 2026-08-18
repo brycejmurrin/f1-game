@@ -33,6 +33,14 @@ const UI_SCREENS = "title,select,garage,settings,career,datahub";
 const UI_VIEWPORTS = "ios-iphone-landscape";
 const UI_JOBS = 1;
 
+// Design §Locking known gap — v1 mutex is MCP-owned. chrome-devtools stdio
+// does not answer :3712/healthz. apex_status reports it; it does not close it.
+const KNOWN_GAP = {
+  chromeDevtoolsStdio:
+    "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
+  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
+};
+
 const WEEK1_NAMES = new Set([
   "apex_verify_track",
   "apex_verify_change_fast",
@@ -742,6 +750,7 @@ function handleStatus(args = {}) {
       dryRun: true,
       argv: ["apex_status"],
       note: "read-only; does not take scratch/apex-browser.lock",
+      knownGap: KNOWN_GAP,
     });
   }
   if (mockMode()) {
@@ -753,6 +762,7 @@ function handleStatus(args = {}) {
       testBg: { recorded: false, running: [] },
       playwright: { live: false, pids: [] },
       loadavg: os.loadavg(),
+      knownGap: KNOWN_GAP,
     });
   }
   const chromePort = daemonPort();
@@ -763,6 +773,7 @@ function handleStatus(args = {}) {
     testBg: testBgStatus(),
     playwright: playwrightLive(),
     loadavg: os.loadavg(),
+    knownGap: KNOWN_GAP,
   });
 }
 
