@@ -34,7 +34,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
   page.on("pageerror", (e) => console.log("PAGE ERROR:", e.message));
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 60000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 60000 });
 
 // The catalog's own prices, so every figure below is relative to what the money
 // is actually for rather than to an abstract credit total.

@@ -90,7 +90,7 @@ const ctx = await browser.newContext({
 });
 const pg = await ctx.newPage();
 await pg.goto(srv.url);
-await pg.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+await pg.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
 await pg.evaluate((t) => window.__apex.race(t), track);
 await pg.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 20000 });
 await sleep(1200);

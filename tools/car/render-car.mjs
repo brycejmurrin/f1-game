@@ -258,7 +258,7 @@ try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
   await page.goto(pageUrl, { waitUntil: 'load' });
-  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: WAIT_MS }).then(() => true).catch(() => false);
+  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
 
   let renderedTod = TOD, firstShot = true;

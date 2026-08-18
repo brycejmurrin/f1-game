@@ -899,14 +899,17 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
-    function buildFragment(matU, chunked) {
+    function buildFragment(matU, chunked, instanced) {
       return Fn(() => {
         // ── STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         //    shared varying-derived node BEFORE any conditional use. ──────────
         const wp = vec3(positionWorld).toVar();               // vWorldPos
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
-        const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
+        const vertexColor = vec3(attribute("color", "vec3")).toVar();
+        const albedoIn = instanced
+          ? vertexColor.mul(attribute("instanceTint", "vec3")).toVar()
+          : vertexColor;                                             // vCol
         // Smooth attribute, same as before the garage-blank regression.
         // GLX is `flat out float vMat`; a TSL `varying().setInterpolation(FLAT)`
         // compiled but the garage turntable drew nothing (software GL / three
@@ -1473,13 +1476,14 @@
      * compileAsync path. The scalars therefore become materialReference
      * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
-     * between classic material instances). Two graphs total: chunked reads
-     * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out, mrt}
+     * between classic material instances). Three graphs total: chunked reads
+     * no `trk` attribute, and instanced multiplies canonical vertex colour by
+     * its placement tint (see buildFragment header). */
+    const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
-    function sharedFragment(chunked) {
-      const idx = chunked ? 1 : 0;
+    function sharedFragment(chunked, instanced) {
+      const idx = instanced ? 2 : (chunked ? 1 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
         const matU = {
@@ -1493,7 +1497,7 @@
           carPaint:  materialReference("userData.tlxCarPaint", "float"),
           sparkle:   materialReference("userData.tlxSparkle", "float"),
         };
-        const packed = buildFragment(matU, chunked);
+        const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
@@ -1531,7 +1535,8 @@
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
       ud.tlxChunked   = !!o.chunked;
-      const packed = sharedFragment(!!o.chunked);
+      ud.tlxInstanced = !!o.instanced;
+      const packed = sharedFragment(!!o.chunked, !!o.instanced);
       _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
@@ -1539,7 +1544,7 @@
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
-      pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
+      pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;

@@ -229,7 +229,7 @@ try {
     const page = await browser.newPage({ viewport: SIZES[0], hasTouch: true, deviceScaleFactor: 1 });
     if (opts.mock && setupApiMocks) await setupApiMocks(page);
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
     await page.evaluate(`(async () => { ${UNTIL}\n${setup} })()`).catch(() => {});
     await sleep(opts.wait ?? 600);
     console.log(`\n### ${name}`);

@@ -10,7 +10,7 @@ import { test, expect } from "../helpers/fixtures.js";
 async function waitForTrack(page, timeout = 10_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    { polling: 100, timeout }
+    null, { polling: 100, timeout }
   );
 }
 
@@ -45,7 +45,7 @@ async function waitForTrack(page, timeout = 10_000) {
 // same starvation this helper exists to remove; polling on a wall clock instead of
 // on frames is the only way to wait for the hook that turns it off.
 async function quietRenderer(page) {
-  await page.waitForFunction(() => !!window.__apex, { polling: 100, timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60_000 });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -104,7 +104,7 @@ async function park(page, frac = 0) {
 // they rendered when they clicked through the menus to get here.
 async function bootRace(page, trackId = "bahrain") {
   await page.goto("/");
-  await page.waitForFunction(() => !!window.__apex, { polling: 100, timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60_000 });
   await page.evaluate((t) => window.__apex.race(t), trackId);
   // Generous: the menu walk used to absorb the circuit build, and this does not.
   // CI has been measured taking 94 s just to boot a race on a starved runner.
@@ -285,10 +285,9 @@ test.describe("Apex 26 — HUD", () => {
     // first test to fail the moment anything else touches the CPU. The cost is
     // the fixture: booting the page, building a circuit and parking a car under
     // SwiftShader, none of which this assertion can avoid. The sibling test below
-    // reached the same conclusion and already carries test.slow(); this one was
-    // simply left behind, so it failed as a "flake" that was really a too-tight
-    // clock. test.slow() triples the budget rather than loosening the assertion.
-    test.slow();
+    // reached the same conclusion. CI now supplies a measured 420 s timeout;
+    // test.slow() must not override it because Playwright triples the command-line
+    // budget and turns one attempt into a 21-minute hang allowance.
     await bootRace(page);
     await park(page, 0);
     await page.evaluate(() => window.__apex.jump(0, 80, 0));
@@ -302,7 +301,7 @@ test.describe("Apex 26 — HUD", () => {
     // failed first the moment anything else touched the CPU.
     await page.waitForFunction(
       () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      { polling: 100, timeout: 3000 }
+      null, { polling: 100, timeout: 3000 }
     );
 
     const speed = await page.locator("#hud-speed-n").innerText();
@@ -316,9 +315,9 @@ test.describe("Apex 26 — HUD", () => {
     // nothing — a bare timeout, with the car correctly parked at s=0. The other
     // smoke tests show why: "select screen is a circuit picker" measures 179 s
     // on that runner and "grid start renders a non-blank frame" 164 s, against
-    // seconds here. goToRace + park alone is most of the budget before this
-    // test asserts anything.
-    test.slow();
+    // seconds here. goToRace + park alone is most of the budget before this test
+    // asserts anything. Keep the workflow's explicit 420 s timeout as the bound;
+    // test.slow() would silently triple it.
     await bootRace(page);
     await park(page, 0);
 
@@ -346,7 +345,7 @@ test.describe("Apex 26 — HUD", () => {
         for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
       }
       return false;
-    }, { timeout: 5000 });
+    }, null, { timeout: 5000 });
 
     // A drawn outline is a 2px stroke around the whole lap, so a painted map
     // has hundreds of non-transparent pixels; a blank canvas has zero. Count

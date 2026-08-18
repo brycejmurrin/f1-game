@@ -6,7 +6,7 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function startSeasonRace(page, laps) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
   // Nothing below asserts a pixel — this spec is about round progression, points
   // and panel visibility — so stop drawing the 3D scene that sits behind every
   // menu. Under SwiftShader that is pure CPU: it halves the load average of a
@@ -36,7 +36,7 @@ async function startSeasonRace(page, laps) {
   await page.locator("#q-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    { timeout: 20_000 }
+    null, { timeout: 20_000 }
   );
 }
 
@@ -72,7 +72,7 @@ test.describe("Season — mode flags", () => {
       localStorage.setItem("apex26.seasonCfg", JSON.stringify({ trackIds: ["monaco"] }));
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-season").click();
     await expect(page.locator("#sel-preview-name")).toContainText("Monaco");
@@ -151,7 +151,7 @@ test.describe("Season — standings panel", () => {
       }));
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.headless(true));   // see startSeasonRace
     await page.locator("#mb-season").click();
     await page.locator("#select").waitFor({ state: "visible" });
@@ -170,7 +170,7 @@ test.describe("Season — standings panel", () => {
     await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
     await page.locator("#q-sim").click();
     await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.9);
       window.__apex.finishRace();

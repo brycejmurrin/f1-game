@@ -613,6 +613,15 @@ const TLX = (function () {
       unlitMat.side = THREE.FrontSide;
       unlitMat.lights = false;
       unlitMat.customProgramCacheKey = () => "tlx-unlit";
+      // Instanced scenery owns a separate tint attribute. Keeping the canonical
+      // per-vertex colour in `color` preserves mixed-colour models (brown tree
+      // trunks + per-instance foliage, billboard frames + tinted faces).
+      const unlitInstancedMat = new THREE.MeshBasicNodeMaterial();
+      unlitInstancedMat.colorNode = TSL.attribute("color", "vec3")
+        .mul(TSL.attribute("instanceTint", "vec3"));
+      unlitInstancedMat.side = THREE.FrontSide;
+      unlitInstancedMat.lights = false;
+      unlitInstancedMat.customProgramCacheKey = () => "tlx-unlit-instanced";
       const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
       rawUnlitMat.side = THREE.FrontSide;
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
@@ -824,6 +833,7 @@ const TLX = (function () {
       // uniforms). Key = the 9 material scalars + render-state flags.
       const defaultMat = lit ? lit.makeMaterial({}) : null;
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
+      const defaultMatInstanced = lit ? lit.makeMaterial({ instanced: true }) : null;
       const matCache = new Map();
       const MAT_CACHE_CAP = 64;
       // Frame stamp per cached material, so eviction can never dispose one that
@@ -837,11 +847,13 @@ const TLX = (function () {
       // Reported from an iPhone: garage correct, race identical to WebGL2 except
       // the car body was missing.
       let _matFrame = 0;
-      function fallbackMat() { return _drawMatMode >= 2 ? rawUnlitMat : unlitMat; }
-      function materialFor(opts, chunked) {
-        if (_drawMatMode || !lit) return fallbackMat();
+      function fallbackMat(instanced) {
+        return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
+      }
+      function materialFor(opts, chunked, instanced) {
+        if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : defaultMat;
+        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
         // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
         // every frame): raw in the key it mints a variant per step of the
@@ -862,7 +874,8 @@ const TLX = (function () {
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
-          (chunked ? "|ch" : "");
+          (chunked ? "|ch" : "") +
+          (instanced ? "|in" : "");
         let m = matCache.get(key);
         if (!m) {
           if (matCache.size >= MAT_CACHE_CAP) {
@@ -882,7 +895,9 @@ const TLX = (function () {
               break;
             }
           }
-          m = lit.makeMaterial(chunked ? Object.assign({ chunked: true }, o) : o);
+          m = lit.makeMaterial(chunked
+            ? Object.assign({ chunked: true }, o)
+            : (instanced ? Object.assign({ instanced: true }, o) : o));
           matCache.set(key, m);
         }
         if (m) m.__tlxFrame = _matFrame;
@@ -914,20 +929,17 @@ const TLX = (function () {
         const need = Math.max(1, cap | 0);
         const geo = imesh.geometry;
         if (!geo) return null;
-        const attr = geo.getAttribute("color");
+        const attr = geo.getAttribute("instanceTint");
         if (attr && attr.isInstancedBufferAttribute && attr.count >= need) return attr;
-        // Per-vertex `color` (buildGeometry) is ~16×vec3 = 192 B on a typical
-        // prop. TSL attribute("color") + InstancedMesh is uploaded with
-        // instance stepMode on WebGPU — Dawn then wants count*12 bytes
-        // (mcp-probe: 566 instances → 6792 vs 192 at slot 2). Put an
-        // InstancedBufferAttribute of size `cap` on the geometry and do NOT
-        // also set imesh.instanceColor: NodeMaterial multiplies instanceColor
-        // into colorNode (three NodeMaterial.js), which bound a second
+        // Keep canonical per-vertex `color` intact and put the placement tint in
+        // a dedicated instance-rate attribute. Replacing `color` discarded the
+        // fixed-colour parts of mixed models; do NOT also set imesh.instanceColor:
+        // NodeMaterial would multiply it into colorNode and bind a second
         // instance-rate slot (slot 5, 12 B when setColorAt lazily allocated 1).
         const next = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
         next.setUsage(THREE.DynamicDrawUsage);
         next.array.fill(1);
-        geo.setAttribute("color", next);
+        geo.setAttribute("instanceTint", next);
         return next;
       }
       function _writeInstanceMatrices(imesh, matrices, colors, n) {
@@ -1005,13 +1017,23 @@ const TLX = (function () {
 
       function cullInstances(batch, planes) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
-        let sig = 0;
-        for (let pi = 0; pi < 6; pi++) {
-          const p = planes[pi];
-          sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+        // A batch has one physical instance buffer, so only the frustum whose
+        // pack is resident can be cached. The old two-signature cache remembered
+        // counts for two frusta but not their packed matrices: shadow L1 -> main M
+        // could return M's old count while L1's transforms remained uploaded.
+        // Compare all coefficients as well; the old p[0]/p[3]-only hash collided
+        // for mirrored yaw/pitch frusta.
+        let samePack = !!batch._cullPlanes;
+        if (samePack) {
+          let po = 0;
+          for (let pi = 0; pi < 6 && samePack; pi++) {
+            const p = planes[pi];
+            for (let k = 0; k < 4; k++, po++) {
+              if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+            }
+          }
         }
-        if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-        if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+        if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
         const src = batch.srcMatrices, dst = batch.packMatrices;
         const sc = batch.srcColors, dc = batch.packColors;
         let n = 0;
@@ -1031,8 +1053,12 @@ const TLX = (function () {
         }
         batch.visible = n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
-        batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-        batch._cullSig0 = sig; batch._cullN0 = n;
+        const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+        for (let pi = 0, po = 0; pi < 6; pi++) {
+          const p = planes[pi];
+          for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+        }
+        batch._cullN = n;
         return n;
       }
 
@@ -1046,7 +1072,7 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        drawList.push({ instanced: batch, mat: materialFor(opts, false) });
+        drawList.push({ instanced: batch, mat: materialFor(opts, false, true) });
       }
 
       function freeInstancedBatch(batch) {
@@ -1064,9 +1090,9 @@ const TLX = (function () {
         }
       }
 
-      function castShadowInstanced(batch) {
+      function castShadowInstanced(batch, count) {
         if (softGpu()) return;
-        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch);
+        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
       }
 
       function _showInstanced(rec, order) {

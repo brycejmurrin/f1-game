@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci-coverage.mjs";
 
+const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
+
 test("it sees the specs on disk", () => {
   assert.ok(ALL_SPECS.length > 50, `only ${ALL_SPECS.length} specs found — the scan is broken`);
   assert.ok(ALL_SPECS.every((s) => s.startsWith("tests/") && s.endsWith(".spec.js")));
@@ -64,8 +67,7 @@ test("it does not claim to cover what it cannot", () => {
 });
 
 test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
-  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const selected = ci.split("\n  selected:")[1];
+  const selected = ciWorkflow.split("\n  selected:")[1];
   assert.ok(selected, "selected job missing");
   assert.deepEqual(report.selectionGate, {
     present: true,
@@ -83,8 +85,7 @@ test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
 });
 
 test("selection resolves the event-specific base and fails closed when it cannot", () => {
-  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const selected = ci.split("\n  selected:")[1];
+  const selected = ciWorkflow.split("\n  selected:")[1];
   assert.match(selected, /PUSH_BEFORE: \$\{\{ github\.event\.before \}\}/);
   assert.match(selected, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.match(selected, /push\) BEFORE="\$PUSH_BEFORE"/);
@@ -96,6 +97,58 @@ test("selection resolves the event-specific base and fails closed when it cannot
 });
 
 test("Pages workflow calls leave the selected gate disabled", () => {
-  const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
-  assert.doesNotMatch(pages, /^\s+advisory:/m);
+  assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
+});
+
+test("Pages workflow calls use a unique CI concurrency key", () => {
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| github\.ref \}\}/);
+  assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
+  assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+});
+
+test("an obsolete Pages run cannot deploy after a newer commit", () => {
+  const deploy = pagesWorkflow.split("\n  deploy:")[1];
+  assert.match(deploy, /git fetch --no-tags origin/);
+  assert.match(deploy, /TIP=\$\(git rev-parse/);
+  assert.match(deploy, /\[ "\$TIP" = "\$GITHUB_SHA" \]/);
+  assert.match(deploy, /echo "deploy=false" >> "\$GITHUB_OUTPUT"/);
+  for (const step of ["actions\/configure-pages@v5", "name: Stage site",
+    "actions\/upload-pages-artifact@v3", "actions\/deploy-pages@v4"]) {
+    const at = deploy.search(new RegExp(step));
+    assert.notEqual(at, -1, `${step} moved or disappeared`);
+    assert.match(deploy.slice(Math.max(0, at - 120), at + 220),
+      /if: steps\.tip\.outputs\.deploy == 'true'/,
+      `${step} must be guarded by the branch-tip verdict`);
+  }
+});
+
+test("cached browser jobs never enter apt through --with-deps", () => {
+  const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
+  const driving = ciWorkflow.split("\n  driving-model:")[1].split("\n  selected:")[0];
+  for (const [name, job] of [["smoke", smoke], ["driving-model", driving]]) {
+    assert.match(job, /id: pwcache/, `${name} cache must expose cache-hit`);
+    assert.match(job,
+      /if: .*steps\.pwcache\.outputs\.cache-hit != 'true'[\s\S]*?run: npx playwright install --with-deps chromium/,
+      `${name} may use apt only on a cache miss`);
+    assert.doesNotMatch(job,
+      /if: .*cache-hit == 'true'[\s\S]{0,160}run: npx playwright install --with-deps chromium/,
+      `${name} cache-hit path must stay network-free`);
+  }
+});
+
+test("ship filter chooses a successful active deployment, not merely the newest record", () => {
+  const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
+  assert.match(smoke, /deployments\?environment=github-pages&per_page=20/);
+  assert.match(smoke, /d\.statuses_url/);
+  assert.match(smoke, /success\) LIVE="\$SHA"; break/);
+  assert.match(smoke, /inactive\|failure\|error\|queued\|pending\|in_progress/);
+  assert.match(smoke, /no successful active github-pages deployment found/);
+  assert.doesNotMatch(smoke, /j\[0\].*\.sha.*process\.stdout\.write/);
+});
+
+test("smoke's command-line timeout is not tripled inside the spec", () => {
+  const smokeSpec = fs.readFileSync(new URL("../specs/smoke.spec.js", import.meta.url), "utf8");
+  assert.match(ciWorkflow, /test:smoke -- --timeout=420000/);
+  assert.doesNotMatch(smokeSpec, /^\s*test\.slow\s*\(/m,
+    "test.slow triples the workflow's 420 s per-test timeout");
 });

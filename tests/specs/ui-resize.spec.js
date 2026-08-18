@@ -67,7 +67,7 @@ const SIZES = [
 
 async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race,
-    { polling: 100, timeout: 20_000 });
+    null, { polling: 100, timeout: 20_000 });
   // STOP THE RENDER LOOP. This spec opens the garage, which runs a live 3D car
   // preview (renderSetupPreview in game.js) regardless of whether a race is
   // active — every subsequent wait in this file was competing with that for
@@ -97,7 +97,7 @@ async function waitReady(page) {
 async function openGarage(page) {
   await page.evaluate(() => document.getElementById("mb-garage").click());
   await page.waitForFunction(() => !document.getElementById("carsetup").hidden,
-    { polling: 100, timeout: 10_000 });
+    null, { polling: 100, timeout: 10_000 });
   await page.waitForTimeout(400);
 }
 
@@ -272,10 +272,10 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
         document.getElementById("pm-settings").click();
       });
       await page.waitForFunction(() => !document.getElementById("pmsettings").hidden,
-        { polling: 50, timeout: 8_000 });
+        null, { polling: 50, timeout: 8_000 });
       await page.evaluate(() => document.getElementById("pm-lighting").click());
       await page.waitForFunction(() => !document.getElementById("lighting").hidden,
-        { polling: 50, timeout: 8_000 });
+        null, { polling: 50, timeout: 8_000 });
       await page.waitForTimeout(500);
 
       const state = await page.evaluate(() => {

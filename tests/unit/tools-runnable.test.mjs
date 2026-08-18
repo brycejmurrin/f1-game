@@ -301,6 +301,19 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
   }
 });
 
+test("apex-report never serializes credentials or URL capabilities", () => {
+  const src = fs.readFileSync(path.join(TOOLS, "apex-report.js"), "utf8");
+  assert.doesNotMatch(src, /Object\.keys\(localStorage\)/,
+    "new apex26.* keys must be excluded unless explicitly approved for diagnostics");
+  const allowlist = /const STORAGE_KEYS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(allowlist, "diagnostic storage must use an explicit allowlist");
+  assert.doesNotMatch(allowlist[1], /spotify|turn|token|verifier|credential/i,
+    "OAuth and relay credentials must never enter a report");
+  assert.match(src, /location\.origin \+ location\.pathname/);
+  assert.doesNotMatch(src, /href:\s*location\.href/,
+    "query and fragment capabilities must not enter a report");
+});
+
 test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
   assert.equal(fs.existsSync(path.join(TOOLS, "aerial-survey.mjs")), false,
     "aerial-survey.mjs must be gone — its N/E/S/W obliques live on survey-track --oblique");

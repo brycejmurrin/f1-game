@@ -4104,13 +4104,17 @@ const WGX = (function () {
     }
     function cullInstances(batch, planes) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
-      let sig = 0;
-      for (let pi = 0; pi < 6; pi++) {
-        const p = planes[pi];
-        sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+      let samePack = !!batch._cullPlanes;
+      if (samePack) {
+        let po = 0;
+        for (let pi = 0; pi < 6 && samePack; pi++) {
+          const p = planes[pi];
+          for (let k = 0; k < 4; k++, po++) {
+            if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+          }
+        }
       }
-      if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-      if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+      if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
       const src = batch.srcMatrices, dst = batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
@@ -4130,8 +4134,12 @@ const WGX = (function () {
       if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
       }
-      batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-      batch._cullSig0 = sig; batch._cullN0 = n;
+      const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+      for (let pi = 0, po = 0; pi < 6; pi++) {
+        const p = planes[pi];
+        for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+      }
+      batch._cullN = n;
       return n;
     }
     function drawInstanced(batch, opts) {
@@ -4185,6 +4193,7 @@ const WGX = (function () {
           }
         }
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+        batch._cullPlanes = null;
       }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
