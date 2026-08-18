@@ -1153,8 +1153,9 @@ Live per-source input snapshot: which source (keyboard `key`, on-screen buttons
 plus `holdPointers` — the pressed-pointer count each on-screen hold button is
 tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
-on" report. `adaptiveButtons` / `speedStd` / `rateIn` are the Advanced
-ADAPTIVE BUTTONS path (digital steer rate scaled by the SPEED STEER hyperbola).
+on" report. `adaptiveButtons` / `adaptiveMix` (0..1) / `speedStd` / `rateIn` are the
+Advanced ADAPTIVE BUTTONS path (digital steer rate blended toward the
+SPEED STEER hyperbola; the slider is how much).
 
 **On-screen variant for a phone with no console:** load the game with
 `?inputdebug=1` (or set `localStorage["apex26.inputDebug"] = "1"`) and a small

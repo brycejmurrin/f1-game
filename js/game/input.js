@@ -38,15 +38,15 @@ const Input = (function () {
   let KEY_RAMP_IN = 6;        // steer units/s toward full lock
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
                               // is a request to stop, and should be answered)
-  // ADAPTIVE BUTTONS (Advanced → BUTTON INPUT). Off = the fixed rates above.
-  // On = the missing RATE half of SPEED STEER, for digital sources only: the
-  // same hyperbola as lockTaper (`1 / (1 + vStd / STEER_SPEED_REF)`), so a tap
-  // at speed is a correction and a hold still reaches lock, just more slowly.
-  // Analog travel on the on-screen arrows (slide opposite the steer direction
-  // to ease) is the touchscreen's answer to an analog trigger — same gesture
-  // the pedals already have. Release still uses KEY_RAMP_OUT: letting go is a
+  // ADAPTIVE BUTTONS (Advanced → BUTTON INPUT). A 0..1 mix, not a switch:
+  // 0 = the fixed rates above; 1 = the missing RATE half of SPEED STEER, for
+  // digital sources only. The full curve is the same hyperbola as lockTaper
+  // (`1 / (1 + vStd / STEER_SPEED_REF)`); the slider blends toward it so a
+  // player can ask for a little heaviness at speed or a lot. Analog travel on
+  // the on-screen arrows (slide opposite the steer direction to ease) is
+  // blended the same way. Release still uses KEY_RAMP_OUT: letting go is a
   // request to stop and should stay quick.
-  let adaptiveButtons = false;
+  let adaptiveMix = 0;
   let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
   let speedStdOverride = null;
   let speedProvider = null;
@@ -383,9 +383,10 @@ const Input = (function () {
   // Same hyperbola as lockTaper in js/game.js. SPEED STEER still owns the
   // reference; this option only *enables* the rate half for digital inputs.
   function digitalRateIn() {
-    if (!adaptiveButtons) return KEY_RAMP_IN;
+    if (adaptiveMix <= 0) return KEY_RAMP_IN;
     const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
-    return KEY_RAMP_IN / (1 + currentSpeedStd() / ref);
+    const full = KEY_RAMP_IN / (1 + currentSpeedStd() / ref);
+    return KEY_RAMP_IN + (full - KEY_RAMP_IN) * adaptiveMix;
   }
 
   function keyboardSteer() {
@@ -640,8 +641,8 @@ const Input = (function () {
     const t = nowMs();
     const dt = (btnSteerT ? Math.min(0.1, (t - btnSteerT) / 1000) : 0) * timeScale;
     btnSteerT = t;
-    const left = btnSteerLeft ? (adaptiveButtons ? btnSteerLeftVal : 1) : 0;
-    const right = btnSteerRight ? (adaptiveButtons ? btnSteerRightVal : 1) : 0;
+    const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
+    const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
     const target = right - left;
     btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? digitalRateIn() : KEY_RAMP_OUT) * dt);
     return btnSteerVal;
@@ -1114,7 +1115,10 @@ const Input = (function () {
     }
   }
 
-  function setAdaptiveButtons(on) { adaptiveButtons = !!on; }
+  function setAdaptiveButtons(v) {
+    if (typeof v === "boolean") { adaptiveMix = v ? 1 : 0; return; }
+    if (typeof v === "number" && isFinite(v)) adaptiveMix = clamp(v, 0, 1);
+  }
   function setSteerSpeedRef(ref) {
     if (typeof ref === "number" && isFinite(ref) && ref > 1) steerSpeedRef = ref;
   }
@@ -1379,7 +1383,8 @@ const Input = (function () {
       btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
              throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal,
              leftVal: btnSteerLeftVal, rightVal: btnSteerRightVal },
-      adaptiveButtons,
+      adaptiveButtons: adaptiveMix,
+      adaptiveMix,
       speedStd: currentSpeedStd(),
       steerSpeedRef,
       rateIn: digitalRateIn(),

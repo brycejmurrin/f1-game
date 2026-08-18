@@ -236,16 +236,47 @@ test.describe("adaptive buttons are analog triggers for digital steer", () => {
     expect(await pump(page)).toBe(1);
   });
 
-  test("the Advanced toggle persists and lights up", async ({ page }) => {
+  test("the Advanced slider persists and the label tracks it", async ({ page }) => {
     await page.evaluate(() => {
       document.getElementById("adv-details").open = true;
-      document.getElementById("pm-adaptbtn-on").click();
+      const el = document.getElementById("pm-adaptbtn");
+      el.value = "10";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(await page.evaluate(() => Input.debugState().adaptiveButtons)).toBe(true);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.adaptiveButtons")))).toBe(1);
-    expect(await page.evaluate(() => document.getElementById("pm-adaptbtn-on").classList.contains("active"))).toBe(true);
-    await page.evaluate(() => document.getElementById("pm-adaptbtn-off").click());
-    expect(await page.evaluate(() => Input.debugState().adaptiveButtons)).toBe(false);
+    expect(await page.evaluate(() => Input.debugState().adaptiveMix)).toBe(1);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.adaptiveButtons")))).toBe(10);
+    expect(await page.evaluate(() => document.getElementById("pm-adaptbtn-v").textContent)).toBe("10");
+    await page.evaluate(() => {
+      const el = document.getElementById("pm-adaptbtn");
+      el.value = "1";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(await page.evaluate(() => Input.debugState().adaptiveMix)).toBe(0);
+    expect(await page.evaluate(() => document.getElementById("pm-adaptbtn-v").textContent)).toBe("OFF");
+  });
+
+  test("a mid slider is slower than off and faster than full, at the same speed", async ({ page }) => {
+    const run = (mix) => page.evaluate(async (m) => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(m);
+      Input.setSteerSpeedRef(42);
+      Input.setSpeedStd(72);
+      document.getElementById("btn-steer-right")
+        .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 40 + Math.round(m * 10), bubbles: true }));
+      let v = 0;
+      for (let i = 0; i < 12; i++) {
+        v = Input.steer();
+        if (i < 11) await new Promise((r) => setTimeout(r, 20));
+      }
+      return v;
+    }, mix);
+    const off = await run(0);
+    const mid = await run(0.5);
+    const full = await run(1);
+    expect(off).toBeGreaterThan(mid);
+    expect(mid).toBeGreaterThan(full);
+    expect(full).toBeGreaterThan(0.1);
   });
 });
 
