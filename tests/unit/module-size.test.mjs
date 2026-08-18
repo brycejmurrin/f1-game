@@ -310,7 +310,11 @@ const CEILINGS = {
   // -> 8547 deploy∪TLX-load∪collision: 8544 plus the frozen env-face gate.
   // -> 8584 TLX/WGX deferred IIFEs load as a DAG (BACKEND_EDGES) plus
   // modulepreload of the three vendor when the pick is already "three".
-  "js/game.js": 8584,
+  // -> 8593 field cars share the player world-pose + planted-wheel draw path
+  // (drop the leftover xVis 16/s lag; AI no longer draws baked wheels on
+  // the chassis attitude matrix). Split-newline count after the pose mirror
+  // moved to the end of updateCar so it follows the s advance.
+  "js/game.js": 8593,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
