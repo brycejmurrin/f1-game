@@ -8,12 +8,27 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 `js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
-Remaining honest look deltas: TAA still off (no history resolve — do not
-enable the Halton jitter alone); TLX MSAA stays off (no resolved depth
-for post). SAA mixes geometric N with a uniform-CF peel hoist on all
-three backends (material/wall bump stays out of SAA). Desktop GLX MSAA
-is 4× like WGX. Every baked MAT layer (walls included) is hoisted to
-`textureSample` so pack aniso matches GLX `texture()`.
+Remaining honest look deltas (audited 2026-08-18 against source):
+
+- **TAA** still off (no history resolve — do not enable Halton jitter alone).
+  GLX has no TAA either; this is not a live GLX↔WGX mismatch.
+- **TLX MSAA** stays off (no resolved depth for post).
+- **WGX composite SSR** (`wgsl-post.js`): `roadK = wetness * reflect` after
+  `po.reflect` is already `wetness * ssrWetMul` (or dry 0.07/0.08). Dry
+  roads get `roadK = 0` (no night sheen); wet is double-scaled. GLX applies
+  `uReflect` once and keeps dry sheen. Also missing GLX `sinT` Nv fallback
+  (`post.js`) and `min(gateSrc/0.20)`.
+- **Wet vs SAA order:** GLX widens roughness then wets; WGX wets then SAA.
+- **TLX `mat` is smooth-interpolated** (`attribute("mat")`); GLX is
+  `flat in float vMat`. Mixed brick/glass chunked walls smear.
+- **TLX car SSR tag** cannot write 0.35 into alpha (three treats it as
+  coverage). Needs MRT — not a one-target port.
+- SAA / MAT-aniso / desktop GLX 4× MSAA / peel-then-bump are matched.
+
+SAA mixes geometric N with a uniform-CF peel hoist on all three backends
+(material/wall bump stays out of SAA). Every baked MAT layer (walls
+included) is hoisted to `textureSample` so pack aniso matches GLX
+`texture()`.
 Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
