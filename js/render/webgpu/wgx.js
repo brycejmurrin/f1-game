@@ -3038,7 +3038,8 @@ const WGX = (function () {
         // CCW after that flip and were culled to a pair of edge lines.
         // Do NOT mark decal/always-pass: that stamps ribbon depth over
         // walls and tyres drawn later (they look sunk into the tarmac).
-        // Floor/terrain already punch a LUT hole; bias + 8 cm lift win the rest.
+        // Floor/terrain already punch a LUT hole; bias wins the rest.
+        // Never lift the ribbon in Y — cars and props stay on the mesh.
         extra.doubleSided = true;
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;

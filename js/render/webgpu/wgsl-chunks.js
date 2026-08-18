@@ -648,7 +648,8 @@ fn vs_main(
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
-    wp.y = wp.y + 0.08;
+    // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
+    // fight and then buried cars, AI, and fence feet in the tarmac.
   }
   o.matTrk = pulled;
   o.matId = pulled.x;
