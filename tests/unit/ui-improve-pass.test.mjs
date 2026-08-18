@@ -111,6 +111,14 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
   const css = read("css/menus.css");
   assert.match(css,
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
+  assert.match(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
+    "compact stacked filter pans; do not re-gate this on a local max-width query");
+  assert.match(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
+    "search keeps a readable floor so the row actually overflows at 200%");
+  assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
+  assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
 });
 
 test("garage categories implement one roving tab system", () => {

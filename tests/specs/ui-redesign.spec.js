@@ -21,19 +21,30 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const initialMap = await page.evaluate(() => {
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const initialSelect = await page.evaluate(() => {
+    const sel = document.getElementById("sel-inner");
     const map = /** @type {HTMLCanvasElement} */ (document.getElementById("sel-preview-map"));
     const r = map.getBoundingClientRect();
     const zoom = map.currentCSSZoom || 1;
     const bufferAspect = map.width / Math.max(1, map.height);
-    const boxAspect = (r.width / zoom) / Math.max(1, r.height / zoom);
+    const boxH = r.height / zoom;
+    const boxW = r.width / zoom;
+    const boxAspect = boxW / Math.max(1, boxH);
     return {
+      pair: sel.dataset.pair,
+      density: sel.dataset.density,
       buffer: [map.width, map.height],
+      box: [boxW, boxH],
+      display: getComputedStyle(map).display,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
     };
   });
-  expect(Math.min(...initialMap.buffer)).toBeGreaterThan(8);
-  expect(initialMap.skew).toBeLessThan(0.03);
+  // 852×393 is under #sel-inner --compact-at 480, so density stacks the
+  // catalogue (pair-at raised to 2000) even at UI SIZE 100%. The pair-on map
+  // aspect check belongs to a roomy sheet, not this viewport.
+  expect(initialSelect.density, JSON.stringify(initialSelect)).toBe("compact");
+  expect(initialSelect.pair).toBe("off");
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. That reproducibly enters the compact single-column layout; at the
   // default size this viewport correctly retains the roomy paired catalogue.
@@ -67,7 +78,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       },
     };
   });
-  expect(compactCatalogue.oneRow).toBe(true);
+  expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
   // At the slider maximum the toolbar becomes horizontally pannable and stops
   // being sticky, so vertical scrolling can still reveal real circuit rows.
@@ -79,17 +90,29 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const maxScaleCatalogue = await page.evaluate(() => {
     window.SheetShape?.reclassify();
+    const sel = document.getElementById("sel-inner");
     const list = document.getElementById("sel-tracks");
     const filter = document.getElementById("sel-track-filter");
     list.scrollTop = filter.scrollHeight;
     const lr = list.getBoundingClientRect();
     const rr = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
+    const cs = getComputedStyle(filter);
     return {
       horizontalToolbar: filter.scrollWidth > filter.clientWidth,
       firstVisible: Math.max(0, Math.min(lr.bottom, rr.bottom) - Math.max(lr.top, rr.top)),
+      dump: {
+        localW: sel.clientWidth,
+        zoom: getComputedStyle(sel).zoom,
+        sheetScale: sel.style.getPropertyValue("--sheet-scale"),
+        fit: sel.dataset.fit,
+        scrollW: filter.scrollWidth,
+        clientW: filter.clientWidth,
+        wrap: cs.flexWrap,
+        overflowX: cs.overflowX,
+      },
     };
   });
-  expect(maxScaleCatalogue.horizontalToolbar).toBe(true);
+  expect(maxScaleCatalogue.horizontalToolbar, "200% pan-x toolbar " + JSON.stringify(maxScaleCatalogue.dump)).toBe(true);
   expect(maxScaleCatalogue.firstVisible).toBeGreaterThanOrEqual(24);
   await page.evaluate(() => {
     const root = document.documentElement.style;
@@ -108,11 +131,11 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       emptyHidden: document.getElementById("sel-track-empty").hidden,
     };
   });
-  expect(searched.active).toBe(true);
+  expect(searched.active, "search focused").toBe(true);
   expect(searched.shown.length).toBeGreaterThan(0);
-  expect(searched.shown.every((name) => /monaco/i.test(name))).toBe(true);
+  expect(searched.shown.every((name) => /monaco/i.test(name)), "all monaco").toBe(true);
   expect(searched.hidden).toBeGreaterThan(20);
-  expect(searched.emptyHidden).toBe(true);
+  expect(searched.emptyHidden, "empty hidden").toBe(true);
 
   // Stacked/short select: body is not a scroller; the track list fills it.
   // 568×320 is under #sel-inner --pair-at 620, so SheetShape writes pair=off.
