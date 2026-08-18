@@ -50,6 +50,7 @@ const teamPicker = () => $("teampicker");
 // The sheet is shared; without this, choosing a team in the garage would
 // silently rebuild the select screen behind it and leave the garage stale.
 let pickerHost = "select";
+let previewOpenRaf = 0;
 
 function teamSwatch(t) {
   const sw = document.createElement("span");
@@ -337,6 +338,20 @@ function buildSelect() {
     applyTrackSearch(trackQuery);
     updateTrackPreview();
   }
+  // buildSelect runs while #select is still hidden at every entry point, so
+  // the synchronous preview pass can only draw against placeholder geometry.
+  // Refit after two frames: the first exposes and classifies the sheet, the
+  // second sees the settled data-pair/data-shape box. ResizeObserver remains
+  // the ongoing resize path, but first paint no longer depends on when a busy
+  // browser happens to deliver its callback (the audit caught intermittent
+  // 1x1 maps when three SwiftShader contexts competed).
+  if (previewOpenRaf) cancelAnimationFrame(previewOpenRaf);
+  previewOpenRaf = requestAnimationFrame(() => {
+    previewOpenRaf = requestAnimationFrame(() => {
+      previewOpenRaf = 0;
+      if (els.select && !els.select.hidden) updateTrackPreview();
+    });
+  });
 }
 
 // The elevation profile chart, drawn identically in two places: the select
@@ -512,6 +527,7 @@ function updateTrackPreview() {
   // budget negative and collapsed every map onto its floor (measured 36x72).
   const sheet = card && card.closest(".sheet");
   const stacked = !!(sheet && sheet.dataset.pair !== "on");
+  const compact = !!(sheet && sheet.dataset.density === "compact");
   const cardInnerW = card ? card.clientWidth - padX : 260;
   const chipH = sheet ? px(getComputedStyle(sheet).getPropertyValue("--chip-h")) || 40 : 40;
   /* In every stacked layout CSS makes the preview a thumbnail band beside its
@@ -522,8 +538,10 @@ function updateTrackPreview() {
   const plan = stacked
     ? {
       shape: "beside",
-      slotW: Math.min(cardInnerW * 0.42, chipH * 3),
-      slotH: chipH * 1.5
+      // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.
+      // fitCanvas pins max-height inline, so a disagreement here makes JS win.
+      slotW: Math.min(cardInnerW * 0.42, chipH * (compact ? 1.8 : 3)),
+      slotH: chipH * (compact ? 1 : 1.5)
     }
     : TrackMaps.planPreview({
       aspect: a,

@@ -472,6 +472,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-info {
   display: block;
 }
+/* On a short landscape phone the active catalogue row already supplies the
+   circuit identity. Removing the duplicate preview band buys the list an
+   entire control row at 100% and keeps the filter usable through 200%. */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > #sel-body > #sel-track-section {
+  display: none;
+}
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks {
   /* Basis 0, not auto: auto is the 2,000px catalogue, so shrink eats the
      list before grow can give it leftover body height. */
@@ -530,7 +536,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
    ~80px of that slack on the map: a tall circuit's outline goes from 206px
    wide to ~255px with its caption still on one line. The list keeps ~510px,
    which is well clear of where its rows start wrapping. */
-#sel-inner { --pair-at: 620px; --pair-split: minmax(0, 50%); --fit-at: 200px; }
+#sel-inner {
+  --pair-at: 620px;
+  --pair-split: minmax(0, 50%);
+  --fit-at: 200px;
+  /* Preview facts start wrapping out of their capped band before the generic
+     380px sheet threshold (measured: phone portrait @125%, 432 own px). */
+  --compact-at: 480px;
+}
 @media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
 /* SHORT SHEET: stack even when the box is still wide in CSS px. Career already
    does this (`#cr-inner[data-density="compact"] { --pair-at: 2000px }`). A
@@ -974,9 +987,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 820px) {
   #sel-preview-name { font-size: 18px; }
 }
-/* Compact pair-on: same extras drop as the stacked compact band, so the
-   preview column fits without becoming a second vertical document. Name +
-   rec stay. */
+/* Compact pair-on: the active row already names the circuit. At 175–200% the
+   map needs the whole preview column; retaining even name + record put a
+   partially clipped caption under it. */
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-info { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
@@ -1118,6 +1132,29 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
   display: none;
+}
+/* At 175–200% a landscape phone gives the sheet less than 360 local px. Four
+   controls cannot shrink into that width without their labels overlapping.
+   Keep one touch-height row, preserve each control's intrinsic width, and make
+   the toolbar itself horizontally pannable. The redundant group heading drops
+   here so the first actual circuit still fits below the toolbar. */
+@container sheet (max-width: 360px) {
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+    position: static;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+    display: none;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+    flex: 0 0 auto;
+    min-width: max-content;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+    flex: 0 0 9rem;
+  }
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }

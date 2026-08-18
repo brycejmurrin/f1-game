@@ -197,7 +197,7 @@ const TrackMaps = (function () {
   // The knobs, and the failure each one is holding shut:
   const CAPTION_MIN = 185;        // caption keeps its facts on one or two lines;
                                   //   a flat width share clipped the third chip
-  const BESIDE_MIN_W = 360;       // below this a card cannot seat both columns
+  const BESIDE_MIN_W = 340;       // below this a card cannot seat both columns
   const BESIDE_ASPECT_MAX = 1.1;  // only a circuit TALLER than wide is helped by
                                   //   turning sideways (Singapore got worse)
   const BESIDE_DEAD_FRAC = 0.34;  // a third of the card empty beside the map is
@@ -245,8 +245,12 @@ const TrackMaps = (function () {
   // belt-and-braces when a later layout pass still clamps.
   function fitCanvas(canvas, maxW, maxH, def, pinCss) {
     const a = aspect(def);
-    let boxW = Math.max(1, Math.floor(maxW || 1));
-    let boxH = Math.max(1, Math.floor(maxH || 1));
+    // A ResizeObserver can briefly report a zero slot while zoom/layout classes
+    // converge. Never turn that transient into a visible 1x1 canvas; 40 local
+    // px is the compact preview's own height floor and the next settled refit
+    // can still grow it normally.
+    let boxW = Math.max(40, Math.floor(maxW || 1));
+    let boxH = Math.max(40, Math.floor(maxH || 1));
     let w = boxW, h = Math.round(w / a);
     if (h > boxH) { h = boxH; w = Math.round(h * a); }
     w = Math.max(1, w); h = Math.max(1, h);
