@@ -332,7 +332,7 @@ export async function runCssPlay(opts) {
       viewport: { width: opts.viewport.width, height: opts.viewport.height },
     });
     await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 90000 });
-    await page.waitForFunction(() => window.__apex && window.__apex.race, {
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
       polling: 100, timeout: 30000,
     });
     await page.evaluate(() => {
