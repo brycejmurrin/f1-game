@@ -948,6 +948,35 @@ test("HDR grade is gated on all three backends when knobs are neutral", () => {
     "TLX must still compute the same off-neutral _hg mask as GLX");
 });
 
+test("TLX software sky fallback is a zenith-horizon mix, not a flat lid", () => {
+  const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sky, /mix\(U\.zenith,\s*U\.horizon,\s*t\)/,
+    "fallbackNode must mix the same zenith/horizon uniforms the full sky reads");
+  assert.doesNotMatch(sky, /fallbackNode = Fn\(\(\) => vec4\(U\.zenith, 1\.0\)\)/,
+    "do not fall back to a flat zenith lid — that is the washed software-GL sky");
+});
+
+test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /colorPcss/,
+    "WebGL2 desktop must take the depth-in-color blocker path");
+  assert.match(sh, /TSL\.depth/,
+    "sun casters must write TSL.depth into the R16F color attachment");
+  assert.match(sh, /colorPcss \? sunRT\.texture : sunRT\.depthTexture/,
+    "WebGL2 blocker taps the color attachment, WebGPU still textureLoads depth");
+});
+
+test("WGX SSR is consumed same-frame in COMPOSITE, not next-frame LIT", () => {
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /binding\(8\) var ssrPostTex/,
+    "COMPOSITE must bind this-frame ssrTex");
+  assert.match(post, /ssrPostTex/,
+    "COMPOSITE must sample the SSR target");
+  const lit = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(lit, /wetSheen > 0\.001 && ssrStrength > 0\.001/,
+    "LIT must not still mix last frame's ssrTex into wet road");
+});
+
 test("SSAO tap setup is skipped when strength is 0 on all three backends", () => {
   // Contact shadows keep the pass live at aoStr=0; the 8 dependent depth
   // fetches must not still run. strength/uStrength is a uniform.

@@ -840,7 +840,7 @@ const WGX = (function () {
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
-    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect / game.js po.reflect); captured each present(), consumed by the NEXT begin()/_writeFrame to line up with the 1-frame ssrTex lag
+    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect). Still packed into next begin() for debug; consume is same-frame in COMPOSITE.
     // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
@@ -2068,6 +2068,7 @@ const WGX = (function () {
               { binding: 6, resource: _dirtView },   // LENS DIRT grime map (built once at init)
               // Scene depth for flare sunVis occlusion + SSAO bilateral upsample.
               { binding: 7, resource: next.depthSampleView },
+              { binding: 8, resource: next.ssrView || ssrView },
             ],
           });
           next.fxaaBG = device.createBindGroup({
@@ -3409,10 +3410,9 @@ const WGX = (function () {
       }
       _passSamples = 1;
       const o = opts || {};
-      // Capture the wet-road SSR strength GLX consumes as opts.reflect (game.js
-      // po.reflect = _ssr). Stored for the NEXT frame's _writeFrame (params4.w),
-      // matching the 1-frame lag: this present() writes ssrTex, the next lit pass
-      // both samples it AND scales it by this same reflect value.
+      // Capture wet-road SSR strength (game.js po.reflect). COMPOSITE consumes
+      // this frame's ssrTex in the same present(); _frameReflect still feeds
+      // next begin() params4.w for anything that still reads the LIT lane.
       _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
@@ -3452,9 +3452,8 @@ const WGX = (function () {
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
-      // ── SSR (full-res) — wet-road reflections into ssrTex, consumed by the LIT
-      //    pass NEXT frame (frame binding 6, 1-frame lag). Skipped when dry; the
-      //    LIT wet-gate (wet=0) no-ops any stale content, so no clear is needed.
+      // ── SSR (full-res) — wet-road / lacquer reflections into ssrTex, consumed
+      //    by COMPOSITE this same present() (binding 8). Skipped when dry.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
       // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
       // on wetness ALONE kept dispatching the 24-step march on a shed device for
@@ -3686,13 +3685,16 @@ const WGX = (function () {
         s[43] = _hg ? 1 : 0;
         s[44] = (T && T.liftR      != null) ? T.liftR      : 0;
         s[45] = (T && T.liftG      != null) ? T.liftG      : 0;
-        s[46] = (T && T.liftB      != null) ? T.liftB      : 0; s[47] = 0;                 // lift
+        s[46] = (T && T.liftB      != null) ? T.liftB      : 0;
+        s[47] = (lastFrame && lastFrame.wetness) || 0;                                    // lift.w = wetness (same-frame SSR)
         s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
         s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
-        s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1; s[51] = 0;                 // gamma
+        s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1;
+        s[51] = (o.reflect != null) ? o.reflect : 0;                                      // gamma.w = wet-road SSR
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
-        s[54] = (T && T.gainB      != null) ? T.gainB      : 1; s[55] = 0;                 // gain
+        s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
+        s[55] = (T && T.carReflect != null) ? T.carReflect : 0.05;                        // gain.w = carReflect
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;

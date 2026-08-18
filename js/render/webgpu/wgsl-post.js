@@ -568,6 +568,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(5) U         : uniform  CompositeU
   //      @binding(6) dirtTex   : texture_2d<f32>   LENS DIRT grime map
   //      @binding(7) depthTex  : texture_depth_2d  scene depth (bilateral AO + flare occ)
+  //      @binding(8) ssrPostTex: texture_2d<f32>   this-frame SSR (same-present consume)
   //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
@@ -592,9 +593,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, hdrGradeOn)
   //                                          w = GLX uHdrGradeOn: 1 only when an
   //                                          HDR-grade knob is off-neutral
-  //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
-  //      gamma       : vec4<f32>  off 192   (RGB gamma, _pad)
-  //      gain        : vec4<f32>  off 208   (RGB gain, _pad)
+  //      lift        : vec4<f32>  off 176   (RGB lift, wetness)
+  //      gamma       : vec4<f32>  off 192   (RGB gamma, reflect / wet-road SSR)
+  //      gain        : vec4<f32>  off 208   (RGB gain, carReflect)
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
   //                                          TONE CURVE knobs; defaults 2.51/0.03/
   //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
@@ -632,6 +633,7 @@ struct CompositeU {
 @group(0) @binding(5) var<uniform> U : CompositeU;
 @group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
 @group(0) @binding(7) var depthTex  : texture_depth_2d;
+@group(0) @binding(8) var ssrPostTex : texture_2d<f32>;  // this-frame SSR (GLX composite consume)
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
@@ -772,7 +774,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       }
     }
   }
-  var c = textureSampleLevel(sceneTex, samp, sceneUV, 0.0).rgb;
+  let sceneS = textureSampleLevel(sceneTex, samp, sceneUV, 0.0);
+  var c = sceneS.rgb;
+  let sceneA = sceneS.a;
   let caDir = in.uv - vec2<f32>(0.5);
 
   // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
@@ -838,6 +842,27 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     aoV = textureSampleLevel(ssaoTex, samp, in.uv, 0.0).r;
   }
   c = c * aoV;
+
+  // Same-frame SSR consume (GLX COMPOSITE_FS). present() wrote ssrPostTex
+  // from this frame's HDR+depth; LIT no longer samples last frame. Road
+  // uses wetness * reflect; lacquer uses the 0.35 car-paint alpha tag.
+  let ssrWet = U.lift.w;
+  let ssrRefl = U.gamma.w;
+  let ssrCar = U.gain.w;
+  if (ssrRefl > 0.001 || ssrCar > 0.001) {
+    let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
+    if (ssr.a > 0.001) {
+      let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
+      let roadK = (1.0 - carPx) * ssrWet * ssrRefl;
+      let carK = carPx * ssrCar;
+      let ssrK = ssr.a * max(roadK, carK);
+      if (ssrK > 0.001) {
+        let dark = select(0.10, 0.22, carPx > 0.5);
+        let sat = select(0.92, 0.88, carPx > 0.5);
+        c = mix(c, c * dark + ssr.rgb * sat, clamp(ssrK, 0.0, 0.85));
+      }
+    }
+  }
 
   // Volumetric shafts (additive, unscaled — strength is in the GODRAY pass).
   c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;

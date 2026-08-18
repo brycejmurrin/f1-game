@@ -1269,20 +1269,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // masked-out texels (transparent black, incl. the 1×1 placeholder and the
   // cleared texture) from darkening wet road toward black. ssrStrength=0 also
   // makes this a no-op.
-  let ssrStrength = max(F.params4.w, 0.0);
-  if (wetSheen > 0.001 && ssrStrength > 0.001) {
-    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
-    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
-    let ssrK = ssr.a * clamp(wetSheen * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
-    color = mix(color, color * 0.10 + ssr.rgb * 0.92, ssrK);
-  }
-  // Car-paint SSR consume (F.params4.z = carReflect / composite SSR strength).
-  if (carPaint > 0.001 && max(F.params4.z, 0.0) > 0.001) {
-    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
-    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
-    let ssrK = ssr.a * clamp(F.params4.z, 0.0, 1.0);
-    color = mix(color, color * 0.22 + ssr.rgb * 0.88, clamp(ssrK, 0.0, 0.85));
-  }
+  // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
+  // COMPOSITE_FS. LIT used to sample last present()'s ssrTex here — a 1-frame
+  // lag on wet road / lacquer. The texture stays bound so a 1×1 placeholder
+  // cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/shaders/lit.js).

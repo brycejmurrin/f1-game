@@ -517,9 +517,11 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.ok(Math.abs(composite[34] - 0.14) < 1e-6, "acesE default in tuneFx.z (float 34)");
   assert.ok(Math.abs(composite[35] - 7.0) < 1e-6, "flareStreak default in tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0]);
-  assert.deepEqual(composite.slice(52, 56), [1, 1, 1, 0]);
+  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0], "lift RGB + wetness pad");
+  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0], "gamma RGB + reflect pad");
+  assert.ok(Math.abs(composite[52] - 1) < 1e-6 && Math.abs(composite[53] - 1) < 1e-6 &&
+            Math.abs(composite[54] - 1) < 1e-6 && Math.abs(composite[55] - 0.05) < 1e-6,
+    "gain RGB + carReflect default 0.05 in gain.w");
   // aces vec4 (floats 56..59) = shipped Narkowicz coefficients a,b,c,d.
   // (f32 rounding: none of these are exactly representable, so compare with a tol.)
   const ACES_DEF = [2.51, 0.03, 2.43, 0.59];
@@ -577,9 +579,12 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
   assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 1],
     "tone1 is whites/toe/shoulder/hdrGradeOn — off-neutral knobs must arm the gate");
-  assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
-  assert.deepEqual(composite.slice(48, 52), [11, 12, 13, 0], "gamma must occupy floats 48..51");
-  assert.deepEqual(composite.slice(52, 56), [14, 15, 16, 0], "gain must occupy floats 52..55");
+  assert.deepEqual(composite.slice(44, 47), [8, 9, 10], "lift RGB must occupy floats 44..46");
+  assert.equal(composite[47], 0, "lift.w is wetness — harness begin() has no wetness");
+  assert.deepEqual(composite.slice(48, 51), [11, 12, 13], "gamma RGB must occupy floats 48..50");
+  assert.equal(composite[51], 0, "gamma.w is opts.reflect — harness present() has none");
+  assert.deepEqual(composite.slice(52, 55), [14, 15, 16], "gain RGB must occupy floats 52..54");
+  assert.ok(Math.abs(composite[55] - 0.05) < 1e-6, "gain.w is carReflect (TUNE default 0.05)");
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {

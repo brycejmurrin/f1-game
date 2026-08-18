@@ -41,15 +41,12 @@ vendored `vendor/three-0.184.0/three.webgpu.min.js`. Findings:
   upstream-style poisson blocker search directly in `tsl-lit.js` (costlier
   per-pixel, simplest wiring). The comparison sampler binding stays declared
   and unused — harmless.
-- **WebGL2 fallback path**: the compare-mode texture is unreadable as plain
-  data, so the blocker source must be a COLOR texture: re-render the pooled
-  sun casters into a small (512²) R16F depth-in-color target with a trivial
-  depth-writing material (three's own MeshDepthMaterial/VSM precedent).
-  Cadence: only when the sun snap-cache redraws (`game.js` owns that), which
-  is exactly when GLX refreshes its blocker map — not per frame.
-  Alternatively keep `pcss() = false` on WebGL2 only: phones default to the
-  WebGL2 backend (`tlx.js` forceWebGL pin) and the fixed-R look is already
-  the shipped mobile compromise in GLX.
+- **WebGL2 fallback path (landed, desktop)**: the sun pass writes `TSL.depth`
+  (`ViewportDepthNode` = window depth) into an R16F color attachment on the
+  existing sun RT. The 512² blocker downsample `textureLoad`s that color
+  (texelFetch is legal; it is not a `sampler2DShadow`). Cadence is still
+  `endPass()` on the sun snap-cache redraw. Phones and software GL keep
+  `pcssEnabled = false` (fixed `R = 3.0`).
 - Two `THREE.Texture` wrappers sharing one `.source` (one with
   `compareFunction`, one without) has NO upstream precedent (searched) and
   fights per-texture GL state on the WebGL backend — rejected.
