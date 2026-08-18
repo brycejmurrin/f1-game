@@ -83,6 +83,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // grandstands; coplanar-audit --why is still 5 same-facing `trk` spots
 // (maxArea 16.7 m², minGap 0). No new defect class. Cap raised to the
 // measured count so it stops lying about the tree.
+//
+// indianapolis 8 → 9 (2026-08-18): oval-stand remesh that pulled the
+// long infield chords off the racing line (OUTER_BAYS 30→40, inner
+// 6×96 m → 12×46 m). coplanar-audit --why: 9 spots / 25 same-facing
+// pairs, all `trk`, maxArea 3.5 m², minGap 0 — adjacent shorter-bay
+// tops on one plane. Same seam class as the previous 8-bay joints;
+// the extra spot is the extra joint. Trade for props-over-road.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
