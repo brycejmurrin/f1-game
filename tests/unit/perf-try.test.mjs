@@ -6,9 +6,9 @@
    rather than moved into the lighting tuner.
 
    This file keeps its name so the 109-suite count does not churn. It now
-   freezes: no perf-try.js / no PERF tab; late sky is unconditional; env-probe
-   radial cull is 300 m without a toggle; GLSL/WGSL/TSL keep only the gated
-   (ON) path.
+   freezes: no PerfTry module / no PERF tab; late sky is unconditional;
+   env-probe radial cull is 300 m without a toggle; GLSL/WGSL/TSL keep only
+   the gated (ON) path.
 
    Run: node --test tests/unit/perf-try.test.mjs
 */
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-test("perf-try.js and the PERF tab are gone", () => {
+test("PerfTry module and the PERF tab are gone", () => {
   assert.equal(fs.existsSync(path.join(ROOT, "js/game/perf-try.js")), false);
   const html = read("index.html");
   assert.doesNotMatch(html, /pm-tab-performance|pm-panel-performance|perf-try\.js/);
