@@ -288,6 +288,7 @@
       const gk = (id, def) => (GT && GT[id] != null ? GT[id] : def);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
+      let dest = null;
       // try/finally, not a plain restore at the end: tlx.js catches around
       // post.present() and repaints direct-to-canvas — without the finally, a
       // throw mid-chain latches autoClear=false for every later classic-path
@@ -536,6 +537,10 @@
       C.reflect.value = haveRefl ? reflStr : 0;
 
       // ── 3/4) composite -> LDR, FXAA -> canvas (or the ?viz= bisect blit) ──
+      // softDest: software-WebGPU present target. Never setRenderTarget(null)
+      // on that path — three's default framebuffer calls getCurrentTexture(),
+      // which breaks mapAsync device-wide (WGX / Dawn software adapters).
+      dest = (typeof ctx.softDest === "function" ? ctx.softDest() : null) || null;
       if (viz) {
         const B = P.blit;
         B.U.mono.value = viz === "ssao" ? 1 : 0;
@@ -545,12 +550,12 @@
           : viz === "bloom" ? (haveBloom ? bloomLv[0].rt.texture : blackTex)
           : (viz === "shafts" || viz === "godray") ? (haveGR ? godrayRT.texture : blackTex)
           : sceneRT.texture;   // composite-off | scene: the raw HDR world
-        runPass(B.mat, null);
+        runPass(B.mat, dest);
       } else {
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
         P.fxaa.U.texel.value.set(1 / W, 1 / H);
-        runPass(P.fxaa.mat, null);
+        runPass(P.fxaa.mat, dest);
       }
       _last.ssao = !!haveAO;
       _last.bloom = !!haveBloom;
@@ -558,7 +563,9 @@
       _last.ssr = !!(haveRefl && reflStr > 0.001);
       _last.fxaa = !viz;
       } finally {
-        try { renderer.setRenderTarget(null); } catch (_) { /* device dying: tlx.js's catch owns the fallback */ }
+        if (!dest) {
+          try { renderer.setRenderTarget(null); } catch (_) { /* device dying: tlx.js's catch owns the fallback */ }
+        }
         renderer.autoClear = prevAutoClear;
       }
     }

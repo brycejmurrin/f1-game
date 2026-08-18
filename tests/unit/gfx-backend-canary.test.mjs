@@ -747,6 +747,136 @@ test("TLX asks for an opaque canvas on the WebGPU backend", () => {
     'alphaMode "opaque"');
 });
 
+test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is not beige)", () => {
+  // scene.background is the fallback when backgroundNode misses (software-GL
+  // TSL compile, HDR-target skip). Clearing to fogColor made every dusk
+  // probe a washed beige void ([0.68,0.64,0.54]). Zenith is the sky the
+  // node would have drawn; fog stays the no-track menu fallback only.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const begin = src.indexOf("begin(frame)");
+  assert.notEqual(begin, -1, "begin(frame) moved");
+  const body = src.slice(begin, begin + 900);
+  assert.match(body, /skyZenith/, "begin() must read frame.skyZenith for the Color fallback");
+  assert.match(body, /background\.setRGB/, "begin() still sets scene.background");
+  const zAt = body.indexOf("skyZenith");
+  const fogAssign = body.indexOf("fogColor) || [0.04");
+  assert.ok(zAt >= 0 && fogAssign > zAt,
+    "zenith must be preferred; fogColor is the no-zenith fallback");
+  const drawSky = src.indexOf("drawSky(frameSky)");
+  assert.notEqual(drawSky, -1, "drawSky moved");
+  assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
+    "drawSky must keep the Color fallback in lockstep with the sky node");
+  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\(\)\) && sky\.fallbackNode/,
+    "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
+  assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
+    "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
+});
+
+test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
+  const src = read("js/render/three/tlx.js");
+  const present = src.indexOf("present(opts)");
+  const hdr = src.indexOf("post.sceneTarget()", present);
+  assert.ok(present > 0 && hdr > present, "HDR present path moved");
+  const pinBefore = src.lastIndexOf("pinSkyMaterial()", hdr);
+  assert.ok(pinBefore > present && pinBefore < hdr,
+    "HDR target render must pin the TSL sky or a missed compile leaves the Color clear");
+});
+
+test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () => {
+  // Dawn on SwiftShader/Lavapipe executes shaders but the native swapchain
+  // never composites, and the first getCurrentTexture() breaks mapAsync
+  // device-wide. TLX sniffs the adapter (info fields are not JSON-
+  // enumerable), keeps #game as the GPU canvas, and blits onto #game-soft.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
+    "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
+  assert.match(src, /info\.vendor/,
+    "adapter.info fields are not enumerable — read vendor/device/architecture directly");
+  assert.match(src, /swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/,
+    "sniff regex must match WGX's software-adapter list");
+  assert.match(src, /apex26\.wgxCapture/,
+    "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)");
+  assert.match(src, /game-soft/,
+    "#game stays the GPU canvas; visible present is the #game-soft sibling");
+  assert.match(src, /_displayCanvas\.getContext\("2d"/,
+    "soft-present overlay is a 2D sibling — never getContext(2d) on #game");
+  assert.match(src, /softDest:\s*function\s*\(\)\s*\{\s*return softOutRT/,
+    "post chain must receive softDest so FXAA never targets the swapchain");
+  assert.match(src, /awaitSoftPresent/,
+    "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
+  assert.match(src, /capturePixels/,
+    "backend must expose capturePixels for gfx-probe frame.png");
+  assert.match(src, /readRenderTargetPixelsAsync/,
+    "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  assert.match(src, /function drawInstanced[\s\S]{0,400}if \(softGpu/,
+    "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
+  assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
+    "env / post restore must rebind the blit RT, not the native swapchain");
+  const envEnd = src.indexOf("envFaceEnd(face)");
+  assert.notEqual(envEnd, -1, "envFaceEnd moved");
+  const envBody = src.slice(envEnd, envEnd + 2800);
+  assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
+    "envFaceEnd must not restore the swapchain on the software-WebGPU path");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /ctx\.softDest/,
+    "tlx-post must honour ctx.softDest for the FXAA / viz dest");
+  assert.match(post, /if\s*\(\s*!dest\s*\)/,
+    "finally must skip setRenderTarget(null) when a soft dest is bound");
+});
+
+test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opacity", () => {
+  // Same hole as the iPhone alpha-canvas guard, on the #game-soft path:
+  // car-paint alpha is the SSR mask. A default 2D overlay composites that
+  // as 35% opacity and the bodywork ghosts (tyres/wings stay solid).
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf('_displayCanvas.getContext("2d"');
+  assert.notEqual(at, -1, "overlay getContext moved");
+  assert.match(src.slice(at, at + 120), /alpha:\s*false/,
+    "#game-soft must be an opaque 2D context");
+  assert.match(src, /img\.data\[i \+ 3\] = 255/,
+    "putImageData blit must force opaque pixels");
+  assert.match(src, /data\[i\] = 255/,
+    "_unstrideRgba / capturePixels must force opaque alpha too");
+});
+
+test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
+  // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
+  // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
+  // Deploy's fix: an InstancedBufferAttribute named `color` on the geometry
+  // (`_instColorAttr`). Do NOT also set imesh.instanceColor — NodeMaterial
+  // multiplies that into colorNode and binds a second 12-byte dummy at slot 5.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf("function createInstancedBatch");
+  assert.notEqual(at, -1, "createInstancedBatch moved");
+  const body = src.slice(at, at + 2200);
+  assert.match(body, /_instColorAttr\(\s*imesh/,
+    "every batch must get an instanced color attribute, not only when colors[] is present");
+  assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
+    "do not also set imesh.instanceColor — that is the slot-5 dummy-buffer trap");
+  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const cast = shadow.indexOf("function castInstanced");
+  assert.notEqual(cast, -1, "castInstanced moved");
+  const castBody = shadow.slice(cast, cast + 1800);
+  assert.doesNotMatch(castBody, /m\.instanceColor\s*=/,
+    "shadow InstancedMesh must not set instanceColor — the lit geo already has instanced color");
+});
+
+test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
+  // scene.matrixWorldAutoUpdate is false; three uploads matrixWorld as the
+  // model matrix. Writing only `.matrix` left cars/flaps/shadows at identity —
+  // invisible on track (world-space chase cam), fine in the garage (car near
+  // origin). World-baked track still looked correct with identity.
+  const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matrixWorldAutoUpdate\s*=\s*false/,
+    "matrixWorldAutoUpdate latch moved — re-check whether acquireMesh still must promote");
+  const acq = src.indexOf("function acquireMesh");
+  assert.notEqual(acq, -1, "acquireMesh moved");
+  const body = src.slice(acq, acq + 900);
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must promote m.matrix into matrixWorld — without it every " +
+    "draw() with a non-identity model (cars) renders at the world origin");
+});
+
 test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {
   // Makes the assertion above SUFFICIENT for that backend. If three stops
   // reading the parameter, alpha:false becomes a no-op and cars ghost again on
