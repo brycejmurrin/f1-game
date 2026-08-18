@@ -919,7 +919,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, \(authored && attrBG\) \? attrBG : \(_roadLutBG \|\| attrBG \|\| zeroAttrBG\)\)/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG \|\| zeroAttrBG\)/);
   assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
   assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
@@ -937,8 +937,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /o\.trk = pulled\.yzw/);
   assert.match(CHUNKS_SOURCE, /@location\(3\)       trk : vec3<f32>/);
   assert.doesNotMatch(CHUNKS_SOURCE, /@interpolate\(linear\) trk/);
-  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5 && !isRoadDraw/);
-  assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
+  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5;/);
+  assert.match(CHUNKS_SOURCE, /vTrk = select\(select\(vec3<f32>\(0\.0\), in\.trk, !isRoadDraw\), fromWorld\.xyz, useWorldTrk\)/);
   assert.match(CHUNKS_SOURCE, /dpdx\(in\.trk\)/);
   assert.match(CHUNKS_SOURCE, /let vsMat = in\.matId/);
   assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
