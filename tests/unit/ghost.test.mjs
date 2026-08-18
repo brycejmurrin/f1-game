@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -34,6 +35,7 @@ function createHarness() {
     console,
   };
   const ctx = vm.createContext(sandbox);
+  seedLog(ctx);
   const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
   vm.runInContext(src, ctx);
   return { Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx), store: mockLocalStorage };

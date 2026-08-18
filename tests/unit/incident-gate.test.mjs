@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/game/incidentsim.js"), "utf8");
@@ -37,6 +38,7 @@ function load() {
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
     isNaN, isFinite, console, DebrisWorld,
   });
+  seedLog(ctx);
   // js/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
   vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
   vm.runInContext(SRC, ctx, { filename: "js/game/incidentsim.js" });

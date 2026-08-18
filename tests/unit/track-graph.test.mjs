@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -23,6 +24,7 @@ function load() {
   const sandbox = { Math, Array, Object, JSON, Number, Infinity, isFinite, console };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
+  seedLog(ctx);
   for (const rel of ["js/track/geom.js", "js/track/graph.js"]) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: rel });
