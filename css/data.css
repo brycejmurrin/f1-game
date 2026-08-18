@@ -598,9 +598,9 @@ body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--
    time/status, and points remain. Compact landscape is often still "wide" in
    --wide-at units, so density also drops TEAM. */
 body[data-width="narrow"] .dh-th-team,
-body[data-width="narrow"] .dh-td-team,
+body[data-width="narrow"] .dh-td-team { display: none; }
 body[data-width="narrow"] .dh-th-grid,
-body[data-width="narrow"] .dh-td-grid,
+body[data-width="narrow"] .dh-td-grid { display: none; }
 body[data-density="compact"] .dh-th-team,
 body[data-density="compact"] .dh-td-team { display: none; }
 
