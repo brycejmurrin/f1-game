@@ -385,9 +385,10 @@ const TLX = (function () {
       // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
-      // Game code writes matrixWorld on every pooled mesh. Auto-update would
-      // walk the whole graph on each renderer.render() (shadow primes + env
-      // faces + present) for no result.
+      // Pooled meshes write matrixWorld themselves in acquireMesh (the scene
+      // root is identity, so world = local). Auto-update would walk the whole
+      // graph on each renderer.render() (shadow primes + env faces + present)
+      // for no result — and a missed write leaves cars at the origin.
       scene.matrixAutoUpdate = false;
       scene.matrixWorldAutoUpdate = false;
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
@@ -1017,7 +1018,18 @@ const TLX = (function () {
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
         m.geometry = geo;
         m.material = material || fallbackMat();
+        // scene.matrixWorldAutoUpdate is false (see create() above), so three
+        // will NEVER promote m.matrix → matrixWorld. The renderer uploads
+        // matrixWorld as the model matrix: writing only `.matrix` left every
+        // pooled mesh at identity forever. World-baked track/terrain still
+        // looked right (identity IS their model matrix); cars, flaps, blob
+        // shadows, and any draw() with a non-identity model sat at the origin
+        // — invisible from a chase cam on track, but correct in the garage
+        // where the car IS near the origin. Same symptom the material-cache
+        // dispose used to cause; this is the remaining half.
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
+        m.matrixWorld.copy(m.matrix);
+        m.matrixWorldNeedsUpdate = false;
         m.visible = true;
         poolUsed++;
         if (!m.parent) scene.add(m);

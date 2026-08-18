@@ -553,6 +553,22 @@ test("TLX asks for an opaque canvas on the WebGPU backend", () => {
     'alphaMode "opaque"');
 });
 
+test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
+  // scene.matrixWorldAutoUpdate is false; three uploads matrixWorld as the
+  // model matrix. Writing only `.matrix` left cars/flaps/shadows at identity —
+  // invisible on track (world-space chase cam), fine in the garage (car near
+  // origin). World-baked track still looked correct with identity.
+  const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matrixWorldAutoUpdate\s*=\s*false/,
+    "matrixWorldAutoUpdate latch moved — re-check whether acquireMesh still must promote");
+  const acq = src.indexOf("function acquireMesh");
+  assert.notEqual(acq, -1, "acquireMesh moved");
+  const body = src.slice(acq, acq + 900);
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must promote m.matrix into matrixWorld — without it every " +
+    "draw() with a non-identity model (cars) renders at the world origin");
+});
+
 test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {
   // Makes the assertion above SUFFICIENT for that backend. If three stops
   // reading the parameter, alpha:false becomes a no-op and cars ghost again on
