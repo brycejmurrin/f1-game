@@ -130,7 +130,6 @@ function ensurePanel() {
   if (_panel || typeof document === "undefined") return _panel;
   const el = document.createElement("pre");
   el.id = "game-metrics";
-  el.setAttribute("aria-live", "polite");
   el.setAttribute("aria-label", "Debug metrics");
   el.style.cssText = PANEL_STYLE;
   document.body.appendChild(el);
@@ -186,29 +185,38 @@ function paintBtn(btn) {
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
 }
 
+function raiseBuffer() {
+  try {
+    const cur = Log.level();
+    if (Log.LEVELS[cur.buffer] >= Log.DEBUG) return;
+    _raisedBuffer = { buffer: cur.buffer, bufferNs: cur.bufferNs };
+    Log.level("buffer:debug");
+    const ns = _raisedBuffer.bufferNs;
+    for (const k in ns) Log.level("buffer:" + k + ":" + ns[k]);
+  } catch (_) { /* keep shipped thresholds */ }
+}
+
+function restoreBuffer() {
+  if (!_raisedBuffer) return;
+  try {
+    Log.level("buffer:" + _raisedBuffer.buffer);
+    const ns = _raisedBuffer.bufferNs;
+    for (const k in ns) Log.level("buffer:" + k + ":" + ns[k]);
+  } catch (_) { /* leave whatever the player set */ }
+  _raisedBuffer = null;
+}
+
 function set(v) {
   const next = !!v;
   _on = next;
   try { localStorage.setItem(KEY, next ? "1" : "0"); } catch (_) { /* private mode: session-only */ }
   try { Log.info("game", "metrics " + (next ? "on" : "off")); } catch (_) { /* Log not loaded */ }
   if (next) {
-    try {
-      if (typeof Log !== "undefined") {
-        const cur = Log.level().buffer;
-        if (Log.LEVELS[cur] < Log.DEBUG) {
-          _raisedBuffer = cur;
-          Log.level("buffer:debug");
-        }
-      }
-    } catch (_) { /* keep shipped thresholds */ }
+    raiseBuffer();
     paintOverlay();
     startLoop();
   } else {
-    try {
-      if (typeof Log !== "undefined" && _raisedBuffer)
-        Log.level("buffer:" + _raisedBuffer);
-    } catch (_) { /* leave whatever the player set */ }
-    _raisedBuffer = null;
+    restoreBuffer();
     paintOverlay();
   }
   paintBtn(_btn);
@@ -250,13 +258,15 @@ function initUI() {
     });
   }
 
-  if (on()) { paintOverlay(); startLoop(); }
+  if (on()) { raiseBuffer(); paintOverlay(); startLoop(); }
 }
 
 if (typeof document !== "undefined") {
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }
+
+if (on()) raiseBuffer();
 
 return { KEY, on, set, toggle, snapshot, PANEL_STYLE };
 })();

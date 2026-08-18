@@ -75,6 +75,24 @@ test("turning metrics on raises the log buffer so the overlay tail fills", () =>
   assert.equal(Log.level().buffer, "info", "OFF restores the buffer it raised");
 });
 
+test("boot-ON (?metrics=1) raises the buffer without set()", () => {
+  const { M, Log } = load({ search: "?metrics=1" });
+  assert.equal(M.on(), true);
+  assert.equal(Log.level().buffer, "debug");
+  assert.equal(Log.level().console, "warn");
+});
+
+test("metrics ON keeps per-namespace buffer overrides", () => {
+  const { M, Log } = load({});
+  Log.level("buffer:scenery:trace");
+  M.set(true);
+  assert.equal(Log.level().buffer, "debug");
+  assert.equal(Log.level().bufferNs.scenery, "trace");
+  M.set(false);
+  assert.equal(Log.level().buffer, "info");
+  assert.equal(Log.level().bufferNs.scenery, "trace");
+});
+
 test("snapshot keeps frame EMA off the governor budget", () => {
   const { M } = load({
     PerfGov: { fpsEMA: () => 16.7, floorMs: () => 22.2, tier: () => 2 },
