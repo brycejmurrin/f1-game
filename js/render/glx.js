@@ -1462,15 +1462,19 @@ const GLX = (function () {
   // unchanged from the previous cull — static prop batches often match.
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
-    // Dual-sig cache: main + env-probe VPs alternate; skip repack/upload when
-    // the plane set matches a recent cull (static props, same camera cell).
-    let sig = 0;
-    for (let pi = 0; pi < 6; pi++) {
-      const p = planes[pi];
-      sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+    // There is one GPU instance buffer, so only its resident pack can be a hit.
+    // A two-frustum count cache returned the right N with the wrong transforms.
+    let samePack = !!batch._cullPlanes;
+    if (samePack) {
+      let po = 0;
+      for (let pi = 0; pi < 6 && samePack; pi++) {
+        const p = planes[pi];
+        for (let k = 0; k < 4; k++, po++) {
+          if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+        }
+      }
     }
-    if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-    if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+    if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
     let n = 0;
@@ -1498,8 +1502,12 @@ const GLX = (function () {
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
       }
     }
-    batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-    batch._cullSig0 = sig; batch._cullN0 = n;
+    const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+    for (let pi = 0, po = 0; pi < 6; pi++) {
+      const p = planes[pi];
+      for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+    }
+    batch._cullN = n;
     return n;
   }
 

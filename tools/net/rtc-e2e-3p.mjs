@@ -63,7 +63,7 @@ const mk = async (name) => {
   const p = await c.newPage();
   p.on("pageerror", (e) => log(`  [${name} pageerror]`, String(e).slice(0, 160)));
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
-  await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   // THREE software-rendered racing games on one box starve each other's game
   // loop well below 1 Hz, and the game loop is what pumps the transport.
   // headless() skips render() only — physics, netPlay.tick and the countdown
@@ -108,7 +108,7 @@ const seat = async (p, team, driver) => p.evaluate(([t, d, relay, turn]) => {
 }, [team, driver, RELAY, TURN]);
 await Promise.all([seat(A, 1, 0), seat(B, 3, 0), seat(C, 6, 0)]);
 for (const p of [A, B, C]) {
-  await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   await p.evaluate(() => window.__apex.headless(true));
 }
 log("seated: A ferrari:0, B redbull:0, C haas:0");

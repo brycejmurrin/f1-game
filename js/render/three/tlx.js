@@ -239,6 +239,10 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      // readRenderTargetPixelsAsync owns a full-frame staging allocation. Keep
+      // at most one live and coalesce callers onto the newest rendered target;
+      // software adapters can otherwise queue hundreds while mapAsync lags.
+      let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
       // 2D overlay — never getContext("2d") on #game (one context type per
@@ -613,6 +617,15 @@ const TLX = (function () {
       unlitMat.side = THREE.FrontSide;
       unlitMat.lights = false;
       unlitMat.customProgramCacheKey = () => "tlx-unlit";
+      // Instanced scenery owns a separate tint attribute. Keeping the canonical
+      // per-vertex colour in `color` preserves mixed-colour models (brown tree
+      // trunks + per-instance foliage, billboard frames + tinted faces).
+      const unlitInstancedMat = new THREE.MeshBasicNodeMaterial();
+      unlitInstancedMat.colorNode = TSL.attribute("color", "vec3")
+        .mul(TSL.attribute("instanceTint", "vec3"));
+      unlitInstancedMat.side = THREE.FrontSide;
+      unlitInstancedMat.lights = false;
+      unlitInstancedMat.customProgramCacheKey = () => "tlx-unlit-instanced";
       const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
       rawUnlitMat.side = THREE.FrontSide;
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
@@ -665,7 +678,10 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); } });
-          if (post && !post.enabled()) post = null;
+          if (post && !post.enabled()) {
+            try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
+            post = null;
+          }
           // GLX keeps the post chain on an RGBA8 scene when half-float is not
           // renderable (js/render/glx/post.js). Killing it here dropped ACES,
           // bloom, SSAO, god-ray, FXAA and SSR on phones that missed the float
@@ -675,6 +691,7 @@ const TLX = (function () {
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
+        try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
         post = null;
       }
 
@@ -824,6 +841,7 @@ const TLX = (function () {
       // uniforms). Key = the 9 material scalars + render-state flags.
       const defaultMat = lit ? lit.makeMaterial({}) : null;
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
+      const defaultMatInstanced = lit ? lit.makeMaterial({ instanced: true }) : null;
       const matCache = new Map();
       const MAT_CACHE_CAP = 64;
       // Frame stamp per cached material, so eviction can never dispose one that
@@ -837,11 +855,13 @@ const TLX = (function () {
       // Reported from an iPhone: garage correct, race identical to WebGL2 except
       // the car body was missing.
       let _matFrame = 0;
-      function fallbackMat() { return _drawMatMode >= 2 ? rawUnlitMat : unlitMat; }
-      function materialFor(opts, chunked) {
-        if (_drawMatMode || !lit) return fallbackMat();
+      function fallbackMat(instanced) {
+        return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
+      }
+      function materialFor(opts, chunked, instanced) {
+        if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : defaultMat;
+        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
         // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
         // every frame): raw in the key it mints a variant per step of the
@@ -862,7 +882,8 @@ const TLX = (function () {
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
-          (chunked ? "|ch" : "");
+          (chunked ? "|ch" : "") +
+          (instanced ? "|in" : "");
         let m = matCache.get(key);
         if (!m) {
           if (matCache.size >= MAT_CACHE_CAP) {
@@ -882,7 +903,9 @@ const TLX = (function () {
               break;
             }
           }
-          m = lit.makeMaterial(chunked ? Object.assign({ chunked: true }, o) : o);
+          m = lit.makeMaterial(chunked
+            ? Object.assign({ chunked: true }, o)
+            : (instanced ? Object.assign({ instanced: true }, o) : o));
           matCache.set(key, m);
         }
         if (m) m.__tlxFrame = _matFrame;
@@ -914,20 +937,17 @@ const TLX = (function () {
         const need = Math.max(1, cap | 0);
         const geo = imesh.geometry;
         if (!geo) return null;
-        const attr = geo.getAttribute("color");
+        const attr = geo.getAttribute("instanceTint");
         if (attr && attr.isInstancedBufferAttribute && attr.count >= need) return attr;
-        // Per-vertex `color` (buildGeometry) is ~16×vec3 = 192 B on a typical
-        // prop. TSL attribute("color") + InstancedMesh is uploaded with
-        // instance stepMode on WebGPU — Dawn then wants count*12 bytes
-        // (mcp-probe: 566 instances → 6792 vs 192 at slot 2). Put an
-        // InstancedBufferAttribute of size `cap` on the geometry and do NOT
-        // also set imesh.instanceColor: NodeMaterial multiplies instanceColor
-        // into colorNode (three NodeMaterial.js), which bound a second
+        // Keep canonical per-vertex `color` intact and put the placement tint in
+        // a dedicated instance-rate attribute. Replacing `color` discarded the
+        // fixed-colour parts of mixed models; do NOT also set imesh.instanceColor:
+        // NodeMaterial would multiply it into colorNode and bind a second
         // instance-rate slot (slot 5, 12 B when setColorAt lazily allocated 1).
         const next = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
         next.setUsage(THREE.DynamicDrawUsage);
         next.array.fill(1);
-        geo.setAttribute("color", next);
+        geo.setAttribute("instanceTint", next);
         return next;
       }
       function _writeInstanceMatrices(imesh, matrices, colors, n) {
@@ -1005,13 +1025,23 @@ const TLX = (function () {
 
       function cullInstances(batch, planes) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
-        let sig = 0;
-        for (let pi = 0; pi < 6; pi++) {
-          const p = planes[pi];
-          sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+        // A batch has one physical instance buffer, so only the frustum whose
+        // pack is resident can be cached. The old two-signature cache remembered
+        // counts for two frusta but not their packed matrices: shadow L1 -> main M
+        // could return M's old count while L1's transforms remained uploaded.
+        // Compare all coefficients as well; the old p[0]/p[3]-only hash collided
+        // for mirrored yaw/pitch frusta.
+        let samePack = !!batch._cullPlanes;
+        if (samePack) {
+          let po = 0;
+          for (let pi = 0; pi < 6 && samePack; pi++) {
+            const p = planes[pi];
+            for (let k = 0; k < 4; k++, po++) {
+              if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+            }
+          }
         }
-        if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-        if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+        if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
         const src = batch.srcMatrices, dst = batch.packMatrices;
         const sc = batch.srcColors, dc = batch.packColors;
         let n = 0;
@@ -1031,8 +1061,12 @@ const TLX = (function () {
         }
         batch.visible = n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
-        batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-        batch._cullSig0 = sig; batch._cullN0 = n;
+        const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+        for (let pi = 0, po = 0; pi < 6; pi++) {
+          const p = planes[pi];
+          for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+        }
+        batch._cullN = n;
         return n;
       }
 
@@ -1046,7 +1080,7 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        drawList.push({ instanced: batch, mat: materialFor(opts, false) });
+        drawList.push({ instanced: batch, mat: materialFor(opts, false, true) });
       }
 
       function freeInstancedBatch(batch) {
@@ -1064,9 +1098,9 @@ const TLX = (function () {
         }
       }
 
-      function castShadowInstanced(batch) {
+      function castShadowInstanced(batch, count) {
         if (softGpu()) return;
-        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch);
+        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
       }
 
       function _showInstanced(rec, order) {
@@ -1402,6 +1436,10 @@ const TLX = (function () {
         const w = Math.max(1, Math.round(cw * dpr * renderScale));
         const h = Math.max(1, Math.round(ch * dpr * renderScale));
         if (w !== W || h !== H) {
+          // An old-size async read may finish after the visible canvas changes.
+          // It is allowed to drain, but must never repaint the resized canvas.
+          _softReadEpoch++;
+          _softReadQueued = null;
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
           if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
@@ -1450,8 +1488,9 @@ const TLX = (function () {
         for (let i = 3; i < data.length; i += 4) data[i] = 255;
         return data;
       }
-      function _readLdr(rt) {
-        const w = (rt && rt.width) || W, h = (rt && rt.height) || H;
+      function _readLdr(rt, readW, readH) {
+        const w = readW || (rt && rt.width) || W;
+        const h = readH || (rt && rt.height) || H;
         return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
           return { w, h, data: _unstrideRgba(src, w, h) };
         });
@@ -1463,11 +1502,25 @@ const TLX = (function () {
           try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
         }
       }
-      function _queueSoftBlit(rt) {
-        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
-        _readLdr(rt).then(function (pack) {
+      function _finishSoftBlitRead() {
+        _softReadPending = false;
+        const next = _softReadQueued;
+        _softReadQueued = null;
+        if (next) _startSoftBlitRead(next);
+      }
+      function _startSoftBlitRead(req) {
+        _softReadPending = true;
+        let read;
+        try { read = _readLdr(req.rt, req.w, req.h); }
+        catch (_) { _finishSoftBlitRead(); return; }
+        read.then(function (pack) {
           try {
             const w = pack.w, h = pack.h, src = pack.data;
+            // Resize/post-fallback invalidates an older source generation. One
+            // in-flight read means same-size frames stay ordered, so do not drop
+            // a valid completion merely because a newer frame is queued.
+            if (req.epoch !== _softReadEpoch || !_displayCanvas ||
+                _displayCanvas.width !== w || _displayCanvas.height !== h) return;
             if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
               _softImg = _displayCtx.createImageData(w, h);
             }
@@ -1486,7 +1539,25 @@ const TLX = (function () {
               _softBlitNotify();
             }
           } catch (_) { /* 2D blit failed */ }
-        }).catch(function () { /* RT not GPU-ready this frame */ });
+        }, function () { /* RT not GPU-ready this frame */ }).then(_finishSoftBlitRead);
+      }
+      function _queueSoftBlit(rt) {
+        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        const req = {
+          rt,
+          w: (rt && rt.width) || W,
+          h: (rt && rt.height) || H,
+          epoch: _softReadEpoch,
+        };
+        if (_softReadPending) {
+          _softReadQueued = req;       // newest frame wins; bounded to one waiter
+          return;
+        }
+        _startSoftBlitRead(req);
+      }
+      function _cancelSoftBlits() {
+        _softReadEpoch++;
+        _softReadQueued = null;
       }
 
       // ── the backend object (the ~40-member seam contract) ────────────────
@@ -1894,15 +1965,19 @@ const TLX = (function () {
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
           return new Promise(function (resolve, reject) {
+            let waiter = null;
             const timer = setTimeout(function () {
+              const i = _softPresentWaiters.indexOf(waiter);
+              if (i >= 0) _softPresentWaiters.splice(i, 1);
               reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
             }, ms);
-            _softPresentWaiters.push(function (gen) {
+            waiter = function (gen) {
               if (gen > start) {
                 try { clearTimeout(timer); } catch (_) { /* harness */ }
                 resolve(gen);
               }
-            });
+            };
+            _softPresentWaiters.push(waiter);
           });
         },
         softPresent() { return !!_softBlit; },
@@ -2204,7 +2279,10 @@ const TLX = (function () {
           };
           const dropTo = (mode, mat) => {
             _drawMatMode = mode;
+            const deadPost = post;
             post = null;
+            _cancelSoftBlits();
+            try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
             try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
             lit = null;
@@ -2266,8 +2344,13 @@ const TLX = (function () {
           } catch (e) { persistFail(e); }
           // Post-only death: same materials, canvas (the 1269 intent).
           if (!painted && post) {
+            const deadPost = post;
             post = null;
+            _cancelSoftBlits();
             try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+            finally {
+              try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }
+            }
           }
           if (!painted) {
             dropTo(1, unlitMat);

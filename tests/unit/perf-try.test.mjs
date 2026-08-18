@@ -140,6 +140,6 @@ test("SETTINGS still has GRAPHICS: HIGH and three category tabs", () => {
   assert.match(html, /id="pm-tab-controls"/);
   assert.match(html, /id="pm-tab-display"/);
   assert.match(html, /id="pm-tab-more"/);
-  assert.match(read("css/components.css"), /repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(read("css/components.css"), /\.balanced-row\s*>\s*:not\(\[hidden\]\)/);
   assert.doesNotMatch(read("css/components.css"), /repeat\(4, minmax\(0, 1fr\)\)/);
 });

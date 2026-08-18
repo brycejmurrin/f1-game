@@ -44,7 +44,11 @@ body:has(#camtune:not([hidden])) {
      This is the second of the two viewport-unit-inside-zoom defects
      docs/archive/research/UI-SCALE-AND-ZOOM.md §5b deferred; --cs-sheet-w was the
      other, fixed earlier this session. */
-  --dock-w: min(calc(88 * var(--vwz)), 380px);
+  --dock-w: min(
+    calc(88 * var(--vwz)),
+    380px,
+    calc(100 * var(--vwz) - (var(--sal) + var(--sar) + 16px) / var(--ui-scale))
+  );
   /* WHAT THE PANEL PAINTS, WHICH IS NOT WHAT IT DECLARES — use this, not
      --dock-w, to position anything against the dock.
      #lighting-inner is a `.sheet`, and css/components.css puts
@@ -63,6 +67,7 @@ body:has(#camtune:not([hidden])) {
      repeating this formula. */
   --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
 }
+#lighting-inner, #camtune-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
@@ -217,14 +222,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
 /* Category tabs — split the 80+ sliders into one group at a time. Part of the
    panel's fixed head (only #lt-rows scrolls), so the chips are always visible. */
-/* A GRID, not flex-wrap. There are twelve lighting categories and thirteen
-   camera modes with labels from "FX" to "NIGHT GLOW & BLOOM", so content-sized
-   chips wrapped into ragged lines that ended on a single stranded chip. Two
-   equal columns give every chip the same target, and .no-orphan-2 (see
-   css/components.css) widens a lonely thirteenth to the full row instead of
-   leaving it hanging. */
+/* A balanced row derives its column count from this panel's local width. There
+   are twelve lighting categories and thirteen camera modes with labels from FX
+   to NIGHT GLOW & BLOOM; fixed two-column grids wasted desktop width and needed
+   child-count arithmetic to rescue a lonely thirteenth chip. */
 .lt-tabs {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 8rem; --balance-min: 7rem;
+  gap: 4px;
   margin: 2px -18px 6px; padding: 6px 18px 8px;
   background: rgba(12, 14, 20, 0.94);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -370,6 +375,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   min-width: 52px; min-height: var(--tap-sm);
   padding: 4px 12px; font-size: var(--fs-micro); letter-spacing: 0.06em;
 }
+@container sheet (max-width: 240px) {
+  #audioset-inner .as-head { flex-wrap: wrap; }
+  #audioset-inner .opt-row.as-toggle { width: 100%; }
+  #audioset-inner .opt-row.as-toggle .opt-btn { flex: 1 1 0; min-width: var(--tap-min); }
+}
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
    prominent thing and there was no way back a track. Title leads, source is a
@@ -458,7 +468,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    js/game/sheetshape.js — 620 to match the media query below, because the
    viewport height that query reads is blind to `zoom` and the sheet's own height
    at UI SIZE 115% on that phone was 557 while the query still read 659. */
-#lighting-inner, #camtune-inner { --compact-at: 620px; }
+#lighting-inner, #camtune-inner { --compact-at: 620px; --rail-at: 500px; }
 #lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot {
   position: sticky; bottom: 0; z-index: 2;
 }
@@ -526,6 +536,56 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
 
+  /* At extreme local widths a wrapped 2+1 footer becomes the largest thing in
+     the panel and its sticky position covers the tab strip. Rail-off compact
+     panels have the full dock width, so keep all three scoped actions in one
+     row and remove redundant explanatory chrome. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    position: static;
+    display: flex; flex-wrap: nowrap;
+    --balance-basis: 0px; --balance-min: 0px;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rail, #ct-rail) {
+    display: contents;
+  }
+  /* Compact already means the sheet is short in its own units. A viewport
+     max-height query cannot see zoom, so hide only redundant title chrome.
+     Lighting's head also owns FREE CAMERA and must remain actionable. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-head {
+    display: block; grid-column: 1; grid-row: 1; margin: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-head h2, #ct-head) {
+    display: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] .lt-tabs {
+    grid-column: 2; grid-row: 1; min-width: 0;
+  }
+  #camtune-inner[data-density="compact"][data-rail="off"] .lt-tabs { grid-column: 1 / -1; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
+    grid-column: 1 / -1; grid-row: 2; min-height: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    grid-column: 1 / -1; grid-row: 3;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
+    min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
+    font-size: var(--fs-micro); white-space: nowrap;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
+    #lt-profile, #lt-preview, #lt-spread, #ct-profile, .lt-help-toggle
+  ) {
+    display: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #pc-toggle {
+    min-height: var(--tap-min); padding: 0 var(--gap);
+    font-size: var(--fs-micro);
+  }
+
 /* ---------- short AND wide: put the chrome in a rail ----------
    Compacting the head was not enough. Measured on a 852x393 phone the panel is
    356px tall and its fixed furniture — title 39 + profile 15 + time/weather 52 +
@@ -566,15 +626,15 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      density inside :has() puts a SECOND id in this selector, and (2,2,1) beats
      three classes no matter what. Stating the exclusion is what keeps the two
      rules from being ordered by an accident of how the condition is spelled. */
-  body:not(.photo-mode):has(#lighting:not([hidden]) > #lighting-inner[data-density="compact"]),
-  body:not(.photo-mode):has(#camtune:not([hidden]) > #camtune-inner[data-density="compact"]) {
+  body:not(.photo-mode):has(#lighting:not([hidden]) > #lighting-inner[data-density="compact"][data-rail="on"]),
+  body:not(.photo-mode):has(#camtune:not([hidden]) > #camtune-inner[data-density="compact"][data-rail="on"]) {
     /* `70 * --vwz`, not `70vw` — this file's own header explains why: the value
        is consumed inside `zoom: var(--ui-scale)`, so a bare viewport unit is
        multiplied by the scale and paints as 80vw at the 1.15 a coarse pointer
        ships. The base --dock-w was corrected; these two overrides were missed. */
     --dock-w: min(calc(70 * var(--vwz)), 560px);
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] {
     display: grid;
     grid-template-columns: 210px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
@@ -589,28 +649,26 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      painted underneath RESET ALL / COPY VALUES / DONE. The rail scrolls, so it
      never needed the second row — the foot's height is exactly what row 2 is
      for. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rail, #ct-rail) {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-rail, #ct-rail) {
     display: flex; flex-direction: column;
     grid-column: 1; grid-row: 1;
     min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-rows, #ct-rows) {
     grid-column: 2; grid-row: 1;
     min-height: 0; max-height: none;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { grid-column: 2; grid-row: 2; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-json { grid-column: 2; grid-row: 2; }
   /* The action bar is the foot of the RAIL, so its height comes out of the
-     rail's column and not out of the slider list beside it. Compact, because
-     every pixel it takes here is a pixel of row 1 — which is the sliders.
-     Two columns with DONE spanning both: three flex items at `1 1 84px` in a
-     210px rail wrapped 2 + 1, stranding DONE. Spanning it is the same shape,
-     stated on purpose — and it makes the primary action the widest target. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot {
+     rail's column and not out of the slider list beside it. The balanced row
+     fits two actions, then grows the final DONE action across the last line. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot {
     grid-column: 1; grid-row: 2;
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 5.5rem; --balance-min: 5rem;
     margin-top: 0; gap: 5px; padding: 6px 0 0;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot button {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot button {
     margin: 0; min-width: 0;
     /* --tap-min, NOT 0. `min-height: 0` here was cancelling the floor the block
        above sets, and this rule wins on both order and the child combinator — so
@@ -620,14 +678,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
        do: --tap-min only floors the axis a thumb needs. */
     padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
   }
-  /* BOTH panels' DONE, not just the lighting one: the camera tuner's foot is
-     #ct-reset / #ct-reset-all / #ct-close, so naming only #lt-close left DONE
-     stranded half-width in the camtune rail — the exact 2 + 1 defect the rule
-     above documents. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot > :is(#lt-close, #ct-close) { grid-column: 1 / -1; }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 5.5rem; --balance-min: 5rem;
     overflow: visible; touch-action: auto;
     margin: 2px 0 4px; padding: 0;
     background: none; border-bottom: none;
@@ -635,22 +689,26 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   /* #ct-modes too — the compact strip above sets nowrap on both chip lists, so
      resetting only #lt-tabs left the camera-mode chips nowrap inside the rail's
      ~100px columns. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab { white-space: normal; justify-content: center; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-tabs, #ct-modes) .lt-tab {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+    white-space: normal; justify-content: center;
+  }
   /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
      button and costing the rail a whole extra line. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2 { font-size: 15px; }
-  /* THREE equal columns for the five chips: 3 + 2, never 4 + 1. This row was
-     flex, so the fifth option (TRACK / CLOUD) wrapped alone onto line two and
-     stretched the full width of the rail, reading as a different kind of
-     control rather than one more chip. The label takes its own full-width row
-     above them. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head h2 { font-size: 15px; }
+  /* Preview choices pack from their own readable width. At the usual 210px
+     rail five choices become 3 + 2; a future added choice or narrower local
+     panel rebalances without changing a column count. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row {
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 3.25rem; --balance-min: 3rem;
     align-items: stretch;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { grid-column: 1 / -1; width: auto; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn { min-width: 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-lbl { flex: 1 0 100%; width: auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row .opt-btn {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+  }
 
   /* ---------- ...EXCEPT WHILE FLYING: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
      The rail exists to show twelve categories and their sliders side by side,
@@ -697,6 +755,14 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
     white-space: nowrap; flex: 0 0 auto;
   }
+}
+
+/* At extreme UI sizes the dock can be locally narrower than its header even in
+   a wide physical viewport. Keep the action inside and let the slider pane own
+   the width rather than clipping the FREE CAMERA control. */
+@container sheet (max-width: 220px) {
+  #lt-head { flex-wrap: wrap; }
+  #pc-toggle { width: 100%; min-width: 0; }
 }
 /* advanced disclosure — a native <details>/<summary>; the summary keeps the
    look of the button it replaced (tokens.css's base `button` rule does not

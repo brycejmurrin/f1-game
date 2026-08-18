@@ -483,7 +483,7 @@ const PROBE = (rootSel) => {
   const vw = innerWidth, vh = innerHeight;
   const root = document.querySelector(rootSel);
   const px = (n) => Math.round(n);
-  const SCROLLERS = ".pane,#sel-body,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
   // A COLLAPSED <details> STILL HAS GEOMETRY, and that is not the same as being
@@ -756,6 +756,8 @@ const PROBE = (rootSel) => {
   const sr = sheet.getBoundingClientRect();
   for (const el of root.querySelectorAll(SCROLLERS)) {
     if (!visible(el)) continue;
+    const cs = getComputedStyle(el);
+    if (!/(auto|scroll)/.test(cs.overflowY + cs.overflowX)) continue;
     const r = el.getBoundingClientRect();
     out.scrollers.push({ el: desc(el), box: [px(r.width), px(r.height)],
       hidden: px(el.scrollHeight - el.clientHeight), toFloor: px(sr.bottom - r.bottom) });
@@ -976,7 +978,7 @@ const browser = await launchChromium({
 // and opening the next one — 10 loads instead of 120.
 const OVERLAY_IDS = ["select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
   // The panels reached from SETTINGS, plus the mid-session music player. Left off
   // this list they stay open into the NEXT cell and swallow its clicks — which is
   // how fourteen consecutive cells came back "SKIPPED: page.click timeout" from

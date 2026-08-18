@@ -54,25 +54,45 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools and playwright in the five-server catalog", () => {
+test(".mcp.json registers apex-tools and playwright in the seven-server catalog", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);
-  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
+  assert.equal(cfg.mcpServers.playwright.command, "bash");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
-  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, catalog.stdio.args);
+  assert.equal(catalog.stdio.command, "bash");
   assert.equal(catalog.http.bind, "127.0.0.1");
   assert.equal(catalog.http.port, 3713);
   assert.deepEqual(catalog.http.args, ["serve-http"]);
+});
+
+test("official npx catalog pins match the wrapper packages and never @latest", () => {
+  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
+  const pw = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8")
+    .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
+  const cd = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8")
+    .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
+  assert.equal(cfg.mcpServers["playwright-official"].command, "npx");
+  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", pw]);
+  assert.equal(cfg.mcpServers["chrome-devtools-official"].command, "npx");
+  assert.deepEqual(cfg.mcpServers["chrome-devtools-official"].args, ["-y", cd]);
+  assert.deepEqual(cursorCfg.mcpServers["playwright-official"], cfg.mcpServers["playwright-official"]);
+  assert.deepEqual(cursorCfg.mcpServers["chrome-devtools-official"], cfg.mcpServers["chrome-devtools-official"]);
+  assert.doesNotMatch(JSON.stringify(cfg), /@latest/);
+  assert.doesNotMatch(JSON.stringify(cursorCfg), /@latest/);
 });
 
 test(".cursor/mcp.json locksteps the root catalog (Cloud/Claude load .mcp.json)", () => {

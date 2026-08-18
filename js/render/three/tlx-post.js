@@ -46,6 +46,36 @@
 
   function postChain(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
+    // Every resource created by this chain stays owned here, including lazy
+    // targets. The renderer keeps GPU-side state after JS references disappear,
+    // so runtime degradation and partial construction both need an explicit,
+    // idempotent unwind.
+    const ownedRTs = new Set();
+    const ownedTextures = new Set();
+    const ownedMaterials = new Set();
+    let quad = null;
+    let disposed = false;
+    function ownRT(rt) { ownedRTs.add(rt); return rt; }
+    function ownTexture(tex) { if (tex) ownedTextures.add(tex); return tex; }
+    function trackMaterial(mat) { if (mat) ownedMaterials.add(mat); return mat; }
+    function dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (quad) quad.material = null;
+      for (const mat of ownedMaterials) {
+        try { mat.dispose(); } catch (_) { /* device already dying */ }
+      }
+      // RenderTarget.dispose owns all MRT colour attachments and its depth
+      // texture. Do not separately dispose those textures here.
+      for (const rt of ownedRTs) {
+        try { rt.dispose(); } catch (_) { /* device already dying */ }
+      }
+      for (const tex of ownedTextures) {
+        try { tex.dispose(); } catch (_) { /* device already dying */ }
+      }
+      ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
+    }
+    try {
     // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
     // dropped gate: the MSAA deviation above means this chain already runs the
     // GLX mobile-tier recipe (no multisampled scene target, FXAA carries the
@@ -79,7 +109,7 @@
 
     // ── 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex) ─────────────────
     function onePx(v) {
-      const t = new THREE.DataTexture(new Uint8Array([v, v, v, 255]), 1, 1);
+      const t = ownTexture(new THREE.DataTexture(new Uint8Array([v, v, v, 255]), 1, 1));
       t.colorSpace = THREE.NoColorSpace;
       t.needsUpdate = true;
       return t;
@@ -138,7 +168,7 @@
         }
         // Plain Texture over the canvas (CanvasTexture isn't exported by the
         // vendored webgpu bundle — same object, needsUpdate set by hand).
-        const t = new THREE.Texture(cv);
+        const t = ownTexture(new THREE.Texture(cv));
         t.minFilter = THREE.LinearFilter;
         t.magFilter = THREE.LinearFilter;
         t.generateMipmaps = false;
@@ -151,10 +181,10 @@
 
     // ── render-target helpers ────────────────────────────────────────────────
     function makeRT(w, h, type, format) {
-      const rt = new THREE.RenderTarget(w, h, {
+      const rt = ownRT(new THREE.RenderTarget(w, h, {
         type, depthBuffer: false,
         format: format || THREE.RGBAFormat,
-      });
+      }));
       rt.texture.generateMipmaps = false;
       rt.texture.colorSpace = THREE.NoColorSpace;
       return rt;
@@ -164,11 +194,14 @@
     // a SAMPLEABLE depth texture (NO compareFunction — raw reads for SSAO/
     // SSR/godray reconstruction; the shadow maps keep their own compare ones).
     let W = 1, H = 1;
-    const sceneDepthTex = new THREE.DepthTexture(1, 1);
+    // Track depth independently until the RenderTarget adopts it, so a target
+    // constructor throw still releases a partially-created depth texture.
+    const sceneDepthTex = ownTexture(new THREE.DepthTexture(1, 1));
     sceneDepthTex.name = "TLXSceneDepth";
-    const sceneRT = new THREE.RenderTarget(1, 1, {
+    const sceneRT = ownRT(new THREE.RenderTarget(1, 1, {
       type: hdrType, count: 2, depthBuffer: true, depthTexture: sceneDepthTex,
-    });
+    }));
+    ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
@@ -259,10 +292,11 @@
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
+      trackMaterial,
     });
 
     // ── fullscreen runner ───────────────────────────────────────────────────
-    const quad = new THREE.QuadMesh();
+    quad = new THREE.QuadMesh();
     function runPass(mat, target) {
       quad.material = mat;
       renderer.setRenderTarget(target);
@@ -609,6 +643,7 @@
       ldrTarget: () => ldrRT,
       resize,
       present,
+      dispose,
       viz,
       state: () => ({
         on: true,
@@ -618,6 +653,10 @@
         targets: [W, H],
       }),
     };
+    } catch (e) {
+      dispose();
+      throw e;
+    }
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { postChain });

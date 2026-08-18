@@ -307,7 +307,9 @@ parse_common_flags() {
       *) rest+=("$1"); shift ;;
     esac
   done
-  PARSE_REST=("${rest[@]}")
+  # bash + set -u: empty rest[@] is unbound (deploy-check --tip with no extra args).
+  PARSE_REST=()
+  if ((${#rest[@]})); then PARSE_REST=("${rest[@]}"); fi
 }
 
 cmd_tools() {

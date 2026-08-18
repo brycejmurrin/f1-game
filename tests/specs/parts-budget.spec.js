@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
 import { galleryPath } from "../helpers/output-paths.js";
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
 }
 
 async function pickOpt(page, catId, optId) {

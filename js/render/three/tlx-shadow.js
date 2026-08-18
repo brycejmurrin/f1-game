@@ -253,13 +253,13 @@
     let iUsed = 0;
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
     const _castMat = new THREE.Matrix4();
-    // Instanced casters: always the FULL instance set (GLX/WGX contract).
-    // batch.visible is the MAIN-camera cull from the lit pass — using it drops
-    // casters behind the eye that still hit the light frustum. Prefer
-    // srcMatrices (unculled CPU copy); fall back to a full imesh walk.
-    function castInstanced(batch) {
+    // Explicit count = the light-frustum slice packed by cullInstances(). With
+    // no count, preserve the full-set contract so casters behind the main camera
+    // can still hit the light frustum.
+    function castInstanced(batch, count) {
       if (!S.depthPassOn || !batch || !batch.geo) return;
-      const n = batch.instances | 0;
+      const culled = count !== undefined;
+      const n = culled ? Math.min(count | 0, batch.instances | 0) : (batch.instances | 0);
       if (!(n > 0)) return;
       let m = iPool[iUsed];
       if (!m || (m.userData.tlxInstCap || 0) < batch.instances) {
@@ -279,7 +279,9 @@
       m.geometry = batch.geo;
       m.material = depthMat;
       const dst = m.instanceMatrix.array;
-      const src = batch.srcMatrices;
+      // An explicit count follows cullInstances(), whose packed matrices are the
+      // light-frustum slice. With no count retain the full-set shadow contract.
+      const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
       if (src && src.length >= n * 16) {
         for (let i = 0, o = 0; i < n; i++, o += 16) {
           for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];

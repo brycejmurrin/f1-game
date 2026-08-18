@@ -135,6 +135,26 @@
   color: #fff;
   font-weight: 800;
 }
+/* UI SIZE can turn a physically short screen into a very short LOCAL card.
+   body[data-density] is measured in those same zoom-adjusted units; compact
+   chrome keeps the destination strip and loading state from consuming the
+   entire work area while every target still paints at least 24 CSS px. */
+body[data-density="compact"] .dh-header { padding: 0 var(--gap); }
+body[data-density="compact"] .dh-card { min-height: 0; height: 100%; max-height: 100%; }
+body[data-density="compact"] .dh-title { font-size: var(--fs-4); }
+body[data-density="compact"] .dh-close {
+  width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min);
+}
+body[data-density="compact"] .dh-tabs { gap: var(--gap); padding: 0 var(--gap); }
+body[data-density="compact"] .dh-tab {
+  min-height: var(--tap-min); padding: 0 var(--gap); font-size: var(--fs-micro);
+}
+body[data-density="compact"] .dh-content { padding: var(--gap); }
+body[data-density="compact"] .dh-loading,
+body[data-density="compact"] .dh-error { gap: var(--gap); padding: var(--gap); }
+body[data-density="compact"] .dh-race-sub {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
 /* On a narrow upright card, hiding half the destinations beyond a sideways
    gesture makes the hub's information architecture undiscoverable. All six
    labels fit comfortably in two equal columns, so trade one extra tab row for
@@ -274,7 +294,7 @@
 .dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
-.dh-lr-head { margin-bottom: var(--gap); }
+#dh-lr-head { margin-bottom: var(--gap); }
 /* KEPT LITERAL, NOT AN OVERSIGHT: this is one rung of a RESPONSIVE SHRINK
    LADDER (a component whose font-size steps down again in a narrower/denser
    layout — .dh-split-L, .dh-tpopup, .dh-telem-side). Tokenising both rungs of
@@ -288,7 +308,10 @@
    left for whenever the scale gains an intermediate step, not before. */
 .dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: #fff; }
 .dh-lr-meta { font-size: var(--fs-2); color: #8a8a95; margin-top: 2px; }
-.dh-table { width: 100%; border-collapse: collapse; font-size: var(--fs-3); font-variant-numeric: tabular-nums; }
+.dh-table {
+  width: 100%; max-width: 100%; table-layout: fixed;
+  border-collapse: collapse; font-size: var(--fs-3); font-variant-numeric: tabular-nums;
+}
 .dh-table thead th {
   text-align: left; font-size: var(--fs-1); letter-spacing: 0.10em;
   color: #8a8a95; font-weight: 700; padding: 4px calc(var(--gap) * 0.5) 8px;
@@ -301,8 +324,11 @@
 .dh-table td { padding: 7px calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-pos { width: 26px; text-align: right; color: #8a8a95; }
 /* chip + driver name side by side in the driver cell */
-.dh-td-driver { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); min-width: 0; }
-.dh-td-driver .dh-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dh-td-driver {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dh-td-driver .dh-codechip { display: inline-flex; margin-right: calc(var(--gap) * 0.5); vertical-align: middle; }
+.dh-td-driver .dh-name { display: inline; min-width: 0; }
 .dh-td-team { color: #8a8a95; font-size: var(--fs-2); width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
 .dh-td-grid { width: 30px; text-align: center; color: #8a8a95; }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
@@ -521,7 +547,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   margin-bottom: var(--gap); padding-bottom: var(--gap);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.dh-pick-years { display: flex; gap: 4px; }
+.dh-pick-years { display: flex; flex-wrap: wrap; gap: 4px; }
 .dh-pill {
   font-size: var(--fs-micro); font-weight: 700;
   padding: 5px calc(var(--pad) * 0.5); border-radius: var(--r-pill);
@@ -637,17 +663,17 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* Landscape: left pane = fixed-width sidebar; right pane = scrollable main */
 @media (orientation: landscape) and (max-height: 520px) {
   /* Remove outer content padding and overflow so panes control their own */
-  .dh-content.dh-has-split {
+  body[data-width="wide"] .dh-content.dh-has-split {
     padding: 0;
     overflow: hidden;
   }
-  .dh-split {
+  body[data-width="wide"] .dh-split {
     flex-direction: row;
     height: 100%;
     overflow: hidden;
     gap: 0;
   }
-  .dh-split-L {
+  body[data-width="wide"] .dh-split-L {
     width: 260px;
     flex-shrink: 0;
     overflow-y: auto;
@@ -658,7 +684,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     gap: 8px;
   }
-  .dh-split-R {
+  body[data-width="wide"] .dh-split-R {
     flex: 1;
     overflow-y: auto;
     /* what .pane gives every other scroll region in the app */
@@ -702,7 +728,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   .dh-split-R .dh-wx-value { font-size: var(--fs-4); }
 
   /* Last race header compact (single line) */
-  .dh-lr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: calc(var(--gap) * 0.5); }
+  #dh-lr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: calc(var(--gap) * 0.5); }
   .dh-lr-name { font-size: 15px; }
 
   /* Gauge dashboard tighter */

@@ -2987,6 +2987,9 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
+  // Debug teleports can run while a headless/SwiftShader frame is starved.
+  // Let apex.js synchronise its observable HUD state without waiting for rAF.
+  refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -3090,7 +3093,7 @@ function clearMenuScreens() {
 }
 
 function quitToMenu() {
-  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local");
+  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
@@ -3116,7 +3119,8 @@ function quitToMenu() {
   setFlow("gp"); session = "race";
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiPeers.clear();
-  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.abortQuali()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
+  // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
+  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.cancel()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -8293,7 +8297,7 @@ els.resNext.onclick = () => {
 };
 
 function setPaused(p) {
-  if (state !== "race" && state !== "count") return;
+  if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
   if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
@@ -8330,7 +8334,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // state (the render loop reads them); the module mutates them through G. The
 // façade exposes setCamMode as a deferred arrow (const initialised here), and
 // the update loop's `cycleCam()` closes over this const.
-const { setCamMode, cycleCam } = CamModes.create(G);
+const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNetDone) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };

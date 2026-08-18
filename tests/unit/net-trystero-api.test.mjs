@@ -235,3 +235,50 @@ test("a bad relay override is dropped, never handed to WebSocket", () => {
     ["wss://relay.example", "ws://127.0.0.1:7448"],
     "and a real override still wins — ws:// matters, it is the local fixture");
 });
+
+test("direct relay frames are rejected before unbounded parsing or decoding", () => {
+  const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
+  const huge = "x".repeat(NetNostr.MAX_FRAME_CHARS + 1);
+  const frame = NetNostr.readRelayFrame(huge);
+  assert.equal(frame.close, true);
+  assert.equal(frame.message, null);
+  assert.equal(NetNostr.readRelayFrame({ toString: () => '["EVENT"]' }).close, true,
+    "Nostr JSON is text; arbitrary objects must not be coerced before measuring");
+  assert.deepEqual(NetNostr.readRelayFrame('["EVENT","s",{"content":"ok"}]').message,
+    ["EVENT", "s", { content: "ok" }]);
+});
+
+test("direct relay dedupe and decrypt work stay hard bounded", async () => {
+  const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
+  const releases = [];
+  const inbox = NetNostr.createBoundedInbox(() => new Promise((resolve) => releases.push(resolve)));
+
+  for (let i = 0; i < NetNostr.MAX_HEARD_ACTIVE; i++) assert.equal(inbox.accept("msg-" + i), true);
+  assert.equal(inbox.accept("msg-0"), true, "a duplicate consumes no second decrypt slot");
+  assert.equal(inbox.accept("overflow"), false, "unique work beyond the concurrency cap closes that relay");
+  assert.equal(inbox.stats().active, NetNostr.MAX_HEARD_ACTIVE);
+  assert.equal(inbox.accept("x".repeat(NetNostr.MAX_CONTENT_CHARS + 1)), false);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  for (const release of releases) release();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inbox.stats().active, 0);
+
+  // Let each task settle before admitting the next, exercising the FIFO bound
+  // rather than the concurrency rejection above.
+  const quick = NetNostr.createBoundedInbox(async () => {});
+  for (let i = 0; i < NetNostr.MAX_SEEN + 20; i++) {
+    assert.equal(quick.accept("unique-" + i), true);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.ok(quick.stats().seen <= NetNostr.MAX_SEEN);
+  assert.ok(quick.stats().seenChars <= NetNostr.MAX_SEEN_CHARS);
+  assert.equal(quick.stats().active, 0);
+
+  for (let i = 0; i < 4; i++) {
+    assert.equal(quick.accept(String(i) + "z".repeat(NetNostr.MAX_CONTENT_CHARS - 1)), true);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.ok(quick.stats().seenChars <= NetNostr.MAX_SEEN_CHARS,
+    "a handful of individually legal near-limit frames must not multiply retention");
+});

@@ -47,17 +47,24 @@ window.SheetShape = (function () {
    * Hysteresis again, and for a sharper reason than the shape: a sheet sitting
    * exactly on its threshold would otherwise toggle between one and two columns
    * on every observer callback. */
-  const PAIR_HYST = 8;
+  const PAIR_HYST = 8, RAIL_HYST = 12, WIDE_HYST = 16;
 
-  function classifyPair(el, w) {
-    const raw = getComputedStyle(el).getPropertyValue("--pair-at");
+  function classifyFlag(el, w, cssVar, attr, hyst, onVal, offVal) {
+    onVal = onVal || "on";
+    offVal = offVal || "off";
+    const raw = getComputedStyle(el).getPropertyValue(cssVar);
     const at = parseFloat(raw);
-    if (!at) { if (el.dataset.pair) delete el.dataset.pair; return; }
-    const was = el.dataset.pair === "on";
-    const now = was ? w >= at - PAIR_HYST : w >= at;
-    const next = now ? "on" : "off";
-    if (el.dataset.pair !== next) el.dataset.pair = next;
+    if (!at) { if (el.dataset[attr]) delete el.dataset[attr]; return; }
+    const was = el.dataset[attr] === onVal;
+    const now = was ? w >= at - hyst : w >= at;
+    const next = now ? onVal : offVal;
+    if (el.dataset[attr] !== next) el.dataset[attr] = next;
   }
+
+  function classifyPair(el, w) { classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST); }
+  /* Tuners: viewport media cannot see zoom. 734 physical px at UI SIZE 200%
+   * is ~257 local px — too narrow for a 210px rail plus slider values. */
+  function classifyRail(el, w) { classifyFlag(el, w, "--rail-at", "rail", RAIL_HYST); }
 
   /* THE THIRD ANSWER: is the sheet SHORT — and short in the units its own CSS
    * is written in, which is not the same question as "is the viewport short".
@@ -85,6 +92,45 @@ window.SheetShape = (function () {
    * the fixed footer fixed. */
   const SHORT_DEFAULT = 380, SHORT_HYST = 40;   // hysteresis, same reason as the others
 
+  /* THE FOURTH ANSWER: can this sheet afford the requested UI zoom and still
+   * have a functional content row? Most sheets can simply scroll, but dense
+   * list/detail panels have fixed head + foot chrome around that scroller. On a
+   * 343px landscape viewport, 200% left the Garage with a 9px option pane and
+   * How-to-Play with 30px of reading pane: bigger type had made both LESS
+   * accessible.
+   *
+   * Opt-in with --fit-at, the minimum height the component needs in its own CSS
+   * units. The cap is derived from the host screen's SAFE content box, so it
+   * reacts to orientation, browser chrome and injected notch insets without a
+   * device name or scale-specific media query. It never enlarges a preference;
+   * it only writes --sheet-scale when the requested scale cannot fit. */
+  function classifyFit(el) {
+    const cs = getComputedStyle(el);
+    const at = parseFloat(cs.getPropertyValue("--fit-at"));
+    if (!at) {
+      if (el.style.getPropertyValue("--sheet-scale")) el.style.removeProperty("--sheet-scale");
+      if (el.dataset.fit) delete el.dataset.fit;
+      return;
+    }
+    const host = el.parentElement;
+    if (!host) return;
+    const hs = getComputedStyle(host);
+    const available = host.clientHeight
+      - (parseFloat(hs.paddingTop) || 0) - (parseFloat(hs.paddingBottom) || 0);
+    if (!available) return;
+    const desired = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue("--ui-scale")) || 1;
+    const fitted = Math.max(0.4, Math.min(desired, available / at));
+    const capped = fitted < desired - 0.001;
+    const next = capped ? String(Math.round(fitted * 1000) / 1000) : "";
+    if (el.style.getPropertyValue("--sheet-scale") !== next) {
+      if (next) el.style.setProperty("--sheet-scale", next);
+      else el.style.removeProperty("--sheet-scale");
+    }
+    const state = capped ? "on" : "off";
+    if (el.dataset.fit !== state) el.dataset.fit = state;
+  }
+
   function classifyDensity(el, hOwn) {
     const raw = getComputedStyle(el).getPropertyValue("--compact-at");
     const at = parseFloat(raw) || SHORT_DEFAULT;
@@ -96,6 +142,7 @@ window.SheetShape = (function () {
 
   function classify(el, w, h) {
     if (!w || !h) return; // display:none — keep the last answer rather than guess
+    classifyFit(el);
     const ratio = h / w;
     const was = el.dataset.shape;
     const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
@@ -116,6 +163,7 @@ window.SheetShape = (function () {
        rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
        sat ~39px past the sheet until this order flipped. */
     classifyDensity(el, hOwn);
+    classifyRail(el, wOwn);
     classifyPair(el, wOwn);
   }
 
@@ -142,10 +190,10 @@ window.SheetShape = (function () {
      and that callback the sheet carries no `data-shape`/`data-pair` and the CSS
      falls back to the stacked layout. Visually that is a valid layout — it was
      made valid on purpose — but it is not the SAME layout, and the difference is
-     observable: in the fallback `#sel-body` is the scroll region, in the pair
-     `#sel-tracks` is. js/game/menunav.js redirects a trackpad gesture to the
-     nearest pane, so for that one frame the wheel scrolled the wrong element,
-     and three menu-keyboard specs caught it.
+     observable: stacked vs pair is columns vs a preview band, but `#sel-tracks`
+     is the list scroller in both. js/game/menunav.js redirects a trackpad
+     gesture to the nearest pane, so for that one frame the wheel scrolled the
+     wrong element, and three menu-keyboard specs caught it.
      Screens are toggled by their `hidden` attribute, so watching that and
      classifying immediately closes the gap with no polling and no new contract
      for the code that opens a screen. */
@@ -203,6 +251,7 @@ window.SheetShape = (function () {
     const scale = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
     classifyDensity(b, window.innerHeight / scale);
+    classifyFlag(b, window.innerWidth / scale, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
   }
 
   function reclassify() {

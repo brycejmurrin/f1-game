@@ -237,14 +237,18 @@ other occupants. One-sided is acceptable if `apex_status` reports them
 
 ## Registration
 
-Fifth catalog name in both files: `playwright` → `tools/playwright-mcp.sh`
-`["run"]`. `apex-tools` stays `tools/apex-tools-mcp.sh` `["serve"]`.
+Fifth catalog name in both files: `playwright` → `bash`
+`["tools/playwright-mcp.sh", "run"]`. `apex-tools` stays `bash`
+`["tools/apex-tools-mcp.sh", "serve"]` (Cursor PATH-lookup: a bare
+`tools/*.sh` command never starts). Official npx rows
+`playwright-official` / `chrome-devtools-official` pin the same
+`MCP_NPM_PACKAGE` as those wrappers — never `@latest`.
 Same-commit updates:
 
 - key lists in `tests/unit/probe-mcp.test.mjs` and
   `tests/unit/tinyfish-mcp.test.mjs` include
-  `["apex-tools", "chrome-devtools", "playwright", "probe", "tinyfish"]`
-- `.cursor/mcp.json` locksteps those five names + apex-tools argv (`type: stdio`)
+  `playwright-official` and `chrome-devtools-official`
+- `.cursor/mcp.json` locksteps those seven names + apex-tools argv (`type: stdio`)
 - `apex-tools-mcp.sh` / `playwright-mcp.sh` help in `tests/unit/tools-runnable.test.mjs`
 - AGENTS Cloud path lists `./tools/apex-tools-mcp.sh` and
   `./tools/playwright-mcp.sh` next to `tinyfish-mcp.sh` / `probe-mcp.py`

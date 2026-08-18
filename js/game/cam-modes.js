@@ -42,29 +42,50 @@ window.CamModes = (function () {
     // CAM button: quick tap cycles (muscle memory preserved); press-and-hold (or
     // right-click) opens a PICKER GRID of all modes — cycling one-by-one through
     // 13 cameras to reach the one you want was the worst switch in the game.
+    const camTrigger = $("btn-cam");
     const camPicker = (() => {
       let el = null;
       const build = () => {
         el = document.createElement("div");
         el.id = "campicker";
-        // 13 modes in a 3-wide grid leaves REAR CAM alone on the last line; the
-        // no-orphan rule (css/components.css) widens it across the row instead.
-        el.className = "no-orphan-3";
+        el.setAttribute("role", "menu");
+        el.setAttribute("aria-label", "Camera view");
+        // The shared balanced row derives its count from the available width;
+        // REAR CAM fills a lone final line without assuming three columns.
+        el.className = "balanced-row";
         el.hidden = true;
         for (let i = 0; i < CAM_MODES.length; i++) {
           const b = document.createElement("button");
           b.textContent = CAM_MODES[i].label;
           b.dataset.idx = i;
-          b.onclick = (e) => { e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); };
+          b.setAttribute("role", "menuitemradio");
+          b.tabIndex = -1;
+          b.onclick = (e) => {
+            e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); camTrigger?.focus();
+          };
           el.appendChild(b);
         }
+        el.addEventListener("keydown", (e) => {
+          const items = [...el.querySelectorAll('[role="menuitemradio"]')];
+          const at = items.indexOf(document.activeElement);
+          let next = -1;
+          if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % items.length;
+          else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (at - 1 + items.length) % items.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = items.length - 1;
+          else if (e.key === "Escape") {
+            e.preventDefault(); e.stopPropagation(); hide(); camTrigger?.focus(); return;
+          }
+          else return;
+          e.preventDefault(); e.stopPropagation(); items[next]?.focus();
+        });
         document.body.appendChild(el);
       };
       const sync = () => {
         for (const b of el.children) {
           const on = +b.dataset.idx === G.camMode;
           b.classList.toggle("active", on);
-          b.setAttribute("aria-pressed", on ? "true" : "false");
+          b.setAttribute("aria-checked", on ? "true" : "false");
         }
       };
       const show = () => {
@@ -73,14 +94,21 @@ window.CamModes = (function () {
         if (!el) build();
         sync();
         el.hidden = false;
+        camTrigger?.setAttribute("aria-expanded", "true");
+        el.querySelector('[aria-checked="true"]')?.focus();
       };
-      const hide = () => { if (el) el.hidden = true; };
+      const hide = () => {
+        if (el) el.hidden = true;
+        camTrigger?.setAttribute("aria-expanded", "false");
+      };
       const visible = () => !!el && !el.hidden;
       return { show, hide, visible };
     })();
     (() => {
-      const b = $("btn-cam");
+      const b = camTrigger;
       if (!b) return;
+      b.setAttribute("aria-haspopup", "menu");
+      b.setAttribute("aria-expanded", "false");
       let holdT = 0, held = false;
       const HOLD_MS = 340;
       b.addEventListener("pointerdown", () => {
@@ -112,10 +140,13 @@ window.CamModes = (function () {
       document.addEventListener("pointerdown", (e) => {
         if (camPicker.visible() && e.target !== b && !e.target.closest("#campicker")) camPicker.hide();
       });
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) camPicker.hide();
+      });
     })();
     refreshCamBtn();
 
-    return { refreshCamBtn, setCamMode, cycleCam };
+    return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }
 
   return { create };

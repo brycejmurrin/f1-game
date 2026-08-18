@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **509 classes in 53 families**, and until this document there was no
+`css/` holds **508 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -13,16 +13,17 @@ cannot appear without this document noticing.
 
 ---
 
-## The three primitives, plus one pattern
+## Shared layout primitives
 
 Everything else is built on these. They live in `css/components.css`.
 
 | primitive | what it is |
 |---|---|
 | `.screen` | a full-viewport overlay, inset by the OS safe area, that centres its child |
-| `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on |
+| `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it |
 | `.pane` | a scroll region that says so — an edge fade on whichever side has more |
 | `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#carsetup` and `#career`. Slots are named by POSITION, not role — see the note in `css/components.css` |
+| `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
 ## Families, and the file that owns each
 
@@ -59,7 +60,7 @@ not.
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
-`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `no-`, `rotate-`,
+`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`) is one file each and needs no map.
 
@@ -98,6 +99,8 @@ file changes a screen owned by another.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
+- `.balanced-row` — `components` + `menus`. Flex wrap that derives its column
+  count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
@@ -146,6 +149,7 @@ most-shared class in the project and had no entry at all:
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
+- `.sheet-head` — `components` + `overlays`
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`
@@ -153,7 +157,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 509 — a class defined in `css/` and referenced from neither
+None, out of 508 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

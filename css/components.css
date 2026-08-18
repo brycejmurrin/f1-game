@@ -127,7 +127,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      and every `@container sheet` breakpoint keep their meaning: at 130% you
      need 30% more REAL width to afford two columns, which is the honest answer.
      A browser without `zoom` renders at 1.0, which is the old behaviour. */
-  zoom: var(--ui-scale);
+  /* A dense screen may declare --fit-at (its minimum functional height in
+     LOCAL units). SheetShape then supplies --sheet-scale only when the safe
+     viewport cannot afford the requested UI size. This keeps a 200% preference
+     on roomy screens but prevents chrome from reducing the actual content pane
+     to zero on a short landscape phone. */
+  zoom: var(--sheet-scale, var(--ui-scale));
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
@@ -140,6 +145,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   /* the query container for every layout decision inside this sheet */
   container: sheet / inline-size;
 }
+/* Every direct region is a grid item. `min-width:auto` would let any region's
+   max-content width enlarge the implicit sheet column even though the outer
+   card remains viewport-sized. Horizontal strips and wrapping content must
+   negotiate inside the card, never resize the card's track. */
+.sheet > :where(.sheet-head, .sheet-body, .sheet-foot) { min-width: 0; }
 /* Head and foot are CHROME: every pixel they take is a pixel the list below
    does not get, and on a 393px-tall screen that is the difference between four
    circuits visible and two. Both are deliberately thin. */
@@ -180,6 +190,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    the heading is never smaller than the floor at any setting. */
 .sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
 .sheet-body {
+  /* Grid items default to min-width:auto, so a max-content child can widen the
+     BODY track even while the sheet itself stays viewport-sized. At 200% UI
+     size the How-to-Play definition grid did exactly that: the sheet painted
+     369px wide while its body/head/foot painted about 749px and were clipped.
+     The sheet owns horizontal containment; its body must be allowed to shrink
+     to that track and let its own content wrap/scroll. */
+  min-width: 0;
   min-height: 0;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
 }
@@ -462,30 +479,27 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   }
 }
 
-/* ---------- NO LONELY LAST CHIP ----------
-   A wrapped row of buttons that ends with ONE item on its own line reads as a
-   mistake — the eye sees a broken grid, not a deliberate row. It happened all
-   over: TRACK alone under the tuner's four time-of-day chips, CLOUD alone under
-   the weather chips, "57 (FULL)" alone under LAPS, the thirteenth camera mode
-   alone under a 3-wide picker.
+/* ---------- BALANCED CONTROL ROWS ----------
+   A control group must answer the room it actually gets, not a remembered
+   device width or a child count baked into `repeat(3, ...)`. Flex line packing
+   already has the desired invariant: every item on a line grows by the same
+   amount, so a lone final control becomes a deliberate full-width action while
+   two or more share the line evenly. Hidden/runtime-added controls participate
+   automatically and no `:nth-child(3n + 1)` variant can drift from the column
+   count selected somewhere else.
 
-   The fix has to be count-independent, because most of these lists are built at
-   runtime and half of them change length (STANDINGS appears mid-season; the
-   tuner has twelve categories today). CSS cannot count children — but it can
-   ask "is the LAST item also the first of a row?", which is exactly what a
-   lonely item is:
-
-     2 columns → the orphan is an odd-numbered child      :nth-child(odd)
-     3 columns → the orphan is child 3n+1                  :nth-child(3n+1)
-     5 columns → the orphan is child 5n+1                  :nth-child(5n+1)
-
-   When that matches, span the item across the whole row. Nothing is ever
-   stranded, the row still reads as a row, and a list that changes length stays
-   correct without anyone remembering to re-check it. Applied at each grid via
-   the .no-orphan-N classes below. */
-.no-orphan-2 > :last-child:nth-child(odd)   { grid-column: 1 / -1; }
-.no-orphan-3 > :last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
-.no-orphan-5 > :last-child:nth-child(5n + 1) { grid-column: 1 / -1; }
+   --balance-basis is the preferred local width at which a new line becomes
+   useful; --balance-min may be smaller when a family can safely compress. A
+   group that must remain one equal row sets both to 0px, still without knowing
+   how many children JavaScript will add. */
+.balanced-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.balanced-row > :not([hidden]) {
+  flex: 1 1 var(--balance-basis, 8rem);
+  min-width: min(100%, var(--balance-min, var(--balance-basis, 8rem)));
+}
 
 /* ---------- classification rows ----------
    A position, a team colour, a name and a number: the race result, the
@@ -680,7 +694,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pmsettings  { --sheet-w: 760px; }
 #results     { --sheet-w: 600px; }
 #standings   { --sheet-w: 560px; }
-#howtoplay   { --sheet-w: 700px; }
+/* Help uses a term rail beside a readable description column. At the old 700px
+   cap long explanations wrapped heavily; 1000px uses available desktop width
+   while viewport fitting still protects constrained/high-scale sheets. */
+#howtoplay   { --sheet-w: 1000px; }
 #advanced    { --sheet-w: 820px; }
 #audioset    { --sheet-w: 460px; }
 #race-settings { --sheet-w: 560px; }
@@ -778,19 +795,19 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   position: sticky;
   top: 0;
   z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  --balance-basis: 7.25rem;
+  --balance-min: 7.25rem;
   gap: calc(var(--gap) * 0.5);
   padding-bottom: calc(var(--gap) * 0.6);
   background: var(--bg);
 }
-/* Three labels fit without truncation once the sheet has this much LOCAL room.
-   Below it the 2-col wrap keeps CONTROLS and DISPLAY legible. */
-@container sheet (min-width: 420px) and (max-width: 519px) {
-  #pm-category-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
+/* The balanced row chooses one, two or three controls from its own local width;
+   a 2 + 1 wrap makes MORE a deliberate full-width action, not a half-empty
+   grid. The wide container branch below remains a vertical navigation rail. */
 #pm-category-tabs > button {
-  min-width: 0;
+  min-width: min(100%, var(--balance-min));
   min-height: var(--tap);
   margin: 0;
   padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
@@ -936,6 +953,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     gap: calc(var(--gap) * 1.25);
   }
   #pm-category-tabs {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
     padding: 0;
     background: transparent;

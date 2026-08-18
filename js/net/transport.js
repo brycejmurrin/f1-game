@@ -449,15 +449,36 @@ const NetTransport = (function () {
     }
     Log.info("net", "rtc create");
     const chans = {};
-    // Cap only queued STATE snapshots until pump() drains them. EVENT is the
-    // reliable protocol stream: dropping START/LAP/RESULT locally after WebRTC
-    // delivered it defeats the channel's entire contract. A backgrounded tab
-    // can legitimately receive more than 64 events before its game loop pumps;
-    // state snapshots are disposable and remain drop-oldest/keep-newest.
+    // STATE is disposable and can drop oldest. EVENT is reliable protocol state,
+    // so silently dropping it would desynchronise the race; instead a peer that
+    // overruns its bounded inbox is disconnected explicitly. This matters most
+    // while a tab is backgrounded and pump() is throttled or paused.
     const STATE_INBOX_CAP = 64;
+    const EVENT_INBOX_CAP = 256;
+    const INBOX_BYTE_CAP = 1024 * 1024;
     let inbox = [];
     let queuedState = 0;
+    let queuedEvents = 0;
+    let queuedBytes = 0;
     let openCount = 0;
+
+    function messageBytes(data) {
+      if (typeof data === "string") return data.length * 2; // conservative JS heap cost
+      if (data instanceof ArrayBuffer) return data.byteLength;
+      if (ArrayBuffer.isView(data)) return data.byteLength;
+      if (typeof Blob !== "undefined" && data instanceof Blob) return data.size;
+      return INBOX_BYTE_CAP + 1;             // unknown payload shape: fail closed
+    }
+
+    function shutdown(reason) {
+      if (ep.status === "closed") return;
+      ep.status = "closed";
+      inbox.length = 0;
+      queuedState = queuedEvents = queuedBytes = 0;
+      for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) {} }
+      try { pc.close(); } catch (e) {}
+      ep._emit("close", reason);
+    }
 
     // WHAT KIND of candidates we found, which is the difference between two
     // completely different failures that otherwise look identical to a player:
@@ -492,14 +513,25 @@ const NetTransport = (function () {
         ep.status = "closed"; ep._emit("close", "peer");
       };
       ch.onmessage = (e) => {
-        inbox.push({ channel: kind, data: e.data });
+        if (ep.status === "closed") return;
+        const bytes = messageBytes(e.data);
+        if (queuedBytes + bytes > INBOX_BYTE_CAP ||
+            (kind === EVENT && queuedEvents + 1 > EVENT_INBOX_CAP)) {
+          Log.warn("net", "rtc inbox overflow");
+          shutdown("overflow");
+          return;
+        }
+        inbox.push({ channel: kind, data: e.data, bytes });
+        queuedBytes += bytes;
         if (kind === STATE) queuedState++;
+        else queuedEvents++;
         while (queuedState > STATE_INBOX_CAP) {
           // The newest state packet is the useful one. Event packets stay in
           // their original relative position while the oldest snapshot leaves.
           const i = inbox.findIndex((m) => m.channel === STATE);
           if (i < 0) break; // defensive: queuedState and inbox should agree
-          inbox.splice(i, 1);
+          const removed = inbox.splice(i, 1)[0];
+          queuedBytes -= removed.bytes;
           queuedState--;
         }
       };
@@ -543,18 +575,13 @@ const NetTransport = (function () {
         ep._emit("message", m.channel, m.data);
       }
       inbox.length = 0;
-      queuedState = 0;
+      queuedState = queuedEvents = queuedBytes = 0;
       return count;
     };
-    ep.close = function () {
-      if (ep.status === "closed") return;
-      ep.status = "closed";
-      for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) {} }
-      try { pc.close(); } catch (e) {}
-      ep._emit("close", "local");
-    };
+    ep.close = function () { shutdown("local"); };
     ep.stats = () => ({
       queued: inbox.length,
+      queuedBytes,
       connection: pc.connectionState,
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,

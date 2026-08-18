@@ -5,7 +5,7 @@ from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/verify-track.cjs`, and `npm run test:*` groups.
 
 **A skill is when/how, not the command.** The CLI lives under `tools/`. Some
-CLIs are pinned as `apex_*` MCP tools; most are not. Full map (four MCP
+CLIs are pinned as `apex_*` MCP tools; most are not. Full map (seven MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow.
@@ -37,6 +37,8 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
 | **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
 | **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
+| **pixel-perfect** | Pixel-by-pixel screenshot baselines (`toHaveScreenshot`). Prefer **playwright-probe** / **survey-ui-matrix** for Apex 26 itself. |
+| **webapp-testing** | Python Playwright helper scripts for a generic local webapp. Prefer **playwright-probe** for this repo. |
 | **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state; TinyFish requires one-time setup plus an injected key). Local CLI pins → `apex-tools` / `./tools/apex-tools-mcp.sh`. Interactive UI resize/DOM → `survey-ui-matrix` / `playwright-mcp.sh`. |
 | **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
 | **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
@@ -45,6 +47,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
 | **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
 | **webgpu-debug** | WebGPU/WGX issues — black screen, WGSL derivative uniformity, GPU validation errors, device-loss ladder, `wgx-validate.mjs --static` (full Dawn parent-only). |
+| **webgpu-inspector** | Inspect GPU objects / WGSL via `webgpu-inspector-mcp`. Prefer **webgpu-debug** + `wgx-validate.mjs` for Apex 26 itself. |
 | **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
 | **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
 | **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
@@ -79,7 +82,7 @@ Design principles:
   `deploy-merge`).
 - **Description = what + when** — third person, under 1024 chars, must contain
   a trigger (`Use when` / `Use proactively`). Vague descriptions ("helps with
-  documents") fail discovery in a 38-skill library.
+  documents") fail discovery in a 41-skill library.
 - **One command over a ritual** — `verify-change.mjs` composes pick-tests +
   the fast gate + batched groups; skills should name the composer, not restated
   five-step prose.
