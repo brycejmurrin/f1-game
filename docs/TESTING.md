@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 112 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 114 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -257,7 +257,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
 | `shimmer` | does baked tarmac crawl under motion |
 | `tlx` | the three.js/TSL backend probes |
-| `webgpu-lifecycle` | WGX resource lifecycle, as a pure unit suite |
+| `webgpu-lifecycle` | WGX/TLX resource and software-present lifecycle, as a pure unit suite |
 
 ### Car & UI
 
@@ -268,6 +268,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `camera` | the 13 camera modes, camera + driving hooks, the camera tuner |
 | `audio` | WebAudio engine/sfx smoke + the music library |
+| `audio-unit` | Spotify token refresh ownership, rotation races, and retryable failures in a Node VM |
 
 ### Modes, data & multiplayer
 
@@ -766,6 +767,7 @@ what it covers.
 | `material-shimmer.spec.js` | does baked tarmac CRAWL when the car moves |
 | `tlx-probes.spec.js` | the three.js/TSL backend behind `apex26.gfxBackend="three"` |
 | `webgpu-lifecycle.test.mjs` | WGX resource lifecycle — plus the two invariants a MOCK device cannot enforce: every `sampleCount` is 1 or 4 (WebGPU allows nothing else; WGX shipped 2 and no real device accepted it) and no WGSL derivative sits where control flow may be non-uniform (`dpdx` behind a material branch is a COMPILE error, and WGX then silently falls back to GLX) |
+| `renderer-soft-lifecycle.test.mjs` | TLX/WGX software-present backpressure, resize freshness, timed-out waiter cleanup, and TLX post-chain teardown on fallback or partial construction failure |
 | `assets-pack.test.mjs` | the baked pack on disk: licence allow-list, md5, size budget |
 | `import-models.test.mjs` | the AX26 model-import output and its determinism |
 | `import-models-workflow.test.mjs` | workflow-dispatch inputs stay out of executable shell text; HTTPS URL and non-deploy branch validation |
@@ -825,6 +827,7 @@ what it covers.
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |
+| `spotify-refresh.test.mjs` | Spotify refresh single-flight, retry preservation, rotated-token ownership, and terminal revocation |
 
 ### Multiplayer
 

@@ -239,6 +239,10 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      // readRenderTargetPixelsAsync owns a full-frame staging allocation. Keep
+      // at most one live and coalesce callers onto the newest rendered target;
+      // software adapters can otherwise queue hundreds while mapAsync lags.
+      let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
       // 2D overlay — never getContext("2d") on #game (one context type per
@@ -674,7 +678,10 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); } });
-          if (post && !post.enabled()) post = null;
+          if (post && !post.enabled()) {
+            try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
+            post = null;
+          }
           // GLX keeps the post chain on an RGBA8 scene when half-float is not
           // renderable (js/render/glx/post.js). Killing it here dropped ACES,
           // bloom, SSAO, god-ray, FXAA and SSR on phones that missed the float
@@ -684,6 +691,7 @@ const TLX = (function () {
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
+        try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
         post = null;
       }
 
@@ -1428,6 +1436,10 @@ const TLX = (function () {
         const w = Math.max(1, Math.round(cw * dpr * renderScale));
         const h = Math.max(1, Math.round(ch * dpr * renderScale));
         if (w !== W || h !== H) {
+          // An old-size async read may finish after the visible canvas changes.
+          // It is allowed to drain, but must never repaint the resized canvas.
+          _softReadEpoch++;
+          _softReadQueued = null;
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
           if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
@@ -1476,8 +1488,9 @@ const TLX = (function () {
         for (let i = 3; i < data.length; i += 4) data[i] = 255;
         return data;
       }
-      function _readLdr(rt) {
-        const w = (rt && rt.width) || W, h = (rt && rt.height) || H;
+      function _readLdr(rt, readW, readH) {
+        const w = readW || (rt && rt.width) || W;
+        const h = readH || (rt && rt.height) || H;
         return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
           return { w, h, data: _unstrideRgba(src, w, h) };
         });
@@ -1489,11 +1502,25 @@ const TLX = (function () {
           try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
         }
       }
-      function _queueSoftBlit(rt) {
-        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
-        _readLdr(rt).then(function (pack) {
+      function _finishSoftBlitRead() {
+        _softReadPending = false;
+        const next = _softReadQueued;
+        _softReadQueued = null;
+        if (next) _startSoftBlitRead(next);
+      }
+      function _startSoftBlitRead(req) {
+        _softReadPending = true;
+        let read;
+        try { read = _readLdr(req.rt, req.w, req.h); }
+        catch (_) { _finishSoftBlitRead(); return; }
+        read.then(function (pack) {
           try {
             const w = pack.w, h = pack.h, src = pack.data;
+            // Resize/post-fallback invalidates an older source generation. One
+            // in-flight read means same-size frames stay ordered, so do not drop
+            // a valid completion merely because a newer frame is queued.
+            if (req.epoch !== _softReadEpoch || !_displayCanvas ||
+                _displayCanvas.width !== w || _displayCanvas.height !== h) return;
             if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
               _softImg = _displayCtx.createImageData(w, h);
             }
@@ -1512,7 +1539,25 @@ const TLX = (function () {
               _softBlitNotify();
             }
           } catch (_) { /* 2D blit failed */ }
-        }).catch(function () { /* RT not GPU-ready this frame */ });
+        }, function () { /* RT not GPU-ready this frame */ }).then(_finishSoftBlitRead);
+      }
+      function _queueSoftBlit(rt) {
+        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        const req = {
+          rt,
+          w: (rt && rt.width) || W,
+          h: (rt && rt.height) || H,
+          epoch: _softReadEpoch,
+        };
+        if (_softReadPending) {
+          _softReadQueued = req;       // newest frame wins; bounded to one waiter
+          return;
+        }
+        _startSoftBlitRead(req);
+      }
+      function _cancelSoftBlits() {
+        _softReadEpoch++;
+        _softReadQueued = null;
       }
 
       // ── the backend object (the ~40-member seam contract) ────────────────
@@ -1920,15 +1965,19 @@ const TLX = (function () {
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
           return new Promise(function (resolve, reject) {
+            let waiter = null;
             const timer = setTimeout(function () {
+              const i = _softPresentWaiters.indexOf(waiter);
+              if (i >= 0) _softPresentWaiters.splice(i, 1);
               reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
             }, ms);
-            _softPresentWaiters.push(function (gen) {
+            waiter = function (gen) {
               if (gen > start) {
                 try { clearTimeout(timer); } catch (_) { /* harness */ }
                 resolve(gen);
               }
-            });
+            };
+            _softPresentWaiters.push(waiter);
           });
         },
         softPresent() { return !!_softBlit; },
@@ -2230,7 +2279,10 @@ const TLX = (function () {
           };
           const dropTo = (mode, mat) => {
             _drawMatMode = mode;
+            const deadPost = post;
             post = null;
+            _cancelSoftBlits();
+            try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
             try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
             lit = null;
@@ -2292,8 +2344,13 @@ const TLX = (function () {
           } catch (e) { persistFail(e); }
           // Post-only death: same materials, canvas (the 1269 intent).
           if (!painted && post) {
+            const deadPost = post;
             post = null;
+            _cancelSoftBlits();
             try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+            finally {
+              try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }
+            }
           }
           if (!painted) {
             dropTo(1, unlitMat);

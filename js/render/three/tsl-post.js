@@ -76,6 +76,9 @@
     const _pinKeys = Object.create(null);
     function passMaterial(fragNode, key) {
       const m = new THREE.NodeMaterial();
+      // tlx-post owns the pass family. Register immediately so an exception
+      // during later material setup/factory construction can unwind it.
+      if (typeof ctx.trackMaterial === "function") ctx.trackMaterial(m);
       m.fragmentNode = fragNode;
       m.depthTest = false;
       m.depthWrite = false;

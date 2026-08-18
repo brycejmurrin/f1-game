@@ -53,23 +53,18 @@ jobs:
       # branch and GitHub cancels the older pending gate when another push lands.
       concurrency_key: pages-${{ github.run_id }}
 
-  deploy:
+  # Keep obsolete runs out of the environment entirely. An environment job is
+  # itself a GitHub deployment: letting an obsolete run enter it and then skip
+  # deploy-pages records a misleading successful deployment for bytes that were
+  # never published. This early check is an optimisation/truthfulness guard;
+  # deploy repeats it under the Pages lock to close the queue-time race.
+  current-tip:
     needs: ci
-    # The ONLY step that actually touches GitHub's single-slot Pages queue.
-    # See the top-of-file comment for why this moved off the workflow level.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.tip.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
-      # CI runs in parallel, so an older slow run can arrive at this serialized
-      # job after a newer fast run. Re-read the branch tip immediately before
-      # upload and make an obsolete run a successful no-op; otherwise it could
-      # roll Pages back to an older SHA. Fetch failure is deliberately fatal.
       - name: Is this still the branch tip?
         id: tip
         run: |
@@ -81,8 +76,34 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING DEPLOY: $GITHUB_SHA is obsolete; branch tip is $TIP"
           fi
+
+  deploy:
+    needs: current-tip
+    if: needs.current-tip.outputs.deploy == 'true'
+    # The ONLY step that actually touches GitHub's single-slot Pages queue.
+    # See the top-of-file comment for why this moved off the workflow level.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # A newer push can land after current-tip passes or while this job waits
+      # for the serialized Pages slot. Re-read the tip inside the lock. Failure
+      # is deliberate: once an environment job exists it must not report success
+      # unless deploy-pages actually publishes this SHA.
+      - name: Recheck branch tip inside the Pages lock
+        run: |
+          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          TIP=$(git rev-parse "refs/remotes/origin/${GITHUB_REF_NAME}")
+          if [ "$TIP" != "$GITHUB_SHA" ]; then
+            echo "::error::REFUSING DEPLOY: $GITHUB_SHA is obsolete; branch tip is $TIP"
+            exit 1
+          fi
       - uses: actions/configure-pages@v5
-        if: steps.tip.outputs.deploy == 'true'
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
       # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
@@ -103,7 +124,6 @@ jobs:
       # .nojekyll goes up too — Pages otherwise runs the tree through Jekyll,
       # which has its own opinions about which files deserve to exist.
       - name: Stage site
-        if: steps.tip.outputs.deploy == 'true'
         run: |
           mkdir -p _site
           cp index.html version.json manifest.json sw.js _site/
@@ -115,12 +135,10 @@ jobs:
       # aborted with "Multiple artifacts named github-pages were unexpectedly
       # found". A per-attempt name keeps every attempt's upload unique.
       - uses: actions/upload-pages-artifact@v3
-        if: steps.tip.outputs.deploy == 'true'
         with:
           path: _site
           name: github-pages-${{ github.run_attempt }}
       - id: deployment
-        if: steps.tip.outputs.deploy == 'true'
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_attempt }}

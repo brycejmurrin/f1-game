@@ -18,8 +18,8 @@ function save(round, money) {
   };
 }
 
-function load() {
-  const disk = new Map([
+function load(options = {}) {
+  const disk = options.disk || new Map([
     ["apex26.career.driver.0", JSON.stringify(save(1, 100))],
     ["apex26.careerSlot", JSON.stringify("driver:0")],
   ]);
@@ -32,7 +32,9 @@ function load() {
     Math, JSON, Object, Array, String, Number, Date, Set, Map, isNaN, isFinite, parseInt, console,
     localStorage: {
       getItem: (k) => disk.has(k) ? disk.get(k) : null,
-      setItem: (k, v) => disk.set(k, String(v)),
+      setItem: (k, v) => options.setItem
+        ? options.setItem(k, String(v), disk)
+        : disk.set(k, String(v)),
     },
     window: { addEventListener: (name, fn) => listeners.set(name, fn) },
     Log: { warn() {}, info() {} },
@@ -49,6 +51,41 @@ function load() {
     foreign: (key) => listeners.get("storage")({ key, newValue: disk.get(key) }),
   };
 }
+
+test("legacy migration preserves its source when the destination write hits quota", () => {
+  const legacy = save(3, 500);
+  const disk = new Map([["apex26.career", JSON.stringify(legacy)]]);
+  const { Career } = load({
+    disk,
+    setItem(key, value, target) {
+      if (key === "apex26.career.driver.0") {
+        const err = new Error("storage is full");
+        err.name = "QuotaExceededError";
+        throw err;
+      }
+      target.set(key, value);
+    },
+  });
+
+  Career.load();
+  assert.deepEqual(JSON.parse(disk.get("apex26.career")), legacy,
+    "the only durable copy must remain under its legacy key");
+  assert.equal(disk.has("apex26.career.driver.0"), false,
+    "the session cache must not be mistaken for a durable migration");
+});
+
+test("legacy migration preserves a save when its destination set is full", () => {
+  const legacy = save(8, 800);
+  const disk = new Map([["apex26.career", JSON.stringify(legacy)]]);
+  for (let i = 0; i < 3; i++) {
+    disk.set("apex26.career.driver." + i, JSON.stringify(save(i + 1, 100 + i)));
+  }
+  const { Career } = load({ disk });
+
+  Career.load();
+  assert.deepEqual(JSON.parse(disk.get("apex26.career")), legacy,
+    "no free slot means defer migration, not delete the overflow save");
+});
 
 test("an active career refuses to overwrite a newer foreign save", () => {
   const { Career, disk, foreign } = load();
