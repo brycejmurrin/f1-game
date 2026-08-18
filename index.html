@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1422">
+<meta name="apex-build" content="1423">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=8527b17f4e8b" as="style">
-<link rel="preload" href="css/components.css?v=3837f8949c66" as="style">
+<link rel="preload" href="css/components.css?v=b3b24a208517" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,11 +40,11 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=8527b17f4e8b">
-<link rel="stylesheet" href="css/components.css?v=3837f8949c66">
+<link rel="stylesheet" href="css/components.css?v=b3b24a208517">
 <link rel="stylesheet" href="css/tuner.css?v=3a059b0920b2" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=a4f689e3c284">
-<link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=1025f7c8e34f">
+<link rel="stylesheet" href="css/carsetup.css?v=727b355fd1bf" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=7be98806b5c7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=37367486eb05" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
 <link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
