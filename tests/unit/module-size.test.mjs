@@ -377,7 +377,8 @@ const CEILINGS = {
   // 2741 -> 2757: sharper wing foil (knife-TE sample + outboard span split) and
   // beveled endplates/canards — same mesh for GLX/WGX/TLX, paid from the 2.4k
   // default-body headroom. Raised deliberately.
-  "js/car/car3d.js": 2757,
+  // 2757 -> 2766: thinner foil sections (~25%) + foil T-wing + beveled vanes.
+  "js/car/car3d.js": 2766,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

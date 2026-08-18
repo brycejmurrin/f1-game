@@ -658,18 +658,18 @@ const Car3D = (function () {
   function frontCascade(aLvl) {
     const a = aLvl;
     const els = [
-      [2.72, 0.048, 2.40, 0.086, 1.00, 0.032],   // main plane (structure, never moves)
-      [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],   // flap 1
+      [2.72, 0.048, 2.40, 0.086, 1.00, 0.024],   // main plane (structure, never moves)
+      [2.50, 0.092, 2.24, 0.146, 0.98, 0.020],   // flap 1
     ];
-    if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026]);   // flap 2
+    if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.018]);   // flap 2
     // Flaps 3 and 4 sit 10 mm and 30 mm lower than they first shipped. The stack
     // was drawn climbing into the nose overhang: at maximum downforce the top
     // element passed ~21 mm THROUGH the nose underside, which no rotation can
     // undo because the intersection is at the element's own rest attitude. The
     // drop is the largest the slot gaps above them will take (flap 3 keeps 11 mm
     // of daylight to flap 2, which is a slot, not a coincidence).
-    if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.024]);   // flap 3
-    if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.022]);   // flap 4
+    if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.016]);   // flap 3
+    if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.014]);   // flap 4
     return els;
   }
   // How many of them the mesh still bakes. Never the main plane.
@@ -1004,7 +1004,7 @@ const Car3D = (function () {
     // stack is one that quietly passes through itself at some blend nobody looked
     // at. The mainplane below is structure, so it enters the chain at zero.
     const rearMain = Object.assign(
-      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.032, 0),
+      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
       { zAngle: 0, xAngle: 0 });
     let below = rearMain;
     const addRear = (id, le, te, thick, sweepMul) => {
@@ -1017,16 +1017,16 @@ const Car3D = (function () {
                             { zAngle: el.zAngle, xAngle: el.xAngle });
     };
     if (a >= 2) {
-      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.030, 0.9);
+      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9);
     }
-    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.035, 1);
+    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1);
     // The proud max-downforce top plane. It used to be BAKED, which put the
     // topmost element of the tallest wing on the grid among the parts that do
     // not move — directly contradicting the rule the rest of this function
     // implements, and leaving the one plane a following car actually sees frozen
     // while the two beneath it swept. It is an element like any other.
     if (a >= 4 && !(st.drs || 0)) {
-      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.030, 1.1);
+      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1);
     }
     return out;
   }
@@ -2380,9 +2380,9 @@ const Car3D = (function () {
       for (let i = 0; i < nCan; i++) {
         const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
         addBeveledSpan(out,
-          { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
-          { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 },
-          0.010, c1);
+          { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.018, h: 0.12, t: 0.55 },
+          { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.018, h: 0.18, t: 0.70 },
+          0.008, c1);
       }
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
@@ -2396,8 +2396,14 @@ const Car3D = (function () {
     if (!ckpt && aVane > 0) {
       for (const s of [-1, 1]) {
         // Primary vane — always present.
-        addBox(out, s*0.73, 0.30, 0.98, 0.02, 0.22, 0.34, CARBON);
-        if (aVane >= 2) addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);  // inner fence
+        addBeveledSpan(out,
+          { z: 1.15, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
+          { z: 0.81, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
+          0.006, CARBON);
+        if (aVane >= 2) addBeveledSpan(out,
+          { z: 0.87, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          { z: 0.57, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          0.006, CARBON);
         if (aVane >= 3) {
           // Curved triple cascade: a swept forward vane + a canted footplate vane.
           addBeveledSpan(out,
@@ -2461,7 +2467,7 @@ const Car3D = (function () {
           attachHalf: 0.50,
         }, col, SURFACES.paint);
       rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
-        0.51, 0.032, c1, 0.8);
+        0.51, 0.024, c1, 0.8);
       // The middle plane is ACTIVE AERO as well — see aeroFlapsGeom's "rearMid".
       // Only the mainplane above stays baked, which is exactly the 2026 rule:
       // every rear element except the bottom mainplane rotates.
@@ -2502,7 +2508,10 @@ const Car3D = (function () {
       // drawAeroFlaps() — see aeroFlapsGeom's "rearTop". Baking it here left the
       // highest plane on the car as the only one that could not move.
       if (aTvane) {
-        addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
+        addWingFoil(out, {
+          zLead: -1.935, yLead: epCY + 0.188, zTrail: -2.025, yTrail: epCY + 0.212,
+          half: 0.17, thick: 0.014, taper: 0.90, sweep: 0.018, rise: 0.006,
+        }, c2, SURFACES.paint);
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without
         // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
         // visibly holding it up.
@@ -2511,11 +2520,11 @@ const Car3D = (function () {
       if (aBeam) {
         // Prominent beam wing slung low under the main plane, spanning the crash structure.
         rearWing(-2.36, 0.64 + rwLift * 0.4, -2.58, 0.68 + rwLift * 0.4,
-          0.46, 0.032, c1, 0.65);
+          0.46, 0.022, c1, 0.65);
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.022, c2, 1.15);
+        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, c2, 1.15);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod

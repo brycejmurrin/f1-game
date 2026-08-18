@@ -40,6 +40,12 @@ test("foil samples a knife trailing edge and splits the outboard span", () => {
   assert.match(SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: _ep\.front\.z/);
 });
 
+test("wing elements stay knife-thin (not 32 mm planks)", () => {
+  assert.match(SRC, /\[2\.72, 0\.048, 2\.40, 0\.086, 1\.00, 0\.024\]/);
+  assert.match(SRC, /elemRecord\(\[-2\.30, upperTrailY - 0\.270\], \[-2\.52, upperTrailY - 0\.225\], 0\.024, 0\)/);
+  assert.match(SRC, /0\.51, 0\.024, c1, 0\.8/);
+});
+
 test("one flap is a closed foil, not a 48-triangle plank", () => {
   const flap = Car3D.buildFlapGeom({
     le: [2.50, 0.092], te: [2.24, 0.146], half: 0.92, thick: 0.028,

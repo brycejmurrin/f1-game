@@ -777,10 +777,10 @@ test.describe("Parts module — visual recipes", () => {
       // and 30 mm lower than they first shipped — the stack used to climb INTO
       // the nose overhang (21 mm through it at max downforce).
       const elements = [
-        [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],
-        [2.34, 0.148, 2.10, 0.212, 0.95, 0.026],
-        [2.20, 0.200, 1.98, 0.272, 0.92, 0.024],
-        [2.08, 0.256, 1.88, 0.328, 0.88, 0.022],
+        [2.50, 0.092, 2.24, 0.146, 0.98, 0.020],
+        [2.34, 0.148, 2.10, 0.212, 0.95, 0.018],
+        [2.20, 0.200, 1.98, 0.272, 0.92, 0.016],
+        [2.08, 0.256, 1.88, 0.328, 0.88, 0.014],
       ];
       return aero.options.flatMap((option) => {
         const style = option.visual, level = style.lvl;
