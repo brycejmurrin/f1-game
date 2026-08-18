@@ -1028,6 +1028,24 @@ test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
     "paint fragments get peel SAA; carbon/rubber stay on geometric N");
 });
 
+test("WGX hoists every pack layer with textureSample so walls match GLX aniso", () => {
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /fn matUvLit\(/,
+    "constant-layer UV helper for the fs_main hoist");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
+    "CONCRETE must use textureSample, not SampleLevel");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv2, 2\)/,
+    "BRICK must use textureSample, not SampleLevel");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv14, 14\)/,
+    "RUST/corrugated must use textureSample, not SampleLevel");
+  assert.match(chunks, /let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15/,
+    "glass/flag stay off the hoist; everything else picks the hoisted tap");
+  const peelLit = chunks.indexOf("N = paintPeelN(N, in.objPos, vDist, carPaint)");
+  const bump = chunks.indexOf("applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn)");
+  assert.ok(peelLit > 0 && bump > peelLit,
+    "wall bump must run after peel like GLX, not before detail");
+});
+
 test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   // WGX cannot dpdx after applyMaterialNormal (non-uniform matId). GLX used
   // to dFdx the bumped N, which widened roughness on every brick/concrete
