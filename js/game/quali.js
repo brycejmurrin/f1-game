@@ -241,9 +241,28 @@ function create(G) {
 
   // Run the session for real: compute and keep the result as THE classification.
   // `driven` is a time, or a driverId->time map when more than one human drove.
+  function persistOrder() {
+    const s = G.season;
+    if (!s || !classification) return;
+    s.qualiOrder = classification.map((r) => r.driverId);
+    try {
+      if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
+      else if (G.store) G.store.set("season", s);
+    } catch (_) { /* persist is best-effort */ }
+  }
+
+  function restoreFromSeason() {
+    const ids = G.season && G.season.qualiOrder;
+    if (classification || !Array.isArray(ids) || !ids.length) return;
+    classification = ids.map((driverId, i) => ({
+      driverId, pos: i + 1, t: 0, gap: 0, code: "", name: "", team: null,
+      isPlayer: false, human: false,
+    }));
+  }
+
   function simulate(driven) {
     const rows = compute(driven);
-    if (rows) classification = rows;
+    if (rows) { classification = rows; persistOrder(); }
     Log.info("game", "Quali.simulate n=" + (rows ? rows.length : 0));
     return rows;
   }
@@ -265,6 +284,7 @@ function create(G) {
   // Returns null unless every live car is accounted for, so a partial map falls
   // back to the normal grid instead of placing half a field.
   function order(live) {
+    restoreFromSeason();
     if (!classification || !live || !live.length) return null;
     const byId = new Map(live.map((c) => [c.driverId, c]));
     const out = [];
@@ -275,6 +295,7 @@ function create(G) {
     return out.length === live.length ? out : null;
   }
   function results() {
+    restoreFromSeason();
     return classification
       ? classification.map(({ car, ...row }) => row)   // drop the live car ref
       : null;

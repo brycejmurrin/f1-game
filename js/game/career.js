@@ -589,7 +589,7 @@ function freeMoney(on) {
 }
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {
-  if (!career) return null;
+  if (!career || careerConflict) return null;
   career.money += Math.max(0, Math.round(Number(n) || GRANT));
   save();
   return career.money;
@@ -602,7 +602,7 @@ const charge = (cost) => (freeMoney() ? 0 : cost);
 // Buy an option outright. Returns false when it cannot be afforded or is already
 // owned, so the caller can play the existing budget-reject animation.
 function research(opt) {
-  if (!career || !opt) return false;
+  if (!career || !opt || careerConflict) return false;
   if (career.owned.indexOf(opt.id) >= 0) return false;
   const cost = charge(researchCost(opt));
   if (cost > career.money) return false;
@@ -621,7 +621,7 @@ function research(opt) {
 // converts into lap time). Spending on one is genuinely giving up the other.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
-  if (!career || budgetUpgradeCost() == null || cost > career.money) return false;
+  if (!career || careerConflict || budgetUpgradeCost() == null || cost > career.money) return false;
   career.money -= cost;
   career.budgetLvl++;
   save();
@@ -752,7 +752,7 @@ function facilityDiscount() {
 }
 function upgradeFacility() {
   const raw = facilityCost();
-  if (!career || raw == null) return false;
+  if (!career || careerConflict || raw == null) return false;
   const cost = charge(raw);
   if (cost > career.money) return false;
   career.money -= cost;

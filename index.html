@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1382">
+<meta name="apex-build" content="1383">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -81,8 +81,12 @@
       .then(function (v) {
         if (!v || !v.build || v.build <= loaded) return;
         var key = "apex26.shellReloadedTo";
-        if (sessionStorage.getItem(key) === String(v.build)) return;  // already tried this build
-        sessionStorage.setItem(key, String(v.build));
+        var bust = new URLSearchParams(location.search).get("b");
+        // Only consume the one-shot after this document IS the busted shell.
+        // Setting it before location.replace burned the guard when the SW
+        // returned Response.error() and left the player on the stale page.
+        if (bust && String(loaded) === bust) sessionStorage.setItem(key, bust);
+        if (sessionStorage.getItem(key) === String(v.build)) return;
         // Query busts the cached shell. KEEP THE HASH: dropping it silently
         // destroyed VS FRIEND invite links (#vs=CODE) opened on a stale shell —
         // the one visitor class guaranteed to hit this reload path.
@@ -1727,7 +1731,7 @@
 <script crossorigin="anonymous" src="js/track/maps.js?v=6325038dba7c"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=e7f55b9a1b43"></script>
 <script crossorigin="anonymous" src="js/game/input.js?v=a46edadea4cb"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=cff0b54bc11a"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=0dbf0fd9ae15"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=ca27755313c8"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=7ce36fac7c3e"></script>
@@ -1742,7 +1746,7 @@
 <script crossorigin="anonymous" src="js/car/parts.js?v=ee93f741b785"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=62ed3d578b13"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=6ceeacc3872f"></script>
-<script crossorigin="anonymous" src="js/car/ghost.js?v=bf65b002eda1"></script>
+<script crossorigin="anonymous" src="js/car/ghost.js?v=0f7d7fef9e94"></script>
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
@@ -1753,13 +1757,13 @@
 <script crossorigin="anonymous" src="js/game/particles.js?v=90aaaca0f4d8"></script>
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=cce133b55ea5"></script>
 <script crossorigin="anonymous" src="js/game/store.js?v=0f55b200ad29"></script>
-<script crossorigin="anonymous" src="js/game/career.js?v=ce2d77c828a6"></script>
-<script crossorigin="anonymous" src="js/game/season-cal.js?v=8189d5e411e9"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=8b957db35ce7"></script>
+<script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=b5d98ad9f09f"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=5cdb30e33b36"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=9392d8d36fff"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=7c12ac985817"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=e07c8efaf421"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
@@ -1784,11 +1788,11 @@
 <script crossorigin="anonymous" src="js/game/metrics.js?v=e07f1ca0ecc1"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=577b77b3b7e7"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=1765e0cbdc83"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=a8360eea31c1"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=3d3fc4f75f28"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=c4dafcdffad5"></script>
-<script crossorigin="anonymous" src="js/game/quali.js?v=f10ded14a598"></script>
+<script crossorigin="anonymous" src="js/game/quali.js?v=a9be3d369c0c"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=0bcb3d87a3d0"></script>
-<script crossorigin="anonymous" src="js/game/incidentsim.js?v=4cdbea9e7169"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=45e83e221e76"></script>
 <script crossorigin="anonymous" src="js/game/agentview-raster.js?v=16273e78276f"></script>
 <script crossorigin="anonymous" src="js/game/agentview.js?v=95cfa3552b50"></script>
 <script crossorigin="anonymous" src="js/game/apex.js?v=aa9694908c64"></script>
@@ -1801,7 +1805,7 @@
 <script crossorigin="anonymous" src="js/net/handshake.js?v=91595eb882cf"></script>
 <script crossorigin="anonymous" src="js/net/snapshot.js?v=1860fa808033"></script>
 <script crossorigin="anonymous" src="js/net/session.js?v=97852ab04e82"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=d20b31729b7d"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=7926f9cd9434"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=db35d92a7c80"></script>
-<script crossorigin="anonymous" src="js/game.js?v=6bc0ac55fe0b"></script>
+<script crossorigin="anonymous" src="js/game.js?v=7ea054835ee8"></script>
 </body></html>

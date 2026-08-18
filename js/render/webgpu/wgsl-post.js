@@ -849,11 +849,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let ssrWet = U.lift.w;
   let ssrRefl = U.gamma.w;
   let ssrCar = U.gain.w;
-  if (ssrRefl > 0.001 || ssrCar > 0.001) {
+  if (ssrWet > 0.001 || ssrRefl > 0.001 || ssrCar > 0.001) {
     let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
     if (ssr.a > 0.001) {
       let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
-      let roadK = (1.0 - carPx) * ssrWet * ssrRefl;
+      // ssr.a already carries roadTerm = roadMask * strength (wet * reflect).
+      // Multiplying ssrWet * ssrRefl again made the wet mirror quadratic.
+      let roadK = (1.0 - carPx);
       let carK = carPx * ssrCar;
       let ssrK = ssr.a * max(roadK, carK);
       if (ssrK > 0.001) {

@@ -64,6 +64,21 @@ test("an active career refuses to overwrite a newer foreign save", () => {
   assert.equal(winner.money, 900);
 });
 
+test("a conflicted career refuses grant/research so RAM does not drift from disk", () => {
+  const { Career, disk, foreign } = load();
+  Career.load();
+  Career.engage(true);
+  const key = "apex26.career.driver.0";
+  const money = Career.data().money;
+  disk.set(key, JSON.stringify(save(9, 900)));
+  foreign(key);
+  assert.equal(Career.conflicted(), true);
+  assert.equal(Career.grant(50), null);
+  assert.equal(Career.research({ id: "wing", cost: 1 }), false);
+  assert.equal(Career.data().money, money);
+  assert.equal(Career.data().owned.indexOf("wing"), -1);
+});
+
 test("outside active play a foreign live-slot save refreshes Career's object", () => {
   const { Career, disk, foreign } = load();
   Career.load();

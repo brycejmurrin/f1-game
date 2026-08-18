@@ -706,7 +706,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
   let bury = D.mat2.w > 0.5;
   let slab = max(fwWpos.x, fwWpos.z) > 6.0;
-  if ((bury || slab) && !isRoadDraw && fromWorld.w > 0.5) {
+  // Close chase-cam car triangles have huge wpos derivatives and sit on the
+  // LUT footprint — the slab term would discard bodywork as if it were the
+  // scenery addBox. Surfaces 20–27 are the car catalog (lit.js / DrawU.mat2.z).
+  let isCarDraw = D.mat2.z >= 19.5 && D.mat2.z <= 27.5;
+  if ((bury || slab) && !isRoadDraw && !isCarDraw && fromWorld.w > 0.5) {
     discard;
   }
 

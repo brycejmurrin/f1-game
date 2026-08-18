@@ -737,30 +737,9 @@ const NetPlay = (function () {
       // of extra age on top of the interpolation delay, which the buffer
       // already absorbs. That is the price of star over mesh, and it buys not
       // opening N² connections through N NATs.
-      if (localCar && now - lastPublish >= PUBLISH_MS) {
-        lastPublish = now;
-        // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
-        // car this is, and its grid is not indexed the same as ours.
-        const entries = [{ id: G.wireId(localCar), car: localCar }];
-        if (role === "host") {
-          for (const r of remotes.values()) entries.push({ id: G.wireId(r.car), car: r.car });
-        }
-        // encodeSnapshot has always taken a list with a count byte and a
-        // per-entry id (js/net/snapshot.js). This is the first caller to send
-        // more than one, which is what that shape was reserved for.
-        // To every peer. One identical packet serves all of them: a guest
-        // receiving its own car back drops it for free, because localCar is by
-        // construction not in `remotes` (see onState).
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
-        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
-      }
-
-      // Draw each rival where it was INTERP_DELAY_MS ago, blended between the
-      // two packets bracketing that moment. Contact uses predict() instead —
-      // sample is delayMs in the past (~5–8 m at race speed), and resolving
-      // against the drawn pose is a phantom hit one end / a miss the other
-      // (docs/MULTIPLAYER.md; NetSnapshot.createInterp). Dual fields: pose
-      // stays the delayed draw; _nProg/_nX/_nSpd carry the live contact pose.
+      // Pose remotes FIRST. Host relay encodes r.car; if that write ran after
+      // the snapshot, guests received last tick's parked pose (or the grid
+      // spawn) while this tick's interp sample sat unused.
       for (const r of remotes.values()) {
         const st = r.interp.sample(now);
         if (st) poseRemote(r.car, st);
@@ -776,6 +755,28 @@ const NetPlay = (function () {
         } else {
           c._nOk = false;
         }
+      }
+
+      if (localCar && now - lastPublish >= PUBLISH_MS) {
+        lastPublish = now;
+        // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
+        // car this is, and its grid is not indexed the same as ours.
+        const entries = [{ id: G.wireId(localCar), car: localCar }];
+        if (role === "host") {
+          for (const r of remotes.values()) {
+            const id = G.wireId(r.car);
+            if (id < 0) continue;
+            entries.push({ id, car: r.car });
+          }
+        }
+        // encodeSnapshot has always taken a list with a count byte and a
+        // per-entry id (js/net/snapshot.js). This is the first caller to send
+        // more than one, which is what that shape was reserved for.
+        // To every peer. One identical packet serves all of them: a guest
+        // receiving its own car back drops it for free, because localCar is by
+        // construction not in `remotes` (see onState).
+        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
+        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
       }
     }
 

@@ -3500,13 +3500,12 @@ function _colResolvePair(a, b, last, rubScrub) {
     shiftLong(b, -sgn * corr * sB);
     const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
     if (relV > 0) {
-      // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
-      // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
-      // Rapier resolves in preStep — applying jImp here then promoting is a
-      // double resolve. Safe: owns() cars are already skipped above; below
-      // threshold / inactive, notifyCar no-ops and this exchange stays the
-      // resolver (C3 event-scoping).
-      if (!(incidentSim.active() && relV >= 15)) {
+      // Soft momentum exchange (was 1.15). Skip only cars Rapier already
+      // owns — a relV≥15 skip used to drop jImp even when promoteCarDynamic
+      // failed later, leaving the pair with no resolver. owns() cars are
+      // also skipped in _colSepPair; this is the same rule at the impulse.
+      // notifyCar still queues a shunt; below threshold it no-ops (C3).
+      if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
         const jImp = 0.5 * relV / iSum;
         if (sgn >= 0) {
           b.speed = Math.max(0, b.speed - iB * jImp);
@@ -6967,8 +6966,8 @@ function render(dt) {
     // fills the camera as a black box until you pull away ("starts dark, clears
     // after throttle"). Once there's real separation it draws normally.
     let gDs = Infinity;
-    if (g && !g.done) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
-    if (g && !g.done && gDs > 3.0) {
+    if (g) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
+    if (g && gDs > 3.0) {
       Tracks.sample(track, g.s, smp2);
       // Normalize the lerped basis — same node-rate scale-pulse fix as the cars.
       { const t = smp2.t, r = smp2.r;

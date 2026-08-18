@@ -328,7 +328,7 @@ const IncidentSim = (function () {
       promoted.push(i);
     }
     if (!promoted.length) return;
-    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen });
+    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen, elapsed: 0 });
     _seq++; _promoted += promoted.length; _lastKind = kind;
     Log.info("game", "IncidentSim start " + kind + " cars=" + promoted.length);
   }
@@ -400,7 +400,8 @@ const IncidentSim = (function () {
         let st = (inc.settle.get(i) || 0);
         st = settling ? st + (fin(dt) ? dt : 1 / 60) : 0;
         inc.settle.set(i, st);
-        const windowUp = (_tick - inc.tick0) * (fin(dt) ? dt : 1 / 60) >= WINDOW_MAX_S;
+        inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
+        const windowUp = inc.elapsed >= WINDOW_MAX_S;
         if (st >= SETTLE_HOLD_S || windowUp) handbackCar(inc, i, false, pose);
       }
     }

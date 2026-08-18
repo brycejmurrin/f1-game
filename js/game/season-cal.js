@@ -287,6 +287,7 @@ function award(season, order) {
     season.round++;
     delete season.stage;
     delete season.sprintOrder;
+    delete season.qualiOrder;
     sprintOrder = null;
   }
   lastScored = scoring;
