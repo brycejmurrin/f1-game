@@ -256,12 +256,12 @@
    852×393 does not stack minimap, chips, and pause. Viewport max-height cannot
    see zoom; body[data-density] is the same hook as the menus (body --compact-at
    600). Insets still divide by --hud-z. Do not redeclare #hud-sectors top. */
-body[data-density="compact"] .hud-top { gap: 6px; }
-body[data-density="compact"] .hud-box { padding: 4px 7px; }
+body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
+body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
 body[data-density="compact"] #minimap { width: 96px; height: 96px; }
 body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
-body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: 3px 6px; }
-body[data-density="compact"] .hud-bottom { gap: 2px; }
+body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
+body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 
 /* ---------- start lights ---------- */
 #lights {

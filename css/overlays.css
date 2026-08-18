@@ -573,8 +573,8 @@ body.hud-hidden #hud-restore { display: block; }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
    max-height gate — 852×393 is already body compact (body --compact-at 600). */
 body[data-density="compact"] #campicker {
-  gap: 4px;
-  padding: 6px;
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.75);
   width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
 }
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
