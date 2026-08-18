@@ -198,3 +198,55 @@ test("street OT scale still uses a clean gap after the seating fix", () => {
   assert.ok(A.streetOtScale(rook) >= 0.72);
   assert.ok(A.streetOtScale(ace) > A.streetOtScale(rook));
 });
+
+test("street tow is half-size and queue brake eases in", () => {
+  assert.equal(A.towGain(false), 0.045);
+  assert.ok(A.towGain(true) > 0 && A.towGain(true) < A.towGain(false));
+  assert.equal(A.queueBrake(60, 56.9, false), 1);
+  assert.equal(A.queueBrake(60, 57.5, false), 0, "permanent still waits for +3");
+  assert.equal(A.queueBrake(60, 57.5, true), 0, "street +2.5 is still a follow close");
+  const soft = A.queueBrake(60, 54.5, true);
+  assert.ok(soft > 0 && soft < 1, `street ease-in ${soft}`);
+  assert.equal(A.queueBrake(60, 50, true), 1);
+});
+
+test("street sep/mass/wall keep the player from bouncing into Armco", () => {
+  assert.ok(A.sepClamp(true) < A.sepClamp(false));
+  assert.ok(A.humanInvMass(true) < A.humanInvMass(false));
+  assert.equal(A.humanInvMass(false), 0.5);
+  assert.ok(A.wallHitLoss(true) < 0.36);
+  assert.ok(A.wallSteerScrub(true) < 26);
+  assert.equal(A.wallAiScrub(true), A.wallAiScrub(false));
+});
+
+test("otPull and defendPull: streets use an open gap, not an Armco dive", () => {
+  const open = {
+    traits: ace, speed: 58, blockerSpeed: 52, blockerGap: 8,
+    roomL: 1.2, roomR: 3.4,
+  };
+  const perm = A.otPull({ ...open, street: false });
+  const street = A.otPull({ ...open, street: true });
+  assert.ok(perm > 0 && street > 0);
+  assert.ok(street < perm, "street OT must stay gentler than a permanent dive");
+  assert.equal(A.otPull({ ...open, street: true, blockerGap: 15 }), 0);
+  const cover = {
+    traits: ace, speed: 50, chaser: true, chaserGap: 6, chaserSpeed: 54,
+    kA: 0.01, roomL: 3.0, roomR: 1.0,
+  };
+  const dPerm = A.defendPull({ ...cover, street: false });
+  const dStreet = A.defendPull({ ...cover, street: true });
+  assert.ok(dPerm < 0, `permanent cover inside (k>0 → -x), got ${dPerm}`);
+  assert.ok(Math.abs(dStreet) < Math.abs(dPerm));
+  assert.equal(A.defendPull({ ...cover, street: true, roomL: 1.5 }), 0);
+});
+
+test("adaptLane on streets will not crawl toward a tight wall", () => {
+  const tight = A.adaptLane(0, {
+    traits: mid, nearby: 4, roomL: 0.4, roomR: 1.5, baseLane: 0, street: true,
+  }, 0.5);
+  assert.equal(tight, 0);
+  const open = A.adaptLane(0, {
+    traits: mid, nearby: 4, roomL: 0.4, roomR: 3.5, baseLane: 0, street: true,
+  }, 0.5);
+  assert.ok(open > 0 && open < 0.2, `street fan-out ${open}`);
+});

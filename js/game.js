@@ -3424,7 +3424,8 @@ function _colFillBuckets(ranked) {
 const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 function sepShares(a, b) {
-  const iA = a.human ? 0.5 : 1, iB = b.human ? 0.5 : 1;
+  const hum = AiDrive.humanInvMass(!!track.street);
+  const iA = a.human ? hum : 1, iB = b.human ? hum : 1;
   const netA = netPlay.owns(a), netB = netPlay.owns(b);
   _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
   _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
@@ -3491,7 +3492,7 @@ function collideFx(a, b, impact) {
 // (separate on x, scrub speed); longitudinal => a rear-end (separate along the
 // track, transfer speed rear->front). Mass-weighted, several relaxation passes
 // to settle clusters, then a hard min-separation pass so cars can never render
-// merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
+// merged. The player is "heavier" (AiDrive.humanInvMass) so the AI can't shove them off.
 function _colResolvePair(a, b, last, rubScrub) {
   if (incidentSim.owns(a) || incidentSim.owns(b)) return;
   const ct = pairContact(a, b);
@@ -3889,18 +3890,18 @@ function updateCar(c, dt, ranked) {
     // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
     // cap bounds it) but surges the instant we draw out of that car's box. Fades
     // with gap + lateral offset; straight only (the wake is behind the car).
-    if (towCar && !braking && kMax < 0.006 && !track.street) {
+    if (towCar && !braking && kMax < 0.006) {
       const tow = clamp((34 - towGap) / 28, 0, 1) * clamp(1 - Math.abs(towCar.x - c.x) / 4, 0, 1);
-      vmax *= 1 + 0.045 * tow;  // up to +4.5% top speed deep in the wake (~F1 tow)
+      vmax *= 1 + AiDrive.towGain(!!track.street) * tow;
     }
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
-    // cap our pace to it, braking if closing fast, so we tuck behind not ram. On
-    // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
-    // Awareness pads the follow gap (AiDrive.followPad).
+    // cap our pace to it, braking if closing fast, so we tuck behind not ram.
+    // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
       const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
-      if (c.speed > blocker.speed + 3) { braking = true; brakeLvl = 1; }
+      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
+      if (qb) { braking = true; brakeLvl = qb; }
     }
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
@@ -4109,7 +4110,7 @@ function updateCar(c, dt, ranked) {
     // Adaptive preferred lane: under traffic density, slowly bias toward the
     // freer side so midfield trains fan out instead of locking one line forever.
     c.lane = AiDrive.adaptLane(c.lane, {
-      traits: aiT, nearby: nearbyN, roomL, roomR,
+      traits: aiT, nearby: nearbyN, roomL, roomR, street: !!track.street,
       baseLane: c.lanePref != null ? c.lanePref : c.lane,
     }, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
@@ -4124,28 +4125,20 @@ function updateCar(c, dt, ranked) {
     // side is also tight (a car alongside or a wall), so we don't dive into a
     // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
     let overtake = 0;
-    // PERMANENT circuits: a decisive, CRAFT-scaled pull-out that clears the box and
-    // uses the tow. STREET circuits keep the gentler baseline move — tight barriers
-    // punish an over-committed line (it clipped the wall on Monaco) — further
-    // scaled by awareness so careful drivers don't wall. Defend and tow are
-    // permanent-only for the same reason.
-    const otEnh = !track.street;
-    if (blocker && blocker.speed < c.speed + (otEnh ? 5 : 4) && blockerGap < (otEnh ? 16 : 14)) {
-      const side = roomR >= roomL ? 1 : -1;
-      const need = side > 0 ? roomR : roomL;
-      overtake = side * (otEnh
-        ? lerp(0.8, 2.6, clamp(1 - blockerGap / 16, 0, 1)) * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, aiT.craft)
-        : lerp(0.6, 2.2, clamp(1 - blockerGap / 14, 0, 1)) * clamp(need / 2.4, 0, 1) * AiDrive.streetOtScale(aiT));
+    // OT / defend pulls live in AiDrive (craft on permanents, awareness + open
+    // inside-room on streets). Tow is no longer permanent-only.
+    if (blocker) {
+      overtake = AiDrive.otPull({
+        street: !!track.street, traits: aiT, speed: c.speed,
+        blockerSpeed: blocker.speed, blockerGap, roomL, roomR,
+      });
     }
-    // Defending: a car of similar-or-better pace close behind, a corner ahead, and
-    // clean air in front → take the inside line to cover the obvious passing spot,
-    // scaled by CRAFT. Corner-only (shading on a straight just made the defender
-    // weave and bleed pace); a steady cover that fades as the threat drops back.
     let defend = 0;
-    if (chaser && !blocker && chaserGap < 12 && chaser.speed > c.speed - 3 && Math.abs(kA) > 0.004 && !track.street) {
-      const coverSide = -Math.sign(kA);
-      const coverRoom = coverSide > 0 ? roomR : roomL;   // don't cover INTO a close barrier
-      defend = coverSide * lerp(0.2, 1.1, aiT.craft) * clamp(1 - chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
+    if (chaser && !blocker) {
+      defend = AiDrive.defendPull({
+        street: !!track.street, traits: aiT, speed: c.speed, chaser: true,
+        chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR,
+      });
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
@@ -4182,7 +4175,8 @@ function updateCar(c, dt, ranked) {
       if (deficit <= 0) continue;
       sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
-    sep = clamp(sep, -2.6, 2.6);              // metres of separation bias
+    const sepMax = AiDrive.sepClamp(!!track.street);
+    sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
     const desiredX = clamp(targetX + overtake + defend + sep + unstuck, -(hw - 0.5), hw - 0.5);
@@ -4611,7 +4605,7 @@ function updateCar(c, dt, ranked) {
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
-        if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.36 : 0.28);
+        if (!c.wasOnWall) c.speed *= 1 - incidence * AiDrive.wallHitLoss(!!track.street);
         // straighten the nose toward the wall tangent so the car slides along it
         // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
         // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
@@ -4634,7 +4628,7 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        const scrub = pushIn * (track.street ? 26 : 16) * dt;
+        const scrub = pushIn * AiDrive.wallSteerScrub(!!track.street) * dt;
         if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
         else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
@@ -4643,7 +4637,7 @@ function updateCar(c, dt, ranked) {
       // the player just drives off the barrier — no sticky pin, no auto-rescue.
     } else {
       // AI has no world-space heading to slide; clamp + gentle scrub.
-      c.speed = Math.max(0, c.speed - (track.street ? 16 : 12) * dt);
+      c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
     }
     c.wasOnWall = true;
   } else {

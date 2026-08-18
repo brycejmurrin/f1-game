@@ -15,6 +15,7 @@
      • multi-sample brake target + soft pedal level + craft late-brake
      • slow adaptive preferred-lane nudge from traffic density
      • street vs permanent boxed/min-gap/racing-line mix (pack seating)
+     • street tow / queue-brake / OT+defend pull / sep clamp / player mass
 
    WHAT STAYS IN game.js
      • the O(n) traffic scan (roomL/R, blocker, tow, chaser)
@@ -53,6 +54,32 @@ const AiDrive = (function () {
   // and stack into a parking lot; 8 m still tucks more than a permanent.
   function followBase(street) {
     return street ? 8 : 6;
+  }
+
+  // Slipstream vmax gain. Streets used to get none, so the 8 m train could
+  // never close; a half-size tow still fits inside the follow cap.
+  function towGain(street) {
+    return street ? 0.022 : 0.045;
+  }
+
+  // Closing-on-blocker brake. Permanent stamps at +3 m/s (old rule). Streets
+  // wait longer and ease in so a slow corner does not accordion the field.
+  function queueBrake(speed, blockerSpeed, street) {
+    const excess = (speed || 0) - (blockerSpeed || 0);
+    const thresh = street ? 4.5 : 3;
+    if (excess <= thresh) return 0;
+    return street ? clamp((excess - thresh) / 4, 0.2, 1) : 1;
+  }
+
+  // Metres of proactive lateral-sep bias. 2.6 m of yank is a wall on Monaco.
+  function sepClamp(street) {
+    return street ? 1.55 : 2.6;
+  }
+
+  // Player invMass in pairContact. Streets: heavier so an AI lean-on does
+  // not bounce the human into Armco (permanents keep the 0.5 "heavier" rule).
+  function humanInvMass(street) {
+    return street ? 0.42 : 0.5;
   }
 
   // Contact compliance: aware drivers yield more so a lean-on pass sticks.
@@ -186,15 +213,69 @@ const AiDrive = (function () {
     const dens = ctx.nearby || 0;
     if (dens < 2) return lane;
     const freer = (ctx.roomR || 0) - (ctx.roomL || 0);
-    if (Math.abs(freer) < 0.9) return lane;
+    const minFree = ctx.street ? 1.35 : 0.9;
+    if (Math.abs(freer) < minFree) return lane;
     const sign = freer > 0 ? 1 : -1;
+    const destRoom = sign > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
+    if (ctx.street && destRoom < 1.7) return lane;
     // Awareness commits earlier; craft picks a more decisive bias.
-    const step = lerp(0.08, 0.22, ctx.traits.craft) * lerp(0.7, 1.15, ctx.traits.awareness);
+    const step = lerp(0.08, 0.22, ctx.traits.craft) * lerp(0.7, 1.15, ctx.traits.awareness)
+      * (ctx.street ? 0.55 : 1);
     // Bias around the grid home line (baseLane), not the live lane — otherwise
     // every frame adds another step and the field crawls to ±0.85.
     const home = ctx.baseLane != null ? ctx.baseLane : lane;
     const target = clamp(home + sign * step, -0.85, 0.85);
     return damp(lane, target, 0.35, dt);
+  }
+
+  // Lateral metres of overtake pull. Permanent = craft-scaled dive; street
+  // uses awareness (streetOtScale) and a slightly stronger open-gap move than
+  // the old 0.6–2.2 band so a clean side after the seating fix still gets used.
+  function otPull(ctx) {
+    const street = !!ctx.street;
+    const t = ctx.traits;
+    const gap = ctx.blockerGap;
+    if ((ctx.speed || 0) < (ctx.blockerSpeed || 0) + (street ? 4 : 5)) return 0;
+    if (gap >= (street ? 14 : 16)) return 0;
+    const side = (ctx.roomR || 0) >= (ctx.roomL || 0) ? 1 : -1;
+    const need = side > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
+    if (street) {
+      return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
+        * clamp(need / 2.3, 0, 1) * streetOtScale(t);
+    }
+    return side * lerp(0.8, 2.6, clamp(1 - gap / 16, 0, 1))
+      * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft);
+  }
+
+  // Inside-line cover when a chaser is close and a corner is coming.
+  // Streets only cover when the inside is actually open (no Armco dive).
+  function defendPull(ctx) {
+    if (ctx.blocker || !ctx.chaser || (ctx.chaserGap || 99) >= 12) return 0;
+    if ((ctx.chaserSpeed || 0) <= (ctx.speed || 0) - 3) return 0;
+    const kA = ctx.kA || 0;
+    if (Math.abs(kA) <= 0.004) return 0;
+    const coverSide = -Math.sign(kA);
+    const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
+    if (ctx.street && coverRoom < 2.2) return 0;
+    const mag = lerp(0.2, 1.1, ctx.traits.craft)
+      * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
+    return coverSide * (ctx.street ? mag * 0.45 : mag);
+  }
+
+  // First-hit speed loss (incidence 0..1). Streets were 0.50 then 0.36; 0.30
+  // still bites a head-on without parking a graze. Permanents stay 0.28.
+  function wallHitLoss(street) {
+    return street ? 0.30 : 0.28;
+  }
+
+  // Steer-into-wall scrub (m/s²). Streets 40→26→20; permanents 16.
+  function wallSteerScrub(street) {
+    return street ? 20 : 16;
+  }
+
+  // AI has no heading slide; this is the clamp-frame speed scrub.
+  function wallAiScrub(street) {
+    return street ? 12 : 12;
   }
 
   // Street trains follow at ~12 m. The old boxed rule treated ANY in-lane
@@ -226,8 +307,10 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    traits, stuckThreshold, followPad, followBase, contactGive, steerDamp, unstuckPull,
-    streetOtScale, otFireRate, otShouldFire, wantBoost, brakeTarget, brakeDecision,
-    adaptLane, isBoxed, minLatGap, racingLineMix,
+    traits, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
+    otShouldFire, wantBoost, brakeTarget, brakeDecision, adaptLane, otPull,
+    defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
+    wallAiScrub,
   };
 })();
