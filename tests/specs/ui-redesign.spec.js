@@ -311,37 +311,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.panelPainted).toBe(true);
   expect(settings.navH).toBeLessThan(settings.bodyH);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
-
-  // Lighting tuner at 200% on short landscape: compact strip, one scroller,
-  // explanations off. Rail stays off because local width is 852/2 < --rail-at.
-  await page.evaluate(() => document.getElementById("pm-lighting").click());
-  await page.waitForFunction(() => {
-    const el = document.getElementById("lighting-inner");
-    return el && !document.getElementById("lighting").hidden && el.dataset.density === "compact";
-  }, null, { polling: 100, timeout: 10_000 });
-  const lighting = await page.evaluate(() => {
-    const el = document.getElementById("lighting-inner");
-    const tabs = document.getElementById("lt-tabs");
-    const rows = document.getElementById("lt-rows");
-    const toggle = el.querySelector(".lt-help-toggle");
-    return {
-      density: el.dataset.density,
-      rail: el.dataset.rail,
-      wrap: getComputedStyle(tabs).flexWrap,
-      panelOY: getComputedStyle(el).overflowY,
-      rowsOY: getComputedStyle(rows).overflowY,
-      rowsH: rows.getBoundingClientRect().height,
-      helpOff: !toggle || getComputedStyle(toggle).display === "none",
-    };
-  });
-  expect(lighting.density).toBe("compact");
-  expect(lighting.rail).not.toBe("on");
-  expect(lighting.wrap).toBe("nowrap");
-  expect(["hidden", "clip"]).toContain(lighting.panelOY);
-  expect(["auto", "scroll", "overlay"]).toContain(lighting.rowsOY);
-  expect(lighting.rowsH).toBeGreaterThanOrEqual(24);
-  expect(lighting.helpOff).toBe(true);
-  await page.evaluate(() => document.getElementById("lt-close").click());
+  await page.evaluate(() => document.getElementById("pm-settings-close").click());
 
   // Last Race: reproduce the production table shape at phone portrait width.
   await page.setViewportSize({ width: 393, height: 844 });
@@ -400,6 +370,48 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.waitForFunction(() => window.__apex.info().track === "monza",
     null, { polling: 100, timeout: 40_000 });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+  // Lighting tuner is race-only (`pm-lighting` is disabled on the title). Open
+  // it from pause → settings → MORE at 200% on the short landscape sheet.
+  await page.setViewportSize({ width: 852, height: 393 });
+  await page.evaluate(() => {
+    window.__apex.uiScale(200);
+    document.getElementById("pausebtn").click();
+    document.getElementById("pm-settings").click();
+    document.getElementById("pm-tab-more").click();
+    document.getElementById("pm-lighting").click();
+    window.SheetShape?.reclassify();
+  });
+  await page.waitForFunction(() => {
+    const el = document.getElementById("lighting-inner");
+    return el && !document.getElementById("lighting").hidden && el.dataset.density === "compact";
+  }, null, { polling: 100, timeout: 10_000 });
+  const lighting = await page.evaluate(() => {
+    const el = document.getElementById("lighting-inner");
+    const tabs = document.getElementById("lt-tabs");
+    const rows = document.getElementById("lt-rows");
+    const toggle = el.querySelector(".lt-help-toggle");
+    return {
+      density: el.dataset.density,
+      rail: el.dataset.rail,
+      wrap: getComputedStyle(tabs).flexWrap,
+      panelOY: getComputedStyle(el).overflowY,
+      rowsOY: getComputedStyle(rows).overflowY,
+      rowsH: rows.getBoundingClientRect().height,
+      helpOff: !toggle || getComputedStyle(toggle).display === "none",
+    };
+  });
+  expect(lighting.density, "lighting compact").toBe("compact");
+  expect(lighting.rail).not.toBe("on");
+  expect(lighting.wrap).toBe("nowrap");
+  expect(["hidden", "clip"]).toContain(lighting.panelOY);
+  expect(["auto", "scroll", "overlay"]).toContain(lighting.rowsOY);
+  expect(lighting.rowsH).toBeGreaterThanOrEqual(24);
+  expect(lighting.helpOff).toBe(true);
+  await page.evaluate(() => {
+    document.getElementById("lt-close").click();
+    document.getElementById("pm-settings-close").click();
+    document.getElementById("pm-resume").click();
+  });
   await page.waitForSelector("#btn-cam:not([hidden])", { timeout: 10_000 });
   await page.evaluate(() => document.getElementById("btn-cam")
     .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })));
