@@ -382,13 +382,15 @@ test("roadHwFeel lifts city streets more than wide permanents and keeps pinches"
   const monacoFeel = feel({ id: "monaco", street: true, baseHW: 5 });
   const marinaFeel = feel({ id: "singapore", street: true, baseHW: 6 });
   const vegasFeel = feel({ id: "vegas", street: true, baseHW: 7 });
+  const madridFeel = feel({ id: "madrid", street: false, baseHW: 7 });
   const miamiFeel = feel({ id: "miami", street: false, baseHW: 7 });
   const imolaFeel = feel({ id: "imola", street: false, baseHW: 7 });
   const sepangFeel = feel({ id: "sepang", street: false, baseHW: 8 });
   assert.ok(monacoFeel > marinaFeel, "tightest street gets the biggest lift");
   assert.ok(marinaFeel > vegasFeel, "mid street gets more than a boulevard");
   assert.ok(vegasFeel > imolaFeel, "street canyon still outlifts a park circuit");
-  assert.ok(miamiFeel > imolaFeel, "urban hybrid outlifts a same-width permanent");
+  assert.ok(madridFeel > imolaFeel, "Madring's city walls outlift a same-width permanent");
+  assert.equal(miamiFeel, 1, "Miami keeps authored width — folded campus kit");
   assert.ok(imolaFeel > sepangFeel, "narrower permanents grow more than already-wide ones");
   assert.equal(feel({ id: "monaco", street: true, baseHW: 5, hwFeel: 1.3 }), 1.3,
     "authored hwFeel overrides the class default");

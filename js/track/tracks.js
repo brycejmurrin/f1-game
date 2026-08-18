@@ -2674,8 +2674,11 @@ const Tracks = (function () {
       if (base <= 6.25) return 1.16;   // Singapore / Baku / Jeddah
       return 1.10;                     // Vegas — already a boulevard
     }
-    // City walls without the street-barrier envelope (Hard Rock / IFEMA).
-    if (id === "miami" || id === "madrid") return 1.12;
+    // IFEMA / Madring reads as a city canyon without `street: true`. Miami
+    // stays at authored width: the Hard Rock campus folds back on itself and
+    // even a 6% lift rejects the required race-control kit.
+    if (id === "miami") return 1;
+    if (id === "madrid") return 1.12;
     // Permanents already differ by authored baseHW (7 / 7.5 / 8); lift the
     // narrower ones a little more so Sepang does not grow as much as Imola.
     if (base >= 8) return 1.03;
