@@ -100,7 +100,10 @@ const CEILING = {
   // duplicate landscape `padding` when they moved onto body[data-width].
   // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
   // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
-  rawSpacing: 467,
+  // 2026-08-18: 467 -> 473. The menu-color restore (eedad021) put six raw
+  // spacing literals back on menus.css without a ceiling bump. Lock the
+  // measured count; do not treat this as a cleanup-branch regression.
+  rawSpacing: 473,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

@@ -201,45 +201,15 @@ on the 08-18 perf-hunt board, not this register.
   2026-08 hidden behind a stale count assertion in the same spec that failed
   first; with the count re-pinned, the pier assertion is visible again and the
   product question it asks is still unanswered.
-- **`hud-layout` `notched-landscape` — FIXED, validated 25/25 across all four
-  viewports.** `#hud-sectors`' top offset is now derived from `var(--tap)`
-  (`css/hud.css`) instead of a hard-coded 56, and the short-landscape override
-  that pulled it UP to 52 is gone (`css/responsive.css`). Kept below for the
-  diagnosis, which is the reusable part. All six variants
-  (tilt/buttons/touch × auto/manual gears) fail with three layout problems where
-  the spec expects none; the other viewport rows pass, so it is the VIEWPORT —
-  852×393 with real safe-area insets (`sal 59, sar 59, sab 21`) — not the input
-  mode. Confirmed PRE-EXISTING at `d7a1158` by an A/B on a quiet box, both sides
-  via `tools/test-solo.mjs` (which refuses to start above its load gate):
-  `HEAD` 6/6 fail at 20.3–22.1 s, base worktree 6/6 fail at 21.7–22.8 s. No
-  timeouts on either side — these are assertion failures, not contention. Repro:
-  `node tools/test-solo.mjs tests/specs/hud-layout.spec.js -g notched-landscape`.
-
-  **Diagnosed — one collision, and it IS player-visible.** A `--reporter=list`
-  run gives the actual payload: `hudClash: ["#hud-sectors+pausebtn"]` (a single
-  pair; the "Received +3" in the live reporter is diff LINES, not items). The
-  arithmetic: `#pausebtn` is `width/height: var(--tap)` at `top: calc(8px + …)`
-  (`css/overlays.css:477`), so on touch — where `--tap: 52px`
-  (`css/tokens.css:405`) — it spans y 8→60. `#hud-sectors` is pinned at
-  `top: calc(56px + …)` (`css/hud.css:156`). **A 4 px overlap.** The 56px
-  constant works against the 44px desktop `--tap` (44+8 = 52 < 56) and stops
-  holding at 52. `css/overlays.css:492` records a sibling of the same bug class
-  ("on touch (--tap: 52px) CHASE overlapped…"), so this is a known trap, not a
-  novel one.
-
-  Why it matters more than the portrait case the spec already dismissed: that
-  one (`.hud-top`+`#pausebtn`, a measured 8.7px collision) is unreachable
-  behind the full-screen `z-index: 9000` `#rotate-device` block, which is why
-  `HUD_LANDSCAPE_ONLY` exists and why the spec author correctly refused to move
-  CSS nobody could see move. In LANDSCAPE `#rotate-device` is not up, so this
-  collision is on screen: the sector splits sit on the pause button on a
-  notched phone. The fix is to derive the sectors' offset from the button's
-  real box (`8px + var(--tap) + gap`) instead of the hard-coded 56 — which
-  leaves desktop unchanged (44+8+4 = 56) and moves touch down 8px. Note also
-  that the two elements scale the safe-area inset differently (`#hud-sectors`
-  divides `--sar`/`--sat` by `--hud-scale`, `#pausebtn` does not), so they
-  additionally drift apart at non-default HUD SIZE — worth settling in the same
-  pass.
+- **`hud-layout` `notched-landscape` — FIXED.** `#hud-sectors` top is
+  `calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z))` in
+  `css/hud.css` (the old hard-coded 56 was desktop-`--tap` only and overlapped
+  `#pausebtn` by 4 px on touch). The short-landscape override that pulled it
+  UP to 52 is gone. Diagnosis that still applies: never pin HUD chrome to a
+  pixel constant when a sibling is sized from `--tap`; convert the unscaled
+  sum into the zoomed element's units (`--hud-z`) or the pair drifts at
+  non-default HUD SIZE. Portrait `.hud-top`/`#pausebtn` overlap stays
+  excluded — it sits behind `#rotate-device`.
 - **`menu-keyboard` › "left/right move along a chip row without leaving it" is
   red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
   block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
@@ -331,11 +301,10 @@ on the 08-18 perf-hunt board, not this register.
   should be reconsidered on its remaining merits.
 - **A19 residue.** `css/overlays.css` still carries mutually inconsistent
   measured cluster widths in comments (the "467px" family) of which at least
-  two are stale. The hud-layout coverage gap
-  is closed for landscape (`HUD_LANDSCAPE_ONLY` now checks `.hud-top`,
-  `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait is deliberately excluded,
-  with the measured `.hud-top`/pausebtn overlap documented as unreachable
-  behind the full-screen `#rotate-device` block.
+  two are historical measurements of the pre-grid flex strip. Landscape
+  hud-layout coverage is closed (`HUD_LANDSCAPE_ONLY` checks `.hud-top`,
+  `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait overlap stays excluded
+  behind `#rotate-device`.
 - **A13 zoom/rect sites — closed.** `js/game/css-zoom.js` (`CssZoom`) is the
   shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
   `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
