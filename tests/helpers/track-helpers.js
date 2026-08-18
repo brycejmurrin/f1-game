@@ -49,6 +49,12 @@ export const TRACKS = createRequire(import.meta.url)("../../tools/manifest.cjs")
    investigation — can be measured on its own. Three specs had each pasted their
    own copy of the 40 ids; a new circuit added to js/circuits/ silently escaped
    all three. */
+// Banked-road sample height (page.evaluate idiom):
+//   const bank = Tracks.banking(bankTrack, frac * bankTrack.total, lat);
+//   y = node.y + (bank ? bank.dy : 0);
+// Centreline `node.y` is not the tarmac at |lat| > 0 inside a bankZone.
+// Monza / Spa / Zandvoort foundation specs use this; `__apex.groundY` still
+// reports the raw centreline gap (durable overRoad is open).
 export function auditTracks() {
   if (!process.env.TRACK) return TRACKS;
   return process.env.TRACK.split(",").map((t) => t.trim()).filter(Boolean);

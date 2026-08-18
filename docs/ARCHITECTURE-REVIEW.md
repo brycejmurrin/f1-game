@@ -195,12 +195,12 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
-- **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
-  allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
-  failing — it wants a geometry fix, not a wider tolerance. It spent part of
-  2026-08 hidden behind a stale count assertion in the same spec that failed
-  first; with the count re-pinned, the pier assertion is visible again and the
-  product question it asks is still unanswered.
+- **Montreal: a bridge support floats 2.72 m off the ground — FIXED in
+  engine + circuit.** `foundation()` now falls back to `Tracks.terrainY` when
+  the build-time 30 m triangle grid misses a `flatTerrain` shelf, and the
+  casino footbridge opts out of `overheadSpan`'s auto-legs (`supports: false`)
+  so the custom piers are the only feet. Browser spec not re-run in this
+  session (load).
 - **`hud-layout` `notched-landscape` — FIXED.** `#hud-sectors` top is
   `calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z))` in
   `css/hud.css` (the old hard-coded 56 was desktop-`--tap` only and overlapped
@@ -219,12 +219,12 @@ on the 08-18 perf-hunt board, not this register.
   dialog regression above owns "Tab cannot escape the track-detail dialog" — so
   the file is worth one pass rather than two separate fixes. It is the only
   failure in `test:ui`, which otherwise runs 100/100.
-- **`props-over-road` is red on COTA and Indianapolis** — last located
-  offenders were the Austin360 Amphitheater (`cota`) and an infield
-  `structure` group (`indianapolis`) against a 0.2 m cap
-  (`tests/specs/props-over-road.spec.js`). Re-measure with
-  `tools/measure-props-over-road.mjs` before editing geometry; the spec header
-  no longer claims a frozen "15 circuits fully clean" list.
+- **`props-over-road` on COTA and Indianapolis — geometry fix landed;
+  browser re-measure not run in this session.** COTA's amphitheater now emits
+  from its declared origin (the 8 m declared-vs-built offset). Indianapolis
+  shortens the oval stand and colour-band chords that covered the infield at
+  racing 0.33. Re-measure with `tools/measure-props-over-road.mjs` before
+  treating the spec as green.
 
   **Both offenders are located and are the same class: a big bespoke
   `structure`, not foliage, barriers or lighting.** Measured with
@@ -262,10 +262,12 @@ on the 08-18 perf-hunt board, not this register.
   `center = vadd(vadd(a.c, a.r, 8), a.u, 13)` and emits its stage deck at the
   anchor, so the tested box sits 8 m further from the circuit than the geometry.
   `modelGroup` now measures this (`diagnostics.escaped`, read via
-  `__apex.modelDiagnostics()`): the amphitheater escapes its declared box by
+  `__apex.modelDiagnostics()`): the amphitheater escaped its declared box by
   **9.0 m along the RIGHT axis** — laterally, toward the track — which is the
-  4.79 m of geometry over the racing line. Reported, not rejected: enforcing
-  would delete authored scenery across 40 circuits on an unmeasured rule.
+  4.79 m of geometry over the racing line. The amphitheater now emits from
+  that declared origin, and `modelGroup` re-runs the road preflight on the
+  **emitted** oriented box (lateral footprint only — vertical apron slack is
+  still a diagnostic, not a delete).
 
   **Indianapolis is NOT this bug.** Same instrument: 15 of its 21 groups escape
   their declared bounds, but every one is vertical (≤0.44 m aprons/greens) and
@@ -287,8 +289,8 @@ on the 08-18 perf-hunt board, not this register.
   310,000, justified in the spec's own comment — but Vegas builds 1,825,925
   prop vertices (~80 MB of GPU buffer at the real interleave, against the
   ~100 MB where iOS jetsams the page) with **no cap at all**.
-  `verify-track.cjs` already computes the number; the gate is a threshold plus
-  the existing ratchet pattern.
+  `verify-track.cjs` now fails `vegas` above 1 850 000 prop verts (measured
+  ~1.83 M + slack). Other circuits stay uncapped.
 - **The banked-reference measurement error is fixed locally, not durably.**
   Monza's 0.294 and Spa's 0.525 "terrain over road" readings were one root
   cause — probes measured against the unbanked centreline where `bankZones`
@@ -329,16 +331,12 @@ most-load-bearing first.
   the measured convention. **Still do not flip any sign without a rendered
   lap** — the 2026-08-13 barrier fix stayed deliberately vertical-only for
   that reason.
-- **The wall clamp is bypassed while `IncidentSim` owns the car.** A wall hit of
-  severity ≥34 hands the car to the incident window, and the ownership check in
-  `js/game.js`'s barrier step then skips the clamp entirely — so the player
-  tumbles through the barrier instead of being held by it. Player-only, RNG-free
-  and **pre-existing**: `tests/specs/collisions-deep.spec.js` fails 2/2 at the
-  session-start commit with the identical values, and the spec now isolates the
-  clamp through the sanctioned `__apex.incident` flags-off path so it tests the
-  clamp rather than the takeover. The product question is untouched: should
-  `wallAt` remain an outer bound during an R2 takeover, or is passing through
-  the barrier the intended cost of a launch?
+- **The wall clamp is bypassed while `IncidentSim` owns the car — FIXED.**
+  Product: `wallAt` stays the outer bound during R2 (the side-world has no
+  barrier colliders). `postStep` now clamps `tf.x` and writes `px`/`pz` from
+  the clamped `(s,x)`. `updateCar` still skips its own clamp while `owns()`
+  is set — that is correct; the write-back is the remaining authority.
+  Unit-tested in `tests/unit/incident-gate.test.mjs`.
 - **Red Bull Ring's barrier coverage — FIXED (2026-08-13), and the mechanism
   was general.** tightFrac 0.225 was not missing dressing: sceneryRange()
   collapsed every authored full-lap span to zero width (wrap01(1) === 0)
@@ -348,13 +346,10 @@ most-load-bearing first.
   Verified: fleet A/B shows redbull only (0.225 -> 1.000), characterization
   + redbull-foundation + tiny + guards all green.
 
-- **`__apex.scene()` disagrees with its own spec about corners behind the
-  camera.** `tests/specs/agent-view.spec.js` asserts `|bearingDeg| > 120` for a
-  corner flagged `behindCamera`; Monza measures **108.1°**, and the value is
-  stable across camera states (107.7° before a `snapCam()`), so it is not a
-  flake — it is a genuine disagreement between the bearing convention the spec
-  encodes and the one the code computes. Neither side should move before the
-  convention is settled.
+- **`__apex.scene()` behind-camera bearing — SETTLED.** `behindCamera` means
+  `|bearingDeg| > 90` (behind the look direction), not `project() === null`
+  (behind the near plane). The spec asserts `> 90`. Monza's first behind
+  corner at ~108° now flags correctly.
 - **Title-screen CLS — FIXED, and the method is the point.** The title screen
   used to paint in the wrong shape and relay out: `body[data-density]` picks
   `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on

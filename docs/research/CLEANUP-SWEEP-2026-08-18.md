@@ -49,20 +49,25 @@ and the ATM/COL packs stay. Cache 1433 (mesh.js / agentview.js hashes applied).
 
 ---
 
-## Open defects (not fixed here)
+## Open defects — landed in the follow-up pass
 
-Player-visible or contract bugs. Geometry and product-rule work, not cleanup.
+| Tag | Where | What landed |
+|---|---|---|
+| **BUG** | COTA amphitheater | Emit from the declared origin (`a.c + 8r`), so the stage is no longer 8 m closer to the racing line than the preflight box. |
+| **BUG** | Indianapolis oval wall | More / shorter grandstand and colour-band bays so the chord no longer covers the infield at racing 0.33. |
+| **BUG** | Montreal casino footbridge pier | `foundation()` falls back to `Tracks.terrainY` when the 30 m build grid misses a flatTerrain shelf; overheadSpan auto-legs disabled (`supports: false`). |
+| **BUG** | `IncidentSim` wall-clamp skip | `postStep` clamps `tf.x` to `Tracks.wallAt` and writes world pose from the clamped `(s,x)`. Product: the wall stays an outer bound during R2. |
+| **BUG** | `modelGroup` preflight | Re-runs the road footprint test on the **emitted** oriented box. Declared-box escape stays a diagnostic (vertical slack). |
+| **BUG** | `__apex.scene()` behind-camera | `behindCamera` is `|bearingDeg| > 90` (look-direction). Spec matches. |
+| **TECH-DEBT** | Vegas prop verts | `verify-track.cjs` fails `vegas` above 1 850 000 verts. |
+| **TECH-DEBT** | Banked probes | Zandvoort's prop-clearance samples add `Tracks.banking().dy`. Durable `__apex.groundY` `overRoad` is still open. |
+
+## Still open (not this pass)
 
 | Tag | Where | Notes |
 |---|---|---|
-| **BUG** | Indianapolis / COTA props-over-road | Standing `structure` groups over the racing line. Re-measure before editing. |
-| **BUG** | Montreal casino footbridge pier | Foundation spec left red (~2.72 m float vs 0.05 m). |
-| **BUG** | `IncidentSim` wall-clamp skip | Product question: should `wallAt` remain an outer bound during R2? |
-| **BUG** | `modelGroup` preflight | Checks declared bounds, not emitted geometry (COTA amphitheater class). |
-| **BUG** | `__apex.scene()` behind-camera bearing | Spec wants `> 120°`; Monza measures ~108°. Settle the convention first. |
-| **BUG** | Singapore / Silverstone / Shanghai / Abu Dhabi | Direct `TrackGeom.*` bypasses scenery-api shift/mirror/on-track guards. |
-| **TECH-DEBT** | Vegas ~1.81 M prop verts | `verify-track` reports, does not fail. |
-| **TECH-DEBT** | Banked `groundY` probes | Zandvoort + ~12 foundation specs still sample centreline `node.y` only. |
+| **BUG** | Singapore / Silverstone / Shanghai / Abu Dhabi raw `TrackGeom.*` | Remaining `TrackGeom.addBox` calls on `out` are the **overhead escape hatch** (gantry lights that must span tarmac). modelGroup-internal raw emits now go through emitted-footprint preflight. Do not wrap `TrackGeom` globally — that would delete start lights. |
+| **TECH-DEBT** | `__apex.groundY` banked `overRoad` | Specs still have to add `Tracks.banking().dy` themselves. |
 
 ---
 

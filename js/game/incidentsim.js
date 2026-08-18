@@ -376,12 +376,31 @@ const IncidentSim = (function () {
         let tf = null;
         try { tf = G.trackFrom(px, pz, c.s); } catch (e) { tf = null; }
         if (!tf || !fin(tf.s) || !fin(tf.x)) { handbackCar(inc, i, true); continue; }
+        // The side-world has no barrier colliders (header contract). updateCar
+        // skips its wallAt clamp while owns() is set, so THIS write-back is
+        // the remaining outer bound: a launch may leave the tarmac, it may
+        // not pass through the barrier.
+        if (G.track && typeof Tracks !== "undefined" && Tracks.wallAt) {
+          const wr = Tracks.wallAt(G.track, tf.s, 1);
+          const wl = Tracks.wallAt(G.track, tf.s, -1);
+          if (fin(wr) && tf.x > wr) tf.x = wr;
+          if (fin(wl) && tf.x < -wl) tf.x = -wl;
+        }
         const vHoriz = Math.hypot(pose.vx || 0, pose.vz || 0);
         const speed = fin(vHoriz) ? vHoriz : (lg ? lg.speed : 0);
         // ── WRITE-BACK (window-scoped + guarded). HUMAN-car authority is
         // px/pz/head/(s,x); AI authority is (s,x)/prog. See report. ──
+        // World pose follows the clamped (s,x) so a body that tumbled past
+        // the barrier does not paint the car through it.
+        let wx = px, wz = pz;
+        if (G.worldFromTrack) {
+          try {
+            const w = G.worldFromTrack(tf.s, tf.x);
+            if (w && fin(w.x) && fin(w.z)) { wx = w.x; wz = w.z; }
+          } catch (e) {}
+        }
         if (c.human) {
-          c.px = px; c.pz = pz; c.head = head;
+          c.px = wx; c.pz = wz; c.head = head;
           const L = (G.track && G.track.total) || 1;
           let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
           if (fin(ds)) c.prog += ds;
@@ -392,6 +411,7 @@ const IncidentSim = (function () {
           let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
           if (fin(ds)) c.prog += ds;
           c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
+          c.px = wx; c.pz = wz;
         }
         // Advance the last-good snapshot to this validated pose.
         inc.good.set(i, snapOf(c));

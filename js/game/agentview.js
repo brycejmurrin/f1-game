@@ -2743,13 +2743,17 @@ const AgentView = (function () {
       for (const c of G.cars) {
         const [wx, wz] = carWorld(c);
         const p = project(vp, wx, 0.6, wz);           // ~roll-hoop height
+        const bearing = bearingTo(wx, wz);
         out.cars.push({
           id: c.id != null ? c.id : G.cars.indexOf(c),
           code: c.code || null, isPlayer: !!c.isPlayer,
-          distM: distTo(wx, wz), bearingDeg: bearingTo(wx, wz),
+          distM: distTo(wx, wz), bearingDeg: bearing,
           inFrame: !!(p && p.inFrame),
           screenPct: p ? p.screenPct : null,
-          behindCamera: !p,
+          // Look-direction, not clip-space w. project() is null only on the
+          // near plane; a car 100° off to the side still has w>0. |bearing|
+          // > 90 is "behind where you look".
+          behindCamera: Math.abs(bearing) > 90,
         });
       }
       out.cars.sort((a, b) => a.distM - b.distM);
@@ -2766,10 +2770,11 @@ const AgentView = (function () {
         // you" is exactly what an agent needs after a spin, so distance decides
         // inclusion and the projection only decides whether it is on screen.
         if (!(p && p.inFrame) && d > 400) continue;
+        const bearing = bearingTo(wx, wz);
         out.corners.push({ turn: c.turn, dir: c.dir, distM: d,
-                           bearingDeg: bearingTo(wx, wz),
+                           bearingDeg: bearing,
                            inFrame: !!(p && p.inFrame),
-                           behindCamera: !p,
+                           behindCamera: Math.abs(bearing) > 90,
                            screenPct: p ? p.screenPct : null });
       }
       out.corners.sort((a, b) => a.distM - b.distM);

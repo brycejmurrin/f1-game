@@ -22,6 +22,7 @@ async function propClearance(page) {
     const cellSize = 12;
     const cellKey = (x, z) => `${Math.floor(x / cellSize)},${Math.floor(z / cellSize)}`;
     const nodes = Array.from({ length: count }, (_, i) => window.__apex.nodeAt(i / count));
+    const bankTrack = Tracks.buildCenterline(Tracks.LIST.find((t) => t.id === "zandvoort"));
     const halfWidth = new Float64Array(count);
     const nearestNode = (x, z) => {
       let bestDistance = Infinity, best = 0;
@@ -43,10 +44,14 @@ async function propClearance(page) {
     for (let i = 0; i < count; i++) {
       const node = nodes[i];
       for (const scale of [-0.75, -0.4, 0, 0.4, 0.75]) {
+        const lat = scale * halfWidth[i];
+        const bank = Tracks.banking(bankTrack, node.frac != null ? node.frac * bankTrack.total : i / count * bankTrack.total, lat);
         const sample = {
-          x: node.x + node.rx * scale * halfWidth[i],
-          z: node.z + node.rz * scale * halfWidth[i],
-          y: node.y,
+          x: node.x + node.rx * lat,
+          z: node.z + node.rz * lat,
+          // Centreline node.y is not the tarmac at |lat| > 0 on a banked
+          // corner. Same dy term buildRoad applies (see monza-foundation).
+          y: node.y + (bank ? bank.dy : 0),
           frac: i / count,
         };
         const index = samples.push(sample) - 1;
