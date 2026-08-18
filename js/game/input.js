@@ -1240,12 +1240,18 @@ const Input = (function () {
       window.addEventListener("orientationchange", onScreenRotate);
     }
 
-    window.addEventListener("gamepadconnected", function () { padConnected = true; });
-    window.addEventListener("gamepaddisconnected", function () {
+    window.addEventListener("gamepadconnected", function (e) {
+      padConnected = true;
+      try { Log.info("input", "gamepad connected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      catch (_) { /* Log absent */ }
+    });
+    window.addEventListener("gamepaddisconnected", function (e) {
       padConnected = false; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
       padNavDir = null;
+      try { Log.info("input", "gamepad disconnected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      catch (_) { /* Log absent */ }
     });
   }
 

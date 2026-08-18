@@ -202,7 +202,7 @@ const Tracks = (function () {
   // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
   // GPU. This is the heavy one — only needed to actually render/drive a circuit.
   function build(def, opts) {
-    Log.info("track", "build start " + def.id);
+    Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
     // One profile drives terrain generation, floor blending, and scenery
     // grounding. Keeping it on the track also makes diagnostics deterministic.
@@ -285,7 +285,7 @@ const Tracks = (function () {
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
     }
-    Log.info("track", "build done " + def.id + " total=" + (track && track.total));
+    Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
   }
 

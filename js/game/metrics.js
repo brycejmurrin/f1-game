@@ -57,9 +57,16 @@ function snapshot() {
   const out = {
     on: on(),
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
-    state: "", track: "", session: "",
+    auto: null, strikes: null, tierFloor: null,
+    state: "", track: "", session: "", flow: "",
+    lapsTarget: null, quali: null, career: null, turns: null,
     lap: null, pos: null, total: null,
+    lapTime: null, best: null, lastLap: null, raceT: null,
+    gapAhead: null, gapBehind: null, aeroX: null, sector: null,
     speedKph: null, speedIsDash: false, gear: null, energy: null, s: null, x: null,
+    angle: null, k: null, hw: null,
+    cam: "", caution: "",
+    logConsole: "", logBuffer: "", logN: 0,
     logs: [],
   };
   try {
@@ -78,6 +85,9 @@ function snapshot() {
         if (p.floorMs != null) out.budget = p.floorMs;
         if (p.scale != null) out.scale = p.scale;
         if (p.tier != null) out.tier = p.tier;
+        if (p.auto != null) out.auto = p.auto;
+        if (p.crashStrikes != null) out.strikes = p.crashStrikes;
+        if (p.tierFloor != null) out.tierFloor = p.tierFloor;
       }
     }
   } catch (_) { /* apex not live / player not spawned */ }
@@ -95,6 +105,11 @@ function snapshot() {
         out.state = i.state || "";
         out.track = i.track || "";
         out.session = i.session || i.flow || "";
+        out.flow = i.flow || "";
+        if (i.lapsTarget != null) out.lapsTarget = i.lapsTarget;
+        if (i.raceQuali != null) out.quali = i.raceQuali;
+        if (i.career != null) out.career = i.career;
+        if (i.turns != null) out.turns = i.turns;
       }
     }
   } catch (_) { /* info needs a live G */ }
@@ -107,6 +122,14 @@ function snapshot() {
         out.total = t.total;
         out.gear = t.gear;
         out.energy = t.energy;
+        if (t.lapTime != null) out.lapTime = t.lapTime;
+        if (t.best != null) out.best = t.best;
+        if (t.lastLap != null) out.lastLap = t.lastLap;
+        if (t.raceT != null) out.raceT = t.raceT;
+        if (t.gapAhead != null) out.gapAhead = t.gapAhead;
+        if (t.gapBehind != null) out.gapBehind = t.gapBehind;
+        if (t.aeroX != null) out.aeroX = t.aeroX;
+        if (t.sector != null) out.sector = t.sector;
       }
     }
   } catch (_) { /* timing needs player.px */ }
@@ -129,12 +152,33 @@ function snapshot() {
           out.speedKph = +(o.speed * 3.6).toFixed(1);
         if (o.s != null) out.s = o.s;
         if (o.x != null) out.x = o.x;
+        if (o.angle != null) out.angle = o.angle;
+        if (o.k != null) out.k = o.k;
+        if (o.hw != null) out.hw = o.hw;
       }
     }
   } catch (_) { /* probe needs player + track */ }
   try {
-    if (typeof Log !== "undefined")
-      out.logs = Log.records({ limit: 8 }).map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+    if (typeof __apex !== "undefined" && __apex.camera) {
+      const c = __apex.camera();
+      if (c && c.mode) out.cam = c.mode;
+    }
+  } catch (_) { /* camera hook needs CAM_MODES */ }
+  try {
+    if (typeof __apex !== "undefined" && __apex.caution) {
+      const c = __apex.caution();
+      if (c && c.label) out.caution = c.label;
+    }
+  } catch (_) { /* caution layer absent */ }
+  try {
+    if (typeof Log !== "undefined") {
+      const lv = Log.level();
+      out.logConsole = lv.console || "";
+      out.logBuffer = lv.buffer || "";
+      const rec = Log.records();
+      out.logN = rec.length;
+      out.logs = rec.slice(-12).map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+    }
   } catch (_) { /* log module absent */ }
   return out;
 }
@@ -156,6 +200,13 @@ function fmt(v, digits) {
   return String(v);
 }
 
+function fmtTime(t) {
+  if (t == null || !isFinite(t)) return "—";
+  const m = Math.floor(t / 60);
+  const s = t - m * 60;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
+}
+
 function paintOverlay() {
   const el = ensurePanel();
   if (!el) return;
@@ -167,13 +218,31 @@ function paintOverlay() {
   const lines = [
     "METRICS   `  or  F9  or  SETTINGS",
     "fps " + fmt(s.fps) + "   frame " + fmt(s.ms) + " ms   budget " + fmt(s.budget) + " ms",
-    "scale " + fmt(s.scale) + "   tier " + fmt(s.tier) + "   gfx " + fmt(s.backend || null),
-    (s.track || "menu") + "  " + (s.session || s.state || "") +
-      "  lap " + fmt(s.lap) + "  P" + fmt(s.pos) + (s.total != null ? "/" + s.total : ""),
+    "scale " + fmt(s.scale) + "   tier " + fmt(s.tier) +
+      (s.tierFloor != null ? " floor " + s.tierFloor : "") +
+      "   auto " + fmt(s.auto) + "   strikes " + fmt(s.strikes) +
+      "   gfx " + fmt(s.backend || null),
+    (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
+      "  " + (s.caution || "GREEN") +
+      "  cam " + fmt(s.cam || null) +
+      (s.quali ? "  quali" : "") + (s.career ? "  career" : ""),
+    "lap " + fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "") +
+      "  P" + fmt(s.pos) + (s.total != null ? "/" + s.total : "") +
+      "  S" + fmt(s.sector) +
+      "  t " + fmtTime(s.lapTime) + "  best " + fmtTime(s.best) +
+      "  last " + fmtTime(s.lastLap),
     "v " + fmt(s.speedKph) + (s.speedIsDash ? " km/h" : " km/h gnd") +
       "  g" + fmt(s.gear) +
       "  s " + fmt(s.s, 1) + "  x " + fmt(s.x, 2) +
-      "  ers " + fmt(s.energy, 2),
+      "  ers " + fmt(s.energy, 2) +
+      "  aero " + fmt(s.aeroX, 2),
+    "gap " + fmt(s.gapAhead, 1) + " / " + fmt(s.gapBehind, 1) +
+      " m   yaw " + fmt(s.angle, 3) +
+      "   k " + fmt(s.k, 4) +
+      "   hw " + fmt(s.hw, 1) +
+      (s.turns != null ? "   turns " + s.turns : ""),
+    "log " + fmt(s.logConsole || null) + "/" + fmt(s.logBuffer || null) +
+      "  tail " + fmt(s.logN),
     "— log —",
   ].concat(s.logs.length ? s.logs : ["(empty — buffer raised to debug while this is on)"]);
   el.textContent = lines.join("\n");

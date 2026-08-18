@@ -105,21 +105,36 @@ test("snapshot keeps frame EMA off the governor budget", () => {
 });
 
 test("snapshot uses probe(), never obs()", () => {
-  let obs = 0, probe = 0;
+  let obs = 0, probe = 0, field = 0;
   const { M } = load({
     apex: {
       obs() { obs++; return { speedKph: 99, s: 1, x: 2 }; },
-      probe() { probe++; return { speed: 20, s: 12.5, x: -0.4 }; },
-      timing() { return { lap: 3, pos: 4, total: 20, gear: 6, energy: 0.5 }; },
+      fieldState() { field++; return []; },
+      probe() { probe++; return { speed: 20, s: 12.5, x: -0.4, angle: 0.1, k: 0.02, hw: 6 }; },
+      timing() {
+        return { lap: 3, pos: 4, total: 20, gear: 6, energy: 0.5, lapTime: 71.2,
+          best: 70.1, gapAhead: 12.5, aeroX: 0.4, sector: 2 };
+      },
+      camera() { return { mode: "chase" }; },
+      caution() { return { label: "GREEN" }; },
+      info() { return { state: "race", track: "monza", flow: "gp", lapsTarget: 5, career: false }; },
     },
   });
   const s = M.snapshot();
   assert.equal(obs, 0);
+  assert.equal(field, 0);
   assert.equal(probe, 1);
   assert.equal(s.speedKph, 72);
   assert.equal(s.s, 12.5);
   assert.equal(s.x, -0.4);
   assert.equal(s.lap, 3);
+  assert.equal(s.cam, "chase");
+  assert.equal(s.caution, "GREEN");
+  assert.equal(s.gapAhead, 12.5);
+  assert.equal(s.aeroX, 0.4);
+  assert.equal(s.k, 0.02);
+  assert.equal(s.track, "monza");
+  assert.equal(s.logBuffer, "info");
 });
 
 test("overlay sits below the zoomed sector stack, not on the minimap", () => {
@@ -132,11 +147,10 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.doesNotMatch(M.PANEL_STYLE, /top:\s*140px/);
 });
 
-test("snapshot prefers the HUD dashKph digit over ground*3.6", () => {
+test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
   const { M } = load({
     apex: { probe() { return { speed: 20, s: 1, x: 0 }; } },
   });
-  // VM has no document — probe fallback is ground km/h.
   const gnd = M.snapshot();
   assert.equal(gnd.speedKph, 72);
   assert.equal(gnd.speedIsDash, false);

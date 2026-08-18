@@ -25,9 +25,7 @@ const { LT, buildTrackLights } = LightTune;
 const CLEAR_FOG_SCALE = 0.45;
 
 function applyRaceSettings() {
-  if (Log.enabled("game", Log.DEBUG)) {
-    Log.debug("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
-  }
+  Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
   // Load the lighting-tuner profile for the current (track, time, weather) so
   // the right per-condition values are live. Cheap (a few dozen assignments);
   // applyRaceSettings only fires on track load / time / weather change.
