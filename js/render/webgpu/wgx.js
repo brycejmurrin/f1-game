@@ -705,7 +705,7 @@ const WGX = (function () {
     }
     function _jsStrike(where, e) {
       litPass = null; encoder = null; currentView = null;
-      try { Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
+      try { if (!_jsStrikes) Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
       _jsStrikes++;
       if (_jsStrikes < JS_STRIKE_CAP) return;
       _lost = true;
@@ -911,7 +911,7 @@ const WGX = (function () {
     // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
     //    _buildPost; size-dependent targets + bind groups (re)built in
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
-    let _postReady = false, _fxReady = false;
+    let _postReady = false, _fxReady = false, _cfgWarned = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
         ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
         ldrTex = null, ldrView = null, ssrTex = null;
@@ -1746,7 +1746,8 @@ const WGX = (function () {
         // configured swapchain. Reconfigure on every buffer-size change.
         if (ctx) {
           const _cfgErr = _configureCanvas();
-          if (_cfgErr) try { Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } catch (_) { /* harness */ }
+          if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
+          else _cfgWarned = false;
         }
         if (_softGpu && _displayCanvas) {
           _displayCanvas.width = w;

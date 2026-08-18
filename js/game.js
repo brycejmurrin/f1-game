@@ -1777,7 +1777,7 @@ function getCarDecalTexture(team, num, isPlayer) {
       // team's numbers/sponsors for the session, unlogged. Log and retry — but
       // this runs per drawn car per FRAME, so cache the null after 3 tries.
       const n = _decalTexFail[key] = (_decalTexFail[key] || 0) + 1;
-      Log.warn("gfx", "decal atlas build failed for " + key + " (attempt " + n + ")", e);
+      if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
       if (n < 3) return null;
     }
     _decalTexCache[key] = t;

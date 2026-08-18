@@ -124,6 +124,7 @@ test("snapshot uses probe(), never obs()", () => {
       info() { return { state: "race", track: "monza", flow: "gp", lapsTarget: 5, career: false }; },
     },
   });
+  M.setPage("car");
   const s = M.snapshot();
   assert.equal(obs, 0);
   assert.equal(field, 0);
@@ -155,6 +156,7 @@ test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
   const { M } = load({
     apex: { probe() { return { speed: 20, s: 1, x: 0 }; } },
   });
+  M.setPage("car");
   const gnd = M.snapshot();
   assert.equal(gnd.speedKph, 72);
   assert.equal(gnd.gndKph, 72);
@@ -179,6 +181,7 @@ test("a painted HUD 0 does not wipe probe ground speed", () => {
     document: { getElementById: (id) => id === "hud-speed-n" ? { textContent: "0" } : null },
     apex: { probe() { return { speed: 60, s: 10, x: 0 }; } },
   });
+  M.setPage("car");
   const s = M.snapshot();
   assert.equal(s.dashKph, 0);
   assert.equal(s.speedKph, 0);
@@ -199,6 +202,7 @@ test("snapshot reads physState() and still skips obs()/fieldState()", () => {
       },
     },
   });
+  M.setPage("phys");
   const s = M.snapshot();
   assert.equal(obs, 0);
   assert.equal(field, 0);
@@ -213,6 +217,7 @@ test("log page filters the tail by namespace and level", () => {
   Log.info("car", "livery ferrari");
   Log.warn("scenery", "backdrop SUPPRESSED");
   Log.info("track", "build done monza total=1 n=1 night=false");
+  M.setPage("log");
   M.setLogNs("*");
   M.setLogLvl("warn");
   const warn = M.snapshot();
@@ -225,6 +230,30 @@ test("log page filters the tail by namespace and level", () => {
   const tr = M.snapshot();
   assert.equal(tr.logs.length, 1);
   assert.match(tr.logs[0], /build done monza/);
+});
+
+test("GOV snapshot skips probe() and physState()", () => {
+  let probe = 0, phys = 0;
+  const { M } = load({
+    apex: {
+      probe() { probe++; return { speed: 10 }; },
+      physState() { phys++; return { slipDeg: 1 }; },
+    },
+  });
+  assert.equal(M.page(), "gov");
+  M.snapshot();
+  assert.equal(probe, 0);
+  assert.equal(phys, 0);
+});
+
+test("?metrics=1 set() does not write storage", () => {
+  const { M, disk } = load({ store: { "apex26.metrics": "0" }, search: "?metrics=1" });
+  assert.equal(M.on(), true);
+  M.set(false);
+  assert.equal(M.on(), false);
+  assert.equal(disk.get("apex26.metrics"), "0");
+  M.set(true);
+  assert.equal(disk.get("apex26.metrics"), "0", "URL pin must not write storage");
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {

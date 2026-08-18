@@ -1615,7 +1615,7 @@ const Tracks = (function () {
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
-        Log.warn("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
+        Log.info("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
         return;
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
