@@ -27,7 +27,7 @@ node tools/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 ./tools/playwright-mcp.sh dom  --screen settings --sel .sheet
 ```
 
-`--css css/foo.css` reloads that `<link>` as `?play=<mtime>` (server is
+`--css css/menus.css` reloads that `<link>` as `?play=<mtime>` (server is
 `no-store`). `--inject ".sheet{…}"` is an overlay. Output:
 `artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}`.
 
