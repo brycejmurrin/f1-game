@@ -551,6 +551,10 @@ const WGX = (function () {
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
     const _softGpu = _softAdapter || _outProbeOff;
     if (_softGpu) _outProbeOff = true;
+    // Software-present renders into an rgba8unorm texture, not the preferred
+    // (usually bgra8unorm) swapchain. Every pipeline targeting currentView must
+    // be compiled for the attachment it will actually receive.
+    const _presentFormat = _softGpu ? LDR_FORMAT : format;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
     // on phones/WebKit). WebKit/iOS mapAsync/f16 copy timing false-triggers the
@@ -578,6 +582,33 @@ const WGX = (function () {
       }
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
+    }
+    // CACHED CSS SIZE. resize() runs every frame, but clientWidth/clientHeight
+    // are layout reads. Mirror GLX/TLX: invalidate only when the visible canvas
+    // box or viewport changes, then reuse the last real size between events.
+    const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
+    let _cssW = 0, _cssH = 0, _cssDirty = true;
+    const _markCssDirty = function () { _cssDirty = true; };
+    let _canWatchCss = false;
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", _markCssDirty);
+      window.addEventListener("orientationchange", _markCssDirty);
+      _canWatchCss = true;
+    }
+    if (typeof ResizeObserver === "function" && _layoutCanvas) {
+      try {
+        new ResizeObserver(_markCssDirty).observe(_layoutCanvas);
+        _canWatchCss = true;
+      } catch (_) { /* optional */ }
+    }
+    function _cssSize() {
+      // Zero means the canvas is not laid out yet; keep probing until real.
+      if (!_canWatchCss) _cssDirty = true;
+      if (_cssDirty || _cssW <= 0 || _cssH <= 0) {
+        _cssW = _layoutCanvas.clientWidth;
+        _cssH = _layoutCanvas.clientHeight;
+        _cssDirty = false;
+      }
     }
     function _wgxEscalate(why) {
       if (_outProbeOff) {
@@ -1073,7 +1104,7 @@ const WGX = (function () {
       blitPipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: { module: blitModule, entryPoint: "vs_main" },
-        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format }] },
+        fragment: { module: blitModule, entryPoint: "fs_main", targets: [{ format: _presentFormat }] },
         primitive: { topology: "triangle-list" },
       });
 
@@ -1340,7 +1371,7 @@ const WGX = (function () {
           _blurSlots = BLUR_SLOTS;
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
-        pFXAA      = fsPipe(_Post.FXAA,       format,        null);
+        pFXAA      = fsPipe(_Post.FXAA,       _presentFormat, null);
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
         blurUBO      = device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
@@ -1689,14 +1720,14 @@ const WGX = (function () {
       });
     }
     function resize() {
-      const layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
       // past the 8192 default, and every ensureTargets() alloc (and the
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
-      const w = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientWidth * dpr * renderScale)));
-      const h = Math.min(maxDim, Math.max(1, Math.round(layoutCanvas.clientHeight * dpr * renderScale)));
+      _cssSize();
+      const w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
+      const h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
@@ -4026,7 +4057,7 @@ const WGX = (function () {
         });
         // 4×4 keeps copyTextureToBuffer's 256-byte row alignment trivially legal.
         dst = device.createTexture({
-          size: [4, 4], format: format,
+          size: [4, 4], format: _presentFormat,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
         });
         buf = device.createBuffer({ size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });

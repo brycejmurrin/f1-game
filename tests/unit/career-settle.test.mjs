@@ -91,6 +91,19 @@ test("mate classified P5 but RETIRED: a retired car scores nothing — no double
     "mate retired: a retired car scores nothing, so this is NOT a double");
 });
 
+test("MY TEAM standings include the hired second driver", () => {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.pts["custom:0"] = 25;
+  career.season.pts["custom:1"] = 18;
+
+  const custom = Career.driverStandings().filter((row) => row.team.id === "custom");
+  assert.deepEqual(Array.from(custom, (row) => row.id).sort(), ["custom:0", "custom:1"]);
+  assert.equal(custom.find((row) => row.id === "custom:1").pts, 18);
+});
+
 test("the retired flag is the ONLY discriminator between the two rounds", () => {
   // The base code failed exactly this: both rounds classify the mate P5, and a
   // position-only read (`Teams.POINTS[order.indexOf(mate)]`) returns 10 points

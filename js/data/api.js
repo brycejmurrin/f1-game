@@ -191,8 +191,11 @@ const F1API = (function () {
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
-            if (j.detail) throw new Error(j.detail);
-            if (j.error) throw new Error(j.error);
+            if (j.detail || j.error) {
+              const err = new Error(j.detail || j.error);
+              err.status = res.status;
+              throw err;
+            }
           } catch (e) {
             // A non-JSON error body just falls through to the generic
             // "HTTP <status>" error below; the deliberate detail/error throws
@@ -234,7 +237,8 @@ const F1API = (function () {
         // Never paper over live-session auth lockouts with stale cache — that
         // makes LIVE look "updated" while silently serving old classification.
         const msg = (err && err.message) || "";
-        if (hit && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
+        const status = err && err.status;
+        if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
           Log.warn("data", "apex26: fetch failed, serving stale cache for " + url, err);
           return hit.data;
         }
