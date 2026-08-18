@@ -590,6 +590,8 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let right = vec2<f32>(tangFwd.y, -tangFwd.x);
   let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
   let ds = select(0.0, dot(wp.xz - best.xy, tangFwd), tangOk);
+  // Two-sample s-blend warped the near dash (measured). Nearest + ds
+  // stair-steps at cell swaps but keeps rectangular paint.
   let s = best.z + ds;
   let hw = best.w;
   let dCenter = sqrt(bestD);
@@ -712,11 +714,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // Road draws bind authored storage[vid]. Dawn drops interpolators after
-  // location 3 and drops location-3 .w. Markings use location-3 vec3 in.trk.
-  // LUT stays on floor/terrain only.
-  let useWorldTrk = fromWorld.w > 0.5 && !isRoadDraw;
-  let vTrk = select(in.trk, fromWorld.xyz, useWorldTrk);
+  // Location-3 in.trk shards dashes on Dawn (loc5 / linear / perspective
+  // all measured). Road markings reconstruct (s,x,hw) per fragment from
+  // interpolated wpos + the world LUT — bind group 2 is the LUT, not
+  // authored storage[vid]. LUT miss on a road draw zeros trk so we do
+  // not fall back to the shattered interpolator.
+  let useWorldTrk = fromWorld.w > 0.5;
+  let vTrk = select(select(vec3<f32>(0.0), in.trk, !isRoadDraw), fromWorld.xyz, useWorldTrk);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
   let vsMat = in.matId;
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);

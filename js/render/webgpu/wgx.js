@@ -3207,9 +3207,12 @@ const WGX = (function () {
     function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      // Road pieces keep their authored (mat,s,x,hw) buffer so dashes follow
-      // interpolated vertex s. Floor/terrain keep the world LUT (magic 12345).
-      pass.setBindGroup(2, (authored && attrBG) ? attrBG : (_roadLutBG || attrBG || zeroAttrBG));
+      // Always the world LUT when one exists. Authored storage[vid] + a
+      // location-3 interpolator shards dashes on Dawn (measured). Floor
+      // bury and road markings both read trkFromWorld(wpos). `authored`
+      // stays in the signature so call sites do not drift.
+      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+      void authored;
     }
 
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon

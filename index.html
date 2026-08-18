@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1450">
+<meta name="apex-build" content="1451">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -42,11 +42,11 @@
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
 <link rel="stylesheet" href="css/components.css?v=e02c9a943064">
 <link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=a2b8f7d3d72b">
+<link rel="stylesheet" href="css/menus.css?v=d7fb8317fcae">
 <link rel="stylesheet" href="css/carsetup.css?v=727b355fd1bf" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=3a107477654a" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=af3b5a880848">
+<link rel="stylesheet" href="css/responsive.css?v=92a9da5137c0">
 <link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=920e853fb9f8" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=0fdfe263e6cb" media="print" onload="this.media='all'">
@@ -425,12 +425,7 @@
        them ~90px apart. Nested, there is no second row for the gap to open in. -->
   <div id="menu-brand">
     <h1 id="title">APEX&nbsp;26</h1>
-    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics</p>
-    <div id="menu-status" aria-label="Season overview">
-      <div class="menu-status-item"><span class="menu-status-label">SEASON</span><strong>2026</strong></div>
-      <div class="menu-status-item"><span class="menu-status-label">CALENDAR</span><strong>24 ROUNDS</strong></div>
-      <div class="menu-status-item"><span class="menu-status-label">INPUT</span><strong>TILT READY</strong></div>
-    </div>
+    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics &middot; tilt to steer</p>
     <div id="menu-meta">
       <!-- The master sound toggle lives IN the title composition, not floating
            over the app. It used to be `position: fixed` at the top-right corner
@@ -1183,7 +1178,7 @@
       <dt>&#9881; SETTINGS</dt>
       <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
       <dt>&#127918; CHANGE STEERING</dt>
-      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens presets (RELAX / STANDARD / PRO) plus sliders for sensitivity, driving help, steer lock, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). Everything applies instantly and is saved</dd>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
       <dt>&#128161; LIGHTING</dt>
       <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
       <dt>&#128266; SOUND &amp; HUD</dt>

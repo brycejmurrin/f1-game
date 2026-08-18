@@ -97,6 +97,9 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-buttons {
     grid-column: 2; grid-row: 1; align-self: center;
     gap: clamp(8px, 1.2vw, 16px); justify-items: stretch;
+    /* Same skew gutter compact already uses — CAREER's -6deg hang measured
+       418px against a 410px column without it. */
+    padding-inline: var(--gap);
   }
   /* ONE --vwz width for brand and all THREE tiers. The old 320–420px clamp
      stopped growing on a wide display and ignored UI SIZE; 32vwz scales with

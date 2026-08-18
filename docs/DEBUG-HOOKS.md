@@ -1154,7 +1154,7 @@ plus `holdPointers` — the pressed-pointer count each on-screen hold button is
 tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
 on" report. `adaptiveButtons` / `adaptiveMix` (0..1) / `speedStd` / `rateIn` are the
-Advanced ADAPTIVE BUTTONS path (digital steer rate blended toward the
+STEERING & ASSISTS ADAPTIVE BUTTONS path (digital steer rate blended toward the
 SPEED STEER hyperbola; the slider is how much).
 
 **On-screen variant for a phone with no console:** load the game with
