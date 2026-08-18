@@ -53,7 +53,7 @@ function fakeSession() {
   const handlers = new Map();
   const sent = [];
   return {
-    sent,
+    sent, closed: 0,
     clearHandlers() { handlers.clear(); return this; },
     onState() { return this; },
     onClose() { return this; },
@@ -71,10 +71,39 @@ function fakeSession() {
     synced: () => true,
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
+    close() { this.closed++; handlers.clear(); return true; },
+    handlerCount() {
+      let n = 0;
+      for (const list of handlers.values()) n += list.length;
+      return n;
+    },
     /** Deliver an inbound event AS IF the peer on this connection had sent it. */
     deliver(type, data) { for (const fn of handlers.get(type) || []) fn(data); },
   };
 }
+
+test("no_slot rolls back the car role and disposes the unadopted session", () => {
+  const G = stubG(2);
+  // No local car means start must fail, but slot selection will temporarily
+  // claim one of these cars before it discovers that the local side is absent.
+  for (const car of G.cars) { car.local = false; car.human = false; car.isPlayer = false; }
+  G.player = null;
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+
+  const out = net.start({ role: "guest", session: s });
+
+  assert.deepEqual(out, {
+    ok: false,
+    error: "no_slot",
+    message: "Could not find a grid slot for both drivers.",
+  });
+  assert.equal(net.active(), false);
+  assert.equal(s.closed, 1, "a rejected session must not keep its transport alive");
+  assert.equal(s.handlerCount(), 0, "a rejected session must not retain NetPlay handlers");
+  assert.equal(G.cars.some((car) => car.human || car.local), false,
+    "a partially claimed grid car must return to AI ownership");
+});
 
 /** A G façade with just enough of a grid for start() to seat `n - 1` rivals. */
 function stubG(n) {

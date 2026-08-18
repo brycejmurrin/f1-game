@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1368">
+<meta name="apex-build" content="1369">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -45,7 +45,7 @@
 <link rel="stylesheet" href="css/menus.css?v=fa8c0129335b">
 <link rel="stylesheet" href="css/carsetup.css?v=3805ca35dc15" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ed56d72144a6" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=852572fe00b6" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=1858fbc64a03" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
 <link rel="stylesheet" href="css/track-detail.css?v=b697169cdb3d" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=20193ca1d064" media="print" onload="this.media='all'">
@@ -453,7 +453,7 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
@@ -1536,7 +1536,7 @@
            LightStore.copyToTracks (js/game/light-store.js). -->
       <div id="lt-spread"></div>
       <label class="lt-help-toggle"><input id="lt-help-on" type="checkbox" checked> Show explanations</label>
-      <div id="lt-tabs" class="lt-tabs no-orphan-2" role="tablist"></div>
+      <div id="lt-tabs" class="lt-tabs no-orphan-2" role="tablist" aria-label="Lighting categories"></div>
     </div>
     <div id="lt-rows" class="pane"></div>
     <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
@@ -1576,10 +1576,10 @@
         <h2>CAMERA TUNER</h2>
       </div>
       <div id="ct-profile"></div>
-      <div id="ct-modes" class="lt-tabs no-orphan-2" role="tablist"></div>
+      <div id="ct-modes" class="lt-tabs no-orphan-2" role="tablist" aria-label="Camera modes"></div>
       <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox" checked> Show explanations</label>
     </div>
-    <div id="ct-rows" class="pane"></div>
+    <div id="ct-rows" class="pane" role="tabpanel"></div>
     <div class="sheet-foot">
       <button id="ct-reset">RESET CAM</button>
       <button id="ct-reset-all">RESET ALL</button>
@@ -1730,7 +1730,7 @@
 <script crossorigin="anonymous" src="js/game/audio.js?v=62b34f37828e"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=ca27755313c8"></script>
-<script crossorigin="anonymous" src="js/game/audio-panel.js?v=c3f9234e7375"></script>
+<script crossorigin="anonymous" src="js/game/audio-panel.js?v=efb76c5f94a8"></script>
 <script crossorigin="anonymous" src="js/data/api.js?v=0ae8ad9a200d"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=b07960e0ac73"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=97093360fa39"></script>
@@ -1761,21 +1761,21 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=02a68dc3d54e"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=2d288d0b996f"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=687721ac4f80"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=e07c8efaf421"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=aee58f08138d"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=22e73035078f"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=137520bf0037"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=719e5b9cf4e9"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=c29e4bba6e7d"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=38cc261f2b96"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
-<script crossorigin="anonymous" src="js/game/tuner.js?v=2c5aaecd9ae8"></script>
-<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=122e6bf14087"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=6218d97c1559"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=2e3deae9bdd9"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=a11315c314a1"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=35542784f968"></script>
@@ -1801,7 +1801,7 @@
 <script crossorigin="anonymous" src="js/net/handshake.js?v=91595eb882cf"></script>
 <script crossorigin="anonymous" src="js/net/snapshot.js?v=1860fa808033"></script>
 <script crossorigin="anonymous" src="js/net/session.js?v=97852ab04e82"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=ad860eea86bc"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=d20b31729b7d"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=db35d92a7c80"></script>
-<script crossorigin="anonymous" src="js/game.js?v=ca5f2c43bbca"></script>
+<script crossorigin="anonymous" src="js/game.js?v=4de25797efa1"></script>
 </body></html>
