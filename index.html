@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1459">
+<meta name="apex-build" content="1460">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2e0d20e14bba" as="style">
-<link rel="preload" href="css/components.css?v=110c6886f5a3" as="style">
+<link rel="preload" href="css/components.css?v=b30695818ab1" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,7 +40,7 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2e0d20e14bba">
-<link rel="stylesheet" href="css/components.css?v=110c6886f5a3">
+<link rel="stylesheet" href="css/components.css?v=b30695818ab1">
 <link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=29bef9af2a72">
 <link rel="stylesheet" href="css/carsetup.css?v=42534c84479e" media="print" onload="this.media='all'">
@@ -1795,7 +1795,7 @@
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=12d9bca64754"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
-<script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
+<script crossorigin="anonymous" src="js/game/settings-nav.js?v=f4049b14c868"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
