@@ -1143,6 +1143,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
     position: static;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    touch-action: pan-x;
     scrollbar-width: none;
   }
   #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
