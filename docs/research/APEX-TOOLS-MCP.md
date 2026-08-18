@@ -127,8 +127,19 @@ Output paths on every wrap (`--out`, carshot dest, `--diff`) are refused with
 Dispatch keys off `kind` (`tree` vs `browser`), not the week-1 name set — a
 new tree tool must not take the lock.
 
-Still not wrapped (use the CLI): `select-recall`, `wgx-gallery`, `graph-parity`
-(needs `BASE=`), HTTP `:3713`.
+## Week-4 (more tree CLIs)
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_select_recall` | `select-recall.mjs --json` | Replay only |
+| `apex_cache_bump_only` | `cache-bump-only.mjs <since> --json` | Requires `since`. Exit 1 (not a pure bump) is `ok:true` + `exit:1` |
+| `apex_rotate_markings_check` | `rotate-markings.cjs --check` | Never `--write` |
+| `apex_startline_snap` | `startline-snap.cjs --json [ids…]` | JSON |
+| `apex_startline_probe` | `startline-probe.cjs --json` | Optional `--calibrate` / `--snap` / `--frac` |
+| `apex_aero_zone_turns` | `aero-zone-turns.cjs <id>\|--all` | TRACK_VM |
+
+Still not wrapped (use the CLI): `wgx-gallery` (batch Chromium), `graph-parity`
+(needs `BASE=`; vacuous-refuse on a clean tree), HTTP `:3713`.
 
 All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 

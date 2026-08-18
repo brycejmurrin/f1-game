@@ -83,7 +83,7 @@ sit in this table was indexed by nothing and moved to
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
 | [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey (physics / GLX / WGX / TLX / track / net / UI / career) plus Context7 + tinyfish deploy-check: ranked open bugs and perf opportunities with file evidence. Not a fix log — act from the priority board. |
-| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Hosted `apex-tools` MCP wrapping committed CLIs against the local tree; deploy stays TinyFish. Week-1/2/3 catalog in `tools/apex-tools-mcp.mjs` (browser tools take the lock; tree tools do not; CI is mock/`dryRun`). |
+| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Hosted `apex-tools` MCP wrapping committed CLIs against the local tree; deploy stays TinyFish. Week-1–4 catalog in `tools/apex-tools-mcp.mjs` (browser tools take the lock; tree tools do not; CI is mock/`dryRun`). |
 
 The four workflows' verbatim per-agent output now lives together in
 [`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,
