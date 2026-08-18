@@ -732,17 +732,23 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     rgba(0, 0, 0, 0.42);
 }
 
-/* The live #game scene is the imagery. A dim sheet over the title used to
-   keep #overlay painted, so CAREER / RACE read through around the card.
-   Same stack happens when teampicker / race-settings sit on #select.
-   Fade the menu under the dialog — not the canvas. opacity, not hidden:
-   the attribute stays off so layer queries and tests keep matching. */
-body:has(dialog.screen:not([hidden])) #overlay,
+/* Fade the menu under a dim dialog — not the canvas. opacity, not hidden,
+   so layer queries and tests still match the open attribute. */
+body:has(dialog.screen:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
 body:has(#teampicker:not([hidden])) #select,
 body:has(#race-settings:not([hidden])) #select,
-body:has(#track-detail:not([hidden])) #select,
+body:has(#track-detail:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
 body:has(#customize:not([hidden])) #select,
-body:has(#season-setup:not([hidden])) #select,
+body:has(#season-setup:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
 body:has(#career-offers:not([hidden])) #career,
 body:has(#career-history:not([hidden])) #career,
 body:has(#career-guide:not([hidden])) #career,
