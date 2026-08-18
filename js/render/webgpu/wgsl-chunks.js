@@ -647,7 +647,7 @@ fn vs_main(
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
   // No 4th vertex attribute — Dawn zeroed it (and broke pos fetch) on large
-  // ribbon VBOs. Rebuild mat+trk from the centerline LUT / storage[vid].
+  // ribbon VBOs. Road pieces read authored mat+trk from storage[vid].
   var pulled = vec4<f32>(0.0);
   if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
   // Road pieces bind authored mat+trk (group 2, vertex_index). Do not
