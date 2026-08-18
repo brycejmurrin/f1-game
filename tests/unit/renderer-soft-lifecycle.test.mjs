@@ -145,7 +145,7 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(src, /let _softDisplayPending = false, _softDisplayEpoch = 0/);
   assert.match(src, /if \(_softDisplayPending\) return null/);
   assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
-  assert.match(src, /epoch === _softDisplayEpoch && _displayCanvas[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
+  assert.match(src, /epoch === _softDisplayEpoch && seq === _softBlitSeq &&[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
   assert.match(src, /const release = function \(\) \{ _softDisplayPending = false; \}/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
   assert.match(resize, /if \(sizeChanged\) \{\s*_softDisplayEpoch\+\+/);

@@ -325,7 +325,9 @@ const CEILINGS = {
   // instead of abortQuali-unhiding the lobby.
   // 8605 -> 8599: extract street OT/defend/tow/queue-brake/sep/wall into AiDrive.
   // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
-  "js/game.js": 8601,
+  // 8601 -> 8602: snapGameCam invalidates the WGX soft-present generation so
+  // awaitSoftPresent cannot resolve on a pits/gantry blit after park().
+  "js/game.js": 8602,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
