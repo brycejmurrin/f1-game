@@ -153,7 +153,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 | `rtc-e2e*.mjs` / `nostr-probe.mjs` | Real network / minutes | skill **multiplayer-debug** |
 | `report-server.mjs` | Binds `0.0.0.0` | skill **mcp-probe** |
 | `cdmcp-*` / `mcp-cli.mjs` / `chrome-devtools-mcp.sh` | Other catalogs | **mcp-probe** |
-| `tinyfish-mcp.sh` / TinyFish keys | Other catalog | **deploy-research** |
+| `tinyfish-mcp.sh` / TinyFish keys | Other catalog; missing key → https://agent.tinyfish.ai/home | **deploy-research** |
 | github.io / `target=deploy` | Pages is TinyFish-only | `./tools/tinyfish-mcp.sh deploy-check --tip` |
 
 ## How to call (Cloud)

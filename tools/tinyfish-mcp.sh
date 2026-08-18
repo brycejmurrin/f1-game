@@ -43,13 +43,14 @@ load_env() {
   TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-}}"
 }
 
+TINYFISH_KEY_URL="https://agent.tinyfish.ai/home"
+
 need_key() {
   load_env
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     echo "TINYFISH_API_KEY is not set." >&2
-    echo "  1. Get a key: https://agent.tinyfish.ai/api-keys" >&2
-    echo "  2. echo 'TINYFISH_API_KEY=...' > $ENV_FILE" >&2
-    echo "  3. $0 start" >&2
+    echo "  Get a key: ${TINYFISH_KEY_URL}" >&2
+    echo "  Then: echo 'TINYFISH_API_KEY=...' > $ENV_FILE && $0 start" >&2
     exit 1
   fi
 }
@@ -79,7 +80,7 @@ cmd_setup() {
   )
   if [[ ! -f "$ENV_FILE" ]]; then
     echo "Create $ENV_FILE with: TINYFISH_API_KEY=…" >&2
-    echo "  Get a key: https://agent.tinyfish.ai/api-keys" >&2
+    echo "  Get a key: ${TINYFISH_KEY_URL}" >&2
   else
     echo "Env: $ENV_FILE present"
   fi
@@ -499,6 +500,7 @@ see the TOP of a big file, so a deep marker is unverifiable from here.
 ship"; for deeper content use git provenance plus deploy-check's build id.
 
 Env: TINYFISH_API_KEY in $ENV_FILE or shell (required; never embedded).
+     Get a key: $TINYFISH_KEY_URL
 Repo: $REPO
 EOF
 }

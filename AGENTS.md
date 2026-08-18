@@ -190,7 +190,8 @@ servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
 host catalog is empty (this Cloud dashboard often is), fall back to
 `./tools/apex-tools-mcp.sh call`. Smoke the four wrappers (no Chromium):
 `./tools/apex-tools-mcp.sh smoke`. TinyFish key is never baked — set
-`TINYFISH_API_KEY` (dashboard secret or `scratch/tinyfish-mcp-server/.env`).
+`TINYFISH_API_KEY` (dashboard secret or `scratch/tinyfish-mcp-server/.env`;
+get a key at https://agent.tinyfish.ai/home).
 `./tools/tinyfish-mcp.sh deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`.
 `apex_status` occupancy includes host Playwright MCP (`browser_*`); close it
 before a browser wrap. Do not attach `mcp-probe` for a `version.json` check.

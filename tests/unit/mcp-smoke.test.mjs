@@ -72,9 +72,21 @@ test("help names the never-wrap and the write path", () => {
 test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/cloud-agent-install.sh"), "utf8");
   assert.match(src, /TINYFISH_API_KEY/);
+  assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
   assert.match(src, /chrome-devtools-mcp\.sh" clone/);
   assert.ok(!src.includes("sk-" + "tinyfish-"));
   assert.ok(!src.includes("BAKED" + "_KEY"));
+});
+
+test("mcp-smoke names the TinyFish home URL when the key is missing", () => {
+  assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
+  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  if (!body.tinyfishKey.present) {
+    assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
+    assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
+  }
 });
 
 test("tracked source never embeds a TinyFish key", () => {

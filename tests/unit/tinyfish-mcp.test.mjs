@@ -72,6 +72,7 @@ test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
   assert.match(r.stdout, /--tip/);
   assert.match(r.stdout, /version\.json/);
   assert.match(r.stdout, /required; never embedded/);
+  assert.match(r.stdout, /https:\/\/agent\.tinyfish\.ai\/home/);
 });
 
 test("TinyFish requires injected credentials and ensure names the missing setup", () => {
@@ -95,7 +96,10 @@ test("TinyFish requires injected credentials and ensure names the missing setup"
       },
     });
     assert.notEqual(noKey.status, 0);
-    assert.match(`${noKey.stdout}\n${noKey.stderr}`, /TINYFISH_API_KEY is not set/);
+    const noKeyText = `${noKey.stdout}\n${noKey.stderr}`;
+    assert.match(noKeyText, /TINYFISH_API_KEY is not set/);
+    assert.match(noKeyText, /https:\/\/agent\.tinyfish\.ai\/home/);
+    assert.doesNotMatch(noKeyText, /api-keys/);
 
     const r = spawnSync("bash", [SH, "ensure"], {
       cwd: ROOT,

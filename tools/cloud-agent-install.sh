@@ -56,7 +56,7 @@ fi
 # TinyFish key is never embedded. Cloud: dashboard secret TINYFISH_API_KEY, or
 # gitignored scratch/tinyfish-mcp-server/.env. deploy-check --tip fails without it.
 if [[ -z "${TINYFISH_API_KEY:-}" && ! -f "$ROOT/scratch/tinyfish-mcp-server/.env" ]]; then
-  echo "NOTE: TINYFISH_API_KEY unset — TinyFish deploy-check --tip will fail until the Cloud secret or scratch .env is set"
+  echo "NOTE: TINYFISH_API_KEY unset — get a key: https://agent.tinyfish.ai/home"
 fi
 
 # Best-effort chrome-devtools MCP clone (gitignored scratch/). Persist by

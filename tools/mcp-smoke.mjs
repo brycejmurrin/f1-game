@@ -24,6 +24,7 @@ const CHROME_BIN = path.join(
   "scratch/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
 );
 const TINYFISH_ENV = path.join(ROOT, "scratch/tinyfish-mcp-server/.env");
+const TINYFISH_KEY_URL = "https://agent.tinyfish.ai/home";
 
 function tinyfishKey() {
   if ((process.env.TINYFISH_API_KEY || "").trim()) {
@@ -35,7 +36,7 @@ function tinyfishKey() {
       return { present: true, via: "env-file" };
     }
   }
-  return { present: false, via: "missing" };
+  return { present: false, via: "missing", url: TINYFISH_KEY_URL };
 }
 
 function chromeClone() {
@@ -124,7 +125,7 @@ function main(argv) {
   const clone = chromeClone();
   const warnings = [];
   if (!key.present) {
-    warnings.push("TINYFISH_API_KEY is not set (shell or scratch/tinyfish-mcp-server/.env)");
+    warnings.push(`TINYFISH_API_KEY is not set — get a key: ${TINYFISH_KEY_URL}`);
   }
   if (!clone.present) {
     warnings.push("chrome-devtools clone missing — run tools/chrome-devtools-mcp.sh clone (npx pin still works)");
