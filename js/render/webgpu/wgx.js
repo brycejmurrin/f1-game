@@ -245,16 +245,9 @@ const WGX = (function () {
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
   // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
-  // mat+trk do NOT ride a 4th vertex attribute on the road VBO — Dawn
-  // delivered 0 for that attr (and for vertex_index on drawIndexed). Cars
-  // (small VBOs) are fine. The ribbon's mat+trk live in a group-2 spatial
-  // LUT (world XZ → nearest centerline sample); fs_main reconstructs
-  // (mat, s, x, hw) from wpos so markings and asphalt do not depend on
-  // the broken attribute. Shared-index ribbons still expand so the
-  // storage[vid] fallback stays 1:1 on adapters where vertex_index works.
-  // CRITICAL: keeping a float32x4 @location(3) on large ribbon VBOs also
-  // broke position fetch on SwiftShader-Dawn (road rasterized to a thin
-  // depth band only). Stride must stay 36 with three attributes.
+  // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
+  // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
+  // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
   const VERTEX_STRIDE = 36;
   const VERTEX_FLOATS = 9;
   const VERTEX_POS_LAYOUT = {
@@ -582,13 +575,19 @@ const WGX = (function () {
     // Soft-present path: final pass → softPresentTex (COPY_SRC) → ephemeral staging
     // buffer readback (_softDisplayEncode/_softDisplayFinish) → putImageData on
     // visible #game 2D context. Never getCurrentTexture() on software — first call
-    // breaks mapAsync device-wide. awaitSoftPresent() resolves only after a blit
-    // with maxPx >= 8. WebGPU renders on a hidden canvas swapped in at boot.
+    // breaks mapAsync device-wide. ONE mapAsync in flight (mirror capturePixels):
+    // a later present() skips the 2D copy so SwiftShader cannot complete an older
+    // readback after a newer one and leave #game on a pits/gantry frame.
+    // awaitSoftPresent() resolves only after a blit with maxPx >= 8 that was
+    // encoded AFTER the wait started. WebGPU renders on a hidden canvas swapped
+    // in at boot.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
+    let _softBlitSeq = 0;
+    let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
@@ -1612,10 +1611,10 @@ const WGX = (function () {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
-      // Road ribbon: always-pass (still writes depth). The stadium floor +
-      // terrain write first and win on SwiftShader-Dawn even with a negative
-      // bias. Must still write depth — skyLate draws after the world and
-      // would erase a no-Z ribbon wherever the floor was discarded.
+      // Optional always-pass (opts.decal). The road must NOT use this —
+      // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
+      // punch a LUT hole; the road uses less-equal (no GL-sized bias)
+      // and still writes depth so skyLate cannot erase it.
       const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
@@ -1728,8 +1727,9 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: bpr, rowsPerImage: h },
           [w, h, 1]
         );
+        _softBlitSeq++;
         _softDisplayPending = true;
-        return { buf, bpr, w, h, epoch: _softDisplayEpoch };
+        return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch };
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
         return null;
@@ -1737,7 +1737,7 @@ const WGX = (function () {
     }
     function _softDisplayFinish(cap) {
       if (!cap) return;
-      const { buf, bpr, w, h, epoch } = cap;
+      const { buf, bpr, w, h, seq, epoch } = cap;
       const release = function () { _softDisplayPending = false; };
       if (!_displayCtx) {
         try { buf.destroy(); } catch (_) { /* device dying */ }
@@ -1751,8 +1751,8 @@ const WGX = (function () {
               const src = new Uint8Array(buf.getMappedRange());
               // A resize can complete while mapAsync is pending. Drain/destroy
               // the old buffer, but never paint its stale dimensions.
-              if (epoch === _softDisplayEpoch && _displayCanvas &&
-                  _displayCanvas.width === w && _displayCanvas.height === h) {
+              if (epoch === _softDisplayEpoch && seq === _softBlitSeq &&
+                  _displayCanvas && _displayCanvas.width === w && _displayCanvas.height === h) {
                 let maxPx = 0;
                 if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
                   _softImg = _displayCtx.createImageData(w, h);
@@ -1769,7 +1769,7 @@ const WGX = (function () {
                 }
                 if (maxPx >= 8) {
                   _displayCtx.putImageData(img, 0, 0);
-                  _softBlitNotify();
+                  _softBlitNotify(seq);
                 }
               }
             } catch (_) { /* 2D blit failed */ }
@@ -1793,17 +1793,25 @@ const WGX = (function () {
       try { cap.buf.destroy(); } catch (_) { /* submit rejected / device dying */ }
       _softDisplayPending = false;
     }
-    function _softBlitNotify() {
-      _softBlitGen++;
+    function _softBlitNotify(seq) {
+      _softBlitShown = seq;
+      _softBlitGen = seq;
+      const keep = [];
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
-        try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+        try {
+          if (!ws[i](seq)) keep.push(ws[i]);
+        } catch (_) { /* harness waiter */ }
       }
+      for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
     }
     function awaitSoftPresent(timeoutMs) {
       if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
-      const start = _softBlitGen;
-      if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
+      // Snapshot the last *issued* encode. A waiter must see a later encode
+      // complete — otherwise park()+snapCam() resolves on the in-flight pits
+      // blit that was submitted before the camera moved.
+      const after = _softBlitSeq;
+      if (_softBlitShown > after) return Promise.resolve(_softBlitShown);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
         let waiter = null;
@@ -1812,11 +1820,13 @@ const WGX = (function () {
           if (i >= 0) _softPresentWaiters.splice(i, 1);
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
-        waiter = function (gen) {
-          if (gen > start) {
+        waiter = function (seq) {
+          if (seq > after) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
-            resolve(gen);
+            resolve(seq);
+            return true;
           }
+          return false;
         };
         _softPresentWaiters.push(waiter);
       });
@@ -2279,7 +2289,12 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
+        // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.
+        // Dawn zeros a 4th attr (and pos) even on piece VBOs — asphalt vs
+        // verge is classified from the LUT (abs(x) < hw - 0.45).
+        inter[o + 6] = col[i * 3];
+        inter[o + 7] = col[i * 3 + 1];
+        inter[o + 8] = col[i * 3 + 2];
         attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
           attr[i * 4 + 1] = trk[i * 3];
@@ -2347,12 +2362,10 @@ const WGX = (function () {
       });
       return { sbuf, attrBG };
     }
-    // World-XZ spatial LUT for the road ribbon. Group-2 used to be a per-vertex
-    // mat+trk array indexed by vertex_index — that index stays 0 on this
-    // adapter's drawIndexed (and on large non-indexed draws), so every
-    // fragment read a grass skirt. The LUT is 32×32 cells × 16 centerline
-    // samples; fs_main finds the nearest sample to wpos.xz and rebuilds
-    // (mat, s, lateral x, hw). Magic 12345 marks a LUT vs a dummy/attr buffer.
+    // World-XZ spatial LUT (32×32×16). Group-2 used to be a per-vertex
+    // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
+    // vertex attr zeros (and breaks pos) even on piece VBOs. Magic 12345
+    // marks a LUT vs a dummy/attr buffer.
     function _makeRoadLUT(pos, trk, matArr) {
       const posA = toF32(pos), trkA = toF32(trk);
       const vCount = (posA.length / 3) | 0;
@@ -3067,13 +3080,17 @@ const WGX = (function () {
     function _litOpts(opts) {
       const o = opts || {};
       const extra = {};
-      if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
+      if (o.buryRibbon) extra.depthBias = [5, 10];
+      if (!extra.depthBias && !o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
         extra.depthBias = [3, 6];
       if (o.surfaceId === 16) {
-        // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
-        // CCW after that flip and were culled to a pair of edge lines.
+        // Winding is already swapped in _expandPull; doubleSided lets the
+        // underside/skirts z-fight the top (chopped asphalt). Do NOT mark
+        // decal/always-pass and do NOT keep GL [-8,-16] — those bury tyres.
+        // No road bias: later car draws win the contact; buryRibbon terrain
+        // sits behind so LUT misses cannot punch holes in the tarmac.
         extra.doubleSided = true;
-        extra.decal = true;
+        extra.depthBias = null;
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
     }
@@ -3111,6 +3128,17 @@ const WGX = (function () {
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       if (!mesh.chunks) {
+        // hasTrk roads are createMesh pieces (chunks=null). Drawing only
+        // mesh.vbuf here left 4095 verts — the rest of the ribbon vanished
+        // and terrain showed through (chopped asphalt).
+        if (mesh.pieces) {
+          for (let i = 0; i < mesh.pieces.length; i++) {
+            const p = mesh.pieces[i];
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+            _drawGeom(litPass, p);
+          }
+          return;
+        }
         _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
         _drawGeom(litPass, mesh);
         return;
@@ -3861,6 +3889,14 @@ const WGX = (function () {
       if (_shadowSetModel(model) < 0) return;
       shadowPass.setVertexBuffer(1, identInstanceBuf);
       if (!mesh.chunks) {
+        if (mesh.pieces) {
+          for (let i = 0; i < mesh.pieces.length; i++) {
+            const p = mesh.pieces[i];
+            shadowPass.setVertexBuffer(0, p.vbuf);
+            _drawGeom(shadowPass, p);
+          }
+          return;
+        }
         shadowPass.setVertexBuffer(0, mesh.vbuf);
         _drawGeom(shadowPass, mesh);
         return;

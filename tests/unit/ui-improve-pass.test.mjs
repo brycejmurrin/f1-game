@@ -7,6 +7,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
+test("UI audit scale axis includes the product's 40% minimum", async () => {
+  const { parseScales } = await import("../../tools/ui-scale-axis.mjs");
+  assert.deepEqual(parseScales(["--scale=40,200"]), [40, 200]);
+  assert.throws(() => parseScales(["--scale=39.75"]), /between 40 and 200/);
+});
+
 test("CssZoom helper ships before sheetshape and menunav", () => {
   const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   const iZoom = man.indexOf('"js/game/css-zoom.js"');
@@ -293,4 +299,20 @@ test("overflowing Help navigation keeps its first landmark reachable", () => {
   const css = read("css/overlays.css");
   assert.match(css, /#htp-contents\s*\{[^}]*justify-content:\s*flex-start/);
   assert.match(css, /#htp-contents > :first-child\s*\{[^}]*margin-inline-start:\s*auto/);
+});
+
+test("dense sheets preserve a functional content height at extreme UI size", () => {
+  const shape = read("js/game/sheetshape.js");
+  const components = read("css/components.css");
+  const garage = read("css/carsetup.css");
+  const menus = read("css/menus.css");
+  assert.match(shape, /function classifyFit\(el\)/);
+  assert.match(shape, /available \/ at/);
+  assert.match(shape, /el\.style\.setProperty\("--sheet-scale"/);
+  assert.match(shape, /el\.dataset\.fit = state/);
+  assert.match(components, /zoom:\s*var\(--sheet-scale, var\(--ui-scale\)\)/);
+  assert.match(components, /\.sheet > :where\(\.sheet-head, \.sheet-body, \.sheet-foot\)\s*\{\s*min-width:\s*0/);
+  assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*340px/);
+  assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*240px/);
+  assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
 });

@@ -900,7 +900,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /aInst0/);
   assert.match(CHUNKS_SOURCE, /matTrkArr/);
   assert.match(CHUNKS_SOURCE, /@builtin\(vertex_index\) vid/);
-  assert.match(CHUNKS_SOURCE, /packedRoad/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /packedRoad/);
   assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
   assert.match(WGX_SOURCE, /o\.surfaceId/);
   assert.doesNotMatch(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
@@ -916,29 +916,45 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /_expandPull/);
   assert.match(WGX_SOURCE, /hasTrk/);
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
+  assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
   assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
-  assert.match(WGX_SOURCE, /extra\.decal = true/);
+  assert.match(WGX_SOURCE, /extra\.doubleSided = true;/);
+  assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
+  assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
+  assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
+  assert.match(WGX_SOURCE, /const MAX_S = 2000/);
+  assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
+  assert.match(CHUNKS_SOURCE, /o\.matTrk = vec4<f32>\(pulled\.y, pulled\.z, pulled\.w, pulled\.x\)/);
+  assert.match(CHUNKS_SOURCE, /vTrk = select\(fromWorld\.xyz, in\.matTrk\.xyz, isRoadDraw\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /useWorldTrk = isRoadDraw && fromWorld\.w > 0\.5/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
+  assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
   assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
   assert.doesNotMatch(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
   assert.match(CHUNKS_SOURCE, /if \(!ff && !isRoadDraw\) \{ N = -N; \}/);
   assert.match(CHUNKS_SOURCE, /if \(isRoadDraw && N\.y < 0\.0\) \{ N = -N; \}/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /wp\.y = wp\.y \+ 0\.08/);
   assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
-  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
-  assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && !isCarDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
-  assert.match(CHUNKS_SOURCE, /let isCarDraw = D\.mat2\.z >= 19\.5 && D\.mat2\.z <= 27\.5;/);
+  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 0\.8, abs\(x\) <= hw \+ 0\.55, tangOk\)/);
+  assert.match(CHUNKS_SOURCE, /if \(bury && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /let slab = max\(fwWpos/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
   assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /trkFromWorld\(in\.wpos\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
@@ -1055,7 +1071,14 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
-  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(/);
+  assert.match(WGX_SOURCE, /if \(_softDisplayPending\) return null/,
+    "only one soft-present mapAsync in flight — late pits readbacks must not overwrite #game");
+  assert.match(WGX_SOURCE, /function _softDisplayAbort\(/);
+  assert.match(WGX_SOURCE, /seq: _softBlitSeq/);
+  assert.match(WGX_SOURCE, /const after = _softBlitSeq/,
+    "awaitSoftPresent waits for an encode issued after the call, not the in-flight blit");
+  assert.match(WGX_SOURCE, /seq > after/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(
@@ -1378,7 +1401,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.yzw\)\) \+ abs\(dpdy\(in\.matTrk\.yzw\)\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.xyz\)\) \+ abs\(dpdy\(in\.matTrk\.xyz\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
