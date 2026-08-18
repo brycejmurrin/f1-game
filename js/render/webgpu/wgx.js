@@ -546,10 +546,26 @@ const WGX = (function () {
     let _outProbeBuf = null, _outProbePending = false, _outProbeN = 0, _outBlack = 0;
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
-    try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
+    // SCREENSHOTS setting (SETTINGS ▸ SCREENSHOTS) + probe flag. Session wins
+    // so gfx-probe can override a saved local pref for one tab; local persists
+    // the player's tap. "1" = force 2D blit, "0" = force native swapchain.
+    const _capPref = (function readCapturePref() {
+      try {
+        const s = sessionStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* fall through */ }
+      try {
+        const s = localStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* AUTO */ }
+      return null;
+    })();
+    _outProbeOff = _capPref === "1" || _capPref === "0";
     // wgxCapture probes must soft-present even when adapter sniffing misses (headed
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
-    const _softGpu = _softAdapter || _outProbeOff;
+    // NATIVE ("0") keeps the swapchain so you can see why software screenshots
+    // are black — and turns the output-probe ladder off so black is not a refuse.
+    const _softGpu = _capPref === "0" ? false : (_softAdapter || _capPref === "1");
     if (_softGpu) _outProbeOff = true;
     // Runtime HDR readback probe (separate from _outProbeOff — that flag also
     // suppresses _wgxEscalate during wgxCapture, and must NOT block device.lost
@@ -4333,6 +4349,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
+      softPresent: () => !!_softGpu,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

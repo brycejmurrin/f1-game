@@ -160,7 +160,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   assert.equal(G.prevBackend("webgl2"), "webgpu");
   assert.equal(G.prevBackend("webgpu"), "three");
   assert.equal(G.prevBackend("three"), "webgl2");
-  assert.equal(G.backendLabel("three"), "THREE");
+  assert.equal(G.backendLabel("three"), "THREE.JS");
   assert.equal(G.backendLabel("webgpu"), "WEBGPU");
 });
 
@@ -198,6 +198,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.perChunkOff": "1",
     "apex26.tlxForceGL": "0",
     "apex26.tlxViz": "lit",
+    "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
   });
@@ -205,6 +206,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxClaimFail": "1",
     "apex26.gfxBound": "webgl2",
     "apex26.ctxLostReloads": "2",
+    "apex26.wgxCapture": "0",
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
@@ -214,6 +216,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.envProbeOff"), "context-loss latches are renderer crash state");
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.perChunkOff"));
   assert.ok(G.RENDERER_SS_KEYS.includes("apex26.ctxLostReloads"));
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.wgxCapture"), "SCREENSHOTS pref is renderer state");
+  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.wgxCapture"));
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
@@ -225,6 +229,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ls.getItem("apex26.perChunkOff"), null);
   assert.equal(ls.getItem("apex26.tlxForceGL"), null);
   assert.equal(ls.getItem("apex26.tlxViz"), null);
+  assert.equal(ls.getItem("apex26.wgxCapture"), null);
+  assert.equal(ss.getItem("apex26.wgxCapture"), null);
   assert.equal(ls.getItem("apex26.gfxHigh"), "1", "mobile GRAPHICS: ULTRA bit must survive");
   assert.equal(ls.getItem("apex26.uiScale"), "110", "unrelated settings must survive");
   assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
@@ -480,6 +486,80 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(ls.getItem("apex26.gfxWgxFail"), null);
   timers.forEach((fn) => fn());
   assert.equal(reloaded(), 1);
+});
+
+test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  assert.ok(a.byId["pm-three-path"], "THREE PATH button");
+  assert.ok(a.byId["pm-screenshots"], "SCREENSHOTS button");
+  assert.ok(a.byId["pm-save-shot"], "SAVE SCREENSHOT button");
+  assert.ok(a.byId["pm-gfx-status"], "status line");
+  assert.match(a.byId["pm-three-path"].textContent, /THREE PATH: AUTO/);
+  assert.match(a.byId["pm-screenshots"].textContent, /SCREENSHOTS: AUTO/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+
+  a.byId["pm-three-path"].onclick();
+  assert.equal(a.G.readThreePath(), "webgl2");
+  assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
+  assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+
+  a.byId["pm-screenshots"].onclick();
+  assert.equal(a.G.readShotMode(), "blit");
+  assert.equal(a.ls.getItem("apex26.wgxCapture"), "1");
+  assert.equal(a.ss.getItem("apex26.wgxCapture"), "1");
+  assert.equal(a.reloaded(), 0, "SCREENSHOTS must not reload on WEBGL2");
+
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "1" } });
+  assert.match(b.byId["pm-three-path"].textContent, /WEBGL2/);
+  assert.match(b.byId["pm-gfx-status"].textContent, /pinned to WebGL2/);
+  b.byId["pm-three-path"].onclick();
+  assert.equal(b.G.readThreePath(), "webgpu");
+  assert.equal(b.ls.getItem("apex26.tlxForceGL"), "0");
+  assert.match(b.byId["pm-three-path"].textContent, /RELOADING/);
+  b.timers.forEach((fn) => fn());
+  assert.equal(b.reloaded(), 1, "THREE PATH reloads when THREE.JS is live");
+
+  const c = bootPicker({
+    ls: { "apex26.gfxBackend": "webgpu" },
+    ss: { "apex26.wgxCapture": "1" },
+    gpu: {},
+  });
+  assert.equal(c.G.readShotMode(), "blit");
+  assert.match(c.byId["pm-screenshots"].textContent, /2D BLIT/);
+  assert.match(c.byId["pm-gfx-status"].textContent, /2D BLIT/);
+  c.byId["pm-screenshots"].onclick();
+  assert.equal(c.G.readShotMode(), "native");
+  assert.match(c.byId["pm-screenshots"].textContent, /RELOADING/);
+  c.timers.forEach((fn) => fn());
+  assert.equal(c.reloaded(), 1, "SCREENSHOTS reloads when WEBGPU is live");
+});
+
+test("presentStatus names the three screenshot paths in plain language", () => {
+  const src = read("js/game/gfx-quality.js");
+  const ctx = vm.createContext({
+    window: {}, document: undefined,
+    localStorage: makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.wgxCapture": "0" }),
+    sessionStorage: makeStorage(),
+  });
+  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
+  const G = vm.runInContext("GfxQuality", ctx);
+  assert.match(G.presentStatus(), /native swapchain/);
+  G.applyShotMode("blit", { noReload: true });
+  assert.match(G.presentStatus(), /copied onto the canvas/);
+  ctx.localStorage.setItem("apex26.gfxBackend", "three");
+  ctx.localStorage.setItem("apex26.tlxForceGL", "0");
+  assert.match(G.presentStatus(), /pinned to WebGPU/);
+  G.applyThreePath("webgl2", { noReload: true });
+  assert.match(G.presentStatus(), /pinned to WebGL2/);
+});
+
+test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /capturePixels\(\) \{/);
+  assert.match(tlx, /awaitSoftPresent\(\) \{ return Promise\.resolve\(0\); \}/);
+  assert.match(tlx, /THREE PATH to WEBGL2/);
+  assert.match(tlx, /softPresent\(\) \{ return false; \}/);
 });
 
 /* ── TLX canvas opacity — the "transparent cars on iPhone" guard ─────────

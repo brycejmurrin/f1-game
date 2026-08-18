@@ -945,6 +945,9 @@ test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", a
 });
 
 test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
+  assert.match(WGX_SOURCE, /localStorage.getItem\("apex26.wgxCapture"\)/);
+  assert.match(WGX_SOURCE, /_capPref === "0" \? false/);
+  assert.match(WGX_SOURCE, /softPresent: \(\) => !!_softGpu/);
   assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
   assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);

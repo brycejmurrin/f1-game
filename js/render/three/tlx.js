@@ -1495,6 +1495,32 @@ const TLX = (function () {
         makeFrustumPlanes(viewProj) {
           return TLXShaders.makeFrustumPlanes(viewProj);
         },
+        // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
+        // WebGL2 (THREE PATH: WEBGL2, the CI pin): readPixels from the canvas.
+        // WebGPU: no software blit — reject so Settings / gfx-probe can say so.
+        capturePixels() {
+          const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          if (!gl || typeof gl.readPixels !== "function") {
+            return Promise.reject(new Error(
+              "three.js WebGPU has no screenshot blit — set THREE PATH to WEBGL2"));
+          }
+          return new Promise((resolve, reject) => {
+            try {
+              const w = W, h = H;
+              if (!(w > 0 && h > 0)) throw new Error("no frame size");
+              const raw = new Uint8Array(w * h * 4);
+              gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+              const data = new Uint8ClampedArray(w * h * 4);
+              for (let y = 0; y < h; y++) {
+                const src = (h - 1 - y) * w * 4;
+                data.set(raw.subarray(src, src + w * 4), y * w * 4);
+              }
+              resolve({ width: w, height: h, data });
+            } catch (e) { reject(e); }
+          });
+        },
+        awaitSoftPresent() { return Promise.resolve(0); },
+        softPresent() { return false; },
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 

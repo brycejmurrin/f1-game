@@ -76,12 +76,39 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 | `apex26.gfxClaimFail` (session) | Skip opt-in after canvas claim-and-die |
 | `apex26.gfxBound` (session) | Live fallback label while the pick stays |
 | `apex26.gfxWgxLevel` / `gfxWgxLite` / `gfxWgxOk` / `gfxWgxFail` | WGX quality ladder / refuse reason |
-| `apex26.gfxTlxFail`, `apex26.tlxForceGL` | TLX fail / force WebGL pin |
+| `apex26.gfxTlxFail`, `apex26.tlxForceGL` | TLX fail / THREE PATH (`1`=WebGL2, `0`=WebGPU, unset=AUTO) |
+| `apex26.wgxCapture` | SCREENSHOTS: `1`=2D blit, `0`=native swapchain, unset=AUTO (session overrides local) |
 
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs
 `gfxWgxLevel` (full → lite → minimal → session skip). Phones are not
 hard-refused; tiers read `GLX.isMobile` / `mobileTier` for caps.
+
+## Screenshots — why WebGPU can look black
+
+Play with this in **SETTINGS ▸ DISPLAY**. The controls are injected next to
+RENDERER so the body-node ratchet stays put.
+
+| Control | What it does |
+|---|---|
+| **RENDERER** | `WEBGL2` (default) / `THREE.JS` / `WEBGPU`. Reloads. |
+| **THREE PATH** | three.js GPU: `AUTO` / `WEBGL2` / `WEBGPU` (`apex26.tlxForceGL`). Reloads only if RENDERER is THREE.JS. |
+| **SCREENSHOTS** | WebGPU present: `AUTO` / `2D BLIT` / `NATIVE` (`apex26.wgxCapture`). Reloads only if RENDERER is WEBGPU. |
+| **SAVE SCREENSHOT** | Waits for `awaitSoftPresent`, then downloads `#game` as a PNG. |
+| Status line | Plain-language: which path is live, and whether screenshots will work. |
+
+**The rule in one sentence.** On a software GPU (SwiftShader / Lavapipe) the
+native WebGPU swapchain never composites — a screenshot of that canvas is
+black — and calling `getCurrentTexture()` once breaks `mapAsync` for the
+whole device.
+
+| Backend | Visible `#game` on software | Screenshot API |
+|---|---|---|
+| **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
+| **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
+| **THREE.JS** | Pin THREE PATH to WEBGL2 (the CI pin). three's own WebGPU has no 2D blit here and stays black on software. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 reads pixels; WebGPU rejects with the THREE PATH hint |
+
+Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
