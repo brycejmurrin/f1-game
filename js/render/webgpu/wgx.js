@@ -206,15 +206,6 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
-  // PerfTry GLSL flags become WGSL module consts (authored `= true` so
-  // wgx-validate --static still compiles). Overlay the live toggle at create.
-  function _perfWgsl(src) {
-    try {
-      return (typeof PerfTry !== "undefined" && PerfTry.withWgslConsts)
-        ? PerfTry.withWgslConsts(src) : src;
-    } catch (_) { return src; }
-  }
-
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
   const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
@@ -1083,7 +1074,7 @@ const WGX = (function () {
       });
       litLayout = device.createPipelineLayout({ bindGroupLayouts: [g0Layout, g1Layout, g2Layout] });
 
-      litModule  = device.createShaderModule({ code: _perfWgsl(WGSLChunks.LIT) });
+      litModule  = device.createShaderModule({ code: WGSLChunks.LIT });
       skyModule  = device.createShaderModule({ code: WGSLChunks.SKY });
       blitModule = device.createShaderModule({ code: WGSLChunks.BLIT });
 
@@ -1108,12 +1099,12 @@ const WGX = (function () {
 
       // Sky pipeline — renders into the LIT pass (SCENE_FORMAT). Depth write OFF,
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
-      // early sky paints the clear background, and PerfTry.skyLate (default ON)
-      // still only fills pixels the world left at the far plane — GLX parity
-      // (js/render/shaders/sky.js + glx.js drawSky depthMask false / LEQUAL).
-      // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
-      // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
-      // melted world; cars still visible because they draw after the sky).
+      // early sky paints the clear background, and late sky (opaque → sky →
+      // glow) still only fills pixels the world left at the far plane — GLX
+      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
+      // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
+      // / melted world; cars still visible because they draw after the sky).
       // EXPLICIT shared layout — skyBindGroup is set with BOTH pipelines
       // (drawSky picks the MS variant when the lit pass is multisampled), and
       // two `layout:"auto"` pipelines are NEVER bind-group compatible, even
@@ -1335,7 +1326,7 @@ const WGX = (function () {
       try {
         pointSampler = device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
         const fsPipe = (code, fmt, blend) => {
-          const mod = device.createShaderModule({ code: _perfWgsl(code) });
+          const mod = device.createShaderModule({ code });
           const target = blend ? { format: fmt, blend } : { format: fmt };
           return device.createRenderPipeline({
             layout: "auto",
@@ -3212,14 +3203,10 @@ const WGX = (function () {
       _envFrame = frame;
       _envSvVP = svVP; _envSvEye = svEye; _envSvCull = svCull;
       frame.viewProj = _envVP; frame.eye = eye;
-      // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
-      // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
-      // when envCull is on; keep a tighter main-camera cull when present.
-      if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-        frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
-      } else {
-        frame.cullDist = 0;
-      }
+      // Radial cull for the probe (GLX envFaceBegin): without this a 64²
+      // reflection target re-draws the whole 900 m city. Cap at 300 m; keep
+      // a tighter main-camera cull when present.
+      frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
       _writeFrame(frame);
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       _envEncoder = device.createCommandEncoder();

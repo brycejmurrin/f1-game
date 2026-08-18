@@ -606,7 +606,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    lives in the GODRAY uniform.
   // ════════════════════════════════════════════════════════════════════════
   const COMPOSITE = `
-const OPT_FLAREGATE = true;
 struct CompositeU {
   p0          : vec4<f32>,
   sunUV       : vec4<f32>,
@@ -905,17 +904,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   // Lens flare: anamorphic streak + ghost circles (GLX js/render/shaders/post.js COMPOSITE_FS).
   // Occlusion: procedural flare would bleed through geometry; sample depth at sunUV.
-  // PerfTry.flareGate / GLX OPT_FLAREGATE: skip the depth fetch when the flare
-  // is off or the sun is off-screen. Module const is uniform CF. OFF compiles
-  // the ungated fetch so the pause-menu toggle is not a GLX-only lie.
-  var sunVis: f32;
-  if (OPT_FLAREGATE) {
-    sunVis = select(0.0,
-      smoothstep(0.9990, 0.9999, loadCompDepth(sunUV)),
-      flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0);
-  } else {
-    sunVis = smoothstep(0.9990, 0.9999, loadCompDepth(sunUV));
-  }
+  // Skip the depth fetch when the flare is off or the sun is off-screen
+  // (uniform CF). Matches GLX post.js sunVis.
+  var sunVis: f32 = select(0.0,
+    smoothstep(0.9990, 0.9999, loadCompDepth(sunUV)),
+    flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0);
   if (flareStr > 0.0 && sunVis > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);

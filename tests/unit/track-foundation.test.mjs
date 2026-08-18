@@ -357,7 +357,7 @@ test("envCull build owns one ribbon representation and retains collision geometr
 
 test("game keeps the sole prebuilt ribbon usable across envCull and tier changes", () => {
   const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(source, /chunkRibbons:\s*typeof PerfTry[^\n]+PerfTry\.on\("envCull"\)[^\n]+PerfGov\.tier\(\) < 3/);
+  assert.match(source, /chunkRibbons:\s*PerfGov\.tier\(\) < 3/);
   assert.match(source, /track\.meshes\.terrain \|\| track\.meshes\.terrainChunked/);
   assert.match(source, /track\.meshes\.road \|\| track\.meshes\.roadChunked/);
   assert.match(source, /_wantRoadChunk = gfx\.chunkedTrackCoords !== false/);

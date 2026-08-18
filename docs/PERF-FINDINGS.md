@@ -733,11 +733,11 @@ standalone bug fix worth landing on its own.
 ### Stale entry corrected: the env-probe cull already shipped
 
 §3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
-shipped as **`PerfTry.envCull`**, `ENV_CULL_M = 300`, `js/render/glx.js:912-922`,
-default ON (counted reach), applied as a `min` and never an override, with the
-counted justification in `js/game/perf-try.js`. TLX's probe used to hard-code
-`cullDist=0` (stale comment: "GLX frameCullDist stays 0") — 2026-08-18 it
-honours the same 300 m cap + save/restore as GLX/WGX. What remains true is the
+is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx.js`
+`envFaceBegin`, applied as a `min` and never an override, with the same cap
+on WGX and TLX. The pause-menu `PerfTry.envCull` toggle is gone — these were
+renderer A/B flags, not lighting knobs, so they were not moved into the
+lighting tuner. What remains true is the
 sharpener:
 `frame.cullDist` is read in exactly one place, inside the chunked path, so the
 switch **cannot remove a single road or terrain triangle** from the probe — it
@@ -787,8 +787,8 @@ reflection. Everything between 300 m and 900 m is paying full vertex cost to
 move less than a pixel.
 
 **This is NOT bit-identical**, unlike everything else taken today, so it does
-not get taken the same way: it belongs behind a `PerfTry` default-OFF switch
-(`js/game/perf-try.js`) where it can be A/B'd on real hardware, which is the
+not get taken the same way: it belongs behind a counted A/B on real hardware,
+which is the
 mechanism that already exists for exactly this class of change.
 
 Everything below was the original note on why this box could not settle it, and
@@ -899,7 +899,7 @@ sphere of radius R, so these are **lower** bounds):
 | provably outside the ±80 m shadow ortho | **89 %** | **88 %** | **89 %** |
 
 > **SUPERSEDED 2026-08-17 (render-audit follow-ups).** Camera-pass road AND
-> terrain now lazy-build `*Chunked` under default-ON `PerfTry.envCull` +
+> terrain now lazy-build `*Chunked` under the baked 300 m env-probe cull +
 > `PerfGov.tier() < 3` (`js/game.js` drawWorldMeshes). Shadow ribbons already
 > chunked independently. The table above remains a valid *pre-chunk* reach
 > measurement; do not re-derive “unreachable” from it.
@@ -910,8 +910,9 @@ Three things make this worth writing down rather than doing:
    light-frustum test is exactly the one `castShadowChunked` already applies to
    props, and a triangle outside the ortho writes no depth. But chunking
    reorders submission *within* the mesh, so coplanar LEQUAL ties inside the
-   road could flip — the class `perf-try.js`'s unwired `floorLast` note already
-   flags. That needs a rendered lap, not a frame.
+   road could flip — the class of change `floorLast` would have been (draw the
+   base floor last among opaque world meshes) already flags. That needs a
+   rendered lap, not a frame.
 2. **The fix already exists in the tree and is unreachable.** `js/game.js`
    lazily builds `track.meshes.roadChunked` and draws it via `drawChunked` —
    but only under `LT.roadChunkLamps && LT.perChunkLights`, a *lamp* feature
@@ -919,9 +920,9 @@ Three things make this worth writing down rather than doing:
    in §2: a fix that existed and had not been copied across.
    (**Also superseded:** envCull now opens the camera path without lamp knobs.)
 3. **It sharpens a §3 entry above.** `frameCullDist` is read in exactly one
-   place, inside the chunked path. `draw()` never reads it — so `PerfTry.envCull`,
-   the switch built for the env-probe reach, **cannot remove a single ribbon
-   triangle from the probe.** It only ever touched props and glass.
+   place, inside the chunked path. `draw()` never reads it — so the 300 m
+   env-probe cull **cannot remove a single ribbon triangle from the probe.**
+   It only ever touched props and glass.
 
 **Two `Δprog` wraps with no pre-reject, where `pairContact` has one.**
 `pairContact` opens with an exact cheap reject before its two float modulos,
@@ -969,7 +970,7 @@ wall plus eager top-level work.
 > (web.dev, *Deep dive into the murky waters of script loading*), and GitHub
 > Pages serves HTTP/2, so they multiplex on one connection. Only EXECUTION is
 > serial and ordered. This also kills `defer` as a lever from a second
-> direction, on top of the nine `readyState === "loading"` guards below:
+> direction, on top of the eight `readyState === "loading"` guards below:
 > `defer` cannot fix a serialisation that is not happening.
 
 **The `?v=N` bump throws away Chrome's code cache for all 148 scripts, every
@@ -1003,16 +1004,16 @@ player reaches.
 
 **`defer` is not the one-attribute change it looks like.** Every external tag
 sits at the very end of `<body>` with no markup after it, and deferred classic
-scripts keep document order — so it reads as free. It is not: **nine**
+scripts keep document order — so it reads as free. It is not: **eight**
 self-initialising modules guard on
 `if (document.readyState === "loading") …DOMContentLoaded… else init();`
 — enumerate them with `grep -rl 'readyState === "loading"' js/`, which gives
 `js/game/ariastate.js`, `gfx-quality.js`, `menunav.js`, `music-lib.js`,
-`perf-try.js`, `scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
+`scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
 Parser-blocking,
-`readyState` is `"loading"`, so all nine defer `init()` until after the whole
+`readyState` is `"loading"`, so all eight defer `init()` until after the whole
 wall has run — which `sheetshape.js` states as a deliberate choice. Under
-`defer`, `readyState` is `"interactive"` and all nine take the `else` branch and
+`defer`, `readyState` is `"interactive"` and all eight take the `else` branch and
 initialise **mid-wall**, so a module at tag 50 can init before one it reads at
 tag 100 exists. The prepared form of the change is
 `readyState !== "complete"`, which is behaviour-preserving today and correct

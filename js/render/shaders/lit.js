@@ -1094,13 +1094,10 @@ void main() {
     // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
     // glows the fog all around, brightest down the throw. Consumed by the fog
     // and ground-mist tints below - everything here is already computed.
-#ifdef OPT_LAMPFOGGATE
-    // PerfTry.lampFogGate: lampFog's only consumer is gated on uLampFog > 0.0
-    // (game.js drives it to exactly 0 in daylight), so accumulating it here for
-    // every lit fragment of every one of the 32 lights is thrown away on every
-    // day frame. uLampFog is a uniform, so this stays uniform control flow.
+    // lampFog's only consumer is gated on uLampFog > 0.0 (game.js drives it
+    // to exactly 0 in daylight), so skip the accumulate on day frames.
+    // uLampFog is a uniform, so this stays uniform control flow.
     if (uLampFog > 0.0)
-#endif
     lampFog += lb.xyz * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
     // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this

@@ -1705,18 +1705,14 @@ const TLX = (function () {
           _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
           _envInvVP.copy(_envVP).invert();
           _envInvVP.toArray(_envInvArr);
-          // PerfTry.envCull (GLX envFaceBegin / WGX): a 64² cube must not
-          // re-draw the 900 m city. Save/restore frame.cullDist; radial cap
-          // is a MIN of the live camera cull when that is already tighter.
+          // Env-probe radial cull (GLX envFaceBegin / WGX): a 64² cube must
+          // not re-draw the 900 m city. Save/restore frame.cullDist; radial
+          // cap is a MIN of the live camera cull when that is already tighter.
           _envFrame = frame;
           _envEye = eye;
           _envSvCull = (frame.cullDist > 0) ? frame.cullDist : 0;
-          if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-            _envCullM = _envSvCull > 0 ? Math.min(_envSvCull, 300) : 300;
-            frame.cullDist = _envCullM;
-          } else {
-            _envCullM = 0;
-          }
+          _envCullM = _envSvCull > 0 ? Math.min(_envSvCull, 300) : 300;
+          frame.cullDist = _envCullM;
           return _envInvArr;
         },
         envFaceEnd(face) {
@@ -1724,8 +1720,8 @@ const TLX = (function () {
           const faceCam = envCubeCam.children[face & 7];
           // Materialise the world draw-list (sky background node + track meshes
           // — game.js issued NO car/FX draws in the probe pass) into the face.
-          // Chunked records cull against the face frustum + PerfTry.envCull
-          // radial cap (GLX/WGX envFaceBegin). Restore frame.cullDist after.
+          // Chunked records cull against the face frustum + 300 m radial
+          // cap (GLX/WGX envFaceBegin). Restore frame.cullDist after.
           const faceVP = _envVP.elements;   // set in envFaceBegin for this face
           // Software GL: six world presents into a 64px cube miss the 360 s
           // test budget even after skipping city+sky (measured 2026-08-17:

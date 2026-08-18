@@ -9,10 +9,9 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
-2026-08-18: pause-menu PerfTry GLSL flags (`flareGate`, `lampFogGate`) are no
-longer GLX-only. WGX overlays authored `const OPT_* = true;` at pipeline
-create (`PerfTry.withWgslConsts`); TLX builds the gated or ungated TSL graph
-the same way. `envCull` was already in WGX `envFaceBegin`.
+2026-08-18: the old pause-menu PerfTry GLSL flags (`flareGate`, `lampFogGate`)
+and the 300 m `envCull` are now the baked product path on GLX/WGX/TLX — no
+toggle, no `OPT_*` overlay. Late sky (opaque → sky → glow) is unconditional.
 Car-paint orange-peel / flake now key to `objPos` (GLX `vObjPos`, 220 Hz +
 `hash21`); SSAO uses the GLX/TLX `K[0..7]` fan instead of an even 2π ring.
 `applyHdrGrade` is gated on `tone1.w` (`uHdrGradeOn`); SSAO skips the 8-tap

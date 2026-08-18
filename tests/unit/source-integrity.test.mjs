@@ -242,7 +242,7 @@ test("tools/layout-audit.mjs knows about every screen in the shell", () => {
 
 test("Settings uses labelled category tabs with matching panels", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  for (const id of ["controls", "display", "performance", "more"]) {
+  for (const id of ["controls", "display", "more"]) {
     assert.match(html, new RegExp(`id="pm-tab-${id}"[^>]*role="tab"[\\s\\S]{0,180}aria-controls="pm-panel-${id}"`));
     assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="tabpanel"[\\s\\S]{0,180}aria-labelledby="pm-tab-${id}"`));
   }

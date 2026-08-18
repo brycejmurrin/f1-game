@@ -88,11 +88,9 @@ const GLX = (function () {
   // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
-  // Probe draw-distance cull, metres — used ONLY when PerfTry.envCull is on
-  // (default ON; counted reach in docs/PERF-FINDINGS.md / tools/chunk-reach.cjs,
-  // switch entry in js/game/perf-try.js). A face is
-  // 90 deg across ENV_SIZE pixels = 1.41 deg/px, so a 20 m building subtends
-  // ~2.7 px here and 0.9 px at the 900 m far plane.
+  // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
+  // tools/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
+  // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
@@ -218,16 +216,6 @@ const GLX = (function () {
 
   function compile(type, src) {
     const sh = gl.createShader(type);
-    // PerfTry #defines (js/game/perf-try.js) — GLSL-side optimisations. Counted /
-    // bit-identical gates default ON (`def: true`); others stay OFF. Injected
-    // AFTER the #version line, because GLSL
-    // requires #version to be the first non-comment token; prepending would
-    // fail every compile. This is the single chokepoint for all GLX shaders,
-    // so one insertion covers lit/sky/post/shadow/decal/glow/particle.
-    try {
-      const defs = typeof PerfTry !== "undefined" ? PerfTry.defines() : "";
-      if (defs) src = src.replace(/^(\s*#version[^\n]*\n)/, "$1" + defs);
-    } catch (_) { /* PerfTry absent (standalone shader harness) or storage refused: compile the shader exactly as authored, with no #defines. */ }
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
@@ -924,19 +912,17 @@ const GLX = (function () {
     _envFrame = frame;
     _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
-    // PerfTry.envCull (default ON; counted reach in docs/PERF-FINDINGS.md): the
-    // probe inherits the MAIN camera's
-    // cullDist, which game.js sets to 0 — no radial cull at all — below PerfGov
-    // tier 3. So a 64x64 reflection target re-draws the city through the 900 m
-    // frustum above. Counted with tools/chunk-reach.cjs: 238.3 chunks /
-    // 1,256,344 indices per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
+    // Env-probe radial cull (counted reach in docs/PERF-FINDINGS.md): the
+    // probe inherits the MAIN camera's cullDist, which game.js sets to 0 —
+    // no radial cull at all — below PerfGov tier 3. A 64x64 reflection
+    // target would otherwise re-draw the city through the 900 m frustum.
+    // Counted with tools/chunk-reach.cjs: 238.3 chunks / 1,256,344 indices
+    // per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
     //
     // MIN, never an override: where the main camera is already culling tighter
     // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
-    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-      frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-    }
+    frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
     begin(frame);
     return _envInvVP;
   }

@@ -92,8 +92,9 @@ const CLASS_CEILING = 537;
 // 1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
 // the deploy branch and the season branch each raised this in parallel and both
 // numbers are stale the moment they meet.
-// 1160 = category-based Settings navigation: four tab buttons, a dedicated
-// performance panel, and its small semantic wrappers. Still well below 1,400.
+// 1160 = category-based Settings navigation: tab buttons + panels.
+// Still well below 1,400. The PERF tab / perf-try.js script were removed
+// when those switches baked ON; NODE_CEILING stays a max, not a target.
 const NODE_CEILING = 1161;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.

@@ -108,9 +108,6 @@
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
-    // Default ON when PerfTry is absent (standalone TSL harness / first paint).
-    const lampFogGate = typeof PerfTry === "undefined" || PerfTry.on("lampFogGate");
-
     const PI = 3.14159265359;
 
     /* ── frame + tune uniforms ────────────────────────────────────────────────
@@ -1147,14 +1144,11 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: U.lampFog is 0 by day,
-              // so skip the accumulate (uniform CF — safe for TSL→WGSL). OFF
-              // builds the ungated add so the pause-menu toggle is not a lie.
-              const addLampFog = () => {
+              // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
+              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
+              If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
-              };
-              if (lampFogGate) If(U.lampFog.greaterThan(0.0), addLampFog);
-              else addLampFog();
+              });
               const NoLl = max(dot(N, Ld), 0.0).toVar();
               // Per-lamp shadow for the one mapped floodlight (js/render/shaders/lit.js):
               // perspective divide, slope-boosted constant bias (perspective

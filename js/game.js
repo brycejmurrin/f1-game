@@ -2237,7 +2237,7 @@ function loadTrack(idx) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3 });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3 });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -5519,7 +5519,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // Camera/probe terrain chunking — same envCull gate as the road ribbon.
     // Shadow path already lazy-builds terrainChunked; reuse that handle.
     let _tMesh = track.meshes.terrain || track.meshes.terrainChunked, _tChunked = !!(_tMesh && _tMesh.chunks && _tMesh.chunks.length);
-    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
+    if (PerfGov.tier() < 3) {
       if (track.meshes.terrainChunked === undefined) {
         track.meshes.terrainChunked = null;
         if (track.terrainGeo && gfx.createChunkedMesh) {
@@ -5551,12 +5551,12 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // same expression but is only assigned under _floodActive, so it is unset by
     // day). Without the tier/latch terms this built a second GPU copy of the road
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
-    // Prefer per-chunk road when lamp knobs ask for it, OR whenever envCull is
-    // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
-    // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
-    // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
+    // Prefer per-chunk road when lamp knobs ask for it, OR whenever the
+    // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
+    // index drop). Lamp path still needs tier < 1; the cull-only path keeps
+    // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
     const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
-      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
+      || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
@@ -6543,18 +6543,10 @@ function render(dt) {
   // for the god-rays); only frameSky's POINTER needs restoring — the env-probe
   // pass above may have swapped it to the probe face's inverse.
   frameSky.invViewProj = _mInvVP;
-  // PerfTry.skyLate: draw the sky AFTER the opaque world so early-Z rejects the
-  // 40-70% of SKY_FS fragments the world overwrites (SKY_VS puts it at depth
-  // 1.0 with depth writes off under LEQUAL, so the order is result-invariant
-  // for the OPAQUE half). The glow is what makes this non-trivial: it is
-  // additive with depthMask off, so it writes no depth — leaving the background
-  // at 1.0 where it painted, which a later depth-1.0 sky with blend OFF would
-  // erase. So the sky-late path draws the world WITHOUT glow, then the sky,
-  // then the glow: opaque -> sky -> glow. Moving the glow after the props is
-  // visually equivalent — a prop in front of a lamp occludes the halo either
-  // way, by overwrite before or by depth test after.
-  const _skyLate = (typeof PerfTry !== "undefined") && PerfTry.on("skyLate");
-  if (!_skyLate) gfx.drawSky(frameSky);
+  // Late sky: draw AFTER the opaque world so early-Z rejects the SKY_FS
+  // fragments the world overwrites (SKY_VS at depth 1.0, depth writes off
+  // under LEQUAL — result-invariant for the opaque half). Glow is additive
+  // with depthMask off, so it must follow the sky: opaque → sky → glow.
   // (`wet` is already declared above in the sky/lightning block)
   // Per-surface materials drive the GGX specular term.
   // Wet weather: rain films lower effective roughness dramatically — road becomes
@@ -6563,13 +6555,9 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, !_skyLate);
-  if (_skyLate) {
-    gfx.drawSky(frameSky);
-    // Same guard drawWorldMeshes applies to its own glow call, kept identical
-    // so the two paths differ ONLY in ordering.
-    if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
-  }
+  drawWorldMeshes(frame, night, wet, _floodEmit, false);
+  gfx.drawSky(frameSky);
+  if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
