@@ -583,6 +583,138 @@ def cmd_slider_ab(argv: list[str]) -> None:
     print(f"after:  {after_png}")
 
 
+def cmd_look_survey(argv: list[str]) -> None:
+    """One Chrome boot, several tod×weather lighting looks, chase+park+snapCam.
+
+    mcp-probe path for the per-track lighting retune: take_screenshot via
+    chrome-devtools MCP (not Playwright). Parks to about:blank after.
+    Night/day flips wait 1.6s for the dark rebuild. HUD off.
+
+    Example:
+      python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \\
+        --combos dawn|dry,day|dry,night|dry,night|rain \\
+        --out artifacts/lighting/shots/bahrain
+    """
+    p = argparse.ArgumentParser(prog="look-survey")
+    p.add_argument("track")
+    p.add_argument("--frac", type=float, default=0.12)
+    p.add_argument(
+        "--combos",
+        default="day|dry,night|dry,day|rain,dawn|fog",
+        help="comma list of tod|wx (dawn|day|dusk|night × dry|wet|rain|fog|overcast)",
+    )
+    p.add_argument(
+        "--port",
+        type=int,
+        default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"),
+    )
+    p.add_argument(
+        "--out",
+        default=None,
+        help="directory for <tod>-<wx>.png + state.json",
+    )
+    args = p.parse_args(argv)
+
+    combos = []
+    for raw in args.combos.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        parts = raw.split("|")
+        if len(parts) != 2:
+            print(f"bad combo {raw!r} — want tod|wx", file=sys.stderr)
+            sys.exit(1)
+        combos.append((parts[0], parts[1]))
+    if not combos:
+        print("no combos", file=sys.stderr)
+        sys.exit(1)
+
+    out_dir = Path(args.out) if args.out else \
+        ROOT / "artifacts" / "lighting" / "shots" / args.track
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    server = _ensure_static_server(args.port)
+    url = f"http://127.0.0.1:{args.port}/"
+    states = []
+    c = McpClient()
+    try:
+        c.start()
+        print(f"→ navigate_page {url}")
+        c.call("navigate_page", {"url": url})
+
+        boot_js = f"""async () => {{
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 80 && !window.__apex; i++) await wait(250);
+  if (!window.__apex) return {{ ok: false, error: "no __apex" }};
+  const a = window.__apex;
+  if (typeof Assets !== "undefined" && Assets.loadModels) {{
+    try {{ await Assets.loadModels(); }} catch (_) {{}}
+  }}
+  a.race({json.dumps(args.track)});
+  for (let i = 0; i < 80 && !(a.info() && a.info().track); i++) await wait(200);
+  a.go();
+  a.step(1/60, 120);
+  a.camera("chase");
+  if (a.hud) a.hud(false);
+  return {{ ok: true, track: a.info().track, theme: a.info().theme }};
+}}"""
+        print("→ evaluate_script (boot)")
+        boot = eval_json(c.call("evaluate_script", {"function": boot_js}))
+        if not boot.get("ok"):
+            print(f"boot failed: {boot}", file=sys.stderr)
+            sys.exit(1)
+
+        for tod, wx in combos:
+            look_js = f"""async () => {{
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const a = window.__apex;
+  if (a.weather) a.weather({json.dumps(wx)});
+  if (a.setTimeOfDay) a.setTimeOfDay({json.dumps(tod)});
+  a.park({args.frac});
+  a.snapCam();
+  a.step(1/60, 24);
+  await wait(1600);
+  const ls = a.lightState ? a.lightState() : null;
+  return {{
+    ok: true,
+    tod: a.setTimeOfDay(),
+    weather: a.weather(),
+    lightState: ls,
+    exposure: ls && ls.exposure,
+    numLights: ls && ls.numLights,
+    sunY: ls && ls.sunY,
+    builtNight: ls && ls.builtNight,
+  }};
+}}"""
+            print(f"→ look {tod}|{wx}")
+            look = eval_json(c.call("evaluate_script", {"function": look_js}))
+            png = out_dir / f"{tod}-{wx}.png"
+            c.call("take_screenshot", {"filePath": str(png)})
+            look["png"] = str(png)
+            look["combo"] = f"{tod}|{wx}"
+            states.append(look)
+            print(f"   wrote {png}  lights={look.get('numLights')} exp={look.get('exposure')} sunY={look.get('sunY')}")
+
+        try:
+            c.call("navigate_page", {"url": "about:blank"})
+        except Exception:
+            pass
+    finally:
+        c.close()
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                server.kill()
+
+    state_path = out_dir / "state.json"
+    state_path.write_text(json.dumps({"track": args.track, "frac": args.frac, "looks": states}, indent=2) + "\n")
+    print(f"state: {state_path}")
+    ok = sum(1 for s in states if s.get("ok"))
+    print(f"= run {'passed' if ok == len(states) else 'failed'} ({ok}/{len(states)} looks)")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -601,6 +733,8 @@ def main() -> None:
         cmd_apex_shot(rest)
     elif cmd == "slider-ab":
         cmd_slider_ab(rest)
+    elif cmd == "look-survey":
+        cmd_look_survey(rest)
     else:
         print(f"unknown: {cmd}", file=sys.stderr)
         sys.exit(1)
