@@ -882,7 +882,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /aInst0/);
   assert.match(CHUNKS_SOURCE, /matTrkArr/);
   assert.match(CHUNKS_SOURCE, /@builtin\(vertex_index\) vid/);
-  assert.match(CHUNKS_SOURCE, /packedRoad/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /packedRoad/);
   assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
   assert.match(WGX_SOURCE, /o\.surfaceId/);
   assert.doesNotMatch(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
@@ -908,7 +908,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /extra\.doubleSided = true;/);
   assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
   assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
-  assert.match(WGX_SOURCE, /Pack mat into col\.x on the ribbon/);
+  assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
+  assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
+  assert.match(CHUNKS_SOURCE, /abs\(fromWorld\.y\) < fromWorld\.z - 0\.45/);
+  assert.match(CHUNKS_SOURCE, /useWorldTrk = isRoadDraw && fromWorld\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
   assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);

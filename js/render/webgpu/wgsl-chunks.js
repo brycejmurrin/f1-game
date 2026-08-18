@@ -555,8 +555,14 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
   let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4;
   let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, tangOk));
-  let right = vec2<f32>(tang.y, -tang.x);
+  // Face +s so lateral x does not flip when the nearest sample swaps, and
+  // dashed paint can use a continuous along-track s (nearest-bin s stair-steps).
+  let sSign = select(1.0, sign(best2.z - best.z), abs(best2.z - best.z) > 1e-3);
+  let tangFwd = tang * sSign;
+  let right = vec2<f32>(tangFwd.y, -tangFwd.x);
   let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
+  let ds = select(0.0, dot(wp.xz - best.xy, tangFwd), tangOk);
+  let s = best.z + ds;
   let hw = best.w;
   let dCenter = sqrt(bestD);
   // Prefer perpendicular distance when a real tangent exists. Point-distance
@@ -568,9 +574,8 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let onRibbon = select(dCenter <= hw + 0.8, abs(x) <= hw + 0.55, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
-  // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
-  // here (a bad tangent used to tag the ribbon MAT 9 / grass).
-  return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
+  // Asphalt vs verge is classified in fs_main from abs(x) < hw - 0.45.
+  return select(vec4<f32>(0.0), vec4<f32>(s, x, hw, 1.0), valid);
 }
 ${hash}
 ${vnoise}
@@ -648,8 +653,8 @@ fn vs_main(
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) {
-      let packed = col.x > 1.5 && col.x < 40.0;
-      let mid = select(0.0, floor(col.x), packed);
+      // Interior tarmac only. Kerbs / grass / skirts keep MAT 0 + vertex colour.
+      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
       pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
     }
     // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
@@ -672,18 +677,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
-  let fwCol = abs(dpdx(in.col)) + abs(dpdy(in.col));
   let fromWorld = trkFromWorld(in.wpos);
-  let fwWorld = abs(dpdx(fromWorld.yzw)) + abs(dpdy(fromWorld.yzw));
-  let packedRoad = in.col.x > 1.5 && in.col.x < 40.0;
+  // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
+  let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
+  let useWorldTrk = isRoadDraw && fromWorld.w > 0.5;
   let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
-  let classified = select(in.matTrk.x, floor(in.col.x), packedRoad);
+  // Per-fragment LUT class — interpolating 0↔16 across the asphalt lip
+  // would mid-triangle-switch applyMaterial the same way packed col.x did.
+  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
+  let classified = select(in.matTrk.x, select(0.0, 16.0, lutAsphalt), useWorldTrk);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
+  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
   // branches. textureSample gets implicit LOD + anisotropy — the GLX
@@ -813,7 +820,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let NoH = max(dot(N, H), 0.0);
   let VoH = max(dot(V, H), 0.0);
 
-  var albedo    = select(in.col, vec3<f32>(fract(in.col.x)), packedRoad);
+  var albedo    = in.col;
   var emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
   var metalness = D.mat0.w;

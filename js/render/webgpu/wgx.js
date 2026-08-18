@@ -2243,14 +2243,11 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        // Pack mat into col.x on the ribbon (Dawn zeros a 4th attr). floor(col.x)
-        // is the MAT id, fract is albedo — fs_main packedRoad. Stamping every
-        // fragment MAT 16 painted kerbs/grass/skirts as asphalt (chopped ribbon).
-        const cr = col[i * 3];
-        // Pack asphalt only. Grass/kerb/skirt stay unpacked vertex colour
-        // (FLAT) — packing them as MAT 9/0 made the verge a noisy grey slab.
-        inter[o + 6] = (trk && mat && mat[i] === 16)
-          ? 16 + Math.min(Math.max(cr, 0), 0.999) : cr;
+        // Raw RGB. Packing MAT into col.x (16 + albedo) interpolates 16→0
+        // across every asphalt/grass triangle and sawtooths fract(R) — that
+        // was the warped tarmac. Dawn still zeros a 4th attr; asphalt vs
+        // verge is classified in WGSL from the LUT (abs(x) < hw - 0.45).
+        inter[o + 6] = col[i * 3];
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
         attr[i * 4] = mat ? mat[i] : 0;
