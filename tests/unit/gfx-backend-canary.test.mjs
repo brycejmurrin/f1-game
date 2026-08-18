@@ -1051,7 +1051,8 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js");
   const lit = read("js/render/shaders/lit.js");
   const tsl = read("js/render/three/tsl-lit.js");
-  assert.match(chunks, /@location\(7\)\s+objPos\s*:\s*vec3<f32>/,
+  // location 3 is the road trk vec3; objPos shifted 7 → 5 with that pack.
+  assert.match(chunks, /@location\(5\)\s+objPos\s*:\s*vec3<f32>/,
     "LIT VSOut must carry object-space position (GLX vObjPos)");
   assert.match(chunks, /o\.objPos\s*=\s*aPos/,
     "vs_main must write aPos into objPos, not the world-space wp");
