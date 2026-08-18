@@ -31,7 +31,7 @@
   /* The brand block and the button column are two SEPARATE things; 2px between
      them read as one run-on block, which is why the disclaimer looked like a
      caption on the CAREER button rather than the last line of the small print. */
-  gap: clamp(18px, 3.8vh, 36px);
+  gap: clamp(20px, 4vh, 40px);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   /* CENTRED UNTIL IT DOES NOT FIT, then top-aligned and scrollable.
      `align-content: center` in a grid that overflows pushes content past BOTH
@@ -99,26 +99,13 @@
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
-#menu-hero {
-  display: grid;
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background:
-    linear-gradient(180deg, rgba(232, 0, 45, 0.08), rgba(232, 0, 45, 0.02)),
-    rgba(0, 0, 0, 0.16);
-  border: 1px solid rgba(232, 0, 45, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
+#menu-hero { display: grid; }
 /* Four modes normally settle into 2x2, but the row is content-driven: feature
    availability can hide/add an action without leaving a half-empty grid cell. */
 #menu-primary {
   --balance-basis: 45%;
   --balance-min: 40%;
   gap: calc(var(--gap) * 0.7);
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background: rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -157,12 +144,6 @@
    fill its final line without a state-specific selector. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
 #menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
-#menu-secondary {
-  padding: clamp(4px, 0.6vw, 8px);
-  border-radius: calc(var(--r-lg) + 6px);
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -174,41 +155,15 @@
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
-#menu-brand {
-  align-items: center;
-  gap: 12px;
-  padding: clamp(18px, 2.2vw, 28px) clamp(20px, 2.6vw, 30px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: calc(var(--r-lg) + 10px);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
-    rgba(0, 0, 0, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 60px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(10px);
-}
+#menu-brand { align-items: center; }
 /* The small print is ONE step below the wordmark — near enough to belong to it,
    far enough not to read as a third title line. The step is a stated margin
    rather than whatever the audio line happened to reserve: #audiostate is empty
    until tilt is granted (or denied), and its `min-height: 16px` used to hold a
    phantom band open between the subtitle and the disclaimer, which is what left
    the disclaimer floating in the middle of nothing on a desktop. */
-#menu-meta {
-  margin-top: 16px;
-  gap: 6px;
-  width: 100%;
-  align-items: center;
-}
-#audiostate {
-  color: var(--dim);
-  font-size: var(--fs-micro);
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+#menu-meta { margin-top: 16px; gap: 6px; }
+#audiostate { color: var(--dim); font-size: var(--fs-micro); }
 #audiostate:empty { display: none; }
 /* NO `align-self` HERE — the chip must follow #menu-meta's own alignment, which
    is `center` in portrait and `flex-start` in landscape. Pinning it to
@@ -219,7 +174,7 @@
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
 #soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
-#disclaimer { color: var(--dim); font-size: var(--fs-micro); margin: 0; text-align: center; flex-basis: 100%; }
+#disclaimer { color: var(--dim); font-size: var(--fs-micro); margin: 0; }
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
 .build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
@@ -1438,5 +1393,4 @@ body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
 body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
-
 } /* @layer components */
