@@ -179,8 +179,8 @@
    at a glance — the first build of this screen looked like nothing was picked. */
 .cr-flavour.active, .cr-teamtile.active, .cr-seat.active {
   border-color: var(--red);
-  background: rgba(225, 6, 0, 0.18);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 12px rgba(225, 6, 0, 0.28);
+  background: color-mix(in oklab, var(--red) 24%, transparent);
+  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
 }
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
@@ -382,7 +382,11 @@
 .cr-slot.empty .cr-slot-who { color: var(--dim); }
 /* The career you are IN keeps the red edge permanently — after a switch, "which
    one am I in" has to be answerable without pressing anything. */
-.cr-slot.active .cr-slot-main { border-color: var(--red); }
+.cr-slot.active .cr-slot-main {
+  border-color: var(--red);
+  background: color-mix(in oklab, var(--red) 16%, transparent);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
+}
 .cr-slot-n {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--red);
 }

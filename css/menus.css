@@ -60,7 +60,7 @@
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
-    radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
+    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 30%, transparent), transparent 64%),
     rgba(6, 6, 10, 0.55);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
@@ -68,7 +68,7 @@
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   color: var(--text);
-  text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 /* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
    0` — 70% of the h1, centred inside it — so it began and ended under arbitrary
@@ -82,7 +82,7 @@
   margin: 10px 0 0;
   background: var(--red);
   transform: skewX(-30deg);
-  box-shadow: 0 0 14px rgba(225, 6, 0, 0.6);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
 #subtitle { color: rgba(242, 242, 245, 0.72); margin: 10px 0 0; font-size: 14px; letter-spacing: 0.04em; }
 /* THREE TIERS, by how much of your evening the thing costs.
@@ -714,8 +714,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 .team-card:active, .team-tile:active { background: rgba(255, 255, 255, 0.14); }
 .team-tile.active {
-  border-color: var(--red); background: rgba(225, 6, 0, 0.18);
-  box-shadow: 0 0 14px rgba(225, 6, 0, 0.25);
+  border-color: var(--red); background: color-mix(in oklab, var(--red) 24%, transparent);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--red) 36%, transparent);
 }
 /* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
    what actually tells them apart at a glance. */
@@ -794,8 +794,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
    it is the reason it is inset that matters, and that survives the move.) */
 .sel-chip.active {
   border-color: var(--red);
-  background: rgba(225, 6, 0, 0.18);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 12px rgba(225, 6, 0, 0.28);
+  background: color-mix(in oklab, var(--red) 24%, transparent);
+  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
@@ -1173,7 +1173,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   .track-row:hover { background: rgba(255, 255, 255, 0.06); }
 }
 .track-row:active { background: rgba(255, 255, 255, 0.09); }
-.track-row.active { background: rgba(225, 6, 0, 0.12); border-left: 3px solid var(--red); padding-left: 9px; }
+.track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
@@ -1199,7 +1199,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: var(--fs-micro); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: rgba(225,6,0,0.20); border-color: var(--red); color: #fff; font-weight: 700; }
+#race-settings .sel-chip.active { background: color-mix(in oklab, var(--red) 26%, transparent); border-color: var(--red); color: #fff; font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }

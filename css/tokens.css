@@ -368,22 +368,23 @@
      area, and white on it still measures over 5:1.
      Derived with color-mix rather than a second hex so there is still one red:
      change --red and the fills follow. */
-  --red-fill: color-mix(in oklab, var(--red) 86%, #14000c);
+  --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
   --grad-primary:     linear-gradient(135deg in oklab,
-                        color-mix(in oklab, var(--red-fill) 82%, #fff) 0%,
-                        color-mix(in oklab, var(--red-fill) 72%, #000) 100%);
+                        color-mix(in oklab, var(--red-fill) 76%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 74%, #000) 100%);
   --grad-primary-hot: linear-gradient(135deg in oklab,
-                        color-mix(in oklab, var(--red-fill) 66%, #fff) 0%,
-                        color-mix(in oklab, var(--red-fill) 86%, #000) 100%);
+                        color-mix(in oklab, var(--red-fill) 58%, #fff) 0%,
+                        color-mix(in oklab, var(--red-fill) 84%, #000) 100%);
   /* The wash every sheet head carries: a brand bleed from the leading edge over
      a light-from-above sheen. It is what makes a dialog look like part of this
      game rather than a generic card. */
   --grad-head:
-    linear-gradient(90deg in oklab, rgba(225, 6, 0, 0.16), transparent 52%),
-    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.06), transparent 72%);
+    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 26%, transparent), transparent 56%),
+    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.07), transparent 72%);
   /* A rule that FADES instead of stopping dead — used as a background-image on
-     the bottom 1px, so it needs no extra element. */
-  --grad-rule: linear-gradient(90deg in oklab, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02) 78%, transparent);
+     the bottom 1px, so it needs no extra element. Starts on brand so every
+     sheet hairline belongs to the same family. */
+  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 42%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
   /* Team identity, wherever a surface should carry it. Resolves through
      --accent, so it re-skins itself the moment the player changes team. */
   --grad-accent: linear-gradient(150deg in oklab,
