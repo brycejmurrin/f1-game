@@ -20,7 +20,7 @@ const MANIFEST = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 function loadTrackMaps() {
   const sandbox = {
-    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
+    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
     isNaN, isFinite, parseInt, parseFloat,
     console: { log() {}, warn() {}, error() {}, info() {}, debug() {} },
   };
@@ -138,4 +138,13 @@ test("fitCanvas preserves circuit aspect inside a box (no stretch)", () => {
   const sq = TrackMaps.fitCanvas(fake, 300, 300, monza);
   assert.ok(Math.abs(sq.w / sq.h - a) < 0.05);
   assert.ok(sq.w === 300 || sq.h === 300, "should bind one edge of the box");
+});
+
+test("fitCanvas never commits a 1px transient during layout convergence", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const bahrain = Tracks.LIST.find((t) => t.id === "bahrain");
+  const fake = { width: 0, height: 0, style: {} };
+  const fit = TrackMaps.fitCanvas(fake, 0, 0, bahrain, true);
+  assert.ok(fit.w > 8 && fit.h > 8, `${fit.w}x${fit.h} is not a useful preview`);
+  assert.ok(Math.abs(fit.w / fit.h - TrackMaps.aspect(bahrain)) < 0.05);
 });

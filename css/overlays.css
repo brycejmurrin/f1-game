@@ -502,10 +502,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   letter-spacing: 0.06em;
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
-   cinematic view — readouts, minimap, cam/pause buttons and the touch pads —
-   leaving the restore eye. The METRICS overlay stays up so a debug session
-   can hide the HUD without losing the live readouts. */
+   cinematic view — readouts, start lights, announce, cam picker, cam/pause
+   buttons and the touch pads — leaving the restore eye. The METRICS overlay
+   stays up so a debug session can hide the HUD without losing the live
+   readouts (photo-mode HIDE HUD is the opposite: see body.pc-uihidden). */
 body.hud-hidden #hud,
+body.hud-hidden #lights,
+body.hud-hidden #announce,
+body.hud-hidden #campicker,
 body.hud-hidden #btn-cam,
 body.hud-hidden #pausebtn,
 body.hud-hidden .touchbtn { display: none !important; }
@@ -536,8 +540,9 @@ body.hud-hidden #hud-restore { display: block; }
   top: calc(8px + var(--tap) + var(--sat));
   right: calc(10px + var(--tap) + 4px + var(--sar));
   z-index: 24;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 84px; --balance-min: 84px;
+  width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
   gap: calc(var(--gap) * 0.5);
   padding: 8px;
   background: rgba(8, 8, 14, 0.92);
@@ -583,6 +588,53 @@ body.hud-hidden #hud-restore { display: block; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 
 /* ---------- how to play ---------- */
+/* Five landmarks turn a very long reference into something browsable. The
+   rail lives in the fixed sheet head, so it remains available while the <dl>
+   owns the one vertical scroller. It pans sideways only when local width is
+   genuinely too small; links never wrap into a second row of chrome. */
+#htp-contents {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: calc(var(--gap) * 0.4); min-width: 0; flex: 1 1 auto;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+#howtoplay-inner { --fit-at: 200px; }
+/* Auto margin right-aligns the rail only while every link fits. When it
+   overflows the margin collapses to zero, leaving CONTROLS at the reachable
+   scroll origin; `justify-content:flex-end` instead placed that origin at a
+   negative offset and clipped the first links on a portrait phone. */
+#htp-contents > :first-child { margin-inline-start: auto; }
+#htp-contents::-webkit-scrollbar { display: none; }
+#htp-contents a {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-height: var(--chip-h);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.05); color: var(--text);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.05em;
+  text-decoration: none;
+}
+@media (hover: hover) {
+  #htp-contents a:hover { background: rgba(255,255,255,0.12); }
+}
+#htp-contents a:active { background: rgba(255,255,255,0.16); }
+#htp-contents a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+#howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"] {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"] {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+#howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
 #howtoplay dl {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -596,19 +648,18 @@ body.hud-hidden #hud-restore { display: block; }
   white-space: nowrap;
 }
 #howtoplay dt:first-child { border-top: none; }
+#howtoplay dt[id] { scroll-margin-block-start: var(--gap); }
 #howtoplay dd {
   color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
   padding: calc(var(--gap) * 0.5) 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 #howtoplay dd:first-of-type { border-top: none; }
-/* Wide and short (a landscape phone) is the case this screen is worst at: one
-   tall term/description column ran ~2.5 screens deep, so every answer was a
-   scroll away. Given the room, take TWO pairs per row instead of one.
-   Deliberately a wider grid and not `columns: 2`: this <dl> IS the .sheet-body
-   scroll container, and multicol inside a height-constrained scroller lays its
-   overflow columns out SIDEWAYS — it fragmented the help into seven columns
-   2371px wide instead of two. A grid keeps the flow vertical. */
+/* One term/description pair per row at every width. The former wide layout put
+   two pairs in one grid row; one long answer (ACTIVE AERO) then forced a huge
+   blank block under its short neighbour (BOOST), and both descriptions became
+   narrow newspaper columns. The pinned contents rail makes raw document depth
+   manageable without sacrificing reading order or measure. */
 /* TOO NARROW FOR TWO COLUMNS AT ALL — stack each term above its description.
    A `max-content` term column plus a description column has a minimum width the
    sheet cannot always give it, and `.sheet-body` scrolls on Y only
@@ -625,12 +676,6 @@ body.hud-hidden #hud-restore { display: block; }
   /* Stacked, a rule on BOTH halves draws a line through the middle of an entry;
      the divider belongs to the term that starts it. */
   #howtoplay dd { border-top: none; padding-top: 0; }
-}
-@container sheet (min-width: 620px) {
-  #howtoplay dl {
-    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
-    column-gap: calc(var(--gap) * 1.5);
-  }
 }
 .key {
   display: inline-block;
@@ -659,6 +704,12 @@ body.hud-hidden #hud-restore { display: block; }
    needs no z-index of its own (`:modal` outranks every z value — see
    js/game/uilayers.js / topmodal.js for the ladder). */
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
+#vsfriend #vs-pick > .bigbtn {
+  /* .bigbtn's menu-sized 78vw width is resolved against the viewport and then
+     zoomed again inside a sheet. At 200% it painted wider than #vs-body. These
+     are sheet actions, so size them from their actual container. */
+  width: 100%; max-width: none; margin: 0; box-sizing: border-box;
+}
 #vsfriend .vs-hint {
   margin: 4px 0 0;
   font-size: var(--fs-micro);
@@ -848,6 +899,32 @@ body.hud-hidden #hud-restore { display: block; }
   text-transform: uppercase;
 }
 #vsfriend #vs-code-entry { margin-top: calc(var(--gap) * 0.5); }
+
+/* Compact multiplayer is an information-dense workflow, not a splash screen.
+   Give the body the height previously spent on a second action bar and keep the
+   escape action in the title band. This matters most at UI SIZE 200%, where a
+   landscape phone has only ~170 local vertical pixels. */
+#vsfriend .sheet[data-density="compact"] { position: relative; }
+#vsfriend .sheet[data-density="compact"] > #vs-head {
+  padding-right: calc(var(--pad) + var(--tap));
+}
+#vsfriend .sheet[data-density="compact"] > .sheet-foot {
+  position: absolute; top: calc(var(--pad) * 0.18); right: var(--pad); z-index: 3;
+  display: block; padding: 0; background: none;
+}
+#vsfriend .sheet[data-density="compact"] > .sheet-foot::before { display: none; }
+#vsfriend .sheet[data-density="compact"] #vs-close {
+  min-width: var(--tap); min-height: var(--tap-min); padding: 0 var(--gap);
+  font-size: var(--fs-micro); line-height: 1;
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick > .bigbtn {
+  min-height: var(--tap-min); padding: var(--gap); font-size: var(--fs-2);
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick > .vs-hint,
+#vsfriend .sheet[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
 
 /* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
    ~390px to spend, and a preview that needs scrolling is a preview you cannot

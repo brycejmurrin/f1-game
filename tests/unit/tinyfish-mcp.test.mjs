@@ -49,19 +49,21 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
-  assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["run"]);
+  assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers.probe.command, "python3");
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
-  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
-  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
+  assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "bash");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
 });
 
 test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
@@ -440,6 +442,14 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(CD_SH, "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
   assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
+});
+
+test("deploy-check --tip does not trip set -u on an empty rest array", () => {
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /# bash \+ set -u: empty rest\[@\] is unbound/);
+  assert.match(src, /if \(\(\$\{#rest\[@\]\}\)\)/);
+  const r = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
 });
 
 test("Playwright MCP network fallback is pinned to the audited release", () => {

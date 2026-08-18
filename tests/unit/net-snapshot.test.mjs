@@ -88,6 +88,18 @@ test("a full 22-car grid still fits comfortably", () => {
   assert.ok(bytes.length * 20 < 7000);
 });
 
+test("negative wire ids are omitted so the count byte matches", () => {
+  const bytes = NetSnapshot.encodeSnapshot(1, [
+    { id: -1, car: car({}) },
+    { id: 3, car: car({ s: 10 }) },
+    { id: -2, car: car({}) },
+  ]);
+  const out = NetSnapshot.decodeSnapshot(bytes);
+  assert.equal(out.cars.length, 1);
+  assert.equal(out.cars[0].id, 3);
+  assert.equal(bytes[5], 1);
+});
+
 test("a truncated packet decodes to nothing rather than a garbage car", () => {
   const bytes = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({ s: 500 }) }]);
   assert.equal(NetSnapshot.decodeSnapshot(bytes.slice(0, bytes.length - 4)), null);

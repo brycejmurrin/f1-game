@@ -24,7 +24,7 @@ const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 }
 async function shot(page, name) {
   await page.waitForTimeout(250);
@@ -165,7 +165,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("42 HUD hidden (clean screen)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
@@ -179,7 +179,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("43 camera picker grid", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent

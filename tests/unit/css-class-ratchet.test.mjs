@@ -82,7 +82,8 @@ export function shellNodes() {
 // on the buttons' own ids, and .cs-cam-lbl (a duplicate of an inherited value)
 // went entirely.
 // 537 after .sel-section (one element, one declaration) became #sel-track-section.
-const CLASS_CEILING = 537;
+// UI redesign: the one-off Last Race heading moved from a class to a stable ID.
+const CLASS_CEILING = 536;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -92,13 +93,16 @@ const CLASS_CEILING = 537;
 // 1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
 // the deploy branch and the season branch each raised this in parallel and both
 // numbers are stale the moment they meet.
-// 1160 = category-based Settings navigation: four tab buttons, a dedicated
-// performance panel, and its small semantic wrappers. Still well below 1,400.
-const NODE_CEILING = 1161;
+// 1160 = category-based Settings navigation: tab buttons + panels.
+// Still well below 1,400. The PERF tab / PerfTry script were removed
+// when those switches baked ON; NODE_CEILING stays a max, not a target.
+// +3 2026-08-18: five How-to-Play landmark links and their labelled navigation
+// replace the former undifferentiated long sheet without adding wrapper headings.
+const NODE_CEILING = 1164;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
-// +1 2026-08-13: the <script> tag for js/game/perf-try.js (renderer
-// A/B switches, measurable only on real hardware — see the file header).
+// +1 2026-08-13: the <script> tag for the renderer A/B switch module
+// (measurable only on real hardware — later baked ON and deleted).
 // +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden

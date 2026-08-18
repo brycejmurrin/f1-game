@@ -57,6 +57,15 @@ const NetNostr = (function () {
   // it, for ever. Five seconds is slow enough not to look like spam to a relay
   // and fast enough that nobody notices the wait.
   const REPOST_MS = 5000;
+  // Relay traffic is anonymous and therefore attacker-controlled. The largest
+  // handshake accepted downstream is 512 KiB; AES-GCM adds 28 bytes and base64
+  // expands by 4/3. Keep the JSON frame only a small envelope larger than that.
+  const MAX_HANDSHAKE_CHARS = 512 * 1024;
+  const MAX_CONTENT_CHARS = Math.ceil((MAX_HANDSHAKE_CHARS + 28) / 3) * 4;
+  const MAX_FRAME_CHARS = MAX_CONTENT_CHARS + 8192;
+  const MAX_SEEN = 64;
+  const MAX_SEEN_CHARS = MAX_CONTENT_CHARS * 2;
+  const MAX_HEARD_ACTIVE = 4;
 
   let modPromise = null;
 
@@ -190,6 +199,44 @@ const NetNostr = (function () {
     return RELAYS;
   }
 
+  // Parse only bounded text. NIP-01 frames are JSON strings; coercing a Blob or
+  // an arbitrary object with String() can allocate before we have measured it.
+  function readRelayFrame(data) {
+    if (typeof data !== "string" || data.length > MAX_FRAME_CHARS) {
+      return { close: true, message: null };
+    }
+    try { return { close: false, message: JSON.parse(data) }; }
+    catch (e) { return { close: false, message: null }; }
+  }
+
+  // A tiny bounded admission gate around the expensive base64 + PBKDF2/AES
+  // work. Overflow closes only the relay that sent it; the other sockets remain
+  // available. Duplicates are admitted without consuming another worker.
+  function createBoundedInbox(consume) {
+    const seen = new Set();
+    let seenChars = 0, active = 0;
+    const remember = (content) => {
+      seen.add(content);
+      seenChars += content.length;
+      while (seen.size > MAX_SEEN || seenChars > MAX_SEEN_CHARS) {
+        const oldest = seen.values().next().value;
+        if (oldest == null) break;
+        seen.delete(oldest);
+        seenChars -= oldest.length;
+      }
+    };
+    const accept = (content) => {
+      if (typeof content !== "string" || !content || content.length > MAX_CONTENT_CHARS) return false;
+      if (seen.has(content)) return true;
+      if (active >= MAX_HEARD_ACTIVE) return false;
+      remember(content);
+      active++;
+      Promise.resolve().then(() => consume(content)).catch(() => {}).finally(() => { active--; });
+      return true;
+    };
+    return { accept, stats: () => ({ seen: seen.size, seenChars, active }) };
+  }
+
   /*
    * DIRECT RELAY EXCHANGE — the relays as a message bus, and nothing else.
    *
@@ -255,7 +302,6 @@ const NetNostr = (function () {
     const sockets = [];
     const socketUrl = new Map();
     let current = send || null;
-    const seen = new Set();
     const rejectedBy = new Set();
     let lastPubId = null;
 
@@ -294,8 +340,6 @@ const NetNostr = (function () {
       };
 
       const heard = async (b64) => {
-        if (seen.has(b64)) return;
-        seen.add(b64);
         let text = null;
         try {
           const bin = atob(b64);
@@ -315,13 +359,13 @@ const NetNostr = (function () {
           return;
         }
         // An offer, and we are the replying side.
-        if (seen.has("__answering")) return;
-        seen.add("__answering");
+        if (answering) return;
+        answering = true;
         let out = null;
         try { out = await reply(text); } catch (e) { out = null; }
         if (done) return;
         if (!out) {
-          seen.delete("__answering");
+          answering = false;
           finish({ ok: false, error: "reply_failed", message: "Could not answer that invite." });
           return;
         }
@@ -335,6 +379,8 @@ const NetNostr = (function () {
         }, 1200);
         setTimeout(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
       };
+      let answering = false;
+      const inbox = createBoundedInbox(heard);
 
       const tick = setInterval(() => {
         if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
@@ -362,8 +408,9 @@ const NetNostr = (function () {
           if (current) publish(current);
         };
         w.onmessage = (ev) => {
-          let m;
-          try { m = JSON.parse(String(ev.data)); } catch (e) { return; }
+          const frame = readRelayFrame(ev.data);
+          if (frame.close) { try { w.close(); } catch (e) {} return; }
+          const m = frame.message;
           // Array.isArray, not a bare index: JSON.parse("null") succeeds INSIDE
           // the try and `null[0]` then threw out of the handler — past the
           // module's "never throws" promise and onto index.html's window error
@@ -377,7 +424,10 @@ const NetNostr = (function () {
             }
             return;
           }
-          if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string") heard(m[2].content);
+          if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
+              !inbox.accept(m[2].content)) {
+            try { w.close(); } catch (e) {}
+          }
         };
         w.onerror = () => {};
       }
@@ -835,5 +885,9 @@ const NetNostr = (function () {
     // Exported FOR THE TESTS. A bad stored override used to reach
     // `new WebSocket()` and throw out of joinRoom, and asserting that on the
     // source text is the kind of test that passes while the code is broken.
-    RELAYS, relayUrls, validRelay };
+    RELAYS, relayUrls, validRelay,
+    // Pure bounded-input helpers exported for Node regressions; production uses
+    // these exact functions in directExchange's WebSocket handler.
+    MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
+    readRelayFrame, createBoundedInbox };
 })();

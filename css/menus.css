@@ -98,12 +98,13 @@
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
-#menu-hero, #menu-primary, #menu-secondary { display: grid; width: min(calc(78 * var(--vwz)), 340px); }
-/* 2x2. minmax(0,1fr) rather than 1fr because a grid column's default `min-width:
-   auto` refuses to shrink below its longest word — RACE A FRIEND would push the
-   pair wider than the hero above it. */
+#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
+#menu-hero { display: grid; }
+/* Four modes normally settle into 2x2, but the row is content-driven: feature
+   availability can hide/add an action without leaving a half-empty grid cell. */
 #menu-primary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  --balance-basis: 45%;
+  --balance-min: 40%;
   gap: calc(var(--gap) * 0.7);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
@@ -132,16 +133,17 @@
 }
 #mb-career-sub:empty { display: none; }
 #menu-secondary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  --balance-basis: 45%;
+  --balance-min: 40%;
   gap: calc(var(--gap) * 0.55);
 }
-/* STANDINGS only appears mid-season, so this row is four buttons or five — and
-   at five the last one is stranded alone on row three. The generic
-   .no-orphan-2 rule cannot be used here: :nth-child counts HIDDEN elements, so
-   it would widen HOW TO PLAY in the four-button case too. :has() asks the only
-   question that actually matters — is the fifth button showing? */
-#menu-secondary:has(#mb-standings:not([hidden])) > :last-child { grid-column: 1 / -1; }
+/* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
+   keeps the normal four controls as two pairs, and lets a visible fifth action
+   fill its final line without a state-specific selector. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
+#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -202,7 +204,7 @@
    used — 599 here, 600 in css/responsive.css, one pixel apart, the same question.
    It is registered `inherits: false` in css/tokens.css: declared plainly it cascaded
    into every .sheet and moved their thresholds from 380 to 600. */
-body { --compact-at: 600px; }
+body { --compact-at: 600px; --wide-at: 620px; }
 
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/game/sheetshape.js). Orientation
@@ -332,95 +334,157 @@ body { --compact-at: 600px; }
   :where(body[data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
 }
 
+/* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
+   --------------------------------------
+   A 1920x1080 display can use the complete 200% title composition; a 393x659
+   phone cannot. Before this split both got the same whole-subtree zoom. At 200%
+   the phone portrait showed the brand and the top edge of CAREER, and a real
+   Playwright click could not scroll RACE into view. Landscape showed CAREER and
+   halves of the first row. The declared geometry had doubled along with type.
+
+   Browser zoom belongs on this axis too: it reduces the CSS-pixel viewport, so
+   a 1920px monitor at 200% browser zoom enters this media query as roughly
+   960x540. Device-pixel ratio and render resolution do not; neither changes the
+   CSS viewport and neither should change menu geometry.
+
+   Geometry stops at 125%; text receives the residual multiplier. Viewport-unit
+   compensation must use that same geometry scale inside these two zoomed
+   children, otherwise their widths would still divide by the requested 200%
+   while they paint at 125%. The requested --ui-scale remains untouched for the
+   slider, sheet layouts and density classifier. */
+@media (max-width: 899px), (max-height: 699px) {
+  :where(body[data-density="compact"]) #menu-brand {
+    zoom: var(--ui-compact-brand-scale);
+    --vwz: calc(1vw / var(--ui-compact-brand-scale));
+    --vhz: calc(1vh / var(--ui-compact-brand-scale));
+    --svhz: calc(1svh / var(--ui-compact-brand-scale));
+  }
+  :where(body[data-density="compact"]) #menu-buttons {
+    zoom: var(--ui-compact-scale);
+    /* Keep the skewed button tips inside the menu's clipping box. */
+    padding-inline: calc(var(--gap) + var(--gap) * 0.25 / var(--ui-compact-scale));
+    --vwz: calc(1vw / var(--ui-compact-scale));
+    --vhz: calc(1vh / var(--ui-compact-scale));
+    --svhz: calc(1svh / var(--ui-compact-scale));
+  }
+
+  /* Type still honours the requested percentage. The compact landscape rules
+     use a deliberate 17px control rung; every smaller label uses the shared
+     micro rung. Icons are em-sized and follow their label automatically. */
+  :where(body[data-density="compact"]) #menu-buttons .bigbtn {
+    font-size: calc(17px * var(--ui-compact-text));
+  }
+  :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
+    font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
+  }
+  :where(body[data-density="compact"]) :is(#mb-career-sub, #menu-buttons .minibtn) {
+    font-size: calc(var(--fs-micro) * var(--ui-compact-text));
+  }
+}
+
 /* ---------- select screen ---------- */
 #select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
 #sel-inner { --sheet-w: 1020px; }
-/* Portrait / narrow: the body is the scroller and the track list keeps its own
-   cap below, so the two never fight.
-   Gated on `:not([data-pair="on"])` — the `.pane-pair` contract. An ungated
-   `#sel-body` rule is (1,0,0) and beats the primitive's (0,3,0), so the body
-   stayed a flex column while the sheet was already two grid tracks. Measured:
-   four clipped elements on a landscape phone and three on every desktop, the
-   moment this screen was put on the primitive. */
-/* THE SCROLLER FOLLOWS THE PAIR, NOT THE WIDTH. This used to be
-   `@container sheet (max-width: 619px)`, which assumed a sheet wider than that
-   always had its panes split — true once the observer has run, false in the
-   frame before it. In that frame a wide sheet is stacked AND has no scroller, so
-   a ~350px preview card plus the list overflowed a 240px body row and spilled
-   past the sheet: four clipped elements on a landscape phone, three on most
-   desktops, every run. Keying the scroller on `:not([data-pair="on"])` makes the
-   unmeasured state a VALID layout instead of a race the observer has to win. */
+/* STACKED: ONE LIST SCROLLER. The circuit map is context — a compact band —
+   not a second document. #sel-body is a flex column that does NOT scroll;
+   #sel-tracks fills the leftover height and is the only overflow-y:auto.
+   Document order is the visual order: preview band first, then the list.
+   Filter + search stay sticky at the top of that list (below). Start stays
+   pinned in .sheet-foot.
+   The previous hotfix made the body the scroller and capped the list at
+   min(40svhz, 300px) with order:-1 so the list sat above the map. That was
+   two nested vertical regions on a short sheet. Retired.
+   Gated on `:not([data-pair="on"])` — an ungated `#sel-body` rule is (1,0,0)
+   and beats the primitive's (0,3,0), so the body stayed a flex column while
+   the sheet was already two grid tracks. Keying on the pair attribute (not a
+   width query) also makes the unmeasured first frame a valid stack. */
+/* Fill the screen so the body row is definite. A content-sized sheet (one
+   filtered row) made flex-basis:0 on the list collapse — measured 29px
+   after a Monaco search, 116px with the full catalogue, same 568×320. */
+#sel-inner:not([data-pair="on"]) { height: 100%; }
 #sel-inner:not([data-pair="on"]) > #sel-body {
   display: flex; flex-direction: column; gap: var(--gap);
-  overflow-y: auto; overflow-x: hidden;
-  overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
+  min-height: 0;
+  overflow: hidden;
 }
-/* AND THE LIST MUST NOT BE THE THING THAT YIELDS. `overflow-y: auto` on the body
- * says "let the column be taller than me and scroll", but flex SHRINKS before it
- * overflows, and the two items shrink very differently: #sel-track-section is a
- * plain block, so `min-height: auto` floors it at its min-content height and it
- * refuses; #sel-tracks is a scroll container, whose `min-height: auto` is ZERO,
- * so it absorbs the entire deficit alone.
- *
- * MEASURED, iPhone 15 Pro landscape at UI SIZE 150%: sheet 400x204 in its own
- * units, body 118.7 of them, preview card 175.6 — a 57-unit deficit, and
- * #sel-tracks came out 1.3 units tall (2 device px), rendered BELOW the sheet's
- * own bottom edge and 4px into the home-indicator inset. The layout audit
- * reported that as one element under the hardware; the element was the circuit
- * list, and the whole list was gone. That is the same two-pixel list
- * js/game/sheetshape.js was written for, arriving down a different path — there
- * a wrong proxy chose the layout, here the right layout was chosen and the flex
- * algorithm quietly took the list's height away inside it.
- *
- * `flex: none` makes the cap below a HEIGHT rather than a ceiling on something
- * being crushed: the list takes min(40svhz, 300px), the body overflows by
- * exactly what does not fit, and the body scrolls — which is what the comment
- * above already promised ("the body is the scroller and the track list keeps its
- * own cap below, so the two never fight"). It only ever fought because nothing
- * said which one wins.
- *
- * A `min-height` floor was tried first, on the theory that most of this
- * shrinking is healthy and only the collapse to zero is the bug. It is not: the
- * shrink is never healthy here, because the section it is yielding to cannot
- * shrink at all. MEASURED on a portrait iPhone at UI SIZE 130%, with a two-row
- * floor: the section kept all 304 of its units and the list was clamped to the
- * floor — so the floor was not a safety net, it was the list's height, at every
- * portrait scale from 80 up. Two rows of forty is not a list either. */
-#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { flex: none; }
-/* AND WHEN THE BODY MUST SCROLL, THE LIST IS WHAT SHOULD BE ABOVE THE FOLD.
- * `flex: none` above gives the list its height back, but on this sheet — 306
- * device px tall, holding a 263px preview card and a 137px list inside a 178px
- * body — something is below the fold no matter how the pixels are dealt. The
- * question is only WHICH, and the shipped order answers it backwards: the
- * preview is confirmation of a choice, the list is where the choice is MADE, and
- * a player who opens SELECT CIRCUIT and sees no circuits has no way to know
- * scrolling is what is missing.
- *
- * The whole stack, not just the compact tier. Gating this on `data-density`
- * looked tighter and was wrong: MEASURED, the body overflows on a portrait
- * iPhone at every scale from 80 to 150, while the sheet only classifies compact
- * at 150 — so the three sizes most people actually use kept the list below the
- * fold, now with a real height instead of a collapsed one. "Is the sheet short"
- * is not the question; "does the body have room for both" is, and the answer on
- * a stacked select is no, at every phone size there is. The stack only happens
- * on a sheet under 620 units wide — phones and small windows — so this does not
- * touch the desktop, where the pair is on and `order` means nothing.
- *
- * Turning the pair on instead was measured and is worse: at 400 units wide the
- * two columns give the list the same 137px (its `max-height` cap binds either
- * way), shrink the map from 269 to 210, and stack BACK above START into a 177px
- * foot.
- *
- * `max-height: 100%` was also tried here, to let the list fill the body rather
- * than sit at its cap, and it is a trap. It does exactly that on a landscape
- * phone, where the sheet is height-capped by the screen and the body's
- * `minmax(0, 1fr)` row is therefore DEFINITE. On a portrait phone the sheet is
- * content-sized, that row is indefinite, a percentage max-height against an
- * indefinite containing block computes to `none`, and the cap silently
- * disappears — the one direction a height bound must never fail in. The existing
- * `min(40 * svhz, 300px)` cap is viewport-derived and resolves the same way
- * everywhere, so it stays. */
-#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks { order: -1; }
+#sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section {
+  display: flex; flex-direction: column;
+  /* 0 1 auto, not 0 0 auto: a content-sized band that cannot shrink ate the
+     list (measured 2px of #sel-tracks on a 568×320 stacked sheet). Cap the
+     band at a share of the definite body so the list always has room. */
+  flex: 0 1 auto; min-height: 0; max-height: 42%;
+  overflow: hidden;
+}
+#sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
+  flex: 0 1 auto; min-height: 0;
+  /* The preview is a band in every stacked sheet: thumbnail beside caption.
+     A map-over-caption column spent the entire 42% height cap on the map and
+     clipped the circuit name even at 100% on a portrait phone. */
+  flex-direction: row;
+  align-items: center;
+}
+#sel-inner:not([data-pair="on"]) #sel-preview-info { display: block; }
+/* Token-based map cap so the band stays a band. --chip-h answers density;
+   object-fit keeps the outline true when the cap binds. */
+#sel-inner:not([data-pair="on"]) #sel-preview-map {
+  max-height: calc(var(--chip-h) * 3);
+  object-fit: contain;
+}
+/* Compact stacked: the band is a thumbnail + name. Rec / GP / meta / facts /
+   elev are the extras that turn a band into a second document. The CIRCUIT
+   label stays in the a11y tree via aria-labelledby; hiding it visually buys
+   the list a row on a 320-tall sheet. */
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-circuit-label,
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-gp { display: none; }
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-rec { display: none; }
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts,
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-elev { display: none; }
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
+  /* The JS preserves the circuit aspect with an inline width/height. Clamp to
+     both the chip ladder and the actual preview band so high UI sizes cannot
+     leave a 60px painted thumbnail inside a ~42px band. */
+  max-height: min(var(--chip-h), 100%);
+  max-width: min(42%, calc(var(--chip-h) * 1.8));
+}
+/* When the shared functional-height cap is active, or the sheet itself is too
+   narrow to seat a thumbnail beside the name, the name is the useful preview.
+   Dropping the decorative map returns a complete control row to the catalogue
+   and avoids clipping an inline aspect-ratio size inside a sub-60px band. */
+#sel-inner[data-fit="on"] #sel-preview-map { display: none; }
+@container sheet (max-width: 300px) {
+  #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
+}
+@media (orientation: landscape) {
+  @container sheet (max-width: 420px) {
+    #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
+  }
+}
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-track-preview {
+  /* A short/high-scale sheet cannot afford a map row followed by a caption
+     row. Keep the one surviving label beside the thumbnail so neither is
+     clipped by the preview band's height budget. */
+  flex-direction: row;
+  align-items: center;
+  padding: calc(var(--gap) * 0.4);
+  margin-bottom: 0;
+}
+#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-info {
+  display: block;
+}
+/* On a short landscape phone the active catalogue row already supplies the
+   circuit identity. Removing the duplicate preview band buys the list an
+   entire control row at 100% and keeps the filter usable through 200%. */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > #sel-body > #sel-track-section {
+  display: none;
+}
+#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks {
+  /* Basis 0, not auto: auto is the 2,000px catalogue, so shrink eats the
+     list before grow can give it leftover body height. */
+  flex: 1 1 0; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
 /* The grid-item min-width guard for the circuit column. It used to be a
    sel-section class carried by exactly one element in the whole app, which is a
    context wearing a class's clothes — same collapse as the mb-prefix pair above
@@ -472,7 +536,22 @@ body { --compact-at: 600px; }
    ~80px of that slack on the map: a tall circuit's outline goes from 206px
    wide to ~255px with its caption still on one line. The list keeps ~510px,
    which is well clear of where its rows start wrapping. */
-#sel-inner { --pair-at: 620px; --pair-split: minmax(0, 50%); }
+#sel-inner {
+  --pair-at: 620px;
+  --pair-split: minmax(0, 50%);
+  --fit-at: 200px;
+  /* Preview facts start wrapping out of their capped band before the generic
+     380px sheet threshold (measured: phone portrait @125%, 432 own px). */
+  --compact-at: 480px;
+}
+@media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
+/* SHORT SHEET: stack even when the box is still wide in CSS px. Career already
+   does this (`#cr-inner[data-density="compact"] { --pair-at: 2000px }`). A
+   landscape phone at UI SIZE 150% keeps a ~700px clientWidth, so the 620px
+   pair threshold stays on and the compact preview-band / one-list rules never
+   fire. Density is classified first (sheetshape.js), then pair reads the
+   raised threshold. */
+#sel-inner[data-density="compact"] { --pair-at: 2000px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -520,44 +599,26 @@ body { --compact-at: 600px; }
   max-height: 50%;
   object-fit: contain;
 }
-/* SCROLLS RATHER THAN CLIPS. `overflow: hidden` here made the card's last chip
-   row UNREACHABLE: measured at 852x393, #sel-preview-info ran 12px past this
-   box, which had 11px of live scroll range and no way to use it — "5 DRS zones"
-   and "T1 slowest" were sliced through the middle by the BACK/START bar. The
-   content existed, it scrolled, and no gesture could reach it.
-   `safe center` REPLACES the child's `margin-block: auto`. Auto margins centre
-   by absorbing free space, and when there is none they push the overflow out
-   BOTH ends — and the start edge of a scroll container cannot be scrolled to,
-   so centring-by-margin inside a scroller hides the top irrecoverably. That is
-   the same trap css/tokens.css documents for #overlay. Declared as the
-   progressive pair: an engine that rejects `safe center` must fall back to
-   `center`, not to `normal`. */
+/* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
+   definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
+   A second overflow-y:auto here made the map column a document next to
+   #sel-tracks.pane. Shrink the card to the column; the map already yields
+   (max-height: 50% + object-fit). Compact density hides the extra facts
+   (below) so the band stays a band.
+   `safe center` still splits spare height above and below when the card
+   fits. An auto margin on the child would push overflow out both ends. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
-  overflow-y: auto; overscroll-behavior-y: contain; overflow-x: hidden;
+  overflow: hidden;
   display: flex; flex-direction: column;
+  min-height: 0;
   justify-content: center;
   justify-content: safe center;
   padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
 }
-/* The label sits at the top; the card takes the rest of the column and centres
-   itself in it, so a pane taller than the card has its spare height split
-   above and below rather than pooled at the bottom. */
-/* The centring moved to the parent's `safe center` (above). An auto margin here
-   would re-take the unreachable-start-edge bug the moment the card outgrows the
-   column, which is the case this whole branch exists for. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
   margin-block: 0;
-  /* KNOWN TRADE, recorded rather than hidden. Under `overflow: hidden` the card
-     was force-shrunk to the column and silently lost 12px off the bottom, with
-     no gesture able to reach it. With the parent scrolling, nothing is
-     unreachable — but the card also stops being force-shrunk, so it takes its
-     natural height and ~84px scrolls instead of ~12px vanishing.
-     That is the right way round: unreachable content is a defect, a short
-     scroll is an affordance. Making it shrink AND scroll needs a definite
-     height on this column, which the flex chain does not currently provide
-     (`max-height: 100%` here resolves against an indefinite height and is
-     inert — measured, not assumed). Revisit with the height mechanism in
-     docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md. */
+  flex: 0 1 auto; min-height: 0; max-height: 100%;
+  overflow: hidden;
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
   padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
@@ -601,6 +662,7 @@ body { --compact-at: 600px; }
     #sel-inner[data-shape="tall"] #sel-track-section {
       display: flex; flex-direction: column;
       flex: 0 0 52%; min-height: 0;
+      overflow: hidden;
     }
     /* The card FILLS the capped band, which gives it a definite height, and the
        map is capped at that height minus the room the caption needs. A share of
@@ -704,7 +766,7 @@ body { --compact-at: 600px; }
   /* on the height ladder (css/tokens.css) rather than sized by padding alone */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center;
-  padding: 6px 10px;
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
   font-size: var(--fs-micro);
   border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -925,21 +987,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 820px) {
   #sel-preview-name { font-size: 18px; }
 }
-/* Short landscape: the map and the facts are the useful part; prose is not. */
-/* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
-   and width stay media queries: zoom does not distort either.
-
-   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
-   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
-   a class and an attribute to every selector in the block, which is enough to beat
-   a LATER rule that used to win — measured: #sel-inner's height cap started
-   overriding a rule it had always lost to, and the desktop select golden moved.
-   Wrapped in :where(), these rules keep exactly the specificity they had. */
-@media (orientation: landscape) {
-  :where(.sheet[data-density="compact"]) #sel-preview-meta,
-  :where(.sheet[data-density="compact"]) #sel-preview-elev { display: none; }
-}
+/* Compact pair-on: the active row already names the circuit. At 175–200% the
+   map needs the whole preview column; retaining even name + record put a
+   partially clipped caption under it. */
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-info { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
@@ -973,6 +1028,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+/* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
+   a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
+#ss-inner[data-density="compact"] { --pair-at: 2000px; }
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
@@ -1009,6 +1067,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    .season-upcoming-row's default cursor — but they need centred alignment so a
    chip and a baseline-aligned label sit on the same line. */
 #ss-cal .season-upcoming-row { align-items: center; gap: calc(var(--gap) * 0.5); }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row { flex-wrap: wrap; }
+#ss-inner[data-density="compact"] #ss-cal .sur-name {
+  flex: 1 1 calc(100% - 34px); min-width: 0; overflow-wrap: anywhere;
+}
 #ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
 
 /* ---------- track picker rows ---------- */
@@ -1021,8 +1083,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    list scrolls. Reuses .sel-chip chrome already shared with race-settings. */
 #sel-track-filter {
   position: sticky; top: 0; z-index: 2;
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 8px 10px;
+  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.66) calc(var(--gap) * 0.83);
   background: color-mix(in oklab, var(--panel) 92%, #000);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1031,13 +1093,69 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   min-width: 0;
   justify-content: center;
   font-size: var(--fs-micro);
-  padding: 6px 10px;
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.83);
   letter-spacing: 0.06em;
 }
-/* In the single-column layout the list is capped so it cannot push the sheet's
-   own body into a long scroll — the list scrolls, the screen does not. */
-@container sheet (max-width: 619px) {
-  #sel-tracks { max-height: min(calc(40 * var(--svhz)), 300px); overflow-y: auto; overscroll-behavior-y: contain; }
+#sel-track-search {
+  flex: 1 0 100%;
+  min-width: 0;
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-2);
+}
+#sel-track-search::placeholder { color: var(--dim); opacity: 1; }
+#sel-track-empty { padding: var(--pad); text-align: center; }
+/* A notched phone in landscape can leave the single-column list only ~140px
+   tall. Spending two control rows here hid the first actual circuit entirely.
+   Keep the filter and search on one row only in that exact compact/wide mode;
+   portrait and the roomy paired catalogue retain the easier two-row layout. */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+  flex: 0 1 auto;
+  padding-inline: calc(var(--gap) * 0.55);
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+  flex: 1 1 9rem;
+  min-width: 9rem;
+}
+/* The sticky filter already names SEASON and CLASSICS. Repeating that group
+   heading directly below it costs the only circuit row on a short landscape
+   sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
+  display: none;
+}
+/* At 175–200% a landscape phone gives the sheet less than 360 local px. Four
+   controls cannot shrink into that width without their labels overlapping.
+   Keep one touch-height row, preserve each control's intrinsic width, and make
+   the toolbar itself horizontally pannable. The redundant group heading drops
+   here so the first actual circuit still fits below the toolbar. */
+@container sheet (max-width: 360px) {
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+    position: static;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+    display: none;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+    flex: 0 0 auto;
+    min-width: max-content;
+  }
+  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+    flex: 0 0 9rem;
+  }
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }
@@ -1101,16 +1219,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      the full width so they don't leave a dead half-row beside them. */
   #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
 }
-/* Chips on a MODULE, not on flex wrap — at every width, which is why this sits
-   outside the container query above. Every one of these groups has a chip count
-   that does not divide into the row it sits in, so `flex-wrap` left a different
-   ragged hole in each: "57 (FULL)" alone on line two of LAPS, FOG alone under
-   WEATHER, and DIFFICULTY's three chips using a third of a full-width row with
-   the rest empty. Equal columns make every row deliberately full, minmax(0,1fr)
-   keeps them honest at any sheet width, and the chips get bigger tap targets
-   out of it. */
-#rs-laps, #rs-weather, #rs-diff { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-#rs-time { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Every option group packs from a legible CHIP width rather than a remembered
+   2/3/5-column count. Wide groups stay on one line; a locally narrow section
+   wraps and balances its own remaining controls. */
+#race-settings .balanced-row { --balance-basis: 4.25rem; --balance-min: 3.75rem; }
 
 /* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
    how you miss a setting. A landscape phone gives ~285px of body between the
@@ -1137,8 +1249,6 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      row is the thing that pushes everything else down. */
   :where(.sheet[data-density="compact"]) #rs-body #rs-time-section,
   :where(.sheet[data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
-  /* Five chips in a third of the sheet want three across, not five. */
-  :where(.sheet[data-density="compact"]) #rs-time { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* RACE SETTINGS is seen before every single race, and its labels used to be
      the smallest type in the app at 9px — under the --label floor by a third.
      The chips are also the thing you AIM at here, so undersized type with thin

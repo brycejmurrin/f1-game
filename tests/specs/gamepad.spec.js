@@ -122,7 +122,7 @@ test("disconnecting the pad clears its state", async ({ page }) => {
 
 test("keyboard driving remains active after using a HUD button", async ({ page }) => {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 10_000 });
   await page.evaluate(() => {
     window.__apex.go();
     Input.reset();

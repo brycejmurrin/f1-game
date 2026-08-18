@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => typeof Parts !== "undefined" && Parts.CATALOG, { timeout: 8000 });
+  await page.waitForFunction(() => typeof Parts !== "undefined" && Parts.CATALOG, null, { timeout: 8000 });
 }
 
 test.describe("Parts module — catalog structure", () => {
@@ -1461,7 +1461,7 @@ test.describe("ERS parts drive the battery and overtake", () => {
     const rows = [];
     for (const ers of ["harvest", "standard", "overcharge"]) {
       await page.goto("/");
-      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
       const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
       await page.evaluate(([e, id]) => {
         const key = "apex26.parts." + id;
@@ -1471,9 +1471,9 @@ test.describe("ERS parts drive the battery and overtake", () => {
         localStorage.setItem("apex26.unlimitedBudget", "true");
       }, [ers, teamId]);
       await page.reload();
-      await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
       await page.evaluate(() => window.__apex.race("monza"));
-      await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 40_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 40_000 });
       rows.push(await page.evaluate(() => {
         const A = window.__apex;
         A.headless(true); A.go(); A.jump(0.1, 60, 0); A.step(1 / 60, 2);

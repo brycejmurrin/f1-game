@@ -125,6 +125,10 @@ function shell(req, res, url, root, token) {
 
 export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_BYTES }) {
   let acceptedBytes = 0;
+  // Bytes held by requests that have started but have not yet committed. Without
+  // this reservation, concurrent uploads all compare against the same old
+  // acceptedBytes value and can collectively sail past the session quota.
+  let reservedBytes = 0;
   return function collect(req, res, url) {
     const supplied = url.searchParams.get("token") || cookieToken(req);
     if (!sameToken(supplied, token)) {
@@ -147,25 +151,38 @@ export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_
 
     const chunks = [];
     let bytes = 0;
+    let reserved = 0;
     let aborted = false;
+    const releaseReservation = () => {
+      if (!reserved) return;
+      reservedBytes = Math.max(0, reservedBytes - reserved);
+      reserved = 0;
+    };
     req.on("data", (c) => {
       if (aborted) return;
-      bytes += c.length;
-      if (bytes > MAX_BYTES || acceptedBytes + bytes > maxTotalBytes) {
+      const next = bytes + c.length;
+      if (next > MAX_BYTES || acceptedBytes + reservedBytes + c.length > maxTotalBytes) {
         aborted = true;
+        releaseReservation();
         res.writeHead(413).end("report quota exceeded");
         req.destroy();
         return;
       }
+      bytes = next;
+      reserved += c.length;
+      reservedBytes += c.length;
       chunks.push(c);
     });
+    // A client that disconnects before `end` must not hold quota forever.
+    req.on("aborted", releaseReservation);
+    req.on("error", releaseReservation);
     req.on("end", () => {
       if (aborted) return;
       const text = Buffer.concat(chunks).toString("utf8");
       const name = safeName(url.searchParams.get("file"));
       let rep;
       try { rep = JSON.parse(text); }
-      catch (_) { res.writeHead(400).end("invalid JSON"); return; }
+      catch (_) { releaseReservation(); res.writeHead(400).end("invalid JSON"); return; }
       try {
         mkdirSync(out, { recursive: true });
         // Never let a repeated or forged filename erase the evidence already
@@ -173,11 +190,14 @@ export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_
         // is an error worth surfacing rather than silently inventing a name.
         writeFileSync(join(out, name), text, { flag: "wx", mode: 0o600 });
       } catch (e) {
+        releaseReservation();
         const status = e && e.code === "EEXIST" ? 409 : 500;
         res.writeHead(status).end(status === 409 ? "report already exists" : "could not write report");
         return;
       }
-      acceptedBytes += bytes;
+      acceptedBytes += reserved;
+      reservedBytes = Math.max(0, reservedBytes - reserved);
+      reserved = 0;
       const kb = (bytes / 1024).toFixed(1);
       console.log(`\n[report] ${name}  (${kb} KB)  -> artifacts/reports/${name}`);
       console.log(`[report] build ${rep.build} · backend ${rep.backend} · state ${rep.state}`);

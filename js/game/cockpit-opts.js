@@ -1,9 +1,9 @@
 /* Apex 26 — CockpitOpts: player-facing options for the first-person view.
 
    Today that is one switch, the HALO, but the shape is deliberate: cockpit
-   look-and-feel choices are NOT perf experiments (js/game/perf-try.js) and NOT
-   quality tiers (js/game/gfx-quality.js), so they get their own owner rather
-   than being smuggled into a panel whose heading would then be lying.
+   look-and-feel choices are NOT quality tiers (js/game/gfx-quality.js), so they
+   get their own owner rather than being smuggled into a panel whose heading
+   would then be lying.
 
    THE HALO. The secondary roll structure is real and mandatory on the car
    (FIA 2026 C12.4.2 — front fixing axis at Z=660, rear faces on Z=695), and a
@@ -77,7 +77,7 @@ function setTurnChase(on) {
 function turnChaseLead() { return turnChase() ? TURN_CHASE : 0; }
 
 /* SETTINGS > COCKPIT. Injected at runtime rather than written into
-   index.html, for the same two reasons PerfTry documents: the DOM-node ratchet
+   index.html, for the same two reasons gfx-quality documents: the DOM-node ratchet
    (tests/unit/css-class-ratchet.test.mjs) counts index.html's nodes, and this
    button mints NO new CSS class — it carries none, exactly like its neighbours
    #pm-res / #pm-renderer / #pm-gfx. */

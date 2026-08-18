@@ -28,18 +28,21 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "chrome-devtools-official",
     "playwright",
+    "playwright-official",
     "probe",
     "tinyfish",
   ]);
   assert.equal(cfg.mcpServers.probe.command, "python3");
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
-  assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
-  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
-  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
+  assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
+  assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "bash");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
 });
 
 test("probe-mcp status stays usable when tinyfish is down", () => {
@@ -234,6 +237,29 @@ test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live dae
   } finally {
     daemon.kill("SIGKILL");
   }
+});
+
+test("tools/list without mock does not spawn backends (Cursor discovery)", () => {
+  // Live ensure() used to start Chromium + tinyfish ensure during tools/list.
+  // Cursor then marked project-0-f1-game-probe as error and cached 0 tools.
+  const env = { ...process.env };
+  delete env.PROBE_MCP_MOCK;
+  delete env.PROBE_MCP_FAIL_BACKENDS;
+  const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  const tools = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  const r = spawnSync("python3", [PROBE, "serve"], {
+    encoding: "utf8",
+    input: `${init}\n${tools}\n`,
+    env,
+    timeout: 4000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const lines = r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+  const listed = JSON.parse(lines[1]);
+  const names = (listed.result.tools || []).map((t) => t.name);
+  assert.ok(names.includes("chrome_navigate_page"), names.slice(0, 8));
+  assert.ok(names.includes("tinyfish_fetch_content"), names.slice(0, 8));
+  assert.ok(names.length >= 50, `static catalog too small: ${names.length}`);
 });
 
 test("tools/list still advertises both catalogs when a backend ensure() throws", () => {

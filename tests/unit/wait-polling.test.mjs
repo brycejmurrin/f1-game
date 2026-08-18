@@ -1,6 +1,6 @@
 // wait-polling — a declared timeout that cannot fire is not a bound.
 //
-// MEASURED (tests/manual/timeout-probe.spec.js), `{ timeout: 3000 }` against a
+// MEASURED (tests/manual/timeout-probe.spec.js), `null, { timeout: 3000 }` against a
 // predicate that can never be true:
 //
 //   parked Monza, rendering   109,665 ms   36x the declared bound
@@ -14,27 +14,19 @@
 // `false` does not — which is why the same wait behaves completely differently
 // depending on whether a backend happens to be installed.
 //
-// A RATCHET, NOT A SWEEP. 353 call sites carry a declared timeout without
-// `polling`. Rewriting them in one commit would be a 300-site behavioural
-// change landing without a run behind it — the exact mistake `58614db2` already
-// made once this session. So the population is frozen: new waits must pass
-// `polling`, and the existing ones get fixed where they can be verified.
+// A RATCHET, NOT A POLLING SWEEP. Option objects have been moved mechanically
+// into Playwright's third argument, so their timeouts are real. Adding timer
+// polling at hundreds of sites is a separate behavioural change; freeze that
+// population and fix existing waits where their timing can be verified.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { lintSource, lintAll, count } from "../../tools/wait-polling-lint.mjs";
 
-// Measured 2026-08-07: 353, then 319 once tests/specs/tlx-probes.spec.js — the file
-// that produced the finding, and its largest single holder at 34 sites — was
-// converted. LOWER this as call sites are fixed; raising it needs a
-// reason, and "I added a new wait" is not one.
-//
-// 2026-08-13, the one raise so far, and it is SCOPE and not new debt: the lint
-// walked tests/ and tools/ but only admitted `*.js` (plus spec/test files) —
-// and every tool is `.mjs`/`.cjs`, so the tools/ half of its own scan list
-// contributed nothing. Fixing the filter surfaced 70 pre-existing sites
-// (tools/layout-audit.mjs alone holds 24). The tests/ population is unchanged
-// at 312; the ceiling is set to the whole measured population, 382.
-const CEILING = 382;
+// Measured 2026-08-18 after moving every unambiguous option object into argument
+// three: 370 correctly-positioned timeouts still use rAF polling. LOWER this as
+// call sites are fixed; raising it needs a reason, and "I added a new wait" is
+// not one.
+const CEILING = 370;
 // Far enough below and the ratchet has stopped ratcheting — the same trap
 // tools/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 // adoption was 54.
@@ -42,13 +34,27 @@ const SLACK = 40;
 
 test("a declared timeout with no polling is flagged", () => {
   const { sites } = lintSource(
-    `await page.waitForFunction(() => window.x === 1, { timeout: 30_000 });`);
+    `await page.waitForFunction(() => window.x === 1, null, { timeout: 30_000 });`);
   assert.equal(sites.length, 1);
+  assert.equal(sites[0].kind, "missing-polling");
 });
 
 test("passing polling clears it", () => {
   const { sites } = lintSource(
+    `await page.waitForFunction(() => window.x === 1, null, { polling: 100, timeout: 30_000 });`);
+  assert.deepEqual(sites, []);
+});
+
+test("an options-looking second argument is flagged because Playwright treats it as predicate data", () => {
+  const { sites } = lintSource(
     `await page.waitForFunction(() => window.x === 1, { polling: 100, timeout: 30_000 });`);
+  assert.equal(sites.length, 1);
+  assert.equal(sites[0].kind, "misplaced-options");
+});
+
+test("a real object predicate argument is not mistaken for options", () => {
+  const { sites } = lintSource(
+    `await page.waitForFunction((expected) => window.x === expected.timeout, { timeout: 7 });`);
   assert.deepEqual(sites, []);
 });
 
@@ -85,7 +91,7 @@ test("the population does not grow", () => {
   assert.ok(n <= CEILING,
     `${n} waitForFunction calls declare a timeout without polling, ceiling is ${CEILING}. ` +
     "A declared timeout does not bound a wait on a rendering page — pass " +
-    "{ polling: 100, timeout: N }. See docs/TESTING.md.");
+    "null, { polling: 100, timeout: N }. See docs/TESTING.md.");
   assert.ok(n > CEILING - SLACK,
     `only ${n} sites against a ceiling of ${CEILING} — lower the ceiling, or this ` +
     "ratchet has stopped ratcheting");

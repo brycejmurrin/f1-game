@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { request } from "node:http";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -73,6 +74,47 @@ test("report POSTs require auth, valid JSON, quota, and never overwrite", async 
     assert.equal((await fetch(srv.url + "apex-report?file=large.json", {
       method: "POST", headers, body: JSON.stringify({ data: "x".repeat(200) }),
     })).status, 413);
+  } finally {
+    await srv.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("concurrent report streams reserve quota before either one commits", async () => {
+  const root = fixture();
+  const token = "concurrent-test-token-with-entropy";
+  const srv = await startReportServer({
+    root, host: "127.0.0.1", port: 0, token, maxTotalBytes: 128,
+  });
+  const body = JSON.stringify({ data: "x".repeat(64) });
+  const openPost = (name) => {
+    let resolve;
+    let reject;
+    const response = new Promise((res, rej) => { resolve = res; reject = rej; });
+    const req = request(new URL(`apex-report?file=${name}`, srv.url), {
+      method: "POST",
+      headers: {
+        cookie: `apex26_report_token=${encodeURIComponent(token)}`,
+        "content-type": "application/json",
+      },
+    }, (res) => {
+      res.resume();
+      res.on("end", () => resolve(res.statusCode));
+    });
+    req.on("error", reject);
+    req.write(body);                  // reserve bytes, deliberately do not end yet
+    return { req, response };
+  };
+
+  try {
+    const first = openPost("first.json");
+    // Let the first chunk reach the route while its request remains in flight.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const second = openPost("second.json");
+    assert.equal(await second.response, 413,
+      "an in-flight report must count against the total quota");
+    first.req.end();
+    assert.equal(await first.response, 200);
   } finally {
     await srv.close();
     rmSync(root, { recursive: true, force: true });

@@ -459,16 +459,16 @@ const Tracks = (function () {
     // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
     // so a model sets `out._mat = MAT.BRICK` around a block instead of threading a
     // param through every call. Untagged geometry stays FLAT (unchanged look).
-    const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const out = TrackModels.scratch();
     // Separate GLASS buffer: reflective window panes are emitted here and drawn
     // with a low-roughness material so the lit shader's env term mirrors the sky
     // (real view-dependent reflection, not a faked colour). Day windows only.
-    const glassBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const glassBuf = TrackModels.scratch();
     // Separate WATER buffer: lake/sea/marina surfaces emit here and draw with a
     // low-roughness material so the lit shader's env term mirrors the live sky
     // (real time-of-day reflection + sun glint), turning flat blue slabs into
     // reflective water. Flagged via groundPlane(..., water=true).
-    const waterBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const waterBuf = TrackModels.scratch();
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Session darkness (set by Tracks.build from the chosen time of day) drives
     // window/skyline lighting — so buildings respond to dusk/night even on a
@@ -533,6 +533,11 @@ const Tracks = (function () {
     // ground floor) sit below road level and are exempt via the topY check.
     // ===================================================================
     let _culled = 0;
+    const _suppressed = Object.create(null);
+    const noteSuppressed = (kind, msg) => {
+      _suppressed[kind] = (_suppressed[kind] || 0) + 1;
+      if (Log.enabled("scenery", Log.DEBUG)) Log.debug("scenery", msg);
+    };
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
     };
@@ -1532,7 +1537,7 @@ const Tracks = (function () {
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
       if (onTrack(cx, cz, sz[0] / 2 + 1.5)) {
-        Log.warn("track", `place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
+        noteSuppressed("place", `place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
         return;
       }
       // sink the base 0.8m below grade so prop bottoms tuck under the terrain
@@ -1617,7 +1622,7 @@ const Tracks = (function () {
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
-        Log.warn("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
+        Log.info("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
         return;
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
@@ -1711,7 +1716,7 @@ const Tracks = (function () {
       hash, upOf, cross, norm, lerp, vadd,
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
-      note, noteSpan,
+      note, noteSpan, noteSuppressed,
       // Per-circuit trackside-furniture FORM lookup, resolved the same way FURN
       // and BARRIER already are: KIT[def.id] || KIT_DEF[theme] || fallback. The
       // fallback the caller passes is always that emitter's CURRENT geometry,
@@ -2436,7 +2441,11 @@ const Tracks = (function () {
       }
     }
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
-    if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
+    {
+      const sk = Object.keys(_suppressed);
+      if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
+    }
     flushAsm();          // the last anonymous run has no successor to close it
     // Swap every named record's guessed envelope for what it actually emitted.
     for (const rec of propList) {
@@ -2450,7 +2459,7 @@ const Tracks = (function () {
       delete rec._m;
     }
     Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
-    return { out, glass: glassBuf, water: waterBuf };
+    return { out: TrackModels.sealGeometry(out), glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
   function buildGate(track) {

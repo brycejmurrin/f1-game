@@ -91,13 +91,13 @@ try {
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
   page.setDefaultTimeout(60000);
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 20000, polling: 100 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000, polling: 100 });
 
   // race the track (retry once if a concurrent edit briefly broke the page)
   let ok = false;
   for (let t = 0; t < 3 && !ok; t++) {
     await page.evaluate((tid) => window.__apex.race(tid, "day", "dry"), id);
-    ok = await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 9000, polling: 100 }).then(() => true).catch(() => false);
+    ok = await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 9000, polling: 100 }).then(() => true).catch(() => false);
     if (!ok) await sleep(500);
   }
   if (!ok) {

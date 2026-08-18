@@ -861,9 +861,13 @@ test("WGX god-ray and env probe match GLX gates", () => {
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
   assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
   assert.match(WGX_SOURCE, /!f\.noEnv/);
-  // Env probe respects PerfTry.envCull (300 m cap).
-  assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
+  // Env probe always applies the 300 m radial cap (baked ON).
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+  assert.doesNotMatch(WGX_SOURCE, /_perfWgsl|typeof PerfTry|PerfTry\./);
+  assert.doesNotMatch(CHUNKS_SOURCE, /OPT_LAMPFOGGATE/);
+  assert.match(CHUNKS_SOURCE, /if \(F\.params8\.x > 0\.0\)/);
+  assert.doesNotMatch(POST_SOURCE, /OPT_FLAREGATE/);
+  assert.match(POST_SOURCE, /flareStr > 0\.0 && sunUV\.x >= 0\.0 && sunUV\.x <= 1\.0/);
 });
 
 test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {
@@ -927,9 +931,10 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
   assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
-  assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && !isCarDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.match(CHUNKS_SOURCE, /let isCarDraw = D\.mat2\.z >= 19\.5 && D\.mat2\.z <= 27\.5;/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
-  assert.match(WGX_SOURCE, /o\.buryRibbon/);
+  assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);

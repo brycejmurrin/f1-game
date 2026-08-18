@@ -58,3 +58,14 @@ test("the commit step validates and quotes a non-deploy branch", () => {
   assert.match(workflow, /git checkout -B "\$COMMIT_BRANCH"/);
   assert.doesNotMatch(workflow, /git checkout -B "\${{\s*inputs\.commit_branch\s*}}"/);
 });
+
+test("model imports advance and commit the cache generation", () => {
+  const shell = executableShell();
+  const changed = shell.indexOf("git diff --cached --quiet");
+  const bump = shell.indexOf("node tools/bump-cache.mjs --apply");
+  const commit = shell.indexOf("git commit -m");
+  assert.ok(changed >= 0 && bump > changed && commit > bump,
+    "only a real model change should bump, and the bump must precede the commit");
+  assert.match(shell, /git add index\.html version\.json/,
+    "the bot commit must carry the generation alongside the mutable asset bytes");
+});

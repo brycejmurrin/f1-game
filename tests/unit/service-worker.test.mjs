@@ -21,7 +21,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -97,6 +97,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
           }
       : setTimeout,
     clearTimeout,
+    ...(navigator ? { navigator } : {}),
   });
   vm.runInContext(SW_SOURCE, context, { filename: "sw.js" });
 
@@ -375,6 +376,47 @@ test("navigation and version 5xx responses fall back to healthy cached entries",
 
   const version = harness.fetchEvent(new Request(`${ORIGIN}/version.json?_=${Date.now()}`));
   assert.equal(await (await version.responsePromise).json().then((v) => v.build), 320);
+});
+
+test("an online version.json fetch reject does not serve a stale precache", async () => {
+  const harness = createHarness({
+    navigator: { onLine: true },
+    fetchImpl: () => Promise.reject(new TypeError("Failed to fetch")),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/version.json`, new Response('{"build":320}', { status: 200 })],
+  ]));
+
+  const version = harness.fetchEvent(new Request(`${ORIGIN}/version.json?_=${Date.now()}`));
+  assert.equal((await version.responsePromise).status, 0);
+});
+
+test("an online navigate timeout does not serve a stale cached shell", async () => {
+  const harness = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise(() => {}),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+  ]));
+
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal((await nav.responsePromise).status, 0);
+});
+
+test("an online cache-first miss timeout does not hang", async () => {
+  const harness = createHarness({
+    immediateTimeoutMs: 4000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise(() => {}),
+  });
+  const ev = harness.fetchEvent({
+    method: "GET",
+    mode: "same-origin",
+    url: `${ORIGIN}/js/game.js?v=1`,
+  });
+  assert.equal((await ev.responsePromise).status, 0);
 });
 
 test("a cache-bust navigation never falls back to the generic cached shell", async () => {

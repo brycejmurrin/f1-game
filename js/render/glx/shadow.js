@@ -227,6 +227,9 @@ const GLXShadow = (function () {
       if (count === undefined && batch.srcMatrices && batch.ibo) {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.srcMatrices);
+        // cullInstances may only hit when its packed transforms are still the
+        // buffer's resident contents; this upload replaces them with the full set.
+        batch._cullPlanes = null;
       }
       bindVAO(batch.vao);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);

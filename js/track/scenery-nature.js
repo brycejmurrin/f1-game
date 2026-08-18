@@ -128,7 +128,7 @@ const SceneryNature = (function () {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) {
-        Log.warn("scenery", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("pine", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
@@ -184,7 +184,7 @@ const SceneryNature = (function () {
       const sp = (opts && opts.spread) || 1;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 4)) {
-        Log.warn("scenery", `tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("tree", `tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       // Past the on-track guard — this tree ships. Canopy radius scales with
@@ -273,7 +273,7 @@ const SceneryNature = (function () {
     const palm = (k, side, dist, h, frond) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 4)) {
-        Log.warn("scenery", `palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("palm", `palm SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side });
@@ -367,7 +367,7 @@ const SceneryNature = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const slim = opts.slim != null ? Math.max(0.4, Math.min(2.2, opts.slim)) : 1;
       if (onTrack(a.c[0], a.c[2], 1.6 * slim + 0.6)) {
-        Log.warn("scenery", `cypress SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("cypress", `cypress SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("cypress", [a.c[0], a.c[1] + h / 2, a.c[2]], [3 * slim, h, 3 * slim], { k, side });
@@ -392,7 +392,7 @@ const SceneryNature = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       if (onTrack(a.c[0], a.c[2], h * 0.44 * spread + 0.6)) {
-        Log.warn("scenery", `stonePine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("stonePine", `stonePine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
@@ -422,7 +422,7 @@ const SceneryNature = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       if (onTrack(a.c[0], a.c[2], h * 0.34 * spread + 0.8)) {
-        Log.warn("scenery", `broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("broadleafFall", `broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
@@ -454,7 +454,7 @@ const SceneryNature = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const spread = opts.spread != null ? Math.max(2, opts.spread) : h * 1.15;
       if (onTrack(a.c[0], a.c[2], spread * 0.5 + 0.8)) {
-        Log.warn("scenery", `acacia SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("acacia", `acacia SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("acacia", [a.c[0], a.c[1] + h * 0.8, a.c[2]], [spread, h, spread], { k, side });
@@ -503,7 +503,7 @@ const SceneryNature = (function () {
       const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       const rad = (4.2 + h * 0.12) * spread;
       if (onTrack(a.c[0], a.c[2], rad + 0.6)) {
-        Log.warn("scenery", `plane SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("plane", `plane SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("plane", [a.c[0], a.c[1] + h * 0.6, a.c[2]], [rad * 2, h, rad * 2], { k, side });
@@ -536,7 +536,7 @@ const SceneryNature = (function () {
       // w*0.75*sqrt(2) ~= w*1.061. The old w*0.75 guard measured to an edge
       // midpoint and let the four corners overhang it by 41 %.
       if (onTrack(x, z, w * 1.061 + ROAD_SKIRT)) {
-        Log.warn("scenery", `peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
+        ctx.noteSuppressed("peak", `peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
       ctx.note("peak", [x, baseY + h / 2, z], [w, h, w]);
@@ -573,7 +573,7 @@ const SceneryNature = (function () {
       let fit = w;
       for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
       if (onTrack(x, z, reach(fit))) {
-        Log.warn("scenery", `mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
+        ctx.noteSuppressed("mountain", `mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
       if (fit < w) h *= Math.sqrt(fit / w);   // narrower dune, plausible slope
@@ -588,7 +588,7 @@ const SceneryNature = (function () {
     const ridge = (x, z, baseY, ang, len, w, h, col) => {
       // Skip if footprint half-extent reaches tarmac.
       if (onTrack(x, z, Math.max(len, w) * 0.5 + ROAD_SKIRT)) {
-        Log.warn("scenery", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
+        ctx.noteSuppressed("ridge", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
       ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
@@ -758,7 +758,7 @@ const SceneryNature = (function () {
       const oInner = side * (hw[k] + gap);
       const ifx = px[k] + r[0] * oInner, ifz = pz[k] + r[2] * oInner;
       if (onTrack(ifx, ifz, 0)) {
-        Log.warn("scenery", `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
+        ctx.noteSuppressed("grandstand", `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
         return;
       }
       // Past the inner-face guard — this stand ships. Size is the back shell
@@ -1008,7 +1008,7 @@ const SceneryNature = (function () {
         if (blocked.has(k)) return;
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.2)) {
-          Log.warn("scenery", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          ctx.noteSuppressed("hedge", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         // Scalloped clipped top instead of a dead-flat wall: a ±10% per-node
@@ -1121,7 +1121,7 @@ const SceneryNature = (function () {
       const bform = (opts && opts.form) || "clump";
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 2)) {
-        Log.warn("scenery", `bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("bush", `bush SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       // Nominal envelope: lobes are radius ~1.1-2.0 spread over a ~0.6-1.1 m

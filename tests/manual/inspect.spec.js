@@ -22,9 +22,9 @@ import { circuits } from "./circuits.js";
 
 async function loadTrack(page, circuit) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
   await page.evaluate((c) => window.__apex.race(c), circuit);
-  await page.waitForFunction(() => window.__apex?.info().track != null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.info().track != null, null, { timeout: 15_000 });
 }
 
 for (const circuit of circuits()) {

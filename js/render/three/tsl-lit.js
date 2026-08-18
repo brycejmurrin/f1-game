@@ -55,8 +55,8 @@
 
   function lit(THREE, TSL, ctx) {
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, attribute, texture, cubeTexture,
-      float, int, vec2, vec3, vec4,
+      Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
+      float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
@@ -84,7 +84,10 @@
       m.fog = false;
       m.vertexColors = false;
       m.premultipliedAlpha = false;
-      m.customProgramCacheKey = _pinKeys[key] || (_pinKeys[key] = () => key);
+      // Key must change when mrtNode is armed: HDR writes 2 attachments,
+      // env cube / canvas write 1. A pinned constant key would reuse the
+      // wrong program and fail WebGPU validation on the cube.
+      m.customProgramCacheKey = () => key + (m.mrtNode ? "-mrt" : "");
     }
 
     // ── M4: the tlx-shadow.js subsystem (null/absent -> no shadow code is
@@ -114,7 +117,6 @@
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
-
     const PI = 3.14159265359;
 
     /* ── frame + tune uniforms ────────────────────────────────────────────────
@@ -712,8 +714,11 @@
       const s = float(trkIn.x).toVar();
       const x = float(trkIn.y).toVar();
       const hw = float(trkIn.z).toVar();
-      // Hoisted derivatives — see the note above.
-      const aaX = clamp(fwidth(x), 1e-4, 0.30).toVar();
+      // Hoisted derivatives — see the note above. MIP uses the RAW
+      // footprint (WGX/GLX roadMarkings) so a saturated 0.30 AA ceiling
+      // keeps paint instead of erasing it.
+      const fwX = max(fwidth(x), 1e-4).toVar();
+      const aaX = min(fwX, 0.30).toVar();
       const aaS = clamp(fwidth(s).div(7.0), 1e-4, 0.24).toVar();
       const albedo = vec3(albedoIn).toVar();
       const rough = float(roughIn).toVar();
@@ -729,8 +734,8 @@
       const dash = smoothstep(aaS.mul(-1.0).add(0.25), aaS.add(0.25), abs(ph.sub(0.25))).oneMinus().toVar();
 
       // Sub-pixel minification: fade amplitude rather than let a half-covered
-      // band strobe.
-      const mip = clamp(aaX.sub(0.06).div(0.24).oneMinus(), 0.0, 1.0).toVar();
+      // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
+      const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
       // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
       // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
       const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();
@@ -767,7 +772,7 @@
       const fwHc13 = fwidth(hc.mul(1.3)).toVar();
       const fwY13 = fwidth(y.mul(1.3)).toVar();
       const fwTy = fwidth(fract(y.div(0.34))).toVar();
-      const ridgePhase0 = abs(hc).mul(5.5).toVar();
+      const ridgePhase0 = hc.mul(7.5).toVar();
       const fwRidge = fwidth(ridgePhase0).toVar();
       If(inRange.and(far.greaterThan(0.001)), () => {
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
@@ -893,14 +898,21 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
-    function buildFragment(matU, chunked) {
+    function buildFragment(matU, chunked, instanced) {
       return Fn(() => {
         // ── STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         //    shared varying-derived node BEFORE any conditional use. ──────────
         const wp = vec3(positionWorld).toVar();               // vWorldPos
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
-        const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
+        const vertexColor = vec3(attribute("color", "vec3")).toVar();
+        const albedoIn = instanced
+          ? vertexColor.mul(attribute("instanceTint", "vec3")).toVar()
+          : vertexColor;                                             // vCol
+        // Smooth attribute, same as before the garage-blank regression.
+        // GLX is `flat out float vMat`; a TSL `varying().setInterpolation(FLAT)`
+        // compiled but the garage turntable drew nothing (software GL / three
+        // r185). FLAG wave still reads the per-vertex attribute in the VS.
         const matA = float(attribute("mat", "float")).toVar();       // vMat
         // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
         // non-chunked mesh. Anchored here with the other varyings per the
@@ -1169,8 +1181,8 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: U.lampFog is 0 by day,
-              // so skip the accumulate (uniform CF — safe for TSL→WGSL).
+              // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
+              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
@@ -1449,9 +1461,9 @@
      * opaque path (required so SrcAlpha does not ghost the body) makes
      * isOpaque() FALSE, so whatever sits in output.a is coverage. Putting
      * the tag there painted the body at 35% over the road. opacityNode and
-     * output.a are both the real material alpha (tlxAlpha). Car SSR on this
-     * backend therefore sees scene alpha 1 (no tag) until a second target
-     * can carry the mask; road SSR is unchanged.
+     * output.a are both the real material alpha (tlxAlpha). The 0.35 tag
+     * rides a second HDR attachment (`ssrTag`) via mrtNode, armed only
+     * for the main scene pass — the env cube is a single-target RT.
      *
      * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
      * every variant must bind the SAME node-graph OBJECTS, not a fresh
@@ -1463,12 +1475,14 @@
      * compileAsync path. The scalars therefore become materialReference
      * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
-     * between classic material instances). Two graphs total: chunked reads
-     * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out}
+     * between classic material instances). Three graphs total: chunked reads
+     * no `trk` attribute, and instanced multiplies canonical vertex colour by
+     * its placement tint (see buildFragment header). */
+    const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
+    const _mats = [];
     let _sharedPos = null;
-    function sharedFragment(chunked) {
-      const idx = chunked ? 1 : 0;
+    function sharedFragment(chunked, instanced) {
+      const idx = instanced ? 2 : (chunked ? 1 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
         const matU = {
@@ -1482,18 +1496,24 @@
           carPaint:  materialReference("userData.tlxCarPaint", "float"),
           sparkle:   materialReference("userData.tlxSparkle", "float"),
         };
-        const packed = buildFragment(matU, chunked);
+        const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
-        // `out` is RGB + that real alpha. packed.a still holds the SSR tag
-        // for a future MRT; it must NOT be the vec4 written to the target.
+        // `out` is RGB + that real alpha. packed.a is the SSR tag on the
+        // second HDR attachment; it must NOT be the vec4 written to output.
         // r185 NodeBuilder.isOpaque() is false for NoBlending, so output.a
         // is coverage: a 0.35 tag ghosts painted bodywork against the road
         // (GLX writes the tag with blending OFF and an opaque canvas).
+        const out = vec4(packed.rgb, matU.alpha);
         g = _sharedGraph[idx] = {
           rgb: packed.rgb, a: packed.a, opacity: matU.alpha,
-          out: vec4(packed.rgb, matU.alpha),
+          out,
+          // Named to match sceneRT.textures[1].name. Env / canvas RTs have
+          // no such texture, so MRTNode.setup skips this output.
+          mrt: (SSR_TAG && typeof mrt === "function")
+            ? mrt({ output: out, ssrTag: packed.a })
+            : null,
         };
       }
       return g;
@@ -1513,14 +1533,17 @@
       ud.tlxClearcoat = val(o.clearcoat, 0.0);
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
-      const packed = sharedFragment(!!o.chunked);
+      ud.tlxChunked   = !!o.chunked;
+      ud.tlxInstanced = !!o.instanced;
+      const packed = sharedFragment(!!o.chunked, !!o.instanced);
+      _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
       // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
-      pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
+      pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -1620,6 +1643,17 @@
     // cube while rendering INTO the probe (feedback-loop guard) and back at the
     // live cube for the main pass. No-op when there's no cube node.
     function setEnvCube(tex) { if (envCubeNode && tex) envCubeNode.value = tex; }
+    // Arm the second HDR attachment (ssrTag) only for the main scene render.
+    // Env faces and the canvas fallback must keep mrtNode null — same
+    // material, one color target.
+    function setSsrMrt(on) {
+      if (!SSR_TAG) return;
+      for (let i = 0; i < _mats.length; i++) {
+        const m = _mats[i];
+        const g = sharedFragment(!!m.userData.tlxChunked);
+        m.mrtNode = on && g.mrt ? g.mrt : null;
+      }
+    }
 
     // Adopt a loaded asset pack (js/render/assets.js). The texture nodes were
     // bound to the placeholders at factory time, so — exactly like setEnvCube
@@ -1643,7 +1677,7 @@
     }
 
     return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube,
-             setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
+             setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });

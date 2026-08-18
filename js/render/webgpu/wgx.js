@@ -589,6 +589,7 @@ const WGX = (function () {
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
+    let _softDisplayPending = false, _softDisplayEpoch = 0;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -713,7 +714,7 @@ const WGX = (function () {
     }
     function _jsStrike(where, e) {
       litPass = null; encoder = null; currentView = null;
-      try { Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
+      try { if (!_jsStrikes) Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
       _jsStrikes++;
       if (_jsStrikes < JS_STRIKE_CAP) return;
       _lost = true;
@@ -919,7 +920,7 @@ const WGX = (function () {
     // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
     //    _buildPost; size-dependent targets + bind groups (re)built in
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
-    let _postReady = false, _fxReady = false;
+    let _postReady = false, _fxReady = false, _cfgWarned = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
         ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
         ldrTex = null, ldrView = null, ssrTex = null;
@@ -1099,12 +1100,12 @@ const WGX = (function () {
 
       // Sky pipeline — renders into the LIT pass (SCENE_FORMAT). Depth write OFF,
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
-      // early sky paints the clear background, and PerfTry.skyLate (default ON)
-      // still only fills pixels the world left at the far plane — GLX parity
-      // (js/render/shaders/sky.js + glx.js drawSky depthMask false / LEQUAL).
-      // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
-      // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
-      // melted world; cars still visible because they draw after the sky).
+      // early sky paints the clear background, and late sky (opaque → sky →
+      // glow) still only fills pixels the world left at the far plane — GLX
+      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
+      // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
+      // / melted world; cars still visible because they draw after the sky).
       // EXPLICIT shared layout — skyBindGroup is set with BOTH pipelines
       // (drawSky picks the MS variant when the lit pass is multisampled), and
       // two `layout:"auto"` pipelines are NEVER bind-group compatible, even
@@ -1711,10 +1712,15 @@ const WGX = (function () {
     }
     function _softDisplayEncode() {
       if (!_softGpu || !_displayCtx || !softPresentTex || !encoder) return null;
+      // A software map can lag many frames. Never allocate another full-frame
+      // staging buffer until the current one has mapped or failed; the next
+      // rendered frame will naturally become the newest readback.
+      if (_softDisplayPending) return null;
+      let buf = null;
       try {
         const w = width, h = height;
         const bpr = (w * 4 + 255) & ~255;
-        const buf = device.createBuffer({
+        buf = device.createBuffer({
           size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });
         encoder.copyTextureToBuffer(
@@ -1722,47 +1728,70 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: bpr, rowsPerImage: h },
           [w, h, 1]
         );
-        return { buf, bpr, w, h };
-      } catch (_) { return null; }
+        _softDisplayPending = true;
+        return { buf, bpr, w, h, epoch: _softDisplayEpoch };
+      } catch (_) {
+        try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
+        return null;
+      }
     }
     function _softDisplayFinish(cap) {
-      if (!cap || !_displayCtx) return;
-      const { buf, bpr, w, h } = cap;
+      if (!cap) return;
+      const { buf, bpr, w, h, epoch } = cap;
+      const release = function () { _softDisplayPending = false; };
+      if (!_displayCtx) {
+        try { buf.destroy(); } catch (_) { /* device dying */ }
+        release();
+        return;
+      }
       const finish = function () {
         try {
           buf.mapAsync(GPUMapMode.READ).then(function () {
             try {
               const src = new Uint8Array(buf.getMappedRange());
-              let maxPx = 0;
-              if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
-                _softImg = _displayCtx.createImageData(w, h);
-              }
-              const img = _softImg;
-              for (let y = 0; y < h; y++) {
-                const s = y * bpr, d = y * w * 4;
-                for (let x = 0; x < w; x++) {
-                  const si = s + x * 4, di = d + x * 4;
-                  const r = src[si], g = src[si + 1], b = src[si + 2];
-                  img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
-                  if ((r + g + b) > maxPx) maxPx = r + g + b;
+              // A resize can complete while mapAsync is pending. Drain/destroy
+              // the old buffer, but never paint its stale dimensions.
+              if (epoch === _softDisplayEpoch && _displayCanvas &&
+                  _displayCanvas.width === w && _displayCanvas.height === h) {
+                let maxPx = 0;
+                if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+                  _softImg = _displayCtx.createImageData(w, h);
                 }
-              }
-              if (maxPx >= 8) {
-                _displayCtx.putImageData(img, 0, 0);
-                _softBlitNotify();
+                const img = _softImg;
+                for (let y = 0; y < h; y++) {
+                  const s = y * bpr, d = y * w * 4;
+                  for (let x = 0; x < w; x++) {
+                    const si = s + x * 4, di = d + x * 4;
+                    const r = src[si], g = src[si + 1], b = src[si + 2];
+                    img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
+                    if ((r + g + b) > maxPx) maxPx = r + g + b;
+                  }
+                }
+                if (maxPx >= 8) {
+                  _displayCtx.putImageData(img, 0, 0);
+                  _softBlitNotify();
+                }
               }
             } catch (_) { /* 2D blit failed */ }
             try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
-          }).catch(function () {
+            release();
+          }, function () {
             try { buf.destroy(); } catch (_) { /* device dying */ }
+            release();
           });
         } catch (_) {
           try { buf.destroy(); } catch (_) { /* device dying */ }
+          release();
         }
       };
       try {
         device.queue.onSubmittedWorkDone().then(finish, finish);
       } catch (_) { finish(); }
+    }
+    function _softDisplayAbort(cap) {
+      if (!cap) return;
+      try { cap.buf.destroy(); } catch (_) { /* submit rejected / device dying */ }
+      _softDisplayPending = false;
     }
     function _softBlitNotify() {
       _softBlitGen++;
@@ -1777,15 +1806,19 @@ const WGX = (function () {
       if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
+        let waiter = null;
         const timer = setTimeout(function () {
+          const i = _softPresentWaiters.indexOf(waiter);
+          if (i >= 0) _softPresentWaiters.splice(i, 1);
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
-        _softPresentWaiters.push(function (gen) {
+        waiter = function (gen) {
           if (gen > start) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
             resolve(gen);
           }
-        });
+        };
+        _softPresentWaiters.push(waiter);
       });
     }
     function resize() {
@@ -1800,12 +1833,14 @@ const WGX = (function () {
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
+        _softDisplayEpoch++;
         canvas.width = w; canvas.height = h;
         // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
         // configured swapchain. Reconfigure on every buffer-size change.
         if (ctx) {
           const _cfgErr = _configureCanvas();
-          if (_cfgErr) try { Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } catch (_) { /* harness */ }
+          if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
+          else _cfgWarned = false;
         }
         if (_softGpu && _displayCanvas) {
           _displayCanvas.width = w;
@@ -3010,7 +3045,7 @@ const WGX = (function () {
       d[base + 26] = o.surfaceId != null ? o.surfaceId : 0;
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
-      d[base + 27] = (o.buryRibbon || (o.detail || 0) > 0.1) ? 1 : 0;
+      d[base + 27] = o.buryRibbon ? 1 : 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3160,7 +3195,7 @@ const WGX = (function () {
     // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
-    // the world draws (drawSky + track meshes, NO cars) between begin/end — they record
+    // the world draws (track meshes then drawSky, NO cars) between begin/end — they record
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
     function envInit() {
       if (envCubeTex) return;
@@ -3204,14 +3239,10 @@ const WGX = (function () {
       _envFrame = frame;
       _envSvVP = svVP; _envSvEye = svEye; _envSvCull = svCull;
       frame.viewProj = _envVP; frame.eye = eye;
-      // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
-      // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
-      // when envCull is on; keep a tighter main-camera cull when present.
-      if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-        frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
-      } else {
-        frame.cullDist = 0;
-      }
+      // Radial cull for the probe (GLX envFaceBegin): without this a 64²
+      // reflection target re-draws the whole 900 m city. Cap at 300 m; keep
+      // a tighter main-camera cull when present.
+      frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
       _writeFrame(frame);
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       _envEncoder = device.createCommandEncoder();
@@ -3421,7 +3452,8 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
-        device.queue.submit([encoder.finish()]);
+        try { device.queue.submit([encoder.finish()]); }
+        catch (e) { _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
         _softDisplayFinish(disp);
@@ -3461,7 +3493,8 @@ const WGX = (function () {
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
-      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0;
+      const _carRefl = o.carReflect != null ? o.carReflect
+        : ((T && T.carReflect != null) ? T.carReflect : 0);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
       if (_ssrReady && ssrBG && frameHaveProj &&
@@ -3695,7 +3728,8 @@ const WGX = (function () {
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
         s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
-        s[55] = (T && T.carReflect != null) ? T.carReflect : 0.05;                        // gain.w = carReflect
+        s[55] = o.carReflect != null ? o.carReflect
+          : ((T && T.carReflect != null) ? T.carReflect : 0.05);                           // gain.w = carReflect
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;
@@ -3741,7 +3775,8 @@ const WGX = (function () {
       }
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
-      device.queue.submit([encoder.finish()]);
+      try { device.queue.submit([encoder.finish()]); }
+      catch (e) { _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
       _softDisplayFinish(disp);
@@ -4101,13 +4136,17 @@ const WGX = (function () {
     }
     function cullInstances(batch, planes) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
-      let sig = 0;
-      for (let pi = 0; pi < 6; pi++) {
-        const p = planes[pi];
-        sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+      let samePack = !!batch._cullPlanes;
+      if (samePack) {
+        let po = 0;
+        for (let pi = 0; pi < 6 && samePack; pi++) {
+          const p = planes[pi];
+          for (let k = 0; k < 4; k++, po++) {
+            if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+          }
+        }
       }
-      if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-      if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+      if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
       const src = batch.srcMatrices, dst = batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
@@ -4127,8 +4166,12 @@ const WGX = (function () {
       if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
       }
-      batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-      batch._cullSig0 = sig; batch._cullN0 = n;
+      const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+      for (let pi = 0, po = 0; pi < 6; pi++) {
+        const p = planes[pi];
+        for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+      }
+      batch._cullN = n;
       return n;
     }
     function drawInstanced(batch, opts) {
@@ -4182,6 +4225,7 @@ const WGX = (function () {
           }
         }
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+        batch._cullPlanes = null;
       }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);

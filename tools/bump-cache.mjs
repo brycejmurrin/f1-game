@@ -24,6 +24,13 @@ const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
+// These paths are served cache-first at stable paths, or contain code loaded
+// with ?v=<shell build> rather than a per-file digest. Any byte change here
+// therefore requires a strictly newer service-worker/shell generation.
+const GENERATION_PATHS = Object.freeze([
+  "js/", "css/", "index.html", "sw.js", "manifest.json",
+  "icons/", "assets/", "vendor/",
+]);
 
 function digest(rel) {
   const target = path.resolve(ROOT, rel);
@@ -64,13 +71,22 @@ function verdict() {
   };
   const since = opt("--since");
   if (since) {
-    const diff = execFileSync("git", ["diff", "--name-only", since, "--", "js/", "css/", "index.html"],
+    const diff = execFileSync("git", ["diff", "--name-only", since, "--", ...GENERATION_PATHS],
       { cwd: ROOT, encoding: "utf8" }).trim();
     const versionMoved = execFileSync("git", ["diff", "--name-only", since, "--", "version.json"],
       { cwd: ROOT, encoding: "utf8" }).trim() !== "";
+    const baseBuild = JSON.parse(execFileSync("git", ["show", `${since}:version.json`],
+      { cwd: ROOT, encoding: "utf8" })).build;
+    if (!Number.isInteger(baseBuild) || baseBuild <= 0) {
+      throw new Error(`${since}:version.json has an invalid build`);
+    }
     out.assetsChangedSince = diff ? diff.split("\n") : [];
-    out.bumpNeeded = out.assetsChangedSince.length > 0 && !versionMoved;
-    if (out.bumpNeeded) out.consistent = false;
+    out.versionMoved = versionMoved;
+    out.baseBuild = baseBuild;
+    out.generationAdvanced = Number.isInteger(build) && build > baseBuild;
+    out.bumpNeeded = out.assetsChangedSince.length > 0 && !out.generationAdvanced;
+    out.generationRegressed = Number.isInteger(build) && build < baseBuild;
+    if (out.bumpNeeded || out.generationRegressed) out.consistent = false;
   }
   return out;
 }
@@ -110,5 +126,6 @@ else if (flag("--apply")) console.log(`hashed ${result.tagCount} tag(s); shell b
 else console.log(result.consistent
   ? `consistent at shell build ${result.versionJson} (${result.tagCount} content-hashed tags)`
   : `INCONSISTENT: ${result.assetMismatches.length} asset hash mismatch(es), shell ${result.shellBuild}, version.json ${result.versionJson}` +
-    (result.bumpNeeded ? ` — assets changed since ${opt("--since")} without a shell bump` : ""));
+    (result.bumpNeeded ? ` — cache-sensitive assets changed since ${opt("--since")} without a newer shell generation` : "") +
+    (result.generationRegressed ? ` — shell generation regressed below ${result.baseBuild}` : ""));
 process.exit(flag("--apply") || result.consistent ? 0 : 1);

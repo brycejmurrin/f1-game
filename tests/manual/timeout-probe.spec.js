@@ -46,9 +46,9 @@ test("a never-true predicate on a QUIET page respects its declared timeout", asy
   // The control. Nothing unusual about the page; if this overruns, the bound is
   // simply not honoured and nothing further needs explaining.
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 30_000 });
   const r = report("quiet page", await timed(() =>
-    page.waitForFunction(() => window.__neverEverTrue === 42, { timeout: SHORT })));
+    page.waitForFunction(() => window.__neverEverTrue === 42, null, { timeout: SHORT })));
   expect(r.ms).toBeLessThan(SHORT + TOLERANCE);
 });
 
@@ -59,9 +59,9 @@ test("a predicate that THROWS every evaluation still respects its timeout", asyn
   // from a falsy one, that is the difference between a 30 s failure and a
   // 344 s one, and it would explain M6 without any product being at fault.
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 30_000 });
   const r = report("throwing predicate", await timed(() =>
-    page.waitForFunction(() => window.__nothing.atAll.here === 1, { timeout: SHORT })));
+    page.waitForFunction(() => window.__nothing.atAll.here === 1, null, { timeout: SHORT })));
   expect(r.ms).toBeLessThan(SHORT + TOLERANCE);
 });
 
@@ -70,11 +70,11 @@ test("a never-true predicate on a BUSY page respects its declared timeout", asyn
   // thread is saturated may starve the poll. A race under SwiftShader is
   // exactly that page — and it is the page M6 waits on.
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 30_000 });
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 60_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   const r = report("busy page (monza rendering)", await timed(() =>
-    page.waitForFunction(() => window.__neverEverTrue === 42, { timeout: SHORT })));
+    page.waitForFunction(() => window.__neverEverTrue === 42, null, { timeout: SHORT })));
   expect(r.ms).toBeLessThan(SHORT + TOLERANCE);
 });

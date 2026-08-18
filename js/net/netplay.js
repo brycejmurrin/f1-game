@@ -308,7 +308,10 @@ const NetPlay = (function () {
         if (role !== "host") return true;
         const wid = remoteFor(id);
         const r = wid != null ? remotes.get(wid) : null;
-        return !!(r && r.car && d.driverId != null && d.driverId === r.car.driverId);
+        return !!(r && r.car && (
+          (d.driverId != null && d.driverId === r.car.driverId) ||
+          (d.code != null && d.code === r.car.code)
+        ));
       }
       // ADOPT, don't stack. A session outlives the screen that opened it — the
       // lobby creates one before a track exists and NetPlay takes it over once
@@ -349,7 +352,11 @@ const NetPlay = (function () {
         s.onEvent(name, (d) => {
           eventLog.push({ type: name, data: d, from: id });
           if (eventLog.length > 32) eventLog.shift();
-          if (name === EV.BYE) { lastReason = "bye"; stop("bye"); }
+          if (name === EV.BYE) {
+            lastReason = "bye";
+            // A clean leave is one rival, not the session — same as onClose.
+            if (!(role === "host" && sessions.size > 1)) stop("bye");
+          }
           // START, RESULT and CAUTION are the HOST'S to declare, so this side
           // may only obey them when it is not the one that declares them. The
           // send sides have always been gated (nameTheMoment and reportCaution
@@ -379,7 +386,7 @@ const NetPlay = (function () {
           // same driverId — unbound, the same spoof paints a lap-in-progress
           // over another driver's name on the host's waiting screen.
           if (name === EV.QLIVE && d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d);
-          if (name === EV.LAP && d) {
+          if (name === EV.LAP && d && sendersOwnDriver(d)) {
             peerLaps.push(d);
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
           }
@@ -634,7 +641,7 @@ const NetPlay = (function () {
     }
 
     function reportQuali(driverId, t) {
-      if (!session || !(t > 0)) return false;
+      if (!sessions.size || !(t > 0)) return false;
       return broadcast(EV.QUALI, { driverId, t: +t.toFixed(3) });
     }
 
@@ -737,30 +744,9 @@ const NetPlay = (function () {
       // of extra age on top of the interpolation delay, which the buffer
       // already absorbs. That is the price of star over mesh, and it buys not
       // opening N² connections through N NATs.
-      if (localCar && now - lastPublish >= PUBLISH_MS) {
-        lastPublish = now;
-        // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
-        // car this is, and its grid is not indexed the same as ours.
-        const entries = [{ id: G.wireId(localCar), car: localCar }];
-        if (role === "host") {
-          for (const r of remotes.values()) entries.push({ id: G.wireId(r.car), car: r.car });
-        }
-        // encodeSnapshot has always taken a list with a count byte and a
-        // per-entry id (js/net/snapshot.js). This is the first caller to send
-        // more than one, which is what that shape was reserved for.
-        // To every peer. One identical packet serves all of them: a guest
-        // receiving its own car back drops it for free, because localCar is by
-        // construction not in `remotes` (see onState).
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
-        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
-      }
-
-      // Draw each rival where it was INTERP_DELAY_MS ago, blended between the
-      // two packets bracketing that moment. Contact uses predict() instead —
-      // sample is delayMs in the past (~5–8 m at race speed), and resolving
-      // against the drawn pose is a phantom hit one end / a miss the other
-      // (docs/MULTIPLAYER.md; NetSnapshot.createInterp). Dual fields: pose
-      // stays the delayed draw; _nProg/_nX/_nSpd carry the live contact pose.
+      // Pose remotes FIRST. Host relay encodes r.car; if that write ran after
+      // the snapshot, guests received last tick's parked pose (or the grid
+      // spawn) while this tick's interp sample sat unused.
       for (const r of remotes.values()) {
         const st = r.interp.sample(now);
         if (st) poseRemote(r.car, st);
@@ -776,6 +762,28 @@ const NetPlay = (function () {
         } else {
           c._nOk = false;
         }
+      }
+
+      if (localCar && now - lastPublish >= PUBLISH_MS) {
+        lastPublish = now;
+        // G.wireId, not cars.indexOf — the receiver has to be able to say WHICH
+        // car this is, and its grid is not indexed the same as ours.
+        const entries = [{ id: G.wireId(localCar), car: localCar }];
+        if (role === "host") {
+          for (const r of remotes.values()) {
+            const id = G.wireId(r.car);
+            if (id < 0) continue;
+            entries.push({ id, car: r.car });
+          }
+        }
+        // encodeSnapshot has always taken a list with a count byte and a
+        // per-entry id (js/net/snapshot.js). This is the first caller to send
+        // more than one, which is what that shape was reserved for.
+        // To every peer. One identical packet serves all of them: a guest
+        // receiving its own car back drops it for free, because localCar is by
+        // construction not in `remotes` (see onState).
+        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
+        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
       }
     }
 
