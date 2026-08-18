@@ -2955,6 +2955,10 @@ const WGX = (function () {
       const o = opts || {};
       if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
         return Object.assign({}, o, { depthBias: [3, 6] });
+      // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
+      // CCW after that flip and were culled to a pair of edge lines.
+      if (o.surfaceId === 16 && !o.doubleSided)
+        return Object.assign({}, o, { doubleSided: true });
       return o;
     }
 
