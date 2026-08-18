@@ -3365,6 +3365,7 @@ function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
   c.prog += d;
   if (c._prevS != null) c._prevS = wrapS(c._prevS + d);
+  _colShifted = true;
 }
 
 // Collision masses AND separation shares for one pair.
@@ -3393,6 +3394,7 @@ const LCAR = 4.8, WCAR = 2.0;
 const COL_BUCKET_M = LCAR;
 const _colBuckets = [];   // sparse: bucketId → car[]
 const _colBucketIds = []; // compact list of occupied bucket ids this pass
+let _colShifted = false;  // shiftLong this step — skip idle re-buckets
 
 function _colClearBuckets() {
   for (let i = 0; i < _colBucketIds.length; i++) {
@@ -3606,15 +3608,15 @@ function resolveCollisions(ranked, dt) {
   // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
   const useBuckets = ranked.length > 12;
   let nB = 0;
-  if (useBuckets) nB = _colFillBuckets(ranked);
+  if (useBuckets) { nB = _colFillBuckets(ranked); _colShifted = false; }
   else if (Log.enabled("game", Log.DEBUG)) {
     Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
   }
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
     if (useBuckets) {
-      // Re-bucket each pass: shiftLong moves prog, so adjacency can change.
-      if (pass > 0) nB = _colFillBuckets(ranked);
+      // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
+      if (pass > 0 && _colShifted) { nB = _colFillBuckets(ranked); _colShifted = false; }
       _colForBucketPairs(nB, (a, b) => _colResolvePair(a, b, last, rubScrub));
     } else {
       const fwd = (pass & 1) === 0;
@@ -3634,7 +3636,7 @@ function resolveCollisions(ranked, dt) {
   // tighter boundary no longer causes the old vibration).
   const SLOP = 0.05;
   if (useBuckets) {
-    nB = _colFillBuckets(ranked);
+    if (_colShifted) nB = _colFillBuckets(ranked);
     _colForBucketPairs(nB, (a, b) => _colSepPair(a, b, SLOP));
   } else {
     for (let i = 0; i < ranked.length; i++) {
@@ -3747,7 +3749,7 @@ function updateCar(c, dt, ranked) {
     const L = track.total;
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
-      if (o === c) continue;
+      if (o === c || o.finished) continue;
       let dprog = o.prog - c.prog;
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
@@ -3868,17 +3870,17 @@ function updateCar(c, dt, ranked) {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
-    const samples = [];
+    AiDrive.beginLook();
     let kMax = 0;
     for (let d = 12; d < look; d += 14) {
       const ss = wrapS(c.s + d);
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      samples.push({ d, k: kk, bank: Tracks.bankAngle(track, ss) });
+      AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     const br = AiDrive.brakeDecision({
-      traits: aiT, samples, latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
       roomL, roomR,
@@ -4160,7 +4162,7 @@ function updateCar(c, dt, ranked) {
     const ci2 = (c.rank || 1) - 1;
     const Ltrk = track.total;
     for (let k = 0; k < ranked.length; k++) {
-      if (k === ci2) continue;
+      if (k === ci2 || ranked[k].finished) continue;
       const o = ranked[k];
       let dp = o.prog - c.prog;
       if (!Number.isFinite(dp)) continue;

@@ -324,7 +324,8 @@ const CEILINGS = {
   // 8604 -> 8605: title quit closes the camera picker and cancels friend-quali
   // instead of abortQuali-unhiding the lobby.
   // 8605 -> 8599: extract street OT/defend/tow/queue-brake/sep/wall into AiDrive.
-  "js/game.js": 8599,
+  // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
+  "js/game.js": 8601,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

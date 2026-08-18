@@ -34,6 +34,33 @@ test("traits defaults match the mid-grid fallback", () => {
   assert.equal(t.experience, 0.75);
 });
 
+test("traits writes a reused scratch (read before the next call)", () => {
+  const a = A.traits({ craft: 0.1, awareness: 0.2, experience: 0.3, skill: 0.4 });
+  assert.equal(a.craft, 0.1);
+  const b = A.traits({ craft: 0.9 });
+  assert.equal(a, b);
+  assert.equal(b.craft, 0.9);
+  assert.equal(b.awareness, 0.75);
+});
+
+test("look sample pool reuses rows across beginLook", () => {
+  A.beginLook();
+  A.pushLook(10, 0.01, 0.1);
+  A.pushLook(24, 0.02, 0.2);
+  const first = A.endLook();
+  assert.equal(first.length, 2);
+  assert.equal(first[0].d, 10);
+  const row0 = first[0];
+  A.beginLook();
+  A.pushLook(12, 0.03, 0);
+  const second = A.endLook();
+  assert.equal(second, first);
+  assert.equal(second.length, 1);
+  assert.equal(second[0], row0);
+  assert.equal(second[0].d, 12);
+  assert.equal(second[0].k, 0.03);
+});
+
 test("awareness shortens the stuck dig-out threshold", () => {
   assert.ok(A.stuckThreshold(ace) < A.stuckThreshold(rook));
   assert.ok(A.stuckThreshold(mid) > 0.4 && A.stuckThreshold(mid) < 1.2);
@@ -124,9 +151,11 @@ test("brakeDecision soft-pedals small excess and full-pedals big excess", () => 
   ];
   const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
   const lim = A.brakeTarget(base);
-  const soft = A.brakeDecision({ ...base, speed: lim + 2 });
-  const hard = A.brakeDecision({ ...base, speed: lim + 10 });
-  const ok = A.brakeDecision({ ...base, speed: lim - 1 });
+  // brakeDecision returns a reused scratch (pairContact/_ct contract) — copy
+  // fields before the next call.
+  const soft = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 2 }));
+  const hard = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 10 }));
+  const ok = Object.assign({}, A.brakeDecision({ ...base, speed: lim - 1 }));
   assert.equal(ok.braking, false);
   assert.equal(soft.braking, true);
   assert.ok(soft.brakeLvl < hard.brakeLvl);

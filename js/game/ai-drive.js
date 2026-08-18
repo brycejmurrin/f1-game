@@ -29,14 +29,30 @@ const AiDrive = (function () {
   const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 
   // ── ratings on the car (0..1), with the mid-grid default the old code used ──
+  // Reused scratch — same contract as game.js pairContact/_ct. Callers must
+  // read fields before the next traits() call (updateCar does; tests do).
+  const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97 };
   function traits(c) {
-    return {
-      craft: c.craft != null ? c.craft : 0.75,
-      awareness: c.awareness != null ? c.awareness : 0.75,
-      experience: c.experience != null ? c.experience : 0.75,
-      skill: c.skill != null ? c.skill : 0.97,
-    };
+    _traits.craft = c.craft != null ? c.craft : 0.75;
+    _traits.awareness = c.awareness != null ? c.awareness : 0.75;
+    _traits.experience = c.experience != null ? c.experience : 0.75;
+    _traits.skill = c.skill != null ? c.skill : 0.97;
+    return _traits;
   }
+
+  // Look-ahead sample pool for updateCar's brake scan. beginLook/pushLook/endLook
+  // recycle the array and the {d,k,bank} rows so ~20 AI cars × ~10 samples no
+  // longer allocate every physics step (vegas physics profile: brakeTarget 1.4%).
+  const _look = [];
+  const _lookPool = [];
+  function beginLook() { _look.length = 0; }
+  function pushLook(d, k, bank) {
+    let s = _lookPool[_look.length];
+    if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0 };
+    s.d = d; s.k = k; s.bank = bank;
+    _look.push(s);
+  }
+  function endLook() { return _look; }
 
   // High awareness digs out sooner (sees the box); low awareness sits longer.
   function stuckThreshold(t) {
@@ -191,6 +207,7 @@ const AiDrive = (function () {
     return vLim;
   }
 
+  const _br = { braking: false, brakeLvl: 0, vLim: 0, excess: 0 };
   function brakeDecision(ctx) {
     const vLim = brakeTarget(ctx);
     const speed = ctx.speed || 0;
@@ -203,7 +220,11 @@ const AiDrive = (function () {
       braking = true;
       brakeLvl = clamp((excess - soft) / (full - soft), 0.2, 1);
     }
-    return { braking, brakeLvl, vLim, excess };
+    _br.braking = braking;
+    _br.brakeLvl = brakeLvl;
+    _br.vLim = vLim;
+    _br.excess = excess;
+    return _br;
   }
 
   // ── ADAPTIVE LANE ─────────────────────────────────────────────────────────
@@ -311,6 +332,6 @@ const AiDrive = (function () {
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
-    wallAiScrub,
+    wallAiScrub, beginLook, pushLook, endLook,
   };
 })();

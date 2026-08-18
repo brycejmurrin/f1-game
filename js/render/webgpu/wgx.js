@@ -2457,11 +2457,24 @@ const WGX = (function () {
     function _rememberRoadLut(lut) {
       if (lut && lut.isRoadLut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
     }
+    // firstIndex is an ELEMENT offset (WebGPU drawIndexed), not a byte offset.
+    // Chunks store both; convert byteOffset / bytesPerIndex when firstIndex is
+    // absent so a GLX-style range still draws the correct run.
+    function _chunkFirstIndex(ch) {
+      if (!ch) return 0;
+      if (ch.firstIndex != null) return ch.firstIndex | 0;
+      if (ch.byteOffset) {
+        const bpi = ch.indexFormat === "uint32" ? 4 : 2;
+        return (ch.byteOffset / bpi) | 0;
+      }
+      return 0;
+    }
     function _drawGeom(pass, mesh, instCount) {
       if (mesh.ibuf) {
         pass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
-        if (instCount) pass.drawIndexed(mesh.count, instCount);
-        else pass.drawIndexed(mesh.count);
+        const firstIndex = _chunkFirstIndex(mesh);
+        if (instCount) pass.drawIndexed(mesh.count, instCount, firstIndex);
+        else pass.drawIndexed(mesh.count, 1, firstIndex);
       } else if (instCount) pass.draw(mesh.count, instCount);
       else pass.draw(mesh.count);
     }
@@ -2541,8 +2554,10 @@ const WGX = (function () {
       return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
     }
 
-    // Chunked prop mesh: ONE shared vertex buffer + per spatial XZ cell index
-    // buffer, each with an AABB (port of GLX.createChunkedMesh).
+    // Chunked mesh: spatial XZ cells with AABBs (port of GLX.createChunkedMesh).
+    // Road (has trk) expands once, then bins the non-indexed triangle list so
+    // the camera can draw every cell (surfaceId 16) while shadow casts cull.
+    // Props/glass share one IBO; chunks are ranges (firstIndex + count).
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       const pos = toF32(data.pos);
@@ -2550,22 +2565,72 @@ const WGX = (function () {
       const srcIdx = data.idx;
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
-      // Road/ribbon (has trk): stay on createMesh's expanded 4095-vert pieces.
-      // Chunked hasTrk uploaded a second expanded VBO per cell; those draws
-      // never covered the chase canvas even with always-pass + no frustum cull.
       if (data.trk && data.trk.length >= vCount * 3) {
-        const m = createMesh(data);
-        m.chunks = null;
+        const b = _interleave(data);
+        const pulled = _expandPull(b.vert, b.attr, b.idx);
+        const lut = _makeRoadLUT(data.pos, data.trk, data.mat);
+        const buckets = new Map();
+        const pv = pulled.vert, VF = VERTEX_FLOATS;
+        for (let t = 0; t < pulled.count; t += 3) {
+          const ao = t * VF, bo = (t + 1) * VF, co = (t + 2) * VF;
+          const ax = pv[ao], ay = pv[ao + 1], az = pv[ao + 2];
+          const bx = pv[bo], by = pv[bo + 1], bz = pv[bo + 2];
+          const cx = pv[co], cy = pv[co + 1], cz = pv[co + 2];
+          const gx = Math.floor(((ax + bx + cx) / 3) / cell) + 1024;
+          const gz = Math.floor(((az + bz + cz) / 3) / cell) + 1024;
+          const key = gx * 4096 + gz;
+          let bk = buckets.get(key);
+          if (!bk) { bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }; buckets.set(key, bk); }
+          bk.idx.push(t, t + 1, t + 2);
+          const mn = bk.mn, mx = bk.mx;
+          if (ax<mn[0])mn[0]=ax; if (ax>mx[0])mx[0]=ax; if (ay<mn[1])mn[1]=ay; if (ay>mx[1])mx[1]=ay; if (az<mn[2])mn[2]=az; if (az>mx[2])mx[2]=az;
+          if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
+          if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
+        }
+        const PIECE = 4095;
+        const chunks = [];
+        try {
+          buckets.forEach((bk) => {
+            const nAll = bk.idx.length;
+            for (let off = 0; off < nAll; off += PIECE) {
+              let n = Math.min(PIECE, nAll - off);
+              n -= n % 3;
+              if (n <= 0) continue;
+              const vert = new Float32Array(n * VF);
+              for (let j = 0; j < n; j++) {
+                const src = bk.idx[off + j] * VF;
+                for (let k = 0; k < VF; k++) vert[j * VF + k] = pv[src + k];
+              }
+              const cv = _mkBuffer(vert, GPUBufferUsage.VERTEX);
+              chunks.push({
+                vbuf: cv, ibuf: null, count: n, min: bk.mn, max: bk.mx,
+                sbuf: lut.sbuf, attrBG: lut.attrBG,
+              });
+            }
+          });
+        } catch (e) {
+          for (const c of chunks) {
+            try { if (c.vbuf) c.vbuf.destroy(); } catch (_) { /* already invalid */ }
+          }
+          try { if (lut && lut.sbuf) lut.sbuf.destroy(); } catch (_) { /* already invalid */ }
+          _allocFail("createChunkedMesh", e);
+          return { _wgx: "chunked", vbuf: null, ibuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat: b.indexFormat };
+        }
+        if (lut) _rememberRoadLut(lut);
         if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
         if (!data._keepPositions) { data.pos = null; data.idx = null; }
-        return m;
+        const head = chunks[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
+        return {
+          _wgx: "chunked", vbuf: head.vbuf, ibuf: null,
+          sbuf: lut.sbuf, attrBG: lut.attrBG, chunks,
+          count: head.count, indexFormat: b.indexFormat,
+        };
       }
       const b = _interleave(data);
-      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
-      if (lut) _rememberRoadLut(lut);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexFormat = big ? "uint32" : "uint16";
-      let vbuf = null, sbuf = null, attrBG = null;
+      const BPI = big ? 4 : 2;
+      let vbuf = null, sbuf = null, attrBG = null, ibuf = null;
       try {
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
       } catch (e) {
@@ -2589,36 +2654,36 @@ const WGX = (function () {
         if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
         if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
       }
+      let total = 0;
+      buckets.forEach((bk) => { total += bk.idx.length; });
+      const packed = new IndexArray(total);
       const chunks = [];
-      try {
-        buckets.forEach((bk) => {
-          const arr = new IndexArray(bk.idx);
-          if (b.hasTrk) {
-            const e = _expandPull(b.vert, b.attr, arr);
-            const cv = _mkBuffer(e.vert, GPUBufferUsage.VERTEX);
-            const a = lut || _makeAttrBG(e.attr);
-            chunks.push({
-              vbuf: cv, ibuf: null, count: e.count, indexFormat, min: bk.mn, max: bk.mx,
-              sbuf: a.sbuf, attrBG: a.attrBG,
-            });
-          } else {
-            const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
-            const a = _makeAttrBG(b.attr);
-            chunks.push({
-              ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx,
-              sbuf: a.sbuf, attrBG: a.attrBG,
-            });
-          }
+      let off = 0;
+      buckets.forEach((bk) => {
+        const src = bk.idx;
+        for (let i = 0; i < src.length; i++) packed[off + i] = src[i];
+        chunks.push({
+          firstIndex: off, byteOffset: off * BPI, count: src.length,
+          indexFormat, min: bk.mn, max: bk.mx,
         });
-        if (chunks[0]) { sbuf = chunks[0].sbuf; attrBG = chunks[0].attrBG; }
+        off += src.length;
+        bk.idx = null;
+      });
+      try {
+        ibuf = _mkBuffer(packed, GPUBufferUsage.INDEX);
+        const a = _makeAttrBG(b.attr);
+        sbuf = a.sbuf; attrBG = a.attrBG;
+        for (let i = 0; i < chunks.length; i++) {
+          chunks[i].ibuf = ibuf;
+          chunks[i].sbuf = sbuf;
+          chunks[i].attrBG = attrBG;
+        }
       } catch (e) {
         // Partial chunk set under memory pressure: release everything — a
         // half-uploaded prop mesh must not pin buffers on a struggling device.
         try { vbuf.destroy(); } catch (_) { /* already invalid */ }
-        for (const c of chunks) {
-          try { c.ibuf.destroy(); } catch (_) { /* already invalid */ }
-          try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already invalid */ }
-        }
+        try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createChunkedMesh", e);
         return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
       }
@@ -2626,7 +2691,7 @@ const WGX = (function () {
       // can then fall back to createMesh without finding its source nulled.
       if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
-      return { _wgx: "chunked", vbuf, sbuf, attrBG, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
+      return { _wgx: "chunked", vbuf, ibuf, sbuf, attrBG, chunks, count: total, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
@@ -2740,14 +2805,15 @@ const WGX = (function () {
       if (!m) return;
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
+      if (m.sbuf) m.sbuf.destroy();
       if (m.chunks) {
         for (let i = 0; i < m.chunks.length; i++) {
           const c = m.chunks[i];
-          try { if (c.ibuf) c.ibuf.destroy(); } catch (_) { /* already destroyed */ }
+          try { if (c.ibuf && c.ibuf !== m.ibuf) c.ibuf.destroy(); } catch (_) { /* already destroyed */ }
           try { if (c.vbuf && c.vbuf !== m.vbuf) c.vbuf.destroy(); } catch (_) { /* already destroyed */ }
-          try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already destroyed */ }
+          try { if (c.sbuf && c.sbuf !== m.sbuf) c.sbuf.destroy(); } catch (_) { /* already destroyed */ }
         }
-      } else if (m.sbuf) m.sbuf.destroy();
+      }
     }
     function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
 
@@ -3150,24 +3216,46 @@ const WGX = (function () {
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
-      let drew = 0, culled = 0;
-      let nearCull = 0, nearDraw = 0;
-      const nearR = 80;
+      if (!cull) {
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
+          _drawGeom(litPass, ch);
+        }
+        return;
+      }
+      // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
+      // Map insertion order is IBO order, so summing count from the run's
+      // first firstIndex submits the same triangles as the per-chunk loop.
+      let run = null;
+      const flush = () => {
+        if (!run) return;
+        _bindLitVerts(litPass, run.vbuf, identInstanceBuf, run.attrBG);
+        _drawGeom(litPass, run);
+        run = null;
+      };
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
-        const isNear = dist2 < nearR * nearR;
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
-          culled++;
-          if (isNear) nearCull++;
+        if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) {
+          flush();
           continue;
         }
-        if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
-        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
-        _drawGeom(litPass, ch);
-        drew++;
-        if (isNear) nearDraw++;
+        const vbuf = ch.vbuf || mesh.vbuf;
+        const ibuf = ch.ibuf || mesh.ibuf || null;
+        const attrBG = ch.attrBG || mesh.attrBG;
+        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
+          run.count += ch.count;
+        } else {
+          flush();
+          run = {
+            vbuf, ibuf, attrBG, count: ch.count,
+            firstIndex: _chunkFirstIndex(ch),
+            indexFormat: ch.indexFormat || mesh.indexFormat,
+          };
+        }
       }
+      flush();
     }
 
     // Fallback path: the Phase-2 tonemap blit (HDR scene -> swapchain). Used when
@@ -3902,12 +3990,31 @@ const WGX = (function () {
         return;
       }
       const cull = !!_shadowLightVP;   // planes were extracted into _fcPlanes in shadowBegin
+      let run = null;
+      const flush = () => {
+        if (!run) return;
+        shadowPass.setVertexBuffer(0, run.vbuf);
+        _drawGeom(shadowPass, run);
+        run = null;
+      };
       for (let i = 0; i < mesh.chunks.length; i++) {
         const ch = mesh.chunks[i];
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        shadowPass.setVertexBuffer(0, ch.vbuf || mesh.vbuf);
-        _drawGeom(shadowPass, ch);
+        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) { flush(); continue; }
+        const vbuf = ch.vbuf || mesh.vbuf;
+        const ibuf = ch.ibuf || mesh.ibuf || null;
+        const attrBG = ch.attrBG || mesh.attrBG;
+        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
+          run.count += ch.count;
+        } else {
+          flush();
+          run = {
+            vbuf, ibuf, attrBG, count: ch.count,
+            firstIndex: _chunkFirstIndex(ch),
+            indexFormat: ch.indexFormat || mesh.indexFormat,
+          };
+        }
       }
+      flush();
     }
     function shadowEnd() {
       if (!shadowPass) return;
