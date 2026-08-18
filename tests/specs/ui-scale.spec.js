@@ -31,7 +31,7 @@ const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary pl
 // Players can still dial 115 via SETTINGS ▸ DISPLAY, so the guard must keep
 // seeing it. Touch used to *ship* at 115; that default dropped after the type
 // floor made phones read as "zoomed in".
-const SCALES = [50, 100, 115, 130, 150];
+const SCALES = [50, 100, 115, 130, 150, 200];
 
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].
@@ -216,6 +216,58 @@ test.describe("UI scale", () => {
     const cleared = await page.evaluate(() => window.__apex.uiScale(null));
     expect(cleared.stored).toBeNull();
     expect(+(await read()).ui).toBeGreaterThan(0.5);
+  });
+
+  test("200% keeps title navigation reachable on phones and browser-zoom equivalents", async ({ page }) => {
+    const shapes = [
+      ["phone portrait", { width: 393, height: 659 }],
+      ["phone landscape", { width: 734, height: 343 }],
+      // 1920x937 content area at 200% browser zoom is approximately 960x469
+      // CSS pixels. Browser zoom changes this viewport; DPR/render resolution do not.
+      ["desktop at 200% browser zoom", { width: 960, height: 469 }],
+    ];
+
+    for (const [name, viewport] of shapes) {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
+        null, { polling: 100, timeout: 30_000 });
+      await page.evaluate(() => window.__apex.uiScale(200));
+      await page.waitForFunction(() => document.body.dataset.density === "compact",
+        null, { polling: 100, timeout: 5_000 });
+
+      const scale = await page.evaluate(() => ({
+        requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
+        geometry: getComputedStyle(document.getElementById("menu-buttons")).zoom,
+        raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
+      }));
+      expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
+      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
+      expect(+scale.geometry, `${name}: compact geometry is capped`).toBeCloseTo(1.25, 2);
+      expect(scale.raceFont * +scale.geometry,
+        `${name}: control text still paints at the requested 200%`).toBeGreaterThanOrEqual(33);
+
+      // A real locator click asks Chromium to scroll the control into view. The
+      // old nested 2x geometry timed out here in phone portrait even though the
+      // DOM-only fit probe declared the screen clean.
+      const target = await page.evaluate(async () => {
+        const menu = document.getElementById("menu-buttons");
+        const race = document.getElementById("mb-race");
+        race.scrollIntoView({ block: "center" });
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const r = race.getBoundingClientRect();
+        const m = menu.getBoundingClientRect();
+        return {
+          scrollable: menu.scrollHeight > menu.clientHeight + 1,
+          inside: r.top >= m.top - 1 && r.bottom <= m.bottom + 1,
+          x: r.left + r.width / 2, y: r.top + r.height / 2,
+        };
+      });
+      expect(target.inside, `${name}: RACE can be scrolled fully into view`).toBe(true);
+      await page.mouse.click(target.x, target.y);
+      await expect(page.locator("#select")).toBeVisible();
+    }
   });
 
   // applyScale() (js/game.js) runs on every boot, reading straight from

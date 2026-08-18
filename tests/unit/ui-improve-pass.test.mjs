@@ -48,6 +48,34 @@ test("select track filter persists via store", () => {
   assert.match(js, /\["classic", "CLASSICS"\]/);
 });
 
+test("circuit select stacked uses one list scroller", () => {
+  const css = read("css/menus.css");
+  assert.doesNotMatch(css, /40 \* var\(--svhz\)/,
+    "the 300px / 40svhz list cap was the nested-scroller hotfix");
+  assert.doesNotMatch(css, /#sel-inner:not\(\[data-pair="on"\]\) > #sel-body > #sel-tracks \{[^}]*order:\s*-1/,
+    "list-above-preview order was only needed while the body scrolled");
+  assert.match(css, /#sel-inner:not\(\[data-pair="on"\]\) > #sel-body \{[\s\S]*?overflow:\s*hidden/,
+    "stacked body is a flex column, not a vertical scroller");
+  assert.match(css, /#sel-inner:not\(\[data-pair="on"\]\) > #sel-body > #sel-tracks \{[\s\S]*?flex:\s*1 1 0/,
+    "the track list fills leftover body height from a zero basis");
+  assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
+    "wide preview column fits instead of scrolling as a second document");
+});
+
+test("garage stacked categories are a horizontal strip", () => {
+  const css = read("css/carsetup.css");
+  assert.doesNotMatch(css, /#cs-tabs\s*\{[\s\S]*?max-height:\s*48%/,
+    "stacked tabs must not keep the wrapping 48% vertical catalogue");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\) #cs-tabs \.cs-tab/,
+    "the strip is keyed on data-pair, not portrait orientation");
+  assert.match(css, /#cs-tabs\s*\{[\s\S]*?overflow-x:\s*auto[\s\S]*?overflow-y:\s*hidden/,
+    "stacked tabs pan sideways and override .pane overflow-y");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \{[\s\S]*?overflow-y:\s*auto/,
+    "pair-on rail may still scroll vertically");
+  const js = read("js/game/setup-ui.js");
+  assert.match(js, /scrollIntoView\(\{ block: "nearest", inline: "center" \}\)/);
+});
+
 test("circuit catalogue has a searchable filter toolbar", () => {
   const js = read("js/game/menus.js");
   const css = read("css/menus.css");

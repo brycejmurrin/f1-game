@@ -150,10 +150,10 @@ window.SheetShape = (function () {
      and that callback the sheet carries no `data-shape`/`data-pair` and the CSS
      falls back to the stacked layout. Visually that is a valid layout — it was
      made valid on purpose — but it is not the SAME layout, and the difference is
-     observable: in the fallback `#sel-body` is the scroll region, in the pair
-     `#sel-tracks` is. js/game/menunav.js redirects a trackpad gesture to the
-     nearest pane, so for that one frame the wheel scrolled the wrong element,
-     and three menu-keyboard specs caught it.
+     observable: stacked vs pair is columns vs a preview band, but `#sel-tracks`
+     is the list scroller in both. js/game/menunav.js redirects a trackpad
+     gesture to the nearest pane, so for that one frame the wheel scrolled the
+     wrong element, and three menu-keyboard specs caught it.
      Screens are toggled by their `hidden` attribute, so watching that and
      classifying immediately closes the gap with no polling and no new contract
      for the code that opens a screen. */

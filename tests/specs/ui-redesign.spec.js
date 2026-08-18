@@ -37,14 +37,63 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden).toBe(true);
 
-  // Garage: one roving tab stop and a panel labelled by the selected category.
+  // Stacked/short select: body is not a scroller; the track list fills it.
+  // 568×320 is under #sel-inner --pair-at 620, so SheetShape writes pair=off.
+  await page.evaluate(() => {
+    const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
+    input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.waitForFunction(() => {
+    const inner = document.getElementById("sel-inner");
+    const list = document.getElementById("sel-tracks");
+    return inner && inner.dataset.pair !== "on" && list && list.getBoundingClientRect().height > 80;
+  }, null, { polling: 100, timeout: 5_000 });
+  const stackedSel = await page.evaluate(() => {
+    const body = document.getElementById("sel-body");
+    const list = document.getElementById("sel-tracks");
+    const preview = document.getElementById("sel-track-section");
+    const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
+    input.focus(); input.value = "spa";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const rows = [...document.querySelectorAll("#sel-tracks .track-row")];
+    return {
+      pair: document.getElementById("sel-inner").dataset.pair,
+      bodyOY: getComputedStyle(body).overflowY,
+      listOY: getComputedStyle(list).overflowY,
+      listMaxH: getComputedStyle(list).maxHeight,
+      bodyH: body.getBoundingClientRect().height,
+      listH: list.getBoundingClientRect().height,
+      previewH: preview.getBoundingClientRect().height,
+      previewTop: preview.getBoundingClientRect().top,
+      listTop: list.getBoundingClientRect().top,
+      active: document.activeElement === input,
+      shown: rows.filter((row) => !row.hidden).length,
+    };
+  });
+  expect(stackedSel.pair).not.toBe("on");
+  expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
+  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOY);
+  expect(stackedSel.listMaxH).toBe("none");
+  expect(stackedSel.listH).toBeGreaterThan(80);
+  expect(stackedSel.listH / stackedSel.bodyH).toBeGreaterThan(0.45);
+  expect(stackedSel.listH).toBeGreaterThan(stackedSel.previewH);
+  expect(stackedSel.previewTop).toBeLessThan(stackedSel.listTop);
+  expect(stackedSel.active).toBe(true);
+  expect(stackedSel.shown).toBeGreaterThan(0);
+
+  // Garage stacked: portrait sheet is under --pair-at 400 — a strip, not a grid.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("sel-go").click();
   });
-  await page.waitForFunction(() => !document.getElementById("carsetup").hidden,
-    null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => {
+    const setup = document.getElementById("carsetup");
+    const inner = document.getElementById("cs-inner");
+    return setup && !setup.hidden && inner && inner.dataset.pair !== "on";
+  }, null, { polling: 100, timeout: 10_000 });
   const tabs = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#cs-tabs [role="tab"]')];
     const selected = all.filter((tab) => tab.getAttribute("aria-selected") === "true");
@@ -62,6 +111,26 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(tabs.selected).toBe(1);
   expect(tabs.controls).toBe("cs-options");
   expect(tabs.labelled).toBe(tabs.selectedId);
+  const stackedGarage = await page.evaluate(() => {
+    const tabsEl = document.getElementById("cs-tabs");
+    const opts = document.getElementById("cs-options");
+    const body = document.getElementById("cs-body");
+    const tcs = getComputedStyle(tabsEl);
+    return {
+      pair: document.getElementById("cs-inner").dataset.pair,
+      tabsOY: tcs.overflowY,
+      tabsOX: tcs.overflowX,
+      optsOY: getComputedStyle(opts).overflowY,
+      bodyOY: getComputedStyle(body).overflowY,
+      role: tabsEl.getAttribute("role"),
+    };
+  });
+  expect(stackedGarage.pair).not.toBe("on");
+  expect(["auto", "scroll"]).not.toContain(stackedGarage.tabsOY);
+  expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
+  expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
+  expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
+  expect(stackedGarage.role).toBe("tablist");
   await page.evaluate(() => /** @type {HTMLElement} */ (document.querySelector('#cs-tabs [role="tab"]')).focus());
   await page.keyboard.press("End");
   const endTab = await page.evaluate(() => ({
@@ -74,6 +143,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(endTab.labelled).toBe("cs-tab-livery");
 
   // Settings: at 200%, landscape still spends one row on its three categories.
+  await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => {
     document.getElementById("cs-back").click();
     document.getElementById("sel-back").click();

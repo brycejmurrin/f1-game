@@ -111,7 +111,7 @@ function activateCsCat(id, focus) {
     const tab = document.getElementById(csTabId(id));
     if (tab) {
       tab.focus();
-      tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+      tab.scrollIntoView({ block: "nearest", inline: "center" });
     }
   }
 }

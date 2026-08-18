@@ -1,6 +1,9 @@
 # Apex 26 UI redesign — evidence, system, and rollout
 
-Status: implementation plan and acceptance contract. The visual identity stays:
+Status: implementation plan and acceptance contract. Step 2 (catalogues) is in:
+Circuit Select stacked/short uses a compact preview band plus one list scroller;
+Garage stacked uses a horizontal category strip with options as the only
+dominant vertical scroller. Wide pair-on layouts keep their split. The visual identity stays:
 near-black surfaces, F1 red as the action accent, Titillium Web for interface
 copy, Rajdhani for timing, compact technical labels, and the live car/track as
 the hero. The redesign changes hierarchy and responsive behaviour, not the
@@ -261,8 +264,12 @@ one obvious scroll region.
 ## Rollout
 
 1. Foundation: shared shell hierarchy, settings category fit, tabs/focus
-   contracts, and the Last Race clipping defect.
+   contracts, and the Last Race clipping defect. **Done.**
 2. Catalogues: Circuit Select search/filter and Garage category/options layout.
+   **Done (2026-08-18).** Stacked Circuit Select: compact preview band, one
+   `#sel-tracks` scroller, sticky filter/search, pinned Start. Stacked Garage:
+   horizontal `#cs-tabs` strip (all stacked sheets, not only portrait),
+   `#cs-options` is the only dominant vertical scroller. Pair-on rails kept.
 3. Tuners: Lighting/camera rail/strip behaviour and progressive help.
 4. Journeys: Career, Season, Race-a-friend, Data Hub, results/help/history.
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.

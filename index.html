@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1407">
+<meta name="apex-build" content="1410">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -20,7 +20,7 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=d65299656c01" as="style">
+<link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
 <link rel="preload" href="css/components.css?v=b961025bbc77" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -39,11 +39,11 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=d65299656c01">
+<link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
 <link rel="stylesheet" href="css/components.css?v=b961025bbc77">
 <link rel="stylesheet" href="css/tuner.css?v=0757f8663e28" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=dc90310dea1e">
-<link rel="stylesheet" href="css/carsetup.css?v=8c9ebcf5e6ce" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=b0b375fd271b">
+<link rel="stylesheet" href="css/carsetup.css?v=cf2ebcd8b4ca" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=e8d9b410729b" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
@@ -562,9 +562,8 @@
            so the two-column layout can make it a grid item of the sheet itself
            and span it down through the action-bar row (css/menus.css). A nested
            grid cannot span a row of its parent, and the action bar only ever
-           holds BACK and START — both under the preview column. Stacked
-           (portrait) this is the same document order as before: label, preview,
-           list, one column. -->
+           holds BACK and START — both under the preview column. Stacked: label,
+           compact preview band, then the list — one column, list scrolls. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
@@ -1754,13 +1753,13 @@
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=b5d98ad9f09f"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=dca8532e36b4"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=987588b2c761"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=4e6978f01a55"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=06fdcc035ce3"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=6ee58170b7ab"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=1b224ed8b12d"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=fb5b15f7d6bc"></script>
