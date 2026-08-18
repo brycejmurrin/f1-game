@@ -35,7 +35,7 @@ function buildHarness() {
     };
   };
   const sandbox = {
-    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
+    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON, Map, Set,
     isNaN, isFinite, parseInt, parseFloat,
     GLX: {
       createMesh: (geo) => makeHandle("mesh", geo),

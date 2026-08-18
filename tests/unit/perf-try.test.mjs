@@ -53,6 +53,25 @@ test("GLX skips equal tuner-uniform re-uploads", () => {
   assert.match(post, /gl\.uniform1f\(compU\.uGrainTime/);
 });
 
+test("props fuse uses sealed typed accumulators", () => {
+  const tracks = read("js/track/tracks.js");
+  assert.match(tracks, /const out = TrackModels\.scratch\(\)/);
+  assert.match(tracks, /TrackModels\.sealGeometry\(out\)/);
+  const models = read("js/track/models.js");
+  assert.match(models, /function makeAccum\(Type, est\)/);
+  assert.match(models, /makeAccum\(Float64Array/);
+  assert.match(models, /makeAccum\(Uint32Array/);
+  assert.match(models, /const isNumList =/);
+  assert.match(models, /BYTES_PER_ELEMENT/);
+});
+
+test("main camera cullDist contains the far-plane corners", () => {
+  const game = read("js/game.js");
+  assert.match(game, /const _farCull = farPlane \* Math\.hypot\(1, Math\.tan\(fovY \* 0\.5\)/);
+  assert.match(game, /_fogCull \|\| _farCull/);
+  assert.doesNotMatch(game, /frame\.cullDist = dbgCam[\s\S]{0,120}300/);
+});
+
 test("already-landed leftovers stay in the product path", () => {
   const game = read("js/game.js");
   assert.match(game, /Cheap reject before wrap — same pattern as pairContact/);

@@ -753,6 +753,11 @@ still ~18 px at 900 m / ~1280 px; that is a look change. `cullDist = farPlane`
 is also not look-identical: frustum far-plane *corners* sit farther from the
 eye than `farPlane` (`far / cos(halfFov)`).
 
+> **TAKEN 2026-08-18 (look-identical half).** Clear-day `cullDist` is now
+> the far-corner distance (`farPlane * hypot(1, tan(fovY/2)*hypot(1,aspect))`),
+> a sphere that contains the frustum. Fog / tier-3 still win when tighter.
+> Not 300 m.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
@@ -865,10 +870,12 @@ variadic `push()` shim measured SLOWER than native (the win needs fixed arity);
 `idx` must be `Uint32Array`; and `TrackModels.validateGeometry` gates on
 `Array.isArray(geo.pos)`, so the props mesh ships EMPTY if that is missed.
 
-> **NOT TAKEN 2026-08-18.** The three hard edges still hold. Emitters
-> (`emit`, `addBox`) use `.push()`; a variadic shim is slower than native;
-> changing `validateGeometry` without a lockstep hash re-check on vegas/monza
-> can ship an empty props mesh. Leave the plain arrays.
+> **TAKEN 2026-08-18.** `TrackModels.scratch()` / `makeAccum` grow
+> Float64 (pos/nrm/col/mat — same values as the old Array fuse) and
+> Uint32 (`idx`) with named-arity `push` (not rest/arguments).
+> `sealGeometry` copies to exact-length typed arrays before
+> `validateGeometry`, which now accepts `BYTES_PER_ELEMENT` views as
+> well as `Array.isArray`. Stages from `emptyBuffer()` stay plain arrays.
 
 **Non-passive capture-phase `wheel` listener on `window`**
 (`js/game/menunav.js`) — flagged by the audit as "the single highest-leverage
