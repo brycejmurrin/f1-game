@@ -1095,7 +1095,10 @@ Lavapipe **does** boot three's WebGPU path (SwiftShader Dawn still dies on
 `mappedAtCreation`). A missing `instanceColor` left a 12-byte dummy at
 slot 5; `DrawIndexed` with count>1 failed validation and `#game` stayed
 black — `createInstancedBatch` now always allocates `instanceColor` to
-the instance cap. `gfx-probe --tlx-webgpu` fails on a blank canvas.
+the instance cap. Visible `#game` still stays black: three has no
+WGX-style soft-present blit, and software Dawn never composites the
+native swapchain. Use ForceGL for visible TLX pixels; use
+`--tlx-webgpu --lavapipe` for lifecycle / validation only.
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 
