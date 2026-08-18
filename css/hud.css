@@ -451,6 +451,7 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(
    size rule below is about. */
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
 body.pc-uihidden #lighting-inner { display: none !important; }
+body.pc-uihidden #game-metrics { display: none !important; }
 #pc-restore {
   position: fixed;
   zoom: var(--ui-scale);
@@ -493,6 +494,7 @@ body.pc-uihidden #pc-restore { display: block; }
    Reversible: removing .lt-open restores each to its own hidden state. */
 body.lt-open #hud,
 body.lt-open #lights,
+body.lt-open #announce,
 body.lt-open #btn-cam,
 body.lt-open #pausebtn,
 body.lt-open .touchbtn { display: none !important; }

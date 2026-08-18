@@ -274,7 +274,7 @@ const NetTransport = (function () {
         // to land before a connection is built — and when it does not, every wire dump
         // reads relay:0 while the relay is demonstrably alive. Retained so that
         // symptom has a cause attached to it.
-        Log.warn("net", "TURN credential fetch failed, gathering STUN-only: " + ((err && err.message) || err));
+        Log.warn("net", "TURN credential fetch failed, gathering STUN-only");
         return null;
       }).finally(() => { clearTimeout(bail); fetchingIce = null; });
     }

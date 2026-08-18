@@ -259,5 +259,13 @@ test("?metrics=1 set() does not write storage", () => {
 test("HIDE HUD CSS leaves #game-metrics visible", () => {
   const css = readFileSync(join(ROOT, "css/overlays.css"), "utf8");
   assert.match(css, /body\.hud-hidden #hud/);
+  assert.match(css, /body\.hud-hidden #lights/);
+  assert.match(css, /body\.hud-hidden #announce/);
+  assert.match(css, /body\.hud-hidden #campicker/);
   assert.doesNotMatch(css, /body\.hud-hidden #game-metrics/);
+});
+
+test("photo-mode HIDE HUD CSS hides #game-metrics", () => {
+  const css = readFileSync(join(ROOT, "css/hud.css"), "utf8");
+  assert.match(css, /body\.pc-uihidden #game-metrics/);
 });

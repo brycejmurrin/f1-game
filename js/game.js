@@ -4921,6 +4921,7 @@ function rescuePlayer(c) {
 // stopped car is not a new kind of physics, it is the existing placement with the
 // speed taken out.
 function retireCar(c, reason) {
+  incidentSim.release(c);   // same as rescuePlayer — drop a live Rapier takeover
   c.retired = true;
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
@@ -8283,7 +8284,7 @@ function setPaused(p) {
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
   // never leave an overlay up after resume
-  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; }
+  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
