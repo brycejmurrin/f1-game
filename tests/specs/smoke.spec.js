@@ -321,36 +321,10 @@ test.describe("Apex 26 — HUD", () => {
     await bootRace(page);
     await park(page, 0);
 
-    // The HUD tick (~10 Hz) blits the pre-rendered track outline onto the 2D
-    // minimap canvas — wait for that first paint rather than racing it.
-    //
-    // POLL CHEAPLY. This used to read back the WHOLE canvas on every poll, and
-    // Chromium says what that costs: "Multiple readback operations using
-    // getImageData are faster with the willReadFrequently attribute set to
-    // true" — a warning that appeared in the CI console on both attempts. The
-    // context belongs to the game, so the test cannot set that attribute; what
-    // it can do is stop asking for every pixel just to learn whether ANY pixel
-    // is painted. Five 1-pixel strips spread down the canvas cost ~5/height of
-    // a full readback; a closed lap outline cannot cross none of them, and the
-    // exact count below is unchanged. (A SINGLE middle strip would be cheaper
-    // still and is the wrong trade: if it happened to miss, the poll would time
-    // out at 5 s and report a blank minimap that is actually painted.)
-    await page.waitForFunction(() => {
-      const c = document.querySelector("canvas#minimap");
-      if (!c || !c.width) return false;
-      const ctx = c.getContext("2d");
-      for (let k = 1; k <= 5; k++) {
-        const y = Math.floor((c.height * k) / 6);
-        const d = ctx.getImageData(0, y, c.width, 1).data;
-        for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
-      }
-      return false;
-    }, null, { polling: 100, timeout: 5000 });
-
-    // A drawn outline is a 2px stroke around the whole lap, so a painted map
-    // has hundreds of non-transparent pixels; a blank canvas has zero. Count
-    // above a small floor rather than matching exact colours — sector tints
-    // and car dots vary per run.
+    // park() force-publishes the HUD/minimap before it returns. Read the canvas
+    // once and assert the actual contract; sampled scanlines produced false
+    // blanks for a visibly painted Bahrain outline in CI traces, while polling
+    // also turned that bad oracle into minutes of retry time.
     const painted = await page.locator("canvas#minimap").evaluate((c) => {
       const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
       let n = 0;
