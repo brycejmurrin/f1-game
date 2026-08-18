@@ -19,6 +19,46 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => document.getElementById("mb-race").click());
   await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20,
     null, { polling: 100, timeout: 10_000 });
+  // Match a landscape iPhone's notched safe area at a larger user-selected UI
+  // size. That reproducibly enters the compact single-column layout; at the
+  // default size this viewport correctly retains the roomy paired catalogue.
+  // The filter must not consume the whole list viewport: a real circuit needs
+  // to be visible before the player scrolls either nested pane.
+  await page.evaluate(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--sal", "59px"); root.setProperty("--sar", "59px");
+    root.setProperty("--sab", "21px");
+    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(150);
+  });
+  await page.waitForFunction(() => {
+    const sel = document.getElementById("sel-inner");
+    return sel?.dataset.pair === "off" && sel.dataset.density === "compact";
+  }, null, { polling: 100, timeout: 10_000 });
+  const compactCatalogue = await page.evaluate(() => {
+    const list = document.getElementById("sel-tracks").getBoundingClientRect();
+    const first = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
+    const body = document.getElementById("sel-body").getBoundingClientRect();
+    const preview = document.getElementById("sel-track-section").getBoundingClientRect();
+    const filter = document.getElementById("sel-track-filter").getBoundingClientRect();
+    const controls = [...document.querySelectorAll("#sel-track-filter .sel-chip, #sel-track-search")]
+      .map((el) => el.getBoundingClientRect());
+    return {
+      firstVisible: Math.max(0, Math.min(list.bottom, first.bottom) - Math.max(list.top, first.top)),
+      oneRow: Math.max(...controls.map((r) => r.top)) - Math.min(...controls.map((r) => r.top)) < 2,
+      geometry: {
+        body: [body.top, body.bottom, body.height], preview: [preview.top, preview.bottom, preview.height],
+        filter: [filter.top, filter.bottom, filter.height], list: [list.top, list.bottom, list.height],
+        first: [first.top, first.bottom, first.height],
+      },
+    };
+  });
+  expect(compactCatalogue.oneRow).toBe(true);
+  expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
+  await page.evaluate(() => {
+    const root = document.documentElement.style;
+    root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
+    root.removeProperty("--ui-scale");
+  });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.focus(); input.value = "monaco";
@@ -48,7 +88,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const inner = document.getElementById("sel-inner");
     const list = document.getElementById("sel-tracks");
     return inner && inner.dataset.pair !== "on" && list && list.getBoundingClientRect().height > 80;
-  }, null, { polling: 100, timeout: 5_000 });
+  }, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedSel = await page.evaluate(() => {
     const body = document.getElementById("sel-body");

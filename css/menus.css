@@ -1068,6 +1068,28 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
+/* A notched phone in landscape can leave the single-column list only ~140px
+   tall. Spending two control rows here hid the first actual circuit entirely.
+   Keep the filter and search on one row only in that exact compact/wide mode;
+   portrait and the roomy paired catalogue retain the easier two-row layout. */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+  flex: 0 1 auto;
+  padding-inline: calc(var(--gap) * 0.55);
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+  flex: 1 1 9rem;
+  min-width: 9rem;
+}
+/* The sticky filter already names SEASON and CLASSICS. Repeating that group
+   heading directly below it costs the only circuit row on a short landscape
+   sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
+  display: none;
+}
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }
 .sheet[data-density="compact"] .track-row { padding-block: 7px; }

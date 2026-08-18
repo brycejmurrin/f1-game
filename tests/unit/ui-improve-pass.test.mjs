@@ -95,6 +95,12 @@ test("circuit catalogue has a searchable filter toolbar", () => {
   assert.match(css, /#sel-track-search\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
 });
 
+test("compact landscape catalogue spends its first viewport on a circuit", () => {
+  const css = read("css/menus.css");
+  assert.match(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
+});
+
 test("garage categories implement one roving tab system", () => {
   const js = read("js/game/setup-ui.js");
   assert.match(js, /tabs\.setAttribute\("role", "tablist"\)/);
