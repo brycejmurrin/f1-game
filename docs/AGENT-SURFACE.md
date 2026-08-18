@@ -9,13 +9,15 @@ need → skill (when / don'ts)
        MCP?  local CLI pin → apex-tools (apex_*)
              live canvas   → probe / chrome-devtools   (mcp-probe)
              Pages / web   → tinyfish                  (deploy-research)
+             host browser  → playwright (browser_*)    (playwright-probe)
              no wrap       → run the tools/ CLI
 ```
 
-## Four MCP servers
+## MCP servers
 
-Same names in root `.mcp.json` and `.cursor/mcp.json`. Cloud often does **not**
-auto-load them — then use the shell in the Fallback column.
+**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped four
+names). Cloud often does **not** auto-load them — then use the Fallback
+column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
@@ -23,6 +25,20 @@ auto-load them — then use the shell in the Fallback column.
 | **probe** | `chrome_*` / `tinyfish_*` | Passthrough so one catalog reaches Chrome + TinyFish. | `python3 tools/probe-mcp.py` |
 | **chrome-devtools** | (upstream) | Interactive live canvas / DOM / heap. | `tools/chrome-devtools-mcp.sh` |
 | **tinyfish** | (upstream) | Deployed Pages / public web. | `./tools/tinyfish-mcp.sh deploy-check --tip` |
+
+**Host catalog** (Cursor Cloud / desktop injects these; they are **not** in
+repo `.mcp.json` — do not add them there):
+
+| Server | Prefix | Job | Fallback |
+|---|---|---|---|
+| **playwright** | `browser_*` | Interactive host Chromium (navigate / snapshot / screenshot). Skill **playwright-probe**. | Committed harness: `apex_eval` / `apex_shot` / `tools/test-bg.mjs` |
+| **mcp-context7** | `resolve-library-id` / `query-docs` | Library docs. | — |
+| **Github** | `get_me` / `issue_*` / `pull_request_*` | GitHub API. | `gh` (read-only in Cloud) |
+| **cursor-cloud** | `run-info` / `environment-*` | This Cloud run / environment. | — |
+
+`playwright` MCP is **not** `test-bg` and is **not** an `apex_*` wrap. Never
+start it while Chrome DevTools / probe chrome-daemon is up, and never start
+Chrome while a Playwright MCP tab or `playwright test` is live.
 
 Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 `3713` (`127.0.0.1` only). Design / refuses:
@@ -36,8 +52,9 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | One circuit build | `apex_verify_track` / skill **debug-tracks** | a browser group |
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** / TinyFish | `mcp-probe`, curl github.io |
-| Batch screenshots | skill **playwright-probe** | Chrome MCP while Playwright runs |
-| Start Playwright groups | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap |
+| Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
+| Interactive host browser | host MCP **playwright** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
+| Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 
 Call `apex_status` before any `apex_*` browser tool. Never run Chrome MCP
 while Playwright is running.

@@ -66,6 +66,17 @@ test("every wrap row has a real CLI (or built-in) and a real skill or —", () =
   assert.deepEqual(missing, [], "wrap map points at a missing CLI or skill");
 });
 
+test("server table names the repo four plus host playwright", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  for (const name of ["apex-tools", "probe", "chrome-devtools", "tinyfish", "playwright"]) {
+    assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
+  }
+  assert.match(doc, /browser_\*/);
+  assert.match(doc, /not\*\* in\s+repo `\.mcp\.json`|not in repo `\.mcp\.json`/i);
+  assert.doesNotMatch(read(".mcp.json"), /"playwright"/,
+    "playwright stays a host MCP — do not add it to repo .mcp.json");
+});
+
 test("never-wrap table names the load-bearing refuses", () => {
   const doc = fs.readFileSync(DOC, "utf8");
   const never = parseTable(doc, "<!-- NEVER-WRAP -->")

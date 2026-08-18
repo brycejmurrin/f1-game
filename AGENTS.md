@@ -178,9 +178,11 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP.** Four servers, one job each — map in `docs/AGENT-SURFACE.md`.
-`apex-tools` (`apex_*`) pins local `tools/` CLIs; `probe` is `chrome_*` /
-`tinyfish_*`; chrome-devtools is the live canvas; tinyfish is Pages. Keep
+**MCP.** Repo catalog is four servers; Cloud also injects host **playwright**
+(`browser_*`) — map in `docs/AGENT-SURFACE.md`. `apex-tools` (`apex_*`) pins
+local `tools/` CLIs; `probe` is `chrome_*` / `tinyfish_*`; chrome-devtools is
+the live canvas; tinyfish is Pages; playwright is interactive host Chromium
+(not `test-bg`). Keep
 **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
 serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
 Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four

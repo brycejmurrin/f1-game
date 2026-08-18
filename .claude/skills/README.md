@@ -55,8 +55,9 @@ The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture
 changes are validated visually, not just asserted.
 
 **Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
-live canvas → `mcp-probe`; local CLI pins → `apex-tools`. Do not attach
-`mcp-probe` for a version.json check. Wrap table: `docs/AGENT-SURFACE.md`.
+live canvas → `mcp-probe`; local CLI pins → `apex-tools`; host Chromium →
+`playwright` (`browser_*`). Do not attach `mcp-probe` for a version.json
+check. Wrap table: `docs/AGENT-SURFACE.md`.
 
 Output paths: batch/test under `artifacts/`, human-reviewed captures under
 `scratch/` (see `AGENTS.md`).
