@@ -1659,6 +1659,38 @@ test("shadow model UBO flushes once per pass (not per cast)", () => {
     "_shadowSetModel must not allocate a fresh offset array per cast");
 });
 
+test("quad FX and decal UBOs flush once per lit pass (not per stamp)", () => {
+  // Blob shadows (~field size) and car decals used per-slot writeBuffer into
+  // already-dynamic-offset rings. Same leftover shape as the shadow model
+  // flush: fill a CPU ring, one upload before litPass.end().
+  const write = WGX_SOURCE.match(/function _writeQuadFx\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeQuadFx exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeQuadFx must only fill quadFxRing — no per-stamp queue upload");
+  const withoutFlush = WGX_SOURCE
+    .replace(/function _flushQuadFxUBO\([\s\S]*?\n    \}/, "")
+    .replace(/function _flushDecalUBO\([\s\S]*?\n    \}/, "");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(quadFxUBO/,
+    "quadFxUBO must be written only from _flushQuadFxUBO");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(decalUBO/,
+    "decalUBO must be written only from _flushDecalUBO");
+  assert.match(WGX_SOURCE, /function _flushLitRings/,
+    "draw + quad + decal rings must flush together so an End site cannot forget one");
+  for (const name of ["envFaceEnd", "present"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 1400);
+    assert.match(body, /_flushLitRings\(\)/, name + " must flush all lit rings");
+    const flushAt = body.indexOf("_flushLitRings()");
+    const endAt = body.indexOf("litPass.end()");
+    assert.ok(flushAt >= 0 && endAt > flushAt, name + " must flush before litPass.end()");
+  }
+  const stamp = WGX_SOURCE.match(/function _drawQuadStamp\([\s\S]*?\n    \}/);
+  assert.ok(stamp, "_drawQuadStamp exists");
+  assert.doesNotMatch(stamp[0], /setBindGroup\([^)]*\[slot/,
+    "_drawQuadStamp must not allocate a fresh offset array per stamp");
+});
+
 test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
   // H then V (and times>1) into one uniform region before submit left every
   // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.

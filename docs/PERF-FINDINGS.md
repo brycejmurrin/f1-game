@@ -1056,8 +1056,9 @@ accumulators, `massBlocked` grid, emitter `lo()` cache, baked PerfTry ON
 paths. Do not re-open those from the hunt file.
 
 **Taken 2026-08-18:** WGX `_flushShadowModelUBO` — one `writeBuffer` per
-shadow pass, same ring as `_flushDrawUBO`. Optional leftover: defer the
-350 KB agent surface (PWA memory).
+shadow pass, same ring as `_flushDrawUBO`. Same pass also batched
+`_writeQuadFx` / `drawDecal` via `_flushLitRings()`. Optional leftover:
+defer the 350 KB agent surface (PWA memory).
 
 ## 4. Recorded negative results
 
