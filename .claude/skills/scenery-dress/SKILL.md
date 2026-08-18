@@ -1,6 +1,7 @@
 ---
 name: scenery-dress
 description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback. For a picture-driven accuracy pass (survey first) use survey-track.
+paths: js/circuits/**,js/track/scenery*.js
 ---
 
 # Dress a circuit's scenery

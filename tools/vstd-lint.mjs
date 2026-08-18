@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// vstd-lint — the asserted form of the PACE invariant in CLAUDE.md:
+// vstd-lint — the asserted form of the PACE invariant in AGENTS.md:
 //
 //   "Adding anything that divides a speed by VMAX, or compares one against a
 //    literal, means picking vTop() or vStd()."

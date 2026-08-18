@@ -54,17 +54,21 @@ function relay(opts = {}) {
 
     if (req.method === "GET") {
       if (!room[slot]) return send(404, { error: "not_found" });
-      return send(200, { payload: room[slot] });
+      return send(200, { payload: room[slot].payload });
     }
     let body = "";
     req.on("data", (c) => { body += c; });
     req.on("end", () => {
-      const payload = JSON.parse(body || "{}").payload;
+      const parsed = JSON.parse(body || "{}");
+      const payload = parsed.payload;
+      const owner = parsed.owner || null;
       if (typeof payload !== "string" || !payload) return send(400, { error: "bad_payload" });
-      if (slot === "offer" && room.offer && room.offer !== payload) {
-        return send(409, { error: "taken" });
+      if (slot === "offer" && room.offer) {
+        const sameOwner = owner && room.offer.owner && owner === room.offer.owner;
+        const sameLegacy = !owner && !room.offer.owner && room.offer.payload === payload;
+        if (!sameOwner && !sameLegacy) return send(409, { error: "taken" });
       }
-      room[slot] = payload;
+      room[slot] = { payload, owner };
       rooms.set(code, room);
       send(200, { ok: true });
     });
@@ -122,6 +126,10 @@ test("the two halves meet at the same code", async () => {
   try {
     const code = NetRendezvous.makeCode();
     assert.equal((await NetRendezvous.put(code, "offer", "APEX1.s.OFFER")).ok, true);
+    const stored = r.rooms.get(code).offer;
+    assert.match(stored.payload, /^v1\./, "private relay must store a versioned ciphertext envelope");
+    assert.ok(!stored.payload.includes("APEX1.s.OFFER"), "SDP code must not be visible to the relay");
+    assert.match(stored.owner, /^[A-Za-z0-9_-]{16,128}$/, "offer carries a stable ownership capability");
     const got = await NetRendezvous.get(code, "offer");
     assert.equal(got.ok, true);
     assert.equal(got.body.payload, "APEX1.s.OFFER");
@@ -129,6 +137,31 @@ test("the two halves meet at the same code", async () => {
     assert.equal((await NetRendezvous.put(code, "answer", "APEX1.s.ANSWER")).ok, true);
     const back = await NetRendezvous.get(code, "answer");
     assert.equal(back.body.payload, "APEX1.s.ANSWER");
+  } finally { await r.close(); }
+});
+
+test("an encrypted offer retry changes ciphertext but keeps ownership", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "offer", "SAME-OFFER")).ok, true);
+    const first = { ...r.rooms.get(code).offer };
+    assert.equal((await NetRendezvous.put(code, "offer", "SAME-OFFER")).ok, true);
+    const second = r.rooms.get(code).offer;
+    assert.equal(second.owner, first.owner, "a retry must prove it is the same host");
+    assert.notEqual(second.payload, first.payload, "AES-GCM must still use a fresh IV");
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "SAME-OFFER");
+  } finally { await r.close(); }
+});
+
+test("new clients can read a legacy two-minute plaintext mailbox record", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    r.rooms.set(code, { offer: { payload: "LEGACY-OFFER", owner: null } });
+    const got = await NetRendezvous.get(code, "offer");
+    assert.equal(got.ok, true);
+    assert.equal(got.body.payload, "LEGACY-OFFER");
   } finally { await r.close(); }
 });
 
@@ -147,6 +180,13 @@ test("the private-relay backend still trades both ways", async () => {
     assert.equal(out.payload, "THEIR-ANSWER");
     // ...and our own half really was left for them.
     assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "MY-OFFER");
+    const firstOwner = r.rooms.get(code).offer.owner;
+    const retry = await NetRendezvous.swap({
+      code, mine: "MY-OFFER", slot: "offer", want: "answer", token: { cancelled: false },
+    });
+    assert.equal(retry.ok, true, "the lobby's production swap path can retry its randomized envelope");
+    assert.equal(r.rooms.get(code).offer.owner, firstOwner,
+      "a repeated host attempt must keep the original ownership capability");
   } finally { await r.close(); }
 });
 

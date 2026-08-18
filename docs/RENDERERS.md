@@ -49,7 +49,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (+ `forceWebGL` on mobile/WebKit) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.184.0/` |
+| **TLX** | Opt-in Three `WebGPURenderer` (+ `forceWebGL` on mobile/WebKit) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/gltf.js`,
 `js/render/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in

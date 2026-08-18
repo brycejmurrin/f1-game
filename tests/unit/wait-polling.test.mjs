@@ -96,3 +96,11 @@ test("the tool finds real sites — anti-vacuity", () => {
   // would read as a clean repo rather than failing.
   assert.ok(count() > 100, `expected 100+ sites, got ${count()}`);
 });
+
+test("check-physics.mjs does not declare a timeout without polling", () => {
+  // Six waitForFunction calls on a rendering page. Two already declared a
+  // timeout (the SwiftShader trap); the rest must not grow a fake bound.
+  const row = lintAll().find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check-physics.mjs"));
+  assert.deepEqual(row?.sites ?? [], [],
+    `check-physics.mjs still has waitForFunction timeout without polling: ${JSON.stringify(row?.sites)}`);
+});

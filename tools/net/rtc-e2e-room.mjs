@@ -20,8 +20,10 @@
 // relay is ours, on localhost, and a failure here is ours by construction.
 //
 // Exit 0 = every peer reached the waiting room by room code alone.
-import { chromium } from "playwright";
-import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
+
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 
 const PORT = 4474;
 // --relays=a,b,c — MULTIPLE relays, which is what reality is. The same Nostr
@@ -44,16 +46,14 @@ const alive = async () => {
   try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
 };
 const adopted = await alive();
-const srv = adopted ? null : spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
-const stopSrv = () => { if (srv) srv.kill(); };
+if (!adopted) await startStaticServer(ROOT, { port: PORT });
 let up = adopted;
 for (let i = 0; i < 40 && !up; i++) { up = await alive(); if (!up) await new Promise((r) => setTimeout(r, 250)); }
-if (!up) { stopSrv(); process.exit(1); }
+if (!up) { await shutdown(); process.exit(1); }
 const log = (...a) => console.log(...a);
 log("relay:", RELAY, " peers:", PEERS);
 
-const b = await chromium.launch({
-  executablePath: "/opt/pw-browsers/chromium",
+const b = await launchChromium({
   args: [
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -62,7 +62,7 @@ const b = await chromium.launch({
 });
 const t0 = Date.now();
 const el = () => ((Date.now() - t0) / 1000).toFixed(1) + "s";
-const die = async (m) => { log(`\n*** ${m} ***`); await b.close(); stopSrv(); process.exit(1); };
+const die = async (m) => { log(`\n*** ${m} ***`); await shutdown(); process.exit(1); };
 
 const mk = async (name, teamIdx) => {
   const p = await (await b.newContext({ viewport: { width: 844, height: 390 } })).newPage();
@@ -130,5 +130,5 @@ if (got < want) {
 }
 
 log(`\n*** ROOM CODE WORKS — ${PEERS} peers met over a relay, no invite pasted, at ${el()} ***`);
-await b.close(); stopSrv();
+await shutdown();
 process.exit(0);

@@ -29,14 +29,14 @@
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
 // --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
 //
-// SwiftShader: Dawn validation oracle — gpuErrors often 0, canvas compositor blank.
-// Lavapipe (+ xvfb-run for headed): three.js e2e recipe — real Vulkan ICD, shared
-// ANGLE/Dawn device; still often blank in CI but catches different failure modes.
+// SwiftShader: Dawn validation oracle — native swapchain compositor blank; WGX
+// soft-presents to visible #game via 2D blit. Lavapipe (+ xvfb-run for headed):
+// three.js e2e recipe — real Vulkan ICD; same soft-present path as SwiftShader.
 // Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { extname, join, normalize, relative, resolve, sep } from "node:path";
 
 const require = createRequire(import.meta.url);
 const _wgpuArgs = require("./webgpu-chrome-args.cjs");
@@ -66,11 +66,33 @@ const CHROMIUM_PATHS = [
   "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
   "/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
   "/opt/google/chrome/chrome",
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ];
 
 /** Preinstalled sandbox Chromium; undefined → playwright's bundled build. */
+function fromPlaywrightBrowsersPath() {
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!root || !existsSync(root)) return undefined;
+  let dirs;
+  try { dirs = readdirSync(root).filter((d) => d.startsWith("chromium-")).sort().reverse(); }
+  catch { return undefined; }
+  for (const d of dirs) {
+    for (const rel of [
+      "chrome-linux/chrome",
+      "chrome-linux64/chrome",
+      "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+      "chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium",
+    ]) {
+      const exe = join(root, d, rel);
+      if (existsSync(exe)) return exe;
+    }
+  }
+}
+
 export function pickChromium() {
-  return process.env.CHROME || process.env.PW_CHROMIUM || CHROMIUM_PATHS.find(existsSync);
+  return process.env.CHROME || process.env.PW_CHROMIUM
+    || CHROMIUM_PATHS.find(existsSync)
+    || fromPlaywrightBrowsersPath();
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -122,7 +144,12 @@ export function shutdown() {
  * Serve `root` over HTTP from THIS process (async, unlike `python -m
  * http.server`, which serialises requests). Returns { port, url, close }.
  */
-export async function startStaticServer(root, { port = 0, host = "127.0.0.1", route = null } = {}) {
+export async function startStaticServer(root, {
+  port = 0,
+  host = "127.0.0.1",
+  route = null,
+  allowPath = null,
+} = {}) {
   const base = resolve(root);
   const prefix = base + sep;
   const server = createServer((req, res) => {
@@ -136,6 +163,17 @@ export async function startStaticServer(root, { port = 0, host = "127.0.0.1", ro
       const rel = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
       const file = normalize(join(base, rel));
       if (!file.startsWith(prefix) && file !== base) { res.writeHead(403).end("forbidden"); return; }
+      const local = relative(base, file).split(sep).join("/");
+      // A static test server never needs repository control files. This also
+      // protects callers that deliberately bind to the LAN: URL containment
+      // alone kept traversal out, but still served .git/config and dot-prefixed
+      // tool state because those files genuinely live below `base`.
+      if (local.split("/").some((part) => part.startsWith("."))) {
+        res.writeHead(404).end("not found"); return;
+      }
+      if (allowPath && allowPath(local, req, url) !== true) {
+        res.writeHead(404).end("not found"); return;
+      }
       const st = statSync(file);
       if (!st.isFile()) { res.writeHead(404).end("not found"); return; }
       res.writeHead(200, {

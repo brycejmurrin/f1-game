@@ -77,7 +77,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   headless guards follow the layout automatically.
 - **`tools/extract-module.mjs`** assists further extractions from game.js
   (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
-- **Cache busting is unchanged** — every JS/CSS edit still needs the `?v=N` sed
+- **Cache busting is content-addressed** — every JS/CSS edit still needs the `bump-cache` refresh
   across `index.html` plus the matching `version.json` bump.
 
 ### Deferred follow-ups (known debt, in rough priority order)
@@ -225,7 +225,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
-| `"three"` | **TLX** | three.js r184 + TSL; WebGPU with automatic WebGL2 fallback inside three |
+| `"three"` | **TLX** | three.js r185.1 + TSL; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
@@ -286,8 +286,8 @@ GLX stays the default. Nothing here flips that.
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
-game.js. Vendored three r184 lives OUTSIDE `js/` at top-level
-`vendor/three-0.184.0/` (the load-order test walks `js/**`; an un-versioned
+game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
+`vendor/three-0.185.1/` (the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
 specifiers to that dir (invisible to the load-order regex and the sw.js precache
@@ -691,7 +691,7 @@ The table lists the modules whose contracts need prose; the rest of `js/game/`
 (input, audio, lighting/light-store/light-presets, particles, carmesh,
 bodyattitude, debrisworld, incidentsim, racecontrol, agentview,
 agentview-raster, music-lib, spotify, cam-tune, cam-tuner, tables, uilayers)
-is one-line-summarised in CLAUDE.md's file layout, which the docs-integrity
+is one-line-summarised in AGENTS.md's file layout, which the docs-integrity
 guard keeps complete.
 
 ## js/game.js — main
@@ -768,7 +768,7 @@ screen, pause menu, data hub root, touch buttons, help modal. Script tags must
 match `tools/manifest.cjs` (asserted by `tests/unit/load-order.test.mjs`).
 `css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
 accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
-every script/style URL with `?v=N`, where `N` is a monotonic per-build integer
+every script/style URL with `?v=<sha256>`, while a separate monotonic shell generation
 (check `index.html` for the current value). `version.json` `{ "build": N }`
 mirrors the same `N`; the shell version guard uses it to force-refresh a stale
 installed PWA.

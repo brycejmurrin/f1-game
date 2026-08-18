@@ -295,7 +295,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
       // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/game/cockpit-opts.js).
       // At 0 the aim is the car's heading and NOTHING else, which is the state
-      // CLAUDE.md's "the arc must not reach the driver" rule asks for: no read of
+      // AGENTS.md's "the arc must not reach the driver" rule asks for: no read of
       // curvature or the racing line reaches the player unless they switch it on.
       const tcL = mode === "cockpit" && typeof CockpitOpts !== "undefined"
         ? CockpitOpts.turnChaseLead() : 0;

@@ -130,6 +130,17 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 // Persisted so a player who only races classics does not re-tap every open.
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
+const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]];
+
+function setTrackFilter(id, focus) {
+  trackFilter = id;
+  store.set("trackFilter", id);
+  if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+  vt(() => {
+    buildSelect(); tickUi();
+    if (focus) els.selTracks.querySelector('[data-filter="' + id + '"]')?.focus();
+  });
+}
 
 function trackFilterBar() {
   const bar = document.createElement("div");
@@ -137,20 +148,28 @@ function trackFilterBar() {
   bar.className = "sel-chip-row";
   bar.setAttribute("role", "tablist");
   bar.setAttribute("aria-label", "Circuit filter");
-  [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]].forEach(([id, label]) => {
+  trackFilters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "sel-chip" + (trackFilter === id ? " active" : "");
     b.dataset.filter = id;
     b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", trackFilter === id ? "true" : "false");
+    b.tabIndex = trackFilter === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
       e.stopPropagation();
-      trackFilter = id;
-      store.set("trackFilter", id);
-      if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
-      vt(() => { buildSelect(); tickUi(); });
+      setTrackFilter(id, false);
+    };
+    b.onkeydown = (e) => {
+      let next = null;
+      if (e.key === "ArrowRight") next = (index + 1) % trackFilters.length;
+      else if (e.key === "ArrowLeft") next = (index - 1 + trackFilters.length) % trackFilters.length;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = trackFilters.length - 1;
+      if (next == null) return;
+      e.preventDefault(); e.stopPropagation();
+      setTrackFilter(trackFilters[next][0], true);
     };
     bar.appendChild(b);
   });
@@ -164,8 +183,11 @@ function buildSelect() {
   // that differs between modes here is what the screen is called and what the
   // foot button promises next.
   const room = !!G.netRoom;
-  els.selGo.textContent = room ? "NEXT" : "START";
+  const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "START";
+  els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
   els.selTitle.textContent = room ? "THE RACE"
+    : seasonComplete ? "SEASON COMPLETE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
     : G.timeTrial ? "TIME TRIAL" : "GRAND PRIX";
   // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
@@ -175,6 +197,12 @@ function buildSelect() {
     // Non-interactive preview of the upcoming season circuit
     els.selTracks.textContent = "";
     updateTrackPreview();       // …which also writes the "Round n of N" caption
+    if (seasonComplete) {
+      const done = document.createElement("div");
+      done.className = "season-upcoming-head";
+      done.textContent = "ALL " + SeasonCal.rounds() + " ROUNDS COMPLETE";
+      els.selTracks.appendChild(done);
+    }
     const rnd = (G.season && G.season.round || 0) + 1;
     // The way in to SEASON SETUP. Built here rather than put in index.html so it
     // exists ONLY in the season branch — #select's pixel golden is captured
@@ -185,7 +213,7 @@ function buildSelect() {
     custom.id = "sel-customise";
     custom.className = "sel-chip";
     custom.type = "button";
-    custom.textContent = "CUSTOMISE SEASON";
+    custom.textContent = seasonComplete ? "START NEW SEASON" : "CUSTOMISE SEASON";
     custom.onclick = (e) => { e.stopPropagation(); G.openSeasonSetup(); };
     els.selTracks.appendChild(custom);
     // Upcoming rounds list (next 5 circuits after current). Indexes SEASON, not
@@ -230,8 +258,7 @@ function buildSelect() {
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.dataset.trackIdx = String(i);
       row.setAttribute("aria-label", t.name);
-      row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", i === G.trackIdx ? "true" : "false");
+      row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
 
       const nm = document.createElement("span");
       nm.className = "track-row-name";
@@ -257,13 +284,16 @@ function buildSelect() {
 
       row.onclick = () => {
         G.trackIdx = i;
+        store.set("trackId", t.id);
+        // Keep the legacy index warm for an older cached build opened after this
+        // one; new builds resolve trackId first and survive list reordering.
         store.set("track", i);
         // In-place highlight — full buildSelect() was O(all tracks) + ScrollFade
         // + View Transition on every click.
         els.selTracks.querySelectorAll(".track-row").forEach((r) => {
           const on = r.dataset.trackIdx === String(i);
           r.classList.toggle("active", on);
-          r.setAttribute("aria-selected", on ? "true" : "false");
+          r.setAttribute("aria-pressed", on ? "true" : "false");
         });
         updateTrackPreview();
         tickUi();
@@ -477,8 +507,9 @@ function updateTrackPreview() {
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
   } else if (G.seasonMode) {
-    els.selPreviewRec.textContent = "Round " + ((G.season && G.season.round || 0) + 1)
-      + " of " + SeasonCal.rounds();
+    els.selPreviewRec.textContent = G.season && !SeasonCal.canRace(G.season)
+      ? "Final standings · " + SeasonCal.rounds() + " rounds"
+      : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
   } else {
     els.selPreviewRec.textContent = "";
   }

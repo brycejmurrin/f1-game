@@ -62,9 +62,24 @@
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
-      dFdx, dFdy, fwidth,
+      dFdx, dFdy, fwidth, materialReference,
     } = TSL;
     const { hash21, vnoise, ignoise } = ctx.chunks;
+
+    // r184 NodeMaterial.customProgramCacheKey() hashes child-node ids, and
+    // MeshBasicNodeMaterial.lights defaults TRUE. setup() mints a fresh
+    // wrapper graph on every NodeBuilder miss, the key changes, the next
+    // mesh misses again — a Monza load compiled 593 unique vertex programs
+    // whose GLSL differed only in `NodeUniforms<id>` names (measured
+    // 2026-08-17, ~60 s inside getProgramParameter). We do not use three's
+    // lights (colorNode is the whole shader). A stable key + lights=false
+    // lets the node-builder cache hit across every mesh that shares a
+    // program family (lit vs lit-chunked).
+    const _pinKeys = Object.create(null);
+    function pinProgram(m, key) {
+      m.lights = false;
+      m.customProgramCacheKey = _pinKeys[key] || (_pinKeys[key] = () => key);
+    }
 
     // ── M4: the tlx-shadow.js subsystem (null/absent -> no shadow code is
     //    built and uShadowStr stays 0, the M3 look). Sun sampling is gated on
@@ -1395,28 +1410,63 @@
      * (defaults = glx.js litMaterial defaults) plus flags:
      *   doubleSided, depthBias:[factor,units], noAlphaWrite (M8), chunked
      * (drawChunked keeps depthWrite TRUE even when alpha<1 — GLX asymmetry).
-     * The scalars become per-material uniform nodes, so every variant emits
-     * the same program text (one real compile; tlx.js caches variants). */
+     *
+     * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
+     * every variant must bind the SAME node-graph OBJECTS, not a fresh
+     * buildFragment() per variant. A fresh graph never dedupes: three's
+     * codegen derives GLSL identifiers from node ids, so each build emits
+     * DIFFERENT program text — a Monza load minted 595 GL programs / 615
+     * unique shader strings and spent ~60 s inside the synchronous
+     * getProgramParameter(LINK_STATUS) that three only skips on its
+     * compileAsync path. The scalars therefore become materialReference
+     * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
+     * updates against ONE shared graph (exactly how three shares programs
+     * between classic material instances). Two graphs total: chunked reads
+     * no `trk` attribute (see buildFragment header). */
+    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a}
+    let _sharedPos = null;
+    function sharedFragment(chunked) {
+      const idx = chunked ? 1 : 0;
+      let g = _sharedGraph[idx];
+      if (!g) {
+        const matU = {
+          emissive:  materialReference("userData.tlxEmissive", "float"),
+          alpha:     materialReference("userData.tlxAlpha", "float"),
+          roughness: materialReference("userData.tlxRoughness", "float"),
+          metalness: materialReference("userData.tlxMetalness", "float"),
+          specular:  materialReference("userData.tlxSpecular", "float"),
+          detail:    materialReference("userData.tlxDetail", "float"),
+          clearcoat: materialReference("userData.tlxClearcoat", "float"),
+          carPaint:  materialReference("userData.tlxCarPaint", "float"),
+          sparkle:   materialReference("userData.tlxSparkle", "float"),
+        };
+        const packed = buildFragment(matU, chunked);
+        // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
+        // fresh wrapper is a fresh cache key — the whole point is one graph.
+        g = _sharedGraph[idx] = { rgb: packed.rgb, a: packed.a };
+      }
+      return g;
+    }
     function makeMaterial(opts) {
       const o = opts || {};
       const val = (v, d) => (v !== undefined ? v : d);
-      const matU = {
-        emissive:  uniform(val(o.emissive, 0)),
-        alpha:     uniform(val(o.alpha, 1)),
-        roughness: uniform(val(o.roughness, 0.7)),
-        metalness: uniform(val(o.metalness, 0.0)),
-        specular:  uniform(val(o.specular, 0.5)),
-        detail:    uniform(val(o.detail, 0.0)),
-        clearcoat: uniform(val(o.clearcoat, 0.0)),
-        carPaint:  uniform(val(o.carPaint, 0.0)),
-        sparkle:   uniform(val(o.sparkle, 1.0)),
-      };
       const alpha = val(o.alpha, 1);
       const m = new THREE.MeshBasicNodeMaterial();
-      const packed = buildFragment(matU, !!o.chunked);
+      const ud = m.userData;
+      ud.tlxEmissive  = val(o.emissive, 0);
+      ud.tlxAlpha     = alpha;
+      ud.tlxRoughness = val(o.roughness, 0.7);
+      ud.tlxMetalness = val(o.metalness, 0.0);
+      ud.tlxSpecular  = val(o.specular, 0.5);
+      ud.tlxDetail    = val(o.detail, 0.0);
+      ud.tlxClearcoat = val(o.clearcoat, 0.0);
+      ud.tlxCarPaint  = val(o.carPaint, 0.0);
+      ud.tlxSparkle   = val(o.sparkle, 1.0);
+      const packed = sharedFragment(!!o.chunked);
       m.colorNode = packed.rgb;
       m.opacityNode = packed.a;
-      m.positionNode = flagPositionNode();
+      m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
+      pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -1504,6 +1554,7 @@
         })();
       }
       m.side = THREE.DoubleSide;
+      pinProgram(m, "tlx-viz-" + mode);
       return m;
     }
 

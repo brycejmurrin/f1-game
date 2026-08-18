@@ -118,7 +118,10 @@ const results = await Promise.all(TRACKS.map(async (id) => {
 
 Use this to validate work from the camera / track / state debug skills
 (`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single
-deterministic screenshots, `shot.mjs` (above) is simpler.
+deterministic screenshots, `tools/capture/shot.mjs` is simpler. It clips
+`canvas#game` with `page.screenshot({ clip })` — do not use
+`locator("canvas#game").screenshot()`, which waits for element stability a live
+WebGL canvas never reaches.
 
 ## Shared Playwright fixtures (`tests/helpers/fixtures.js`)
 

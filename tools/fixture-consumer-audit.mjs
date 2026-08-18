@@ -3,7 +3,7 @@
 //
 // This tool used to hold a hardcoded four-name allow-list and print
 // "✓ 4 intended fixture consumers use shared fixtures", which is true and says
-// nothing: it measured a list, not a policy. Meanwhile CLAUDE.md and
+// nothing: it measured a list, not a policy. Meanwhile AGENTS.md and
 // docs/TESTING.md both tell you to import from ./fixtures.js "unless you have a
 // reason not to", and the majority of specs did not — so the convention was
 // documented, believed, and unenforced.

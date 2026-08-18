@@ -1,4 +1,4 @@
-// select-specs — the advisory CI selector's two halves, and its honesty.
+// select-specs — the blocking CI selector's two halves, and its honesty.
 //
 // The selection logic (groups -> specs -> budget cut) is pure enough to test
 // on fixtures; the real-tree case pins that the composition still produces a
@@ -8,7 +8,7 @@
 // lie the coverage reporter exists to catch from the other side.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED, ADVISORY } from "../../tools/select-specs.mjs";
+import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED, SELECTED_GATE } from "../../tools/select-specs.mjs";
 import { recall } from "../../tools/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
@@ -41,20 +41,20 @@ test("fit cuts at the budget and names every skipped spec", () => {
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
 });
 
-test("a spec that reserves more than the advisory timeout is EXCLUDED by name", () => {
+test("a spec that reserves more than the selected-gate timeout is EXCLUDED by name", () => {
   // The cost model's blind spot, measured on CI run 31233088772: the selector
   // billed every test at ~80 s while 8 of its 10 picks declared their own
   // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
   // the "14-minute" selection failed the job. imola-foundation (420 s) is the
-  // worst standing example; if its budget ever drops below the advisory
+  // worst standing example; if its budget ever drops below the selected-gate
   // timeout this pin should move to whichever spec then holds the title.
   const own = maxDeclaredTimeout("tests/specs/imola-foundation.spec.js");
-  assert.ok(own > ADVISORY.perTestTimeoutSec * 1000,
+  assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
     `imola-foundation now declares ${own} ms — find a new worst example for this pin`);
   const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/smoke.spec.js"], 15);
   assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/smoke.spec.js"],
-    "the spec that fits the advisory budget must still be selected");
+    "the spec that fits the selected-gate budget must still be selected");
 });
 
 test("TRACKED covers the paths that make a selection meaningless", () => {
@@ -90,8 +90,8 @@ test("the import graph finds specs a path RULE cannot — helper -> spec", () =>
 test("fail-fast order: edited, then previously-failed, then imported, then routed", () => {
   // Fowler's TIA survey records Microsoft and Google Testar both running
   // newly-added and previously-failing tests unconditionally; Playwright's CI
-  // guidance is the ordering half. An advisory job's whole value is how EARLY
-  // it speaks, so the likeliest failure must run first.
+  // guidance is the ordering half. The gate should report the likeliest failure
+  // first instead of spending its budget on a lower-signal spec.
   const specs = [{ file: "d.spec.js", tests: 1 }, { file: "c.spec.js", tests: 1 },
                  { file: "b.spec.js", tests: 1 }, { file: "a.spec.js", tests: 1 }];
   const got = prioritise(specs, { changedSpecs: ["a.spec.js"], failed: ["b.spec.js"],
@@ -120,14 +120,14 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
   assert.ok(rows.length >= 5, "the case history is the harness — do not let it shrink");
 });
 
-test("the advisory settings match select-budget's recommendation", () => {
+test("the selected-gate settings match select-budget's recommendation", () => {
   // retries 0 halves the failure cost; 120 s per-test halves it again. If
   // either drifts back to smoke's gate settings, the budget maths silently
   // stops describing the job that runs.
-  assert.equal(ADVISORY.retries, 0);
-  assert.equal(ADVISORY.perTestTimeoutSec, 120);
+  assert.equal(SELECTED_GATE.retries, 0);
+  assert.equal(SELECTED_GATE.perTestTimeoutSec, 120);
   const gate = capacity(15, 1, MEASURED);
-  const advisory = capacity(15, 1, { ...MEASURED, ...ADVISORY });
-  assert.ok(advisory.tests > gate.tests,
-    "the advisory settings must fit MORE tests than the gate settings, or they buy nothing");
+  const selected = capacity(15, 1, { ...MEASURED, ...SELECTED_GATE });
+  assert.ok(selected.tests > gate.tests,
+    "the selected settings must fit MORE tests than smoke's settings, or they buy nothing");
 });

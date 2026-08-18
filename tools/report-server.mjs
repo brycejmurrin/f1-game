@@ -17,6 +17,9 @@
  * the console line is `fetch("/tools/apex-report.js")` with no GitHub in it.
  * (pages.yml stages runtime directories only, which is why the DEPLOYED site
  * cannot offer that.)
+ * The printed URL contains a random session capability. Every read and write
+ * requires it (or the HttpOnly cookie installed by that URL), only runtime files
+ * are served, and accepted report names are created once rather than replaced.
  *
  *   node tools/report-server.mjs [--port 3456] [--host 0.0.0.0] [--root .]
  *
@@ -27,25 +30,40 @@
  * download path.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { startStaticServer } from "./harness.mjs";
 
-const argv = process.argv.slice(2);
-const flag = (name, def) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
-};
-const PORT = Number(flag("--port", "3456"));
-const HOST = flag("--host", "0.0.0.0");
-const ROOT = resolve(flag("--root", process.cwd()));
-const OUT = join(ROOT, "artifacts", "reports");
-
 const MAX_BYTES = 32 * 1024 * 1024;   // a bundle with a PNG is ~100 KB; this is only a floodgate
+const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
+const PUBLIC_FILES = new Set(["index.html", "version.json", "manifest.json", "sw.js"]);
+const PUBLIC_DIRS = ["css/", "js/", "assets/", "icons/", "vendor/"];
+
+function publicPath(local) {
+  return PUBLIC_FILES.has(local) || PUBLIC_DIRS.some((prefix) => local.startsWith(prefix))
+    || local === "tools/apex-report.js";
+}
+
+function sameToken(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const aa = Buffer.from(a), bb = Buffer.from(b);
+  return aa.length === bb.length && aa.length > 0 && timingSafeEqual(aa, bb);
+}
+
+function cookieToken(req) {
+  const raw = String(req.headers.cookie || "");
+  for (const part of raw.split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === "apex26_report_token") return decodeURIComponent(value.join("="));
+  }
+  return "";
+}
 
 // Reports are named by the page, so treat the name as hostile: basename only,
 // and a conservative character class.
-function safeName(raw) {
+export function safeName(raw) {
   const base = String(raw || "").split(/[\\/]/).pop() || "";
   const clean = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120);
   return /\.json$/.test(clean) && clean.length > 5 ? clean : `apex-report-${Date.now()}.json`;
@@ -86,83 +104,92 @@ const BUTTON = `
 </script>
 `;
 
-function shell(req, res, url) {
+function shell(req, res, url, root, token) {
   if (!(url.pathname === "/" || url.pathname === "/index.html")) return false;
   if (!url.searchParams.has("report")) return false;
   let html;
-  try { html = readFileSync(join(ROOT, "index.html"), "utf8"); } catch { return false; }
+  try { html = readFileSync(join(root, "index.html"), "utf8"); } catch { return false; }
   const out = html.includes("</body>") ? html.replace("</body>", BUTTON + "</body>") : html + BUTTON;
   const buf = Buffer.from(out, "utf8");
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
     "Content-Length": buf.length,     // rewritten body: the static path's length would be wrong
     "Cache-Control": "no-store",
+    // The printed token is exchanged for a SameSite cookie on the first
+    // navigation. Subresources and the report POST then authenticate without
+    // putting the capability into every URL or exposing it to fetched scripts.
+    "Set-Cookie": `apex26_report_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`,
   }).end(buf);
   return true;
 }
 
-function collect(req, res, url) {
-  if (shell(req, res, url) === true) return true;
-  if (url.pathname !== "/apex-report") return false;
-
-  if (req.method === "OPTIONS") {           // a probe before POST, and CORS for the odd setup
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    }).end();
-    return true;
-  }
-  if (req.method === "GET") {               // typed into a browser bar: say what this is
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
-      .end(`apex-report collector. POST a bundle here; it lands in ${OUT}.\n` +
-           `On this device's console:  fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))\n`);
-    return true;
-  }
-  if (req.method !== "POST") { res.writeHead(405).end("POST a report here"); return true; }
-
-  const chunks = [];
-  let bytes = 0;
-  let aborted = false;
-  req.on("data", (c) => {
-    if (aborted) return;
-    bytes += c.length;
-    if (bytes > MAX_BYTES) {
-      aborted = true;
-      res.writeHead(413, { "Access-Control-Allow-Origin": "*" }).end("report too large");
-      req.destroy();
-      return;
+export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_BYTES }) {
+  let acceptedBytes = 0;
+  return function collect(req, res, url) {
+    const supplied = url.searchParams.get("token") || cookieToken(req);
+    if (!sameToken(supplied, token)) {
+      res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" })
+        .end("report-server token required");
+      return true;
     }
-    chunks.push(c);
-  });
-  req.on("end", () => {
-    if (aborted) return;
-    const text = Buffer.concat(chunks).toString("utf8");
-    const name = safeName(url.searchParams.get("file"));
-    let rep = null;
-    try { rep = JSON.parse(text); } catch (e) { /* still worth keeping on disk */ }
-    try {
-      mkdirSync(OUT, { recursive: true });
-      writeFileSync(join(OUT, name), text);
-    } catch (e) {
-      res.writeHead(500, { "Access-Control-Allow-Origin": "*" }).end("could not write: " + e.message);
-      return;
+    if (shell(req, res, url, root, token) === true) return true;
+    if (url.pathname !== "/apex-report") return false;
+
+    if (req.method === "GET") {               // typed into a browser bar: say what this is
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" })
+        .end("apex-report collector. POST a JSON bundle from the authenticated report page.\n");
+      return true;
     }
-    const kb = (text.length / 1024).toFixed(1);
-    console.log(`\n[report] ${name}  (${kb} KB)  -> artifacts/reports/${name}`);
-    if (rep) {
+    if (req.method !== "POST") { res.writeHead(405).end("POST a report here"); return true; }
+    if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers["content-type"] || ""))) {
+      res.writeHead(415).end("application/json required"); return true;
+    }
+
+    const chunks = [];
+    let bytes = 0;
+    let aborted = false;
+    req.on("data", (c) => {
+      if (aborted) return;
+      bytes += c.length;
+      if (bytes > MAX_BYTES || acceptedBytes + bytes > maxTotalBytes) {
+        aborted = true;
+        res.writeHead(413).end("report quota exceeded");
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (aborted) return;
+      const text = Buffer.concat(chunks).toString("utf8");
+      const name = safeName(url.searchParams.get("file"));
+      let rep;
+      try { rep = JSON.parse(text); }
+      catch (_) { res.writeHead(400).end("invalid JSON"); return; }
+      try {
+        mkdirSync(out, { recursive: true });
+        // Never let a repeated or forged filename erase the evidence already
+        // collected. The client names reports with a timestamp, so a collision
+        // is an error worth surfacing rather than silently inventing a name.
+        writeFileSync(join(out, name), text, { flag: "wx", mode: 0o600 });
+      } catch (e) {
+        const status = e && e.code === "EEXIST" ? 409 : 500;
+        res.writeHead(status).end(status === 409 ? "report already exists" : "could not write report");
+        return;
+      }
+      acceptedBytes += bytes;
+      const kb = (bytes / 1024).toFixed(1);
+      console.log(`\n[report] ${name}  (${kb} KB)  -> artifacts/reports/${name}`);
       console.log(`[report] build ${rep.build} · backend ${rep.backend} · state ${rep.state}`);
       const cc = rep.canvasContext || {};
       console.log(`[report] canvas alpha: ${cc.webgl2 ? cc.alpha : cc.note || "n/a"}`);
       if (rep.agent) console.log(`[report] ${rep.agent.ua}`);
       for (const line of rep.verdict || []) console.log(`[report]   ${line}`);
-    } else {
-      console.log("[report] body is not JSON — saved raw");
-    }
-    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      .end(JSON.stringify({ ok: true, saved: `artifacts/reports/${name}`, bytes: text.length }));
-  });
-  return true;
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" })
+        .end(JSON.stringify({ ok: true, saved: `artifacts/reports/${name}`, bytes }));
+    });
+    return true;
+  };
 }
 
 function lanURLs(port) {
@@ -176,30 +203,61 @@ function lanURLs(port) {
   return out;
 }
 
-if (!existsSync(join(ROOT, "index.html"))) {
-  console.error(`no index.html in ${ROOT} — run from the repo root or pass --root`);
-  process.exit(1);
+export async function startReportServer({
+  root = process.cwd(),
+  port = 3456,
+  host = "0.0.0.0",
+  token = randomBytes(24).toString("base64url"),
+  maxTotalBytes = MAX_TOTAL_BYTES,
+} = {}) {
+  const resolvedRoot = resolve(root);
+  const out = join(resolvedRoot, "artifacts", "reports");
+  if (!existsSync(join(resolvedRoot, "index.html"))) {
+    throw new Error(`no index.html in ${resolvedRoot} — run from the repo root or pass --root`);
+  }
+  const route = createReportRoute({ root: resolvedRoot, out, token, maxTotalBytes });
+  const srv = await startStaticServer(resolvedRoot, {
+    port, host, route,
+    allowPath: (local) => publicPath(local),
+  });
+  return { ...srv, root: resolvedRoot, out, token };
 }
 
-const srv = await startStaticServer(ROOT, { port: PORT, host: HOST, route: collect });
-// The BOUND port, never the requested one: --port 0 means "pick one", and
-// printing the request would print 0 and send the reader nowhere.
-const port = srv.port;
-const lan = lanURLs(port);
-console.log(`serving ${ROOT}`);
-console.log(`  this machine : http://127.0.0.1:${port}/`);
-for (const u of lan) console.log(`  from a phone : ${u}`);
-if (!lan.length) console.log("  (no external IPv4 found — a phone will not be able to reach this box)");
-console.log(`  reports      -> ${OUT}`);
-console.log("\nOn the device: add ?report=1 to the URL for a SEND REPORT button —");
-console.log("  no console needed, and it samples when the reporter taps it.");
-if (lan.length) console.log(`  e.g. ${lan[0]}?report=1`);
-console.log('Or, where there is a console:  fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))');
-console.log("\nCtrl-C to stop.");
+function invokedAsCli() {
+  const entry = process.argv[1];
+  return !!entry && fileURLToPath(import.meta.url) === resolve(entry);
+}
 
-// startStaticServer unrefs its handle so a forgetful tool can still exit. This
-// tool's whole job is to stay up, so hold the loop open explicitly.
-const keepalive = setInterval(() => {}, 1 << 30);
-const bye = () => { clearInterval(keepalive); Promise.resolve(srv.close()).finally(() => process.exit(0)); };
-process.on("SIGINT", bye);
-process.on("SIGTERM", bye);
+if (invokedAsCli()) {
+  const argv = process.argv.slice(2);
+  const flag = (name, def) => {
+    const i = argv.indexOf(name);
+    return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
+  };
+  const srv = await startReportServer({
+    port: Number(flag("--port", "3456")),
+    host: flag("--host", "0.0.0.0"),
+    root: flag("--root", process.cwd()),
+  }).catch((e) => { console.error(e.message); process.exit(1); });
+
+  // The BOUND port, never the requested one: --port 0 means "pick one", and
+  // printing the request would print 0 and send the reader nowhere.
+  const port = srv.port;
+  const lan = lanURLs(port);
+  const auth = (base) => `${base}?report=1&token=${encodeURIComponent(srv.token)}`;
+  console.log(`serving ${srv.root}`);
+  console.log(`  this machine : ${auth(`http://127.0.0.1:${port}/`)}`);
+  for (const u of lan) console.log(`  from a phone : ${auth(u)}`);
+  if (!lan.length) console.log("  (no external IPv4 found — a phone will not be able to reach this box)");
+  console.log(`  reports      -> ${srv.out}`);
+  console.log("\nOpen one of the complete tokenised URLs above. The token is random for this run;");
+  console.log("requests without it cannot read the working tree or post reports.");
+  console.log("\nCtrl-C to stop.");
+
+  // startStaticServer unrefs its handle so a forgetful tool can still exit. This
+  // tool's whole job is to stay up, so hold the loop open explicitly.
+  const keepalive = setInterval(() => {}, 1 << 30);
+  const bye = () => { clearInterval(keepalive); Promise.resolve(srv.close()).finally(() => process.exit(0)); };
+  process.on("SIGINT", bye);
+  process.on("SIGTERM", bye);
+}

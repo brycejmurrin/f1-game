@@ -511,7 +511,7 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.184.0/three.webgpu.min.js");
+const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
  *  (it spans ~40 lines of comment, so a regex over one line cannot see it). */

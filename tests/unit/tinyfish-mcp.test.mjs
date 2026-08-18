@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,7 +66,50 @@ test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {
   assert.match(r.stdout, /deploy-check/);
   assert.match(r.stdout, /deploy-js/);
   assert.match(r.stdout, /--format/);
+  assert.match(r.stdout, /--tip/);
   assert.match(r.stdout, /version\.json/);
+  assert.match(r.stdout, /required; never embedded/);
+});
+
+test("TinyFish requires injected credentials and ensure names the missing setup", () => {
+  const src = fs.readFileSync(SH, "utf8");
+  const credentialPrefix = "sk-" + "tinyfish-";
+  const legacyFallbackName = "BAKED" + "_KEY";
+  assert.ok(!src.includes(legacyFallbackName) && !src.includes(credentialPrefix),
+    "tracked source must never contain a reusable TinyFish credential");
+  assert.match(src, /TINYFISH_API_KEY/);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-tinyfish-missing-"));
+  try {
+    const missingRepo = path.join(dir, "not-built");
+    const noKey = spawnSync("bash", [SH, "ensure"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        TINYFISH_API_KEY: "",
+        TINYFISH_MCP_REPO: missingRepo,
+      },
+    });
+    assert.notEqual(noKey.status, 0);
+    assert.match(`${noKey.stdout}\n${noKey.stderr}`, /TINYFISH_API_KEY is not set/);
+
+    const r = spawnSync("bash", [SH, "ensure"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        TINYFISH_API_KEY: "test-only-placeholder",
+        TINYFISH_MCP_REPO: missingRepo,
+      },
+    });
+    assert.notEqual(r.status, 0);
+    assert.match(`${r.stdout}\n${r.stderr}`, /Missing build.*run: .* setup/s);
+    assert.equal(fs.existsSync(missingRepo), false,
+      "ensure must not silently clone/build when its documented prerequisite is absent");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("tinyfish-rpc live-build extracts N from nested version.json RPC", () => {
@@ -176,6 +220,42 @@ test("tinyfish-mcp.sh retries the live-build fetch and says the body is capped",
   assert.match(help.stdout, /--marker/);
 });
 
+test("tinyfish-rpc deploy-summary --tip-build is OK when live matches tip, even if local differs", () => {
+  const r = spawnSync(
+    "python3",
+    [RPC, "deploy-summary", "--local-build", "1286", "--tip-build", "1262"],
+    { encoding: "utf8", input: JSON.stringify(FIXTURE_FETCH) },
+  );
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /live=1262/);
+  assert.match(r.stdout, /tip=1262/);
+  assert.match(r.stdout, /local=1286/);
+  assert.match(r.stdout, /OK/);
+  assert.doesNotMatch(r.stdout, /STALE/);
+});
+
+test("tinyfish-rpc deploy-summary --tip-build reports STALE when live != tip", () => {
+  const r = spawnSync(
+    "python3",
+    [RPC, "deploy-summary", "--local-build", "1262", "--tip-build", "1300"],
+    { encoding: "utf8", input: JSON.stringify(FIXTURE_FETCH) },
+  );
+  assert.equal(r.status, 1, "tip mismatch must be non-zero");
+  assert.match(r.stdout, /live=1262/);
+  assert.match(r.stdout, /tip=1300/);
+  assert.match(r.stdout, /STALE/);
+});
+
+test("tinyfish-mcp.sh help lists --tip for deploy-check", () => {
+  const help = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--tip/);
+  assert.match(help.stdout, /deploy tip|deploy-branch tip|origin\//);
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /--tip\) FLAG_TIP=1/);
+  assert.match(src, /origin\/\$\{DEPLOY_BRANCH\}:version\.json/);
+});
+
 test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   const r = spawnSync(
     "python3",
@@ -184,15 +264,6 @@ test("tinyfish-rpc deploy-summary reports OK when builds match", () => {
   );
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /OK/);
-});
-
-test("tinyfish-mcp.sh carries the baked project key (zero-setup reuse)", () => {
-  // Owner's decision 2026-08-17: the key ships in the repo so any checkout can
-  // probe the deployed site with no setup. Precedence stays shell env >
-  // .env file > baked default — this only pins that the default exists.
-  const src = fs.readFileSync(SH, "utf8");
-  assert.match(src, /BAKED_KEY="sk-tinyfish-[A-Za-z0-9_-]{20,}"/);
-  assert.match(src, /\$\{from_shell:-\$\{TINYFISH_API_KEY:-\$BAKED_KEY\}\}/);
 });
 
 test("every mcp_post body in tinyfish-mcp.sh is valid JSON once splices are stubbed", () => {
@@ -276,4 +347,10 @@ test("mcp-cli.mjs drives chrome via chrome-devtools-mcp.sh, not a hard-coded pw 
   assert.match(src, /chrome-devtools-mcp\.sh/);
   assert.doesNotMatch(src, /\/opt\/pw-browsers\/chromium/);
   assert.ok(fs.existsSync(CD_SH));
+});
+
+test("Chrome MCP network fallback is pinned to the audited release", () => {
+  const src = fs.readFileSync(CD_SH, "utf8");
+  assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
+  assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
 });

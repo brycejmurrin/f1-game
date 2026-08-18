@@ -104,15 +104,6 @@ on:
         type: string
         required: false
         default: ""
-      # Explicit flag — do NOT rely on github.event_name != 'workflow_call' alone.
-      # Measured: the advisory job still queued/ran on Pages calls and ate a
-      # runner while deploy CI sat pending. Caller sets false; branch/PR pushes
-      # never pass the input so the default (true) keeps advisory on.
-      advisory:
-        description: "run the change-aware advisory selected-specs job"
-        type: boolean
-        required: false
-        default: true
       # pages.yml no longer overrides this (removed 2026-08-12 alongside moving
       # `concurrency` off the whole workflow and onto just the deploy job —
       # see pages.yml's top-of-file comment). That was the actual fix for the
@@ -191,6 +182,8 @@ jobs:
         run: |
           npm run test:net-unit
           npm run test:service-worker
+          npm run test:lifecycle-unit
+          npm run test:state-unit
           npm run test:webgpu-lifecycle
           npm run test:agent-contract
 
@@ -328,7 +321,7 @@ jobs:
     # and GitHub coerces null and false to the same value — making
     # `null != false` FALSE and the job skip. Measured 2026-08-14 on two
     # consecutive pushes to a branch (runs 31765883905 and 31766287790): smoke
-    # and advisory both `skipped`, each with completed_at BEFORE started_at,
+    # and selected both `skipped`, each with completed_at BEFORE started_at,
     # which is the signature of a job-level `if` resolving false rather than of
     # a step-level filter deciding nothing shipped. The deploy path was
     # unaffected — pages.yml reaches this through workflow_call, where the
@@ -564,10 +557,12 @@ jobs:
   driving-model:
     name: Driving model (characterization traces)
     runs-on: ubuntu-latest
-    # 42 s measured in CI (run 31197770813, step 7). 10 covers a cold runner
-    # and a browser install; if this ever approaches the cap, the trace count
-    # grew and the number here needs re-measuring, not raising.
-    timeout-minutes: 10
+    # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
+    # consumed entirely by an uncached Chromium install on run 32083395969, so
+    # the characterization never started and Pages was blocked. Keep the same
+    # lockfile-keyed browser cache as smoke and leave enough room for a genuine
+    # cold install on a slow shared runner.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -575,6 +570,11 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #
@@ -622,25 +622,14 @@ jobs:
           if-no-files-found: ignore
 
   selected:
-    name: Selected specs (advisory, change-aware)
+    name: Selected specs (change-aware gate)
     runs-on: ubuntu-latest
-    # ADVISORY BY CONSTRUCTION — `continue-on-error` at the job level: this job
-    # REPORTS what a per-spec selection finds and never gates a merge or the
-    # deploy. Gating on a selection would mean a red that depends on which
-    # files changed, which is a flake by another name; the gates stay guards /
-    # sweeps / smoke / driving-model.
-    #
-    # SKIP ON Pages deploy. pages.yml passes advisory:false. Do not key this off
-    # github.event_name alone — under workflow_call the advisory job still ran
-    # and occupied a runner while deploy gates waited.
-    #
-    # Same null-coercion defect the smoke job carried (see the long note there):
-    # `inputs.advisory != false` is false on a plain push, because `inputs` is
-    # empty and null == false, so this job never ran on a branch or PR either.
-    # The form below still keys off the input under workflow_call — which is the
-    # requirement the paragraph above states — and only stops treating a MISSING
-    # input as an explicit false.
-    if: ${{ github.event_name != 'workflow_call' || inputs.advisory }}
+    # BLOCKING ON BRANCH PUSHES AND PULL REQUESTS. A PR's event.before is not its
+    # comparison base, so the selector uses pull_request.base.sha explicitly;
+    # pushes use event.before. workflow_call remains disabled: the Pages workflow
+    # already gates deploys with guards / sweeps / smoke / driving-model, and its
+    # event payload does not carry a PR base.
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     #
     # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
@@ -650,14 +639,13 @@ jobs:
     # pick-tests' groups into specs, fits them to the budget surviving one
     # timeout, and NAMES every spec it skips — silent truncation would read as
     # "covered".
-    continue-on-error: true
     # 26, DERIVED, not guessed — and 20 was wrong. The budget models the
     # EXPECTED cost (one failure at 120 s + nine passes at 79.7 s = ~14 min),
     # but the TRUE worst case is every selected test hitting the per-test
     # timeout: 10 x 120 s = 20 min, plus ~4 min of setup (npm ci + chromium)
     # = ~24 min. At 20 the job would have been CANCELLED in that case — and
     # this workflow's own header records that a cancelled job reads as "0
-    # failures" and once hid a dead deploy. An advisory job that dies of its
+    # failures" and once hid a dead deploy. A selected gate that dies of its
     # own cap teaches nothing; 26 covers the worst case with margin, and the
     # budget (not the cap) stays the thing that bounds the selection.
     #
@@ -686,29 +674,37 @@ jobs:
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             selected-failed-${{ github.ref_name }}-
-      - name: Select specs for this push's diff
+      - name: Select specs for this change
         id: sel
         env:
-          BEFORE: ${{ github.event.before }}
           EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -u
-          skip() { echo "specs=" >> "$GITHUB_OUTPUT"; echo "SKIPPING SELECTION: $1"; exit 0; }
-          # Same fail-safe ladder as the sweeps filter — but where sweeps falls
-          # back to RUNNING (it gates), an advisory selector falls back to
-          # SKIPPING: the full-run duty belongs to the gates, and an advisory
-          # job re-running everything would just burn a runner to say nothing.
-          [ "$EVENT" = "push" ] || skip "event is '$EVENT', not a push"
-          case "${BEFORE:-}" in
-            ""|0000000000000000000000000000000000000000) skip "no before-sha (new branch or first push)" ;;
+          set -eu
+          fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
+          case "$EVENT" in
+            push) BEFORE="$PUSH_BEFORE" ;;
+            pull_request) BEFORE="$PR_BASE" ;;
+            *) fail "unsupported event '$EVENT'" ;;
           esac
-          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || skip "before-sha $BEFORE unreachable (force push?)"
-          node tools/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json || skip "selector failed"
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) fail "no valid comparison base for $EVENT" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || fail "comparison base $BEFORE is unreachable"
+          node tools/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
+            || fail "selector failed"
           node -e '
             const r = require("./sel.json");
+            if (r.reason === "unmatched") {
+              console.error("SELECTED GATE FAILED CLOSED: changed files matched no selection rule");
+              process.exit(1);
+            }
             const specs = r.selected.map((s) => s.file).join(" ");
             console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
             console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs`);
+            for (const s of r.overBudgetSpecs)
+              console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
             for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
             require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `specs=${specs}\n`);
           '

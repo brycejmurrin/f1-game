@@ -88,6 +88,25 @@ def _mock() -> bool:
     return os.environ.get("PROBE_MCP_MOCK", "").strip() not in ("", "0", "false", "no")
 
 
+def _mock_tool_result(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Return an MCP-shaped tool result, including the error path tests need."""
+    failed = arguments.get("__probeMockError") is True
+    result: dict[str, Any] = {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    {"ok": not failed, "mock": True, "tool": name,
+                     **({"error": "mock tool failure"} if failed else {})}
+                ),
+            }
+        ]
+    }
+    if failed:
+        result["isError"] = True
+    return result
+
+
 def daemon_port() -> int | None:
     """Port of a LIVE chrome daemon, else None. Env wins, then the state file,
     then the default — each candidate is health-checked, never trusted."""
@@ -207,11 +226,7 @@ class ChromeBackend:
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self.ensure()
         if _mock():
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps({"ok": True, "mock": True, "tool": name})}
-                ]
-            }
+            return _mock_tool_result(name, arguments)
         if self._daemon is not None:
             return _daemon_post(self._daemon, "/call", {"name": name, "arguments": arguments})
         assert self._client is not None
@@ -330,11 +345,7 @@ class TinyfishBackend:
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self.ensure()
         if _mock():
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps({"ok": True, "mock": True, "tool": name})}
-                ]
-            }
+            return _mock_tool_result(name, arguments)
         resp = self._post(
             {
                 "jsonrpc": "2.0",
@@ -505,6 +516,7 @@ def cmd_call(args: argparse.Namespace) -> int:
         except Exception as e:  # noqa: BLE001 — a traceback buries the upstream message
             print(f"error: {e}", file=sys.stderr)
             return 1
+        failed = result.get("isError") is True
         text = json.dumps(result, indent=2, sort_keys=True)
         full = os.environ.get("PROBE_MCP_FULL", "").strip() not in ("", "0")
         if full or len(text) <= 12000:
@@ -519,7 +531,7 @@ def cmd_call(args: argparse.Namespace) -> int:
             )
     finally:
         bridge.close()
-    return 0
+    return 1 if failed else 0
 
 
 def _tmux(*args: str) -> subprocess.CompletedProcess:

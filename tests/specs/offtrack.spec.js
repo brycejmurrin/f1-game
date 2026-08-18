@@ -96,7 +96,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     // at that speed, read) hid two defects that both surfaced on the test's
     // FIRST ever run (2026-08-07):
     //   - `offSpeed < 45` was an absolute speed pinned across 175 commits of
-    //     deliberate physics work; measured 55.56, the class CLAUDE.md's PACE
+    //     deliberate physics work; measured 55.56, the class AGENTS.md's PACE
     //     rule exists for.
     //   - `onSpeed > offSpeed + 2` had NEVER BEEN EVALUATED (the line above it
     //     always failed first), and it fails on its own: relaunching at 55.56

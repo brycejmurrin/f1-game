@@ -309,6 +309,29 @@ test("post resize keeps old resources valid and cleans partial texture allocatio
   );
 });
 
+test("chunked uploads release production source channels and preserve debug sources", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const make = (debug) => {
+    const quads = 1001, pos = [], nrm = [], col = [], idx = [], mat = [], trk = [];
+    for (let q = 0, v = 0; q < quads; q++, v += 4) {
+      const x = q * 0.1;
+      pos.push(x,0,0, x+1,0,0, x+1,0,1, x,0,1);
+      idx.push(v,v+1,v+2, v,v+2,v+3);
+      for (let i = 0; i < 4; i++) { nrm.push(0,1,0); col.push(1,1,1); mat.push(1); trk.push(x,0,6); }
+    }
+    return { pos, nrm, col, idx, mat, trk, _keepPositions: true, _keepFullGeometry: debug };
+  };
+  const prod = make(false);
+  gfx.createChunkedMesh(prod, 72);
+  assert.ok(prod.pos && prod.idx, "collision/probe channels stay resident");
+  for (const key of ["nrm", "col", "mat", "trk"]) assert.equal(prod[key], null);
+
+  const debug = make(true), refs = { ...debug };
+  gfx.createChunkedMesh(debug, 72);
+  for (const key of ["pos", "nrm", "col", "idx", "mat", "trk"]) assert.equal(debug[key], refs[key]);
+});
+
 test("bloom texture is cleaned when its createView allocation fails", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -701,7 +724,7 @@ test("WGX source keeps the proven parity fixes", () => {
   assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);
   assert.match(WGX_SOURCE, /pParticleAdd/);
-  assert.match(WGX_SOURCE, /_grByD/);
+  assert.match(WGX_SOURCE, /_grKeepNearest/);
   assert.doesNotMatch(WGX_SOURCE, /colors\[i \* 3\] \|\| 1/);
 });
 
@@ -849,7 +872,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(WGX_SOURCE, /depthResolveTex/);
   assert.doesNotMatch(WGX_SOURCE, /shadowPipelineInst/);
   assert.match(POST_SOURCE, /li < 6/, "god-ray lamp loop matches GLX GODRAY_FS consumer cap");
-  assert.match(WGX_SOURCE, /Math\.min\(6, total\)/);
+  assert.match(WGX_SOURCE, /_grKeepNearest\(total, 6\)/);
   assert.match(POST_SOURCE, /texture_depth_2d/);
   assert.match(POST_SOURCE, /uLampStr|lampStr/);
   assert.match(POST_SOURCE, /hazeStr|uHazeStr/);
@@ -958,14 +981,23 @@ test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", a
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");
 });
 
-test("soft-present exposes awaitSoftPresent and paces _softBusy until blit lands", () => {
+test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function awaitSoftPresent\(/);
-  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(doMap/);
-  assert.match(WGX_SOURCE, /_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
+  assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
+  assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
+  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
+  assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(
     WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
-    /_retireFlush[\s\S]{0,400}_softBusy = false/,
-    "_softBusy must not clear in _retireFlush — only after putImageData",
+    /function _queueSoftPresent\(/,
+    "persistent soft-present queue removed — use ephemeral _softDisplayEncode",
+  );
+  assert.doesNotMatch(
+    WGX_SOURCE.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /if \(_softGpu && _softBusy\) return false/,
+    "begin() must not drop frames while soft-present readback is in flight",
   );
 });
 
@@ -1433,6 +1465,26 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
 
+test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
+  // Same ladder as device.lost: a default-rung boot climbs slim/minimal first.
+  // Start on the minimal rung so the cap's destination is GLX, not a reload.
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  await h.create();
+  for (let i = 0; i < 7; i++) {
+    h.device.onuncapturederror({ error: { message: "synthetic validation error " + i } });
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "seven GPU errors must not surrender");
+  assert.equal(reloads, 0);
+  h.device.onuncapturederror({ error: { message: "synthetic validation error cap" } });
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "eight GPU errors surrender the tab to GLX");
+  assert.equal(session.get("apex26.gfxBound"), "webgl2");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /runtime GPU errors/);
+  assert.equal(reloads, 1);
+});
+
 test("pipelines that share a shader module never use layout:'auto'", async () => {
   // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
   // byte-identical — and a pair built from ONE module exists precisely to be
@@ -1442,7 +1494,7 @@ test("pipelines that share a shader module never use layout:'auto'", async () =>
   // compatible" and dropped the whole frame's command buffer. Invisible in
   // this container (software adapters force MSAA 1; the mock validates
   // nothing) — found 2026-08-17 by the first real pixel capture
-  // (tools/wgx-capture.mjs), which is the primary oracle for this class.
+  // (tools/wgx-capture.mjs / gfx-probe.mjs on software adapters).
   // This test pins the structural rule the fixes follow, using only the
   // descriptors the harness already records.
   const h = makeGpuHarness();

@@ -4,11 +4,14 @@
 //   __apex + the named page globals exist,
 //   a race starts, physics steps, telemetry + lighting probes respond.
 // Usage: node tools/quick-validate.mjs [port]     (default 3477)
-// NOTE: playwright/child_process are imported lazily inside main() so that
+// NOTE: playwright stays inside harness.mjs's launchChromium so that
 // tests/unit/quick-validate.test.mjs can import the pure helpers below without
 // pulling in (or depending on the availability of) the whole playwright
 // package — a heavy, environment-sensitive import the helpers never use.
 import { fileURLToPath } from "node:url";
+import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
 
 export function probeFailures(probe, errors) {
   const missing = Object.entries(probe.globals).filter(([, ok]) => !ok).map(([key]) => key);
@@ -44,26 +47,16 @@ export function evaluateLiveProbe(
 }
 
 async function main() {
- const [{ chromium }, { spawn }] = await Promise.all([
-   import("playwright"),
-   import("node:child_process"),
- ]);
  const PORT = Number(process.argv[2] || 3477);
- const srv = spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
+ const srv = await startStaticServer(ROOT, { port: PORT });
  const errors = [];
- let browser;
  try {
-  await new Promise((r) => setTimeout(r, 800));
-  const EXEC = process.env.PW_CHROMIUM;  // unset → Playwright's bundled chromium
-  browser = await chromium.launch({
-    ...(EXEC ? { executablePath: EXEC } : {}),
-    args: ["--use-angle=swiftshader"],
-  });
+  const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
   const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
-  await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded" });
+  await page.goto(srv.url, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.__apex != null, { timeout: 30000 });
 
   const probe = await page.evaluate(evaluateLiveProbe);
@@ -81,8 +74,7 @@ async function main() {
   if (errors.length) console.error("  " + errors.slice(0, 5).join("\n  "));
   process.exitCode = 1;
  } finally {
-  await browser?.close();
-  srv.kill();
+  await shutdown();
  }
 }
 

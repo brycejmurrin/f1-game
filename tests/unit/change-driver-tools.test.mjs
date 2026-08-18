@@ -9,6 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +48,29 @@ test("verify-change batches carry AT MOST ONE browser group each (the 120s-timeo
   }
 });
 
+test("verify-change batches are size 1 (sequential groups, browser or node)", () => {
+  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/game.js", "tools/test-bg.mjs"]).out);
+  assert.ok(plan.batches.length >= 1);
+  for (const batch of plan.batches) {
+    assert.equal(batch.length, 1,
+      `batch ${JSON.stringify(batch)} bunches groups — sequential default is one group per batch`);
+  }
+});
+
+test("tooling-fast npm script uses the sequential runner", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.match(pkg.scripts["test:tooling-fast"], /tools\/tooling-fast\.mjs/,
+    "test:tooling-fast must invoke tools/tooling-fast.mjs (concurrency=1 + per-file logging)");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/tooling-fast.mjs")));
+});
+
+test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/test-bg.mjs"), "utf8");
+  assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
+  assert.match(src, /sequential|maxConcurrent|parallel \? PARALLEL_MAX : 1/,
+    "test-bg must default concurrent cap to 1");
+});
+
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
   const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
@@ -55,7 +79,7 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
 
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
-test("bump-cache: --check catches drift, --apply lands max+1 everywhere, --at pins", () => {
+test("bump-cache: --check catches drift, --apply hashes assets and advances shell generation", () => {
   // artifacts/ is GITIGNORED, so it does not exist in a fresh checkout — mkdtemp
   // straight into it is ENOENT on any clone that has not run a test yet, which
   // is every CI run. It passed locally only because an earlier run had created
@@ -66,22 +90,40 @@ test("bump-cache: --check catches drift, --apply lands max+1 everywhere, --at pi
   fs.mkdirSync(tmpRoot, { recursive: true });
   const dir = fs.mkdtempSync(path.join(tmpRoot, "bumpfix-"));
   try {
+    fs.writeFileSync(path.join(dir, "a.js"), "alpha\n");
+    fs.writeFileSync(path.join(dir, "b.css"), "beta\n");
+    fs.writeFileSync(path.join(dir, "c.js"), "gamma\n");
     fs.writeFileSync(path.join(dir, "index.html"),
-      `<script src="a.js?v=7"></script>\n<link href="b.css?v=7">\n<script src="c.js?v=9"></script>\n`);
+      `<meta name="apex-build" content="7">\n<script src="a.js?v=bad"></script>\n<link href="b.css?v=bad">\n<script src="c.js?v=bad"></script>\n`);
     fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 7 }\n`);
 
     const drift = run(["tools/bump-cache.mjs", "--check", "--json", "--root", dir]);
-    assert.equal(drift.status, 1, "mixed ?v= must exit 1");
+    assert.equal(drift.status, 1, "stale content hashes must exit 1");
     assert.equal(JSON.parse(drift.out).consistent, false);
 
     const applied = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
-    assert.equal(applied.applied, 10, "max(7,9,7)+1");
+    assert.equal(applied.applied, 8, "shell generation advances independently of asset hashes");
     const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-    assert.deepEqual([...new Set([...html.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]))], [10]);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 10);
+    for (const rel of ["a.js", "b.css", "c.js"]) {
+      const hash = createHash("sha256").update(fs.readFileSync(path.join(dir, rel))).digest("hex").slice(0, 12);
+      assert.match(html, new RegExp(`${rel.replace(".", "\\.")}\\?v=${hash}`));
+    }
+    assert.match(html, /name="apex-build" content="8"/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 8);
 
     const ok = run(["tools/bump-cache.mjs", "--check", "--root", dir]);
     assert.equal(ok.status, 0, "post-apply the shell must be consistent");
+
+    const before = Object.fromEntries([...html.matchAll(/(?:src|href)="([^"?]+)\?v=([a-f0-9]{12})"/g)]
+      .map((m) => [m[1], m[2]]));
+    fs.writeFileSync(path.join(dir, "a.js"), "alpha changed\n");
+    JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
+    const changedHtml = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const after = Object.fromEntries([...changedHtml.matchAll(/(?:src|href)="([^"?]+)\?v=([a-f0-9]{12})"/g)]
+      .map((m) => [m[1], m[2]]));
+    assert.notEqual(after["a.js"], before["a.js"], "changed asset gets a new URL");
+    assert.equal(after["b.css"], before["b.css"], "unchanged CSS keeps its warm-cache URL");
+    assert.equal(after["c.js"], before["c.js"], "unchanged JS keeps its warm-code-cache URL");
 
     JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--at", "42", "--json", "--root", dir]).out);
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 42);
@@ -95,7 +137,7 @@ test("bump-cache --check on the REAL shell agrees with the load-order guard", ()
   // the bump, which is the tool's whole reason to exist.
   const real = run(["tools/bump-cache.mjs", "--check", "--json"]);
   const v = JSON.parse(real.out);
-  assert.equal(real.status, 0, `shell inconsistent: tags ${JSON.stringify(v.tagVersions)} vs version.json ${v.versionJson}`);
+  assert.equal(real.status, 0, `shell inconsistent: ${JSON.stringify(v.assetMismatches)}; shell ${v.shellBuild} vs version.json ${v.versionJson}`);
   assert.ok(v.tagCount > 100, "the shell has ~160 versioned tags; a collapse means the regex or index.html broke");
 });
 

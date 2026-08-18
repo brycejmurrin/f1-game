@@ -21,7 +21,7 @@
 // The two closed-loop policies already in the repo cannot be reused here:
 // tests/specs/autopilot.spec.js hard-codes VMAX = 94 / aLat = 13 / A_BRAKE = 24 and
 // tests/specs/agent-drive-bench.spec.js caps at `sp > 33` — bare m/s literals, which
-// is exactly what CLAUDE.md forbids ("comparing one against a literal means
+// is exactly what AGENTS.md forbids ("comparing one against a literal means
 // picking vTop() or vStd()"). Sweeping PACE with either measures the POLICY's
 // mismatch rather than the car: the true force constants (LAT_MAX, BRAKE) do
 // not scale with pace, so at low pace the grip margin over a fixed speed
@@ -29,7 +29,7 @@
 //
 // So this policy carries no speed literal at all. Its target speed comes from
 // the CIRCUIT's own curvature and a GRIP BUDGET in m/s^2 — a force, and forces
-// are pace-invariant by design (see the Physics section of CLAUDE.md). The car
+// are pace-invariant by design (see the Physics section of AGENTS.md). The car
 // is allowed to run to whatever top speed its pace gives it on the straights.
 // The budget is a fixed yardstick held identical across every notch, so its
 // absolute value only decides how hard the policy pushes, never which notch

@@ -178,6 +178,22 @@ def cmd_deploy_summary(args: argparse.Namespace) -> int:
         path = Path(args.local_file)
         local = int(json.loads(path.read_text())["build"])
 
+    tip = args.tip_build
+    if tip is None and args.tip_file:
+        tip = int(json.loads(Path(args.tip_file).read_text())["build"])
+
+    # --tip compares live to the deploy-branch tip so a behind working tree
+    # (live=1337 local=1336, tip=1337) is not reported as a Pages miss.
+    if tip is not None:
+        extra = f" local={local}" if local is not None else ""
+        if live == tip:
+            print(f"live={live} tip={tip}{extra} OK — Pages matches deploy tip")
+            return 0
+        print(
+            f"live={live} tip={tip}{extra} STALE — Pages has not shipped the deploy-branch tip"
+        )
+        return 1
+
     if local is None:
         print(f"live={live}  (no local version.json)")
         return 0
@@ -225,6 +241,10 @@ def main() -> int:
     p_dep = sub.add_parser("deploy-summary", help="compare live version.json build to local")
     p_dep.add_argument("--local-build", type=int, default=None)
     p_dep.add_argument("--local-file", type=str, default=None)
+    p_dep.add_argument("--tip-build", type=int, default=None,
+                       help="compare live to this deploy-branch tip build instead of local")
+    p_dep.add_argument("--tip-file", type=str, default=None,
+                       help="read the tip build from a version.json file")
     p_dep.set_defaults(func=cmd_deploy_summary)
 
     p_live = sub.add_parser("live-build", help="print the live build number from a version.json RPC")

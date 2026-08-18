@@ -1369,6 +1369,11 @@ const GLX = (function () {
   // col,idx,mat} geometry works in both paths.
   function createInstancedBatch(data, matrices, colors, opts) {
     const mesh = createMesh(data);
+    // createMesh returns null on a lost/absent context (ctxGone) — every batch
+    // consumer (drawInstanced/castShadowInstanced/freeInstancedBatch) already
+    // null-guards, so fail closed here rather than deref null.vao. The old
+    // unguarded read threw "reading 'vao'" on racy menu-scene warmup.
+    if (!mesh) return null;
     const vao = mesh.vao;
     gl.bindVertexArray(vao);
 
@@ -1800,6 +1805,7 @@ const GLX = (function () {
     }),
     freeTexture,
     drawDecal,
+    chunkedTrackCoords: true,
     createChunkedMesh: (data, cellSize) => CHK.createChunkedMesh(data, cellSize),
     freeMesh,
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),

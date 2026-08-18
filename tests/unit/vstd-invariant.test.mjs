@@ -1,6 +1,6 @@
 // vstd-invariant — the PACE invariant, asserted instead of written down.
 //
-// CLAUDE.md, Physics: "Adding anything that divides a speed by VMAX, or
+// AGENTS.md, Physics: "Adding anything that divides a speed by VMAX, or
 // compares one against a literal, means picking vTop() or vStd()." PACE is a
 // GROUND-SPEED SCALE — the OVERALL SPEED slider multiplies the car's real m/s —
 // so a threshold written against a raw speed means a different fraction of the

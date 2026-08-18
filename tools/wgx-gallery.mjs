@@ -10,7 +10,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { runWgxShot } from "./wgx-shot.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -39,10 +39,14 @@ for (const spec of SHOTS) {
   const label = spec.track + (spec.cam !== "orbit" ? "-" + spec.cam : "");
   const outDir = join(outRoot, label);
   mkdirSync(outDir, { recursive: true });
-  const shotArgs = ["tools/wgx-shot.mjs", spec.track];
-  if (lite) shotArgs.push("--lite");
-  shotArgs.push("--cam", spec.cam, "--out", outDir);
-  const run = spawnSync(process.execPath, shotArgs, { cwd: ROOT, encoding: "utf8" });
+  let shotErr = null;
+  let shotOk = false;
+  try {
+    const result = await runWgxShot({ track: spec.track, lite, cam: spec.cam, outDir });
+    shotOk = !!(result && result.ok);
+  } catch (e) {
+    shotErr = String((e && e.message) || e).slice(0, 300);
+  }
   const statePath = join(outDir, "state.json");
   const state = existsSync(statePath)
     ? JSON.parse(readFileSync(statePath, "utf8"))
@@ -51,13 +55,13 @@ for (const spec of SHOTS) {
     label,
     track: spec.track,
     cam: spec.cam,
-    ok: run.status === 0 && state && state.backend === "webgpu" && state.gpuErrors === 0,
+    ok: shotOk && state && state.backend === "webgpu" && state.gpuErrors === 0,
     backend: state && state.backend,
     gpuErrors: state && state.gpuErrors,
     coveragePct: state && state.coveragePct,
     canvas: join(outDir, "canvas.png"),
-    exitCode: run.status,
-    error: run.status !== 0 ? ((run.stderr || run.stdout || "wgx-shot failed").trim().slice(0, 300)) : null,
+    exitCode: shotOk ? 0 : 1,
+    error: shotErr,
   };
   results.push(entry);
   if (!entry.ok) failures++;

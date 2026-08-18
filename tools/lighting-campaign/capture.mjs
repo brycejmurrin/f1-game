@@ -1,12 +1,9 @@
-import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { mkdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
 import { CAMERA_FRACTIONS, REGIONS } from "./config.mjs";
 import { evaluateGates, measurePixels } from "./metrics.mjs";
-
-const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
+import { launchChromium } from "../harness.mjs";
 
 const MIME = Object.freeze({
   ".css": "text/css; charset=utf-8",
@@ -222,8 +219,7 @@ export async function startStaticServer(root) {
 }
 
 export async function launchCampaignBrowser() {
-  return chromium.launch({
-    executablePath: process.env.PW_CHROMIUM || undefined,
+  return launchChromium({
     args: ["--use-angle=swiftshader", "--enable-webgl"],
   });
 }

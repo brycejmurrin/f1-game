@@ -46,10 +46,9 @@ const els = {
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch, set on the first world present
-// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Kept in load
-// order — each group has eval-time dependencies inside it, which the <script>
-// tag order used to enforce and loadBackendScripts() now enforces by awaiting
-// each file before starting the next.
+// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Array order
+// is the documented toposort; loadBackendScripts starts every file whose
+// BACKEND_EDGES predecessors have evaluated (six TLX IIFEs in the first wave).
 const BACKEND_FILES = {
   webgpu: [
     "js/render/webgpu/wgsl-chunks.js",
@@ -69,19 +68,57 @@ const BACKEND_FILES = {
     "js/render/three/tlx.js",
   ],
 };
-// Inject classic (non-module) scripts one at a time, resolving when all have
-// evaluated. `?v=` mirrors the build the shell was served at — the same cache
-// key every tagged asset carries — so a deploy invalidates these too. A load
-// error RESOLVES rather than rejects: the caller's fallback is "the global is
-// missing", which is already the not-supported path.
+// Same pairs as tools/manifest.cjs DEFERRED_EDGES — load-order.test.mjs asserts
+// equality. A load error RESOLVES: missing global is already the fallback.
+const BACKEND_EDGES = [
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"],
+  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
+  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
+  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
+  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],
+  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],
+  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],
+  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"],
+  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],
+];
 function loadBackendScripts(files) {
-  return files.reduce((chain, src) => chain.then(() => new Promise((resolve) => {
+  const pending = new Set(files), done = new Set(), inflight = new Set();
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of BACKEND_EDGES) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const inject = (src) => new Promise((resolve) => {
     const el = document.createElement("script");
     el.src = src + "?v=" + (window.__APEX_BUILD || 0);
     el.crossOrigin = "anonymous";
     el.onload = el.onerror = () => resolve();
     document.head.appendChild(el);
-  })), Promise.resolve());
+  });
+  return new Promise((finish) => {
+    const pump = () => {
+      if (!pending.size && !inflight.size) { finish(); return; }
+      for (const src of files) {
+        if (!pending.has(src)) continue;
+        if (!preds.get(src).every((p) => done.has(p))) continue;
+        pending.delete(src);
+        inflight.add(src);
+        inject(src).then(() => { inflight.delete(src); done.add(src); pump(); });
+      }
+    };
+    pump();
+  });
+}
+function preloadThreeVendor() {
+  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
+    const el = document.createElement("link");
+    el.rel = "modulepreload";
+    el.href = href;
+    el.crossOrigin = "anonymous";
+    document.head.appendChild(el);
+  }
 }
 try {
   let pref = null;
@@ -125,14 +162,14 @@ try {
     //
     // The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs asserts
     // this loader and that manifest name exactly the same files, and that sw.js
-    // precaches them). Order matters — the groups carry eval-time dependencies
-    // (DEFERRED_EDGES) the tag order used to guarantee — so load STRICTLY IN
-    // SEQUENCE rather than in parallel.
+    // precaches them). Eval-time edges (BACKEND_EDGES === DEFERRED_EDGES) are
+    // the only waits — independent IIFEs fetch and evaluate together.
     //
     // No error path is needed beyond this: if a fetch fails, the backend global
     // is simply absent, and Gfx.create already treats that as "unavailable"
     // (`typeof TLX === "undefined"`) and returns null, which falls through to
     // GLX below exactly as an unsupported browser always has.
+    if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {
@@ -268,7 +305,18 @@ function syncCustomTeam() {
 }
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
-let trackIdx = store.get("track", 0);
+function storedTrackIndex() {
+  const id = store.get("trackId", null);
+  const stable = typeof id === "string" ? Tracks.LIST.findIndex((t) => t.id === id) : -1;
+  return stable >= 0 ? stable : store.get("track", 0); // legacy positional save
+}
+let trackIdx = storedTrackIndex();
+function restoreFreePlaySelection() {
+  trackIdx = storedTrackIndex(); teamIdx = store.get("team", 2); driverIdx = store.get("driver", 0);
+  if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+  if (!(teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
+  if (!(driverIdx >= 0 && driverIdx < Teams.LIST[teamIdx].drivers.length)) driverIdx = 0;
+}
 let difficulty = store.get("difficulty", "normal");
 // RELIABILITY — "off" | "low" | "real" (js/game/reliability.js). A standing
 // preference like difficulty, so it persists. Ships OFF: store.get returns the
@@ -1430,7 +1478,7 @@ function swapGridSlots(a, b) {
     const t = a[k]; a[k] = b[k]; b[k] = t;
   }
   // The world pose is the authority for a human car (see the physics notes in
-  // CLAUDE.md), so it has to be rebuilt from the new (s, x) — and the render
+  // AGENTS.md), so it has to be rebuilt from the new (s, x) — and the render
   // anchors pinned with it, or the car visibly slides from its old box to its
   // new one over the first frame.
   for (const c of [a, b]) {
@@ -2163,7 +2211,7 @@ function loadTrack(idx) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3 });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2342,50 +2390,48 @@ function launchFlyingLap() {
   announce("QUALIFYING LAP", 1.6);
 }
 
-// SCREEN WAKE LOCK, held for the duration of a race. Without it the system
-// idle timer runs during a Grand Prix same as any other page, and tilt
-// steering sends NO input events by construction (orientation is a sensor
-// read, not user input) — so on a phone driving by tilt the screen dims and
-// locks mid-race with nothing the player did wrong. js/net/lobby.js already
-// holds one for the same reason while the VS FRIEND waiting room is open;
-// this is that shape, copied rather than reinvented. Browsers release the
-// lock on every hide (spec), so it is re-acquired on return by the
-// visibilitychange handler below rather than a second listener here.
+// SCREEN WAKE LOCK for a race; browsers release it whenever the page hides.
 let raceWake = null;
+let raceWakePending = null;
 let raceWakeWanted = false;
 function holdRaceWake() {
   raceWakeWanted = true;
   try {
-    if (!navigator.wakeLock || raceWake) return;
-    navigator.wakeLock.request("screen").then((l) => {
-      raceWake = l;
-      l.addEventListener("release", () => { raceWake = null; });
-    }).catch(() => {});
+    if (!navigator.wakeLock || raceWake || raceWakePending) return;
+    const pending = navigator.wakeLock.request("screen");
+    raceWakePending = pending;
+    pending.then((lock) => {
+      if (raceWakePending === pending) raceWakePending = null;
+      if (!raceWakeWanted || document.hidden) {
+        try { lock.release(); } catch (e) { Log.info("game", "late wake-lock release failed"); }
+        return;
+      }
+      raceWake = lock;
+      // An old sentinel may release after a replacement exists: compare identity.
+      lock.addEventListener("release", () => { if (raceWake === lock) raceWake = null; });
+    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
 function dropRaceWake() {
   raceWakeWanted = false;
-  try { if (raceWake) raceWake.release(); } catch (e) { /* already released is fine */ }
+  const held = raceWake;
   raceWake = null;
+  try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
 }
 
 function startRace() {
-  // Abort any incident takeover left over from the last race, FIRST — while the
-  // cars it owns and the track they crashed on are both still current. IncidentSim
-  // owns cars by their cars[] INDEX and only releases them via a hand-back inside
-  // the race loop, so quitting to the menu mid-takeover left an index owned; after
-  // makeCars() below that index is a completely different car, which would never
-  // drive (updateCar early-outs on owns()) and — if the same track reloaded, with
-  // DebrisWorld's generation unchanged — could be posed onto the stale crash site.
+  // Completed seasons are readable, never raceable (also guarded by award()).
+  if (flow === "season" && !SeasonCal.canRace(season)) {
+    state = "menu"; $("race-settings").hidden = true;
+    buildSelect(); els.select.hidden = false;
+    return false;
+  }
+  // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
   loadTrack(trackIdx);
   makeCars();
-  // A qualifying lap is a time trial with the rest of the field simulated: one
-  // car on track, the existing lap-timing and validity path, and no new game
-  // state. ONE lap, STANDING from the line (see launchFlyingLap and the lights-out
-  // branch in update()). The AI field is built BEFORE cars is
-  // narrowed, so the classification can still see every car.
+  // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
@@ -2410,7 +2456,7 @@ function startRace() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
-  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars));
+  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2421,7 +2467,7 @@ function startRace() {
   // that failed on "speed was 43, expected > 50" had nothing in its attachment
   // saying what the car's top speed even was that run. One line makes the whole
   // class of pace/parts/weather failures self-explaining, which is what the
-  // logging section of CLAUDE.md asks for and what nothing here was doing.
+  // logging section of AGENTS.md asks for and what nothing here was doing.
   // (It sits BELOW recomputePlayerMods() so the mods/aeroLoad it reports are
   // this session's, not the previous one's — __apex.race()/tt() reach here
   // with no garage pass to have refreshed them.)
@@ -3297,6 +3343,37 @@ function shiftLong(c, d) {
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
 const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
 const LCAR = 4.8, WCAR = 2.0;
+// Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
+// contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
+const COL_BUCKET_M = LCAR;
+const _colBuckets = [];   // sparse: bucketId → car[]
+const _colBucketIds = []; // compact list of occupied bucket ids this pass
+
+function _colClearBuckets() {
+  for (let i = 0; i < _colBucketIds.length; i++) {
+    const id = _colBucketIds[i];
+    const arr = _colBuckets[id];
+    if (arr) arr.length = 0;
+  }
+  _colBucketIds.length = 0;
+}
+
+function _colFillBuckets(ranked) {
+  _colClearBuckets();
+  const L = track.total || 1;
+  const nB = Math.max(1, Math.ceil(L / COL_BUCKET_M) | 0);
+  for (let i = 0; i < ranked.length; i++) {
+    const c = ranked[i];
+    const prog = c._nOk ? c._nProg : c.prog;
+    let b = Math.floor((((prog % L) + L) % L) / COL_BUCKET_M) % nB;
+    if (b < 0) b += nB;
+    let arr = _colBuckets[b];
+    if (!arr) { arr = _colBuckets[b] = []; }
+    if (arr.length === 0) _colBucketIds.push(b);
+    arr.push(c);
+  }
+  return nB;
+}
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
 const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
@@ -3359,7 +3436,7 @@ function collideFx(a, b, impact) {
   // burst at the car's world position (collideFx has no world coords here).
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
-  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) {} }
+  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) { void e; } }
   Input.rumble(0.4 + impact * 0.6, 120);
 }
 
@@ -3370,6 +3447,107 @@ function collideFx(a, b, impact) {
 // track, transfer speed rear->front). Mass-weighted, several relaxation passes
 // to settle clusters, then a hard min-separation pass so cars can never render
 // merged. The player is "heavier" (invMass 0.5) so the AI can't shove them off.
+function _colResolvePair(a, b, last, rubScrub) {
+  if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+  const ct = pairContact(a, b);
+  if (!ct) return;
+  const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
+  if (sideContact) {
+    // side-by-side contact: separate laterally, scrub a little speed. Mark
+    // both cars "in contact" so the AI eases off steering this way and
+    // stops fighting the push (the cause of the side-by-side vibration).
+    const sgn = dX >= 0 ? 1 : -1;
+    const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
+    a.x += sgn * corr * sA;
+    b.x -= sgn * corr * sB;
+    // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
+    // side contact was draining speed without separating the cars.
+    if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
+    a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
+    if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+  } else {
+    // rear-end: separate along the track and nudge speeds together (gentle,
+    // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
+    const sgn = dProg >= 0 ? 1 : -1;
+    const corr = Math.max(penLong - 0.05, 0) * 0.4;
+    shiftLong(a, sgn * corr * sA);
+    shiftLong(b, -sgn * corr * sB);
+    const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
+    if (relV > 0) {
+      // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
+      // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
+      // Rapier resolves in preStep — applying jImp here then promoting is a
+      // double resolve. Safe: owns() cars are already skipped above; below
+      // threshold / inactive, notifyCar no-ops and this exchange stays the
+      // resolver (C3 event-scoping).
+      if (!(incidentSim.active() && relV >= 15)) {
+        const jImp = 0.5 * relV / iSum;
+        if (sgn >= 0) {
+          b.speed = Math.max(0, b.speed - iB * jImp);
+          a.speed += iA * jImp * 0.8;
+        } else {
+          a.speed = Math.max(0, a.speed - iA * jImp);
+          b.speed += iB * jImp * 0.8;
+        }
+      }
+      a.contactT = b.contactT = 0.22;
+      if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+      // Debris hook (render-only side-world): closing speed = severity.
+      if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+      // Incident sim (R3/C3 + C1): a hard closing contact queues a
+      // candidate. Only clears the R3 threshold for a real shunt (see
+      // incidentsim); below it the cheap (prog,x) plane above stays the
+      // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
+      if (last) incidentSim.notifyCar(a, b, relV);
+    }
+  }
+}
+
+function _colSepPair(a, b, SLOP) {
+  if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+  const ct = pairContact(a, b);
+  if (!ct) return;
+  const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
+  if (sideContact) {
+    const c = Math.max(penLat - SLOP, 0) * 0.6;
+    if (c <= 0) return;
+    const sgn = dX >= 0 ? 1 : -1;
+    a.x += sgn * c * sA;
+    b.x -= sgn * c * sB;
+  } else {
+    const c = Math.max(penLong - SLOP, 0) * 0.6;
+    if (c <= 0) return;
+    const sgn = dProg >= 0 ? 1 : -1;
+    shiftLong(a, sgn * c * sA);
+    shiftLong(b, -sgn * c * sB);
+  }
+}
+
+// Walk each occupied bucket against itself and the next bucket (mod nB).
+// Bucket width = LCAR → any contacting pair is co-bucketed or adjacent.
+// Each unordered pair is visited once (within-bucket i<j; across only b→b+1).
+function _colForBucketPairs(nB, fn) {
+  for (let bi = 0; bi < _colBucketIds.length; bi++) {
+    const id = _colBucketIds[bi];
+    const A = _colBuckets[id];
+    if (!A || !A.length) continue;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      for (let j = i + 1; j < A.length; j++) fn(a, A[j]);
+    }
+    // Forward neighbour only — each undirected cross edge is visited once,
+    // including the wrap edge (nB-1 → 0).
+    if (nB < 2) continue;
+    const id2 = (id + 1) % nB;
+    const B = _colBuckets[id2];
+    if (!B || !B.length) continue;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      for (let j = 0; j < B.length; j++) fn(a, B[j]);
+    }
+  }
+}
+
 function resolveCollisions(ranked, dt) {
   const PASSES = 4;
   // Snapshot the player's road coords so the writeback at the end can tell
@@ -3379,71 +3557,28 @@ function resolveCollisions(ranked, dt) {
   // 1/60 step (identical there: 0.995^1), but the headless harness steps at
   // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
   const rubScrub = Math.pow(0.995, (dt || 1 / 60) * 60);
+  // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
+  // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
+  const useBuckets = ranked.length > 12;
+  let nB = 0;
+  if (useBuckets) nB = _colFillBuckets(ranked);
+  else if (Log.enabled("phys", "debug")) {
+    Log.debug("phys", "resolveCollisions all-pairs n=" + ranked.length);
+  }
   for (let pass = 0; pass < PASSES; pass++) {
     const last = pass === PASSES - 1;
-    const fwd = (pass & 1) === 0;
-    for (let ii = 0; ii < ranked.length; ii++) {
-      const i = fwd ? ii : ranked.length - 1 - ii;
-      const a = ranked[i];
-      // Incident-sim takeover owns this car's contacts in Rapier — the (prog,x)
-      // plane must not fight the 6-DoF body.
-      if (incidentSim.owns(a)) continue;
-      // Full field: next-10 race ranks miss leader↔backmarker pairs that wrap
-      // to |dProg|≈0 at the same s. 22 cars × LCAR cull is cheap.
-      for (let j = i + 1; j < ranked.length; j++) {
-        const b = ranked[j];
-        if (incidentSim.owns(b)) continue;
-        const ct = pairContact(a, b);
-        if (!ct) continue;
-        const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
-        if (sideContact) {
-          // side-by-side contact: separate laterally, scrub a little speed. Mark
-          // both cars "in contact" so the AI eases off steering this way and
-          // stops fighting the push (the cause of the side-by-side vibration).
-          const sgn = dX >= 0 ? 1 : -1;
-          const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
-          a.x += sgn * corr * sA;
-          b.x -= sgn * corr * sB;
-          // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
-          // side contact was draining speed without separating the cars.
-          if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
-          a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
-          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
-        } else {
-          // rear-end: separate along the track and nudge speeds together (gentle,
-          // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
-          const sgn = dProg >= 0 ? 1 : -1;
-          const corr = Math.max(penLong - 0.05, 0) * 0.4;
-          shiftLong(a, sgn * corr * sA);
-          shiftLong(b, -sgn * corr * sB);
-          const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
-          if (relV > 0) {
-            // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
-            // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
-            // Rapier resolves in preStep — applying jImp here then promoting is a
-            // double resolve. Safe: owns() cars are already skipped above; below
-            // threshold / inactive, notifyCar no-ops and this exchange stays the
-            // resolver (C3 event-scoping).
-            if (!(incidentSim.active() && relV >= 15)) {
-              const jImp = 0.5 * relV / iSum;
-              if (sgn >= 0) {
-                b.speed = Math.max(0, b.speed - iB * jImp);
-                a.speed += iA * jImp * 0.8;
-              } else {
-                a.speed = Math.max(0, a.speed - iA * jImp);
-                b.speed += iB * jImp * 0.8;
-              }
-            }
-            a.contactT = b.contactT = 0.22;
-            if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
-            // Debris hook (render-only side-world): closing speed = severity.
-            if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
-            // Incident sim (R3/C3 + C1): a hard closing contact queues a
-            // candidate. Only clears the R3 threshold for a real shunt (see
-            // incidentsim); below it the cheap (prog,x) plane above stays the
-            // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-            if (last) incidentSim.notifyCar(a, b, relV);
-          }
+    if (useBuckets) {
+      // Re-bucket each pass: shiftLong moves prog, so adjacency can change.
+      if (pass > 0) nB = _colFillBuckets(ranked);
+      _colForBucketPairs(nB, (a, b) => _colResolvePair(a, b, last, rubScrub));
+    } else {
+      const fwd = (pass & 1) === 0;
+      for (let ii = 0; ii < ranked.length; ii++) {
+        const i = fwd ? ii : ranked.length - 1 - ii;
+        const a = ranked[i];
+        if (incidentSim.owns(a)) continue;
+        for (let j = i + 1; j < ranked.length; j++) {
+          _colResolvePair(a, ranked[j], last, rubScrub);
         }
       }
     }
@@ -3453,27 +3588,15 @@ function resolveCollisions(ranked, dt) {
   // steering separation now keeps cars spaced, so collisions rarely fire and a
   // tighter boundary no longer causes the old vibration).
   const SLOP = 0.05;
-  for (let i = 0; i < ranked.length; i++) {
-    const a = ranked[i];
-    if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
-    for (let j = i + 1; j < ranked.length; j++) {
-      const b = ranked[j];
-      if (incidentSim.owns(b)) continue;
-      const ct = pairContact(a, b);
-      if (!ct) continue;
-      const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
-      if (sideContact) {
-        const c = Math.max(penLat - SLOP, 0) * 0.6;
-        if (c <= 0) continue;
-        const sgn = dX >= 0 ? 1 : -1;
-        a.x += sgn * c * sA;
-        b.x -= sgn * c * sB;
-      } else {
-        const c = Math.max(penLong - SLOP, 0) * 0.6;
-        if (c <= 0) continue;
-        const sgn = dProg >= 0 ? 1 : -1;
-        shiftLong(a, sgn * c * sA);
-        shiftLong(b, -sgn * c * sB);
+  if (useBuckets) {
+    nB = _colFillBuckets(ranked);
+    _colForBucketPairs(nB, (a, b) => _colSepPair(a, b, SLOP));
+  } else {
+    for (let i = 0; i < ranked.length; i++) {
+      const a = ranked[i];
+      if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
+      for (let j = i + 1; j < ranked.length; j++) {
+        _colSepPair(a, ranked[j], SLOP);
       }
     }
   }
@@ -3918,7 +4041,7 @@ function updateCar(c, dt, ranked) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   if (c.onKerb) {
-    c.speed -= 6 * dt;                       // slight scrub (raw contact only)
+    c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * dt);
     if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   }
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
@@ -3930,7 +4053,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { void e; } } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -5363,7 +5486,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     const m = night ? _wmTerrainN : _wmTerrainD; m.detail = 0.42 * _sd;
     // Camera/probe terrain chunking — same envCull gate as the road ribbon.
     // Shadow path already lazy-builds terrainChunked; reuse that handle.
-    let _tMesh = track.meshes.terrain, _tChunked = false;
+    let _tMesh = track.meshes.terrain || track.meshes.terrainChunked, _tChunked = !!(_tMesh && _tMesh.chunks && _tMesh.chunks.length);
     if (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3) {
       if (track.meshes.terrainChunked === undefined) {
         track.meshes.terrainChunked = null;
@@ -5391,7 +5514,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // second copy of the geometry costs nothing while the knob is off.
     // _keepPositions is REQUIRED: createChunkedMesh nulls its source arrays, and
     // debrisworld.js + __apex.geo() both still read track.roadGeo.
-    let _roadMesh = track.meshes.road, _roadChunked = false;
+    let _roadMesh = track.meshes.road || track.meshes.roadChunked, _roadChunked = !!(_roadMesh && _roadMesh.chunks && _roadMesh.chunks.length);
     // RESOLVED per-chunk state, not the raw knob (frame.perChunkLights holds the
     // same expression but is only assigned under _floodActive, so it is unset by
     // day). Without the tier/latch terms this built a second GPU copy of the road
@@ -5400,8 +5523,8 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
     // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
     // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = (LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
-      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3);
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+      || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
         track.meshes.roadChunked = null;
@@ -5891,10 +6014,10 @@ function render(dt) {
       // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
       // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
       // Lazy-build shares roadChunked with the lamp draw path.
-      const _castRibbonSh = (geo, key, plain) => {
+      const _castRibbonSh = (geo, key, plain, allow = true) => {
         if (track.meshes[key] === undefined) {
           track.meshes[key] = null;
-          if (geo && gfx.createChunkedMesh) {
+          if (allow && geo && gfx.createChunkedMesh) {
             geo._keepPositions = true;
             track.meshes[key] = gfx.createChunkedMesh(geo, 72);
           }
@@ -5904,7 +6027,7 @@ function render(dt) {
         else gfx.castShadow(plain, MAT_IDENT);
       };
       _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
-      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road);
+      _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road, gfx.chunkedTrackCoords !== false);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
       // map at NIGHT — directional sun shadows are invisible under the dim
       // moonlight, so this is the biggest night saving. Gate on the KEY's actual
@@ -6360,7 +6483,10 @@ function render(dt) {
   // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
   // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
   // for a 64px blurred reflection probe).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (_frameNo & 1) === 0 && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Every-other-frame on a live race (12 frames / cube). park() freezes
+  // physics for shots/tests — then one face per frame so a parked M9 cube
+  // goes ready in 6 presents, not 12 (SwiftShader is seconds-per-frame).
+  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 1) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -7360,27 +7486,23 @@ applyResMode();
 
 $("mb-race").onclick = () => {
   setFlow("gp"); session = "race";
+  restoreFreePlaySelection();
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
-// Guarded, unlike its neighbours, and deliberately: a merge that took the
-// other side of index.html once dropped this button's markup, and an
-// unguarded handler assignment on a null element threw during boot and took
-// the ENTIRE game down — menu, renderer and all — for one missing optional
-// screen. Cheap insurance against a whole-app outage.
+// Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
-  // Two drivers, no server: the lobby does the whole handshake by having the
-  // players paste codes to each other. It starts the race itself once both
-  // sides agree on the setup, so there is no select screen in between.
-  // flow/session are the authority now; seasonMode/timeTrial are derived views.
+  // The peer-to-peer lobby starts the race once both sides agree.
   setFlow("gp"); session = "race";
+  restoreFreePlaySelection();
   netLobby.open();
   if (soundOn) GameAudio.uiSelect();
 };
 $("mb-tt").onclick = () => {
   setFlow("gp"); session = "tt";
+  restoreFreePlaySelection();
   buildSelect();
   els.overlay.hidden = true; els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
@@ -7388,11 +7510,7 @@ $("mb-tt").onclick = () => {
 };
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
-  // Re-read the STANDALONE save. In career `season` is an alias of the career
-  // championship (see openCareer), so without this a player who opened a career
-  // and then pressed SEASON would carry on the career's points here. resume()
-  // also repairs it: a save left PAST the last round of a calendar the player
-  // has since SHORTENED blanks; round === rounds() (finished) stays readable.
+  // Replace any career alias with the repaired standalone save; finished stays readable.
   season = SeasonCal.resume(store.get("season", null));
   store.set("season", season);
   // Finished championship: trackIndex(rounds()) is -1 — park the flyby on the
@@ -7408,19 +7526,16 @@ $("mb-season").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
-// CAREER. Unlike the other three entry points this one does not go to #select:
-// the calendar decides where you race, so the hub replaces that whole screen.
-// A save with no career yet opens the hub in its new-career state.
+// Career's calendar is fixed, so its hub replaces the circuit picker.
 function openCareer() {
   setFlow("career"); session = "race";
   const c = Career.data() || Career.load();
   if (c) {
     season = c.season;               // the SAME object — see endRace()
     trackIdx = Career.trackIndex();
-    // Career owns WHO you drive for; the garage's team/driver pickers do not apply
-    // while a contract is running, so point the existing indices at the contract.
+    // Point the shared car UI at the contract without overwriting GP preferences.
     const ti = Teams.LIST.findIndex((t) => t.id === c.team);
-    if (ti >= 0) { teamIdx = ti; store.set("team", ti); }
+    if (ti >= 0) teamIdx = ti;
     driverIdx = c.seat;
     recomputePlayerMods();
   }
@@ -7500,6 +7615,7 @@ $("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
 // that is not being rendered. Disabled rather than hidden — the same rule the
 // mode-dependent driving controls follow, so the grid never reflows under a
 // thumb mid-tap.
+const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race";
   $("pm-hidehud").disabled = !inRace;
@@ -7507,7 +7623,7 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  syncSettingsAvailability();
+  syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
 function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; }
@@ -7704,11 +7820,10 @@ function openRaceSettings(from) {
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  // The garage is a STEP now, not a side door. #select asks where you race and
-  // nothing else; START goes on to the garage, and the garage's DONE carries on
-  // to the race settings. In the VS FRIEND room it is skipped — the room has
-  // its own GARAGE button because each player owns their own car, and the host
-  // coming here is only editing the shared race.
+  if (els.selGo.dataset.seasonComplete === "1") {
+    buildStandings(); $("standings").hidden = false; return;
+  }
+  // Solo flows go through the garage; VS FRIEND owns a separate garage step.
   if (netRoom) { openRaceSettings("select"); return; }
   openGarage("select");
 };
@@ -8378,10 +8493,12 @@ syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
-// `apex26.track` is a POSITIONAL index into Tracks.LIST, so a reordered or
-// shortened circuit list would leave it dangling and crash loadTrack on the
-// undefined def. Clamp it the same way teamIdx/driverIdx are clamped above.
+// Clamp a legacy positional selection before migrating it to stable identity.
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+// Stable ID is authoritative; keep the legacy index for an older cached build.
+if (Tracks.LIST[trackIdx]) {
+  store.set("trackId", Tracks.LIST[trackIdx].id); store.set("track", trackIdx);
+}
 { const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot

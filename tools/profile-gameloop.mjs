@@ -2,45 +2,27 @@
 // Usage: node tools/profile-gameloop.mjs [track] [mode]
 //   mode "physics" (default): __apex.step()-driven synchronous loop
 //   mode "render": recordVideo-ticked rAF loop (compositor drives frames)
-import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const require = createRequire(ROOT + "/");
-const { chromium } = require("playwright");
 const [track = "vegas", mode = "physics"] = process.argv.slice(2);
 
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-function pickChromium() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-}
-
-const port = await freePort();
-const server = spawn("python3", ["-m", "http.server", String(port)], { cwd: ROOT, stdio: "ignore" });
-await new Promise((r) => setTimeout(r, 700));
-
+const srv = await startStaticServer(ROOT);
 let browser;
 try {
-  browser = await chromium.launch({ executablePath: pickChromium(),
-    args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
+  browser = await launchChromium({
+    args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"],
+  });
   const ctxOpts = { viewport: { width: 844, height: 390 } };
   if (mode === "render") ctxOpts.recordVideo = { dir: ROOT + "/scratch/profiles/vid" };
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
-  await page.goto(`http://127.0.0.1:${port}/`);
+  await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
   await page.evaluate((t) => { window.__apex.race(t); }, track);
   await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 20000 });
-  await new Promise((r) => setTimeout(r, 2000));
+  await sleep(2000);
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Profiler.enable");
@@ -50,7 +32,7 @@ try {
   if (mode === "render") {
     // Compositor (recordVideo) ticks rAF; drive at speed for ~10 s wall.
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); window.__apex.setInput({ throttle: true }); });
-    await new Promise((r) => setTimeout(r, 10000));
+    await sleep(10000);
     await page.evaluate(() => window.__apex.clearInput());
   } else {
     await page.evaluate(() => {
@@ -85,6 +67,5 @@ try {
   // Browser + server go together, on the throw path as well — an orphaned
   // pair keeps eating this 4-core box invisibly (same lesson survey-track.mjs
   // records in its own finally).
-  if (browser) await browser.close().catch(() => {});
-  server.kill();
+  await shutdown();
 }

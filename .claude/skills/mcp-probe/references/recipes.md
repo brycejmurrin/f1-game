@@ -66,7 +66,8 @@ SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
 bind groups match, buffers upload. It is not a visual one. For **pixels**:
 
 ```sh
-node tools/wgx-capture.mjs montreal --lite          # WGX soft-present → frame.png
+node tools/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
+node tools/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
 node tools/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
 node tools/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
@@ -119,7 +120,7 @@ python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
 
 `snapCam()` after every `jump()`/`park()` or the frame is stale — but **never**
 after `orbit()`/`view()`/`eyeAt()` (clears dbgCam; see trap above). Screenshots
-go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (CLAUDE.md).
+go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (AGENTS.md).
 
 ### Background Chromium measure (logged)
 
@@ -232,8 +233,9 @@ in the session catalog):
 
 ```
 ./tools/tinyfish-mcp.sh ensure
-./tools/tinyfish-mcp.sh deploy-check
-# → live=N local=M OK   or   live=N local=M STALE (exit 1)
+./tools/tinyfish-mcp.sh deploy-check --tip
+# → live=N tip=N local=M OK   or   live=N tip=M STALE (exit 1)
+#    --tip compares Pages to the deploy-branch tip, not this working tree
 ./tools/tinyfish-mcp.sh deploy-js js/log.js
 # → shipped source at ?v=<live> (marker-grep path; index.html strips <script>)
 ./tools/tinyfish-mcp.sh fetch --ttl 0 \
@@ -251,7 +253,9 @@ mcp__tinyfish__fetch_content
 Expect `{ "build": <N> }` matching the `version.json` you pushed. A stale build
 here means the Pages deploy lagged or failed (measured 2026-08-12: live was 971
 while the repo was 1089 — a real lag the local suite could never have caught).
-`deploy-check` now compares live vs local and exits 1 on mismatch.
+`deploy-check` compares live vs local (exit 1 on mismatch). `--tip` compares
+live to `origin/claude/f1-game-project-26h3ng:version.json` so a behind
+working tree is not reported as a Pages miss.
 
 Fetch `index.html` too only for readable content — TinyFish's content extract
 **strips `<script>` tags**, so `?v=` cache-bust markers are not there. Grep a
@@ -284,7 +288,7 @@ inlining every page.
 
 | Goal | Command |
 |---|---|
-| Live vs local build | `./tools/tinyfish-mcp.sh deploy-check` |
+| Live vs deploy tip | `./tools/tinyfish-mcp.sh deploy-check --tip` |
 | Confirm a marker shipped | `./tools/tinyfish-mcp.sh deploy-js js/<path>.js` then grep the unique string |
 | Raw Pages URL | `./tools/tinyfish-mcp.sh fetch --ttl 0 "https://brycejmurrin.github.io/f1-game/…"` |
 | External grounding | `./tools/tinyfish-mcp.sh search "…"`, then `fetch` the best URLs |
@@ -294,8 +298,10 @@ Do **not** use tinyfish for the working tree (localhost). Do **not** use Chrome
 DevTools MCP for `github.io` from this container (egress proxy). Pattern
 false-negatives under `format: markdown` — see the `*` escape gotcha above.
 
-**Setup is zero:** the project API key is baked into `tools/tinyfish-mcp.sh`
-(shell env / `.env` override it), so `ensure` works on a fresh checkout.
+**Setup is explicit:** run `tools/tinyfish-mcp.sh setup` once, then provide
+`TINYFISH_API_KEY` through the shell or the proxy's gitignored `.env`. `ensure`
+starts and initializes an existing build; it fails with setup guidance when the
+build or credential is absent. No reusable credential lives in tracked source.
 All 16 upstream tools verified working 2026-08-17 except `get_wallet`
 ("Wallet is not available for your account yet" — account-gated upstream,
 not a wrapper bug).

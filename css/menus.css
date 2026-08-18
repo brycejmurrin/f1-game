@@ -967,6 +967,26 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+/* Stacked season setup owns ONE vertical scroll region. Without this branch the
+   two `.pane` children take their full natural height, #ss-body overflows while
+   remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
+   viewport that made ~1,900px of calendar/pool controls unreachable. The child
+   panes also return overscroll chaining to the body: `.pane` normally contains
+   it, which is correct only while each pane has a bounded, scrollable height. */
+#ss-inner:not([data-pair="on"]) > #ss-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+#ss-inner:not([data-pair="on"]) > #ss-body > .pane {
+  flex: 0 0 auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
 /* Both columns are .pane, so the scrolling, the overscroll containment and the
    reserved gutter come with the primitive — nothing to restate here.
    The move/remove controls: .sel-chip is sized for a thumb on a chip ROW, and

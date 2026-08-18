@@ -303,7 +303,14 @@ const CEILINGS = {
   // _castPropBatchesShadow (light-frustum cull before castShadowInstanced).
   // -> 8475 merge(deploy): survey∪soft-present∪render-audit (split-newline).
   // -> 8467 merge-conflict cleanup (dedupe terrain chunk block).
-  "js/game.js": 8467,
+  // -> 8470 deploy∪TLX-load: their 8467 plus park()/frozen env-probe cadence
+  // (one cube face per frame when physics is frozen). Re-measured on the
+  // union with the ceiling test's own split-newline metric.
+  // -> 8544 collision arc-bucket broadphase (helpers + bucketed pair walks).
+  // -> 8547 deploy∪TLX-load∪collision: 8544 plus the frozen env-face gate.
+  // -> 8584 TLX/WGX deferred IIFEs load as a DAG (BACKEND_EDGES) plus
+  // modulepreload of the three vendor when the pick is already "three".
+  "js/game.js": 8584,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -330,7 +337,10 @@ const CEILINGS = {
   // -> 3112 carAt exposes craft/awareness/experience/lane for AI racecraft probes.
   // -> 3115 deploy∪perf-hunt merge (split-newline count).
   // 3115 -> 3119: carAt AI intent peek (stuckT/deploying) for probes.
-  "js/game/apex.js": 3120,
+  // 3120 -> 3128: openf1/jolpica missing-path guards (typed {ok:false} instead
+  // of fetching a garbage URL / throwing on HTML 404) + fetchTrackOutline
+  // comment moved onto the function it describes.
+  "js/game/apex.js": 3128,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -374,7 +384,7 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2901, // +6 merge: lapMirror overheadSpan/frameAt full remap; kit stays shift-only (beacon/KOLD). // +6 2026-08-17: sceneryLapMirror circuits get full sceneryFrac/sceneryNode remap on overheadSpan/frameAt/circuitKit/groundPatch (singapore portal decks vs anchor). // +31 2026-08-17 perf-hunt S3: dry-run/_absorbOnly emitter guards + preferInstance gate on createInstancedBatch. // +64 2026-08-17 PERF-FINDINGS sand: lazy LIST points (24ms boot ×40 circuits deferred to first touch) + massBlocked CELL grid (SAT exact, candidates only). // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
+  "js/track/tracks.js": 2918, // +17 2026-08-17: envCull owns one supported ribbon representation with safe fallbacks. // +6 merge: lapMirror overheadSpan/frameAt full remap; kit stays shift-only (beacon/KOLD). // +6 2026-08-17: sceneryLapMirror circuits get full sceneryFrac/sceneryNode remap on overheadSpan/frameAt/circuitKit/groundPatch (singapore portal decks vs anchor). // +31 2026-08-17 perf-hunt S3: dry-run/_absorbOnly emitter guards + preferInstance gate on createInstancedBatch. // +64 2026-08-17 PERF-FINDINGS sand: lazy LIST points (24ms boot ×40 circuits deferred to first touch) + massBlocked CELL grid (SAT exact, candidates only). // +9 2026-08-14: def.gpLaps — a real grand prix distance per circuit, derived from lengthKm by the actual regulation (fewest laps over 305 km; Monaco 260) rather than authored as 40 numbers that could fall out of step. 8 of the 9 lines are the comment recording the rule and the 1 dp rounding caveat. // +4 2026-08-14: place() anchors props to the RENDERED terrain instead of groundYAt's closed form (madrid/magny_cours, unfixable circuit-side — the call site is engine-generic); +4 more for exposing groundUnder on the scenery api, which retires the copies mugello and shanghai had each grown
 };
 
 test("the big modules are not growing unnoticed", () => {

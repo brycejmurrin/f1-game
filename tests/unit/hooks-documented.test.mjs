@@ -5,7 +5,7 @@
  * including, immediately, a hook added earlier in this same cleanup pass
  * (`persistState`), which is how this guard came to be written.
  *
- * The gap is not cosmetic. `logLevel` was undocumented while CLAUDE.md tells
+ * The gap is not cosmetic. `logLevel` was undocumented while AGENTS.md tells
  * every agent to use it; the whole `lobby*` family — fifteen hooks that are the
  * only way to drive the multiplayer screens from a test — was invisible to
  * anyone reading the reference rather than the source.
@@ -81,4 +81,14 @@ test("the undocumented list does not name a hook that no longer exists", () => {
   const gone = [...UNDOCUMENTED].filter((n) => !names.has(n)).sort();
   assert.deepEqual(gone, [],
     "these hooks are gone from js/game/apex.js — drop them from UNDOCUMENTED");
+});
+
+test("openf1 and jolpica guard a missing path instead of fetching garbage", () => {
+  const src = read("js/game/apex.js");
+  for (const name of ["openf1", "jolpica"]) {
+    const m = src.match(new RegExp(name + "\\(path\\) \\{[\\s\\S]*?\\n  \\},"));
+    assert.ok(m, name + " body not found");
+    assert.match(m[0], /error:\s*"missing_path"/);
+    assert.match(m[0], /ok:\s*false/);
+  }
 });

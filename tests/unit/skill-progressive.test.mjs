@@ -100,6 +100,10 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["game-feel", "references/workflow.md"],
     ["debug-cameras", "references/framing.md"],
     ["debug-tracks", "references/sweeps.md"],
+    ["motion-capture", "references/traps.md"],
+    ["perf-profile", "references/flame.md"],
+    ["debug-state", "references/hooks.md"],
+    ["deploy-merge", "references/protocol.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -277,6 +281,77 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   assert.match(wt, /verify-change\.mjs --fast/);
   const drift = fs.readFileSync(path.join(AGENTS, "doc-drift-auditor.md"), "utf8");
   assert.match(drift, /DOC-DRIFT/);
+});
+
+test("do not grow a parallel Cursor skills or agents tree", () => {
+  // Cursor loads .claude/skills and .claude/agents. A second tree under
+  // .cursor/ is the drift this repo already paid for with CLAUDE.md vs AGENTS.md.
+  // Allowlist: a file that is explicitly Cursor-only may live there; none do.
+  for (const rel of [".cursor/skills", ".cursor/agents"]) {
+    assert.equal(
+      fs.existsSync(path.join(ROOT, rel)),
+      false,
+      `${rel} exists — keep skills/agents in .claude/ unless the file is Cursor-only`,
+    );
+  }
+});
+
+test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
+  const file = path.join(ROOT, ".cursor/rules/apex-shared.mdc");
+  const text = fs.readFileSync(file, "utf8");
+  const lines = text.split("\n").length;
+  assert.ok(lines <= 40,
+    `.cursor/rules/apex-shared.mdc is ${lines} lines — keep it a pointer (cap 40)`);
+  assert.match(text, /AGENTS\.md/);
+  assert.match(text, /deploy-research/);
+  assert.match(text, /verify-agent/);
+  assert.match(text, /mcp-probe/);
+  assert.match(text, /tinyfish-mcp\.sh|probe-mcp\.py/);
+  assert.match(text, /does \*\*not\*\* auto-load|does not auto-load/i);
+});
+
+test("file-family skills declare Cursor paths; cross-cutting skills do not", () => {
+  // Cursor skills.md (2026): `paths` hides a skill unless matching files are in
+  // play. Cross-cutting workflows must stay unset so they still match from chat.
+  const scoped = {
+    "webgpu-debug": /js\/render\/webgpu/,
+    "webgl-debug": /js\/render\/glx/,
+    "new-track": /js\/circuits/,
+    "scenery-dress": /js\/circuits/,
+  };
+  for (const [name, re] of Object.entries(scoped)) {
+    const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
+    assert.ok(fm.paths, `${name}: missing paths frontmatter`);
+    assert.match(fm.paths, re, `${name}: paths ${fm.paths} should match ${re}`);
+  }
+  for (const name of ["check-changes", "bump-cache", "deploy-merge", "mcp-probe", "playwright-probe"]) {
+    const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
+    assert.equal(fm.paths, undefined, `${name} is cross-cutting — leave paths unset`);
+  }
+});
+
+test("AGENTS.md points at mcp-probe recipes for renderer probes", () => {
+  const text = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
+  assert.match(text, /mcp-probe\/references\/recipes\.md/);
+  assert.doesNotMatch(text, /mcp-probe\/SKILL\.md[^\n]*Probing a specific renderer/);
+});
+
+test("survey-ui-matrix names the ui-survey layout-audit recipe", () => {
+  const text = fs.readFileSync(path.join(SKILLS, "survey-ui-matrix/SKILL.md"), "utf8");
+  assert.match(text, /ui-survey\.mjs/);
+  assert.match(text, /npm run ui:survey/);
+});
+
+test("webgpu-debug names wgx-gallery importing runWgxShot", () => {
+  const text = fs.readFileSync(path.join(SKILLS, "webgpu-debug/SKILL.md"), "utf8");
+  assert.match(text, /wgx-gallery\.mjs/);
+  assert.match(text, /runWgxShot/);
+});
+
+test("skills README uses content-hash cache busting, not ?v=N", () => {
+  const text = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
+  assert.match(text, /\?v=<sha256>/);
+  assert.doesNotMatch(text, /\?v=N\b/);
 });
 
 test("wgx-capture pairs with webgpu-debug in tools/README.md", () => {

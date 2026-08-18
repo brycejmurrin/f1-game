@@ -100,15 +100,20 @@ Session shape — this is what controls both wall time and waiting:
 
 ### Software pixels in this container (no real GPU)
 
-A blank `#game` canvas under headless WebGPU is **not** a WGX failure — the
-native swapchain present path stays black on SwiftShader/Lavapipe. Real pixels:
+On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
+screen — that path stays black. WGX routes the visible `#game` through a **2D
+soft-present blit** (final pass → `COPY_SRC` texture → `putImageData` on
+`#game`; never `getCurrentTexture()`, which breaks `mapAsync` device-wide).
+Cache **1342+** uses ephemeral per-frame staging buffers +
+`onSubmittedWorkDone` before readback; `awaitSoftPresent()` resolves only after
+a non-blank visible blit.
 
-| Backend | Command / path | Needs |
-|---------|----------------|-------|
-| **WGX** | `node tools/wgx-capture.mjs <track>` → `artifacts/tmp/wgx-capture/…/frame.png` | Soft-present (`apex26.wgxCapture=1` / auto on software adapters) |
+| Backend | Command / path | Checks |
+|---------|----------------|--------|
+| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
 | **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL` / `--backend three`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
-| **Unified** | `node tools/gfx-probe.mjs --backend webgpu\|three …` | Same soft-present / WebGL2 pins as above |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
 
 Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
 §Measured. Env packages + install: §Cursor Cloud below.
@@ -134,9 +139,10 @@ binding, not a window property. A clean WGX boot writes NO console line and
 leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
 both ABSENCE signals, so confirm with one positive: drive a race and assert
 `canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
-the canvas. SwiftShader is a validation oracle; for WGX **pixels** use
-`wgx-capture.mjs`, not a screenshot of the canvas. Full trap list:
-`.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
+the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
+`gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
+`wgx-capture.mjs` → `frame.png`. Full trap list:
+`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
 
 ## Cursor Cloud specific instructions
 
@@ -154,16 +160,29 @@ saved.
 **Fresh-agent bootstrap** (after packages; matches Verification §1):
 
 ```sh
+bash tools/cloud-agent-install.sh
+# equivalent manual steps when the script is not the dashboard install:
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-npm install
+npm install --ignore-scripts --no-audit --prefer-offline
 npx playwright install chromium-headless-shell
 npx playwright install chromium
 ```
 
-(`wgx-validate` / `wgx-capture` need full Chromium — the headless shell has no
-`navigator.gpu`.) Missing Lavapipe: `test -f /usr/share/vulkan/icd.d/lvp_icd.json`
-fails → reinstall `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement
-table and MCP flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
+The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
+handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
+when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
+full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
+`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
+`mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
+flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
+
+**MCP on Cloud.** Cursor Cloud does not auto-load repo `.mcp.json`. The host
+catalog is not the game's `probe` / `tinyfish` / `chrome-devtools` servers.
+Default Cloud path: `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind
+working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent
+`deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
+Never run Chrome MCP while Playwright is running.
 
 ## Layout
 
@@ -264,13 +283,16 @@ same surface from a shell.
 ## Agent extensions (skills / subagents)
 
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
-  `.claude/skills/README.md`. Live game + deploy MCP: `mcp-probe`.
+  `.claude/skills/README.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
+  `deploy-research` (do not attach `mcp-probe` for a version.json check).
+  Pre-push: `verify-agent`.
 - **Subagents** (isolated context): `.claude/agents/` — index in
   `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
   post-deploy / public-web worker (no Chrome, no Playwright).
 - **Cursor** loads the same Claude paths; thin always-on pointer:
   `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
-  `.cursor/skills/`.
+  `.cursor/skills/` or agents under `.cursor/agents/`. Cloud sessions do not
+  auto-load `.mcp.json` — use the shell wrappers (see §Cursor Cloud).
 
 ## Area references (load on demand)
 
@@ -301,4 +323,5 @@ Before pushing, re-run `test:tooling-fast` AND — when either side touched
 `js/track/`, `js/circuits/` or `tools/` — `test:sweeps`: the per-circuit
 baselines are exact in BOTH directions, and a geometry change green on each
 lineage alone can be red on their union. The container proxy blocks
-`github.io` — verify a live deploy through an MCP fetch, not curl.
+`github.io` — verify a live deploy through an MCP fetch, not curl
+(`./tools/tinyfish-mcp.sh deploy-check --tip`).

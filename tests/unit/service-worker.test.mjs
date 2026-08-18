@@ -21,7 +21,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -89,7 +89,13 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false } = {}) {
           queueMicrotask(callback);
           return 1;
         }
+      : immediateTimeoutMs != null
+        ? (callback, ms, ...args) => {
+            if (ms === immediateTimeoutMs) { queueMicrotask(() => callback(...args)); return 1; }
+            return setTimeout(callback, ms, ...args);
+          }
       : setTimeout,
+    clearTimeout,
   });
   vm.runInContext(SW_SOURCE, context, { filename: "sw.js" });
 
@@ -199,10 +205,79 @@ test("install tolerates optional asset failures and waits for essential writes b
   assert.equal(current.has(`${ORIGIN}/assets/icon.png`), false);
 });
 
+test("install bypasses the HTTP cache only for mutable shell/version essentials", async () => {
+  const seen = [];
+  const ordinary = installFetch();
+  const harness = createHarness({
+    fetchImpl: async (request, init) => {
+      seen.push({ request, init: init || {} });
+      return ordinary(request);
+    },
+  });
+
+  await harness.lifecycleEvent("install").done();
+  const rows = seen.map((x) => ({
+    path: new URL(typeof x.request === "string" ? x.request : x.request.url, `${ORIGIN}/`).pathname,
+    cache: x.init.cache,
+  }));
+  for (const path of ["/", "/index.html", "/version.json"]) {
+    const calls = rows.filter((x) => x.path === path);
+    assert.ok(calls.length, `${path} should be fetched during install`);
+    assert.ok(calls.every((x) => x.cache === "no-store"),
+      `${path} is mutable and must never seed a new generation from HTTP cache`);
+  }
+  const script = rows.find((x) => x.path === "/js/game.js");
+  assert.ok(script, "versioned script should be precached");
+  assert.equal(script.cache, undefined,
+    "versioned assets should still reuse the page's HTTP-cache download");
+});
+
+test("a never-settling optional fetch cannot block service-worker installation", async () => {
+  const ordinary = installFetch();
+  const harness = createHarness({
+    immediateTimeoutMs: 4000,
+    fetchImpl: (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/assets/icon.png")) return new Promise(() => {});
+      return ordinary(request);
+    },
+  });
+
+  await harness.lifecycleEvent("install").done();
+  assert.equal(harness.skipped, 1);
+  assert.equal(harness.stores.get("apex26-321").has(`${ORIGIN}/assets/icon.png`), false);
+});
+
+test("install icons have declared PNG dimensions and are seeded for offline use", async () => {
+  const root = new URL("..", new URL("..", import.meta.url));
+  const manifest = JSON.parse(await readFile(new URL("manifest.json", root), "utf8"));
+  const required = [
+    { src: "icons/icon-192.png", width: 192, purpose: null },
+    { src: "icons/icon-512.png", width: 512, purpose: null },
+    { src: "icons/icon-maskable-512.png", width: 512, purpose: "maskable" },
+  ];
+
+  for (const expected of required) {
+    const icon = manifest.icons.find((entry) => entry.src === expected.src);
+    assert.ok(icon, `${expected.src} is missing from manifest.json`);
+    assert.equal(icon.sizes, `${expected.width}x${expected.width}`);
+    if (expected.purpose) assert.match(icon.purpose || "", new RegExp(`(^|\\s)${expected.purpose}(\\s|$)`));
+    const png = await readFile(new URL(expected.src, root));
+    assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+    assert.equal(png.readUInt32BE(16), expected.width);
+    assert.equal(png.readUInt32BE(20), expected.width);
+    assert.match(SW_SOURCE, new RegExp(`["]${expected.src.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}["]`));
+  }
+});
+
 test("cache-first responses remain pending until their runtime cache write completes", async () => {
   const heldPut = deferred();
   const harness = createHarness({
-    fetchImpl: async () => new Response("fresh", { status: 200 }),
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return new Response("fresh", { status: 200 });
+    },
     putImpl: async (_name, request) => {
       if (requestKey(request).endsWith("/assets/sfx.ogg")) await heldPut.promise;
     },
@@ -221,17 +296,15 @@ test("cache-first responses remain pending until their runtime cache write compl
   assert.equal(await response.text(), "fresh");
 });
 
-test("late navigation refresh is attached to waitUntil through its cache write", async () => {
-  const network = deferred();
+test("successful navigation remains attached to waitUntil through its cache write", async () => {
   const heldPut = deferred();
   const harness = createHarness({
-    immediateTimeout: true,
     fetchImpl: (request) => {
       const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
       if (url.pathname.endsWith("/version.json")) {
         return Promise.resolve(new Response('{"build":321}', { status: 200 }));
       }
-      return network.promise;
+      return Promise.resolve(new Response("online shell", { status: 200 }));
     },
     putImpl: async (_name, request) => {
       if (requestKey(request) === `${ORIGIN}/race`) await heldPut.promise;
@@ -247,11 +320,8 @@ test("late navigation refresh is attached to waitUntil through its cache write",
     mode: "navigate",
     url: `${ORIGIN}/race`,
   });
-  const fallback = await event.responsePromise;
-  assert.equal(await fallback.text(), "offline shell");
   assert.equal(event.lifetimes.length, 1);
 
-  network.resolve(new Response("online shell", { status: 200 }));
   const beforePut = await Promise.race([
     Promise.all(event.lifetimes).then(() => "settled"),
     new Promise((resolve) => setTimeout(() => resolve("pending"), 0)),
@@ -259,11 +329,55 @@ test("late navigation refresh is attached to waitUntil through its cache write",
   assert.equal(beforePut, "pending");
 
   heldPut.resolve();
+  const response = await event.responsePromise;
+  assert.equal(await response.text(), "online shell");
   await Promise.all(event.lifetimes);
   assert.equal(
     await (await harness.stores.get("apex26-321").get(`${ORIGIN}/race`)).text(),
     "online shell",
   );
+});
+
+test("navigation and version 5xx responses fall back to healthy cached entries", async () => {
+  const harness = createHarness({
+    fetchImpl: async () => new Response("server error", { status: 502 }),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("offline shell", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":320}', { status: 200 })],
+  ]));
+
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal(await (await nav.responsePromise).text(), "offline shell");
+
+  const version = harness.fetchEvent(new Request(`${ORIGIN}/version.json?_=${Date.now()}`));
+  assert.equal(await (await version.responsePromise).json().then((v) => v.build), 320);
+});
+
+test("a cache-bust navigation never falls back to the generic cached shell", async () => {
+  const harness = createHarness({ fetchImpl: async () => new Response("server error", { status: 500 }) });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+  ]));
+
+  const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
+  assert.equal((await bust.responsePromise).status, 0);
+});
+
+test("install rejects a missing or invalid build instead of creating apex26-0", async () => {
+  for (const body of ["{}", '{"build":0}', "not json"]) {
+    const harness = createHarness({
+      fetchImpl: async (request) => {
+        const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+        if (url.pathname.endsWith("/version.json")) return new Response(body, { status: 200 });
+        if (url.pathname.endsWith("/index.html")) return new Response("<script src=\"js/game.js?v=1\"></script>", { status: 200 });
+        return new Response("asset", { status: 200 });
+      },
+    });
+    await assert.rejects(harness.lifecycleEvent("install").done());
+    assert.equal(harness.stores.has("apex26-0"), false);
+    assert.equal(harness.skipped, 0);
+  }
 });
 
 test("activation preserves prior caches unless the current generation is complete", async () => {

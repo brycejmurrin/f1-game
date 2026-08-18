@@ -92,7 +92,9 @@ const CLASS_CEILING = 537;
 // 1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
 // the deploy branch and the season branch each raised this in parallel and both
 // numbers are stale the moment they meet.
-const NODE_CEILING = 1153;  // +1 ai-drive.js script tag
+// 1160 = category-based Settings navigation: four tab buttons, a dedicated
+// performance panel, and its small semantic wrappers. Still well below 1,400.
+const NODE_CEILING = 1160;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for js/game/perf-try.js (renderer

@@ -99,6 +99,13 @@ function normalize(raw) {
 let cfg = null;          // resolved lazily: Tracks.LIST is not ready at eval time
 let resolved = null;     // trackIds -> circuit defs, invalidated with cfg
 
+// GameStore invalidates its parsed-value cache on a storage event, but this
+// module has a second, domain-level cache. Drop it too or another tab's calendar
+// edit remains invisible until a full reload and can later be overwritten here.
+if (store.subscribe) store.subscribe((change) => {
+  if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
+});
+
 function config() {
   if (!cfg) cfg = normalize(store.get(CFG_KEY, null));
   return cfg;
@@ -146,6 +153,28 @@ let lastScored = "race";
 let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
 
 function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; }
+function resetWeekend() { lastScored = "race"; sprintOrder = null; }
+// Starting over is deliberately NOT the same operation as constructing a blank
+// value: the old weekend also has module state (notably a sprint result/grid).
+function restart() { resetWeekend(); return blank(); }
+
+function scoreMap(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  Object.entries(raw).forEach(([id, value]) => {
+    const n = Number(value);
+    if (id && isFinite(n)) out[id] = Math.max(0, n);
+  });
+  return out;
+}
+function codeMap(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  Object.entries(raw).forEach(([id, value]) => {
+    if (id && typeof value === "string") out[id] = value.slice(0, 12);
+  });
+  return out;
+}
 // The standalone `apex26.season` save, made safe to race. A save from a LONGER
 // calendar than the one now configured would sit past its own last round and
 // never finish — only blank when round > rounds() (calendar shrink). round ===
@@ -154,13 +183,12 @@ function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; }
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
   const n = rounds();
-  if (!s || !(s.round >= 0) || s.round > n) {
-    sprintOrder = null;
-    return blank();
+  if (!s || !Number.isInteger(s.round) || s.round < 0 || s.round > n) {
+    return restart();
   }
-  if (!s.pts) s.pts = {};
-  if (!s.teamPts) s.teamPts = {};
-  if (!s.driverCodes) s.driverCodes = {};
+  s.pts = scoreMap(s.pts);
+  s.teamPts = scoreMap(s.teamPts);
+  s.driverCodes = codeMap(s.driverCodes);
   // Restore the sprint grid for a mid-weekend reload (stage === "race"). Cleared
   // when the GP has scored or the save is not mid-weekend — module state alone
   // used to lose the order across a quit/reload.
@@ -171,6 +199,9 @@ function resume(saved) {
     if (s.sprintOrder) delete s.sprintOrder;
   }
   return s;
+}
+function canRace(season) {
+  return !!(season && Number.isInteger(season.round) && season.round >= 0 && season.round < rounds());
 }
 // Is there a championship worth showing STANDINGS for? Not `round > 0` alone:
 // on a sprint weekend the first sprint banks real points while the round is
@@ -233,6 +264,10 @@ function pointsTable() {
 // Returns the stage it SCORED, not the one coming next: buildResults() runs
 // after this and has to title the sheet with the session that just finished.
 function award(season, order) {
+  // The UI also blocks a completed championship, but persistence safety belongs
+  // at the mutation boundary: no alternate/debug call may advance N to N+1 and
+  // make resume() treat the save as corrupt on the next visit.
+  if (!canRace(season)) return null;
   const scoring = stage(season);
   const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
   order.forEach((c, i) => {
@@ -263,11 +298,11 @@ function scored() { return lastScored; }
 // the sprint result is the only running order the weekend has produced —
 // gridUp() takes null as "sort by team tier" and would otherwise throw away the
 // one race that had just been run to decide it.
-function grid(cars) {
+function grid(cars, season) {
   // fmtActive() as well as the two obvious guards: sprintOrder is module state
   // that outlives the season it was set in, and a plain Grand Prix reaching this
   // line must never be gridded off a race it was not part of.
-  if (!fmtActive() || !sprintOrder || quali()) return null;
+  if (!fmtActive() || !midWeekend(season) || !sprintOrder || quali()) return null;
   const byId = new Map(cars.map((c) => [c.driverId, c]));
   const out = [];
   for (const id of sprintOrder) { const c = byId.get(id); if (c) out.push(c); }
@@ -329,7 +364,7 @@ return {
   SPRINT_POINTS, CLASSIC_POINTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
   config, setConfig, resetConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
-  resume, blank, hasProgress,
+  resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
   award, scored, grid, drawRound,
   presetIds, shuffled,

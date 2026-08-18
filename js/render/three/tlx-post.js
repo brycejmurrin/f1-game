@@ -211,13 +211,9 @@
       }
       return nLv > 0;
     }
-    // three r184: RenderTarget.setSize() calls this.dispose() internally, but
-    // that dispose does NOT dispose the RT's textures (fixed upstream in r185,
-    // three PR #33511) — the backend keeps the stale GPU textures and sampler
-    // bindings alive across every resize (rotation, renderScale change), which
-    // is both a GPU-memory leak and the "black frame after resize" report.
-    // Fire the texture disposals ourselves so the backend's dispose path runs;
-    // the JS texture objects stay valid and reallocate lazily at the new size.
+    // three r184 leaked RT textures on setSize(); r185 (#33511) disposes them.
+    // Keep the explicit texture disposals so a stale vendor cannot regress the
+    // "black frame after resize" report; double-dispose is safe.
     function rtSetSize(rt, w, h) {
       if (rt.width === w && rt.height === h) return;
       rt.setSize(w, h);

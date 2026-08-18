@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 100 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 105 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -38,7 +38,8 @@ suites in the background, inspect logs asynchronously, and continue productive
 tasks without waiting.
 
 ```sh
-node tools/test-bg.mjs smoke api collision   # start; returns immediately
+node tools/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
+node tools/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
 tail -f artifacts/logs/smoke.log             # watch one
 node tools/test-bg.mjs --status              # what is running / how it ended
 node tools/test-bg.mjs --wait                # block until all groups finish
@@ -52,8 +53,8 @@ default; every worker is a Chromium + SwiftShader process, so total browsers is
 groups × workers.
 
 **ONE GROUP AT A TIME on a four-core box.** This line used to read "2-3 groups
-is the sweet spot", which contradicted CLAUDE.md's "one heavy group is its full
-capacity" — and CLAUDE.md is the one the measurement supports. Running `tiny` +
+is the sweet spot", which contradicted AGENTS.md's "one heavy group is its full
+capacity" — and AGENTS.md is the one the measurement supports. Running `tiny` +
 `circuit` together is 2 groups × 2 workers = four SwiftShader browsers on four
 cores; load reached 16.8 and the batch produced **five failures, four of which
 were bare 120 s timeouts** (138 s, 148 s, 153 s, 163 s) with a single genuine
@@ -94,7 +95,7 @@ node tools/select-specs.mjs --since <ref>              # spec list, one per line
 node tools/select-specs.mjs --since <ref> --budget-min 15
 ```
 
-It was built for the advisory CI job but is just as useful interactively; a
+It powers the blocking change-aware CI gate and is just as useful interactively; a
 single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
@@ -276,6 +277,8 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `net` | multiplayer in a browser: car roles, the per-car input seam, the session, the lobby, the waiting room, and the camera SCAN (a real `getUserMedia` against a Y4M of a real QR that Chromium plays as a webcam) |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `service-worker` | the SW's install/fetch/version behaviour |
+| `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
+| `state-unit` | season, storage and career state machines, including cross-tab conflicts |
 
 ### API & agent surfaces
 
@@ -292,7 +295,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | Group | What it runs |
 |---|---|
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
-| `tooling-fast` | the structural half in ~30 s — load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `paths` | output paths are port-scoped and self-creating |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/float-audit.cjs`) |
@@ -472,7 +475,7 @@ page, so keep importing `test`. The opt-in is deliberate: this is not a silent
 change of meaning for the specs already on the base fixture.
 
 **Telling a real failure from a busy box.** Both present as a 120 s timeout, and
-CLAUDE.md's standing rule is that a timeout on four cores measures the machine.
+AGENTS.md's standing rule is that a timeout on four cores measures the machine.
 The discriminator is a load INVERSION: `career`'s "the garage returns to the hub"
 passed in 18.2 s while two Playwright processes fought for the box, then timed
 out at 123.9 s when one process had it to itself. Load cannot invert like that,
@@ -842,6 +845,8 @@ what it covers.
 | `net-authority.test.mjs` | who may declare what: START/CAUTION/RESULT are the host's, over a stub-`G` NetPlay |
 | `net-rendezvous.test.mjs` | the room-code client against a real relay |
 | `net-trystero-api.test.mjs` | the vendored Trystero surface actually used |
+| `net-lobby-lifecycle.test.mjs` | canceled lobby operations, overlapping scanners and late wake-lock grants over deferred promises |
+| `rendezvous-worker.test.mjs` | the actual Durable Object request boundary, including declared and streamed oversized bodies |
 
 ### Tooling & repo contracts
 
@@ -868,6 +873,8 @@ what it covers.
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
 | `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys |
 | `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
+| `career-cross-tab.test.mjs` | an active career refuses to overwrite a newer foreign save, while an idle career refreshes to the winning tab |
+| `async-lifecycle.test.mjs` | late QR streams/video playback, decoder retries, IndexedDB late success and a hung fetch releasing the shared queue |
 | `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/game/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, multi-sample soft brake, adaptive lane — in a VM with no browser |
 | `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
 | `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |
@@ -875,7 +882,7 @@ what it covers.
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
 | `terrain-normals.test.mjs` | the terrain ribbon must be shaded by its own shape: `TrackMesh.buildTerrain` normals are unit length, point up, and carry real tilt spread on both a street and an open circuit. `buildTerrain` shipped `nrm.push(0, 1, 0)` for every vertex — an embankment, a banked verge and a flat runoff all took identical sun — and nothing caught it, because a constant normal throws nothing and changes no vertex count |
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
-| `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; CLAUDE.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
+| `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; AGENTS.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/`; previously-fat skills stay split (index ≤180 + the named reference file) |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
@@ -889,7 +896,7 @@ what it covers.
 | `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so 382 call sites carry a bound that is decoration (353 was the 2026-08-07 freeze; the population fell to 312 as specs were fixed, then the lint's file filter was corrected and 70 pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
-| `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. | guards `tools/select-specs.mjs`, the per-spec selector behind ci.yml's advisory `selected` job. Glob expansion against the real tree, dedupe across groups, the budget cut (every spec lands in selected OR the named skip list — silent truncation would read as "covered"), and that the ADVISORY settings (retries 0, 120 s/test) provably fit more tests than smoke's gate settings — the whole reason the job exists |
+| `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. The same suite guards the per-spec selector behind ci.yml's blocking `selected` job: every unaffordable spec lands in a named skip/exclusion list, and the selected-gate settings (retries 0, 120 s/test) provably fit more tests than smoke's retrying settings. |
 | `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 112 Playwright specs**, with 110 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
@@ -905,8 +912,9 @@ what it covers.
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
-| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), baked project key present with env>.env>baked precedence, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` (no live API) |
+| `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), tracked source has no reusable key and `ensure` names its setup prerequisite, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` with an exact fallback version (no live API) |
 | `tools-runnable.test.mjs` | every tool in `tools/` PARSES (`node --check` / `bash -n` / python compile / JSON) and the MCP-facing entry points answer their help path. The README index guards names in both directions but never says the file runs — a tool with a syntax error is indexed, documented and completely inaccessible, and you find out mid-task. Parse-only for the sweep: these tools launch browsers and hit networks |
+| `report-server.test.mjs` | the LAN report collector requires its per-run capability for every read and write, rejects unsafe paths and payloads, and enforces per-request/session storage bounds |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
 
 ---
@@ -924,7 +932,7 @@ what it covers.
 
 ## Operational field notes (moved from CLAUDE.md, 2026-08-13)
 
-The measured history behind the testing gates. CLAUDE.md carries the rules;
+The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
 
 **`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
@@ -957,7 +965,7 @@ verbatim is pure waste.
 **Watcher anchoring.** Anchor on the reporter's terminal line
 `= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
 heartbeat lines contain `N/M done, K failed`, so a pattern like
-`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — CLAUDE.md recommended
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — AGENTS.md recommended
 exactly that for weeks and every watcher built from it misfired. Match every
 terminal status, not just `passed`: a success-only watcher is silent through a
 crash, and silence looks like "still running". Watch the LOG, never the
@@ -1050,22 +1058,60 @@ every WGSL module and validates every pipeline. The ceiling, corrected
 2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
-found). What remains environmental: WGX-canvas SCREENSHOTS are blank (the
-present path), the first `getCurrentTexture()` call breaks `mapAsync`
-device-wide (why readbacks ever looked like zeros), software adapters force
-MSAA 1 (MSAA-only paths need the unit-test source guards), and the full
-desktop stack can LOSE the device seconds in (Chrome reports it as
-`createBuffer failed, size (N) is too large` on a tiny N — that wording means
-device-lost, not size). Validation evidence here is exact; pixel evidence now
-exists in-container; PERFORMANCE truth still needs a real GPU.
+found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
+the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+`node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
+(`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
+SwiftShader when concurrent with display readback. Still environmental: the
+first `getCurrentTexture()` call breaks `mapAsync` device-wide (why WGX never
+touches the swapchain on software adapters), software adapters force MSAA 1,
+and the full desktop stack can LOSE the device seconds in. Validation evidence
+here is exact; visible-canvas evidence exists in-container via soft-present;
+PERFORMANCE truth still needs a real GPU.
 
-**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** A blank headless
-`#game` canvas under WGX is expected on SwiftShader/Lavapipe — use
-`node tools/wgx-capture.mjs` (soft-present readback) or
-`node tools/gfx-probe.mjs --backend webgpu|three`. Lavapipe needs
-`mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
+**TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
+(2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
+load). The remaining group timeouts were GPU fill: M4 left the loop
+presenting, Playwright tore the page down, and M5's first frame sat behind a
+387% GPU process. `setTimeOfDay("night")` / a second `race()` on a live TLX
+page does not return (530 s+ hung `evaluate`, measured four times). Product
+cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
+cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
+lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
+`stopRendering` at the end of M4 so the next spec is not starved. Solo
+verdict after those cuts, M4 still presenting: M4 10.0 s, M5 313.1 s,
+M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
+M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
+`test.slow()` 360 s budget because the env-probe wait is fill-bound on
+SwiftShader even with a quiet GPU; do not widen assertion tolerances.
+
+**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** Native WebGPU
+swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
+visible `#game` via a 2D blit (auto on software adapters +
+`sessionStorage apex26.wgxCapture=1`). Primary probe:
+`node tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
+needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
 three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
+`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
+spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
+endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
+errors. The leftover debug log still had "http cache … cache hit" followed by
+"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
+no tarball bytes, so every package re-fetched in parallel. The same VM's
+`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
+Envoy, so `apt-get update` cannot repair a snapshot that is missing
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
+(skip npm only when `node_modules/<pkg>/package.json` exists — hollow
+directories from a crashed reify are not usable — `--no-audit
+--prefer-offline`, retries; do not fail the build on apt 404 when
+packages are already present).
+Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
+and `cdn.playwright.dev` if a cold snapshot must actually download.

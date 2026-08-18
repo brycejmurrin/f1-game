@@ -1,12 +1,19 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
-**Status (same session):** Priority-board items 1–7 and most High/Medium
-follow-ups were implemented on `cursor/survey-bugs-perf-8ee4` (WGX blur/particle
-rings, career/season, VSC/SC + shiftLong, Singapore remappers, net predict
-contact, GLX env/terrain/shadow/AA, TLX fwidth, live TTL, TURN TTL, ScrollFade,
-focus trap, …). Remaining deferred: pine re-parameterize for reuse, Rapier
-marble CPU, collision broadphase, WGX per-draw UBO batching, TLX three≥r186
-dispose leak, god-ray light partial-select.
+**Status (2026-08-17 deferred pass):** Remaining survey items landed on
+`cursor/survey-deferred-tests-8ee4` — collision arc-bucket broadphase, marble
+cap/rest/far trim, WGX draw-UBO flush (already on tip) + god-ray top-6 partial
+select (GLX+WGX), TLX matCache eviction skips `dispose()` on r184 (#33952).
+Test runners default to sequential with per-file/group logging
+(`tools/tooling-fast.mjs`, `test-bg` concurrent cap 1).
+
+Pine/tree instance reuse was attempted (unit-Y + `[1,hQ,1]`) and **reverted**:
+even Y-only scale + 0.5 m height bins grew Monza severe clips 20→55 and
+Silverstone float 0→1. Re-parameterise belongs with a dedicated baseline regen
+(SCENE-GRAPH-PLAN §S4), not a silent look change.
+
+Earlier same-day board (items 1–7 + High/Medium follow-ups) shipped via
+`cursor/survey-bugs-perf-8ee4` onto deploy.
 
 Read-only fleet audit of the working tree at deploy tip `46554737`
 (local/live `version.json` **1325** after fetch; tinyfish deploy-check was
@@ -67,10 +74,12 @@ that SSAO/god-ray blur axes differ and both particle layers survive.
 WGX generates mips once when `_envProbeLive` flips; GLX remips every full
 6-face cycle. Later cycles leave stale higher mips for rough paint samples.
 
-### 1.3 Soft-present staging destroy vs in-flight `mapAsync` (High on software path)
+### 1.3 ~~Soft-present staging destroy vs in-flight `mapAsync`~~ (Fixed 2026-08-17, cache 1342+)
 
-Resize destroys soft blit buffer while map may still be pending — capture /
-SwiftShader soft-present hazard.
+Was: persistent staging buffer + `_softBusy` gate in `begin()` starved frames;
+resize could destroy buffer mid-readback. Now: ephemeral per-frame staging in
+`_softDisplayEncode` / `_softDisplayFinish`; `awaitSoftPresent()` resolves only
+after a successful visible blit. Guard: `tests/unit/webgpu-lifecycle.test.mjs`.
 
 ### 1.4 Perf: per-draw `writeBuffer` to draw ring; god-ray full-list sort
 

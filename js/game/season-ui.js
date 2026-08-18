@@ -203,7 +203,7 @@ function create(G) {
     // no longer exists cannot be carried into one that does — half of them may
     // have been won at circuits the season no longer visits — so the standings
     // reset with the calendar rather than being silently re-indexed.
-    G.season = SeasonCal.blank();
+    G.season = SeasonCal.restart();
     G.store.set("season", G.season);
     G.trackIdx = SeasonCal.trackIndex(0);
     close();

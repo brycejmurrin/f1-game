@@ -62,7 +62,7 @@ __apex.race("monaco");
 // __apex.trackInfo({what:"corners"}) or __apex.corners() or js/track/markings.js
 __apex.park(0.18);   // stationary + frozen
 __apex.orbit(0.18, 60, 20, 40);             // orbit the chicane (dbgCam — no snapCam after)
-// for a PNG, use the playwright-probe skill's shot.mjs (cam = orbit|eye|cinematic|trackside)
+// for a PNG, use tools/capture/shot.mjs (cam = orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
 __apex.jump(0.035, 60, 0);  // Monza T1 ~0.016–0.042 (markings.js), not 0.1

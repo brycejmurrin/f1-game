@@ -1,0 +1,217 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import vm from "node:vm";
+
+const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.url), "utf8");
+const musicSource = await readFile(new URL("../../js/game/music-lib.js", import.meta.url), "utf8");
+const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
+const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
+
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+test("a stopped QR attempt disposes a camera stream that arrives late", async () => {
+  const media = deferred();
+  let intervals = 0;
+  const track = { stops: 0, stop() { this.stops++; } };
+  const context = vm.createContext({
+    navigator: { mediaDevices: { getUserMedia: () => media.promise } },
+    document: {
+      createElement: () => ({ width: 0, height: 0, getContext: () => ({}) }),
+      head: { appendChild() {} },
+    },
+    jsQR() {},
+    setInterval() { intervals++; return intervals; },
+    clearInterval() {},
+  });
+  vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
+  const scanner = context.__scan.create();
+  const video = { srcObject: null, setAttribute() {}, play: () => Promise.resolve() };
+  const started = scanner.start(video, () => {});
+  await Promise.resolve();
+  scanner.stop();
+  media.resolve({ getTracks: () => [track] });
+
+  assert.equal((await started).error, "cancelled");
+  assert.equal(scanner.active(), false);
+  assert.equal(track.stops, 1);
+  assert.equal(video.srcObject, null);
+  assert.equal(intervals, 0);
+});
+
+test("a canceled QR attempt cannot arm an interval after video.play settles", async () => {
+  const playing = deferred();
+  let intervals = 0;
+  const track = { stops: 0, stop() { this.stops++; } };
+  const context = vm.createContext({
+    navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track] }) } },
+    document: {
+      createElement: () => ({ width: 0, height: 0, getContext: () => ({}) }),
+      head: { appendChild() {} },
+    },
+    jsQR() {}, setInterval() { intervals++; return intervals; }, clearInterval() {},
+  });
+  vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
+  const scanner = context.__scan.create();
+  const started = scanner.start({ srcObject: null, setAttribute() {}, play: () => playing.promise }, () => {});
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  scanner.stop();
+  playing.resolve();
+
+  assert.equal((await started).error, "cancelled");
+  assert.equal(track.stops, 1);
+  assert.equal(intervals, 0);
+});
+
+test("a decoder that loads without registering is retried", async () => {
+  const scripts = [];
+  const context = vm.createContext({
+    navigator: { mediaDevices: { getUserMedia: () => Promise.reject(new Error("unused")) } },
+    document: {
+      createElement(tag) { const out = {}; if (tag === "script") scripts.push(out); return out; },
+      head: { appendChild() {} },
+    },
+    setInterval, clearInterval,
+  });
+  vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
+  const scanner = context.__scan.create();
+  const first = scanner.start({}, () => {});
+  scripts[0].onload();
+  assert.equal((await first).error, "no_decoder");
+  const second = scanner.start({}, () => {});
+  assert.equal(scripts.length, 2);
+  scripts[1].onload();
+  assert.equal((await second).error, "no_decoder");
+});
+
+test("an IndexedDB open that succeeds after timeout closes its orphan handle", async () => {
+  let request;
+  const timers = [];
+  const context = vm.createContext({
+    window: null,
+    document: { readyState: "loading", addEventListener() {}, getElementById: () => null },
+    indexedDB: { open() { request = {}; return request; } },
+    setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {},
+    URL: { createObjectURL() {}, revokeObjectURL() {} }, Map,
+  });
+  context.window = context;
+  vm.runInContext(musicSource, context);
+  const init = context.MusicLib.init();
+  timers.shift()();
+  await init;
+  const db = { closes: 0, close() { this.closes++; }, objectStoreNames: { contains: () => true } };
+  request.result = db;
+  request.onsuccess();
+
+  assert.equal(db.closes, 1);
+  assert.equal(context.MusicLib.available(), false);
+});
+
+test("a timed-out API fetch releases the shared queue", async () => {
+  const timers = [];
+  const calls = [];
+  const context = vm.createContext({
+    fetch(url) {
+      calls.push(url);
+      if (calls.length === 1) return new Promise(() => {});
+      return Promise.resolve(new Response("[]", { status: 200 }));
+    },
+    AbortController, Response,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    Log: { warn() {} }, Date,
+    setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {},
+  });
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const first = context.__api.weather(1, 0).catch((e) => e);
+  const second = context.__api.positions(1, 0);
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(calls.length, 1);
+  timers.shift()(); // fetch deadline
+  const firstError = await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  // The minimum-gap timer may be present after the timeout releases the queue.
+  while (calls.length < 2 && timers.length) {
+    timers.shift()();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.match(firstError.message, /timed out/);
+  assert.equal(calls.length, 2);
+  await second;
+});
+
+function dataApiHarness(responses, initial = new Map()) {
+  const calls = [], sets = [];
+  let keyCalls = 0, now = Date.parse("2026-07-26T14:45:00Z");
+  class ClockDate extends Date { static now() { now += 1000; return now; } }
+  const storage = {
+    get length() { return initial.size; },
+    key(i) { keyCalls++; return [...initial.keys()][i] ?? null; },
+    getItem(k) { return initial.has(k) ? initial.get(k) : null; },
+    setItem(k, v) { initial.set(k, String(v)); sets.push(k); },
+    removeItem(k) { initial.delete(k); },
+  };
+  const context = vm.createContext({
+    console, Date: ClockDate, Map, Set, Object, Array, JSON, Math, Number,
+    isFinite, parseFloat, encodeURIComponent, AbortController,
+    setTimeout, clearTimeout, localStorage: storage,
+    Log: { warn() {} },
+    fetch: async (url) => {
+      calls.push(String(url));
+      const body = responses.shift();
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
+    },
+  });
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  return { api: context.__api, calls, sets, keyCalls: () => keyCalls };
+}
+
+function liveMergeHelpers() {
+  const context = vm.createContext({ console, Map, Object, Array });
+  vm.runInContext(liveSource + ";globalThis.__live=DataLive", context);
+  return context.__live;
+}
+
+test("LIVE position/interval requests use watermarks and never touch localStorage", async () => {
+  const h = dataApiHarness([
+    [
+      { driver_number: 44, position: 1, date: "2026-07-26T14:44:00Z" },
+      { driver_number: 4, position: 2, date: "2026-07-26T14:44:00Z" },
+    ],
+    [{ driver_number: 4, position: 1, date: "2026-07-26T14:44:30Z" }],
+    [{ driver_number: 44, gap_to_leader: 0, date: "2026-07-26T14:44:30Z" }],
+  ]);
+  const live = liveMergeHelpers();
+  const state = { positionCursor: null, intervalCursor: null, positions: new Map(), intervals: {} };
+
+  const first = await h.api.livePositions(999, null);
+  assert.equal(first.cursor, "2026-07-26T14:44:00Z");
+  live._mergePositionBatch(state, first);
+  const delta = await h.api.livePositions(999, state.positionCursor);
+  const merged = live._mergePositionBatch(state, delta);
+  assert.deepEqual(Array.from(merged, (p) => [p.num, p.pos]).sort((a, b) => a[0] - b[0]), [[4, 1], [44, 1]],
+    "a delta must update one driver without dropping unchanged drivers");
+  const gaps = await h.api.liveIntervals(999, null);
+  live._mergeIntervalBatch(state, gaps);
+
+  assert.equal(h.calls[0], "https://api.openf1.org/v1/position?session_key=999");
+  assert.match(h.calls[1], /position\?session_key=999&date%3E=2026-07-26T14%3A44%3A00Z$/);
+  assert.equal(state.positionCursor, "2026-07-26T14:44:30Z");
+  assert.equal(state.intervals[44], 0);
+  assert.deepEqual(h.sets, [], "LIVE history/deltas must remain memory-only");
+});
+
+test("ordinary API writes sweep the cache at most once per five-minute window", async () => {
+  const oldKey = "apex26.api.https://example.test/old";
+  const entries = new Map([[oldKey, JSON.stringify({ t: Date.parse("2026-07-26T14:44:00Z"), data: [] })]]);
+  const h = dataApiHarness([[], []], entries);
+  await h.api.weather(1, 0);
+  const afterFirst = h.keyCalls();
+  await h.api.weather(2, 0);
+  assert.equal(afterFirst, 1, "first write should perform one age sweep");
+  assert.equal(h.keyCalls(), afterFirst, "second response in the same batch must not rescan storage");
+});

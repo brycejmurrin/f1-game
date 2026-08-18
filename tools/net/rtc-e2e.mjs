@@ -21,24 +21,20 @@
 // spec.
 //
 // Exit 0 = a session came up on BOTH peers.
-import { chromium } from "playwright";
-import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
 
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4467;
 const alive = async () => {
   try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
 };
 // A previous run killed with SIGKILL leaves its server behind, and spawning a
 // second one on the same port fails silently — the fetch below then succeeds
-// against the ORPHAN and the run looks fine until srv.kill() kills nothing.
+// against the ORPHAN and the run looks fine until shutdown() kills nothing.
 // Adopt an already-listening server instead of racing it.
 const adopted = await alive();
-const srv = adopted ? null : spawn("python3", ["-m", "http.server", String(PORT)], { stdio: "ignore" });
-if (srv) {
-  srv.on("error", (e) => console.log("[srv error]", String(e)));
-  srv.on("exit", (c) => console.log("[srv exited]", c));
-}
-const stopSrv = () => { if (srv) srv.kill(); };
+if (!adopted) await startStaticServer(ROOT, { port: PORT });
 // Poll until it actually answers, rather than hoping a fixed sleep was enough.
 let up = adopted;
 for (let i = 0; i < 40 && !up; i++) {
@@ -46,7 +42,7 @@ for (let i = 0; i < 40 && !up; i++) {
   if (!up) await new Promise((r) => setTimeout(r, 250));
 }
 console.log("server up:", up, adopted ? "(adopted an existing one)" : "");
-if (!up) { stopSrv(); process.exit(1); }
+if (!up) { await shutdown(); process.exit(1); }
 const log = (...a) => console.log(...a);
 
 // Two pages in one browser means one of them is always the background tab, and
@@ -54,8 +50,7 @@ const log = (...a) => console.log(...a);
 // not obviously so: the game loop is what pumps the transport, so a throttled
 // page stops draining its receive inbox, stops answering pings, and the session
 // times out 2.5 s later. It reads exactly like a network failure.
-const b = await chromium.launch({
-  executablePath: "/opt/pw-browsers/chromium",
+const b = await launchChromium({
   args: [
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -88,11 +83,11 @@ const el = () => ((Date.now() - t0) / 1000).toFixed(1) + "s";
 
 const hostRes = await A.evaluate(() => window.__apex.lobbyHost());
 log(el(), "host invite:", hostRes.ok ? `ok len=${hostRes.code.length}` : JSON.stringify(hostRes));
-if (!hostRes.ok) { await b.close(); stopSrv(); process.exit(1); }
+if (!hostRes.ok) { await shutdown(); process.exit(1); }
 
 const joinRes = await B.evaluate((c) => window.__apex.lobbyJoin(c), hostRes.code);
 log(el(), "guest answer:", joinRes.ok ? `ok len=${joinRes.code.length}` : JSON.stringify(joinRes));
-if (!joinRes.ok) { await b.close(); stopSrv(); process.exit(1); }
+if (!joinRes.ok) { await shutdown(); process.exit(1); }
 
 const accRes = await A.evaluate((c) => window.__apex.lobbyAccept(c), joinRes.code);
 log(el(), "host accepted:", JSON.stringify(accRes).slice(0, 120));
@@ -115,7 +110,7 @@ while (Date.now() < deadline) {
 }
 if (!ok) {
   log(`\n*** NO SESSION after 90s ***`);
-  await b.close(); stopSrv();
+  await shutdown();
   process.exit(1);
 }
 
@@ -140,7 +135,7 @@ const ra = await raceUp(A), rb = await raceUp(B);
 log(`\n${el()} race: A ${JSON.stringify(ra)}\n${el()} race: B ${JSON.stringify(rb)}`);
 if (!ra.cars || !rb.cars) {
   log("*** neither peer got onto a track — the lobby did not start the race ***");
-  await b.close(); stopSrv(); process.exit(1);
+  await shutdown(); process.exit(1);
 }
 
 // Lights-out is armed ~2.5 s ahead by hostStart(); give the countdown time to
@@ -191,5 +186,5 @@ const playing = moving && seesB && seesA;
 log(playing
   ? `\n*** TWO PEERS RACING EACH OTHER OVER REAL WebRTC at ${el()} ***`
   : `\n*** connected, but not racing correctly ***`);
-await b.close(); stopSrv();
+await shutdown();
 process.exit(playing ? 0 : 1);

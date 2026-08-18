@@ -7,16 +7,21 @@
 //     (floating props / channels / sagging ribbon) so you don't have to eyeball it
 //   • a one-line verdict + any page errors
 //
-// Usage: node tools/survey-track.mjs <id> [label] [fracs]
+// Usage: node tools/survey-track.mjs <id> [label] [fracs] [--oblique]
 //   id     circuit id (see __apex.tracks() / js/circuits/*.js), e.g. montreal
 //   label  shot prefix, e.g. before | after   (default: survey)
 //   fracs  comma list of lap fractions to shoot+probe (default 0,0.25,0.5,0.75)
+//   --oblique  also write a bounds-fitted topdown + four high-oblique aerials
+//              (N/E/S/W at 45°) — the old aerial-survey.mjs pass. Flag may sit
+//              anywhere after the script name.
 //
 // Read the PNGs (the EYE shots expose floating props/gaps best) AND the probe table.
 // For just the numbers without screenshots, use
 // .claude/skills/survey-track/ground-profile.mjs.
 
 import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 import {
   assertSafePathToken,
@@ -25,12 +30,51 @@ import {
 } from "./output-paths.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";
 
-const [idArg, labelArg = "survey", fracsArg] = process.argv.slice(2);
-if (!idArg) { console.error("usage: survey-track.mjs <id> [label] [fracs]"); process.exit(2); }
-const id = assertSafePathToken(idArg, "track id");
-const label = assertSafePathToken(labelArg, "label");
-const FRACS = (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number);
+/** Strip --flags anywhere; a lone comma-list after <id> is fracs, not a label. */
+export function parseSurveyTrackArgs(argv) {
+  const positionals = [];
+  let oblique = false;
+  for (const a of argv) {
+    if (a === "--oblique") { oblique = true; continue; }
+    if (a.startsWith("--")) continue;
+    positionals.push(a);
+  }
+  const [idArg, ...rest] = positionals;
+  if (!idArg) return { error: SURVEY_USAGE };
+  let labelArg = "survey";
+  let fracsArg = null;
+  if (rest.length === 1) {
+    if (rest[0].includes(",")) fracsArg = rest[0];
+    else labelArg = rest[0];
+  } else if (rest.length >= 2) {
+    labelArg = rest[0];
+    fracsArg = rest[1];
+  }
+  return {
+    id: assertSafePathToken(idArg, "track id"),
+    label: assertSafePathToken(labelArg, "label"),
+    fracs: (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number),
+    oblique,
+  };
+}
+
+function invokedAsCli() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fileURLToPath(import.meta.url) === resolve(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) await runSurvey(parseSurveyTrackArgs(process.argv.slice(2)));
+
+async function runSurvey(parsed) {
+if (parsed.error) { console.error(parsed.error); process.exit(2); }
+const { id, label, fracs: FRACS, oblique } = parsed;
 const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground probe
 const OUT = resolveRepoDefault(ROOT, "scratch", "captures", "survey-track", id);
 mkdirSync(OUT, { recursive: true });
@@ -47,13 +91,13 @@ try {
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
   page.setDefaultTimeout(60000);
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex != null, { timeout: 20000, polling: 100 });
 
   // race the track (retry once if a concurrent edit briefly broke the page)
   let ok = false;
   for (let t = 0; t < 3 && !ok; t++) {
     await page.evaluate((tid) => window.__apex.race(tid, "day", "dry"), id);
-    ok = await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 9000 }).then(() => true).catch(() => false);
+    ok = await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 9000, polling: 100 }).then(() => true).catch(() => false);
     if (!ok) await sleep(500);
   }
   if (!ok) {
@@ -85,6 +129,31 @@ try {
 
   // 1 · whole-track aerial
   await shot("aerial", () => window.__apex.view());
+  // 1b · bounds-fitted topdown + N/E/S/W high obliques (the old aerial-survey pass)
+  if (oblique) {
+    const bounds = await page.evaluate(() => window.__apex.trackBounds());
+    console.log(`bounds ${id}: ${JSON.stringify(bounds)}`);
+    const cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
+    const cy = bounds.minY != null ? bounds.minY : 0;
+    const span = Math.max(bounds.spanX, bounds.spanZ);
+    await shot("topdown", ({ cx, cy, cz, span }) => {
+      const vf = 60 * Math.PI / 180, aspect = window.innerWidth / window.innerHeight;
+      const altZ = (span / 2) / Math.tan(vf / 2);
+      const altX = (span / 2) / Math.tan(Math.atan(Math.tan(vf / 2) * aspect));
+      const alt = Math.ceil(Math.max(altZ, altX) * 1.18);
+      window.__apex.view({ eye: [cx, cy + alt, cz + 0.1], target: [cx, cy, cz] });
+    }, { cx, cy, cz, span });
+    const dist = Math.ceil(span * 0.85);
+    const el = 42 * Math.PI / 180;
+    const dirs = { N: 0, E: Math.PI / 2, S: Math.PI, W: 3 * Math.PI / 2 };
+    for (const [name, az] of Object.entries(dirs)) {
+      await shot(`oblique${name}`, ({ cx, cy, cz, dist, el, az }) => {
+        const h = Math.sin(el) * dist, r = Math.cos(el) * dist;
+        const ex = cx + Math.sin(az) * r, ez = cz + Math.cos(az) * r;
+        window.__apex.view({ eye: [ex, cy + h + 20, ez], target: [cx, cy + 5, cz] });
+      }, { cx, cy, cz, dist, el, az });
+    }
+  }
   // 2 · per-fraction orbit (three-quarter) + driver's-eye (exposes floats/gaps)
   for (const f of FRACS) {
     await shot(`s${pct(f)}-orbit`, (f) => window.__apex.orbit(f, 45, 18, 45), f);
@@ -145,3 +214,4 @@ if (flags.length) { console.log("⚠ geometry flags (confirm with the EYE shots)
 else console.log("✓ no terrain holes/steps flagged on the probed fractions\n");
 if (shots.some((s) => s.blank)) console.log("⚠ one or more shots look blank — check scenery / camera.");
 if (errs.length) console.log("page errors:", errs.slice(0, 5));
+}

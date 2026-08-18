@@ -54,9 +54,9 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 
 | Preset | WebGPU binds? | Canvas pixels (headless) | Montreál lite wall-clock | Notes |
 |--------|---------------|--------------------------|--------------------------|-------|
-| **SwiftShader** (`WEBGPU_CHROMIUM_ARGS`) | yes | `[160,170,171,255]` | ~11 s (`gfx-probe`) | Default for harness, MCP, Playwright. Needs `sessionStorage apex26.wgxCapture=1` so WGX soft-presents to a 2D canvas — native swapchain is blank in CI. |
-| **Lavapipe headless** (`WEBGPU_LAVAPE_*` + `--headless=new`) | yes | `[161,170,172,255]` | ~11 s (same wait loop) | Second Vulkan software stack (Mesa `lvp_icd.json`). Same validation signal as SwiftShader; upstream three.js e2e direction. MCP: override via `APEX_CHROME_ARGS` + `VK_ICD_FILENAMES` (measured non-black `[64,34,13,255]`). |
-| **Lavapipe + Xvfb headed** | yes | `[161,170,172,255]` (after soft-present blit) | ~2.3 min | Fixed 2026-08-17: headed Lavapipe reports non-enumerable `adapter.info.architecture=swiftshader` that `JSON.stringify` hid, so WGX skipped soft-present. Now reads fields directly + `wgxCapture` forces the 2D blit path. |
+| **SwiftShader** (`WEBGPU_CHROMIUM_ARGS`) | yes | visible `#game` ~`[160,170,171,255]` after soft-present blit | ~11 s (`gfx-probe`) | Default for harness, MCP, Playwright. Native swapchain is blank; WGX 2D-blits final pass to `#game` (`wgxCapture=1` / software adapter auto). |
+| **Lavapipe headless** (`WEBGPU_LAVAPE_*` + `--headless=new`) | yes | same soft-present colours | ~11 s (same wait loop) | Second Vulkan software stack (Mesa `lvp_icd.json`). Same validation signal as SwiftShader; upstream three.js e2e direction. |
+| **Lavapipe + Xvfb headed** | yes | `[161,170,172,255]` (after soft-present blit) | ~2.3 min | Non-enumerable `adapter.info` hid `architecture=swiftshader` from JSON — WGX now reads fields directly; `wgxCapture` forces the 2D blit path. |
 | **llvmpipe (WebGL2 only)** | n/a | GLX path renders | **9.5 s vs 25.8 s** SwiftShader on same montreal boot | Drop `--use-angle=swiftshader`; renderer string `ANGLE (Mesa, llvmpipe …)`. Does **not** expose `navigator.gpu`. Helps default GLX + TLX (`tlxForceGL=1`), not WGX probes. |
 
 Commands that produced the table:
@@ -75,8 +75,9 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
    `tools/webgpu-chrome-args.cjs`, matches Playwright harness.
 2. **Lavapipe headless is a viable A/B** for WGX lifecycle (adapter/device/shaders)
    when you want a second software Vulkan stack; swap flags only, not game code.
-3. **Do not use Lavapipe+Xvfb for MCP screenshots** — use `wgx-capture.mjs` /
-   soft-present readback / `render({what:"view"})` instead.
+3. **MCP / Playwright WGX screenshots:** use visible `#game` after
+   `GLX.awaitSoftPresent()` (`gfx-probe.mjs` pattern) — not the hidden WebGPU
+   swapchain canvas. Readback oracle: `wgx-capture.mjs` / `render({what:"view"})`.
 4. **For Playwright CI speed**, measure dropping the SwiftShader pin for the
    **WebGL2** suite (`llvmpipe`); that is independent of WebGPU backend choice.
 5. **Real GPU + `xvfb-run`** remains the path for hardware WebGL/WebGPU visuals;
@@ -99,7 +100,8 @@ agent loses Lavapipe again.
 
 | Want | Do this |
 |------|---------|
-| WGX pixels | `node tools/wgx-capture.mjs montreal --lite` (soft-present; ignore blank MCP canvas) |
+| WGX visible `#game` | `node tools/gfx-probe.mjs --backend webgpu --lite montreal` |
+| WGX readback oracle | `node tools/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
 | WGX on Lavapipe | `node tools/wgx-lavapipe-probe.mjs montreal --lite` |
 | TLX pixels | `node tools/gfx-probe.mjs --backend three --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |

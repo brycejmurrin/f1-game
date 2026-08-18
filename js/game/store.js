@@ -8,6 +8,9 @@ const GameStore = (function () {
 
 const store = {
   _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
+  _keyRev: new Map(),  // full-key -> writes observed in this document (local or foreign)
+  _clearRev: 0,        // storage.clear() invalidates every key without naming one
+  _listeners: new Set(),
   rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
   // NON-NULL once a read or write has failed: the DOMException name ("QuotaExceededError",
   // "SecurityError", …). See the comment on set().
@@ -49,7 +52,27 @@ const store = {
     try { localStorage.setItem(key, JSON.stringify(v)); }
     catch (e) { noteBroken(e, "write " + k); }
     this._cache.set(key, v);
+    this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
     this.rev++;
+  },
+  // A key-scoped generation lets domain owners detect that THEIR backing value
+  // moved without treating an unrelated preference write as a save conflict.
+  // The string form keeps clear() and per-key counters independent without a
+  // lossy numeric packing scheme.
+  keyRevision(k) {
+    const key = k.indexOf("apex26.") === 0 ? k : "apex26." + k;
+    return this._clearRev + ":" + (this._keyRev.get(key) || 0);
+  },
+  subscribe(fn) {
+    if (typeof fn !== "function") return () => {};
+    this._listeners.add(fn);
+    return () => { this._listeners.delete(fn); };
+  },
+  _notify(change) {
+    for (const fn of this._listeners) {
+      try { fn(change); }
+      catch (e) { Log.warn("game", "persistence observer failed: " + ((e && e.message) || e)); }
+    }
   },
   // ---- cross-tab -----------------------------------------------------------
   // THE CACHE MAKES A SECOND TAB DANGEROUS, and that is what this fixes. `_cache`
@@ -71,11 +94,17 @@ const store = {
   // in this origin is not ours and must not bump rev.
   onForeignWrite(e) {
     if (!e) return false;
-    if (e.key === null) { this._cache.clear(); this.rev++; this.foreign++; return true; }
+    if (e.key === null) {
+      this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
+      this._notify({ key: null, foreign: true, clear: true });
+      return true;
+    }
     if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
     this._cache.delete(e.key);
+    this._keyRev.set(e.key, (this._keyRev.get(e.key) || 0) + 1);
     this.rev++;
     this.foreign++;
+    this._notify({ key: e.key.slice("apex26.".length), fullKey: e.key, foreign: true, clear: false });
     return true;
   },
   foreign: 0,          // applied foreign writes — surfaced by __apex.persistState()
@@ -146,15 +175,17 @@ function seasonRoster() {
 // over it would overwrite the standalone `apex26.season` with career's standings.
 function remapPoints(season) {
   if (!season) return season;
-  const oldPts = season.pts && typeof season.pts === "object" ? season.pts : {};
+  season.round = Number.isInteger(season.round) && season.round >= 0 ? season.round : 0;
+  const oldPts = season.pts && typeof season.pts === "object" && !Array.isArray(season.pts) ? season.pts : {};
   const roster = seasonRoster();
   const nextPts = {};
-  const codes = Object.assign({}, season.driverCodes || {});
+  const codes = season.driverCodes && typeof season.driverCodes === "object" && !Array.isArray(season.driverCodes)
+    ? Object.assign({}, season.driverCodes) : {};
   // Legacy display-code keys cannot be disambiguated after historical code collisions, so migration is best-effort.
   Object.entries(oldPts).forEach(([key, value]) => {
     const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
     const id = driver ? driver.id : key;
-    nextPts[id] = (nextPts[id] || 0) + (Number(value) || 0);
+    nextPts[id] = (nextPts[id] || 0) + Math.max(0, Number(value) || 0);
     if (driver) codes[id] = driver.code;
     else if (!codes[id]) codes[id] = key;
   });
@@ -163,7 +194,13 @@ function remapPoints(season) {
   });
   season.pts = nextPts;
   season.driverCodes = codes;
-  season.teamPts = season.teamPts && typeof season.teamPts === "object" ? season.teamPts : {};
+  const oldTeams = season.teamPts && typeof season.teamPts === "object" && !Array.isArray(season.teamPts)
+    ? season.teamPts : {};
+  season.teamPts = {};
+  Object.entries(oldTeams).forEach(([id, value]) => {
+    const n = Number(value);
+    if (id && isFinite(n)) season.teamPts[id] = Math.max(0, n);
+  });
   return season;
 }
 

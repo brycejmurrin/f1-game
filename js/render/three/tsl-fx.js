@@ -82,13 +82,17 @@
         m.polygonOffsetUnits = -8;
       }
       if (o.doubleSided) m.side = THREE.DoubleSide;   // GLX disables CULL_FACE
+      // See tsl-lit.js pinProgram — r184 hashes child-node ids into the
+      // program key, so an unpinned FX material recompiles per mesh.
+      m.lights = false;
+      m.customProgramCacheKey = () => o.key || "tlx-fx";
       return m;
     }
 
     /* ── blob shadow (SHADOW_FS) ────────────────────────────────────────────
      * The shared quad geometry holds the unit xz footprint at y=0.02; vUV =
      * aPos*2 (SHADOW_VS) == positionGeometry.xz*2 here. */
-    const shadowMat = fxMaterial({ offset: true });
+    const shadowMat = fxMaterial({ offset: true, key: "tlx-fx-blob" });
     shadowMat.colorNode = vec3(0.0);
     shadowMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
@@ -103,7 +107,7 @@
         .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
     /* ── per-mark skid stamp (SHADOW_VS quad + MARK_FS) — the fallback path ── */
-    const markMat = fxMaterial({ offset: true });
+    const markMat = fxMaterial({ offset: true, key: "tlx-fx-mark" });
     markMat.colorNode = vec3(0.0);
     markMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
@@ -113,7 +117,7 @@
     /* ── batched skid trail (MARK_BATCH_VS + MARK_FS) ───────────────────────
      * World-space positions (identity model matrix in tlx.js) + a -1..1 "uv"
      * attribute across each stamp. */
-    const skidMat = fxMaterial({ offset: true });
+    const skidMat = fxMaterial({ offset: true, key: "tlx-fx-skid" });
     skidMat.colorNode = vec3(0.0);
     skidMat.opacityNode = Fn(() => {
       const uvv = vec2(attribute("uv", "vec2")).toVar();        // anchor
@@ -139,7 +143,7 @@
 
     /* ── lamp lens glare (GLOW_VS/FS): additive core + veil ───────────────── */
     const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
-    const glowMat = fxMaterial({ additive: true, doubleSided: true });
+    const glowMat = fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" });
     glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
     glowMat.colorNode = Fn(() => {
       const c = vec2(attribute("fxCorner", "vec2")).toVar();    // anchor
@@ -154,7 +158,7 @@
 
     /* ── FX particles (PARTICLE_VS/FS): two variants replace uAdditive ────── */
     function particleMaterial(additive) {
-      const m = fxMaterial({ additive, doubleSided: true });
+      const m = fxMaterial({ additive, doubleSided: true, key: additive ? "tlx-fx-pt-add" : "tlx-fx-pt" });
       m.positionNode = billboardPosition(attribute("fxSize", "float"));
       const soft = Fn(() => {
         const c = vec2(attribute("fxCorner", "vec2")).toVar();  // anchor
@@ -206,7 +210,7 @@
             break;
           }
         }
-        m = fxMaterial({ doubleSided: true });   // GLX: cull off, depth write off
+        m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal-" + glow });   // GLX: cull off, depth write off
         m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
         const smp = texture(tex);                // samples the mesh "uv" attribute
         m.colorNode = Fn(() => {

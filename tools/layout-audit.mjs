@@ -36,11 +36,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
-import { pickChromium } from "./harness.mjs";
+import { launchChromium } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const require = createRequire(ROOT + "/");
-const { chromium, devices } = require("playwright");
+const { devices } = require("playwright");
 
 const OUT = path.join(ROOT, "artifacts", "layout-audit");
 const SHOT_DIR = path.join(OUT, "shots");
@@ -966,7 +966,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
-const browser = await chromium.launch({ executablePath: pickChromium(),
+const browser = await launchChromium({
   args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
 
 // ONE BOOT PER VIEWPORT, not one per cell. Booting this game means compiling
@@ -1089,7 +1089,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // `polling` is mandatory, not decoration. Playwright polls a predicate on
       // requestAnimationFrame by default, and a page running the game loop
       // starves that poll badly enough that the declared timeout never fires
-      // (CLAUDE.md measures a 3s wait running 109,665 ms). The render loop is
+      // (AGENTS.md measures a 3s wait running 109,665 ms). The render loop is
       // stopped here, but a wait that only bounds itself when the caller
       // remembers a flag is not bounded.
       //
@@ -1182,7 +1182,7 @@ writeIndex(merged);
 // `--jobs=1` re-run, and looked for an afternoon like a button that could not be
 // clicked. Re-probed on a quiet box, every one of those clicks landed in ~200 ms
 // and the same two viewports came back 78 cells / 0 findings / 0 skips. The 12 s
-// budget was measuring the machine, exactly as CLAUDE.md warns a timeout does.
+// budget was measuring the machine, exactly as AGENTS.md warns a timeout does.
 // So: name the skips, and name the retry, because the answer to a skip is never
 // "read the grid harder", it is "run that cell alone".
 const skipped = rows.filter((r) => r.skipped);

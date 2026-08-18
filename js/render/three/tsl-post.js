@@ -71,7 +71,8 @@
     const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
 
     /** Fullscreen overwrite pass material (POST_VS role is three's QuadMesh). */
-    function passMaterial(fragNode) {
+    const _pinKeys = Object.create(null);
+    function passMaterial(fragNode, key) {
       const m = new THREE.NodeMaterial();
       m.fragmentNode = fragNode;
       m.depthTest = false;
@@ -79,6 +80,11 @@
       m.blending = THREE.NoBlending;
       m.fog = false;
       m.lights = false;
+      // Stable family key — see tsl-lit.js pinProgram. Unpinned NodeMaterial
+      // hashes child-node ids; getForRenderCacheKey in tlx.js then forks a
+      // program per QuadMesh. Each pass is one graph, one key.
+      const k = key || "tlx-post";
+      m.customProgramCacheKey = _pinKeys[k] || (_pinKeys[k] = () => k);
       return m;
     }
 
@@ -96,7 +102,7 @@
         soft.assign(soft.mul(soft).div(knee.mul(4.0)));
         const k = max(soft, l.sub(brightU.threshold)).div(max(l, 1e-4));
         return vec4(c.mul(k), 1.0);
-      })()),
+      })(), "tlx-post-bright"),
     };
 
     /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
@@ -116,7 +122,7 @@
         s.addAssign(tex.sample(TL(vUV.add(o2))).rgb.mul(0.0702702703));
         s.addAssign(tex.sample(TL(vUV.sub(o2))).rgb.mul(0.0702702703));
         return vec4(s, 1.0);
-      })());
+      })(), "tlx-post-blur");
       return { mat, tex, U };
     }
     const blurAO = makeBlur();
@@ -156,7 +162,7 @@
           res.assign(g0.add(g1).add(g2).add(g3).mul(0.125).add(g4.mul(0.5)));
         });
         return vec4(res, 1.0);
-      })()),
+      })(), "tlx-post-down"),
     };
 
     /* ── UP (UP_FS in js/render/shaders/post.js): 9-tap tent. Two materials: additive
@@ -176,7 +182,7 @@
           .add(tp(0, 1).add(tp(0, -1)).add(tp(-1, 0)).add(tp(1, 0)).mul(2.0))
           .add(tp(0, 0).mul(4.0));
         return vec4(s.div(16.0), 1.0);
-      })());
+      })(), additive ? "tlx-post-up-add" : "tlx-post-up");
       if (additive) {
         m8Additive(mat);
       }
@@ -277,7 +283,7 @@
           res.assign(ao);
         });
         return vec4(res, res, res, 1.0);
-      })()),
+      })(), "tlx-post-ssao"),
     };
 
     /* ── GODRAY (GODRAY_FS in js/render/shaders/post.js): world-space 16-step march of
@@ -431,7 +437,7 @@
           const hg = g.mul(g).oneMinus().div(hgD.mul(sqrt(hgD)));
           const phase = hg.mul(0.16).add(grU.hgFloor);
           return vec4(grU.sunColor.mul(accum).mul(phase).mul(grU.str).add(lampAccum), 1.0);
-        })()),
+        })(), "tlx-post-godray"),
       };
     }
 
@@ -916,7 +922,7 @@
           c.addAssign(vec3(gn.mul(C.grain).mul(abs(gLuma.sub(0.5)).mul(1.4).oneMinus())));
         });
         return vec4(c, 1.0);
-      })()),
+      })(), "tlx-post-comp"),
     };
 
     /* ── FXAA (FXAA_FS in js/render/shaders/post.js): Lottes compact, LDR resolve.
@@ -957,7 +963,7 @@
           res.assign(select(lB.lessThan(lMin).or(lB.greaterThan(lMax)), rA, rB));
         });
         return vec4(res, 1.0);
-      })()),
+      })(), "tlx-post-fxaa"),
     };
 
     /* ── BLIT (debug ?viz= bisect): paint any chain texture to the canvas.
@@ -972,7 +978,7 @@
         const s = vec4(blitTex.sample(TL(vUV))).toVar();
         const c = select(blitU.mono.greaterThan(0.5), vec3(s.r), s.rgb).mul(blitU.gain);
         return vec4(clamp(c, vec3(0.0), vec3(1.0)), 1.0);
-      })()),
+      })(), "tlx-post-blit"),
     };
 
     return { bright, blurAO, blurGR, down, upAdd, upFinal, spread, ssao, godray,

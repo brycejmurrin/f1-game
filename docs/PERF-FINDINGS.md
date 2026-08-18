@@ -188,7 +188,7 @@ Two rules fall out of that:
   Historically it SILENTLY SKIPPED all 40 tests and reported
   `= run passed (40/40 done, 0 failed)`. The parked spec
   `tests/manual/tracks-visual.spec.js`
-  self-skips when no golden PNGs are committed, and per CLAUDE.md goldens exist
+  self-skips when no golden PNGs are committed, and per AGENTS.md goldens exist
   for the MENUS only. A green line that verifies nothing is more dangerous than
   a red one: the giveaway is that start and finish carry the same timestamp.
 - **`test:api` is not in CI at all**, so it rots. Found 11 specs failing on a
@@ -973,7 +973,7 @@ wall plus eager top-level work.
 deploy.** v8.dev's *Code caching for JavaScript developers*: "Code caches are
 (currently) associated with the URL of a script… changing the URL of a script
 (**including any query parameters!**) creates a new resource entry in our
-resource cache, and with it a new cold cache entry." CLAUDE.md mandates bumping
+resource cache, and with it a new cold cache entry." AGENTS.md mandates bumping
 EVERY `?v=N` after ANY js/css change, so a one-line CSS edit costs every
 returning player a full re-download and a cold compile of the whole wall.
 Per-file content hashing would fix it and is a convention change, not a code

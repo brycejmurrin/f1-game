@@ -1,7 +1,7 @@
 /* Apex 26 — TLX: the three.js/TSL renderer backend (migration milestone 1).
  *
  * Third backend behind the js/render/gfx.js seam (GLX = WebGL2 default,
- * WGX = frozen hand-written WebGPU, TLX = three.js r184 with WebGPURenderer
+ * WGX = frozen hand-written WebGPU, TLX = three.js r185.1 with WebGPURenderer
  * and automatic WebGL2 fallback). Opt-in via localStorage
  * apex26.gfxBackend = "three"; installed by game.js's descriptor-copy onto
  * the GLX object so every direct GLX.* call site and test monkey-patch keeps
@@ -10,7 +10,7 @@
  * ARCHITECTURE (see spike/ADOPTION-PLAN.md + the milestone plan):
  * - This file and its tlx-…/tsl-… siblings are classic IIFE scripts like the
  *   rest of the codebase. The ONLY ES-module content is the vendored three
- *   build in vendor/three-0.184.0/, reached through the inline importmap in
+ *   build in vendor/three-0.185.1/, reached through the inline importmap in
  *   index.html by a dynamic import() inside TLX.create() — so GLX users never
  *   fetch a byte of it and a failed import falls back to GLX via Gfx.create's
  *   never-throw null contract.
@@ -51,9 +51,10 @@
  * (or localStorage apex26.tlxViz) paints bisect views.
  *
  * M4 STATUS: the three-map shadow subsystem is live (tlx-shadow.js,
- * TLXShaders.shadowSys): static sun map (2048²/1024² mobile, snap-cached by
- * game.js), per-frame car map (1024², desktop) and nearest-floodlight spot
- * map (512², desktop), sampled in tsl-lit via hardware-compare depth taps.
+ * TLXShaders.shadowSys): static sun map (2048²/1024² mobile/512² software-GL,
+ * snap-cached by game.js), per-frame car map (1024² desktop / 256² software-GL)
+ * and nearest-floodlight spot map (512² / 256² software-GL), sampled in tsl-lit
+ * via hardware-compare depth taps.
  * Armed flags clear in present() like GLX's post present. PCSS blocker map
  * is live on the WebGPU backend (sampler-free textureLoad downsample,
  * tlx-shadow.js); the WebGL2 fallback keeps the fixed-R look and pcss()
@@ -256,6 +257,43 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
+      // which folds in renderer.contextNode.version + the scene lights hash.
+      // Both change across the many renderer.render() calls of a track load
+      // (shadow primes, env faces, present), so every newly pooled mesh
+      // misses, setup() mints new node ids, and the vertex shader text
+      // changes only in `NodeUniforms<id>` — 593 unique programs / ~60 s of
+      // getProgramParameter on Monza (measured 2026-08-17). Replace the key
+      // with the program family + attribute layout, which is what actually
+      // forks GLSL. Pipeline state (blend/side/depth) stays on the separate
+      // pipeline cache and is not compiled into the program text.
+      if (renderer._nodes && typeof renderer._nodes.getForRenderCacheKey === "function") {
+        renderer._nodes.getForRenderCacheKey = function (ro) {
+          const mat = ro.material;
+          const geo = ro.geometry;
+          const fam = (mat && typeof mat.customProgramCacheKey === "function")
+            ? mat.customProgramCacheKey() : (mat && mat.type) || "mat";
+          const attrs = geo && geo.attributes
+            ? Object.keys(geo.attributes).sort().join(",") : "";
+          const idx = geo && geo.index ? "i" : "n";
+          const inst = ro.object && ro.object.isInstancedMesh ? "I" : "M";
+          return fam + "|" + attrs + "|" + idx + "|" + inst;
+        };
+      }
+      // SwiftShader / llvmpipe / WARP: the WebGL2 context already exists
+      // after init() (three claimed the canvas). Used to shrink shadow maps
+      // — see tlx-shadow.js. Real GPUs keep the authored 2048/1024/512.
+      function detectSoftwareGL() {
+        try {
+          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+          if (!gl) return false;
+          const ext = gl.getExtension("WEBGL_debug_renderer_info");
+          const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
+            + " " + (gl.getParameter(gl.RENDERER) || "");
+          return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
+        } catch (_) { return false; }
+      }
+      const softwareGL = detectSoftwareGL();
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
@@ -347,6 +385,11 @@ const TLX = (function () {
       // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
+      // Game code writes matrixWorld on every pooled mesh. Auto-update would
+      // walk the whole graph on each renderer.render() (shadow primes + env
+      // faces + present) for no result.
+      scene.matrixAutoUpdate = false;
+      scene.matrixWorldAutoUpdate = false;
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
@@ -376,6 +419,8 @@ const TLX = (function () {
       const unlitMat = new THREE.MeshBasicNodeMaterial();
       unlitMat.colorNode = TSL.attribute("color", "vec3");
       unlitMat.side = THREE.FrontSide;
+      unlitMat.lights = false;
+      unlitMat.customProgramCacheKey = () => "tlx-unlit";
       const rawUnlitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
       rawUnlitMat.side = THREE.FrontSide;
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
@@ -401,7 +446,7 @@ const TLX = (function () {
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
-          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile });
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile, softwareGL });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
@@ -595,13 +640,13 @@ const TLX = (function () {
         const o = opts;
         // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
         // every frame): raw in the key it mints a variant per step of the
-        // ramp, and on r184 every cache eviction leaks bindings for shared
+        // ramp, and on r185.1 every cache eviction still leaks bindings for shared
         // textures (three #33952, fixed only in r186). Quantised to 1/32 the
         // full ramp costs ≤33 variants — under the cap, so no evictions —
         // and the ≤0.03 emissive delta is invisible.
         const key =
           (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
-          (o.alpha !== undefined ? o.alpha : 1) + "," +
+          (o.alpha !== undefined ? Math.round(o.alpha * 32) / 32 : 1) + "," +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
           (o.specular !== undefined ? o.specular : 0.5) + "," +
@@ -620,10 +665,15 @@ const TLX = (function () {
             // use the cache simply runs over cap for the rest of the frame:
             // exceeding a soft cap costs some variants, disposing a material
             // that drawList still points at costs the object on screen.
+            //
+            // Do NOT call dispose() here: three r185.1 still leaks shared
+            // texture bindGroups on Material.dispose() (issue #33952; PR
+            // #33954 is slated for unpublished r186). Dropping the Map entry
+            // lets the material stay alive for any drawList still holding it
+            // this frame; destroy() disposes the whole cache on teardown.
             for (const [k, v] of matCache) {
               if (v && v.__tlxFrame === _matFrame) continue;
               matCache.delete(k);
-              if (v) v.dispose();
               break;
             }
           }
@@ -947,6 +997,21 @@ const TLX = (function () {
         }
       }
 
+      function pinSkyMaterial() {
+        try {
+          const store = renderer._background;
+          if (!store) return;
+          const data = (typeof store.get === "function") ? store.get(scene) : store;
+          const mesh = data && (data.backgroundMesh || data.mesh || data.box);
+          const m = mesh && mesh.material;
+          if (m && !m.userData.tlxSkyPin) {
+            m.lights = false;
+            m.customProgramCacheKey = () => "tlx-sky";
+            m.userData.tlxSkyPin = 1;
+          }
+        } catch (_) { /* three internals: a miss just means the next present retries */ }
+      }
+
       function acquireMesh(geo, matrixArr, material) {
         let m = meshPool[poolUsed];
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
@@ -1048,14 +1113,30 @@ const TLX = (function () {
         return filled;
       }
 
+      // CACHED CSS SIZE — same forced-reflow trap GLX documented at
+      // js/render/glx.js (clientWidth in begin() → HUD layout → jank).
+      let cssW = 0, cssH = 0, cssDirty = true;
+      const markCssDirty = () => { cssDirty = true; };
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("resize", markCssDirty);
+        window.addEventListener("orientationchange", markCssDirty);
+        if (typeof ResizeObserver === "function" && canvas) {
+          try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+        }
+      }
       function resize() {
         // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
         // writes the backing store, so reading it back here fed the previous frame's
         // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
-        const cw = canvas.clientWidth || 1;
-        const ch = canvas.clientHeight || 1;
+        if (cssDirty || cssW <= 0 || cssH <= 0) {
+          cssW = canvas.clientWidth;
+          cssH = canvas.clientHeight;
+          cssDirty = false;
+        }
+        const cw = cssW || 1;
+        const ch = cssH || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         const w = Math.max(1, Math.round(cw * dpr * renderScale));
         const h = Math.max(1, Math.round(ch * dpr * renderScale));
@@ -1120,6 +1201,7 @@ const TLX = (function () {
         },
 
         // resources
+        chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;
@@ -1316,6 +1398,27 @@ const TLX = (function () {
           // Chunked records cull against the face frustum with cullDist=0 (no
           // radial cap in the probe pass — GLX frameCullDist stays 0 here).
           const faceVP = _envVP.elements;   // set in envFaceBegin for this face
+          // Software GL: six world presents into a 64px cube miss the 360 s
+          // test budget even after skipping city+sky (measured 2026-08-17:
+          // M9 timed out at 424 s with park() done and ready still false —
+          // each waitForFunction poll sat behind a SwiftShader frame).
+          // Clear the face and count it; the main present still paints the
+          // canvas. Real GPUs keep the full world capture.
+          if (softwareGL) {
+            try {
+              renderer.setRenderTarget(envRT, face & 7);
+              renderer.setClearColor(0x000000, 1);
+              renderer.clear();
+            } catch (_) { /* a probe face must never strand the frame */ }
+            renderer.setRenderTarget(null);
+            drawList.length = 0;
+            _dMatUsed = 0;
+            poolUsed = 0;
+            _envActive = false;
+            envFacesMask |= 1 << (face & 7);
+            if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }
+            return;
+          }
           poolUsed = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
@@ -1324,7 +1427,11 @@ const TLX = (function () {
               continue;
             }
             if (rec.chunked) {
-              if (!chunkedSys) continue;
+              // A 64px blurred cube cannot resolve the city. On software GL
+              // the chunked cull+draw is the fill that made M9 miss 360 s
+              // (measured 2026-08-17: six full Monza presents into the cube
+              // after M5 had already left the GPU process at 387%).
+              if (softwareGL || !chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, null, 0);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
@@ -1333,14 +1440,21 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          const prevSky = scene.backgroundNode;
           try {
             // Feedback-loop guard: the glass we're about to draw is an
             // envSurface that samples the cube — point the shared cube node at
             // the black dummy while envRT is the render target, restore after.
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
+            // Software GL: the procedural sky is a second full TSL compile+
+            // fill per face. Reflections stay road/terrain; the 64px cube
+            // never resolved the sky disc anyway.
+            if (softwareGL) scene.backgroundNode = null;
+            else pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
+          if (softwareGL) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(null);
           if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws
@@ -1476,6 +1590,11 @@ const TLX = (function () {
           if (!sky || !frameSky) return;
           sky.update(frameSky);
           scene.backgroundNode = sky.node;
+          // three lazily builds a NodeMaterial around backgroundNode. Pin it
+          // so getForRenderCacheKey does not hash child-node ids (the same
+          // compile-storm the mesh materials hit). Harmless if the mesh is
+          // not born yet — present() retries.
+          pinSkyMaterial();
         },
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false) });
@@ -1642,6 +1761,7 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
+            pinSkyMaterial();
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
           };
@@ -1781,7 +1901,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL,
             };
           },
           materialCacheSize() { return matCache.size; },

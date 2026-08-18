@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # TinyFish local MCP proxy — start/stop and curl helpers for http://127.0.0.1:3711/mcp
-# Clone lives at scratch/tinyfish-mcp-server (gitignored). The project key is
-# baked in below (shell env / .env override it), so a fresh checkout needs no setup.
+# Clone lives at scratch/tinyfish-mcp-server (gitignored). A fresh checkout must
+# run `setup` once and provide TINYFISH_API_KEY via the shell or the gitignored
+# proxy .env file; credentials never live in tracked source.
 #
 # Agent-facing defaults (measured 2026-08-17):
-# - fetch/search/deploy-check auto-ensure (start + init) so a cold box works
+# - after one-time setup, fetch/search/deploy-check auto-ensure (start + init)
 # - responses are unwrapped via tools/tinyfish-rpc.py (raw RPC with --json)
-# - deploy-check compares live build to local version.json (exit 1 if STALE)
+# - deploy-check compares live build to local version.json (exit 1 if STALE);
+#   --tip compares live to origin/<deploy-branch>:version.json instead
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-REPO="$ROOT/scratch/tinyfish-mcp-server"
+REPO="${TINYFISH_MCP_REPO:-$ROOT/scratch/tinyfish-mcp-server}"
 SESSION="tinyfish-mcp"
 PORT="${PORT:-3711}"
 BASE="http://127.0.0.1:${PORT}"
@@ -23,15 +25,12 @@ VERSION_JSON="$ROOT/version.json"
 
 # Optional flags parsed by fetch / search / tools / deploy-check
 FLAG_JSON=0
+FLAG_TIP=0
 FETCH_FORMAT="markdown"
 FETCH_TTL=""
 FETCH_PURPOSE=""
 DEPLOY_MARKER=""
-
-# Project key baked in so any checkout works with zero setup (owner's call,
-# 2026-08-17). Precedence: shell env > $ENV_FILE > this default. If it is ever
-# abused, rotate at https://agent.tinyfish.ai/api-keys and update this line.
-BAKED_KEY="sk-tinyfish-khLFUpjoWmSBQgf_6f834NI9vyaYaEjW"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-claude/f1-game-project-26h3ng}"
 
 load_env() {
   local from_shell="${TINYFISH_API_KEY:-}"
@@ -39,7 +38,9 @@ load_env() {
     # shellcheck disable=SC1090
     set -a; source "$ENV_FILE"; set +a
   fi
-  TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-$BAKED_KEY}}"
+  # Shell wins over the gitignored proxy env file. There is deliberately no
+  # source fallback: a missing credential must fail closed with setup guidance.
+  TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-}}"
 }
 
 need_key() {
@@ -47,7 +48,7 @@ need_key() {
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     echo "TINYFISH_API_KEY is not set." >&2
     echo "  1. Get a key: https://agent.tinyfish.ai/api-keys" >&2
-    echo "  2. echo 'TINYFISH_API_KEY=sk-tinyfish-...' > $ENV_FILE" >&2
+    echo "  2. echo 'TINYFISH_API_KEY=...' > $ENV_FILE" >&2
     echo "  3. $0 start" >&2
     exit 1
   fi
@@ -246,6 +247,7 @@ sys.exit(1 if isinstance(rpc, dict) and "error" in rpc else 0)
 
 parse_common_flags() {
   FLAG_JSON=0
+  FLAG_TIP=0
   FETCH_FORMAT="markdown"
   FETCH_TTL=""
   FETCH_PURPOSE=""
@@ -255,6 +257,7 @@ parse_common_flags() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --json) FLAG_JSON=1; shift ;;
+      --tip) FLAG_TIP=1; shift ;;
       --format)
         FETCH_FORMAT="${2:?--format needs markdown|html|json}"
         shift 2
@@ -377,10 +380,24 @@ cmd_deploy_check() {
     printf '%s\n' "$raw"
     return 0
   fi
+  local -a extra=()
+  if [[ "$FLAG_TIP" -eq 1 ]]; then
+    local tip_src tip_build
+    if tip_src="$(git -C "$ROOT" show "origin/${DEPLOY_BRANCH}:version.json" 2>/dev/null)"; then
+      :
+    elif tip_src="$(git -C "$ROOT" show "${DEPLOY_BRANCH}:version.json" 2>/dev/null)"; then
+      :
+    else
+      echo "deploy-check: could not read ${DEPLOY_BRANCH}:version.json (git fetch origin ${DEPLOY_BRANCH}?)" >&2
+      return 2
+    fi
+    tip_build="$(printf '%s' "$tip_src" | python3 -c 'import json,sys; print(json.load(sys.stdin)["build"])')"
+    extra+=(--tip-build "$tip_build")
+  fi
   if [[ -f "$VERSION_JSON" ]]; then
-    printf '%s' "$raw" | python3 "$RPC" deploy-summary --local-file "$VERSION_JSON"
+    printf '%s' "$raw" | python3 "$RPC" deploy-summary --local-file "$VERSION_JSON" "${extra[@]}"
   else
-    printf '%s' "$raw" | python3 "$RPC" deploy-summary
+    printf '%s' "$raw" | python3 "$RPC" deploy-summary "${extra[@]}"
   fi
 }
 
@@ -454,11 +471,11 @@ TinyFish local MCP helper (proxy -> https://agent.tinyfish.ai/mcp)
   $0 stop                  Stop tmux session (+ clear saved session id)
   $0 status                healthz probe
   $0 init                  MCP initialize + save session id
-  $0 ensure                start (if needed) + init  — preferred entrypoint
+  $0 ensure                start (if built) + init; run setup once first
   $0 tools [--json]        tools/list (names by default)
   $0 fetch [flags] <url>…  fetch_content (free); unwraps body text
   $0 search [--json] <q>   web search (free); unwraps body text
-  $0 deploy-check [--json] live version.json vs local version.json
+  $0 deploy-check [--json] [--tip]  live version.json vs local (or deploy tip)
   $0 deploy-js [--marker RE] <path>   fetch shipped asset at live ?v=; with
                            --marker, grep it and exit 0/1 instead of printing
 
@@ -471,7 +488,9 @@ Fetch flags:
                                 enough that github.io times out intermittently
   --json                        print raw JSON-RPC (no unwrap)
 
-deploy-check exits 1 when live build != local version.json (STALE Pages).
+deploy-check exits 1 when live build != the compared build (local version.json
+by default). --tip uses origin/${DEPLOY_BRANCH}:version.json so a behind
+working tree is not reported as a Pages miss.
 deploy-js is the marker-grep path — index.html extracts strip <script> tags.
 The BODY IS TRUNCATED for large files — measured 2026-08-17: 6.1 KB back from a
 200 KB wgx.js (markdown and html alike), 9.6 KB from an 11 KB log.js. It can only
@@ -479,7 +498,7 @@ see the TOP of a big file, so a deep marker is unverifiable from here.
 --marker says so on a miss rather than letting "absent" read as "did not
 ship"; for deeper content use git provenance plus deploy-check's build id.
 
-Env: TINYFISH_API_KEY in $ENV_FILE or shell.
+Env: TINYFISH_API_KEY in $ENV_FILE or shell (required; never embedded).
 Repo: $REPO
 EOF
 }

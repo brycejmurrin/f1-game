@@ -5,7 +5,7 @@ Three kinds of docs live here.
 - **Engineering reference** — how the shipped game works today. Read it before
   touching the matching subsystem.
 - **Research** (`research/`) — design notes and investigations still cited from
-  source or from CLAUDE.md. Not a description of current behaviour, but load-bearing.
+  source or from AGENTS.md. Not a description of current behaviour, but load-bearing.
 - **Archive** (`archive/`) — finished plans, superseded designs and build logs.
   Kept for provenance. **Never read these for current structure**; they were
   written against layouts that have since moved.
@@ -83,6 +83,7 @@ sit in this table was indexed by nothing and moved to
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
 | [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey (physics / GLX / WGX / TLX / track / net / UI / career) plus Context7 + tinyfish deploy-check: ranked open bugs and perf opportunities with file evidence. Not a fix log — act from the priority board. |
+| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design for a hosted `apex-tools` MCP that wraps committed CLIs (`verify-track`, `shot`, `gfx-probe`, …) against the local tree; deploy stays TinyFish. Not implemented. |
 
 The four workflows' verbatim per-agent output now lives together in
 [`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,

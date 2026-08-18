@@ -134,6 +134,7 @@ const FULL = [
   "js/game/topmodal.js",
   "js/game/menunav.js",
   "js/game/ariastate.js",
+  "js/game/settings-nav.js",
   "js/game/aerozones.js",
   "js/game/skidmarks.js",
   "js/game/racecontrol.js",

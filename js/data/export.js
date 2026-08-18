@@ -230,6 +230,8 @@ const DataExport = (function () {
     const row = el("div", "dh-export-row");
     const gatherBtn = el("button", "dh-pill dh-active", "Gather");
     const dlBtn = el("button", "dh-pill", "Download");
+    gatherBtn.setAttribute("data-aria-action", "");
+    dlBtn.setAttribute("data-aria-action", "");
     dlBtn.disabled = true;
     row.appendChild(gatherBtn);
     row.appendChild(dlBtn);

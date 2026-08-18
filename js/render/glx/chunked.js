@@ -64,7 +64,15 @@ const GLXChunked = (function () {
       let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const srcIdx = data.idx, vCount = pos.length / 3, big = vCount > 65535;
       const triCount = (srcIdx.length / 3) | 0;
-      if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
+      if (triCount < 2000) {
+        const m = createMesh(data);
+        // createMesh returns null on a lost/absent context (ctxGone); every
+        // mesh/chunked consumer null-guards, so fail closed rather than deref
+        // null.chunks (the same crash class as the createInstancedBatch vao fix).
+        if (!m) return null;
+        m.chunks = null;
+        return m;
+      }
       let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       // Same optional attribs as createMesh: mat (attrib 3) then trk (attrib 4).
       // Dropping trk here is why PER-CHUNK ROAD painted a blank ribbon — the
@@ -93,8 +101,9 @@ const GLXChunked = (function () {
       // built — lowers the transient peak on ~5 M-vert street props. `pos` is still
       // needed below for triangle centroids/AABBs, so it's nulled after the bins.
       nrm = col = mat = null;
-      data.nrm = data.mat = null;
-      if (!data._keepPositions) { data.col = null; data.trk = null; }
+      if (data._keepFullGeometry === false) {
+        data.nrm = data.col = data.mat = data.trk = null;
+      }
       // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
       // grid is bounded (tracks span a few km), so pack signed cell coords.
       const buckets = new Map();

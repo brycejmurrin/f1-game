@@ -332,6 +332,34 @@ test("the parts-category count in the docs matches Parts.CATALOG", () => {
   }
 });
 
+test("live docs and skills cite AGENTS.md as the rule owner, not CLAUDE.md", () => {
+  // CLAUDE.md is a stub. Archive/research/superpowers may still say "CLAUDE.md
+  // says" — those are dated records. Live docs that treat the stub as the
+  // working reference send agents to an empty file.
+  const owner = /CLAUDE\.md(?:'s|\s+says|\s+forbids|\s+mandates|\s+recommended|\s+documents|\s+measures|\s+asks|\s+carries the rules)|per CLAUDE\.md|contradicted CLAUDE\.md|\[`CLAUDE\.md`\]|held by a table in `CLAUDE\.md`|see \*\*Logging\*\* in `CLAUDE\.md`|summarised in CLAUDE\.md|from CLAUDE\.md\. Not a description/i;
+  const allow = /moved from CLAUDE\.md|CLAUDE\.md is a stub|imports AGENTS\.md|do not edit rules into `?CLAUDE\.md`|@AGENTS\.md|byte-for-byte|advertised \d+ Playwright|CLAUDE\.md must import/;
+  const extra = [".cursor/rules/apex-shared.mdc", "tools/README.md"];
+  const jsFiles = [];
+  (function walkJs(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walkJs(rel);
+      else if (e.name.endsWith(".js")) jsFiles.push(rel);
+    }
+  })("js");
+  const bad = [];
+  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS, ...extra, ...jsFiles]) {
+    if (doc === "CLAUDE.md") continue;
+    const isJs = doc.startsWith("js" + path.sep) || doc.startsWith("js/");
+    read(doc).split("\n").forEach((line, i) => {
+      if (allow.test(line)) return;
+      if (isJs ? /CLAUDE\.md/.test(line) : owner.test(line))
+        bad.push(`${doc}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, [], "cite AGENTS.md for current rules; leave archive/research alone");
+});
+
 test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
   // CLAUDE.md and AGENTS.md spent months as byte-for-byte duplicates, both
   // loaded into every session (~490 lines of context for 244 of information)
@@ -490,6 +518,23 @@ test("every tool named in tools/README.md exists on disk", () => {
     .map((m) => m[1])
     .filter((f) => !onDisk.has(f));
   assert.deepEqual(ghosts, [], "tools/README.md documents a tool that does not exist on disk");
+});
+
+test("tools/README documents live test-infra knobs and stays two-column in the runner section", () => {
+  // SPLIT=N and FLOOR_SLACK are load-bearing: an agent who only reads the index
+  // will not know test-shards can fan a group across Playwright shards, or that
+  // fixture-consumer-audit fails when FLOOR lags actual adoption by more than 5.
+  const index = read("tools/README.md");
+  assert.match(index, /SPLIT=N/, "test-shards SPLIT fan-out must be indexed");
+  assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
+  const specs = index.split("\n").find((l) => l.includes("**select-specs.mjs**")) || "";
+  const recall = index.split("\n").find((l) => l.includes("**select-recall.mjs**")) || "";
+  assert.ok(specs, "select-specs row missing");
+  assert.ok(recall, "select-recall row missing");
+  assert.doesNotMatch(specs, /\|\s*check-changes\s*\|/,
+    "select-specs sits in the two-column runner table; do not leak the paired-skill column");
+  assert.doesNotMatch(recall, /\|\s*check-changes\s*\|/,
+    "select-recall sits in the two-column runner table; do not leak the paired-skill column");
 });
 
 test("the tools index lists every tool", () => {

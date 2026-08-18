@@ -1,53 +1,39 @@
 // Measure PROP geometry sitting on/above the racing line for ONE track.
 // Usage: TRACK=redbull PORT=3471 node tools/measure-props-over-road.mjs [--shots]
-// Starts its own http.server on PORT, launches the preinstalled Chromium,
-// captures the props mesh, and reports (as JSON) the worst prop-over-road
-// intrusions with lap-fractions + world coords. With --shots it also writes
-// driver-eye + orbit screenshots per hotspot to artifacts/tmp/pov-<track>-*.png.
-//
-// This is the shared harness for the props-over-road fix pass. It mirrors the
-// geometry used by tests/specs/props-over-road.spec.js so a number here matches CI.
-import { chromium } from "playwright";
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+// Starts an in-process static server via harness.mjs and launches Chromium
+// through the same path every other tool uses (CHROME / PW_CHROMIUM / ladder).
+import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSafePathToken } from "./output-paths.mjs";
 
 const TRACK = process.env.TRACK;
-const PORT = +(process.env.PORT || 3499);
+const PORT = process.env.PORT ? +process.env.PORT : 0;
 const SHOTS = process.argv.includes("--shots");
 if (!TRACK) { console.error("set TRACK=<id>"); process.exit(2); }
 const safeTrack = assertSafePathToken(TRACK, "track id");
 
-// Prefer CHROME / PW_CHROMIUM; else sandbox paths; else Playwright's bundled browser.
-const CHROME = process.env.CHROME || process.env.PW_CHROMIUM ||
-  ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
-    .find(existsSync);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "artifacts", "tmp");
 if (SHOTS) mkdirSync(OUT, { recursive: true });
 
-const srv = spawn("python3", ["-m", "http.server", String(PORT)], { cwd: ROOT, stdio: "ignore" });
-await new Promise((r) => setTimeout(r, 1200));
+const srv = await startStaticServer(ROOT, PORT ? { port: PORT } : {});
 
 const CEIL = 5.0, TOL = 0.15;
 let out = { track: TRACK, max: 0, top: [], err: null };
 try {
-  const b = await chromium.launch({
-    ...(CHROME ? { executablePath: CHROME } : {}),
-    args: ["--use-angle=swiftshader"],
-  });
+  const b = await launchChromium({ args: ["--use-angle=swiftshader"] });
   const p = await b.newPage({ viewport: { width: 900, height: 600 } });
-  await p.goto(`http://localhost:${PORT}/`);
-  await p.waitForFunction(() => window.__apex?.race, null, { timeout: 30000 });
+  await p.goto(srv.url);
+  await p.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 30000 });
   await p.evaluate(() => {
     window.__caps = [];
     const grab = (g) => { try { window.__caps.push({ pos: g && g.pos ? Array.from(g.pos) : null, idx: g && g.idx ? Array.from(g.idx) : null, n: g && g.pos ? g.pos.length / 3 : 0, blocks: g && g.__blocks ? g.__blocks.map((b) => ({ base: b.base, count: b.count, id: b.id })).filter((b) => b.id) : null }); } catch (e) {} };
     for (const fn of ["createChunkedMesh", "createMesh"]) { const o = GLX[fn]; if (!o) continue; GLX[fn] = function (g) { grab(g); return o.apply(this, arguments); }; }
   });
   await p.evaluate((t) => __apex.race(t, "day", "dry"), TRACK);
-  await p.waitForFunction(() => __apex.info().track != null, null, { timeout: 30000 });
+  await p.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: 30000 });
   await p.waitForTimeout(1200);
   out = await p.evaluate(({ CEIL, TOL, TRACK }) => {
     const M = 1200, px = new Float64Array(M), pz = new Float64Array(M), py = new Float64Array(M), rx = new Float64Array(M), rz = new Float64Array(M), hw = new Float64Array(M);
@@ -113,5 +99,5 @@ try {
   }
   await b.close();
 } catch (e) { out.err = String(e && e.message || e); }
-finally { try { srv.kill("SIGKILL"); } catch (_) {} }
+finally { await shutdown(); }
 console.log(JSON.stringify(out));
