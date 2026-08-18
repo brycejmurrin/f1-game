@@ -134,6 +134,10 @@
 
 :root {
   --red: #e10600;
+  /* Carnival inks for menu chrome only (css/menus.css). Not HUD. */
+  --zine-lime: #c8ff3d;
+  --zine-magenta: #ff2bd6;
+  --zine-cyan: #3de8ff;
   --bg: #0a0a0f;
   /* Kept translucent — a sheet often sits over the live 3D scene — but lifted
      to the first elevation step so it reads as a surface above the page. */
