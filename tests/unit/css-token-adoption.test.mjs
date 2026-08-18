@@ -86,7 +86,10 @@ const CEILING = {
   // readout is a peripheral glance during a lap rather than menu chrome a
   // stopped player reads, and at --fs-micro it rendered as a banner beside the
   // minimap. Same class of exception as #hud-speed's raw 34px.
-  subFloorFontSize: 3,
+  // 2026-08-18: 3 -> 5. Deploy 1a3975c5 title-screen landmarks wrote
+  // `#subtitle { font-size: 10px }` twice in css/menus.css (base + stacked
+  // block) — an eyebrow above the wordmark, not menu chrome.
+  subFloorFontSize: 5,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
   // (data, hud, overlays, track-detail) were migrated in the same pass — but
@@ -100,7 +103,10 @@ const CEILING = {
   // duplicate landscape `padding` when they moved onto body[data-width].
   // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
   // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
-  rawSpacing: 467,
+  // 2026-08-18: 467 -> 479. Same 1a3975c5 title-screen pass: landmark
+  // `padding`/`gap` on #menu-primary / #menu-secondary / #pm-category-tabs
+  // and the stacked duplicate block in css/menus.css.
+  rawSpacing: 479,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

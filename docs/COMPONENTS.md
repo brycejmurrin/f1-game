@@ -135,6 +135,8 @@ file and named nowhere, which is exactly the drift the new assertion in
 `tests/unit/component-inventory.test.mjs` now prevents. `.sheet-foot` is the
 most-shared class in the project and had no entry at all:
 
+- `.alt` — `components` + `menus`. Alternate `.bigbtn` look on Select / Career;
+  defined on `.bigbtn.alt` in `components`, re-tinted per-screen in `menus`
 - `.adv-item` — `components` + `tuner`
 - `.adv-more-btn` — `components` + `tuner`
 - `.cs-stat-bar-wrap` — `carsetup` + `menus` + `responsive`
@@ -143,6 +145,8 @@ most-shared class in the project and had no entry at all:
 - `.cs-stat-val` — `carsetup` + `menus` + `responsive`
 - `.cz-liv-none` — `components` + `menus`
 - `.opt-btn` — `components` + `tuner`
+- `.pm-group` / `.pm-group-h` — `components` + `menus`. Pause-settings group and
+  its heading; `menus` re-tints them under `#pmsettings`
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
 - `.res-name` — `career` + `components`
