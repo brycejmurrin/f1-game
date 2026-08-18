@@ -45,7 +45,7 @@ TinyFish `ensure()` threw. Every wrap target is Node. Name collision
 |---|---|
 | **Name** | `apex-tools` (`serverInfo.name`: `apex-tools-mcp`) |
 | **Lives** | `tools/apex-tools-mcp.mjs` + `tools/apex-tools-mcp.sh` |
-| **Transport** | stdio (Cursor). Cloud default is `./tools/apex-tools-mcp.sh call` (repo `.mcp.json` is not auto-loaded). Optional HTTP `127.0.0.1:3713` is **not** required for v1. |
+| **Transport** | stdio (Cursor `.mcp.json` → `serve`). HTTP `127.0.0.1:3713` via `serve-http` (`/mcp`, `/healthz`). Cloud default is `./tools/apex-tools-mcp.sh call` (repo `.mcp.json` is not auto-loaded). Lockstep catalog: `tools/apex-tools-mcp.json`. |
 | **SDK** | Hand-rolled JSON-RPC like `probe-mcp.py` — **no npm MCP SDK**, no build step |
 | **Prefix** | `apex_*` only |
 | **CLI** | `help` / `status` / `list-tools` / `call <name> '<json>'` / `serve` |
@@ -149,8 +149,13 @@ new tree tool must not take the lock.
 | `apex_startline_probe` | `startline-probe.cjs --json` | Optional `--calibrate` / `--snap` / `--frac` |
 | `apex_aero_zone_turns` | `aero-zone-turns.cjs <id>\|--all` | TRACK_VM |
 
-Still not wrapped (use the CLI): `wgx-gallery` (batch Chromium), `graph-parity`
-(needs `BASE=`; vacuous-refuse on a clean tree), HTTP `:3713`.
+| `apex_graph_parity` | `BASE=<ref> graph-parity.cjs <id>\|--all` | **`base` required** (never vacuous HEAD-vs-clean) |
+
+HTTP `serve-http` binds `127.0.0.1:3713` only (`APEX_MCP_HTTP_PORT` override).
+Catalog lockstep: `tools/apex-tools-mcp.json` (stdio + http + tool names).
+
+Still not wrapped (use the CLI): `wgx-gallery` (batch Chromium). chrome-devtools
+stdio occupancy gap stays documented.
 
 All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 
@@ -204,7 +209,7 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
 | `cdmcp-*`, `mcp-cli.mjs`, `chrome-devtools-mcp.sh` | Probe / chrome-devtools |
 | `assets.mjs bake*`, `tests-split --apply`, `rotate-markings --write` | Writers |
-| `graph-parity` as a default tool | Needs `BASE=`; vacuous-refuse on a clean tree (exit 2) |
+| `graph-parity` without `BASE=` | Vacuous-refuse on a clean tree (exit 2). Wrapped only as `apex_graph_parity` with required `base`. |
 
 ---
 
