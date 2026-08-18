@@ -1094,15 +1094,18 @@ probe three's own WebGPU backend in-container: `--backend three --tlx-webgpu
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 
-**TLX software-GL washout was fog-as-clear (2026-08-18).** Dusk
-`fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
-`scene.background`; when the TSL `backgroundNode` missed (software-GL
-compile, HDR-target skip) the whole frame was that beige — kill-fog did
-not help because density was never the path. World frames now clear to
-`skyZenith` (menu / no-zenith still uses fog). Same box, GLX was never
-this washed: it draws the sky as a real fullscreen mesh into the HDR
-buffer. Real-GPU TLX (user device) already looked correct; this is the
-software-probe miss path, not a color-management change.
+**TLX software-GL washout was fog-as-clear + a broken TSL sky (2026-08-18).**
+Dusk `fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
+`scene.background`; when the TSL `backgroundNode` missed the whole frame
+was that beige. When the node *did* compile against the HDR target on
+SwiftShader, `screenUV`/`invViewProj` reconstruction collapsed the dome
+to horizon beige (`~[0.76,0.68,0.52]`) — kill-fog did not help because
+density was never the path. World frames now clear to `skyZenith`, and
+software GL arms `tsl-sky.js`'s zenith-only `fallbackNode` (M5
+`skyState().on` stays true). Real GPUs keep the full SKY_FS node. Same
+box, GLX was never this washed: it draws the sky as a real fullscreen
+mesh. Real-GPU TLX (user device) already looked correct; this is not a
+color-management change.
 
 **Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
 `bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`

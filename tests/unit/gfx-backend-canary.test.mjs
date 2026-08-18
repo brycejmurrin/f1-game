@@ -570,8 +570,12 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
     "zenith must be preferred; fogColor is the no-zenith fallback");
   const drawSky = src.indexOf("drawSky(frameSky)");
   assert.notEqual(drawSky, -1, "drawSky moved");
-  assert.match(src.slice(drawSky, drawSky + 700), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
+  assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
+  assert.match(src.slice(drawSky, drawSky + 1100), /softwareGL && sky\.fallbackNode/,
+    "software GL must arm the zenith-only fallback, not the full SKY_FS node");
+  assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
+    "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
 test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {

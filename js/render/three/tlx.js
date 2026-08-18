@@ -1615,7 +1615,13 @@ const TLX = (function () {
           // is still zenith, not leftover fog from a previous menu frame.
           const z = frameSky.zenith || frameSky.skyZenith;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          scene.backgroundNode = sky.node;
+          // Software GL: the full SKY_FS node is a second TSL compile that
+          // either misses (Color fog → beige void) or reconstructs rays
+          // against the HDR target so every pixel is horizon beige. Arm the
+          // zenith-only fallback; real GPUs keep the procedural dome.
+          // skyState().on stays true (M5) because a backgroundNode is set.
+          scene.backgroundNode = (softwareGL && sky.fallbackNode)
+            ? sky.fallbackNode : sky.node;
           // three lazily builds a NodeMaterial around backgroundNode. Pin it
           // so getForRenderCacheKey does not hash child-node ids (the same
           // compile-storm the mesh materials hit). Harmless if the mesh is
