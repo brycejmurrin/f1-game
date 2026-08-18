@@ -61,6 +61,7 @@ physics-identical clones of the universal option named in `equivalent` — they 
 a distinct mesh, never an advantage, and the test suite enforces that. Every team
 fields one in every category via `FACTORY_PRESETS`, except the four on a
 manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
-`FACTORY_PRESETS` drives AI car MESHES only — never AI physics or player saves.
+`FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs.
+Player saves still go through the garage, not this table.
 
 ---

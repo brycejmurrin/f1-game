@@ -41,5 +41,6 @@ test("makeCars assigns factory aero/ERS to AI, not null", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   assert.match(src, /aeroLoad: \(isP \|\| mate\) \? Parts\.aeroLoad/);
   assert.match(src, /Parts\.aeroLoad\(factoryParts\.setup, team\)/);
+  assert.match(src, /houseStats: Career\.teamStats\(team\)/);
   assert.doesNotMatch(src, /aeroLoad: isP \? Parts\.aeroLoad\([^)]+\): null/);
 });

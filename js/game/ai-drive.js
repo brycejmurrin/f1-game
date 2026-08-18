@@ -16,7 +16,8 @@
      • slow adaptive preferred-lane nudge from traffic density
      • street vs permanent boxed/min-gap/racing-line mix (pack seating)
      • street tow / queue-brake / OT+defend pull / sep clamp / player mass
-     • team houseStyle (from team.stats) + consistency brake band
+     • team houseStyle (from team.stats + seat + career tdev) + consistency
+     brake band + teammate orders (let-by / hold station)
 
    WHAT STAYS IN game.js
      • the O(n) traffic scan (roomL/R, blocker, tow, chaser)
@@ -47,16 +48,53 @@ const AiDrive = (function () {
   // hunger (OT / ERS / dive); hold = park-the-car (follow / defend / bank).
   // Missing stats → 0,0 so existing unit tests that omit `team` stay bit-identical.
   const _house = { attack: 0, hold: 0 };
-  function houseStyle(team) {
-    const s = team && team.stats;
+  function houseStyle(team, seat, stats) {
+    const s = stats || (team && team.stats);
     if (!s) { _house.attack = 0; _house.hold = 0; return _house; }
     _house.attack = clamp(((s.speed + s.accel) * 0.5 - 85) / 25, -1, 1);
     _house.hold = clamp(((s.cornering + s.braking) * 0.5 - 85) / 25, -1, 1);
+    if (seat === 0) {
+      _house.attack = clamp(_house.attack + 0.10, -1, 1);
+      _house.hold = clamp(_house.hold - 0.06, -1, 1);
+    } else if (seat === 1) {
+      _house.attack = clamp(_house.attack - 0.14, -1, 1);
+      _house.hold = clamp(_house.hold + 0.12, -1, 1);
+    }
     return _house;
   }
-  function houseMul(team, lo, hi, axis) {
-    const h = houseStyle(team);
+  function houseMul(team, lo, hi, axis, seat, stats) {
+    const h = houseStyle(team, seat, stats);
     return lerp(lo, hi, ((axis === "hold" ? h.hold : h.attack) + 1) * 0.5);
+  }
+  function houseMulCtx(ctx, lo, hi, axis) {
+    return houseMul(ctx && ctx.team, lo, hi, axis, ctx && ctx.seat, ctx && ctx.stats);
+  }
+
+  // Teammate orders. Seat 0 is the listed lead. #2 does not attack #1; #1 may
+  // pass #2 (let-by). Unknown seats still race carefully. No `id` → not mates
+  // (unit-test factory cards stay bit-identical).
+  function isMate(team, other) {
+    const id = team && team.id;
+    const oid = other && other.team && other.team.id;
+    return !!(id && oid && id === oid);
+  }
+  function ordersMul(team, seat, other, kind) {
+    if (!isMate(team, other)) return 1;
+    const os = other.seat;
+    if (seat == null || os == null) return kind === "ot" ? 0.55 : (kind === "defend" ? 0.4 : 1);
+    if (kind === "ot") {
+      if (seat > os) return 0.22;
+      if (seat < os) return 1.18;
+      return 0.55;
+    }
+    if (kind === "defend") {
+      if (seat > os) return 0.15;
+      if (seat < os) return 1.06;
+      return 0.35;
+    }
+    if (seat > os) return 1.12;
+    if (seat < os) return 0.88;
+    return 1;
   }
 
   // Look-ahead sample pool for updateCar's brake scan. beginLook/pushLook/endLook
@@ -80,9 +118,10 @@ const AiDrive = (function () {
 
   // Following gap added to followBase(). Aware drivers leave space. Streets
   // use a smaller pad so a 22-car train does not accordion 14 m deep.
-  function followPad(t, street, team) {
-    const pad = lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold");
-    return street ? pad * 0.5 : pad;
+  function followPad(t, street, team, seat, other, stats) {
+    const pad = lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats);
+    const out = street ? pad * 0.5 : pad;
+    return out * ordersMul(team, seat, other, "follow");
   }
 
   // Queue distance (m) before the follow pad. Streets used to sit at 12 m
@@ -164,8 +203,9 @@ const AiDrive = (function () {
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
-    const house = houseMul(ctx.team, 0.88, 1.12, "attack");
-    return clamp(0.55 * situ * craftMul * awareMul * expMul * house, 0.08, 2.4);
+    const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
+    const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * house * orders, 0.08, 2.4);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -187,7 +227,7 @@ const AiDrive = (function () {
     if (!straight) return false;
     const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
-    const hs = houseStyle(ctx.team);
+    const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const rich = energy > (0.55 - hs.attack * 0.08);  // attack teams spend earlier
     const desperate = energy > 0.25 && catching;
     // Awareness banks charge: low-awareness drivers still dump early (old feel).
@@ -225,7 +265,7 @@ const AiDrive = (function () {
     const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1);
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
     if (attacking && room > 1.6) {
-      vLim *= lerp(1.0, 1.07, t.craft) * houseMul(ctx.team, 0.99, 1.03, "attack");
+      vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
     }
     return vLim;
   }
@@ -286,7 +326,8 @@ const AiDrive = (function () {
     if (gap >= (street ? 14 : 16)) return 0;
     const side = (ctx.roomR || 0) >= (ctx.roomL || 0) ? 1 : -1;
     const need = side > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
-    const house = houseMul(ctx.team, 0.90, 1.12, "attack");
+    const house = houseMulCtx(ctx, 0.90, 1.12, "attack")
+      * ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
     if (street) {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
         * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
@@ -307,7 +348,8 @@ const AiDrive = (function () {
     if (ctx.street && coverRoom < 2.2) return 0;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
       * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1)
-      * houseMul(ctx.team, 0.90, 1.12, "hold");
+      * houseMulCtx(ctx, 0.90, 1.12, "hold")
+      * ordersMul(ctx.team, ctx.seat, ctx.other, "defend");
     return coverSide * (ctx.street ? mag * 0.45 : mag);
   }
 
@@ -356,7 +398,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    traits, houseStyle, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,

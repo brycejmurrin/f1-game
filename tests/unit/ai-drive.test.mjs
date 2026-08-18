@@ -298,6 +298,55 @@ test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral
     "hold-car teams leave a wider follow pad");
 });
 
+test("seat 0 attacks more than seat 1; omitted seat stays the factory card", () => {
+  const mer = { stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const base = Object.assign({}, A.houseStyle(mer));
+  const lead = Object.assign({}, A.houseStyle(mer, 0));
+  const second = Object.assign({}, A.houseStyle(mer, 1));
+  assert.equal(A.houseStyle(mer).attack, base.attack);
+  assert.ok(lead.attack > base.attack, "lead seat should attack more");
+  assert.ok(second.attack < base.attack, "second seat should hold more");
+  assert.ok(second.hold > lead.hold);
+});
+
+test("career tdev stats shift houseStyle without a new team card", () => {
+  const stock = { stats: { speed: 80, accel: 80, cornering: 80, braking: 80 } };
+  const developed = { speed: 90, accel: 90, cornering: 90, braking: 90 };
+  const a = Object.assign({}, A.houseStyle(stock));
+  const b = Object.assign({}, A.houseStyle(stock, undefined, developed));
+  assert.ok(b.attack > a.attack);
+  assert.ok(b.hold > a.hold);
+});
+
+test("team orders: #2 holds vs #1; #1 may pass #2", () => {
+  const team = { id: "mercedes", stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const lead = { team, seat: 0 };
+  const second = { team, seat: 1 };
+  const rival = { team: { id: "ferrari" }, seat: 0 };
+  assert.equal(A.isMate(team, lead), true);
+  assert.equal(A.isMate(team, rival), false);
+  assert.equal(A.ordersMul(team, 1, lead, "ot"), 0.22);
+  assert.equal(A.ordersMul(team, 0, second, "ot"), 1.18);
+  assert.equal(A.ordersMul(team, 1, rival, "ot"), 1);
+  const midOpen = {
+    traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false, team,
+  };
+  const vsLead = A.otFireRate({ ...midOpen, seat: 1, other: lead });
+  const vsSecond = A.otFireRate({ ...midOpen, seat: 0, other: second });
+  const vsRival = A.otFireRate({ ...midOpen, seat: 1, other: rival });
+  assert.ok(vsLead < vsRival, `#2 vs #1 ${vsLead} should be colder than vs rival ${vsRival}`);
+  assert.ok(vsSecond > vsRival, `#1 vs #2 ${vsSecond} should be hotter than vs rival ${vsRival}`);
+  assert.ok(A.followPad(mid, false, team, 1, lead) > A.followPad(mid, false, team, 0, second),
+    "#2 leaves #1 more space than #1 leaves #2");
+  const cover = {
+    traits: ace, chaser: true, chaserGap: 6, chaserSpeed: 58, speed: 54,
+    kA: 0.01, roomL: 3, roomR: 3, street: false, team, seat: 1, other: lead,
+  };
+  assert.ok(Math.abs(A.defendPull(cover)) < Math.abs(A.defendPull({ ...cover, other: rival })),
+    "#2 should not cover against #1");
+});
+
 test("consistency widens the brake band without moving the mid default", () => {
   const samples = [{ d: 40, k: 0.02, bank: 0 }];
   const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };

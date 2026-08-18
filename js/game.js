@@ -1604,7 +1604,7 @@ function makeCars() {
         aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team) : Parts.aeroLoad(factoryParts.setup, team),
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
-        color: team.color, tier: team.tier, seat: di,
+        color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
@@ -3784,7 +3784,7 @@ function updateCar(c, dt, ranked) {
         traits: aiT, energy: c.energy, otActive: c.otT > 0,
         kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
         towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team,
+        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats,
       })))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
@@ -3831,7 +3831,7 @@ function updateCar(c, dt, ranked) {
                           roomL, roomR, speed: c.speed,
                           aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
                           kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
-                          street: !!track.street, team: c.team,
+                          street: !!track.street, team: c.team, seat: c.seat, stats: c.houseStats, other: blocker,
                         }));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
@@ -3882,7 +3882,7 @@ function updateCar(c, dt, ranked) {
       traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
-      roomL, roomR, team: c.team,
+      roomL, roomR, team: c.team, seat: c.seat, stats: c.houseStats,
     });
     braking = br.braking;
     brakeLvl = br.brakeLvl;
@@ -3899,7 +3899,7 @@ function updateCar(c, dt, ranked) {
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team);
+      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
       if (qb) { braking = true; brakeLvl = qb; }
@@ -4130,15 +4130,15 @@ function updateCar(c, dt, ranked) {
     // inside-room on streets). Tow is no longer permanent-only.
     if (blocker) {
       overtake = AiDrive.otPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team,
-        blockerSpeed: blocker.speed, blockerGap, roomL, roomR,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
+        blockerSpeed: blocker.speed, blockerGap, roomL, roomR, other: blocker,
       });
     }
     let defend = 0;
     if (chaser && !blocker) {
       defend = AiDrive.defendPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, chaser: true,
-        chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
+        chaser: true, chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR, other: chaser,
       });
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
