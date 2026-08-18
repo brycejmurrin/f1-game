@@ -317,7 +317,9 @@ const CEILINGS = {
   // -> 8606 factory-signature field wheels (tyre/brake/rim from getFactorySetup)
   // on the planted spinning path — the old baked AI look, without gluing
   // tyres to chassis attitude.
-  "js/game.js": 8606,
+  // -> 8607: startRace refuses a requested quali grid that quali.order() cannot
+  // map (roster mismatch) instead of gridUp's silent P12 tier shuffle.
+  "js/game.js": 8607,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
