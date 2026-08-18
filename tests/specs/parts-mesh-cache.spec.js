@@ -32,7 +32,7 @@ async function installMeshProbe(page) {
     Car3D.build = function (c1, c2, opts) {
       const data = build(c1, c2, opts);
       if (opts && opts.noWheels && opts.cockpit) cockpitData.add(data);
-      else if (opts && opts.noWheels) bodyData.add(data);
+      else if (opts && opts.noWheels && !opts.field) bodyData.add(data);
       return data;
     };
     Car3D.buildWheel = function () {

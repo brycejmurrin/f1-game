@@ -15,26 +15,28 @@ need → skill (when / don'ts)
 
 ## MCP servers
 
-**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped four
+**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped five
 names). Cloud often does **not** auto-load them — then use the Fallback
 column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
 | **apex-tools** | `apex_*` | Pin safe flags on committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/apex-tools-mcp.sh call <name> '{…}'` |
+| **playwright** | `browser_*` | Interactive Chromium (resize / DOM snapshot / evaluate). Skill **playwright-probe**. | `./tools/playwright-mcp.sh` |
 | **probe** | `chrome_*` / `tinyfish_*` | Passthrough so one catalog reaches Chrome + TinyFish. | `python3 tools/probe-mcp.py` |
 | **chrome-devtools** | (upstream) | Interactive live canvas / DOM / heap. | `tools/chrome-devtools-mcp.sh` |
 | **tinyfish** | (upstream) | Deployed Pages / public web. | `./tools/tinyfish-mcp.sh deploy-check --tip` |
 
 **Cloud / desktop global catalog.** Cloud Agents do **not** read
 `~/.cursor/mcp.json`. Add servers at https://cursor.com/agents (MCP
-dropdown). This session already has host `apex-tools-mcp` from there.
+dropdown) when the host catalog is empty.
 
-Paste **probe** (stdio). That is how Cloud gets `chrome_*` and `tinyfish_*`.
-Do **not** add TinyFish as `http://127.0.0.1:3711/mcp` in the Cloud dropdown —
-HTTP MCP is proxied outside the VM, so loopback never hits the local proxy.
-Do **not** add `playwright` (already a host server). Skip `chrome-devtools`
-unless you want a second Chromium; never run it with host `browser_*`.
+Paste **probe** (stdio) if Cloud did not load the project file. That is how
+Cloud gets `chrome_*` and `tinyfish_*`. Do **not** add TinyFish as
+`http://127.0.0.1:3711/mcp` in the Cloud dropdown — HTTP MCP is proxied
+outside the VM, so loopback never hits the local proxy. `playwright` and
+`apex-tools` already live in project `.mcp.json`. Never run
+`chrome-devtools` next to `browser_*`.
 
 ```json
 {
@@ -52,12 +54,11 @@ after `./tools/tinyfish-mcp.sh ensure`. Put `${workspaceFolder}/` in front
 of `tools/...` there — a bare relative path is resolved from the home
 config, not the repo. Project `.cursor/mcp.json` wins on duplicate names.
 
-**Host catalog** (Cursor Cloud / desktop injects these; they are **not** in
-repo `.mcp.json` — do not add them there):
+**Host catalog** (Cursor Cloud injects these; they are **not** extra rows
+in repo `.mcp.json`):
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **playwright** | `browser_*` | Interactive host Chromium (navigate / snapshot / screenshot). Skill **playwright-probe**. | Committed harness: `apex_eval` / `apex_shot` / `tools/test-bg.mjs` |
 | **mcp-context7** | `resolve-library-id` / `query-docs` | Library docs. | — |
 | **Github** | `get_me` / `issue_*` / `pull_request_*` | GitHub API. | `gh` (read-only in Cloud) |
 | **cursor-cloud** | `run-info` / `environment-*` | This Cloud run / environment. | — |
@@ -79,7 +80,7 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** / TinyFish | `mcp-probe`, curl github.io |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
-| Interactive host browser | host MCP **playwright** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
+| Interactive host browser | repo MCP **playwright** (`browser_*` via `playwright-mcp.sh`) | `test-bg.mjs`; chrome-devtools at the same time |
 | Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats host
@@ -88,8 +89,8 @@ close `browser_*` (`browser_close`) before a browser wrap. Cursor's
 `--mcp-config {"playwright":...}` line is ignored. Never run Chrome MCP
 while Playwright is running.
 
-One command that pokes the four **repo** servers via wrappers (no Chromium;
-missing TinyFish key / chrome clone = warn):
+One command that pokes the five **repo** wrappers (no Chromium;
+missing TinyFish key / chrome clone = warn; playwright `status` only):
 
 ```sh
 ./tools/apex-tools-mcp.sh smoke
@@ -199,5 +200,5 @@ Host catalog empty (this Cloud dashboard often is):
 ```
 
 `dryRun: true` prints argv and spawns nothing. Browser wraps take the lock —
-`apex_status` first. `./tools/apex-tools-mcp.sh smoke` checks the four repo
+`apex_status` first. `./tools/apex-tools-mcp.sh smoke` checks the five repo
 wrappers without taking the lock.

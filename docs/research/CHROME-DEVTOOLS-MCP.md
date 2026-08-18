@@ -18,7 +18,8 @@ Interactive twin of Playwright — not a CI gate. Skills:
 3. **Snapshot uids** look like `1_12`, never bare `1`. Prefer
    `take_snapshot` → `click({uid})` over `getElementById` when checking a11y.
 4. **`resize_page` is unreliable** on this shell — use `emulate` with the full
-   viewport descriptor (`852x393x3,mobile,touch,landscape`).
+   viewport descriptor (`852x393x3,mobile,touch,landscape`), or Playwright MCP
+   `browser_resize` (`tools/playwright-mcp.sh`; never both browsers at once).
 5. **Park `about:blank`** before starting Playwright groups.
 6. **DO NOT JUDGE LAYOUT FROM AN MCP SCREENSHOT ON THIS SHELL.** `take_screenshot`
    here produces images that disagree with the DOM, in both directions, and it

@@ -28,6 +28,7 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "playwright",
     "probe",
     "tinyfish",
   ]);
@@ -37,6 +38,8 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
 });
 
 test("probe-mcp status stays usable when tinyfish is down", () => {
@@ -283,6 +286,19 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
   assert.deepEqual(noBackend.map((c) => c.name), ["new_page", "evaluate_script"]);
   assert.equal(noBackend[0].arguments.url, "http://127.0.0.1:3456/",
     "the documented `npx serve` redirects /index.html, so probes must use the root URL");
+});
+
+test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe ICD", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx-probe.mjs"), "utf8");
+  assert.match(src, /--tlx-webgpu/);
+  assert.match(src, /--lavapipe/);
+  assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
+  assert.match(src, /WEBGPU_LAVAPE_CHROMIUM_ARGS/);
+  assert.match(src, /WEBGPU_LAVAPE_ENV/);
+  assert.match(src, /opts\.backend === "webgpu" \|\| opts\.tlxWebgpu/,
+    "--tlx-webgpu must wait on GLX.awaitSoftPresent like the WGX path");
+  assert.doesNotMatch(src, /no TLX soft-present/,
+    "do not excuse a black TLX WebGPU #game — soft-present is the gate");
 });
 
 test("mcp-cli exits non-zero when an MCP tool returns isError", () => {

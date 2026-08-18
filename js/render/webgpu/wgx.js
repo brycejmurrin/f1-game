@@ -11,7 +11,7 @@
  *   - adapter / device acquisition (async); context configure(); DPR resize;
  *     device-lost reload — unchanged from Phase 1.
  *   - REAL mesh geometry: createMesh / createChunkedMesh build interleaved
- *     GPUBuffers (stride 52 = pos3/nrm3/col3/mat1/trk3) + index buffers; per-chunk
+ *     GPUBuffers (stride 48 = pos3+mat / nrm3+s / col3+pack(x,hw)) + index buffers; per-chunk
  *     AABBs kept for cull. free* call buffer.destroy().
  *   - A LIT render pass into an RGBA16F HDR scene texture (+ depth24plus depth):
  *       * FRAME uniform buffer (viewProj/eye/sun/ambient/sky/fog/tune scalars)
@@ -244,20 +244,25 @@ const WGX = (function () {
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
-  // ── vertex layout: interleaved [pos3, nrm3, col3, mat1, trk3], stride 52 ──
-  // NB: unlike GLX (which keeps mat-less meshes at stride 36), WGX ALWAYS stores
-  // the 10th float (mat, default 0) plus a zero-filled trk3 so a single pipeline
-  // vertex layout serves every mesh — the shader declares @location(3/4)
-  // unconditionally.
-  const VERTEX_STRIDE = 52;   // pos3 nrm3 col3 mat1 trk3
-  const VERTEX_LAYOUT = {
+  // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
+  // mat+trk do NOT ride a 4th vertex attribute on the road VBO — Dawn
+  // delivered 0 for that attr (and for vertex_index on drawIndexed). Cars
+  // (small VBOs) are fine. The ribbon's mat+trk live in a group-2 spatial
+  // LUT (world XZ → nearest centerline sample); fs_main reconstructs
+  // (mat, s, x, hw) from wpos so markings and asphalt do not depend on
+  // the broken attribute. Shared-index ribbons still expand so the
+  // storage[vid] fallback stays 1:1 on adapters where vertex_index works.
+  // CRITICAL: keeping a float32x4 @location(3) on large ribbon VBOs also
+  // broke position fetch on SwiftShader-Dawn (road rasterized to a thin
+  // depth band only). Stride must stay 36 with three attributes.
+  const VERTEX_STRIDE = 36;
+  const VERTEX_FLOATS = 9;
+  const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
-      { shaderLocation: 3, offset: 36, format: "float32" },
-      { shaderLocation: 4, offset: 40, format: "float32x3" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -364,8 +369,11 @@ const WGX = (function () {
     _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right (w - x >= 0)
     _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom (w + y >= 0)
     _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top    (w - y >= 0)
-    _setPlane(planes[4], m2,    m6,    m10,     m14);     // near   (WebGPU clip space z >= 0)
-    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far    (WebGPU clip space w - z >= 0)
+    // frameViewProj is the RAW GL matrix (Z01 is applied only on GPU upload).
+    // Near must be w+z>=0 like GLX/TLX — a WebGPU z>=0 extract on a GL VP
+    // culls the near ribbon (chase/park) and leaves terrain covering the holes.
+    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near (GL clip w+z >= 0)
+    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far  (GL clip w-z >= 0)
   }
   function _aabbInFrustum(planes, mn, mx) {
     for (let i = 0; i < 6; i++) {
@@ -822,17 +830,17 @@ const WGX = (function () {
         frameAmbSky = null, frameAmbGround = null;
 
     // GPU objects assembled below (fail -> return null).
-    let g0Layout, g1Layout, litLayout, litModule, skyModule, blitModule;
+    let g0Layout, g1Layout, g2Layout, litLayout, litModule, skyModule, blitModule;
     let frameUBO, lightSBO, grLightSBO, drawUBO, blitUBO, skyUBO;
     let frameBindGroup, drawBindGroup, skyBindGroup;
-    let skyPipeline, blitPipeline, linearSampler;
+    let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();
 
     // Shadow-pass objects (Phase 3).
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
-    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect / game.js po.reflect); captured each present(), consumed by the NEXT begin()/_writeFrame to line up with the 1-frame ssrTex lag
+    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect). Still packed into next begin() for debug; consume is same-frame in COMPOSITE.
     // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
@@ -880,7 +888,7 @@ const WGX = (function () {
     let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
-    let identInstanceBuf = null;
+    let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
     // submit; one shared buffer left both draws seeing sparks only.
@@ -942,6 +950,19 @@ const WGX = (function () {
 
     try {
       linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+      // Env-cube sampler is its own object: GLX puts 4× anisotropy on the cube
+      // so grazing clearcoat rays do not over-blur. envSamp (binding 5) is
+      // shared with SSR + the PCSS blocker — aniso there would smear those.
+      try {
+        envCubeSamp = device.createSampler({
+          magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
+          maxAnisotropy: 4,
+        });
+      } catch (_) {
+        envCubeSamp = device.createSampler({
+          magFilter: "linear", minFilter: "linear", mipmapFilter: "linear",
+        });
+      }
 
       // Sun shadow map: a depth texture rendered from the sun's POV, sampled by
       // the LIT shader through a comparison sampler (PCF). Fixed size, created
@@ -1035,6 +1056,8 @@ const WGX = (function () {
             texture: { sampleType: "depth" } },
           { binding: 13, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: "uniform" } },
+          { binding: 14, visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "filtering" } },                            // env cube 4× aniso (GLX)
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -1043,7 +1066,13 @@ const WGX = (function () {
             buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: DRAW_USED_BYTES } },
         ],
       });
-      litLayout = device.createPipelineLayout({ bindGroupLayouts: [g0Layout, g1Layout] });
+      g2Layout = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage", minBindingSize: 16 } },
+        ],
+      });
+      litLayout = device.createPipelineLayout({ bindGroupLayouts: [g0Layout, g1Layout, g2Layout] });
 
       litModule  = device.createShaderModule({ code: WGSLChunks.LIT });
       skyModule  = device.createShaderModule({ code: WGSLChunks.SKY });
@@ -1166,6 +1195,20 @@ const WGX = (function () {
         size: [1, 1, MAT_TEX_LAYERS], format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
+      // GLX dummy is explicit 128-grey (identity under albedo*tex*2). An
+      // uninitialized WebGPU texture is undefined — often 0, which crushes
+      // every layer, or garbage that washes the road.
+      {
+        const bpr = 256;
+        const placePx = new Uint8Array(bpr * MAT_TEX_LAYERS);
+        for (let i = 0; i < MAT_TEX_LAYERS; i++) {
+          placePx[i * bpr] = placePx[i * bpr + 1] = placePx[i * bpr + 2] = 128;
+          placePx[i * bpr + 3] = 255;
+        }
+        device.queue.writeTexture(
+          { texture: matPlaceTex }, placePx,
+          { bytesPerRow: bpr, rowsPerImage: 1 }, [1, 1, MAT_TEX_LAYERS]);
+      }
       matPlaceAlbedoView = matPlaceTex.createView({ dimension: "2d-array" });
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
@@ -1191,6 +1234,13 @@ const WGX = (function () {
       _ident[0] = _ident[5] = _ident[10] = _ident[15] = 1;
       _ident[16] = _ident[17] = _ident[18] = 1;
       identInstanceBuf = _mkBuffer(_ident, GPUBufferUsage.VERTEX);
+      // 16 vec4s: fs_main's road LUT probe always indexes 0..15. Dawn also
+      // rejects a 0-byte storage binding. 512 B (not 256) so the mock-GPU
+      // harness does not confuse this with the 256 B composite UBO.
+      zeroAttrBG = device.createBindGroup({
+        layout: g2Layout,
+        entries: [{ binding: 0, resource: { buffer: _mkBuffer(new Float32Array(128), GPUBufferUsage.STORAGE) } }],
+      });
       if (_timestampOk) {
         try {
           _gpuQuerySet = device.createQuerySet({ type: "timestamp", count: 2 });
@@ -1561,14 +1611,21 @@ const WGX = (function () {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       const noAW  = !!(opts && opts.noAlphaWrite);
+      // Road ribbon: always-pass (still writes depth). The stadium floor +
+      // terrain write first and win on SwiftShader-Dawn even with a negative
+      // bias. Must still write depth — skyLate draws after the world and
+      // would erase a no-Z ribbon wherever the floor was discarded.
+      const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
       // Start-line decals pass [-1, -2]; without this they shimmer at range.
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
       const dbC = db ? (db[0] | 0) : 0;
       const dbS = db ? (db[1] | 0) : 0;
+      // Bias offset +32 so road [-8,-16] stays unique (old +8 collided signs).
       const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3)
-                | ((dbC + 8) << 8) | ((dbS + 8) << 16);
+                | ((dbC + 32) << 8) | ((dbS + 32) << 16)
+                | (decal ? (1 << 24) : 0);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -1582,7 +1639,9 @@ const WGX = (function () {
         alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
       };
       const depthStencil = {
-        format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal",
+        format: DEPTH_FORMAT,
+        depthWriteEnabled: !blend,
+        depthCompare: decal ? "always" : "less-equal",
       };
       if (db) {
         depthStencil.depthBias = dbC;
@@ -1591,7 +1650,7 @@ const WGX = (function () {
       }
       p = device.createRenderPipeline({
         layout: litLayout,
-        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
+        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_POS_LAYOUT, INSTANCE_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
         // GLX default: CCW front, cull back. But WebGPU flips NDC-Y → framebuffer-Y
         // relative to WebGL (framebuffer origin is top-left, y-down), which REVERSES
@@ -1772,7 +1831,7 @@ const WGX = (function () {
       // EVERY binding, not just frameUBO. WebGPU rejects a bind group whose
       // resource is null — Safari's message is "Member GPUBufferBinding.buffer
       // is required and must be an instance of GPUBuffer" — and the old guard
-      // named only two of the fifteen. init() calls _rebuildFrameBG() straight
+      // named only two of the sixteen. init() calls _rebuildFrameBG() straight
       // after the UBOs are made, ~90 lines BEFORE matScaleUBO, the material
       // views, the blocker view and both extra shadow views exist, so the
       // first call built a group full of nulls and threw out of init. That
@@ -1785,7 +1844,7 @@ const WGX = (function () {
       // it once their resource lands (env probe, setMaterialMaps, and the
       // explicit call at the end of init).
       if (!g0Layout || !frameUBO || !lightSBO || !matScaleUBO) return;
-      if (!shadowView || !shadowSampler || !linearSampler || !nextSsrView) return;
+      if (!shadowView || !shadowSampler || !linearSampler || !envCubeSamp || !nextSsrView) return;
       if (!blockerView || !carShadowView || !lampShadowView) return;
       if (!matAlbedoView || !matNormalView || !matArraySamp) return;
       const base = (cubeView) => ({
@@ -1805,6 +1864,7 @@ const WGX = (function () {
           { binding: 11, resource: matArraySamp },
           { binding: 12, resource: lampShadowView },
           { binding: 13, resource: { buffer: matScaleUBO } },
+          { binding: 14, resource: envCubeSamp },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -2008,6 +2068,7 @@ const WGX = (function () {
               { binding: 6, resource: _dirtView },   // LENS DIRT grime map (built once at init)
               // Scene depth for flare sunVis occlusion + SSAO bilateral upsample.
               { binding: 7, resource: next.depthSampleView },
+              { binding: 8, resource: next.ssrView || ssrView },
             ],
           });
           next.fxaaBG = device.createBindGroup({
@@ -2124,8 +2185,13 @@ const WGX = (function () {
   return vec4<f32>(p[vi], 0.0, 1.0);
 }
 @fragment fn fs_main(@builtin(position) pos : vec4<f32>) -> @location(0) vec4<f32> {
-  let dim = vec2<f32>(textureDimensions(src));
-  return textureSampleLevel(src, samp, pos.xy / dim, 0.0);
+  // dest pixel → UV over the FULL source. pos is dest-framebuffer pixels;
+  // textureDimensions(src) is the PARENT mip. Dividing by src size (the old
+  // formula) only read the top-left quadrant, so every MAT/env mip was a
+  // zoomed corner — tarmac went to a washed smear vs GLX generateMipmap.
+  let srcSize = vec2<f32>(textureDimensions(src));
+  let dstSize = max(floor(srcSize * 0.5), vec2<f32>(1.0));
+  return textureSampleLevel(src, samp, pos.xy / dstSize, 0.0);
 }`;
           const mod = device.createShaderModule({ code });
           pipe = device.createRenderPipeline({
@@ -2159,7 +2225,7 @@ const WGX = (function () {
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3, mat1, trk3] -> stride-52 Float32Array + index array.
+    // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -2172,16 +2238,25 @@ const WGX = (function () {
       }
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-      const inter = new Float32Array(vCount * 13);
+      const inter = new Float32Array(vCount * VERTEX_FLOATS);
+      const attr = new Float32Array(vCount * 4);
       for (let i = 0; i < vCount; i++) {
-        const o = i * 13;
+        const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
         inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
-        inter[o+9] = mat ? mat[i] : 0;
-        if (trk) { inter[o+10] = trk[i*3]; inter[o+11] = trk[i*3+1]; inter[o+12] = trk[i*3+2]; }
+        attr[i * 4] = mat ? mat[i] : 0;
+        if (trk) {
+          attr[i * 4 + 1] = trk[i * 3];
+          attr[i * 4 + 2] = trk[i * 3 + 1];
+          attr[i * 4 + 3] = trk[i * 3 + 2];
+        }
       }
-      return { vert: inter, idx, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", count: idx.length };
+      return {
+        vert: inter, attr, idx, hasTrk: !!trk,
+        indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16",
+        count: idx.length,
+      };
     }
 
     // ── Resources (Phase 2) ──
@@ -2202,18 +2277,192 @@ const WGX = (function () {
         } else _wgxEscalate(what + " alloc: " + msg.slice(0, 120));
       }
     }
+    // Shared-index ribbons (the road) cannot use drawIndexed on this adapter:
+    // vertex_index stays 0, so every fragment reads matTrkArr[0] (a grass
+    // skirt). Expand to a non-indexed list so vertex_index is 0..N-1 and
+    // matches the storage buffer 1:1.
+    function _expandPull(vert, attr, idx) {
+      const n = idx.length;
+      const ev = new Float32Array(n * VERTEX_FLOATS);
+      const ea = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        // Swap each triangle's last two verts so the ribbon fills under
+        // frontFace cw. Do NOT flip the copied normals — they stay
+        // buildRoad's upOf (track-up). fs_main skips the two-sided N
+        // negate on road draws so the tops do not light as the underside.
+        const flip = (i % 3 === 1) ? 1 : (i % 3 === 2) ? -1 : 0;
+        const v = idx[i + flip], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
+        for (let k = 0; k < VERTEX_FLOATS; k++) ev[o + k] = vert[so + k];
+        ea[ao] = attr[sao]; ea[ao + 1] = attr[sao + 1];
+        ea[ao + 2] = attr[sao + 2]; ea[ao + 3] = attr[sao + 3];
+      }
+      return { vert: ev, attr: ea, count: n };
+    }
+    function _makeAttrBG(attr) {
+      // Dawn rejects a 0-byte storage binding ("Binding size … is zero").
+      // Pad to 256 B (minStorageBufferOffsetAlignment) so a short mesh cannot
+      // fail the bind. 64 floats = 16 vec4s covers the LUT's 16-slot probe.
+      const src = attr && attr.byteLength >= 16 ? attr : new Float32Array(4);
+      const padded = new Float32Array(Math.max(128, Math.ceil(src.length / 64) * 64));
+      padded.set(src);
+      const sbuf = _mkBuffer(padded, GPUBufferUsage.STORAGE);
+      const attrBG = device.createBindGroup({
+        layout: g2Layout,
+        entries: [{ binding: 0, resource: { buffer: sbuf } }],
+      });
+      return { sbuf, attrBG };
+    }
+    // World-XZ spatial LUT for the road ribbon. Group-2 used to be a per-vertex
+    // mat+trk array indexed by vertex_index — that index stays 0 on this
+    // adapter's drawIndexed (and on large non-indexed draws), so every
+    // fragment read a grass skirt. The LUT is 32×32 cells × 16 centerline
+    // samples; fs_main finds the nearest sample to wpos.xz and rebuilds
+    // (mat, s, lateral x, hw). Magic 12345 marks a LUT vs a dummy/attr buffer.
+    function _makeRoadLUT(pos, trk, matArr) {
+      const posA = toF32(pos), trkA = toF32(trk);
+      const vCount = (posA.length / 3) | 0;
+      if (!vCount || trkA.length < vCount * 3) {
+        return _makeAttrBG(null);
+      }
+      const mat = matArr && matArr.length === vCount ? toF32(matArr) : null;
+      const raw = [];
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      let skipHw = 0, skipLat = 0, skipMat = 0;
+      for (let i = 0; i < vCount; i++) {
+        const hw = trkA[i * 3 + 2], lat = trkA[i * 3 + 1];
+        if (hw <= 0.5) { skipHw++; continue; }
+        if (Math.abs(lat) > 0.85) { skipLat++; continue; }
+        if (mat && mat[i] !== 16) { skipMat++; continue; }
+        const px = posA[i * 3], pz = posA[i * 3 + 2];
+        raw.push({ px, pz, s: trkA[i * 3], hw });
+        if (px < minX) minX = px; if (px > maxX) maxX = px;
+        if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+      }
+      if (!raw.length) {
+        return _makeAttrBG(null);
+      }
+      raw.sort((a, b) => a.s - b.s);
+      const MAX_S = 2000;
+      const step = Math.max(1, Math.ceil(raw.length / MAX_S));
+      const samples = [];
+      for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);
+      const pad = 24;
+      minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+      const extX = Math.max(maxX - minX, 1), extZ = Math.max(maxZ - minZ, 1);
+      const GW = 32, GH = 32, SLOT = 16;
+      const cells = new Array(GW * GH);
+      for (let i = 0; i < cells.length; i++) cells[i] = [];
+      const bin = (s, gx, gz) => {
+        if (gx < 0 || gz < 0 || gx >= GW || gz >= GH) return;
+        const list = cells[gx + gz * GW];
+        if (list.length >= SLOT) return;
+        for (let j = 0; j < list.length; j++) {
+          if (list[j].px === s.px && list[j].pz === s.pz) return;
+        }
+        list.push(s);
+      };
+      for (let i = 0; i < samples.length; i++) {
+        const s = samples[i];
+        const gx = Math.max(0, Math.min(GW - 1, (s.px - minX) / extX * GW | 0));
+        const gz = Math.max(0, Math.min(GH - 1, (s.pz - minZ) / extZ * GH | 0));
+        bin(s, gx, gz);
+        bin(s, gx - 1, gz); bin(s, gx + 1, gz);
+        bin(s, gx, gz - 1); bin(s, gx, gz + 1);
+      }
+      for (let gz = 0; gz < GH; gz++) {
+        for (let gx = 0; gx < GW; gx++) {
+          const list = cells[gx + gz * GW];
+          const cx = minX + (gx + 0.5) * extX / GW;
+          const cz = minZ + (gz + 0.5) * extZ / GH;
+          // Ensure every cell has ≥2 spatially distinct samples so the shader
+          // can form a track tangent (a lone sample left best2 at the origin).
+          while (list.length < 2) {
+            let best = null, bestD = Infinity, avoid = list[0] || null;
+            for (let i = 0; i < samples.length; i++) {
+              const s = samples[i];
+              if (avoid && (s.px - avoid.px) * (s.px - avoid.px) + (s.pz - avoid.pz) * (s.pz - avoid.pz) < 0.25) continue;
+              const d = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
+              if (d < bestD) { bestD = d; best = s; }
+            }
+            if (!best) break;
+            list.push(best);
+          }
+        }
+      }
+      const out = new Float32Array(8 + GW * GH * SLOT * 4);
+      out[0] = 12345; out[1] = minX; out[2] = minZ; out[3] = 0;
+      out[4] = extX; out[5] = extZ; out[6] = GW; out[7] = GH;
+      const FAR = { px: 1e6, pz: 1e6, s: 0, hw: 0 };
+      let o = 8;
+      for (let i = 0; i < GW * GH; i++) {
+        const list = cells[i];
+        for (let k = 0; k < SLOT; k++) {
+          const s = list[k] || FAR;
+          out[o] = s.px; out[o + 1] = s.pz; out[o + 2] = s.s; out[o + 3] = s.hw;
+          o += 4;
+        }
+      }
+      const bg = _makeAttrBG(out);
+      bg.isRoadLut = true;
+      return bg;
+    }
+    function _rememberRoadLut(lut) {
+      if (lut && lut.isRoadLut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
+    }
+    function _drawGeom(pass, mesh, instCount) {
+      if (mesh.ibuf) {
+        pass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
+        if (instCount) pass.drawIndexed(mesh.count, instCount);
+        else pass.drawIndexed(mesh.count);
+      } else if (instCount) pass.draw(mesh.count, instCount);
+      else pass.draw(mesh.count);
+    }
+    function _meshFromPull(vert, attr, count, indexFormat, shared) {
+      const vbuf = _mkBuffer(vert, GPUBufferUsage.VERTEX);
+      const a = shared || _makeAttrBG(attr);
+      return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
+    }
     function createMesh(data) {
       const b = _interleave(data);
-      let vbuf = null, ibuf = null;
+      const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
+      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
+      if (lut) _rememberRoadLut(lut);
+      let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       try {
+        if (pulled) {
+          // 4095 = 1365 tris. Large non-indexed draws still saw vertex_index=0
+          // on this adapter; car-sized pieces do not.
+          const PIECE = 4095;
+          if (pulled.count > PIECE) {
+            const pieces = [];
+            for (let off = 0; off < pulled.count; off += PIECE) {
+              let n = Math.min(PIECE, pulled.count - off);
+              n -= n % 3;
+              if (n <= 0) continue;
+              const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
+              const attr = pulled.attr.slice(off * 4, (off + n) * 4);
+              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
+            }
+            const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
+            return {
+              _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
+              count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
+            };
+          }
+          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat, lut);
+          return Object.assign({ _wgx: "mesh" }, m);
+        }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
-        ibuf = _mkBuffer(b.idx,  GPUBufferUsage.INDEX);
+        ibuf = _mkBuffer(b.idx, GPUBufferUsage.INDEX);
+        const a = lut || _makeAttrBG(b.attr);
+        sbuf = a.sbuf; attrBG = a.attrBG;
       } catch (e) {
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);
-        return { _wgx: "mesh", vbuf: null, ibuf: null, count: 0, indexFormat: b.indexFormat, chunks: null };
+        return { _wgx: "mesh", vbuf: null, ibuf: null, sbuf: null, attrBG: null, count: 0, indexFormat: b.indexFormat, chunks: null };
       }
-      return { _wgx: "mesh", vbuf, ibuf, count: b.count, indexFormat: b.indexFormat, chunks: null };
+      return { _wgx: "mesh", vbuf, ibuf, sbuf, attrBG, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
     // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
     // index buffer, matching the DECAL shader vertex layout (js/render/webgpu/wgsl-fx.js).
@@ -2253,14 +2502,28 @@ const WGX = (function () {
       const srcIdx = data.idx;
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = createMesh(data); m.chunks = null; return m; }
+      // Road/ribbon (has trk): stay on createMesh's expanded 4095-vert pieces.
+      // Chunked hasTrk uploaded a second expanded VBO per cell; those draws
+      // never covered the chase canvas even with always-pass + no frustum cull.
+      if (data.trk && data.trk.length >= vCount * 3) {
+        const m = createMesh(data);
+        m.chunks = null;
+        if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
+        if (!data._keepPositions) { data.pos = null; data.idx = null; }
+        return m;
+      }
       const b = _interleave(data);
+      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
+      if (lut) _rememberRoadLut(lut);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexFormat = big ? "uint32" : "uint16";
-      let vbuf = null;
-      try { vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX); }
-      catch (e) {
+      let vbuf = null, sbuf = null, attrBG = null;
+      try {
+        vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
+      } catch (e) {
+        try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+        return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
       }
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
@@ -2282,22 +2545,40 @@ const WGX = (function () {
       try {
         buckets.forEach((bk) => {
           const arr = new IndexArray(bk.idx);
-          const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
-          chunks.push({ ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx });
+          if (b.hasTrk) {
+            const e = _expandPull(b.vert, b.attr, arr);
+            const cv = _mkBuffer(e.vert, GPUBufferUsage.VERTEX);
+            const a = lut || _makeAttrBG(e.attr);
+            chunks.push({
+              vbuf: cv, ibuf: null, count: e.count, indexFormat, min: bk.mn, max: bk.mx,
+              sbuf: a.sbuf, attrBG: a.attrBG,
+            });
+          } else {
+            const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
+            const a = _makeAttrBG(b.attr);
+            chunks.push({
+              ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx,
+              sbuf: a.sbuf, attrBG: a.attrBG,
+            });
+          }
         });
+        if (chunks[0]) { sbuf = chunks[0].sbuf; attrBG = chunks[0].attrBG; }
       } catch (e) {
         // Partial chunk set under memory pressure: release everything — a
         // half-uploaded prop mesh must not pin buffers on a struggling device.
         try { vbuf.destroy(); } catch (_) { /* already invalid */ }
-        for (const c of chunks) { try { c.ibuf.destroy(); } catch (_) { /* already invalid */ } }
+        for (const c of chunks) {
+          try { c.ibuf.destroy(); } catch (_) { /* already invalid */ }
+          try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already invalid */ }
+        }
         _allocFail("createChunkedMesh", e);
-        return { _wgx: "chunked", vbuf: null, chunks: [], count: 0, indexFormat };
+        return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
       }
       // Release only after the complete chunk upload succeeds. A failed upload
       // can then fall back to createMesh without finding its source nulled.
       if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
-      return { _wgx: "chunked", vbuf, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
+      return { _wgx: "chunked", vbuf, sbuf, attrBG, chunks, count: chunks.length ? chunks[0].count : 0, indexFormat };
     }
     // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
@@ -2397,12 +2678,28 @@ const WGX = (function () {
       } catch (_) { return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */ }
     }
 
-    function freeMesh(m) { if (!m) return; if (m.vbuf) m.vbuf.destroy(); if (m.ibuf) m.ibuf.destroy(); }
+    function freeMesh(m) {
+      if (!m) return;
+      if (m.pieces) {
+        for (let i = 0; i < m.pieces.length; i++) freeMesh(m.pieces[i]);
+        return;
+      }
+      if (m.vbuf) m.vbuf.destroy();
+      if (m.sbuf) m.sbuf.destroy();
+      if (m.ibuf) m.ibuf.destroy();
+    }
     function freeChunkedMesh(m) {
       if (!m) return;
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
-      if (m.chunks) for (let i = 0; i < m.chunks.length; i++) m.chunks[i].ibuf.destroy();
+      if (m.chunks) {
+        for (let i = 0; i < m.chunks.length; i++) {
+          const c = m.chunks[i];
+          try { if (c.ibuf) c.ibuf.destroy(); } catch (_) { /* already destroyed */ }
+          try { if (c.vbuf && c.vbuf !== m.vbuf) c.vbuf.destroy(); } catch (_) { /* already destroyed */ }
+          try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already destroyed */ }
+        }
+      } else if (m.sbuf) m.sbuf.destroy();
     }
     function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
 
@@ -2709,7 +3006,11 @@ const WGX = (function () {
       d[base + 22] = o.clearcoat != null ? o.clearcoat : 0;
       d[base + 23] = o.carPaint  != null ? o.carPaint  : 0;
       d[base + 24] = o.sparkle   != null ? o.sparkle   : 1;
-      d[base + 25] = o._instanced ? 1 : 0; d[base + 26] = 0; d[base + 27] = 0;
+      d[base + 25] = o._instanced ? 1 : 0;
+      d[base + 26] = o.surfaceId != null ? o.surfaceId : 0;
+      // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
+      // discards the LUT footprint. Never set this on cars/props (mat2.w).
+      d[base + 27] = (o.buryRibbon || (o.detail || 0) > 0.1) ? 1 : 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -2718,49 +3019,91 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
+    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
+    // Group 2 = mat+trk storage (vertex_index).
+    function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
+      pass.setVertexBuffer(0, vbuf);
+      pass.setVertexBuffer(1, instBuf || identInstanceBuf);
+      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+    }
+
+    // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
+    // draws second with negative bias. Push detail-bearing ground draws away.
+    function _litOpts(opts) {
+      const o = opts || {};
+      const extra = {};
+      if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
+        extra.depthBias = [3, 6];
+      if (o.surfaceId === 16) {
+        // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
+        // CCW after that flip and were culled to a pair of edge lines.
+        extra.doubleSided = true;
+        extra.decal = true;
+      }
+      return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
+    }
 
     function draw(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
+      const o = _litOpts(opts);
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      _writeDraw(slot, model, opts);
-      litPass.setPipeline(_litPipeline(opts));
+      _writeDraw(slot, model, o);
+      litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, mesh.vbuf);
-      litPass.setVertexBuffer(1, identInstanceBuf);
-      litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
-      litPass.drawIndexed(mesh.count);
+      if (mesh.pieces) {
+        for (let i = 0; i < mesh.pieces.length; i++) {
+          const p = mesh.pieces[i];
+          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+          _drawGeom(litPass, p);
+        }
+        return;
+      }
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+      _drawGeom(litPass, mesh);
     }
 
     function drawChunked(mesh, model, opts) {
       if (!litPass || !mesh || !mesh.vbuf) return;
+      const o = _litOpts(opts);
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
-      _writeDraw(slot, model, opts);
-      litPass.setPipeline(_litPipeline(opts));
+      _writeDraw(slot, model, o);
+      litPass.setPipeline(_litPipeline(o));
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, mesh.vbuf);
-      litPass.setVertexBuffer(1, identInstanceBuf);
       if (!mesh.chunks) {
-        litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
-        litPass.drawIndexed(mesh.count);
+        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+        _drawGeom(litPass, mesh);
         return;
       }
-      const cull = !!frameViewProj;
+      // Never frustum/radial-cull the road ribbon. A bad near-plane extract
+      // already hid the chase/park chunks once (terrain filled the holes).
+      const cull = !!frameViewProj && o.surfaceId !== 16;
       if (cull) _extractPlanes(frameViewProj, _fcPlanes);
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
+      let drew = 0, culled = 0;
+      let nearCull = 0, nearDraw = 0;
+      const nearR = 80;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
-        litPass.setIndexBuffer(ch.ibuf, ch.indexFormat);
-        litPass.drawIndexed(ch.count);
+        const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
+        const isNear = dist2 < nearR * nearR;
+        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
+          culled++;
+          if (isNear) nearCull++;
+          continue;
+        }
+        if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
+        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
+        _drawGeom(litPass, ch);
+        drew++;
+        if (isNear) nearDraw++;
       }
     }
 
@@ -3067,10 +3410,9 @@ const WGX = (function () {
       }
       _passSamples = 1;
       const o = opts || {};
-      // Capture the wet-road SSR strength GLX consumes as opts.reflect (game.js
-      // po.reflect = _ssr). Stored for the NEXT frame's _writeFrame (params4.w),
-      // matching the 1-frame lag: this present() writes ssrTex, the next lit pass
-      // both samples it AND scales it by this same reflect value.
+      // Capture wet-road SSR strength (game.js po.reflect). COMPOSITE consumes
+      // this frame's ssrTex in the same present(); _frameReflect still feeds
+      // next begin() params4.w for anything that still reads the LIT lane.
       _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
@@ -3110,9 +3452,8 @@ const WGX = (function () {
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
-      // ── SSR (full-res) — wet-road reflections into ssrTex, consumed by the LIT
-      //    pass NEXT frame (frame binding 6, 1-frame lag). Skipped when dry; the
-      //    LIT wet-gate (wet=0) no-ops any stale content, so no clear is needed.
+      // ── SSR (full-res) — wet-road / lacquer reflections into ssrTex, consumed
+      //    by COMPOSITE this same present() (binding 8). Skipped when dry.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
       // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
       // on wetness ALONE kept dispatching the 24-step march on a shed device for
@@ -3139,6 +3480,7 @@ const WGX = (function () {
         const ssrNear = (o.ssrNear != null) ? o.ssrNear : -2.5;
         s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;
         s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear;
+        s[48] = (T && T.carGloss != null) ? T.carGloss : 1.0;   // gloss.x = uCarGloss
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
@@ -3330,16 +3672,30 @@ const WGX = (function () {
         s[39] = (T && T.highlights != null) ? T.highlights : 0;                           // tone0
         s[40] = (T && T.whites     != null) ? T.whites     : 0;
         s[41] = (T && T.toe        != null) ? T.toe        : 0;
-        s[42] = (T && T.shoulder   != null) ? T.shoulder   : 0; s[43] = 0;                 // tone1
+        s[42] = (T && T.shoulder   != null) ? T.shoulder   : 0;
+        // tone1.w = hdrGradeOn (GLX uHdrGradeOn / TLX C.hdrGradeOn). Skip the
+        // lift/gamma/gain/tone ALU when every knob is the shipped neutral.
+        const _hg = T && (
+          (T.blacks || 0) !== 0 || (T.shadows || 0) !== 0 || (T.midtones || 0) !== 0 ||
+          (T.highlights || 0) !== 0 || (T.whites || 0) !== 0 || (T.toe || 0) !== 0 ||
+          (T.shoulder || 0) !== 0 || (T.liftR || 0) !== 0 || (T.liftG || 0) !== 0 ||
+          (T.liftB || 0) !== 0 || (T.gammaR != null && T.gammaR !== 1) ||
+          (T.gammaG != null && T.gammaG !== 1) || (T.gammaB != null && T.gammaB !== 1) ||
+          (T.gainR != null && T.gainR !== 1) || (T.gainG != null && T.gainG !== 1) ||
+          (T.gainB != null && T.gainB !== 1));
+        s[43] = _hg ? 1 : 0;
         s[44] = (T && T.liftR      != null) ? T.liftR      : 0;
         s[45] = (T && T.liftG      != null) ? T.liftG      : 0;
-        s[46] = (T && T.liftB      != null) ? T.liftB      : 0; s[47] = 0;                 // lift
+        s[46] = (T && T.liftB      != null) ? T.liftB      : 0;
+        s[47] = (lastFrame && lastFrame.wetness) || 0;                                    // lift.w = wetness (same-frame SSR)
         s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
         s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
-        s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1; s[51] = 0;                 // gamma
+        s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1;
+        s[51] = (o.reflect != null) ? o.reflect : 0;                                      // gamma.w = wet-road SSR
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
-        s[54] = (T && T.gainB      != null) ? T.gainB      : 1; s[55] = 0;                 // gain
+        s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
+        s[55] = (T && T.carReflect != null) ? T.carReflect : 0.05;                        // gain.w = carReflect
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;
@@ -3445,31 +3801,41 @@ const WGX = (function () {
     function castShadow(mesh, model) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
-      shadowPass.setVertexBuffer(0, mesh.vbuf);
       shadowPass.setVertexBuffer(1, identInstanceBuf);
-      if (mesh.chunks) {   // a chunked mesh cast without cull — draw every chunk
-        for (let i = 0; i < mesh.chunks.length; i++) {
-          const ch = mesh.chunks[i];
-          shadowPass.setIndexBuffer(ch.ibuf, ch.indexFormat);
-          shadowPass.drawIndexed(ch.count);
+      if (mesh.pieces) {
+        for (let i = 0; i < mesh.pieces.length; i++) {
+          const p = mesh.pieces[i];
+          shadowPass.setVertexBuffer(0, p.vbuf);
+          _drawGeom(shadowPass, p);
         }
         return;
       }
-      shadowPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
-      shadowPass.drawIndexed(mesh.count);
+      if (mesh.chunks) {   // a chunked mesh cast without cull — draw every chunk
+        for (let i = 0; i < mesh.chunks.length; i++) {
+          const ch = mesh.chunks[i];
+          shadowPass.setVertexBuffer(0, ch.vbuf || mesh.vbuf);
+          _drawGeom(shadowPass, ch);
+        }
+        return;
+      }
+      shadowPass.setVertexBuffer(0, mesh.vbuf);
+      _drawGeom(shadowPass, mesh);
     }
     function castShadowChunked(mesh, model) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
-      shadowPass.setVertexBuffer(0, mesh.vbuf);
       shadowPass.setVertexBuffer(1, identInstanceBuf);
-      if (!mesh.chunks) { shadowPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat); shadowPass.drawIndexed(mesh.count); return; }
+      if (!mesh.chunks) {
+        shadowPass.setVertexBuffer(0, mesh.vbuf);
+        _drawGeom(shadowPass, mesh);
+        return;
+      }
       const cull = !!_shadowLightVP;   // planes were extracted into _fcPlanes in shadowBegin
       for (let i = 0; i < mesh.chunks.length; i++) {
         const ch = mesh.chunks[i];
         if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        shadowPass.setIndexBuffer(ch.ibuf, ch.indexFormat);
-        shadowPass.drawIndexed(ch.count);
+        shadowPass.setVertexBuffer(0, ch.vbuf || mesh.vbuf);
+        _drawGeom(shadowPass, ch);
       }
     }
     function shadowEnd() {
@@ -3557,6 +3923,26 @@ const WGX = (function () {
       _lampShadowArmed = true;
     }
 
+    // Byte-exact layer upload (GLX texSubImage3D parity). copyExternalImageToTexture
+    // into rgba8unorm converts sRGB → linear, so a mean-normalised 128-grey
+    // asphalt scan lands at ~0.22 and `albedo * tex * 2.0` crushes or — on
+    // implementations that encode the other way — washes the road vs WebGL2.
+    function _matLayerBytes(img, size) {
+      if (!img) return null;
+      if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) return img;
+      if (typeof ImageData !== "undefined" && img instanceof ImageData) return img.data;
+      try {
+        const cv = (typeof OffscreenCanvas !== "undefined")
+          ? new OffscreenCanvas(size, size)
+          : Object.assign(document.createElement("canvas"), { width: size, height: size });
+        const c2d = cv.getContext("2d", { alpha: true, colorSpace: "srgb" })
+          || cv.getContext("2d", { alpha: true })
+          || cv.getContext("2d");
+        if (!c2d) return null;
+        c2d.drawImage(img, 0, 0, size, size);
+        return c2d.getImageData(0, 0, size, size).data;
+      } catch (_) { return null; }
+    }
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
       const n = layers || MAT_TEX_LAYERS;
@@ -3567,13 +3953,15 @@ const WGX = (function () {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         let filled = 0;
+        const bpr = size * 4;
         for (let i = 0; i < n; i++) {
           const img = images[i];
           if (!img) continue;
           try {
-            if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) {
-              device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, img,
-                { bytesPerRow: size * 4, rowsPerImage: size }, [size, size, 1]);
+            const bytes = _matLayerBytes(img, size);
+            if (bytes && bytes.length >= bpr * size) {
+              device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, bytes,
+                { bytesPerRow: bpr, rowsPerImage: size }, [size, size, 1]);
             } else {
               device.queue.copyExternalImageToTexture(
                 { source: img, flipY: false },
@@ -3763,10 +4151,8 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      litPass.setVertexBuffer(0, batch.vbuf);
-      litPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
-      litPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
-      litPass.drawIndexed(batch.count, n);
+      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
+      _drawGeom(litPass, batch, n);
     }
     function freeInstancedBatch(batch) {
       if (!batch) return;
@@ -3800,8 +4186,7 @@ const WGX = (function () {
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
       shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
-      shadowPass.setIndexBuffer(batch.ibuf, batch.indexFormat);
-      shadowPass.drawIndexed(batch.count, n);
+      _drawGeom(shadowPass, batch, n);
     }
 
     function drawParticles(data, floatCount, additive) {
@@ -4378,6 +4763,9 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
+      capturePixels,
+      awaitSoftPresent,
+      roadLutReady: () => _roadLutReady,
       softPresent: () => !!_softGpu,
 
       // extension: lets a future __apex.gfxBackend() report the active path.

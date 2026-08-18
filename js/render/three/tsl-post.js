@@ -108,7 +108,7 @@
     /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
-    function makeBlur() {
+    function makeBlur(key) {
       const tex = texture(ctx.blackTex);
       const U = { dir: uniform(new THREE.Vector2()) };
       const mat = passMaterial(Fn(() => {
@@ -122,11 +122,15 @@
         s.addAssign(tex.sample(TL(vUV.add(o2))).rgb.mul(0.0702702703));
         s.addAssign(tex.sample(TL(vUV.sub(o2))).rgb.mul(0.0702702703));
         return vec4(s, 1.0);
-      })(), "tlx-post-blur");
+      })(), key);
       return { mat, tex, U };
     }
-    const blurAO = makeBlur();
-    const blurGR = makeBlur();
+    // These are the same graph shape but NOT the same bindings. Reusing one
+    // customProgramCacheKey makes three retain blurAO's texture-node binding
+    // when blurGR compiles, so the god-ray chain blurs the near-white AO buffer
+    // and the composite adds it across the whole frame.
+    const blurAO = makeBlur("tlx-post-blur-ao");
+    const blurGR = makeBlur("tlx-post-blur-godray");
 
     /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);
@@ -243,20 +247,24 @@
           const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
           If(N.z.lessThan(0.0), () => { N.assign(N.negate()); });
           const radius = float(ssaoU.radius).toVar();
-          const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
-          const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
-          const ca = cos(ang).toVar(), sa = sin(ang).toVar();
           const occ = float(0.0).toVar();
-          for (let ki = 0; ki < 8; ki++) {         // 12→8 taps (half-res + blurred)
-            const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
-            const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
-            const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
-            const V = S.sub(P).toVar();
-            const len = length(V).toVar();
-            const ndv = max(dot(N, V.div(max(len, 1e-4))).sub(0.10), 0.0);
-            const range = smoothstep(radius, radius.mul(0.4), len);
-            occ.addAssign(ndv.mul(range));
-          }
+          // GLX/WGX: skip the 8 dependent depth taps when AO strength is 0
+          // (contact shadows still run). strength is a uniform.
+          If(ssaoU.strength.greaterThan(0.0), () => {
+            const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
+            const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
+            const ca = cos(ang).toVar(), sa = sin(ang).toVar();
+            for (let ki = 0; ki < 8; ki++) {         // 12→8 taps (half-res + blurred)
+              const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
+              const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
+              const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
+              const V = S.sub(P).toVar();
+              const len = length(V).toVar();
+              const ndv = max(dot(N, V.div(max(len, 1e-4))).sub(0.10), 0.0);
+              const range = smoothstep(radius, radius.mul(0.4), len);
+              occ.addAssign(ndv.mul(range));
+            }
+          });
           const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
           // Contact shadows: short view-space march toward the sun (SSAO_FS).
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {

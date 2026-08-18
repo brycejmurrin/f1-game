@@ -93,8 +93,8 @@ Session shape — this is what controls both wall time and waiting:
 2. `render({what:"view"|"map"|"circuit"|"car"})` — the character raster of the
    3D scene. Stale under `headless(true)`; `snapCam()` REQUIRED after
    `park()`/`jump()`.
-3. DOM/a11y snapshot (chrome-devtools MCP) — menu/HUD work only; the canvas is
-   invisible to it.
+3. DOM/a11y snapshot (Playwright MCP `browser_snapshot` / `browser_resize` /
+   `browser_evaluate`, or chrome-devtools) — menu/HUD work only; hide `#game`.
 4. Pixel screenshot — visual sign-off only, never an assertion source. For
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
@@ -114,7 +114,8 @@ a non-blank visible blit.
 | **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
 | **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
 | **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | AUTO is WebGPU (phones/Safari included, lite stack). CI still pins WebGL2 (`tlxForceGL=1`). `mappedAtCreation` → `queue.writeBuffer`. Never `getCurrentTexture()` on software. |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 
 Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
 §Measured. Env packages + install: §Cursor Cloud below.
@@ -178,22 +179,25 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP.** Repo catalog is four servers; Cloud also injects host **playwright**
-(`browser_*`) — map in `docs/AGENT-SURFACE.md`. `apex-tools` (`apex_*`) pins
+**MCP.** Repo catalog is five servers (`apex-tools`, `playwright`,
+`tinyfish`, `chrome-devtools`, `probe`) — map in `docs/AGENT-SURFACE.md`.
+`apex-tools` (`apex_*`) pins
 local `tools/` CLIs; `probe` is `chrome_*` / `tinyfish_*`; chrome-devtools is
-the live canvas; tinyfish is Pages; playwright is interactive host Chromium
-(not `test-bg`). Keep
+the live canvas; tinyfish is Pages; playwright (`browser_*` via
+`tools/playwright-mcp.sh`) is interactive Chromium (not `test-bg`). Keep
 **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
 serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
-Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
-servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
+Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same five
+servers, lockstepped (`apex-tools`, `playwright`, `tinyfish`, `chrome-devtools`,
+`probe`). `agent mcp enable apex-tools` then `list-tools`. If the
 host catalog is empty (this Cloud dashboard often is), fall back to
-`./tools/apex-tools-mcp.sh call`. Smoke the four wrappers (no Chromium):
-`./tools/apex-tools-mcp.sh smoke`. TinyFish key: shell / gitignored `.env`
-/ tracked fallback in `tools/tinyfish-mcp.sh` (`TINYFISH_NO_FALLBACK=1`
+`./tools/apex-tools-mcp.sh call`. Smoke the repo wrappers (no Chromium):
+`./tools/apex-tools-mcp.sh smoke`. Playwright UI survey:
+`./tools/playwright-mcp.sh`. TinyFish key: shell / gitignored `.env` /
+tracked fallback in `tools/tinyfish-mcp.sh` (`TINYFISH_NO_FALLBACK=1`
 disables it; custom key: https://agent.tinyfish.ai/home).
 `./tools/tinyfish-mcp.sh deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`.
-`apex_status` occupancy includes host Playwright MCP (`browser_*`); close it
+`apex_status` occupancy includes Playwright MCP (`browser_*`); close it
 before a browser wrap. Do not attach `mcp-probe` for a `version.json` check.
 Never run Chrome MCP while Playwright is running.
 

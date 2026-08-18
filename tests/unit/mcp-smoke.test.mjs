@@ -1,4 +1,4 @@
-// mcp-smoke.test.mjs — four-server shell probe (no Chromium).
+// mcp-smoke.test.mjs — five-wrapper shell probe (no Chromium).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -20,14 +20,14 @@ function run(args, extraEnv = {}) {
   });
 }
 
-test("mcp-smoke --dry-run lists the four repo servers and never launches Chromium", () => {
+test("mcp-smoke --dry-run lists the five repo servers and never launches Chromium", () => {
   const r = run(["--dry-run"]);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.equal(body.dryRun, true);
   const servers = body.plan.map((s) => s.server);
-  for (const need of ["apex-tools", "probe", "chrome-devtools", "tinyfish"]) {
+  for (const need of ["apex-tools", "probe", "chrome-devtools", "playwright", "tinyfish"]) {
     assert.ok(servers.includes(need), `dry-run plan missing ${need}`);
   }
   const argv = body.plan.flatMap((s) => s.argv).join(" ");
@@ -35,16 +35,20 @@ test("mcp-smoke --dry-run lists the four repo servers and never launches Chromiu
   assert.doesNotMatch(argv, /deploy-check/);
   assert.doesNotMatch(argv, /chrome-start/);
   assert.doesNotMatch(argv, /test-bg/);
+  assert.doesNotMatch(argv, /playwright-mcp\.sh run/);
   assert.ok(!body.steps?.length, "dry-run must not spawn");
 });
 
-test("smokePlan chrome/tinyfish steps stay status/help", () => {
+test("smokePlan chrome/playwright/tinyfish steps stay status/help", () => {
   const plan = smokePlan();
   const chrome = plan.find((s) => s.server === "chrome-devtools");
+  const pw = plan.find((s) => s.server === "playwright");
   const fish = plan.find((s) => s.server === "tinyfish");
   assert.ok(chrome.argv.includes("status"));
   assert.ok(!chrome.argv.includes("verify"));
   assert.ok(!chrome.argv.includes("run"));
+  assert.ok(pw.argv.includes("status"));
+  assert.ok(!pw.argv.includes("run"));
   assert.ok(fish.argv.includes("help"));
   assert.ok(!fish.argv.includes("ensure"));
 });
@@ -66,7 +70,7 @@ test("help names the never-wrap and the write path", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Never wraps test-bg/);
   assert.match(r.stdout, /mcp-smoke\.json/);
-  assert.match(r.stdout, /playwright stays out of \.mcp\.json/);
+  assert.match(r.stdout, /playwright status only/);
 });
 
 test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {

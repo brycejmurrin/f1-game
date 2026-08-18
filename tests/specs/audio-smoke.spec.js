@@ -23,6 +23,49 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors }
   expect(pageErrors).toEqual([]);
 });
 
+test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable click", async ({ page }) => {
+  await page.addInitScript(() => {
+    // MUSIC is intentionally still on: these independent saved states used to
+    // make AudioPanel.init() lift the master back on during boot.
+    localStorage.setItem("apex26.sound", "false");
+    localStorage.setItem("apex26.music", "true");
+  });
+  const engineRequests = [];
+  page.on("request", (request) => {
+    if (/assets\/sfx\/f1_(?:engine|rev)\.mp3(?:\?|$)/.test(request.url())) {
+      engineRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });
+
+  // This is a genuine first pointer gesture and also exercises the Settings
+  // button's formerly unconditional GameAudio.init().
+  await page.locator("#mb-settings").click();
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => ({
+    enabled: GameAudio.enabled(),
+    contextState: GameAudio.debug().contextState,
+    pressed: document.getElementById("soundbtn").getAttribute("aria-pressed"),
+    stored: localStorage.getItem("apex26.sound"),
+  }))).toEqual({
+    enabled: false,
+    contextState: "uninitialised",
+    pressed: "false",
+    stored: "false",
+  });
+  expect(engineRequests).toEqual([]);
+
+  // Re-enable with a real click. init() must run synchronously in this gesture
+  // so autoplay policies permit resume, and only now may samples be requested.
+  await page.locator("#pm-settings-close").click();
+  await page.locator("#soundbtn").click();
+  await expect.poll(() => page.evaluate(() => GameAudio.debug().contextState))
+    .not.toBe("uninitialised");
+  await expect.poll(() => engineRequests.length).toBe(2);
+});
+
 test("re-enabling sound during a race restarts race music", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, { timeout: 10000 });

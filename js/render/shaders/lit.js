@@ -842,6 +842,12 @@ void main() {
       N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
     }
   }
+  // SAA source: geometric N + peel, BEFORE wall/MAT bump. WGX cannot take
+  // dpdx after the non-uniform matId branch (lifecycle ratchet), so it mixes
+  // saaVarGeo with a hoisted peel. Feeding dFdx of the bumped wall N here
+  // widened roughness on every brick/concrete/corrugation seam and made
+  // WebGL2 walls read duller than WebGPU. Lighting still uses the bumped N.
+  vec3 Nsaa = N;
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
   // response, not just an albedo tint applied after the fact.
@@ -920,9 +926,9 @@ void main() {
   // After the material's grain/tint so the paint sits ON the tarmac, not under it.
   roadMarkings(albedo, rough);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
-  // screen space (geometry edges, micro-normal at distance) so thin bright
-  // highlights sheen smoothly instead of shimmering pixel-to-pixel.
-  vec3 saaDx = dFdx(N), saaDy = dFdy(N);
+  // screen space (geometry edges, peel on paint). Nsaa is the pre-material
+  // snapshot — same mix WGX uses (geo vs peel). Do not dFdx the bumped N.
+  vec3 saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
   float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
   float a = rough * rough;

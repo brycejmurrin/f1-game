@@ -17,6 +17,22 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+test("gfx-probe cannot report a stale optional frame as fresh", () => {
+  const probe = read("tools/gfx-probe.mjs");
+  assert.match(probe, /ATTEMPT_ARTIFACTS\s*=\s*\[[^\]]*"frame\.png"/,
+    "frame.png must be one of the owned artifacts cleared before every attempt");
+  assert.match(probe, /for \(let attempt[^]*?clearAttemptArtifacts\(\);[^]*?runProbeAttempt\(attempt\)/,
+    "retry attempts must clear files before launching the browser");
+  assert.match(probe, /files:\s*artifactFiles\(\)/,
+    "the JSON result must list files that actually exist, not a static wish list");
+  assert.doesNotMatch(probe, /files:\s*opts\.backend\s*===/,
+    "backend selection alone cannot prove optional frame.png was written");
+  assert.equal((probe.match(/\blite:\s*false\b/g) || []).length, 1,
+    "probe defaults should not carry duplicate lite entries");
+  assert.equal((probe.match(/\biphone:\s*false\b/g) || []).length, 1,
+    "probe defaults should not carry duplicate iphone entries");
+});
+
 test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
   const html = read("index.html");
   const m = html.match(/<button id="pm-renderer"[^>]*>/);
@@ -170,7 +186,8 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.doesNotMatch(post, /keep hdr=true \(WebGPU is always half-float\)/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /apex26\.gfxTlxFail/);
-  assert.match(tlx, /isMobile && !post\.hdrOk\(\)/);
+  assert.doesNotMatch(tlx, /isMobile && !post\.hdrOk\(\)/,
+    "GLX keeps the 8-bit post chain when half-float is missing; TLX must too");
   assert.match(tlx, /TLX: present failed/);
   assert.match(tlx, /MeshBasicMaterial/);
   assert.match(tlx, /apex26\.gfxClaimFail/);
@@ -183,6 +200,14 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.ok(present > 0 && presentEnd > present, "present() body found");
   assert.doesNotMatch(body, /post = null;\s*renderer\.setRenderTarget\(null\);\s*renderer\.render/);
   assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
+});
+
+test("TLX AO and god-ray blurs cannot share a node-program cache key", () => {
+  const post = read("js/render/three/tsl-post.js");
+  assert.match(post, /const blurAO = makeBlur\("tlx-post-blur-ao"\)/);
+  assert.match(post, /const blurGR = makeBlur\("tlx-post-blur-godray"\)/);
+  assert.doesNotMatch(post, /const blur(?:AO|GR) = makeBlur\(\)/,
+    "same-shaped node materials still carry distinct texture-node bindings");
 });
 
 test("TLX material-map ownership keeps placeholders and reports pack state", () => {
@@ -741,10 +766,435 @@ test("the alpha tag that makes canvas opacity load-bearing still exists", () => 
     "still ghost the cars before touching the guards below");
 });
 
+test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
+  // The baked array is 17 layers (MAT 0..16). Car surfaces are 20-27.
+  // GLX/WGX refuse mid>16 before the fetch. TLX used to sample layer=mid
+  // on every car fragment; SwiftShader returns black and the car vanishes
+  // while the road (MAT 16) still draws.
+  const glxLit = read("js/render/shaders/lit.js");
+  assert.match(glxLit, /mid <= 0 \|\| mid > 16/,
+    "GLX matTexUV lost its 1..16 pack gate — re-derive the TLX clamp");
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matTexInPack/,
+    "TLX must name the 1..16 pack gate so car ids cannot enable a live sample");
+  assert.match(src, /lessThanEqual\(16\.0\)/,
+    "the pack gate must refuse mid>16 (car surfaces 20-27)");
+  assert.match(src, /depth\(int\(matTexLayer\(mid\)\)\)/,
+    "the hoisted array sample must clamp the layer, not pass raw mid");
+});
+
+test("TLX pooled meshes write matrixWorld — scene auto-update is off", () => {
+  // scene.matrixWorldAutoUpdate = false so renderer.render() does not walk
+  // the graph. The comment above that flag says every pooled mesh writes
+  // matrixWorld; the shadow caster pool does (tlx-shadow.js cast()). The
+  // visible acquireMesh pool used to write only `matrix`. Reused slots
+  // kept the identity world matrix they were born with (track), so race
+  // cars sat at the origin while the chase camera looked at Monza.
+  const tlx = TLX.replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = tlx.indexOf("function acquireMesh(");
+  assert.ok(at > 0, "acquireMesh is gone");
+  const body = tlx.slice(at, tlx.indexOf("function buildGeometry(", at));
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must stamp matrixWorld — scene auto-update will not");
+  assert.match(body, /matrixWorldAutoUpdate\s*=\s*false/,
+    "pool meshes must not let a later graph walk clobber the stamp");
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "shadow casters are the working reference for this stamp");
+});
+
+test("the SSR tag is not three's opacity socket — that is what made cars vanish", () => {
+  // NodeMaterial.setupDiffuseColor does diffuseColor.a *= opacityNode.
+  // NodeBuilder.isOpaque() is (transparent===false && blending===NormalBlending).
+  // Opaque car paint uses NoBlending so the tag writes verbatim (GLX parity),
+  // which makes isOpaque() FALSE, so a 0.35 opacityNode is left as coverage:
+  // painted bodywork disappears; tyres/carbon/glass (alpha 1) stay. The tag
+  // belongs on outputNode; opacityNode is the real material alpha.
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.doesNotMatch(src, /opacityNode\s*=\s*packed\.a/,
+    "opacityNode = packed.a feeds the 0.35 paint tag into three as coverage");
+  assert.match(src, /opacityNode\s*=\s*packed\.opacity/,
+    "opacityNode must be the real tlxAlpha, not the SSR channel");
+  assert.match(src, /outputNode\s*=\s*packed\.out/,
+    "outputNode must be the shared-graph vec4 (RGB + real alpha)");
+  assert.match(src, /out:\s*vec4\(packed\.rgb,\s*matU\.alpha\)/,
+    "output.a must be tlxAlpha — the 0.35 tag is coverage on NoBlending");
+  assert.doesNotMatch(src, /out:\s*packed(?:\s|,|\})/,
+    "do not emit packed (RGB + tag) as the written vec4");
+  assert.match(src, /opacity:\s*matU\.alpha/,
+    "shared graph must expose matU.alpha as the opacity socket");
+  assert.match(src, /m\.fog\s*=\s*false/,
+    "three scene-fog on top of the lit fog stack darkens bodywork a second time");
+  assert.match(src, /m\.premultipliedAlpha\s*=\s*false/,
+    "premultiply would scale RGB by the tag if it ever re-enters the output");
+});
+
+test("three still treats NoBlending as non-opaque (why the tag cannot live in opacityNode)", () => {
+  // Makes the assertion above NECESSARY. If isOpaque() starts ignoring
+  // blending, NoBlending would force alpha back to 1 and the outputNode
+  // split would be tidy rather than load-bearing — worth knowing which.
+  assert.match(THREE_BUNDLE,
+    /isOpaque\(\)\{const \w+=this\.material;return!1===\w+\.transparent&&\w+\.blending===\w+&&!1===\w+\.alphaToCoverage\}/,
+    "bundled three isOpaque() no longer requires NormalBlending — re-derive " +
+    "whether NoBlending + opacityNode=tag still ghosts cars");
+});
+
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
   assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
     "TLX must pass alpha:false — three's WebGPU backend turns it into " +
     'alphaMode "opaque"');
+  assert.match(rendererParams(), /(^|[{,\s])premultipliedAlpha:\s*false/,
+    "TLX must pass premultipliedAlpha:false — default true premultiplies the " +
+    "SSR tag into car RGB");
+});
+
+test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is not beige)", () => {
+  // scene.background is the fallback when backgroundNode misses (software-GL
+  // TSL compile, HDR-target skip). Clearing to fogColor made every dusk
+  // probe a washed beige void ([0.68,0.64,0.54]). Zenith is the sky the
+  // node would have drawn; fog stays the no-track menu fallback only.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const begin = src.indexOf("begin(frame)");
+  assert.notEqual(begin, -1, "begin(frame) moved");
+  const body = src.slice(begin, begin + 900);
+  assert.match(body, /skyZenith/, "begin() must read frame.skyZenith for the Color fallback");
+  assert.match(body, /background\.setRGB/, "begin() still sets scene.background");
+  const zAt = body.indexOf("skyZenith");
+  const fogAssign = body.indexOf("fogColor) || [0.04");
+  assert.ok(zAt >= 0 && fogAssign > zAt,
+    "zenith must be preferred; fogColor is the no-zenith fallback");
+  const drawSky = src.indexOf("drawSky(frameSky)");
+  assert.notEqual(drawSky, -1, "drawSky moved");
+  assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
+    "drawSky must keep the Color fallback in lockstep with the sky node");
+  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\(\)\) && sky\.fallbackNode/,
+    "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
+  assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
+    "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
+});
+
+test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
+  const src = read("js/render/three/tlx.js");
+  const present = src.indexOf("present(opts)");
+  const hdr = src.indexOf("post.sceneTarget()", present);
+  assert.ok(present > 0 && hdr > present, "HDR present path moved");
+  const pinBefore = src.lastIndexOf("pinSkyMaterial()", hdr);
+  assert.ok(pinBefore > present && pinBefore < hdr,
+    "HDR target render must pin the TSL sky or a missed compile leaves the Color clear");
+});
+
+test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () => {
+  // Dawn on SwiftShader/Lavapipe executes shaders but the native swapchain
+  // never composites, and the first getCurrentTexture() breaks mapAsync
+  // device-wide. TLX sniffs the adapter (info fields are not JSON-
+  // enumerable), keeps #game as the GPU canvas, and blits onto #game-soft.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
+    "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
+  assert.match(src, /info\.vendor/,
+    "adapter.info fields are not enumerable — read vendor/device/architecture directly");
+  assert.match(src, /swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/,
+    "sniff regex must match WGX's software-adapter list");
+  assert.match(src, /apex26\.wgxCapture/,
+    "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)");
+  assert.match(src, /game-soft/,
+    "#game stays the GPU canvas; visible present is the #game-soft sibling");
+  assert.match(src, /_displayCanvas\.getContext\("2d"/,
+    "soft-present overlay is a 2D sibling — never getContext(2d) on #game");
+  assert.match(src, /softDest:\s*function\s*\(\)\s*\{\s*return softOutRT/,
+    "post chain must receive softDest so FXAA never targets the swapchain");
+  assert.match(src, /awaitSoftPresent/,
+    "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
+  assert.match(src, /capturePixels/,
+    "backend must expose capturePixels for gfx-probe frame.png");
+  assert.match(src, /readRenderTargetPixelsAsync/,
+    "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  assert.match(src, /function drawInstanced[\s\S]{0,400}if \(softGpu/,
+    "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
+  assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
+    "env / post restore must rebind the blit RT, not the native swapchain");
+  const envEnd = src.indexOf("envFaceEnd(face)");
+  assert.notEqual(envEnd, -1, "envFaceEnd moved");
+  const envBody = src.slice(envEnd, envEnd + 2800);
+  assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
+    "envFaceEnd must not restore the swapchain on the software-WebGPU path");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /ctx\.softDest/,
+    "tlx-post must honour ctx.softDest for the FXAA / viz dest");
+  assert.match(post, /if\s*\(\s*!dest\s*\)/,
+    "finally must skip setRenderTarget(null) when a soft dest is bound");
+});
+
+test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opacity", () => {
+  // Same hole as the iPhone alpha-canvas guard, on the #game-soft path:
+  // car-paint alpha is the SSR mask. A default 2D overlay composites that
+  // as 35% opacity and the bodywork ghosts (tyres/wings stay solid).
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf('_displayCanvas.getContext("2d"');
+  assert.notEqual(at, -1, "overlay getContext moved");
+  assert.match(src.slice(at, at + 120), /alpha:\s*false/,
+    "#game-soft must be an opaque 2D context");
+  assert.match(src, /img\.data\[i \+ 3\] = 255/,
+    "putImageData blit must force opaque pixels");
+  assert.match(src, /data\[i\] = 255/,
+    "_unstrideRgba / capturePixels must force opaque alpha too");
+});
+
+test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
+  // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
+  // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
+  // Deploy's fix: an InstancedBufferAttribute named `color` on the geometry
+  // (`_instColorAttr`). Do NOT also set imesh.instanceColor — NodeMaterial
+  // multiplies that into colorNode and binds a second 12-byte dummy at slot 5.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf("function createInstancedBatch");
+  assert.notEqual(at, -1, "createInstancedBatch moved");
+  const body = src.slice(at, at + 2200);
+  assert.match(body, /_instColorAttr\(\s*imesh/,
+    "every batch must get an instanced color attribute, not only when colors[] is present");
+  assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
+    "do not also set imesh.instanceColor — that is the slot-5 dummy-buffer trap");
+  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const cast = shadow.indexOf("function castInstanced");
+  assert.notEqual(cast, -1, "castInstanced moved");
+  const castBody = shadow.slice(cast, cast + 1800);
+  assert.doesNotMatch(castBody, /m\.instanceColor\s*=/,
+    "shadow InstancedMesh must not set instanceColor — the lit geo already has instanced color");
+});
+
+test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () => {
+  // GLX sets TEXTURE_MAX_ANISOTROPY_EXT on the env cube so clearcoat rays at
+  // grazing angles do not over-blur. TLX is per-texture; WGX needs a dedicated
+  // sampler (binding 14) because envSamp is shared with SSR + the PCSS blocker.
+  const glx = read("js/render/glx.js");
+  const envAt = glx.indexOf("gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex)");
+  assert.ok(envAt > 0, "GLX env cube setup moved");
+  assert.match(glx.slice(envAt, envAt + 800), /TEXTURE_MAX_ANISOTROPY_EXT/,
+    "GLX env cube must keep 4× anisotropy");
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /envRT\.texture\.anisotropy\s*=\s*4/,
+    "TLX env cube must match GLX 4× anisotropy");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /envCubeSamp/,
+    "WGX must own a dedicated env-cube sampler");
+  assert.match(wgx, /maxAnisotropy:\s*4/,
+    "WGX env-cube sampler must request 4× anisotropy");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js");
+  assert.match(wgsl, /binding\(14\) var envCubeSamp/,
+    "WGSL must sample the cube through the aniso sampler, not shared envSamp");
+  assert.match(wgsl, /textureSampleLevel\(envCube, envCubeSamp/,
+    "env cube taps must use envCubeSamp");
+  assert.doesNotMatch(wgsl.replace(/^[ \t]*\/\/.*$/gm, ""), /textureSampleLevel\(envCube, envSamp/,
+    "do not sample the cube with the shared SSR/blocker sampler");
+});
+
+test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
+  // World-space cells swam as the car translated (floor(wpos*45) + hash3).
+  // GLX / TLX weld glitter to vObjPos / positionGeometry at 220 Hz + hash21.
+  const chunks = read("js/render/webgpu/wgsl-chunks.js");
+  const lit = read("js/render/shaders/lit.js");
+  const tsl = read("js/render/three/tsl-lit.js");
+  assert.match(chunks, /@location\(7\)\s+objPos\s*:\s*vec3<f32>/,
+    "LIT VSOut must carry object-space position (GLX vObjPos)");
+  assert.match(chunks, /o\.objPos\s*=\s*aPos/,
+    "vs_main must write aPos into objPos, not the world-space wp");
+  assert.match(chunks, /fn paintPeelN\(/,
+    "orange-peel must live in a helper so SAA can hoist it in uniform CF");
+  assert.match(chunks, /objPos\.xz \* 34\.0 \+ objPos\.y \* 29\.0/,
+    "orange-peel coarse scale must match GLX vObjPos.xz * 34");
+  assert.match(chunks, /objPos\.xz \* 130\.0 \+ objPos\.y \* 111\.0/,
+    "orange-peel fine scale must match GLX vObjPos.xz * 130");
+  assert.match(chunks, /svnoise\(puv\) \* 0\.6 \+ svnoise\(fuv\) \* 0\.4/,
+    "peel must use surface-family svnoise (hash21), not sky vnoise (hash2)");
+  assert.match(chunks, /floor\(in\.objPos \* 220\.0\)/,
+    "flake cells must use the GLX 220 Hz object-space grid");
+  assert.match(chunks, /hash21\(cell\.xy \+ cell\.z \* 19\.7\)/,
+    "flake hash must match GLX hash21(cell.xy + cell.z * 19.7)");
+  assert.doesNotMatch(chunks.replace(/^[ \t]*\/\/.*$/gm, ""), /floor\(in\.wpos \* 45\.0\)/,
+    "do not cell flake in world space — that is the swim");
+  assert.match(lit, /vObjPos = aPos/,
+    "GLX still keys paint to object space — WGX is the port");
+  assert.match(tsl, /positionGeometry/,
+    "TLX still keys paint to object space — WGX is the port");
+});
+
+test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /let Npeel = paintPeelN\(topNgeo, in\.objPos, vDist, 1\.0\)/,
+    "peel normal for SAA must be computed at fs_main top (uniform CF)");
+  assert.match(chunks, /let saaDxPeel = dpdx\(Npeel\)/,
+    "SAA must take peel derivatives, not only geometric N");
+  assert.match(chunks, /mix\(saaVarGeo, saaVarPeel, saturate\(carPaint\)\)/,
+    "paint fragments get peel SAA; carbon/rubber stay on geometric N");
+});
+
+test("WGX hoists every pack layer with textureSample so walls match GLX aniso", () => {
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(chunks, /fn matUvLit\(/,
+    "constant-layer UV helper for the fs_main hoist");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
+    "CONCRETE must use textureSample, not SampleLevel");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv2, 2\)/,
+    "BRICK must use textureSample, not SampleLevel");
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv14, 14\)/,
+    "RUST/corrugated must use textureSample, not SampleLevel");
+  assert.match(chunks, /let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15/,
+    "glass/flag stay off the hoist; everything else picks the hoisted tap");
+  const peelLit = chunks.indexOf("N = paintPeelN(N, in.objPos, vDist, carPaint)");
+  const bump = chunks.indexOf("applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn)");
+  assert.ok(peelLit > 0 && bump > peelLit,
+    "wall bump must run after peel like GLX, not before detail");
+});
+
+test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
+  // WGX cannot dpdx after applyMaterialNormal (non-uniform matId). GLX used
+  // to dFdx the bumped N, which widened roughness on every brick/concrete
+  // seam and made WebGL2 walls duller than WebGPU. Snapshot after peel,
+  // before the material bump; lighting still uses the bumped N.
+  const lit = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(lit, /vec3 Nsaa = N;/,
+    "GLX must snapshot N after peel, before applyMaterialNormal");
+  assert.match(lit, /saaDx = dFdx\(Nsaa\)/,
+    "GLX SAA must differentiate the pre-material snapshot");
+  assert.doesNotMatch(lit, /saaDx = dFdx\(N\)/,
+    "do not dFdx the bumped wall N — that is the dull-wall look");
+  assert.match(tsl, /const Nsaa = vec3\(N\)\.toVar\(\)/,
+    "TLX must snapshot N after peel, before applyMaterialNormal");
+  assert.match(tsl, /dFdx\(Nsaa\)/,
+    "TLX SAA must differentiate the pre-material snapshot");
+  assert.match(post, /Math\.min\(4, cMax, dMax\)/,
+    "desktop GLX MSAA must pick 4× like WGX, not the old 2× cap");
+});
+
+test("pcssPen help names desktop three.js WebGL2 as live", () => {
+  const lighting = read("js/game/lighting.js");
+  assert.match(lighting, /three\.js desktop WebGL2/,
+    "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
+  assert.doesNotMatch(lighting, /three\.js WebGL2 keeps a fixed-radius kernel/,
+    "that sentence is stale after the R16F color-depth blocker");
+});
+
+test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
+  const post = read("js/render/webgpu/wgsl-post.js");
+  assert.match(post, /const SSAO_K = array<vec2<f32>, 8>/,
+    "WGX SSAO must name the shared 8-tap fan");
+  assert.match(post, /vec2<f32>\(0\.0, 1\.0\).*vec2<f32>\(-0\.5, -0\.866\)/s,
+    "kernel must be the first 8 of GLX K[12]");
+  assert.doesNotMatch(post.replace(/^[ \t]*\/\/.*$/gm, ""),
+    /\(f32\(i\) \+ 0\.5\) \/ 8\.0 \* 6\.2832/,
+    "do not rebuild an even 2π ring — that is the look gap vs GLX/TLX");
+});
+
+test("HDR grade is gated on all three backends when knobs are neutral", () => {
+  // applyHdrGrade at shipped defaults is an identity that still costs ~20 ALU
+  // + transcendentals per full-res pixel. GLX/TLX skip it; WGX used to always
+  // run it (and the max(c,0) clamp is the only non-identity).
+  const glx = read("js/render/shaders/post.js");
+  assert.match(glx, /if \(uHdrGradeOn > 0\.5\) c = applyHdrGrade\(c\)/,
+    "GLX composite must keep the uHdrGradeOn gate");
+  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgsl, /if \(U\.tone1\.w > 0\.5\) \{ c = applyHdrGrade\(c\); \}/,
+    "WGX must gate applyHdrGrade on tone1.w (hdrGradeOn)");
+  assert.doesNotMatch(wgsl, /^\s*c = applyHdrGrade\(c\);/m,
+    "do not always run applyHdrGrade — that is the skip-path drift vs GLX/TLX");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /s\[43\] = _hg \? 1 : 0/,
+    "WGX must pack hdrGradeOn into the tone1.w pad");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /hdrGradeOn\.greaterThan\(0\.5\)/,
+    "TLX composite must keep the hdrGradeOn gate");
+  const tlxPost = read("js/render/three/tlx-post.js");
+  assert.match(tlxPost, /C\.hdrGradeOn\.value = _hg \? 1 : 0/,
+    "TLX must still compute the same off-neutral _hg mask as GLX");
+});
+
+test("TLX software sky fallback is a zenith-horizon mix, not a flat lid", () => {
+  const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sky, /mix\(U\.zenith,\s*U\.horizon,\s*t\)/,
+    "fallbackNode must mix the same zenith/horizon uniforms the full sky reads");
+  assert.doesNotMatch(sky, /fallbackNode = Fn\(\(\) => vec4\(U\.zenith, 1\.0\)\)/,
+    "do not fall back to a flat zenith lid — that is the washed software-GL sky");
+});
+
+test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /colorPcss/,
+    "WebGL2 desktop must take the depth-in-color blocker path");
+  assert.match(sh, /TSL\.depth/,
+    "sun casters must write TSL.depth into the R16F color attachment");
+  assert.match(sh, /colorPcss \? sunRT\.texture : sunRT\.depthTexture/,
+    "WebGL2 blocker taps the color attachment, WebGPU still textureLoads depth");
+});
+
+test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
+  // A single tap left CAR GLOSS dead on WebGPU and night lamps as hard dots.
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/shaders/post.js");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(post, /gloss\s*:\s*vec4<f32>/,
+    "SsrU must carry carGloss");
+  assert.match(post, /clamp\(\(1\.4 - U\.gloss\.x\) \* 0\.5, 0\.0, 1\.0\)/,
+    "carSoft must match GLX (1.4 - uCarGloss) * 0.5");
+  assert.match(post, /carReflect \* \(0\.006 \+ 0\.030 \* carSoft\)/,
+    "car streak width must match GLX uCarReflect * (0.006 + 0.030 * carSoft)");
+  assert.match(post, /hitDist \/ 25\.0/,
+    "contact hardening must scale the streak by march hit distance");
+  assert.match(glx, /float carSoft = clamp\(\(1\.4 - uCarGloss\) \* 0\.5/,
+    "GLX still owns the carSoft formula — WGX is the port");
+  assert.match(tsl, /float\(1\.4\)\.sub\(C\.carGloss\)\.mul\(0\.5\)/,
+    "TLX still owns the carSoft formula — WGX is the port");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /s\[48\] = \(T && T\.carGloss != null\) \? T\.carGloss : 1\.0/,
+    "WGX must pack carGloss into SsrU gloss.x");
+});
+
+test("WGX SSR is consumed same-frame in COMPOSITE, not next-frame LIT", () => {
+  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /binding\(8\) var ssrPostTex/,
+    "COMPOSITE must bind this-frame ssrTex");
+  assert.match(post, /ssrPostTex/,
+    "COMPOSITE must sample the SSR target");
+  const lit = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(lit, /wetSheen > 0\.001 && ssrStrength > 0\.001/,
+    "LIT must not still mix last frame's ssrTex into wet road");
+});
+
+test("SSAO tap setup is skipped when strength is 0 on all three backends", () => {
+  // Contact shadows keep the pass live at aoStr=0; the 8 dependent depth
+  // fetches must not still run. strength/uStrength is a uniform.
+  const glx = read("js/render/shaders/post.js");
+  assert.match(glx, /if \(uStrength > 0\.0\)/,
+    "GLX SSAO must keep the uStrength tap gate");
+  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgsl, /if \(strength > 0\.0\)/,
+    "WGX SSAO must skip the 8-tap loop when AO strength is 0");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /ssaoU\.strength\.greaterThan\(0\.0\)/,
+    "TLX SSAO must skip the 8-tap loop when AO strength is 0");
+});
+
+test("Gfx seam lists instancing on all three backends", () => {
+  const gfx = read("js/render/gfx.js");
+  assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
+    "gfx.js must not still say TLX exports instancing as undefined");
+});
+
+test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
+  // scene.matrixWorldAutoUpdate is false; three uploads matrixWorld as the
+  // model matrix. Writing only `.matrix` left cars/flaps/shadows at identity —
+  // invisible on track (world-space chase cam), fine in the garage (car near
+  // origin). World-baked track still looked correct with identity.
+  const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matrixWorldAutoUpdate\s*=\s*false/,
+    "matrixWorldAutoUpdate latch moved — re-check whether acquireMesh still must promote");
+  const acq = src.indexOf("function acquireMesh");
+  assert.notEqual(acq, -1, "acquireMesh moved");
+  const body = src.slice(acq, acq + 900);
+  assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
+    "acquireMesh must promote m.matrix into matrixWorld — without it every " +
+    "draw() with a non-identity model (cars) renders at the world origin");
 });
 
 test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {

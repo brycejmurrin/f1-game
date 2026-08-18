@@ -97,6 +97,22 @@ fn svnoise(p_in: vec2<f32>) -> f32 {
 fn ignoise(p: vec2<f32>) -> f32 {
   return fract(52.9829189 * fract(dot(p, vec2<f32>(0.06711056, 0.00583715))));
 }
+// Object-space orange-peel (GLX LIT_FS / TLX tsl-lit). Surface-family
+// svnoise (hash21), not sky vnoise (hash2) — GLX interpolates surfaceNoise
+// which redefines vnoise. amt=1 is the full wobble; SAA hoists that at
+// fs_main top (uniform CF) then mixes by per-fragment carPaint.
+fn paintPeelN(N: vec3<f32>, objPos: vec3<f32>, vDist: f32, amt: f32) -> vec3<f32> {
+  let pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
+  let puv = objPos.xz * 34.0 + objPos.y * 29.0;
+  let fuv = objPos.xz * 130.0 + objPos.y * 111.0;
+  let pe = 0.09;
+  let pb0 = svnoise(puv) * 0.6 + svnoise(fuv) * 0.4;
+  let pbx = (svnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + svnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
+  let pby = (svnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + svnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
+  let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+  let pB = cross(N, pT);
+  return normalize(N + (pT * pbx + pB * pby) * (0.22 * amt * pFade));
+}
 fn matScale(mid: i32) -> f32 {
   if (mid < 0 || mid > 16) { return 0.0; }
   return MatS.s[mid / 4][mid % 4];
@@ -150,15 +166,30 @@ fn matTexUV(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>, uv_ptr: ptr<function, vec
   }
   return true;
 }
+// UV for a CONSTANT layer id (fs_main hoist). Same wall-vs-xz rule as
+// matTexUV; scale 0 still divides by 1e-4 so the unused sample is defined.
+fn matUvLit(mid: i32, nrm: vec3<f32>, wpos: vec3<f32>) -> vec2<f32> {
+  let sc = max(matScale(mid), 1e-4);
+  let an = abs(normalize(nrm));
+  if (matWallLike(mid)) {
+    return vec2<f32>(select(wpos.x, wpos.z, an.x > an.z), wpos.y) / sc;
+  }
+  return wpos.xz / sc;
+}
 // Baked pack is 256² (assets/pack/manifest.json). textureSampleLevel(..., 0)
 // locked every layer to mip 0 — at range tarmac read as a flat smear vs GLX's
 // implicit LOD. Footprint from fwWpos (hoisted in fs_main) picks a mip without
 // needing derivative-bearing textureSample inside a matId branch.
 fn matTexLod(fwUv: vec2<f32>) -> f32 {
-  let fp = max(fwUv.x, fwUv.y) * 256.0;
-  return clamp(log2(max(fp, 1e-4)), 0.0, 8.0);
+  // Geometric mean, not max(): max(ddx,ddy) at chase grazing is the
+  // foreshortened axis and jumps to mip 7–8 (flat smear). GLX texture() +
+  // aniso 4 tracks the minor axis. textureSampleLevel cannot use aniso, so
+  // the LOD itself has to stay closer to that minor axis.
+  let sx = max(fwUv.x, 1e-6) * 256.0;
+  let sy = max(fwUv.y, 1e-6) * 256.0;
+  return clamp(log2(sqrt(sx * sy)) - 0.35, 0.0, 8.0);
 }
-fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, litNrm: vec4<f32>, packOn: bool) {
   var uv = vec2<f32>(0.0);
   if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
   let fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
@@ -169,13 +200,20 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   let fp = max(fwUv.x, fwUv.y);
   let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) { return; }
-  let dxy = (textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)).xy - 0.5) * 2.0;
+  // Pack layers 1..16 (except glass/flag) are hoisted in fs_main with
+  // textureSample — implicit LOD + aniso 4, GLX texture() parity.
+  // textureSampleLevel cannot use aniso (washed walls / ribbon).
+  let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15;
+  let nrmSample = select(
+    textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)),
+    litNrm, hoisted);
+  let dxy = (nrmSample.xy - 0.5) * 2.0;
   let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
   let B = cross(*N_ptr, T);
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
   *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
 }
-fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, litNrm: vec4<f32>, packOn: bool) {
   if (mid == 0 || mid == 3 || mid == 15 || mid >= 20) { return; }
   let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) { return; }
@@ -209,9 +247,9 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
   *N_ptr = N;
-  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos);
+  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos, litNrm, packOn);
 }
-fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>) {
+fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>, litPack: vec4<f32>, packOn: bool) {
   if (mid == 0) { return; }
   let far = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);
   if (far <= 0.001) { return; }
@@ -313,7 +351,13 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.10 * far);
   }
   var tuv = vec2<f32>(0.0);
-  if (matTexUV(mid, nrm, wpos, &tuv)) {
+  let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15;
+  if (hoisted) {
+    // Implicit-LOD + aniso sample hoisted in fs_main (GLX texture()).
+    let k = F.params8.w * far;
+    albedo = mix(albedo, albedo * litPack.rgb * 2.0, k);
+    rough = clamp(mix(rough, litPack.a, k * 0.8), 0.04, 1.0);
+  } else if (matTexUV(mid, nrm, wpos, &tuv)) {
     let scT = matScale(mid);
     let fwUvT = select(fwWpos.xz, vec2<f32>(select(fwWpos.x, fwWpos.z, an.x > an.z), fwWpos.y), matWallLike(mid)) / max(scT, 1e-4);
     let t = textureSampleLevel(matAlbedoTex, matSamp, tuv, mid, matTexLod(fwUvT));
@@ -471,7 +515,7 @@ struct DrawU {
   model : mat4x4<f32>,        // off  0
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
-  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, _, _)
+  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, buryRibbon)
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
@@ -482,7 +526,8 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 //   @binding(4) envCube   : texture_cube<f32>  — environment reflection probe
 //                           (mirrors GLX uCarReflect env-mirror). 1×1 placeholder
 //                           when no probe is captured; carReflect=0 makes it a no-op.
-//   @binding(5) envSamp   : sampler            — filtering sampler for envCube (and SSR).
+//   @binding(5) envSamp   : sampler            — filtering sampler for SSR + PCSS blocker
+//                           (NOT the cube — cube anisotropy is envCubeSamp).
 //   @binding(6) ssrTex    : texture_2d<f32>    — screen-space-reflection result
 //                           (Phase-4 post pass, wgsl-post.js). 1×1 placeholder is safe;
 //                           ssrStrength=0 or non-up/dry surfaces make it a no-op.
@@ -496,7 +541,65 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(11) var matSamp : sampler;
 @group(0) @binding(12) var lampShadowTex : texture_depth_2d;
 @group(0) @binding(13) var<uniform> MatS : MatScaleU;
+@group(0) @binding(14) var envCubeSamp : sampler;            // 4× aniso, GLX env cube
 @group(1) @binding(0) var<uniform> D : DrawU;
+@group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
+// Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
+// uploaded by WGX._makeRoadLUT. Magic 12345 distinguishes a LUT from the
+// dummy / per-vertex attr buffer. Uniform 16-iteration loop — no data-
+// dependent break — so the caller may take dpdx of the result.
+fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
+  let h0 = matTrkArr[0];
+  let h1 = matTrkArr[1];
+  let gated = h0.x == 12345.0;
+  let ext = max(h1.xy, vec2<f32>(1.0));
+  let gw = max(h1.z, 1.0);
+  let gh = max(h1.w, 1.0);
+  let uv = clamp((wp.xz - h0.yz) / ext, vec2<f32>(0.0), vec2<f32>(0.999));
+  let gx = u32(uv.x * gw);
+  let gz = u32(uv.y * gh);
+  let base = select(0u, 2u + (gx + gz * u32(gw)) * 16u, gated);
+  var bestD = 1e20;
+  var best = vec4<f32>(0.0);
+  var best2 = vec4<f32>(0.0);
+  var bestD2 = 1e20;
+  for (var i = 0u; i < 16u; i = i + 1u) {
+    let p = matTrkArr[base + i];
+    let d = select(1e20, dot(wp.xz - p.xy, wp.xz - p.xy), gated);
+    let take = d < bestD;
+    best2 = select(best2, best, take);
+    bestD2 = select(bestD2, bestD, take);
+    best = select(best, p, take);
+    bestD = select(bestD, d, take);
+    // Require a spatially distinct second sample — a lone centerline point
+    // left best2 at the origin and produced a garbage tangent, so lateral x
+    // blew past hw and terrain discard never punched the ribbon footprint.
+    let sep = dot(p.xy - best.xy, p.xy - best.xy);
+    let take2 = (d < bestD2) && !take && sep > 0.25;
+    best2 = select(best2, p, take2);
+    bestD2 = select(bestD2, d, take2);
+  }
+  let tangRaw = best2.xy - best.xy;
+  // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
+  let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4;
+  let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, tangOk));
+  let right = vec2<f32>(tang.y, -tang.x);
+  let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
+  let hw = best.w;
+  let dCenter = sqrt(bestD);
+  // Prefer perpendicular distance when a real tangent exists. Point-distance
+  // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
+  // so the nearest centerline sample can be > hw+2.4 away along-track.
+  // Lateral slack is the grass verge (~2.2 m), not 8 m — a wider hole ate
+  // the inner terrain rails (berms / elevation). Along-track LUT coarseness
+  // still uses +8 on point-distance when no tangent exists.
+  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 2.4, tangOk);
+  let valid = gated && hw > 0.5 && onRibbon;
+  // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
+  // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
+  // here (a bad tangent used to tag the ribbon MAT 9 / grass).
+  return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
+}
 ${hash}
 ${vnoise}
 ${brdf}
@@ -510,7 +613,7 @@ ${matLib}
 // uniformly lit while WebGL2 showed cloud shadows crossing the track.
 fn cloudFBM(p_in: vec2<f32>) -> f32 {
   var p = p_in; var s = 0.0; var a = 0.5;
-  for (var i = 0; i < 2; i = i + 1) { s = s + a * vnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
+  for (var i = 0; i < 2; i = i + 1) { s = s + a * svnoise(p); p = p * 2.03 + 1.7; a = a * 0.5; }
   return s;
 }
 fn cloudShadow(wp: vec3<f32>) -> f32 {
@@ -538,18 +641,19 @@ struct VSOut {
   @location(0)       nrm   : vec3<f32>,
   @location(1)       col   : vec3<f32>,
   @location(2)       wpos  : vec3<f32>,
-  @location(3)       dist  : f32,
+  @location(3)       matTrk : vec4<f32>,
   @location(4) @interpolate(flat) matId : f32,
   @location(5)       trk   : vec3<f32>,
+  @location(6) @interpolate(flat) vid : f32,
+  @location(7)       objPos : vec3<f32>,
 };
 
 @vertex
 fn vs_main(
+  @builtin(vertex_index) vid : u32,
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
-  @location(3) aMat : f32,
-  @location(4) aTrk : vec3<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -563,15 +667,26 @@ fn vs_main(
     model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
     col = aCol * aInstColor;
   }
-  let wp = model * vec4<f32>(aPos, 1.0);
+  var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
+  // No 4th vertex attribute — Dawn zeroed it (and broke pos fetch) on large
+  // ribbon VBOs. Rebuild mat+trk from the centerline LUT / storage[vid].
+  var pulled = vec4<f32>(0.0);
+  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
+  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
+    let wt = trkFromWorld(wp.xyz);
+    if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
+    wp.y = wp.y + 0.08;
+  }
+  o.matTrk = pulled;
+  o.matId = pulled.x;
+  o.trk = pulled.yzw;
+  o.vid = f32(vid);
   o.nrm  = nm * aNrm;
   o.col  = col;
   o.wpos = wp.xyz;
-  o.dist = length(wp.xyz - F.eye.xyz);
-  o.matId = aMat;               // flat — procedural material key (Phase 4)
-  o.trk = aTrk;
+  o.objPos = aPos;              // object space: paint flake / orange-peel (GLX vObjPos)
   o.clip = F.viewProj * wp;
   return o;
 }
@@ -581,23 +696,105 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrk = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
+  let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
+  let fwCol = abs(dpdx(in.col)) + abs(dpdy(in.col));
+  let fromWorld = trkFromWorld(in.wpos);
+  let fwWorld = abs(dpdx(fromWorld.yzw)) + abs(dpdy(fromWorld.yzw));
+  let packedRoad = in.col.x > 1.5 && in.col.x < 40.0;
+  let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
+  let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
+  let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
+  let vMatId = select(select(in.matTrk.x, floor(in.col.x), packedRoad), D.mat2.z, D.mat2.z > 0.5);
+  let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
+  let vDist = length(in.wpos - F.eye.xyz);
+  // Every baked MAT layer is sampled here in uniform CF with a CONSTANT
+  // array index so textureSample can use implicit LOD + anisotropy — the
+  // GLX texture() path. textureSampleLevel cannot use aniso (washed walls
+  // / ribbon). scale=0 / mix=0 still samples the 128-grey placeholder
+  // (identity * 2). No branch around these samples.
   let topNgeo = normalize(in.nrm);
-  // GLX takes dFdx(N) AFTER bump (js/render/shaders/lit.js). We cannot: that
-  // N is written inside applyMaterialNormal, which is non-uniform in matId, and
-  // a dpdx after that branch is the NaN-white-road class. Geometric N is the
-  // uniform stand-in — SAA/clearcoat under-count orange-peel vs GLX; that is
-  // a look gap, not a compile defect.
+  let roadSc = max(matScale(16), 1e-4);
+  let roadUv = in.wpos.xz / roadSc;
+  let roadPack = textureSample(matAlbedoTex, matSamp, roadUv, 16);
+  let roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
+  let uv1 = matUvLit(1, topNgeo, in.wpos);
+  let uv2 = matUvLit(2, topNgeo, in.wpos);
+  let uv4 = matUvLit(4, topNgeo, in.wpos);
+  let uv5 = matUvLit(5, topNgeo, in.wpos);
+  let uv6 = matUvLit(6, topNgeo, in.wpos);
+  let uv7 = matUvLit(7, topNgeo, in.wpos);
+  let uv8 = matUvLit(8, topNgeo, in.wpos);
+  let uv9 = matUvLit(9, topNgeo, in.wpos);
+  let uv10 = matUvLit(10, topNgeo, in.wpos);
+  let uv11 = matUvLit(11, topNgeo, in.wpos);
+  let uv12 = matUvLit(12, topNgeo, in.wpos);
+  let uv13 = matUvLit(13, topNgeo, in.wpos);
+  let uv14 = matUvLit(14, topNgeo, in.wpos);
+  let a1 = textureSample(matAlbedoTex, matSamp, uv1, 1);
+  let a2 = textureSample(matAlbedoTex, matSamp, uv2, 2);
+  let a4 = textureSample(matAlbedoTex, matSamp, uv4, 4);
+  let a5 = textureSample(matAlbedoTex, matSamp, uv5, 5);
+  let a6 = textureSample(matAlbedoTex, matSamp, uv6, 6);
+  let a7 = textureSample(matAlbedoTex, matSamp, uv7, 7);
+  let a8 = textureSample(matAlbedoTex, matSamp, uv8, 8);
+  let a9 = textureSample(matAlbedoTex, matSamp, uv9, 9);
+  let a10 = textureSample(matAlbedoTex, matSamp, uv10, 10);
+  let a11 = textureSample(matAlbedoTex, matSamp, uv11, 11);
+  let a12 = textureSample(matAlbedoTex, matSamp, uv12, 12);
+  let a13 = textureSample(matAlbedoTex, matSamp, uv13, 13);
+  let a14 = textureSample(matAlbedoTex, matSamp, uv14, 14);
+  let n1 = textureSample(matNormalTex, matSamp, uv1, 1);
+  let n2 = textureSample(matNormalTex, matSamp, uv2, 2);
+  let n4 = textureSample(matNormalTex, matSamp, uv4, 4);
+  let n5 = textureSample(matNormalTex, matSamp, uv5, 5);
+  let n6 = textureSample(matNormalTex, matSamp, uv6, 6);
+  let n7 = textureSample(matNormalTex, matSamp, uv7, 7);
+  let n8 = textureSample(matNormalTex, matSamp, uv8, 8);
+  let n9 = textureSample(matNormalTex, matSamp, uv9, 9);
+  let n10 = textureSample(matNormalTex, matSamp, uv10, 10);
+  let n11 = textureSample(matNormalTex, matSamp, uv11, 11);
+  let n12 = textureSample(matNormalTex, matSamp, uv12, 12);
+  let n13 = textureSample(matNormalTex, matSamp, uv13, 13);
+  let n14 = textureSample(matNormalTex, matSamp, uv14, 14);
+  let identPack = vec4<f32>(0.5, 0.5, 0.5, 0.5);
+  let packAlbedo = array<vec4<f32>, 17>(
+    identPack, a1, a2, identPack, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, identPack, roadPack);
+  let packNormal = array<vec4<f32>, 17>(
+    identPack, n1, n2, identPack, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, identPack, roadNrmPack);
+  let packOn = F.params8.w > 0.001;
+  let midClamp = clamp(i32(vMatId + 0.5), 0, 16);
+  let litPack = packAlbedo[midClamp];
+  let litNrm = packNormal[midClamp];
+  // GLX takes dFdx(N) AFTER orange-peel + applyMaterialNormal. The matId
+  // bump is non-uniform — a dpdx after that branch is the NaN-white-road
+  // class. Peel is a function of interpolators only, so hoist it here
+  // (uniform CF), take both geometric and peel derivatives, then mix SAA
+  // by per-fragment carPaint. Clearcoat stays on geometric N (GLX Ngeo).
+  let Npeel = paintPeelN(topNgeo, in.objPos, vDist, 1.0);
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
-  let saaDx = dpdx(topNgeo);
-  let saaDy = dpdy(topNgeo);
+  let saaDxGeo = dpdx(topNgeo);
+  let saaDyGeo = dpdy(topNgeo);
+  let saaDxPeel = dpdx(Npeel);
+  let saaDyPeel = dpdy(Npeel);
+  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn. Punch the
+  // LUT tarmac footprint (onRibbon is hw+2.4, the verge — not the berms).
+  // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
+  let bury = D.mat2.w > 0.5;
+  let slab = max(fwWpos.x, fwWpos.z) > 6.0;
+  if ((bury || slab) && !isRoadDraw && fromWorld.w > 0.5) {
+    discard;
+  }
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
-  if (!ff) { N = -N; }
-  applyMaterialNormal(i32(in.matId + 0.5), &N, in.dist, in.wpos, fwWpos);
+  // Skip that on the road. buildRoad writes upOf = cross(right, tangent)
+  // (track-up). _expandPull swaps winding so Dawn rasterizes the tops, which
+  // makes them back-facing under frontFace cw — the ff flip would invert
+  // authored +Y and light the underside (featureless grey + horizon rim).
+  if (!ff && !isRoadDraw) { N = -N; }
+  if (isRoadDraw && N.y < 0.0) { N = -N; }
 
   // ── Deferred material scalars (Phase 4) — all read from the already-plumbed
   //    DrawU/FrameU fields; a 0 value makes each block below a no-op so existing
@@ -610,7 +807,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let wetness   = F.params1.z;
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
-  let surfaceId = i32(in.matId + 0.5);
+  let surfaceId = i32(vMatId + 0.5);
   let classifiedCar = surfaceId >= 20 && surfaceId <= 27;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
@@ -639,7 +836,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // sheet). Distance-faded (would alias to shimmer) and wetness-faded (the water
   // film levels the surface).
   if (detail > 0.001) {
-    var mnFade = clamp(1.0 - (in.dist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
+    var mnFade = clamp(1.0 - (vDist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
     // Footprint fade (GLX lit.js): grazing road pixels span metres; without this
     // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
     // the car. Distance fade alone misses a near-but-grazing patch.
@@ -649,9 +846,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (mnFade > 0.01) {
       let mnp = in.wpos.xz * 1.7;
       let e = 0.22;
-      let h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
-      let hx = vnoise(mnp + vec2<f32>(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(e * 3.9, 0.0)) * 0.3;
-      let hz = vnoise(mnp + vec2<f32>(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2<f32>(0.0, e * 3.9)) * 0.3;
+      let h0 = svnoise(mnp) * 0.7 + svnoise(mnp * 3.9) * 0.3;
+      let hx = svnoise(mnp + vec2<f32>(e, 0.0)) * 0.7 + svnoise(mnp * 3.9 + vec2<f32>(e * 3.9, 0.0)) * 0.3;
+      let hz = svnoise(mnp + vec2<f32>(0.0, e)) * 0.7 + svnoise(mnp * 3.9 + vec2<f32>(0.0, e * 3.9)) * 0.3;
       N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * ((detail * 0.4 * mnFade) / e));
     }
   }
@@ -661,23 +858,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let Ngeo = N;
   // [Block 3a] Car-paint ORANGE-PEEL micro-normal (mirrors GLX LIT_FS js/render/shaders/lit.js).
   // Coarse waviness + fine flake wobble perturb N so the sun streak / sky reflection
-  // shimmer live on the panels. GLX keys this to OBJECT space (vObjPos); WGSL has no
-  // object-position varying yet, so we key to world pos — faithful-but-reduced (a
-  // touch of texture-swim, invisible at the 0.22 amplitude). Distance-faded.
+  // shimmer live on the panels. Keyed to OBJECT space (in.objPos / GLX vObjPos)
+  // so the peel does not swim as the car translates. Distance-faded.
   if (carPaint > 0.001) {
-    let pFade = clamp(1.0 - (in.dist - 18.0) / 50.0, 0.0, 1.0);
-    if (pFade > 0.01) {
-      let puv = in.wpos.xz * 34.0 + in.wpos.y * 29.0;
-      let fuv = in.wpos.xz * 130.0 + in.wpos.y * 111.0;
-      let pe = 0.09;
-      let pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
-      let pbx = (vnoise(puv + vec2<f32>(pe, 0.0)) * 0.6 + vnoise(fuv + vec2<f32>(pe * 3.8, 0.0)) * 0.4) - pb0;
-      let pby = (vnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + vnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
-      let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
-      let pB = cross(N, pT);
-      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
-    }
+    N = paintPeelN(N, in.objPos, vDist, carPaint);
   }
+  // Wall/MAT bump AFTER detail + peel, matching GLX lit.js. Lighting
+  // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
+  applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn);
   let V = normalize(F.eye.xyz - in.wpos);
   let L = F.sunDir.xyz;
   let H = normalize(L + V + vec3<f32>(1e-5));   // +eps: normalize(0) NaNs at V==-L
@@ -686,7 +874,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let NoH = max(dot(N, H), 0.0);
   let VoH = max(dot(V, H), 0.0);
 
-  var albedo    = in.col;
+  var albedo    = select(in.col, vec3<f32>(fract(in.col.x)), packedRoad);
   var emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
   var metalness = D.mat0.w;
@@ -723,24 +911,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var patchM = 0.5;
   if (detail > 0.0) {
     let wp = in.wpos.xz;
-    let fineFade = clamp(1.0 - (in.dist - 35.0) / 90.0, 0.0, 1.0);
-    let n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
+    let fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
+    let n = svnoise(wp * 0.35) * 0.60 + svnoise(wp * 2.1) * 0.40 * fineFade;
     albedo = albedo * (1.0 + (n - 0.5) * detail);
-    patchM = vnoise(wp * 0.055 + vec2<f32>(9.1));
+    patchM = svnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
     // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
-    let crackFade = clamp(1.0 - (in.dist - 18.0) / 45.0, 0.0, 1.0);
-    let cr = abs(vnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+    let crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
+    let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
     let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
     let crack = (1.0 - smoothstep(0.015, crAA, cr))
-              * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + vec2<f32>(7.7)));
+              * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
     albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
     albedo = max(albedo, vec3<f32>(0.0));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
-  applyMaterial(i32(in.matId + 0.5), &albedo, &rough, in.dist, in.wpos, in.nrm, fwWpos);
-  roadMarkings(&albedo, &rough, in.trk, fwTrk);
+  applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
+  if (i32(vMatId + 0.5) == 16) {
+    roadMarkings(&albedo, &rough, vTrk, fwTrk);
+  }
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
@@ -755,10 +945,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
     // Porous ground (grass/foliage/rock/sand/snow) drinks the water: it
     // darkens but never polishes. Reflection-side terms key off wetSheen.
-    let wmid = i32(in.matId + 0.5);
+    let wmid = i32(vMatId + 0.5);
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
-    let pn = vnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
+    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
     // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
     // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
@@ -783,9 +973,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
   // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
   // every lamp lobe, so on a night track it is the difference between 48 stable
-  // highlights and 48 flickering ones. Computed using saaDx/saaDy taken in top-level
-  // uniform control flow to guarantee WGSL specification compliance.
-  let saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  // highlights and 48 flickering ones. Geometric + peel derivatives are
+  // taken in top-level uniform CF; mix by carPaint (paint gets peel SAA).
+  // Material/wall bump stays out of SAA on all three backends — a dpdx
+  // after the matId branch is illegal WGSL, and GLX/TLX snapshot Nsaa
+  // before applyMaterialNormal so brick/concrete match this mix.
+  let saaVarGeo = dot(saaDxGeo, saaDxGeo) + dot(saaDyGeo, saaDyGeo);
+  let saaVarPeel = dot(saaDxPeel, saaDxPeel) + dot(saaDyPeel, saaDyPeel);
+  let saaVar = mix(saaVarGeo, saaVarPeel, saturate(carPaint));
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
 
   let a = rough * rough;
@@ -970,13 +1165,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     var envCC : vec3<f32>;
     if (envProbeStr >= 0.999) {
-      envCC = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
+      envCC = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
     } else {
       let horiz = smoothstep(-0.12, 0.30, Rg.y);
       let skyR = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rg.y, 0.0)));
       envCC = mix(F.ambGround.xyz * 0.6, skyR, horiz);
       if (envProbeStr > 0.001) {
-        let envReal = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
+        let envReal = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }
@@ -1070,15 +1265,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes
   // only when its facet half-aligns with the sun. sparkle DEFAULTS TO 1, so the
   // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
-  // (carPaint=0) and the dark carbon/tyre parts stay untouched. GLX cells in object
-  // space (vObjPos); reduced to world space here (no object-pos varying yet).
+  // (carPaint=0) and the dark carbon/tyre parts stay untouched. Cells in object
+  // space (in.objPos / GLX vObjPos) so glitter stays welded to the bodywork.
   if (carPaint > 0.001 && litNoL > 0.0 && sparkle > 0.001) {
-    var spFade = clamp(1.0 - (in.dist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
+    var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
     spFade = spFade * smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
     if (spFade > 0.01) {
-      let cell = floor(in.wpos * 45.0);
-      let h1 = hash3(cell);
-      let h2 = hash3(cell + vec3<f32>(19.7, 7.3, 3.1));
+      let cell = floor(in.objPos * 220.0);
+      let h1 = hash21(cell.xy + cell.z * 19.7);
+      let h2 = hash21(cell.yz + cell.x * 7.3);
       // Mirror the GLSL finite-basis guard: malformed/degenerate geometry must
       // not feed normalize(0) and spray NaN glints across the paint.
       var nN = vec3<f32>(0.0, 1.0, 0.0);
@@ -1146,20 +1341,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // masked-out texels (transparent black, incl. the 1×1 placeholder and the
   // cleared texture) from darkening wet road toward black. ssrStrength=0 also
   // makes this a no-op.
-  let ssrStrength = max(F.params4.w, 0.0);
-  if (wetSheen > 0.001 && ssrStrength > 0.001) {
-    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
-    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
-    let ssrK = ssr.a * clamp(wetSheen * ssrStrength, 0.0, 1.0) * (1.0 - metalness);
-    color = mix(color, color * 0.10 + ssr.rgb * 0.92, ssrK);
-  }
-  // Car-paint SSR consume (F.params4.z = carReflect / composite SSR strength).
-  if (carPaint > 0.001 && max(F.params4.z, 0.0) > 0.001) {
-    let ssrUV = in.clip.xy / vec2<f32>(textureDimensions(ssrTex));
-    let ssr = textureSampleLevel(ssrTex, envSamp, ssrUV, 0.0);
-    let ssrK = ssr.a * clamp(F.params4.z, 0.0, 1.0);
-    color = mix(color, color * 0.22 + ssr.rgb * 0.88, clamp(ssrK, 0.0, 0.85));
-  }
+  // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
+  // COMPOSITE_FS. LIT used to sample last present()'s ssrTex here — a 1-frame
+  // lag on wet road / lacquer. The texture stays bound so a 1×1 placeholder
+  // cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/shaders/lit.js).
@@ -1184,7 +1369,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (fogHeight > 0.0) {
     heightAtten = exp(-max(in.wpos.y - F.eye.y, 0.0) * fogHeight);
   }
-  let fd = in.dist * fogDensity * heightAtten;
+  let fd = vDist * fogDensity * heightAtten;
   let fAmt = 1.0 - exp(-fd * fd);
   let rd = normalize(in.wpos - F.eye.xyz);
   let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
@@ -1227,7 +1412,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // ceiling — a washed translucent band over the road on misty day circuits.
     let band = exp(-lowH * (0.09 / mh));
     let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
-    let dRamp = clamp((in.dist - 8.0) / 45.0, 0.0, 1.0);
+    let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
     let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
     // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
     let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;

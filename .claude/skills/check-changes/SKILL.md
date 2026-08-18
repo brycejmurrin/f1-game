@@ -36,7 +36,7 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 ./tools/apex-tools-mcp.sh call apex_select_recall '{}'
 ./tools/apex-tools-mcp.sh call apex_cache_bump_only '{"since":"HEAD~1"}'
 ./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
-./tools/apex-tools-mcp.sh smoke                 # four repo wrappers; no Chromium
+./tools/apex-tools-mcp.sh smoke                 # five repo wrappers; no Chromium
 ```
 
 Browser wraps (`apex_eval` / `apex_shot` / `apex_carshot` / …) take the lock —

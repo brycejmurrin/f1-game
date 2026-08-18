@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * mcp-smoke — poke the four repo MCP servers via their shell wrappers.
+ * mcp-smoke — poke the five repo MCP wrappers via their shells.
  *
  * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
@@ -77,6 +77,11 @@ export function smokePlan() {
       note: "status only — verify launches Chromium",
     },
     {
+      server: "playwright",
+      argv: ["bash", path.join(ROOT, "tools/playwright-mcp.sh"), "status"],
+      note: "status only — run launches Chromium",
+    },
+    {
       server: "tinyfish",
       argv: ["bash", path.join(ROOT, "tools/tinyfish-mcp.sh"), "help"],
       note: "help only — ensure / deploy-check need a key (shell / .env / fallback)",
@@ -111,17 +116,17 @@ function parseApexStatus(step) {
 }
 
 function help() {
-  process.stdout.write(`mcp-smoke — four repo MCP servers via shell wrappers
+  process.stdout.write(`mcp-smoke — five repo MCP wrappers via shells
 
 Usage:
   node tools/mcp-smoke.mjs [--dry-run] [--json]
   ./tools/apex-tools-mcp.sh smoke [--dry-run]
 
 Pokes apex-tools (apex_status), probe help + mock list-tools, chrome-devtools
-status, tinyfish help. No Chromium. Missing TinyFish key / chrome clone warn.
-Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
+status, playwright status, tinyfish help. No Chromium. Missing TinyFish key /
+chrome clone warn. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
 
-Never wraps test-bg. Host playwright stays out of .mcp.json.
+Never wraps test-bg. playwright status only (never run).
 `);
   return 0;
 }

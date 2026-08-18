@@ -118,6 +118,7 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /apex_/ },
     { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /smoke/ },
     { cmd: process.execPath, args: [path.join(TOOLS, "mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
+    { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /browser_resize/ },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:tlx.
@@ -146,6 +147,19 @@ test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Chrome:/);
   assert.match(r.stdout, /Bin:/);
+});
+
+test("playwright-mcp.sh help and status exit 0 without launching Chromium", () => {
+  const help = spawnSync("bash", [path.join(TOOLS, "playwright-mcp.sh"), "help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /@playwright\/mcp@0\.0\.79/);
+  assert.match(help.stdout, /browser_evaluate/);
+  const st = spawnSync("bash", [path.join(TOOLS, "playwright-mcp.sh"), "status"],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  assert.equal(st.status, 0, st.stderr);
+  assert.match(st.stdout, /Package:/);
+  assert.doesNotMatch(st.stdout, /0\.0\.0\.0/);
 });
 
 test("chrome-devtools-mcp.sh help exits 0 without requiring Chromium", () => {

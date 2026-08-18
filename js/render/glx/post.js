@@ -107,15 +107,14 @@ const GLXPost = (function () {
         const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
         const cMax = cs && cs.length ? cs[0] : 0;
         const dMax = ds && ds.length ? ds[0] : 0;
-        // 2× (was 4×): halves the multisample colour+depth store and the resolve
-        // blit bandwidth. FXAA (full-res, below) cleans up the specular/edge
-        // shimmer the lower sample count misses, so the perceptual gap is small.
-        // Mobile tier: no MSAA at all — two extra full-res multisampled surfaces
+        // Desktop: 4× to match WGX (WebGPU forbids 2, so WGX is 4 or 1). Fall
+        // back to 2 when the HDR format or the device cannot do 4, then 0.
+        // FXAA (full-res, below) still cleans leftover specular/edge shimmer.
+        // Mobile: no MSAA — two extra full-res multisampled surfaces
         // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
-        // True desktop only: 2x MSAA on the RGBA16F scene target + per-frame
-        // resolve was part of the GRAPHICS: HIGH lag on phones (HIGH used to
-        // flip the whole memory tier, not just visual quality).
-        msaaSamples = IS_MOBILE ? 0 : Math.min(2, cMax, dMax);
+        // Phones used to inherit 2× when GRAPHICS: HIGH flipped the whole
+        // memory tier; IS_MOBILE keeps that from coming back.
+        msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
       compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);

@@ -17,12 +17,11 @@
  * convention (y flipped once here; the texture node's flipY re-flips on the
  * GL backend — the same double-flip three's own shadow code relies on).
  *
- * PCSS blocker search HAS landed on the WebGPU backend (M4-PCSS closed):
- * tlx-shadow.js builds the 512² min-of-4 blocker map with sampler-free
- * textureLoad reads and the sun branch below scales the Poisson radius
- * R = mix(1.5, 6.0, pen) from the receiver-blocker gap. The WebGL2 fallback
- * backend has no blocker map (compare-on textures can't be re-read plain in
- * GLSL) and keeps the fixed R=3 — GLX's own blocker-off radius.
+ * PCSS blocker search HAS landed on WebGPU (textureLoad depth) and desktop
+ * WebGL2 (R16F TSL.depth color — texelFetch is legal on a color texture).
+ * The sun branch scales R = mix(1.5, 6.0, pen) from the receiver-blocker
+ * gap. Phones and software GL keep the fixed R=3 — GLX's own blocker-off
+ * radius.
  *
  * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
  * builds the cube target and drives setEnvStr() from the probe-ready state,
@@ -78,6 +77,13 @@
     const _pinKeys = Object.create(null);
     function pinProgram(m, key) {
       m.lights = false;
+      // Lit already does its own fog / albedo. three's NodeMaterial fog
+      // (default true) and vertexColors would run on top of colorNode and
+      // double-darken bodywork; premultiply would then scale that by the
+      // SSR tag if it ever leaked back into opacity.
+      m.fog = false;
+      m.vertexColors = false;
+      m.premultipliedAlpha = false;
       m.customProgramCacheKey = _pinKeys[key] || (_pinKeys[key] = () => key);
     }
 
@@ -164,9 +170,9 @@
       shadowCtr:      uniform(new THREE.Vector3()),   // gliding fade anchor (frame.shadowCtr)
       // SHADOW SOFTEN (uPcssPen parity). Consumed by the blocker-search branch
       // below when the shadow system built its WebGPU blocker map
-      // (SHD.blockerTex, tlx-shadow.js header); on the WebGL2 fallback backend
-      // there is no blocker map, the branch is not compiled, and the sun PCF
-      // keeps the fixed radius `R = 3.0` — GLX's own uPcss-off look. pcssOn is
+      // (SHD.blockerTex, tlx-shadow.js header); phones / software GL have no
+      // blocker map and keep the fixed radius `R = 3.0`. Desktop WebGL2 and
+      // WebGPU compile the blocker-scaled branch. pcssOn is
       // the RUNTIME gate (glx.js uPcss 1:1): updateFrame re-reads
       // S.pcssEnabled each frame so a live blocker failure degrades cleanly.
       pcssPen:        uniform(80.0),
@@ -393,9 +399,8 @@
             // camera the receiver-blocker gap scales the Poisson radius —
             // crisp at the contact point, soft where the caster is far.
             // Compiled only when the shadow system built its blocker map
-            // (WebGPU backend, tlx-shadow.js header); gated at runtime on
-            // pcssOn like GLX's uPcss. Fixed R = 3.0 otherwise — GLX's own
-            // blocker-off radius.
+            // (WebGPU or desktop WebGL2); gated at runtime on pcssOn like
+            // GLX's uPcss. Fixed R = 3.0 otherwise — GLX's blocker-off radius.
             const R = float(3.0).toVar();
             if (SHD.blockerTex) {
               If(nearLod.and(U.pcssOn.greaterThan(0.5)), () => {
@@ -616,8 +621,19 @@
     // Tile coordinate + this layer's world scale. Scale 0 = "no baked layer for
     // this material", which the callers test before sampling (GLASS and FLAG
     // are deliberately never baked — see tools/assets.mjs SCALES).
-    const matTexScaleOf = (mid) => U.matTexScale.element(int(mid));
-    const matTexUV = (mid, N, wp) => select(matWallLike(mid),
+    //
+    // Pack layers are MAT 1..16. Car surfaces are 20-27 (car3d.js SURFACES).
+    // GLX matTexUV and WGX matTexUV both refuse mid>16 BEFORE indexing the
+    // 17-layer array. TLX used to sample `.depth(int(mid))` and
+    // `uMatTexScale[mid]` raw — OOB on every painted/tyre/carbon fragment.
+    // SwiftShader/WebGL then returns black (or discards), so the whole car
+    // vanishes while the road (MAT 16) still draws. Clamp the layer for the
+    // hoisted sample (derivative_uniformity forbids an early-out around it)
+    // and keep the apply-gate on the REAL id so cars stay procedural.
+    const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
+    const matTexInPack = (mid) => mid.greaterThanEqual(1.0).and(mid.lessThanEqual(16.0));
+    const matTexScaleOf = (mid) => U.matTexScale.element(int(matTexLayer(mid)));
+    const matTexUV = (mid, N, wp) => select(matWallLike(matTexLayer(mid)),
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
@@ -625,15 +641,18 @@
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
-      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      const live = U.matTexMix.greaterThan(0.001)
+        .and(matTexInPack(mid))
+        .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
       const uv = matTexUV(mid, N, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
       // inside those Ifs are the same WGSL derivative_uniformity error as
-      // a hoisted-too-late fwidth (roadMarkings / WGX fs_main).
-      const nt = matNormalNode.sample(uv).depth(int(mid));
+      // a hoisted-too-late fwidth (roadMarkings / WGX fs_main). Layer is
+      // clamped: car ids 20-27 must not index past the 17-deep pack.
+      const nt = matNormalNode.sample(uv).depth(int(matTexLayer(mid)));
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
@@ -654,10 +673,12 @@
       const rough = float(roughIn).toVar();
       const wp = vec3(wpIn).toVar();
       const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();
-      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      const live = U.matTexMix.greaterThan(0.001)
+        .and(matTexInPack(mid))
+        .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + sample BEFORE the live/far gate (implicit derivatives).
       const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp).toVar();
-      const t = matAlbedoNode.sample(uv).depth(int(mid));
+      const t = matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)));
       If(live.and(far.greaterThan(0.001)), () => {
         // Multiplicative, exactly as GLX: the per-track tarmac tint, the
         // racing-line rubber wear and the per-vertex grain all have to survive.
@@ -981,6 +1002,9 @@
           });
         });
 
+        // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
+        const Nsaa = vec3(N).toVar();
+
         // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
@@ -1053,10 +1077,10 @@
           rough.assign(packedPaint.w);
         }
 
-        // ── specular AA: widen roughness by the normal's screen-space
-        //    variance (js/render/shaders/lit.js). Drop with a comment if TSL fights it —
-        //    it did not: dFdx/dFdy on the anchored N compile clean. ───────────
-        const saaDx = dFdx(N), saaDy = dFdy(N);
+        // ── specular AA: widen roughness by the pre-material normal's
+        //    screen-space variance (WGX geo+peel mix). dFdx(N) after the
+        //    wall bump dulls brick/concrete vs WebGPU. ───────────
+        const saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
         const saaVar = dot(saaDx, saaDx).add(dot(saaDy, saaDy)).toVar();
         rough.assign(min(1.0, sqrt(rough.mul(rough).add(saaVar.mul(0.35)))));
         const a = rough.mul(rough).toVar();
@@ -1412,10 +1436,22 @@
 
     /* ── material factory ─────────────────────────────────────────────────────
      * makeMaterial(opts) -> THREE.MeshBasicNodeMaterial with the full lit
-     * fragment as colorNode/opacityNode. opts carries the GLX per-draw scalars
+     * fragment as colorNode + outputNode. opts carries the GLX per-draw scalars
      * (defaults = glx.js litMaterial defaults) plus flags:
      *   doubleSided, depthBias:[factor,units], noAlphaWrite (M8), chunked
      * (drawChunked keeps depthWrite TRUE even when alpha<1 — GLX asymmetry).
+     *
+     * SSR TAG ≠ OPACITY ≠ OUTPUT ALPHA. The fragment still computes the
+     * 0.35 car-paint tag (js/render/shaders/lit.js) as packed.a, but that
+     * channel must not reach three's output. NodeMaterial.setupDiffuseColor
+     * multiplies diffuseColor.a by opacityNode, and r185 NodeBuilder.isOpaque()
+     * is `transparent===false && blending===NormalBlending` — our NoBlending
+     * opaque path (required so SrcAlpha does not ghost the body) makes
+     * isOpaque() FALSE, so whatever sits in output.a is coverage. Putting
+     * the tag there painted the body at 35% over the road. opacityNode and
+     * output.a are both the real material alpha (tlxAlpha). Car SSR on this
+     * backend therefore sees scene alpha 1 (no tag) until a second target
+     * can carry the mask; road SSR is unchanged.
      *
      * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
      * every variant must bind the SAME node-graph OBJECTS, not a fresh
@@ -1429,7 +1465,7 @@
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Two graphs total: chunked reads
      * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a}
+    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out}
     let _sharedPos = null;
     function sharedFragment(chunked) {
       const idx = chunked ? 1 : 0;
@@ -1449,7 +1485,16 @@
         const packed = buildFragment(matU, chunked);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
-        g = _sharedGraph[idx] = { rgb: packed.rgb, a: packed.a };
+        // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
+        // `out` is RGB + that real alpha. packed.a still holds the SSR tag
+        // for a future MRT; it must NOT be the vec4 written to the target.
+        // r185 NodeBuilder.isOpaque() is false for NoBlending, so output.a
+        // is coverage: a 0.35 tag ghosts painted bodywork against the road
+        // (GLX writes the tag with blending OFF and an opaque canvas).
+        g = _sharedGraph[idx] = {
+          rgb: packed.rgb, a: packed.a, opacity: matU.alpha,
+          out: vec4(packed.rgb, matU.alpha),
+        };
       }
       return g;
     }
@@ -1470,7 +1515,10 @@
       ud.tlxSparkle   = val(o.sparkle, 1.0);
       const packed = sharedFragment(!!o.chunked);
       m.colorNode = packed.rgb;
-      m.opacityNode = packed.a;
+      // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
+      // here is what made three.js cars invisible (see factory comment).
+      m.opacityNode = packed.opacity;
+      m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
       pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
       m.transparent = alpha < 1;

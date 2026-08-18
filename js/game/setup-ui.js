@@ -300,9 +300,13 @@ function buildSetup() {
   // ---- Options list for the active category ----
   const optsEl = $("cs-options");
   optsEl.textContent = "";
+  // LIVERY adds this grid; TEAM and the part cats must not inherit it.
+  // Measured 2026-08-18 Playwright MCP: switching LIVERY → TEAM left
+  // `cs-liv-grid` on #cs-options, so #cs-team-card painted 91×64 with
+  // `.tm-name` at 14px (`McLaren` / `MCL · Mercedes engine` truncated).
+  optsEl.classList.remove("cs-liv-grid");
   if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
-  optsEl.classList.remove("cs-liv-grid");
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const factorySetup = Parts.getFactorySetup(team);

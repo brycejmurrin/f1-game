@@ -8,11 +8,38 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 `js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
-Remaining honest look deltas: TAA still off; some FX/noise LOD details.
+Remaining honest look deltas: TAA still off (no history resolve — do not
+enable the Halton jitter alone); TLX MSAA stays off (no resolved depth
+for post). SAA mixes geometric N with a uniform-CF peel hoist on all
+three backends (material/wall bump stays out of SAA). Desktop GLX MSAA
+is 4× like WGX. Every baked MAT layer (walls included) is hoisted to
+`textureSample` so pack aniso matches GLX `texture()`.
+Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
+skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
+COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
+`carGloss` streak; TLX desktop WebGL2 has a color-depth PCSS blocker.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
-(`matTexLod`) are ported to match GLX `lit.js` (were the main “bare tarmac”
-deltas once matTex/markings already shipped).
+(`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`
+had been sampling `pos.xy / parentSize` (dest pixels over src dim) so every
+MAT/env mip was a zoomed top-left corner — tarmac read as a washed smear vs
+GLX `generateMipmap`. Blit UVs now use dest size; `matTexLod` uses a geometric
+mean so chase-grazing no longer jumps to mip 8. ASPHALT (MAT 16) is now
+sampled in `fs_main` with `textureSample` (implicit LOD + anisotropy, same
+as GLX `texture()`) before any non-uniform branch; other layers still use
+`textureSampleLevel`. Pack upload is `writeTexture` of raw RGBA8 bytes —
+`copyExternalImageToTexture` into `rgba8unorm` linearises the mean-128
+asphalt scan and breaks `albedo * tex * 2.0`. 2026-08-17 later: a 4th
+per-vertex attribute (and even `pos.w` of a packed float32x4) was delivered
+as 0 on the **road** VBO — cars were fine. Every road fragment read
+`matId=0` / `trk=0`, so asphalt never ran and `roadMarkings` gated off.
+`vertex_index` on that ribbon also stayed 0 (`drawIndexed` and large
+`draw`), so a per-vertex storage array always returned the grass skirt at
+slot 0. Interpolators after location 3 are dropped. WGX now uploads a
+world-XZ centerline LUT (`_makeRoadLUT`, magic 12345) on group 2;
+`trkFromWorld` rebuilds `(mat, s, x, hw)` from `wpos` so asphalt + paint
+do not depend on the broken attribute. Vertex colour stays the real
+albedo (packing into RGB greys the grass shoulders).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -134,7 +161,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
-| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else. Desktop GLX now picks 4× to match. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.
@@ -173,7 +200,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
-| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **MSAA** | 4× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`; 2 then 0 if the format cannot) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
 | **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
 | **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
@@ -499,9 +526,10 @@ No API research left:
   blend already exists on glow.
 - **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
   into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
-- **`trk` / road markings** — extend `VERTEX_LAYOUT` with `@location(4) trk: vec3`.
-  Today's "always stride 40" comment has to give; meshes without `trk` keep
-  a zero-filled extra float[3] or a second pipeline.
+- **`trk` / road markings** — `rgba32float` texture `@group(2)` +
+  `textureLoad` at `vertex_index`. A 4th vertex attribute (and packed
+  `pos.w`) was dropped on the road VBO; vertex-stage storage failed
+  validation. The ribbon had been shading FLAT with paint gated off.
 - **Heat haze / car-paint SSR** — composite / SSR-consume ports from
   `js/render/shaders/post.js`.
 
