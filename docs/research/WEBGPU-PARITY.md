@@ -13,12 +13,14 @@ Remaining honest look deltas (audited 2026-08-18 against source):
 - **TAA** still off (no history resolve — do not enable Halton jitter alone).
   GLX has no TAA either; this is not a live GLX↔WGX mismatch.
 - **TLX MSAA** stays off (no resolved depth for post).
-- **TLX car SSR tag** cannot write 0.35 into alpha (three treats it as
-  coverage). Needs MRT — not a one-target port.
+- **TLX car SSR tag** cannot write 0.35 into scene alpha (r185 `isOpaque()`
+  is false for `NoBlending`, so `output.a` is coverage). The tag now lives
+  on a second HDR attachment (`ssrTag` / `mrtNode`), armed only for the
+  main scene pass — env cube and canvas fallback stay single-target.
 - **TLX FS `mat` stays smooth** and baked wall UVs still key off the
-  shading N. A TSL `varying().setInterpolation(FLAT)` (and a 5-arg
-  `applyMaterialTexNormal` that passed geometric `Nvary`) compiled on
-  three r185 / software GL but the garage turntable drew nothing.
+  shading N. A TSL `varying().setInterpolation(FLAT)` compiled on three
+  r185 / software GL but the garage turntable drew nothing. Garage frames
+  (no `proj`) also must paint the canvas, not the HDR scene target.
   GLX remains `flat out float vMat`.
 - **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
   ribbon VBOs). Not portable without reopening that defect.

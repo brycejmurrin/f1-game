@@ -31,7 +31,7 @@ function tinyfishFallback() {
   const sh = path.join(ROOT, "tools/tinyfish-mcp.sh");
   if (!fs.existsSync(sh)) return false;
   const prefix = "sk-" + "tinyfish-";
-  return new RegExp(`^\\s*TINYFISH_KEY_FALLBACK=${prefix}\\S+`, "m")
+  return new RegExp(`^\\s*TINYFISH_KEY_FALLBACK=["']?${prefix}\\S+`, "m")
     .test(fs.readFileSync(sh, "utf8"));
 }
 

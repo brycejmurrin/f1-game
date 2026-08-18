@@ -826,7 +826,7 @@ test("the SSR tag is not three's opacity socket — that is what made cars vanis
     "opacityNode must be the real tlxAlpha, not the SSR channel");
   assert.match(src, /outputNode\s*=\s*packed\.out/,
     "outputNode must be the shared-graph vec4 (RGB + real alpha)");
-  assert.match(src, /out:\s*vec4\(packed\.rgb,\s*matU\.alpha\)/,
+  assert.match(src, /vec4\(packed\.rgb,\s*matU\.alpha\)/,
     "output.a must be tlxAlpha — the 0.35 tag is coverage on NoBlending");
   assert.doesNotMatch(src, /out:\s*packed(?:\s|,|\})/,
     "do not emit packed (RGB + tag) as the written vec4");
@@ -1360,4 +1360,73 @@ test("three's WebGL backend still hardcodes an alpha canvas (why we pass a conte
     "bundled three no longer hardcodes alpha:true for WebGL — drop TLX's " +
     "hand-made context and pass alpha:false alone");
   assert.match(THREE_BUNDLE.slice(at, at + 60), /getContext\("webgl2",\s*\w+\)/);
+});
+
+test("TLX env probe culls and lights like GLX — not the chase camera", () => {
+  // envFaceBegin used to return only invViewProj. drawWorldMeshes then
+  // frustum-culled propBatches against the MAIN view, and envFaceEnd ran
+  // before gfx.begin() so the cube baked last-frame (or default) lighting.
+  // Software faces still latch envReady for M9, but a black cube must not
+  // raise uEnvStr (clearcoat absorb toward black).
+  const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  const beginAt = src.indexOf("envFaceBegin(face, eye, frame)");
+  assert.notEqual(beginAt, -1, "envFaceBegin moved");
+  const beginBody = src.slice(beginAt, beginAt + 1800);
+  assert.match(beginBody, /frame\.viewProj\s*=\s*_envVPArr/,
+    "probe must publish the face VP so propBatches cull against the cube face");
+  assert.match(beginBody, /frame\.eye\s*=\s*eye/,
+    "probe eye must be the car, not the chase camera");
+  assert.match(beginBody, /ENV_CULL_M/,
+    "probe must cap draw distance like GLX (300 m when envCull is on)");
+  assert.match(beginBody, /lit\.updateFrame\(frame\)/,
+    "probe runs before gfx.begin — updateFrame must push this frame's lighting");
+  const endAt = src.indexOf("envFaceEnd(face)");
+  assert.notEqual(endAt, -1, "envFaceEnd moved");
+  const endBody = src.slice(endAt, endAt + 3600);
+  assert.match(endBody, /_restoreEnvFrame\(\)/,
+    "envFaceEnd must restore the main-camera VP/eye/cullDist");
+  assert.match(endBody, /_envBlank\s*=\s*true/,
+    "software black-clear cycle must mark the cube blank");
+  assert.match(src, /envReady && !_envBlank && !frame\.noEnv/,
+    "uEnvStr must stay 0 while the cube is a software black stub");
+});
+
+test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => {
+  // r185 isOpaque() is false for NoBlending, so output.a is coverage.
+  // The 0.35 paint tag therefore cannot share the colour target. It is
+  // written to sceneRT.textures[1] (name ssrTag) via mrtNode, armed only
+  // for the main HDR render so the env cube stays a single-target RT.
+  const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(lit, /mrt\(\{\s*output:\s*out,\s*ssrTag:\s*packed\.a\s*\}\)/,
+    "lit mrtNode must write packed.a (the 0.35 tag) to the ssrTag attachment");
+  assert.match(lit, /function setSsrMrt\(on\)/,
+    "env / canvas paths must be able to drop mrtNode");
+  assert.match(lit, /mrtNode \? "-mrt"/,
+    "program key must fork when MRT is armed — one program cannot target both RTs");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /count:\s*2/,
+    "HDR scene target must allocate the ssrTag colour attachment");
+  assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
+    "MRTNode.setup matches attachments by texture.name");
+  const tsl = read("js/render/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tsl, /tagT\.sample\(TL\(vUV\)\)\.r/,
+    "heat haze must skip car pixels using the tag RT, not scene alpha");
+  assert.match(tsl, /tagT\.sample\(TL\(hazeUV\)\)\.r/,
+    "carPx / car SSR must read the tag RT");
+  assert.doesNotMatch(tsl.replace(/\/\*[\s\S]*?\*\//g, ""), /carPx = smoothstep\([^)]*scn\.a/,
+    "carPx must not still key off scn.a");
+  const tlx = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  const hdr = tlx.indexOf("post.sceneTarget()");
+  assert.notEqual(hdr, -1, "HDR present path moved");
+  const window = tlx.slice(Math.max(0, hdr - 800), hdr + 400);
+  assert.match(window, /setSsrMrt\(true\)/,
+    "main HDR render must arm the ssrTag MRT");
+  assert.match(window, /renderer\.setMRT\(/,
+    "renderer.getMRT() is what NodeMaterial.setup merges into");
+  const envEnd = tlx.indexOf("envFaceEnd(face)");
+  const envBody = tlx.slice(envEnd, envEnd + 3600);
+  assert.doesNotMatch(envBody, /setSsrMrt\(true\)/,
+    "env cube must not arm the 2-attachment program");
+  assert.doesNotMatch(envBody, /setMRT\(/,
+    "env cube render must not install a renderer MRT");
 });
