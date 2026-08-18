@@ -102,10 +102,6 @@ file changes a screen owned by another.
 - `.balanced-row` — `components` + `menus`. Flex wrap that derives its column
   count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
-- `.alt` — `components` + `menus`. Secondary-door modifier on `.bigbtn`; menus
-  paints the carnival dashed cyan on it.
-- `.grain` — `components` + `menus`. Film grain primitive; menus raises
-  `#overlay.grain` opacity for the night-paddock wash.
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
 - `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
@@ -153,7 +149,7 @@ most-shared class in the project and had no entry at all:
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
-- `.sheet-head` — `components` + `menus` + `overlays`
+- `.sheet-head` — `components` + `overlays`
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`

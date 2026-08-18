@@ -909,21 +909,4 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   /* wider card so the split has something to split */
   .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
 }
-
-/* Night-paddock carnival. Same sticker as .sheet — overlays layer so it
-   beats the earlier .dh-card border in this file. */
-.dh-overlay {
-  background:
-    radial-gradient(80% 70% at 50% 35% in oklab,
-      color-mix(in oklab, var(--zine-magenta) 16%, transparent),
-      rgba(4, 4, 8, 0.82));
-}
-.dh-card {
-  border: 2px solid var(--zine-lime);
-  box-shadow: 5px 5px 0 var(--zine-magenta), var(--edge);
-}
-.dh-title {
-  color: var(--zine-lime);
-  text-shadow: 2px 2px 0 var(--zine-magenta);
-}
 } /* @layer overlays */

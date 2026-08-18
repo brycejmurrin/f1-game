@@ -776,6 +776,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pausemenu .sheet[data-density="compact"] .build-tag {
   margin: 2px 0 0;
 }
+/* Opaque enough that leftover HUD cannot read through the card. Color is
+   the original dim wash, not carnival inks. */
+#pausemenu.screen.dim { background: rgba(6, 6, 10, 0.88); }
 /* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
    full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
    one full-width primary and QUIT stays the one full-width destructive. */
