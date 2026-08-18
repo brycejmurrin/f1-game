@@ -103,8 +103,9 @@ function buildContext(opts) {
       if (end > start) {
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity,
             minZ = Infinity, maxZ = -Infinity;
+        const pos = out.pos._data || out.pos;
         for (let i = start; i < end; i += 3) {
-          const x = out.pos[i], y = out.pos[i + 1], z = out.pos[i + 2];
+          const x = pos[i], y = pos[i + 1], z = pos[i + 2];
           if (x < minX) minX = x; if (x > maxX) maxX = x;
           if (y < minY) minY = y; if (y > maxY) maxY = y;
           if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;

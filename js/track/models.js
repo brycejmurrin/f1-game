@@ -45,6 +45,9 @@ const TrackModels = (function () {
     }
     return {
       get length() { return n; },
+      // VM emitter wrappers (track-build-vm / clip-audit) read [i] while the
+      // fuse is still growing. Game-path emitters only use length + push.
+      get _data() { return data; },
       push(a, b, c, d, e, f) {
         const add = f !== undefined ? 6 : e !== undefined ? 5 : d !== undefined ? 4
                   : c !== undefined ? 3 : b !== undefined ? 2 : 1;
