@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1420">
+<meta name="apex-build" content="1422">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -41,7 +41,7 @@
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
 <link rel="stylesheet" href="css/components.css?v=3837f8949c66">
-<link rel="stylesheet" href="css/tuner.css?v=3a059b0920b2" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=882b296ce996">
 <link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
@@ -1585,8 +1585,8 @@
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
     <div class="sheet-foot balanced-row">
-      <button id="ct-reset">RESET CAM</button>
-      <button id="ct-reset-all">RESET ALL</button>
+      <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
+      <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
       <button id="ct-close" class="bigbtn">DONE</button>
     </div>
   </div>
@@ -1768,7 +1768,7 @@
 <script crossorigin="anonymous" src="js/game/menus.js?v=06fdcc035ce3"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=e7668ee033b3"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=eaf9b3f6f824"></script>
@@ -1778,8 +1778,8 @@
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
-<script crossorigin="anonymous" src="js/game/tuner.js?v=6218d97c1559"></script>
-<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=2e3deae9bdd9"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=647bc13307be"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=1ac37b5b0651"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=80438bfb565e"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=56df3cedd95b"></script>

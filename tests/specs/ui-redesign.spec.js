@@ -252,6 +252,37 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.navH).toBeLessThan(settings.bodyH);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
 
+  // Lighting tuner at 200% on short landscape: compact strip, one scroller,
+  // explanations off. Rail stays off because local width is 852/2 < --rail-at.
+  await page.evaluate(() => document.getElementById("pm-lighting").click());
+  await page.waitForFunction(() => {
+    const el = document.getElementById("lighting-inner");
+    return el && !document.getElementById("lighting").hidden && el.dataset.density === "compact";
+  }, null, { polling: 100, timeout: 10_000 });
+  const lighting = await page.evaluate(() => {
+    const el = document.getElementById("lighting-inner");
+    const tabs = document.getElementById("lt-tabs");
+    const rows = document.getElementById("lt-rows");
+    const toggle = el.querySelector(".lt-help-toggle");
+    return {
+      density: el.dataset.density,
+      rail: el.dataset.rail,
+      wrap: getComputedStyle(tabs).flexWrap,
+      panelOY: getComputedStyle(el).overflowY,
+      rowsOY: getComputedStyle(rows).overflowY,
+      rowsH: rows.getBoundingClientRect().height,
+      helpOff: !toggle || getComputedStyle(toggle).display === "none",
+    };
+  });
+  expect(lighting.density).toBe("compact");
+  expect(lighting.rail).not.toBe("on");
+  expect(lighting.wrap).toBe("nowrap");
+  expect(["hidden", "clip"]).toContain(lighting.panelOY);
+  expect(["auto", "scroll", "overlay"]).toContain(lighting.rowsOY);
+  expect(lighting.rowsH).toBeGreaterThanOrEqual(24);
+  expect(lighting.helpOff).toBe(true);
+  await page.evaluate(() => document.getElementById("lt-close").click());
+
   // Last Race: reproduce the production table shape at phone portrait width.
   await page.setViewportSize({ width: 393, height: 844 });
   const tableFit = await page.evaluate(() => {

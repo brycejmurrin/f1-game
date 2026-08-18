@@ -271,6 +271,12 @@ one obvious scroll region.
    horizontal `#cs-tabs` strip (all stacked sheets, not only portrait),
    `#cs-options` is the only dominant vertical scroller. Pair-on rails kept.
 3. Tuners: Lighting/camera rail/strip behaviour and progressive help.
+   **Done (2026-08-18).** Compact tuners: one `#lt-rows`/`#ct-rows` scroller
+   (`overflow: hidden` on the panel). Rail CSS is keyed on `data-rail` from
+   local width **and** a three-slider-row budget, not viewport `min-width:
+   720px`. Compact density forces explanations off (toggle hidden). Selected
+   category/mode chips `scrollIntoView`. Camera RESET titles name their scope.
+   COPY VALUES uses local `--svhz`, not `40svh`.
 4. Journeys: Career, Season, Race-a-friend, Data Hub, results/help/history.
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
 6. Final matrix: all screens, scales, inputs, screenshots, performance and

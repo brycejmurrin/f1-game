@@ -799,7 +799,7 @@ what it covers.
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
 | `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/game/sheetshape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |
 | `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
-| `ui-redesign.spec.js` | the redesign foundation in one renderer-light journey: searchable circuits, the Garage's roving tab contract, Settings at 200% on a short landscape phone, and fixed-layout Last Race columns at phone portrait width |
+| `ui-redesign.spec.js` | the redesign foundation in one renderer-light journey: searchable circuits, the Garage's roving tab contract, Settings at 200% on a short landscape phone, compact lighting tuner (one scroller, help off), and fixed-layout Last Race columns at phone portrait width |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |

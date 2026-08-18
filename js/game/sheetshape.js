@@ -63,8 +63,27 @@ window.SheetShape = (function () {
 
   function classifyPair(el, w) { classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST); }
   /* Tuners: viewport media cannot see zoom. 734 physical px at UI SIZE 200%
-   * is ~257 local px — too narrow for a 210px rail plus slider values. */
-  function classifyRail(el, w) { classifyFlag(el, w, "--rail-at", "rail", RAIL_HYST); }
+   * is ~257 local px — too narrow for a 210px rail plus slider values.
+   * Compact rail also needs three visible slider rows (redesign contract);
+   * otherwise keep the horizontal chip strip. */
+  function classifyRail(el, w, h) {
+    const raw = getComputedStyle(el).getPropertyValue("--rail-at");
+    const at = parseFloat(raw);
+    if (!at) { if (el.dataset.rail) delete el.dataset.rail; return; }
+    const was = el.dataset.rail === "on";
+    let now = was ? w >= at - RAIL_HYST : w >= at;
+    if ((el.id === "lighting-inner" || el.id === "camtune-inner")
+        && el.dataset.density === "compact") {
+      const row = el.querySelector(".adv-item");
+      const rowH = (row && row.offsetHeight) || 42;
+      const foot = el.querySelector(":scope > .sheet-foot");
+      const footH = foot ? foot.offsetHeight : 0;
+      const rowsAvail = (h - footH) / Math.max(24, rowH);
+      now = now && (was ? rowsAvail >= 2.5 : rowsAvail >= 3);
+    }
+    const next = now ? "on" : "off";
+    if (el.dataset.rail !== next) el.dataset.rail = next;
+  }
 
   /* THE THIRD ANSWER: is the sheet SHORT — and short in the units its own CSS
    * is written in, which is not the same question as "is the viewport short".
@@ -138,6 +157,11 @@ window.SheetShape = (function () {
     const now = was ? hOwn < at + SHORT_HYST : hOwn < at;
     const next = now ? "compact" : "normal";
     if (el.dataset.density !== next) el.dataset.density = next;
+    if (next === "compact" && el.classList.contains("lt-show-help")) {
+      el.classList.remove("lt-show-help");
+      const help = el.querySelector("#lt-help-on, #ct-help-on");
+      if (help) help.checked = false;
+    }
   }
 
   function classify(el, w, h) {
@@ -163,7 +187,7 @@ window.SheetShape = (function () {
        rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
        sat ~39px past the sheet until this order flipped. */
     classifyDensity(el, hOwn);
-    classifyRail(el, wOwn);
+    classifyRail(el, wOwn, hOwn);
     classifyPair(el, wOwn);
   }
 

@@ -153,6 +153,20 @@ test("title keyboard navigation has an explicit default before stateful controls
   assert.match(nav, /const sel = layer\.querySelector\("\[aria-selected='true'\]/);
 });
 
+test("tuner tabs scroll the selected chip into view", () => {
+  const lighting = read("js/game/tuner.js");
+  const camera = read("js/game/cam-tuner.js");
+  for (const src of [lighting, camera]) {
+    assert.match(src, /scrollIntoView\(\{\s*block:\s*"nearest",\s*inline:\s*"center"\s*\}\)/);
+  }
+});
+
+test("camera reset actions state their scope", () => {
+  const html = read("index.html");
+  assert.match(html, /id="ct-reset"[^>]*title=/);
+  assert.match(html, /id="ct-reset-all"[^>]*title=/);
+});
+
 test("generated lighting and camera tabs carry the complete tab contract", () => {
   const html = read("index.html");
   const lighting = read("js/game/tuner.js");
@@ -210,13 +224,19 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   const data = read("css/data.css");
   const menus = read("css/menus.css");
   assert.match(shape, /function classifyFlag\(el, w, cssVar, attr, hyst/);
-  assert.match(shape, /classifyRail\(el, wOwn\)/);
+  assert.match(shape, /classifyRail\(el, wOwn, hOwn\)/);
+  assert.match(shape, /rowsAvail >= 3/);
   assert.match(shape, /classifyFlag\(b, window\.innerWidth \/ scale, "--wide-at"/);
   assert.match(menus, /--wide-at:\s*620px/);
   assert.match(tuner, /--rail-at:\s*500px/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="on"\]/);
+  assert.doesNotMatch(tuner, /@media \(min-width:\s*720px\)/);
   assert.doesNotMatch(tuner, /@media \(max-height: 430px\)/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="off"\] #lt-head \{[^}]*display: block/);
+  assert.match(tuner, /\[data-density="compact"\]\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(tuner, /\[data-density="compact"\] \.adv-help\s*\{\s*display:\s*none/);
+  assert.match(tuner, /max-height:\s*min\(calc\(28 \* var\(--svhz\)/,
+    "COPY VALUES box uses local --svhz, not 40svh");
   assert.match(tuner, /#lt-head h2, #ct-head/);
   assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
   assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
