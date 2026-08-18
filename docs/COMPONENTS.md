@@ -146,10 +146,15 @@ most-shared class in the project and had no entry at all:
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
 - `.res-name` — `career` + `components`
+- `.res-pts` — `career` + `components`. Compact Career history / qualifying wrap
+  the shared points cell instead of ellipsizing it.
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
 - `.sheet-head` — `components` + `overlays`
+- `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and
+  Career history place the shared body on the sheet grid for the wide contents
+  rail (`#htp-contents` / `#cg-contents` / `#ch-contents`).
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`

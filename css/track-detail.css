@@ -9,8 +9,15 @@
    `#standings { max-width; max-height }` here used to clamp it: this file is
    `@layer overlays`, which beats `@layer components`, so the clamp pinned the
    whole dialog to 540px in the top-left corner instead of the centred sheet.
-   Only the inner scroll region wants a cap of its own. */
-#standings-body { max-height: 55svh; overflow-y: auto; overscroll-behavior-y: contain; font-size: var(--fs-micro); }
+   The body is already `.sheet-body.pane`; leftover height is the sheet grid
+   track. The old viewport-height cap was zoom-blind. */
+#standings-body {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  font-size: var(--fs-micro);
+}
 
 /* ---------- track detail fullscreen modal ---------- */
 #track-detail {

@@ -111,6 +111,14 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
   const css = read("css/menus.css");
   assert.match(css,
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
+  assert.match(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
+    "compact stacked filter pans; do not re-gate this on a local max-width query");
+  assert.match(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
+    "search keeps a readable floor so the row actually overflows at 200%");
+  assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
+  assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
 });
 
 test("garage categories implement one roving tab system", () => {
@@ -157,6 +165,20 @@ test("title keyboard navigation has an explicit default before stateful controls
   assert.match(nav, /const preferred = layer\.querySelector\("\[data-menu-default\]"\);/);
   assert.match(nav, /if \(preferred && list\.indexOf\(preferred\) >= 0\) return preferred;/);
   assert.match(nav, /const sel = layer\.querySelector\("\[aria-selected='true'\]/);
+});
+
+test("tuner tabs scroll the selected chip into view", () => {
+  const lighting = read("js/game/tuner.js");
+  const camera = read("js/game/cam-tuner.js");
+  for (const src of [lighting, camera]) {
+    assert.match(src, /scrollIntoView\(\{\s*block:\s*"nearest",\s*inline:\s*"center"\s*\}\)/);
+  }
+});
+
+test("camera reset actions state their scope", () => {
+  const html = read("index.html");
+  assert.match(html, /id="ct-reset"[^>]*title=/);
+  assert.match(html, /id="ct-reset-all"[^>]*title=/);
 });
 
 test("generated lighting and camera tabs carry the complete tab contract", () => {
@@ -216,16 +238,27 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   const data = read("css/data.css");
   const menus = read("css/menus.css");
   assert.match(shape, /function classifyFlag\(el, w, cssVar, attr, hyst/);
-  assert.match(shape, /classifyRail\(el, wOwn\)/);
+  assert.match(shape, /classifyRail\(el, wOwn, hOwn\)/);
+  assert.match(shape, /rowsAvail >= 3/);
   assert.match(shape, /classifyFlag\(b, window\.innerWidth \/ scale, "--wide-at"/);
   assert.match(menus, /--wide-at:\s*620px/);
   assert.match(tuner, /--rail-at:\s*500px/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="on"\]/);
+  assert.doesNotMatch(tuner, /@media \(min-width:\s*720px\)/);
   assert.doesNotMatch(tuner, /@media \(max-height: 430px\)/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="off"\] #lt-head \{[^}]*display: block/);
+  assert.match(tuner, /\[data-density="compact"\]\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(tuner, /\[data-density="compact"\] \.adv-help\s*\{\s*display:\s*none/);
+  assert.match(tuner, /max-height:\s*min\(calc\(28 \* var\(--svhz\)/,
+    "COPY VALUES box uses local --svhz, not 40svh");
   assert.match(tuner, /#lt-head h2, #ct-head/);
   assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
   assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
+  assert.match(data, /body\[data-density="compact"\] \.dh-overlay/);
+  assert.doesNotMatch(data, /orientation:\s*landscape\) and \(max-height:/,
+    "data hub short-height chrome must use body[data-density], not viewport max-height");
+  assert.match(data, /@media \(orientation:\s*portrait\)[\s\S]*?body\[data-width="narrow"\] \.dh-tabs/,
+    "portrait 2×3 destinations use the zoom-aware width flag");
   assert.match(menus, /#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row[^{]*\{[^}]*flex-wrap:\s*wrap/);
 });
 
@@ -300,6 +333,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   }
   assert.match(css, /#htp-contents\s*\{[\s\S]*?overflow-x:\s*auto/);
   assert.match(css, /#htp-contents a\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
+  assert.match(css, /#howtoplay-inner\[data-shape="wide"\] > #htp-contents/);
+  assert.match(css, /#howtoplay-inner\[data-density="compact"\] > #htp-contents/);
+  assert.match(read("index.html"), /id="vsfriend-inner"/);
   assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--red\)/);
   assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
   assert.doesNotMatch(css, /#howtoplay dl\s*\{[^}]*max-content minmax\(0, 1fr\) max-content/,
@@ -414,5 +450,14 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(components, /\.sheet > :where\(\.sheet-head, \.sheet-body, \.sheet-foot\)\s*\{\s*min-width:\s*0/);
   assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*340px/);
   assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*240px/);
+  assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*300px/);
+  assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*220px/);
+  assert.match(components, /#vsfriend-inner \{\s*--fit-at:\s*280px/);
+  assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*300px/);
+  assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*220px/);
+  assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*300px/);
+  assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*220px/);
+  assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
+  assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
 });

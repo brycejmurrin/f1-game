@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1428">
+<meta name="apex-build" content="1433">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=3837f8949c66" as="style">
+<link rel="preload" href="css/components.css?v=e27e84885c69" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,16 +40,16 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=3837f8949c66">
-<link rel="stylesheet" href="css/tuner.css?v=3a059b0920b2" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=26f56b5dc0e3">
+<link rel="stylesheet" href="css/components.css?v=e27e84885c69">
+<link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=54f9fc909ebe">
 <link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=37367486eb05" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
-<link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=91f2e42053f4" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=8d2242babbff" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=3a107477654a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=74c72643de7d">
+<link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=920e853fb9f8" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=0fdfe263e6cb" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -613,7 +613,7 @@
      no infrastructure. The codes are long because they carry a full ICE-gathered
      SDP, compressed — hence copy buttons rather than an expectation of typing. -->
 <dialog id="vsfriend" class="screen dim" data-esc-close="vs-close" aria-labelledby="dlg-vsfriend" hidden>
-  <div class="sheet">
+  <div id="vsfriend-inner" class="sheet">
     <div id="vs-head" class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
     <div class="sheet-body pane" id="vs-body">
 
@@ -1128,14 +1128,14 @@
   <div id="howtoplay-inner" class="sheet">
     <div class="sheet-head">
       <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
-      <nav id="htp-contents" aria-label="How to play sections">
-        <a href="#htp-controls">CONTROLS</a>
-        <a href="#htp-racing">RACING</a>
-        <a href="#htp-setup">SETUP</a>
-        <a href="#htp-modes">MODES</a>
-        <a href="#htp-friends">FRIENDS</a>
-      </nav>
     </div>
+    <nav id="htp-contents" aria-label="How to play sections">
+      <a href="#htp-controls">CONTROLS</a>
+      <a href="#htp-racing">RACING</a>
+      <a href="#htp-setup">SETUP</a>
+      <a href="#htp-modes">MODES</a>
+      <a href="#htp-friends">FRIENDS</a>
+    </nav>
     <dl class="sheet-body pane">
       <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>
@@ -1604,8 +1604,8 @@
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
     <div class="sheet-foot balanced-row">
-      <button id="ct-reset">RESET CAM</button>
-      <button id="ct-reset-all">RESET ALL</button>
+      <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
+      <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
       <button id="ct-close" class="bigbtn">DONE</button>
     </div>
   </div>
@@ -1668,11 +1668,11 @@
 <script crossorigin="anonymous" src="js/log.js?v=747fd54ee135"></script>
 <script crossorigin="anonymous" src="js/mat4.js?v=b23181bec2d9"></script>
 <script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=c1ba6bde9659"></script>
-<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=92200b4e3ea2"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=ebb22078d312"></script>
 <script crossorigin="anonymous" src="js/render/shaders/sky.js?v=cfc01f7896cc"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=6b8cf3c8af2b"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=c6eed5f2c3ab"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=cb6d6c9bb806"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=3e22996bff9a"></script>
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=547889e83602"></script>
 <script crossorigin="anonymous" src="js/render/glx/chunked.js?v=9460f26a728e"></script>
 <script crossorigin="anonymous" src="js/render/glx.js?v=67cfbd1db497"></script>
@@ -1687,7 +1687,7 @@
 <script crossorigin="anonymous" src="js/render/gltf.js?v=02a852e70fbc"></script>
 <script crossorigin="anonymous" src="js/render/assets.js?v=5266ec266ee4"></script>
 <script crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
-<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=4672cd68f9cc"></script>
+<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=a09d233223d8"></script>
 <script crossorigin="anonymous" src="js/track/geo-paths.js?v=05c9d5fca14c"></script>
 <script crossorigin="anonymous" src="js/track/geom.js?v=32be243006c6"></script>
 <script crossorigin="anonymous" src="js/track/scenery-data.js?v=b9b8afefa90e"></script>
@@ -1769,7 +1769,7 @@
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=5617a732481e"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=22c84084eb8f"></script>
 <script crossorigin="anonymous" src="js/game/light-store.js?v=0bb4bffb5e43"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=4a6660e10524"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=517a947361fb"></script>
@@ -1779,15 +1779,15 @@
 <script crossorigin="anonymous" src="js/game/career.js?v=3b09a418d6be"></script>
 <script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
-<script crossorigin="anonymous" src="js/game/ai-drive.js?v=1cca72c678e3"></script>
+<script crossorigin="anonymous" src="js/game/ai-drive.js?v=d8db402eeb11"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=987588b2c761"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=7f8aebf0e917"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=e7668ee033b3"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=12d9bca64754"></script>
@@ -1797,8 +1797,8 @@
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
-<script crossorigin="anonymous" src="js/game/tuner.js?v=6218d97c1559"></script>
-<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=2e3deae9bdd9"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=647bc13307be"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=1ac37b5b0651"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=64dd8a16a603"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=56df3cedd95b"></script>
@@ -1813,7 +1813,7 @@
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=3ae2fe90b769"></script>
 <script crossorigin="anonymous" src="js/game/agentview-raster.js?v=16273e78276f"></script>
 <script crossorigin="anonymous" src="js/game/agentview.js?v=95cfa3552b50"></script>
-<script crossorigin="anonymous" src="js/game/apex.js?v=32927c3885eb"></script>
+<script crossorigin="anonymous" src="js/game/apex.js?v=cc8b0b57c365"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=8f6fcefd27aa"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=264a9657f294"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=efc8fb13f42f"></script>
@@ -1825,5 +1825,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=5b678b6e1bcb"></script>
+<script crossorigin="anonymous" src="js/game.js?v=7eb65822effc"></script>
 </body></html>

@@ -1027,7 +1027,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+@media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
 /* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
    a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
 #ss-inner[data-density="compact"] { --pair-at: 2000px; }
@@ -1111,51 +1112,37 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
-/* A notched phone in landscape can leave the single-column list only ~140px
-   tall. Spending two control rows here hid the first actual circuit entirely.
-   Keep the filter and search on one row only in that exact compact/wide mode;
-   portrait and the roomy paired catalogue retain the easier two-row layout. */
+/* Compact stacked landscape: one pan-x toolbar. --fit-at can inflate local
+   width past a px query while the row is still starving, so this keys on
+   density. Chips keep intrinsic width; search will not shrink below 12rem. */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
+  position: static;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+  display: none;
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  min-width: max-content;
   padding-inline: calc(var(--gap) * 0.55);
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-  flex: 1 1 9rem;
-  min-width: 9rem;
+  flex: 1 0 12rem;
+  min-width: 12rem;
 }
 /* The sticky filter already names SEASON and CLASSICS. Repeating that group
    heading directly below it costs the only circuit row on a short landscape
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
   display: none;
-}
-/* At 175–200% a landscape phone gives the sheet less than 360 local px. Four
-   controls cannot shrink into that width without their labels overlapping.
-   Keep one touch-height row, preserve each control's intrinsic width, and make
-   the toolbar itself horizontally pannable. The redundant group heading drops
-   here so the first actual circuit still fits below the toolbar. */
-@container sheet (max-width: 360px) {
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
-    position: static;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
-    display: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-    flex: 0 0 auto;
-    min-width: max-content;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-    flex: 0 0 9rem;
-  }
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }

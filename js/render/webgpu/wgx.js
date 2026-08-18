@@ -3669,7 +3669,10 @@ const WGX = (function () {
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
       const sunGR = !!shadowView && grStr > 0;
-      const haveGR = godrayBG && (sunGR || lampVol > 0);
+      // GLX/TLX require invViewProj — without it the march uses IDENT and
+      // paints garbage shafts on the first / odd present.
+      const haveGR = godrayBG && lastFrame && lastFrame.invViewProj
+        && (sunGR || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
@@ -3757,13 +3760,19 @@ const WGX = (function () {
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
           p.setPipeline(pBloomDown); p.setBindGroup(0, bloomDownBG[i]); p.draw(3, 1, 0, 0); p.end();
         }
-        // Upsample: from the smallest level down to mip0, additive (load) blend.
+        // Upsample: intermediate mips accumulate (load); the FINAL write into
+        // mip0 OVERWRITES (clear) — mip0 still holds the sharp bright-pass,
+        // and adding onto it re-injects lamp-lit surfaces at full sharpness
+        // (GLX glx/post.js last===overwrite, TLX upFinal).
         for (let i = nLv - 2; i >= 0; i--) {
           const s = postScratch;
           s[0] = 1 / bloomLv[i + 1].w; s[1] = 1 / bloomLv[i + 1].h; s[2] = spread; s[3] = 0;
           device.queue.writeBuffer(bloomUpUBO[i], 0, s, 0, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
+          const last = i === 0;
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
-            loadOp: "load", storeOp: "store" }] });
+            loadOp: last ? "clear" : "load",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            storeOp: "store" }] });
           p.setPipeline(pBloomUp); p.setBindGroup(0, bloomUpBG[i]); p.draw(3, 1, 0, 0); p.end();
         }
       } else {
@@ -3778,7 +3787,11 @@ const WGX = (function () {
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
-        const shaftMul = (sun && sun.shaft > 0)
+        // GATED ON bloomAmt: the shaft pass READS THE BLOOM CHAIN (GLX
+        // uSunShaft / TLX C.sunShaft). When bloom is shed we still clear
+        // mip0 to black, so 8 dependent taps accumulate vec3(0) unless
+        // the producer says zero here.
+        const shaftMul = (bloomAmt > 0 && sun && sun.shaft > 0)
           ? ((T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0) * sun.shaft
           : 0.0;
         s[0] = exposure; s[1] = bloomNorm; s[2] = shaftMul; s[3] = flareStr;   // p0

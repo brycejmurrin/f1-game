@@ -96,7 +96,11 @@ const CEILING = {
   // a hairline should stay a hairline when the density ladder tightens.
   // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
   // a flex container) when the widget was resized in the HUD SIZE pass.
-  rawSpacing: 471,
+  // 2026-08-18: 471 -> 470. Data Hub Last Race column-hide rules lost a
+  // duplicate landscape `padding` when they moved onto body[data-width].
+  // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
+  // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
+  rawSpacing: 467,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

@@ -1250,7 +1250,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
     // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
     // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
-    color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    if (F.params3.x > 0.0) {
+      color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    }
     // GGX specular from the lamp (same microfacet BRDF as the sun).
     // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
     // so wet roads / walls still streak a lamp you can see, not only the pool.

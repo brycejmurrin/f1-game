@@ -41,7 +41,36 @@ function create(G) {
   // dim uppercase text with the skewed red tick that #select and the garage use —
   // so the career pages read as part of the same family rather than a new screen
   // with its own idea of what a heading looks like. h3, as elsewhere.
-  function head(text) { return el("h3", "sel-label", text); }
+  function head(text, id) {
+    const n = el("h3", "sel-label", text);
+    if (id) n.id = id;
+    return n;
+  }
+  function slug(text) {
+    return String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+  // Jump-nav sibling of the body, same DOM slot as #htp-contents: head, nav,
+  // body, foot. Wide sheets rail it; compact/stacked keep it as a strip.
+  function mountContentsNav(bodyId, navId, label) {
+    const body = $(bodyId);
+    let nav = document.getElementById(navId);
+    if (nav) return nav;
+    nav = el("nav");
+    nav.id = navId;
+    nav.setAttribute("aria-label", label);
+    body.parentNode.insertBefore(nav, body);
+    return nav;
+  }
+  function fillContents(navId, root) {
+    const nav = $(navId);
+    if (!nav) return;
+    nav.textContent = "";
+    root.querySelectorAll(".sel-label[id]").forEach((h) => {
+      const a = el("a", "", h.textContent);
+      a.href = "#" + h.id;
+      nav.appendChild(a);
+    });
+  }
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -201,7 +230,7 @@ function create(G) {
   // the economy is tuned, and a wrong number here is worse than no number.
   function guideSection(title, paras) {
     const frag = document.createDocumentFragment();
-    frag.appendChild(head(title));
+    frag.appendChild(head(title, "cg-" + slug(title)));
     const card = el("div", "cr-card cg-card");
     for (const p of paras) {
       if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
@@ -492,6 +521,7 @@ function create(G) {
       "Your career car and your free-play car are separate builds. Nothing you do "
       + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
     ]));
+    fillContents("cg-contents", body);
     ScrollFade.refresh();
   }
   // `flavour` is optional: the hub knows which career is running, the setup
@@ -1167,7 +1197,7 @@ function create(G) {
     if (!c) return;
     const t = careerTotals();
 
-    body.appendChild(head("CAREER TOTALS"));
+    body.appendChild(head("CAREER TOTALS", "ch-totals"));
     const card = el("div", "cr-card");
     card.append(
       row("Seasons", t.seasons + " · " + c.year + " in progress"),
@@ -1180,7 +1210,7 @@ function create(G) {
       row("Teams driven for", t.teams.map(teamName).join(", ")));
     body.appendChild(card);
 
-    body.appendChild(head("SEASON BY SEASON"));
+    body.appendChild(head("SEASON BY SEASON", "ch-seasons"));
     if (!c.history.length) {
       // An empty box would read as a broken screen. A first season genuinely has
       // no archive, and saying so is the honest answer to "what have I done".
@@ -1208,6 +1238,7 @@ function create(G) {
         body.appendChild(r);
       }
     }
+    fillContents("ch-contents", body);
     ScrollFade.refresh();
   }
 
@@ -1321,6 +1352,9 @@ function create(G) {
     closeGuide();
     if (G.soundOn) GameAudio.uiSelect();
   };
+
+  mountContentsNav("cg-body", "cg-contents", "Career guide sections");
+  mountContentsNav("ch-body", "ch-contents", "Career history sections");
 
   return { build, openHub, openSlots, close, openOffers, closeOffers,
            openHistory, closeHistory, openGuide, closeGuide };
