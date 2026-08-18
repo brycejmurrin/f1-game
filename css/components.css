@@ -778,10 +778,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.5);
   padding-bottom: calc(var(--gap) * 0.6);
   background: var(--bg);
+}
+/* Four labels fit without truncation once the sheet has this much LOCAL room.
+   Below it the documented 2x2 arrangement keeps CONTROLS and DISPLAY legible. */
+@container sheet (min-width: 420px) and (max-width: 519px) {
+  #pm-category-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 #pm-category-tabs > button {
   min-width: 0;
@@ -802,6 +807,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   border-color: var(--red);
   background: rgba(232,0,45,.14);
   box-shadow: inset 3px 0 0 var(--red);
+}
+/* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
+   fills the physical viewport. Keep the aria-label as the accessible name,
+   but paint deliberate compact labels instead of clipping half a word. */
+@container sheet (max-width: 250px) {
+  #pm-tab-controls,
+  #pm-tab-display { font-size: 0; }
+  #pm-tab-controls::after,
+  #pm-tab-display::after { font-size: var(--fs-1); }
+  #pm-tab-controls::after { content: "CTRL"; }
+  #pm-tab-display::after { content: "DISP"; }
 }
 .pm-groups { min-width: 0; }
 .pm-groups > [role="tabpanel"] { min-width: 0; }

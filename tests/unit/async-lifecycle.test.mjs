@@ -150,6 +150,33 @@ test("a timed-out API fetch releases the shared queue", async () => {
   await second;
 });
 
+test("API auth failures never fall back to stale cached data", async () => {
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const key = "apex26.api." + url;
+  const stale = JSON.stringify({ t: 1, data: [{ rainfall: 99 }] });
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: false, status: 403,
+      headers: { get: () => null },
+      text: async () => JSON.stringify({ detail: "Not authenticated" }),
+    }),
+    AbortController,
+    localStorage: {
+      length: 1,
+      getItem: (k) => k === key ? stale : null,
+      setItem() {}, key: () => key, removeItem() {},
+    },
+    Log: { warn() {} }, Date, setTimeout, clearTimeout,
+  });
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+
+  await assert.rejects(context.__api.weather(7, 0), (err) => {
+    assert.equal(err.status, 403);
+    assert.match(err.message, /Not authenticated/);
+    return true;
+  });
+});
+
 function dataApiHarness(responses, initial = new Map()) {
   const calls = [], sets = [];
   let keyCalls = 0, now = Date.parse("2026-07-26T14:45:00Z");

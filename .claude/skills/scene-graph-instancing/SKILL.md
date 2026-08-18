@@ -36,6 +36,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 | `TrackGraph.NODE_COLOR` (`"@node"`) | Per-node tint; canonical mesh bakes white |
 
 ```sh
+./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
 node tools/graph-parity.cjs <id>            # or --all
 BASE=<ref> node tools/graph-parity.cjs --all
 npm run test:tooling-fast

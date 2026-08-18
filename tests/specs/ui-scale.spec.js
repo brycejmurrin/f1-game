@@ -306,7 +306,7 @@ test.describe("UI scale", () => {
         tabCols: tabs.gridTemplateColumns.split(" ").length };
     });
     expect(narrow.layoutCols).toBe(1);
-    expect(narrow.tabCols).toBe(4);
+    expect(narrow.tabCols).toBe(2); // 2×2 keeps full labels legible on phone sheets
 
     await page.locator("#pm-tab-display").focus();
     await page.keyboard.press("ArrowRight");

@@ -916,7 +916,7 @@ function gridSeats() {
   const out = [];
   for (const team of Teams.LIST) {
     if (team.custom && team.id !== career.team) continue;
-    team.drivers.forEach((d, i) => {
+    gridDrivers(team).forEach((d, i) => {
       const id = seasonDriverId(team.id, i);
       out.push({ id, team, seat: i, driver: seatDriver(team.id, i, d) });
     });

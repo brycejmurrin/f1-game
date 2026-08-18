@@ -123,7 +123,14 @@ window.ScrollFade = (function () {
   }
   // Layout after a screen opens settles over several frames (web fonts, the
   // view transition, canvas sizing), so re-measure once things stop moving.
-  function settle() { schedule(); setTimeout(paintAll, 120); setTimeout(paintAll, 400); }
+  let settleSoon = 0, settleLate = 0;
+  function settle() {
+    schedule();
+    if (settleSoon) clearTimeout(settleSoon);
+    if (settleLate) clearTimeout(settleLate);
+    settleSoon = setTimeout(function () { settleSoon = 0; paintAll(); }, 120);
+    settleLate = setTimeout(function () { settleLate = 0; paintAll(); }, 400);
+  }
 
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
