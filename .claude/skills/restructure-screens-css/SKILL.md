@@ -1,6 +1,6 @@
 ---
 name: restructure-screens-css
-description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y) or renderer/canvas work.
+description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y), one-screen CSS play (use css-play), or renderer/canvas work.
 ---
 
 # Restructuring screens, DOM and CSS in a no-build codebase

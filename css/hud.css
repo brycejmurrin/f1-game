@@ -310,15 +310,17 @@ body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
    is the CSS twin so #campicker cannot paint in the dim beside the pause card
    if the hidden attribute lags. Same :has() as #photo-controls above. */
 body:has(.screen.dim:not([hidden])) #campicker { display: none; }
-/* Same moment: stand the BOTTOM race chrome down while a dim dialog is open.
+/* Same moment: stand the race chrome down while a dim dialog is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
-   painted through the sheet. Top timing/map stay — they clear the centred
-   pause card. Mirrors the photo-controls rule above; gated on body.in-race so
-   menu-time dialogs do not touch a HUD that is already hidden. */
-body.in-race:has(.screen.dim:not([hidden])) .hud-bottom,
-body.in-race:has(.screen.dim:not([hidden])) .dock,
-body.in-race:has(.screen.dim:not([hidden])) #pausebtn {
+   painted through the sheet. Top timing/map used to stay because they
+   cleared the card box — they still read through the scrim (POS/LAP/CHASE
+   beside PAUSED) and make the pause sheet look like a sticker on the HUD.
+   Hide the clusters, not only the bottom. Gated on body.in-race so menu-time
+   dialogs do not touch a HUD that is already hidden. */
+body.in-race:has(.screen.dim:not([hidden])) :is(
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #btn-cam, .dock, #pausebtn
+) {
   visibility: hidden;
 }
 #photo-controls > * { pointer-events: auto; }

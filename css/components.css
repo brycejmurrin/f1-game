@@ -251,7 +251,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
-  width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
+  width: auto; min-width: min(100%, 110px); margin: 0; flex: 1 1 0;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
@@ -291,7 +291,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    two debugging sessions.
    Screens tune it with four properties and nothing else:
      --pair-at     the sheet width at which the pair turns on (default 620px)
-     --pair-split  the SIDE column's track      (default minmax(0, 42%))
+     --pair-split  the SIDE column's track      (default minmax(0, 1fr))
      --pair-main   the MAIN column's track      (default minmax(0, 1fr))
      --pair-gap    the gutter between the panes (default 0.8 * --pad)
 
@@ -322,7 +322,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
    gets in the first frame, or if the script never loads. */
 .pane-pair {
-  grid-template-columns: var(--pair-split, minmax(0, 42%)) var(--pair-main, minmax(0, 1fr));
+  grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
   grid-template-rows: auto minmax(0, 1fr) min-content;
   column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
 }
@@ -784,6 +784,21 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pausemenu .sheet[data-density="compact"] .build-tag {
   margin: 2px 0 0;
 }
+/* Opaque enough that leftover HUD cannot read through the card. Color is
+   the original dim wash, not carnival inks. */
+#pausemenu.screen.dim { background: rgba(6, 6, 10, 0.88); }
+/* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
+   full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
+   one full-width primary and QUIT stays the one full-width destructive. */
+#pausemenu .sheet-body.stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) * 0.6);
+}
+#pm-resume,
+#pm-quit,
+#pm-standings,
+#pm-build { grid-column: 1 / -1; }
 
 /* ---------- settings sub-menu ----------
    One category at a time. The old responsive column count made every setting

@@ -98,13 +98,14 @@
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
-#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
+#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; }
-/* Four modes normally settle into 2x2, but the row is content-driven: feature
-   availability can hide/add an action without leaving a half-empty grid cell. */
+/* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
+   doors on one line; a lone last child (STANDINGS season) still fills the row
+   via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
 #menu-primary {
-  --balance-basis: 45%;
-  --balance-min: 40%;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
   gap: calc(var(--gap) * 0.7);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
@@ -135,15 +136,16 @@
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
-  --balance-basis: 45%;
-  --balance-min: 40%;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
   gap: calc(var(--gap) * 0.55);
 }
 /* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
    keeps the normal four controls as two pairs, and lets a visible fifth action
-   fill its final line without a state-specific selector. */
+   fill its final line without a state-specific selector. width:100% (not auto)
+   so a long label wraps inside its half instead of widening its cell. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
-#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
+#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -266,25 +268,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 @media (orientation: landscape) {
   :where(body[data-density="compact"]) #overlay {
-    /* minmax(0, auto) on the BRAND column, for the reason #menu-primary states
-       above: an `auto` track refuses to shrink below its longest word, so the
-       column is sized by whatever prose it happens to contain and the button
-       column is pushed along by it. Measured at 734x343 with the landscape
-       safe-area insets injected (l/r 59px, as tools/layout-audit.mjs does):
-       brand took 348px, +32 gap, +300 of buttons = 680 in a 600px content box,
-       and #menu-buttons hung 13px past #overlay — which clips, since #overlay
-       is overflow-x: hidden.
-       The trigger was raising #disclaimer to the --fs-micro floor: a longer
-       line of the same words, in a track with no shrink floor. But the fault
-       was always in the track, not the type — this block's own comment records
-       the pair already outrunning vw at UI SIZE 150% (measured R=884 on 852).
-       A shrink floor lets the brand column wrap its prose instead, which is
-       what the disclaimer and subtitle are for; the button column is
-       fixed-width (min(42vwz, 300px)) and so keeps its size either way. */
-    grid-template-columns: minmax(0, auto) auto;
+    /* Equal shrinkable tracks. auto+auto sized the brand by its longest word
+       and the doors by a px cap, so the pair was never even and outran vw
+       when zoomed. 1fr 1fr shares leftover; children use 42vwz so paint
+       width tracks the viewport and --ui-scale together. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     justify-content: center;
     justify-content: safe center;
-    align-content: center; justify-items: start;
+    align-content: center; justify-items: stretch;
     /* Re-stating `safe center` because this block re-declares align-content and
        would otherwise take the base rule's overflow bug back — see there.
        Same for justify-content: at UI SIZE 150% the brand+button pair can be
@@ -294,10 +285,16 @@ body { --compact-at: 600px; --wide-at: 620px; }
     column-gap: 32px;
   }
   :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  :where(body[data-density="compact"]) #menu-brand,
+  :where(body[data-density="compact"]) #menu-buttons {
+    width: min(calc(42 * var(--vwz)), 100%);
+    min-width: 0;
+    max-width: 100%;
+  }
   :where(body[data-density="compact"]) #menu-buttons {
     grid-column: 2; grid-row: 1;
     align-self: stretch;
-    width: auto;
+    justify-items: stretch;
   }
   :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
@@ -308,7 +305,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
      150% without touching type size (brand+46vw+gap measured ~872 on 852). */
   :where(body[data-density="compact"]) #menu-hero,
   :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 300px); }
+  :where(body[data-density="compact"]) #menu-secondary { width: 100%; }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
@@ -1459,7 +1456,7 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 #menu-buttons {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "hero hero"
     "primary secondary";
@@ -1492,7 +1489,7 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
   background: var(--menu-panel);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
 }
-#menu-secondary { grid-template-columns: 1fr; }
+#menu-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #menu-primary .bigbtn, #menu-secondary .bigbtn {
   margin: 0;
   min-width: 0;
@@ -1522,17 +1519,17 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 #soundbtn { border-color: rgba(123,215,208,.38); color: var(--menu-data); }
 
 /* Shared panel treatment for the deeper screens. */
-:is(#pausemenu, #pmsettings, #select, #career) .sheet {
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet {
   border-color: var(--menu-line);
   background: linear-gradient(145deg, rgba(26,29,37,.97), rgba(10,11,15,.97));
 }
-:is(#pausemenu, #pmsettings, #select, #career) .sheet-head {
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-head {
   min-height: 58px;
   padding-inline: clamp(var(--pad), 2.5vw, calc(var(--pad) * 1.27));
   background: linear-gradient(90deg, rgba(225,6,0,.16), transparent 70%);
 }
-:is(#pausemenu, #pmsettings, #select, #career) .sheet-head h2 { letter-spacing: .14em; }
-:is(#pausemenu, #pmsettings, #select, #career) .sheet-foot {
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-head h2 { letter-spacing: .14em; }
+:is(#pausemenu, #pmsettings, #select, #career, #vsfriend, #howtoplay, #datahub) .sheet-foot {
   border-top: 1px solid var(--menu-line);
   background: rgba(0,0,0,.18);
 }
@@ -1551,7 +1548,8 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 .menu-status-item {
   display: grid;
   gap: calc(var(--gap) / 3);
-  min-width: 92px;
+  flex: 1 1 0;
+  min-width: 0;
   padding: calc(var(--gap) * 0.75) var(--gap);
   border-left: 2px solid rgba(123, 215, 208, .65);
   background: rgba(123, 215, 208, .055);
@@ -1601,33 +1599,33 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 /* Short landscape is height-constrained, not width-constrained. Compress the
    context layer first so the actionable panels keep their touch floor. */
 @media (orientation: landscape) and (max-height: 620px) {
-  #overlay { gap: 10px; align-content: safe center; }
-  #menu-brand { padding-block: 12px; }
-  #menu-status { margin-top: 10px; }
-  .menu-status-item { padding-block: 6px; }
-  #menu-meta { margin-top: 8px; }
+  #overlay { gap: var(--gap); align-content: safe center; }
+  #menu-brand { padding-block: var(--pad); }
+  #menu-status { margin-top: var(--gap); }
+  .menu-status-item { padding-block: calc(var(--gap) * 0.75); }
+  #menu-meta { margin-top: var(--gap); }
   #menu-hero .bigbtn { min-height: 48px; }
   #menu-primary .bigbtn, #menu-secondary .bigbtn { min-height: 40px; }
 }
 
 @media (orientation: landscape) and (max-height: 480px) {
   #menu-status { display: none; }
-  #menu-brand { padding-block: 9px; }
-  #subtitle { margin-top: 3px; }
-  #menu-meta { margin-top: 5px; }
-  #menu-buttons { row-gap: 6px; }
-  #menu-primary, #menu-secondary { padding: 7px; }
-  #menu-primary::before, #menu-secondary::before { margin-bottom: 4px; }
+  #menu-brand { padding-block: calc(var(--gap) * 1.1); }
+  #subtitle { margin-top: calc(var(--gap) * 0.4); }
+  #menu-meta { margin-top: calc(var(--gap) * 0.6); }
+  #menu-buttons { row-gap: calc(var(--gap) * 0.75); }
+  #menu-primary, #menu-secondary { padding: calc(var(--gap) * 0.85); }
+  #menu-primary::before, #menu-secondary::before { margin-bottom: calc(var(--gap) * 0.5); }
 }
 
 /* Medium landscape has two columns, but neither column may retain the desktop
    620px floor. Size them from the viewport so 844x390 and 667x375 do not
    overlap or push the control rail off-screen. */
 @media (orientation: landscape) and (max-width: 1100px) {
-  #menu-brand { width: min(43vw, 520px); }
-  #menu-buttons { width: min(53vw, 620px); }
-  #menu-brand { padding-inline: clamp(14px, 2.5vw, 30px); }
-  #menu-status { gap: 5px; }
-  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: 8px; }
+  #menu-brand,
+  #menu-buttons { width: min(calc(46 * var(--vwz)), 100%); }
+  #menu-brand { padding-inline: clamp(var(--pad), 2.5vw, calc(var(--pad) * 2)); }
+  #menu-status { gap: calc(var(--gap) * 0.6); }
+  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: var(--gap); }
 }
 } /* @layer components */

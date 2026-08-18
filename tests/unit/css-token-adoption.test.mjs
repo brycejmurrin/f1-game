@@ -115,7 +115,9 @@ const CEILING = {
   // 2026-08-18: 467 → 481. Deploy `45dc6cb1` short-landscape / mid-width
   // menu compress (css/menus.css) added 14 raw padding/gap/margin decls
   // and did not remasure the ceiling; the union is 481.
-  rawSpacing: 481,
+  // 2026-08-18: 481 → 467. Tokenised that short-landscape / mid-width
+  // compress onto --gap / --pad so density and UI SIZE still scale it.
+  rawSpacing: 467,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
