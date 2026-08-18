@@ -135,9 +135,11 @@
 :root {
   --red: #e10600;
   --bg: #0a0a0f;
-  /* Kept translucent — a sheet often sits over the live 3D scene — but lifted
-     to the first elevation step so it reads as a surface above the page. */
-  --panel: color-mix(in oklab, #fff 4.5%, rgba(11, 11, 18, 0.94));
+  /* Translucent on purpose: sheets sit over the live #game circuit, and that
+     3D view is the imagery. 0.76 leaves floodlights and tarmac readable
+     through the card without dropping type contrast. Reduced-transparency
+     swaps this for --surf-1 (css/components.css). */
+  --panel: color-mix(in oklab, #fff 5%, rgba(11, 11, 18, 0.76));
   --text: #f2f2f5;
   --dim: #9a9aa5;
   --sal: env(safe-area-inset-left, 0px);

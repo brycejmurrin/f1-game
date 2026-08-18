@@ -390,7 +390,15 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 
 /* ---------- select screen ---------- */
-#select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
+#select {
+  z-index: 25;
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.42);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #select { background: rgba(6, 6, 10, 0.92); }
+}
 #sel-inner { --sheet-w: 1020px; }
 /* STACKED: ONE LIST SCROLLER. The circuit map is context — a compact band —
    not a second document. #sel-body is a flex column that does NOT scroll;

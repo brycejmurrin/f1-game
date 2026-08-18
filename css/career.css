@@ -23,7 +23,15 @@
    .season-upcoming-row from css/menus.css — a standings table should not look
    like a different game depending on which screen it is on. */
 
-#career { z-index: 25; background: rgba(6, 6, 10, 0.92); }
+#career {
+  z-index: 25;
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.42);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #career { background: rgba(6, 6, 10, 0.92); }
+}
 #cr-inner { --sheet-w: 1020px; --fit-at: 300px; }
 @media (orientation: landscape) { #cr-inner { --fit-at: 220px; } }
 

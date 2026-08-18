@@ -221,7 +221,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   position: relative;
   /* Darker than the body and shaded from the top, so the action bar reads as
      the plate the sheet stands on rather than one more band of content. */
-  background: linear-gradient(180deg in oklab, color-mix(in oklab, var(--red) 8%, rgba(0, 0, 0, 0.30)), rgba(8, 8, 13, 0.97) 60%);
+  background: linear-gradient(180deg in oklab, color-mix(in oklab, var(--red) 8%, rgba(0, 0, 0, 0.30)), rgba(8, 8, 13, 0.80) 60%);
 }
 .sheet-foot::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
@@ -724,11 +724,31 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
-   washed with the menu behind it reading through. */
+   washed with the menu behind it reading through. The fix is to fade the
+   UNDERLYING MENU chrome (rules just below), not to black out #game. */
 .screen.dim {
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     rgba(0, 0, 0, 0.42);
+}
+
+/* The live #game scene is the imagery. A dim sheet over the title used to
+   keep #overlay painted, so CAREER / RACE read through around the card.
+   Same stack happens when teampicker / race-settings sit on #select.
+   Fade the menu under the dialog — not the canvas. opacity, not hidden:
+   the attribute stays off so layer queries and tests keep matching. */
+body:has(dialog.screen:not([hidden])) #overlay,
+body:has(#teampicker:not([hidden])) #select,
+body:has(#race-settings:not([hidden])) #select,
+body:has(#track-detail:not([hidden])) #select,
+body:has(#customize:not([hidden])) #select,
+body:has(#season-setup:not([hidden])) #select,
+body:has(#career-offers:not([hidden])) #career,
+body:has(#career-history:not([hidden])) #career,
+body:has(#career-guide:not([hidden])) #career,
+body:has(#teampicker:not([hidden])) #career {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
