@@ -248,7 +248,7 @@
           const crN = crN0;
           const crL = length(crN).toVar();
           const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
-          If(N.z.lessThan(0.0), () => { N.assign(N.negate()); });
+          // GLX SSAO does not flip N.z — a view-space coin toss darkens walls.
           const radius = float(ssaoU.radius).toVar();
           const occ = float(0.0).toVar();
           // GLX/WGX: skip the 8 dependent depth taps when AO strength is 0

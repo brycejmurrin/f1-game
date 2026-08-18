@@ -677,6 +677,9 @@ fn vs_main(
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
+    // Software-GPU fallback on top of lit depthBias. GLX uses
+    // polygonOffset only — dropping this lift reopens terrain-over-road
+    // on SwiftShader. Do not treat as a look-parity bug.
     wp.y = wp.y + 0.08;
   }
   o.matTrk = pulled;
@@ -934,6 +937,22 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
+  // SPECULAR ANTI-ALIASING BEFORE wet (GLX lit.js). Widen roughness by how
+  // fast the normal is changing in SCREEN space, so a thin bright GGX lobe
+  // on a geometry edge or peel sheens smoothly. Then wet recomputes a from
+  // the polished roughness — doing SAA after wet extra-widened puddle edges.
+  // Geometric + peel derivatives are taken in top-level uniform CF; mix by
+  // carPaint (paint gets peel SAA). Material/wall bump stays out of SAA on
+  // all three backends — a dpdx after the matId branch is illegal WGSL, and
+  // GLX/TLX snapshot Nsaa before applyMaterialNormal so brick/concrete
+  // match this mix.
+  let saaVarGeo = dot(saaDxGeo, saaDxGeo) + dot(saaDyGeo, saaDyGeo);
+  let saaVarPeel = dot(saaDxPeel, saaDxPeel) + dot(saaDyPeel, saaDyPeel);
+  let saaVar = mix(saaVarGeo, saaVarPeel, saturate(carPaint));
+  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
+
+  var a = rough * rough;
+
   // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/shaders/lit.js). Rain
   // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
   // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
@@ -966,24 +985,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     rough = mix(rough, 0.30, wetSheen);
     rough = mix(rough, 0.06, puddle);
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
+    a = rough * rough;
   }
-
-  // SPECULAR ANTI-ALIASING (GLX lit.js parity). Widen roughness by how fast the
-  // normal is changing in SCREEN space, so a thin bright GGX lobe on a geometry
-  // edge, on distant micro-normal ground, or on curved bodywork sheens smoothly
-  // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
-  // every lamp lobe, so on a night track it is the difference between 48 stable
-  // highlights and 48 flickering ones. Geometric + peel derivatives are
-  // taken in top-level uniform CF; mix by carPaint (paint gets peel SAA).
-  // Material/wall bump stays out of SAA on all three backends — a dpdx
-  // after the matId branch is illegal WGSL, and GLX/TLX snapshot Nsaa
-  // before applyMaterialNormal so brick/concrete match this mix.
-  let saaVarGeo = dot(saaDxGeo, saaDxGeo) + dot(saaDyGeo, saaDyGeo);
-  let saaVarPeel = dot(saaDxPeel, saaDxPeel) + dot(saaDyPeel, saaDyPeel);
-  let saaVar = mix(saaVarGeo, saaVarPeel, saturate(carPaint));
-  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
-
-  let a = rough * rough;
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
   // Ground fill is NOT scaled by anything — matches GLX js/render/shaders/lit.js

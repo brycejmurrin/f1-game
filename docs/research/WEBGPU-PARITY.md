@@ -8,12 +8,33 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 `js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
-Remaining honest look deltas: TAA still off (no history resolve — do not
-enable the Halton jitter alone); TLX MSAA stays off (no resolved depth
-for post). SAA mixes geometric N with a uniform-CF peel hoist on all
-three backends (material/wall bump stays out of SAA). Desktop GLX MSAA
-is 4× like WGX. Every baked MAT layer (walls included) is hoisted to
-`textureSample` so pack aniso matches GLX `texture()`.
+Remaining honest look deltas (audited 2026-08-18 against source):
+
+- **TAA** still off (no history resolve — do not enable Halton jitter alone).
+  GLX has no TAA either; this is not a live GLX↔WGX mismatch.
+- **TLX MSAA** stays off (no resolved depth for post).
+- **TLX car SSR tag** cannot write 0.35 into scene alpha (r185 `isOpaque()`
+  is false for `NoBlending`, so `output.a` is coverage). The tag now lives
+  on a second HDR attachment (`ssrTag` / `mrtNode`), armed only for the
+  main scene pass — env cube and canvas fallback stay single-target.
+- **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
+  ribbon VBOs). Not portable without reopening that defect.
+- **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
+  `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
+  reopens terrain-over-road on SwiftShader.
+
+Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
+(no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
+fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX FS
+`mat` is `flat`; TLX baked wall UVs use geometric `Nvary`; TLX corrugation
+AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking mip uses
+unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso / desktop
+GLX 4× MSAA / peel-then-bump stay matched.
+
+SAA mixes geometric N with a uniform-CF peel hoist on all three backends
+(material/wall bump stays out of SAA). Every baked MAT layer (walls
+included) is hoisted to `textureSample` so pack aniso matches GLX
+`texture()`.
 Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
