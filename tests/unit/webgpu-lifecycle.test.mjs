@@ -919,7 +919,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG \|\| zeroAttrBG\)/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, \(authored && attrBG\) \? attrBG : \(_roadLutBG \|\| attrBG \|\| zeroAttrBG\)\)/);
   assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
   assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
@@ -931,13 +931,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
   assert.match(WGX_SOURCE, /const MAX_S = 2000/);
-  assert.match(CHUNKS_SOURCE, /ox < 3/);
-  assert.match(CHUNKS_SOURCE, /best\.z \+ ds/);
-  assert.match(CHUNKS_SOURCE, /nearPair/);
+  assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
   assert.match(WGX_SOURCE, /function holdSoftPresent/);
   assert.match(WGX_SOURCE, /apex26\.wgxHoldPresent/);
   assert.match(CHUNKS_SOURCE, /o\.matTrk = vec4<f32>\(pulled\.y, pulled\.z, pulled\.w, pulled\.x\)/);
-  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5 && !isRoadDraw/);
   assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
   assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
