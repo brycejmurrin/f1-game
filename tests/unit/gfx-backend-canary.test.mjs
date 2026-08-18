@@ -1259,3 +1259,32 @@ test("three's WebGL backend still hardcodes an alpha canvas (why we pass a conte
     "hand-made context and pass alpha:false alone");
   assert.match(THREE_BUNDLE.slice(at, at + 60), /getContext\("webgl2",\s*\w+\)/);
 });
+
+test("TLX env probe culls and lights like GLX — not the chase camera", () => {
+  // envFaceBegin used to return only invViewProj. drawWorldMeshes then
+  // frustum-culled propBatches against the MAIN view, and envFaceEnd ran
+  // before gfx.begin() so the cube baked last-frame (or default) lighting.
+  // Software faces still latch envReady for M9, but a black cube must not
+  // raise uEnvStr (clearcoat absorb toward black).
+  const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  const beginAt = src.indexOf("envFaceBegin(face, eye, frame)");
+  assert.notEqual(beginAt, -1, "envFaceBegin moved");
+  const beginBody = src.slice(beginAt, beginAt + 1800);
+  assert.match(beginBody, /frame\.viewProj\s*=\s*_envVPArr/,
+    "probe must publish the face VP so propBatches cull against the cube face");
+  assert.match(beginBody, /frame\.eye\s*=\s*eye/,
+    "probe eye must be the car, not the chase camera");
+  assert.match(beginBody, /ENV_CULL_M/,
+    "probe must cap draw distance like GLX (300 m when envCull is on)");
+  assert.match(beginBody, /lit\.updateFrame\(frame\)/,
+    "probe runs before gfx.begin — updateFrame must push this frame's lighting");
+  const endAt = src.indexOf("envFaceEnd(face)");
+  assert.notEqual(endAt, -1, "envFaceEnd moved");
+  const endBody = src.slice(endAt, endAt + 3600);
+  assert.match(endBody, /_restoreEnvFrame\(\)/,
+    "envFaceEnd must restore the main-camera VP/eye/cullDist");
+  assert.match(endBody, /_envBlank\s*=\s*true/,
+    "software black-clear cycle must mark the cube blank");
+  assert.match(src, /envReady && !_envBlank && !frame\.noEnv/,
+    "uEnvStr must stay 0 while the cube is a software black stub");
+});
