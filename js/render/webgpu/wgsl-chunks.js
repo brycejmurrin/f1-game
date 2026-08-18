@@ -915,8 +915,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // instead of strobing pixel-to-pixel as the car moves. Feeds the sun lobe AND
   // every lamp lobe, so on a night track it is the difference between 48 stable
   // highlights and 48 flickering ones. Geometric + peel derivatives are
-  // taken in top-level uniform CF; mix by carPaint (paint gets peel SAA,
-  // terrain bump still cannot — applyMaterialNormal is non-uniform).
+  // taken in top-level uniform CF; mix by carPaint (paint gets peel SAA).
+  // Material/wall bump stays out of SAA on all three backends — a dpdx
+  // after the matId branch is illegal WGSL, and GLX/TLX snapshot Nsaa
+  // before applyMaterialNormal so brick/concrete match this mix.
   let saaVarGeo = dot(saaDxGeo, saaDxGeo) + dot(saaDyGeo, saaDyGeo);
   let saaVarPeel = dot(saaDxPeel, saaDxPeel) + dot(saaDyPeel, saaDyPeel);
   let saaVar = mix(saaVarGeo, saaVarPeel, saturate(carPaint));
