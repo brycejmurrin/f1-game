@@ -36,6 +36,8 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
+//  pm-adaptbtn ADAPTIVE BUTTONS digital-steer rate half of SPEED STEER + analog
+//                             travel on the on-screen arrows (opt-in, default off).
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 // The car is planted (understeer-only): DRIFT defaults to 0 so the rear never
 // steps out — overcooking a corner washes the front wide, it never snaps round.
@@ -360,6 +362,8 @@ function applySteerTuning() {
   G.ROAD_FOLLOW    = helpFromSlider(help);
   Input.setTiltSmoothing(cutoffFromSmooth(smooth));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
+  Input.setAdaptiveButtons(!!store.get("adaptiveButtons", 0));
+  Input.setSteerSpeedRef(G.STEER_SPEED_REF);
   G.raceLineAssist = line / 5;
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
@@ -367,6 +371,7 @@ function applySteerTuning() {
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
+  refreshAdaptButtons();
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -401,7 +406,9 @@ $("pm-lock").oninput = (e) => {
 };
 $("pm-speedsteer").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSpeed", v);
-  G.STEER_SPEED_REF = speedRefFromSlider(v); $("pm-speedsteer-v").textContent = v; clearPreset();
+  G.STEER_SPEED_REF = speedRefFromSlider(v);
+  Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+  $("pm-speedsteer-v").textContent = v; clearPreset();
 };
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);
@@ -438,6 +445,29 @@ for (const n of ["off", "corner", "full"]) $("pm-line-" + n).onclick = () => {
   store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 };
+function refreshAdaptButtons() {
+  const on = !!store.get("adaptiveButtons", 0);
+  const offB = $("pm-adaptbtn-off"), onB = $("pm-adaptbtn-on");
+  if (offB) offB.classList.toggle("active", !on);
+  if (onB) onB.classList.toggle("active", on);
+}
+function setAdaptButtons(on) {
+  store.set("adaptiveButtons", on ? 1 : 0);
+  Input.setAdaptiveButtons(on);
+  refreshAdaptButtons();
+  if (G.soundOn) GameAudio.uiSelect();
+}
+const adaptOff = $("pm-adaptbtn-off"), adaptOn = $("pm-adaptbtn-on");
+if (adaptOff) adaptOff.onclick = () => setAdaptButtons(false);
+if (adaptOn) adaptOn.onclick = () => setAdaptButtons(true);
+// vStd(v) = v * VMAX / vTop() = v / max(PACE, 0.05). Same identity, no
+// game.js growth — adaptive digital rate must track the pace-5 scale the
+// SPEED STEER reference is written on.
+Input.setSpeedProvider(function () {
+  const p = G.player;
+  if (!p) return 0;
+  return Math.abs(p.speed || 0) / Math.max(G.PACE || 1, 0.05);
+});
 // <details> owns open/closed state, keyboard toggling and the "expanded"
 // announcement itself; the native "toggle" event fires on both directions,
 // so this only has to add the click sound.

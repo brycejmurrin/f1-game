@@ -38,6 +38,18 @@ const Input = (function () {
   let KEY_RAMP_IN = 6;        // steer units/s toward full lock
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
                               // is a request to stop, and should be answered)
+  // ADAPTIVE BUTTONS (Advanced → BUTTON INPUT). Off = the fixed rates above.
+  // On = the missing RATE half of SPEED STEER, for digital sources only: the
+  // same hyperbola as lockTaper (`1 / (1 + vStd / STEER_SPEED_REF)`), so a tap
+  // at speed is a correction and a hold still reaches lock, just more slowly.
+  // Analog travel on the on-screen arrows (slide opposite the steer direction
+  // to ease) is the touchscreen's answer to an analog trigger — same gesture
+  // the pedals already have. Release still uses KEY_RAMP_OUT: letting go is a
+  // request to stop and should stay quick.
+  let adaptiveButtons = false;
+  let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
+  let speedStdOverride = null;
+  let speedProvider = null;
   const DEG = Math.PI / 180;
 
   // keyboard
@@ -110,6 +122,8 @@ const Input = (function () {
   let btnBrakeVal = 0;
   let btnSteerLeft = false;
   let btnSteerRight = false;
+  let btnSteerLeftVal = 0; // 0..1 analog travel (adaptive buttons; tap = 1)
+  let btnSteerRightVal = 0;
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
   let btnSteerT = 0;       // last ramp timestamp, ms
 
@@ -358,13 +372,29 @@ const Input = (function () {
   // calls share one frame's elapsed time and at 120 fps a frame may make none —
   // wall-clock deltas keep the aggregate rate right through both. timeScale
   // folds in hit-stop; see its declaration.
+  function currentSpeedStd() {
+    if (speedStdOverride != null) return speedStdOverride;
+    if (typeof speedProvider === "function") {
+      const v = speedProvider();
+      if (typeof v === "number" && isFinite(v)) return Math.max(0, v);
+    }
+    return 0;
+  }
+  // Same hyperbola as lockTaper in js/game.js. SPEED STEER still owns the
+  // reference; this option only *enables* the rate half for digital inputs.
+  function digitalRateIn() {
+    if (!adaptiveButtons) return KEY_RAMP_IN;
+    const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
+    return KEY_RAMP_IN / (1 + currentSpeedStd() / ref);
+  }
+
   function keyboardSteer() {
     const t = nowMs();
     const dt = (keySteerT ? Math.min(0.1, (t - keySteerT) / 1000) : 0) * timeScale;
     keySteerT = t;
     const target = (keyRight ? 1 : 0) - (keyLeft ? 1 : 0);
     if (target !== 0) {
-      keySteerVal = moveToward(keySteerVal, target, KEY_RAMP_IN * dt);
+      keySteerVal = moveToward(keySteerVal, target, digitalRateIn() * dt);
     } else {
       keySteerVal = moveToward(keySteerVal, 0, KEY_RAMP_OUT * dt);
     }
@@ -610,8 +640,10 @@ const Input = (function () {
     const t = nowMs();
     const dt = (btnSteerT ? Math.min(0.1, (t - btnSteerT) / 1000) : 0) * timeScale;
     btnSteerT = t;
-    const target = (btnSteerRight ? 1 : 0) - (btnSteerLeft ? 1 : 0);
-    btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? KEY_RAMP_IN : KEY_RAMP_OUT) * dt);
+    const left = btnSteerLeft ? (adaptiveButtons ? btnSteerLeftVal : 1) : 0;
+    const right = btnSteerRight ? (adaptiveButtons ? btnSteerRightVal : 1) : 0;
+    const target = right - left;
+    btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? digitalRateIn() : KEY_RAMP_OUT) * dt);
     return btnSteerVal;
   }
 
@@ -667,11 +699,17 @@ const Input = (function () {
   // Hold semantics, multi-pointer safe: the button stays "held" until
   // every pointer that pressed it has been released/cancelled/left.
   // `level`, when given, additionally reports 0..1 pedal travel.
-  function wireHold(id, apply, level) {
+  // `opts.axis` "x" + `opts.dir` (±1) is the steer-button analog-trigger path:
+  // tap is full travel (same compatibility promise as the pedals); sliding
+  // opposite the steer direction eases off. The default (no opts) is the
+  // original vertical pedal gesture and must stay bit-identical.
+  function wireHold(id, apply, level, opts) {
     const el = document.getElementById(id);
     if (!el) return;
+    const axis = (opts && opts.axis) === "x" ? "x" : "y";
+    const dir = (opts && opts.dir) || 1;
     const ids = new Set();
-    const anchors = level ? new Map() : null;   // pointerId -> y at touch-down
+    const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
     holdBtns.push({ ids, apply, level, anchors });
     el.addEventListener("pointerdown", e => {
       // Capture the pointer so the hold survives the finger/cursor drifting off
@@ -681,11 +719,16 @@ const Input = (function () {
       e.preventDefault();
       ids.add(e.pointerId);
       apply(true);
-      if (level) { anchors.set(e.pointerId, e.clientY); level(1); }
+      if (level) { anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY); level(1); }
     });
     if (level) el.addEventListener("pointermove", e => {
       const a = anchors.get(e.pointerId);
       if (a == null) return;
+      if (axis === "x") {
+        const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
+        level(clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+        return;
+      }
       const up = Math.max(0, a - e.clientY - PEDAL_DEAD_PX);
       level(clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
     });
@@ -1059,6 +1102,7 @@ const Input = (function () {
     try { Log.info("input", "steerMode " + steerMode); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
+      btnSteerLeftVal = btnSteerRightVal = 0;
       btnSteerVal = 0; btnSteerT = 0;
     }
     if (steerMode !== "touch") {
@@ -1069,6 +1113,16 @@ const Input = (function () {
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     }
   }
+
+  function setAdaptiveButtons(on) { adaptiveButtons = !!on; }
+  function setSteerSpeedRef(ref) {
+    if (typeof ref === "number" && isFinite(ref) && ref > 1) steerSpeedRef = ref;
+  }
+  function setSpeedStd(v) {
+    if (v == null) { speedStdOverride = null; return; }
+    if (typeof v === "number" && isFinite(v)) speedStdOverride = Math.max(0, v);
+  }
+  function setSpeedProvider(fn) { speedProvider = typeof fn === "function" ? fn : null; }
 
   // Tilt sensitivity, driven by the in-game TILT RANGE slider. deg = tilt for
   // full lock (higher = less sensitive).
@@ -1193,8 +1247,10 @@ const Input = (function () {
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
-    wireHold("btn-steer-left", function (v) { btnSteerLeft = v; });
-    wireHold("btn-steer-right", function (v) { btnSteerRight = v; });
+    wireHold("btn-steer-left", function (v) { btnSteerLeft = v; if (!v) btnSteerLeftVal = 0; },
+      function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
+    wireHold("btn-steer-right", function (v) { btnSteerRight = v; if (!v) btnSteerRightVal = 0; },
+      function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
@@ -1269,7 +1325,9 @@ const Input = (function () {
     btnThrottle = btnBrake = false;
     btnThrottleVal = btnBrakeVal = 0;
     btnSteerLeft = btnSteerRight = false;
+    btnSteerLeftVal = btnSteerRightVal = 0;
     btnSteerVal = 0; btnSteerT = 0;
+    speedStdOverride = null;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
     keySteerT = 0;
@@ -1319,7 +1377,12 @@ const Input = (function () {
       steerMode,
       key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
       btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
-             throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal },
+             throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal,
+             leftVal: btnSteerLeftVal, rightVal: btnSteerRightVal },
+      adaptiveButtons,
+      speedStd: currentSpeedStd(),
+      steerSpeedRef,
+      rateIn: digitalRateIn(),
       pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
       touchSteer,
       touchActive,
@@ -1357,6 +1420,10 @@ const Input = (function () {
     simTiltReset,
     steerToTilt,
     setSteerMode,
+    setAdaptiveButtons,
+    setSteerSpeedRef,
+    setSpeedStd,
+    setSpeedProvider,
     setTimeScale,
     setTiltSensitivity,
     setTiltSmoothing,

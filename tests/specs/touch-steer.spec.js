@@ -172,6 +172,83 @@ test.describe("on-screen arrows ramp like a key, not a switch", () => {
   });
 });
 
+test.describe("adaptive buttons are analog triggers for digital steer", () => {
+  const pressAt = (page, id, pointerId, x) => page.evaluate(({ id, pointerId, x }) =>
+    document.getElementById(id).dispatchEvent(
+      new PointerEvent("pointerdown", { pointerId, clientX: x, bubbles: true })),
+    { id, pointerId, x });
+  const slideX = (page, id, pointerId, x) => page.evaluate(({ id, pointerId, x }) =>
+    document.getElementById(id).dispatchEvent(
+      new PointerEvent("pointermove", { pointerId, clientX: x, bubbles: true })),
+    { id, pointerId, x });
+
+  test("at rest, adaptive still reaches lock at the old rate", async ({ page }) => {
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(true);
+      Input.setSteerSpeedRef(42);
+      Input.setSpeedStd(0);
+    });
+    await page.evaluate(() => document.getElementById("btn-steer-right")
+      .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 31, bubbles: true })));
+    expect(await pump(page)).toBe(1);
+  });
+
+  test("at speed a tap is a correction, not an instant yank", async ({ page }) => {
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(true);
+      Input.setSteerSpeedRef(42);
+      Input.setSpeedStd(72);
+    });
+    await page.evaluate(() => document.getElementById("btn-steer-right")
+      .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 32, bubbles: true })));
+    const later = await pump(page);
+    expect(later).toBeGreaterThan(0.15);
+    expect(later).toBeLessThan(0.75);   // the same pump reaches 1 with adaptive off
+  });
+
+  test("sliding opposite the steer direction eases like an analog trigger", async ({ page }) => {
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(true);
+      Input.setSpeedStd(0);
+    });
+    await pressAt(page, "btn-steer-right", 33, 400);
+    expect(await page.evaluate(() => Input.debugState().btn.rightVal)).toBe(1);
+    await slideX(page, "btn-steer-right", 33, 310);   // 90 px back toward centre
+    const eased = await page.evaluate(() => Input.debugState().btn.rightVal);
+    expect(eased).toBeGreaterThan(0);
+    expect(eased).toBeLessThan(0.5);
+  });
+
+  test("adaptive off ignores analog travel — a tap still aims at full lock", async ({ page }) => {
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(false);
+    });
+    await pressAt(page, "btn-steer-right", 34, 400);
+    await slideX(page, "btn-steer-right", 34, 310);
+    expect(await pump(page)).toBe(1);
+  });
+
+  test("the Advanced toggle persists and lights up", async ({ page }) => {
+    await page.evaluate(() => {
+      document.getElementById("adv-details").open = true;
+      document.getElementById("pm-adaptbtn-on").click();
+    });
+    expect(await page.evaluate(() => Input.debugState().adaptiveButtons)).toBe(true);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.adaptiveButtons")))).toBe(1);
+    expect(await page.evaluate(() => document.getElementById("pm-adaptbtn-on").classList.contains("active"))).toBe(true);
+    await page.evaluate(() => document.getElementById("pm-adaptbtn-off").click());
+    expect(await page.evaluate(() => Input.debugState().adaptiveButtons)).toBe(false);
+  });
+});
+
 test.describe("on-screen pedals report travel, not just a press", () => {
   const press = (page, id, pointerId, y) => page.evaluate(({ id, pointerId, y }) =>
     document.getElementById(id).dispatchEvent(
