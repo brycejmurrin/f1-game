@@ -100,6 +100,6 @@ test("jump synchronises the HUD instead of depending on the next animation frame
     "the shared facade must expose the real HUD updater through a deferred binding");
   const jump = apex.match(/jump\(frac, speed, lateral\) \{[\s\S]*?\n  \},/);
   assert.ok(jump, "jump body not found");
-  assert.match(jump[0], /G\.refreshHud\(false\)/,
-    "jump must publish its state to the HUD synchronously for frozen/headless probes");
+  assert.match(jump[0], /G\.refreshHud\(true\)/,
+    "jump must force-publish its state to the HUD for frozen/headless probes");
 });

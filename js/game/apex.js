@@ -157,7 +157,7 @@ const api = {
     // loaded CI runner the next animation frame can be delayed for seconds;
     // jump() has already committed the authoritative state, so refresh the HUD
     // (including the minimap) now instead of exposing a stale frame to probes.
-    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(false);
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
   // skip the countdown straight into racing, shove the AI pack out of frame,
