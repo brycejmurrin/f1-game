@@ -41,8 +41,9 @@ const els = {
 // TSL) when apex26.gfxBackend="three", WGX (WebGPU, frozen) when ="webgpu" AND
 // the browser exposes WebGPU. Anything else — and ANY opt-in init failure —
 // uses the WebGL2 backend (GLX) exactly as before, so the default path stays
-// byte-for-byte identical (this async IIFE only actually awaits when opted in;
-// otherwise it runs fully synchronously). `gfx` is the handle every later
+// byte-for-byte identical (this async IIFE only actually awaits when opted
+// into a deferred backend, or when the lazy __apex surface loads — localhost
+// / tests / ?apex=1). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch, set on the first world present
@@ -84,10 +85,10 @@ const BACKEND_EDGES = [
   ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"],
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],
 ];
-function loadBackendScripts(files) {
+function loadBackendScripts(files, edges) {
   const pending = new Set(files), done = new Set(), inflight = new Set();
   const preds = new Map(files.map((f) => [f, []]));
-  for (const [a, b] of BACKEND_EDGES) {
+  for (const [a, b] of (edges || BACKEND_EDGES)) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
   }
   const inject = (src) => new Promise((resolve) => {
@@ -110,6 +111,26 @@ function loadBackendScripts(files) {
     };
     pump();
   });
+}
+// LAZY_AGENT (tools/manifest.cjs). Same files / edges as AGENT_FILES below —
+// load-order.test.mjs asserts equality. Not SW-optional (V8 full-compiles
+// install puts). Players on github.io skip this; tests and localhost inject.
+const AGENT_FILES = [
+  "js/game/agentview-raster.js",
+  "js/game/agentview.js",
+  "js/game/apex.js",
+];
+const AGENT_EDGES = [
+  ["js/game/agentview-raster.js", "js/game/agentview.js"],
+];
+function wantAgentSurface() {
+  if (typeof window !== "undefined" && window.__TEST_MODE) return true;
+  try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
+  const q = typeof location !== "undefined" ? location.search : "";
+  if (/[?&](apex|debug|report)(=|&|$)/.test(q)) return true;
+  if (typeof navigator !== "undefined" && navigator.webdriver) return true;
+  const h = typeof location !== "undefined" ? location.hostname : "";
+  return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
 }
 function preloadThreeVendor() {
   for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
@@ -8590,7 +8611,11 @@ requestAnimationFrame(tick);
 //   __apex.park(0.25)              -> jump to 25% of the lap, field cleared, still
 //   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
 // The __apex dev/test API lives in js/game/apex.js (ApexApi.create(G)).
-window.__apex = ApexApi.create(G);
+// Injected only when wantAgentSurface() — Pages players never download it.
+if (wantAgentSurface()) {
+  await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
+  if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
+}
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built.

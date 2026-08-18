@@ -6,7 +6,7 @@
  * every global it references is assigned by SOME file that loads first. The
  * post-extraction ritual was "grep the removed symbols" — this test replaces
  * it with the real reference graph from tools/scan-globals.mjs (espree +
- * eslint-scope over every manifest FULL + DEFERRED file, scanned LIVE — no
+ * eslint-scope over every manifest FULL + DEFERRED + LAZY_AGENT file, scanned LIVE — no
  * artifacts/ state, works from a fresh clone).
  *
  * Rules, with the currently-known violations FROZEN as baselines in the

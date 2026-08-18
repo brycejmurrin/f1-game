@@ -5,7 +5,7 @@
    over game.js's lets) handed to ApexApi.create(G) at boot — mutable state
    reads/writes go through G.<name>, stable helpers arrive by destructure.
    The runtime surface of window.__apex is unchanged.
-   Must load BEFORE js/game.js (see index.html). */
+   Injected by game.js when wantAgentSurface() — not a tagged script. */
 const ApexApi = (function () {
   "use strict";
 
@@ -1562,15 +1562,15 @@ const api = {
   },
   // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
   // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
-  // reads the latest sample: { supported, on, ms } where ms is the GPU cost of a
-  // recent frame (-1 until a result lands, a few frames after enabling). This is
-  // the GPU-side counterpart to the CPU flame chart — use it to tell whether
-  // night-track spikes are GPU-bound (fragment/fill) before deciding on
-  // instancing vs shader work vs WebGPU.
+  // reads the latest sample: { supported, on, ms, software }. ms is the GPU
+  // cost of a recent frame (-1 until a result lands). software is `ms < 0`:
+  // no sample yet, no extension, or a software rasterizer (SwiftShader).
+  // Do not treat a negative ms as a GPU millisecond.
   gpuTimer: (on) => {
-    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1 };
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: true };
     const st = gfx.gpuTimer(on);
-    return { supported: st.supported, on: st.on, ms: gfx.gpuMs ? gfx.gpuMs() : -1 };
+    const ms = gfx.gpuMs ? gfx.gpuMs() : -1;
+    return { supported: st.supported, on: st.on, ms, software: ms < 0 };
   },
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every

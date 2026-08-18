@@ -60,7 +60,8 @@ let _cap = 0;            // pool size for the CURRENT world (48 desktop / 16 mob
 let _queue = [];         // impacts queued by the game-side hooks, consumed next step
 
 // ── deterministic counters (reset() zeroes them for repeatable episodes) ────
-let _tick = 0;           // side-world ticks stepped
+let _tick = 0;           // side-world ticks stepped (WASM path only)
+let _stepSkips = 0;      // JS-only ticks: live bodies asleep, no car in wake radius
 let _seq = 0;            // debris spawn sequence number
 let _spawnedTotal = 0;
 let _lastImpact = null;  // { kind, carIdx, sev, tick, spawned } — for tests
@@ -135,7 +136,7 @@ const MARBLE_REF_SCALE = 0.025;    // marble mesh reference half-extent (draw sc
 const MARBLE_FAR_DESPAWN_M = 180;  // tighter than FAR_DESPAWN_M — cosmetic grit only
 // A3 furniture tuning
 const FURN_CAP_DESKTOP = 24, FURN_CAP_MOBILE = 12;
-const FURN_WAKE_M = 14;      // arc distance (m) within which a car keeps the world stepping so cones can be punted
+const FURN_WAKE_M = 14;      // wake radius (m): arc for cones, XZ for live debris/marbles/panels
 const CONE_HX = 0.13, CONE_HY = 0.22, CONE_HZ = 0.13;  // cone body half-extents
 // B1 hazard-query tuning (settled bodies ON the racing surface)
 const HAZARD_Y_TOL = 1.6;      // m — ignore bodies this far above/below the road (airborne / sunk)
@@ -504,7 +505,7 @@ function registerFurniture(track) {
 // __apex.debris({reset:true}).
 function reset() {
   destroyWorld();
-  _tick = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
+  _tick = 0; _stepSkips = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
   _marbleSeq = 0; _furnBuilt = false; _lastForce = 0;
   _panelSeq = 0; _panelsBroken = 0;   // B2 counters (bodies torn down in destroyWorld)
   // NOTE: _furnList / _furnTrack are track DATA (from registerFurniture), not
@@ -726,10 +727,17 @@ function spawnImpact(imp, track) {
 }
 
 // ── per-tick step (ONE call site in game.js's fixed-step update) ────────────
-// Idle-check helpers (cheap, no Rapier): any live pool slot? any car within
-// FURN_WAKE_M arc of a registered clippable cone?
+// Idle-check helpers. `_anyLive` / `_carNearFurn` are cheap (no Rapier).
+// `_anyAwake` / `_carNearLiveDebris` query bodies — only after something is live.
 function _anyLive(pool) {
   for (let i = 0; i < pool.length; i++) if (pool[i].live) return true;
+  return false;
+}
+function _anyAwake(pool) {
+  for (let i = 0; i < pool.length; i++) {
+    const s = pool[i];
+    if (s.live && s.body && !s.body.isSleeping()) return true;
+  }
   return false;
 }
 function _carNearFurn(track, cars) {
@@ -745,6 +753,63 @@ function _carNearFurn(track, cars) {
   }
   return false;
 }
+function _playerSample(track) {
+  const p = G.player;
+  if (!p) return { have: false, px: 0, pz: 0 };
+  if (p.px != null) return { have: true, px: p.px, pz: p.pz };
+  Tracks.sample(track, p.s, _smp);
+  return { have: true, px: _smp.p[0], pz: _smp.p[2] };
+}
+// Shared by the WASM path and the asleep-skip path so despawn stays bit-identical.
+function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
+  const far2 = farM * farM;
+  for (let i = 0; i < pool.length; i++) {
+    const s = pool[i];
+    if (!s.live) continue;
+    const b = s.body;
+    if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
+    let far = false;
+    if (havePlayer) {
+      const t = b.translation();
+      const dx = t.x - px, dz = t.z - pz;
+      far = dx * dx + dz * dz > far2;
+    }
+    if (s.restT > restLimit || far) { b.setEnabled(false); s.live = false; }
+  }
+}
+function _carNearLiveDebris(track, cars) {
+  // XZ, same metres as FURN_WAKE_M. A settled marble under the line must still
+  // solve when a car is close enough to punt it — marbleGrip() reads those
+  // sleeping live bodies, so a sleep-only gate without this wake is a grip bug.
+  const r2 = FURN_WAKE_M * FURN_WAKE_M;
+  const n = cars.length;
+  for (const pool of [_slots, _marbles, _panels]) {
+    for (let i = 0; i < pool.length; i++) {
+      const s = pool[i];
+      if (!s.live || !s.body) continue;
+      const t = s.body.translation();
+      for (let k = 0; k < n; k++) {
+        const c = cars[k];
+        let cx = c.px, cz = c.pz;
+        if (cx == null) {
+          Tracks.sample(track, c.s, _smp);
+          cx = _smp.p[0]; cz = _smp.p[2];
+        }
+        const dx = t.x - cx, dz = t.z - cz;
+        if (dx * dx + dz * dz < r2) return true;
+      }
+    }
+  }
+  return false;
+}
+function _needSolve(track, cars) {
+  if (_queue.length || _dynCars.size) return true;
+  if (_anyAwake(_slots) || _anyAwake(_marbles) || _anyAwake(_panels)) return true;
+  if ((_anyLive(_slots) || _anyLive(_marbles) || _anyLive(_panels))
+      && _carNearLiveDebris(track, cars)) return true;
+  if (_furn.length && _carNearFurn(track, cars)) return true;
+  return false;
+}
 function step(dt) {
   const track = G.track, cars = G.cars;
   if (!track || !cars || !cars.length) { _queue.length = 0; return; }
@@ -752,39 +817,29 @@ function step(dt) {
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
   if (!world) buildWorld(track, cars);
   if (world.timestep !== dt) world.timestep = dt;
-  // Idle fast-path (mobile smoothness): when nothing dynamic is in play, the
-  // WASM solve + the 22 kinematic-mirror syncs below are pure per-tick cost
-  // with no visible effect — and that per-frame variance shows up as
-  // micro-stutter at speed on phones. Skip the whole step when there are no
-  // queued impacts, no live debris/marbles/PANELS, no incident-owned dynamic car,
-  // and no car near a clippable cone (which needs the world running to be punted).
-  // Cheap CPU checks only — no Rapier calls — and it resumes the instant any of
-  // those becomes true (a spawn syncs the mirrors that same tick before use).
-  // _panels belongs here because panel aging/freeing lives ONLY in updatePanels()
-  // BELOW this gate: without it a promoted panel freezes mid-scatter, keeps being
-  // drawn and counted as a hazard forever, and _panels fills to PANEL_CAP — the
-  // exact permanent leak PANEL_IDLE_DESPAWN_S was added to close.
-  //
-  // LIVE, NOT AWAKE — and that is deliberate, so don't "fix" it. Marbles spawn
-  // above MARBLE_SLIP_GATE, i.e. out of every corner, and hold `live` for
-  // MARBLE_REST_DESPAWN_S after settling, so this gate rarely fires mid-race and
-  // the tempting change is to skip whenever every body is merely ASLEEP. It is
-  // not safe: skipping the step also freezes the kinematic mirrors, and a car
-  // driving over a settled marble is exactly what wakes it. The mirror box spans
-  // road+0.05..road+0.85 (MIRROR_HY about y=road+0.45) and 7 of the 24 pooled
-  // marbles stand taller than 0.05 m, so a sleeping-only gate leaves those seven
-  // asleep under the racing line instead of punted clear — and `isSleeping()` is
-  // the exact predicate marbleGrip() counts. That moves a REAL grip input under
-  // the driver, which outranks the saving. (Panels have their own version of the
-  // same trap: p.force is re-zeroed per tick in drainForces, so an unbroken panel
-  // aged on a tick that never stepped reads a stale non-zero force, resets restT
-  // forever, and never reaches PANEL_IDLE_DESPAWN_S.) Any future attempt has to
-  // hoist the despawn bookkeeping below AND keep both of those honest.
-  // _carNearFurn is O(furn×cars): skip entirely when there is no furniture, and
-  // JS && short-circuits it whenever anything is already live / queued / dynamic.
+  // Two-tier idle (mobile smoothness). Tier 1 — nothing live at all — skips
+  // everything: no WASM, no bookkeeping. Tier 2 — live bodies but all asleep
+  // and no car within FURN_WAKE_M — skips ONLY world.step + mirror posing.
+  // JS bookkeeping still runs so marbles/shards age out of `live` and panels
+  // reach PANEL_IDLE_DESPAWN_S. A sleep-only WASM skip WITHOUT that hoist
+  // froze kinematic mirrors (cars drove over settled marbles marbleGrip()
+  // still counted) and reset unbroken-panel restT forever (stale p.force).
+  // Pose + step resume together the tick a body wakes, a car enters the
+  // wake radius, a spawn is queued, or a cone is near enough to punt.
   if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
       && !_anyLive(_slots) && !_anyLive(_marbles)
       && (!_furn.length || !_carNearFurn(track, cars))) {
+    return;
+  }
+  if (!_needSolve(track, cars)) {
+    _stepSkips++;
+    for (let i = 0; i < _spallCool.length; i++)
+      if (_spallCool[i] > 0) _spallCool[i] = Math.max(0, _spallCool[i] - dt);
+    const pos = _playerSample(track);
+    _ageAndCullPool(_slots, dt, pos.px, pos.pz, pos.have, REST_DESPAWN_S, FAR_DESPAWN_M);
+    _ageAndCullPool(_marbles, dt, pos.px, pos.pz, pos.have, MARBLE_REST_DESPAWN_S, MARBLE_FAR_DESPAWN_M);
+    for (let i = 0; i < _panels.length; i++) _panels[i].force = 0;
+    if (_panels.length) updatePanels(dt, pos.px, pos.pz);
     return;
   }
   _tick++;
@@ -841,37 +896,11 @@ function step(dt) {
     return;
   }
 
-  // bookkeeping: rest + distance despawn back into the pool
-  const p = G.player;
-  let px = 0, pz = 0;
-  if (p && p.px != null) { px = p.px; pz = p.pz; }
-  else if (p) { Tracks.sample(track, p.s, _smp); px = _smp.p[0]; pz = _smp.p[2]; }
-  for (const s of _slots) {
-    if (!s.live) continue;
-    const b = s.body;
-    if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
-    let far = false;
-    if (p) {
-      const t = b.translation();
-      const dx = t.x - px, dz = t.z - pz;
-      far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
-    }
-    if (s.restT > REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
-  }
-  // A2: marbles despawn on rest (MARBLE_REST_DESPAWN_S) or a tighter far
-  // cull than impact shards — keeps the Rapier idle fast-path reachable.
-  for (const s of _marbles) {
-    if (!s.live) continue;
-    const b = s.body;
-    if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
-    let far = false;
-    if (p) {
-      const t = b.translation();
-      const dx = t.x - px, dz = t.z - pz;
-      far = dx * dx + dz * dz > MARBLE_FAR_DESPAWN_M * MARBLE_FAR_DESPAWN_M;
-    }
-    if (s.restT > MARBLE_REST_DESPAWN_S || far) { b.setEnabled(false); s.live = false; }
-  }
+  // bookkeeping: rest + distance despawn back into the pool (same helper as the skip path)
+  const pos = _playerSample(track);
+  const px = pos.px, pz = pos.pz;
+  _ageAndCullPool(_slots, dt, px, pz, pos.have, REST_DESPAWN_S, FAR_DESPAWN_M);
+  _ageAndCullPool(_marbles, dt, px, pz, pos.have, MARBLE_REST_DESPAWN_S, MARBLE_FAR_DESPAWN_M);
 
   // A1: drain the tick's contact-force events, canonicalise the order, and fold
   // real force per car (mirror↔dynamic contacts only).
@@ -1277,6 +1306,7 @@ function status() {
     cap: _cap || capFor(),
     stepped: _tick,
     spawned: _spawnedTotal,
+    stepSkips: _stepSkips,
     lastImpact: _lastImpact,
     // ── Group A extras: SEPARATE fields (never folded into live/cap) ──
     marbles: marbleCount(),     // live A2 marbles
