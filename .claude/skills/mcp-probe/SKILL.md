@@ -25,10 +25,10 @@ navigate → evaluate → screenshot across separate calls is broken. Prefer hos
 MCP `chrome_*` / `tinyfish_*` when the session catalog has them; use shell
 wrappers for `deploy-check` / `deploy-js --marker` / `mcp-cli probe` batching.
 
-**Cursor Cloud does not auto-load repo `.mcp.json`.** The dashboard catalog is
-not `apex-tools` / `probe` / `tinyfish` / `chrome-devtools`. Default Cloud
-path: `./tools/apex-tools-mcp.sh` (pinned `apex_*` CLIs), the wrappers above,
-or subagent `deploy-research` for `version.json` / public web. Do not attach
+Keep **`apex-tools` in root `.mcp.json`** so Cloud/Claude/this agent can load
+it. Cursor CLI also has `.cursor/mcp.json` (lockstep). If this session's host
+catalog is empty, use `./tools/apex-tools-mcp.sh call`, the wrappers above, or
+subagent `deploy-research` for `version.json` / public web. Do not attach
 this skill for a version.json STALE check.
 
 | Need | Use |
