@@ -117,7 +117,9 @@ const CEILING = {
   // and did not remasure the ceiling; the union is 481.
   // 2026-08-18: 481 → 467. Tokenised that short-landscape / mid-width
   // compress onto --gap / --pad so density and UI SIZE still scale it.
-  rawSpacing: 467,
+  // 2026-08-18: 467 → 466. Settings remodel moved the 620px control pad
+  // onto --pad so the list rows follow the density ladder.
+  rawSpacing: 466,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

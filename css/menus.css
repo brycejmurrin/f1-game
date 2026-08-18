@@ -60,8 +60,8 @@
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
-    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 30%, transparent), transparent 64%),
-    rgba(6, 6, 10, 0.55);
+    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 22%, transparent), transparent 64%),
+    rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
@@ -84,7 +84,13 @@
   transform: skewX(-30deg);
   box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
-#subtitle { color: rgba(242, 242, 245, 0.72); margin: 10px 0 0; font-size: 14px; letter-spacing: 0.04em; }
+#subtitle {
+  color: rgba(242, 242, 245, 0.78);
+  margin: 10px 0 0;
+  font-size: clamp(var(--fs-micro), calc(1.15 * var(--vwz)), var(--fs-4));
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+}
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
    the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two

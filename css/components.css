@@ -727,8 +727,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    washed with the menu behind it reading through. */
 .screen.dim {
   background:
-    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 16%, transparent), transparent 58%),
-    rgba(0, 0, 0, 0.72);
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(0, 0, 0, 0.42);
 }
 
 /* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
@@ -800,8 +800,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    the original dim wash, not carnival inks. */
 #pausemenu.screen.dim {
   background:
-    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 18%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.88);
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 14%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.58);
 }
 /* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
    full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
@@ -826,6 +826,20 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    active panel. High UI sizes must not spend more than one primary control
    row on that navigation (redesign contract). */
 #pmsettings-inner { --fit-at: 300px; }
+#pm-preview {
+  flex: 0 0 auto;
+  width: min(42%, 10rem);
+  height: auto;
+  max-height: 4.8rem;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+#pmsettings-inner[data-density="compact"] #pm-preview {
+  width: min(30%, 6.5rem);
+  max-height: 3.2rem;
+}
 @media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;
@@ -857,7 +871,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   border-radius: var(--r-sm);
   background: rgba(255,255,255,.045);
   color: var(--muted);
-  font-size: var(--fs-1);
+  font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 750;
   letter-spacing: .06em;
 }
@@ -899,7 +913,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .pm-groups > [role="tabpanel"][hidden] { display: none !important; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red); font-size: var(--fs-3); font-weight: 700; letter-spacing: 0.11em;
+  color: var(--red);
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+  font-weight: 700; letter-spacing: 0.11em;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
@@ -919,12 +935,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  text-align: left;
   width: 100%;
-  /* Control labels are glanced mid-corner — --fs-4 (17px) stays ≥~15px visual
-     at the UI SIZE floor (90%). MEASURED before: compact phone buttons read
-     ~10.4 own/--fs-2 and failed the arm's-length floor in the readability survey. */
-  font-size: var(--fs-4);
+  padding-inline: calc(var(--pad) * 0.75);
+  /* Grows with the viewport, never under the micro floor inside sheet zoom. */
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  letter-spacing: 0.04em;
+  background: color-mix(in oklab, #fff 6.5%, transparent);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .pm-group .tune-row {
   position: relative;
@@ -1018,7 +1037,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   #pm-category-tabs > button {
     text-align: left;
     justify-content: flex-start;
-    font-size: var(--fs-2);
+    font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   }
 }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
@@ -1041,7 +1060,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 @container sheet (min-width: 620px) {
   #pmsettings-inner .pm-groups > [role="tabpanel"] button {
-    font-size: var(--fs-2); padding: 8px 6px;
+    font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+    padding-inline: calc(var(--pad) * 0.75);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     min-height: var(--tap);
   }
@@ -1122,7 +1142,11 @@ dialog.screen {
   overflow: hidden;
 }
 dialog.screen[open] { display: grid; }
-dialog.screen.dim::backdrop { background: rgba(6, 6, 10, 0.92); }
+dialog.screen.dim::backdrop {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.38);
+}
 @media (prefers-reduced-transparency: reduce) {
   dialog.screen.dim::backdrop { background: rgba(0, 0, 0, 0.96); }
 }
