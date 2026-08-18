@@ -1108,7 +1108,7 @@ const NetLobby = (function () {
       // `transports` is deliberately KEPT: the raw connections are still the
       // lobby's to report (status()/sdp()) and to close in teardown().
       sessions.clear();
-      if (!started.ok) { say(started.message || "Could not start the session.", true); return; }
+      if (!started.ok) { say(started.message || "Could not start the session.", true); if (G.quitToMenu) G.quitToMenu(); return; }
       // Host names the instant of lights-out; the guest receives it as an
       // event and both drive their countdown to the same moment. Without this
       // each side counts down on its own clock and the grids are released

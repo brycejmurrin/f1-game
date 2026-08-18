@@ -1015,7 +1015,7 @@ function create(G) {
     // hides it, so the reset overwrote the rule on the very next line and the
     // seat never blocked anything. The rule was right, the button just never
     // heard about it. Set the reset first and let the rule have the last word.
-    $("cr-go").disabled = !!st.hire;
+    $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
   }
 

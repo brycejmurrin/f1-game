@@ -2997,7 +2997,7 @@ const G = {
   onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
-  startRace, startWeatherArc, update, wrapS,
+  startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
 
 // Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
@@ -3090,7 +3090,7 @@ function clearMenuScreens() {
 }
 
 function quitToMenu() {
-  PerfGov.sentinelArm(false);   // deliberate exit — not a crash
+  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local");
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
@@ -3116,7 +3116,7 @@ function quitToMenu() {
   setFlow("gp"); session = "race";
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // and the friend-race gate: a stale one locks every later quali
+  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.abortQuali()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -8333,7 +8333,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
-$("pm-restart").onclick = () => { els.pausemenu.hidden = false; setPaused(false); startRace(); };
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNetDone) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
