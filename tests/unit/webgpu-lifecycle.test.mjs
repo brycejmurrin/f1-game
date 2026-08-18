@@ -843,8 +843,12 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff && !isRoadDraw) { N = -N; }");
   assert.ok(roadSample > 0 && ffBranch > roadSample,
     "asphalt textureSample must be hoisted before the front_facing branch");
-  assert.match(CHUNKS_SOURCE, /if \(mid == 16 && roadPackOn\)/);
-  assert.match(CHUNKS_SOURCE, /albedo \* roadPack\.rgb \* 2\.0/);
+  assert.match(CHUNKS_SOURCE, /albedo \* litPack\.rgb \* 2\.0/);
+  assert.match(CHUNKS_SOURCE, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
+    "CONCRETE (wall) pack must hoist textureSample like asphalt");
+  const wallSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, uv1, 1)");
+  assert.ok(wallSample > 0 && ffBranch > wallSample,
+    "wall textureSample must be hoisted before the front_facing branch");
   assert.doesNotMatch(
     CHUNKS_SOURCE,
     /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
@@ -1371,7 +1375,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.yzw\)\) \+ abs\(dpdy\(in\.matTrk\.yzw\)\);/,
-                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
+                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
