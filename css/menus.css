@@ -242,7 +242,7 @@ body { --compact-at: 600px; }
      852x393 compact: #mb-career hangL=-6.3 hangR=-2.3. Padding keeps the
      tips inside the clipper. Cannot use overflow-x:visible here: with
      overflow-y:auto the other axis computes to auto (same trap as .pane). */
-  padding-inline: 8px;
+  padding-inline: var(--gap);
 }
 /* Portrait: give the button column the leftover row under the brand so the
    max-height above is not "full viewport on top of the brand" (which would

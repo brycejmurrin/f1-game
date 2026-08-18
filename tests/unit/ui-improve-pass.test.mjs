@@ -53,7 +53,7 @@ test("compact title column scrolls instead of clipping at high UI SIZE", () => {
   assert.match(css, /body\[data-density="compact"\]\)\s*#menu-buttons/);
   assert.match(css, /max-height:\s*calc\(100 \* var\(--svhz\)/);
   assert.match(css, /align-content:\s*safe center/);
-  assert.match(css, /padding-inline:\s*8px/);
+  assert.match(css, /padding-inline:\s*var\(--gap\)/);
   // Portrait hands the leftover row to the button column (overlay scrollHeight
   // is a dead letter under zoom — see menus.css comment).
   assert.match(css, /orientation:\s*portrait[\s\S]*?minmax\(0,\s*1fr\)/);
