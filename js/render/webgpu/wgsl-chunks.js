@@ -482,7 +482,8 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 //   @binding(4) envCube   : texture_cube<f32>  — environment reflection probe
 //                           (mirrors GLX uCarReflect env-mirror). 1×1 placeholder
 //                           when no probe is captured; carReflect=0 makes it a no-op.
-//   @binding(5) envSamp   : sampler            — filtering sampler for envCube (and SSR).
+//   @binding(5) envSamp   : sampler            — filtering sampler for SSR + PCSS blocker
+//                           (NOT the cube — cube anisotropy is envCubeSamp).
 //   @binding(6) ssrTex    : texture_2d<f32>    — screen-space-reflection result
 //                           (Phase-4 post pass, wgsl-post.js). 1×1 placeholder is safe;
 //                           ssrStrength=0 or non-up/dry surfaces make it a no-op.
@@ -496,6 +497,7 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(11) var matSamp : sampler;
 @group(0) @binding(12) var lampShadowTex : texture_depth_2d;
 @group(0) @binding(13) var<uniform> MatS : MatScaleU;
+@group(0) @binding(14) var envCubeSamp : sampler;            // 4× aniso, GLX env cube
 @group(1) @binding(0) var<uniform> D : DrawU;
 ${hash}
 ${vnoise}
@@ -970,13 +972,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     var envCC : vec3<f32>;
     if (envProbeStr >= 0.999) {
-      envCC = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
+      envCC = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
     } else {
       let horiz = smoothstep(-0.12, 0.30, Rg.y);
       let skyR = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rg.y, 0.0)));
       envCC = mix(F.ambGround.xyz * 0.6, skyR, horiz);
       if (envProbeStr > 0.001) {
-        let envReal = textureSampleLevel(envCube, envSamp, Rg, rough * 2.5).rgb;
+        let envReal = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }
