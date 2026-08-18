@@ -211,11 +211,11 @@ const Car3D = (function () {
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
   // ── Wing element section ────────────────────────────────────────────────────
-  // Chordwise stations from leading to trailing edge, PACKED TOWARD THE LEADING
-  // EDGE: an aerofoil's whole shape happens in its first third, and evenly
-  // spaced stations spend their budget on the flat rear half while leaving the
-  // nose a visible chamfer instead of a curve.
-  const FOIL_T = [0, 0.08, 0.28, 0.60, 1];
+  // Chordwise stations from leading to trailing edge. Packed at BOTH ends: the
+  // first third still owns the nose radius, and 0.84 keeps the last sixth a
+  // knife rather than a 40 % linear fade from mid-chord to the TE (the look
+  // that read as a rounded plank, especially on GLX/WGX paint).
+  const FOIL_T = [0, 0.08, 0.28, 0.60, 0.84, 1];
   // Half-thickness distribution, normalised to peak at 1. t^0.5 gives the
   // square-root nose growth that reads ROUND at four stations; (1-t)^1.1 runs
   // out to a genuinely sharp trailing edge. Thickness reaching zero at both ends
@@ -225,19 +225,19 @@ const Car3D = (function () {
   // Camber as a fraction of chord. F1 wings are INVERTED, so the mean line bows
   // DOWN off the chord line and the suction side is the underside.
   const FOIL_CAMBER = 0.05;
-  // Wing element split into centre + outboard thirds so sweep, taper and tip
-  // rise alter the actual planform rather than only stacking more rectangles.
+  // Wing element split into a flat centre plus TWO outboard samples per side so
+  // sweep, taper and tip rise read as a hard planform, not three stacked boards.
   //
   // Each element is a CLOSED, CAMBERED SECTION — blunt leading edge, real
   // underside, sharp trailing edge. It used to be a single double-sided quad per
   // third: six triangles for a whole wing element, with `thick` doing nothing but
   // offsetting that sheet upward. That is fine head-on and falls apart the moment
   // anything looks along the span or watches an element rotate, which is exactly
-  // what ACTIVE AERO made it do — a plank pivoting in mid-air. The section costs
-  // 48 triangles instead of 6 and the whole car is still ~2.2k against a 2.4k
-  // ceiling, so it is bought with headroom that already existed.
+  // what ACTIVE AERO made it do — a plank pivoting in mid-air. Five span
+  // segments × five chord intervals is 100 triangles (was 48); the default body
+  // still sits under the 2.4k ceiling on the headroom that bought the foil.
   function addWingFoil(out, spec, col, surface) {
-    const half = spec.half, inner = half * 0.34;
+    const half = spec.half, inner = half * 0.34, mid = half * 0.67;
     const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
     const rise = spec.rise || 0, thick = spec.thick;
     const dz = spec.zLead - spec.zTrail, dy = spec.yTrail - spec.yLead;
@@ -261,7 +261,7 @@ const Car3D = (function () {
         h: thick * 0.5 * foilThick(t),
       };
     };
-    const segments = [[-half, -inner], [-inner, inner], [inner, half]];
+    const segments = [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
     for (const [x0, x1] of segments) {
       for (let i = 0; i < FOIL_T.length - 1; i++) {
         const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
@@ -308,6 +308,13 @@ const Car3D = (function () {
       if (side > 0) addQuad(out, fs, rs, rt, ft, col, surface);
       else          addQuad(out, ft, rt, rs, fs, col, surface);
     }
+  }
+  // Plate with the same 45° crown the bodywork already uses. Thin endplates and
+  // canards otherwise flash as a single aliased edge; the bevel is the running
+  // highlight that makes a wing look cut rather than boxed.
+  function addBeveledSpan(out, front, rear, b, col, colFront, surface, frontSurface) {
+    addSpan(out, front, rear, col, colFront, surface, frontSurface);
+    if (b > 0) addTopBevel(out, front, rear, b, col, surface);
   }
 
   function addBeamBetween(out, p0, p1, th, col, surface) {
@@ -651,18 +658,18 @@ const Car3D = (function () {
   function frontCascade(aLvl) {
     const a = aLvl;
     const els = [
-      [2.72, 0.048, 2.40, 0.086, 1.00, 0.032],   // main plane (structure, never moves)
-      [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],   // flap 1
+      [2.72, 0.048, 2.40, 0.086, 1.00, 0.024],   // main plane (structure, never moves)
+      [2.50, 0.092, 2.24, 0.146, 0.98, 0.020],   // flap 1
     ];
-    if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.026]);   // flap 2
+    if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.018]);   // flap 2
     // Flaps 3 and 4 sit 10 mm and 30 mm lower than they first shipped. The stack
     // was drawn climbing into the nose overhang: at maximum downforce the top
     // element passed ~21 mm THROUGH the nose underside, which no rotation can
     // undo because the intersection is at the element's own rest attitude. The
     // drop is the largest the slot gaps above them will take (flap 3 keeps 11 mm
     // of daylight to flap 2, which is a slot, not a coincidence).
-    if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.024]);   // flap 3
-    if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.022]);   // flap 4
+    if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.016]);   // flap 3
+    if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.014]);   // flap 4
     return els;
   }
   // How many of them the mesh still bakes. Never the main plane.
@@ -997,7 +1004,7 @@ const Car3D = (function () {
     // stack is one that quietly passes through itself at some blend nobody looked
     // at. The mainplane below is structure, so it enters the chain at zero.
     const rearMain = Object.assign(
-      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.032, 0),
+      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
       { zAngle: 0, xAngle: 0 });
     let below = rearMain;
     const addRear = (id, le, te, thick, sweepMul) => {
@@ -1010,16 +1017,16 @@ const Car3D = (function () {
                             { zAngle: el.zAngle, xAngle: el.xAngle });
     };
     if (a >= 2) {
-      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.030, 0.9);
+      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9);
     }
-    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.035, 1);
+    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1);
     // The proud max-downforce top plane. It used to be BAKED, which put the
     // topmost element of the tallest wing on the grid among the parts that do
     // not move — directly contradicting the rule the rest of this function
     // implements, and leaving the one plane a following car actually sees frozen
     // while the two beneath it swept. It is an element like any other.
     if (a >= 4 && !(st.drs || 0)) {
-      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.030, 1.1);
+      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1);
     }
     return out;
   }
@@ -1175,6 +1182,11 @@ const Car3D = (function () {
       lvl, beam: tier === 2 ? 1 : 0, drs: 0,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
+      // 2026 body-kit knobs. All default 0 so older recipes stay byte-identical.
+      // duct 0|1|2  upper sidepod ram (none / letterbox / scooped snorkel)
+      // board 0|1|2 in-wash wakeboard ahead of the pod (none / fence / fence+foot)
+      // slot  0|1   rear floor-corner mouse-hole
+      duct: 0, board: 0, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
@@ -1357,17 +1369,33 @@ const Car3D = (function () {
     // letterbox. Only the front (inlet) station moves — the shoulder onward is
     // engine-recipe territory, so parts and team identity stay orthogonal.
     const inletBias = style ? (style.inlet || 0) : 0;
+    // Seven stations (was four). 2026 pods are a tall shoulder over a scooped
+    // undercut that pinches into the coke-bottle — four linear slabs read as a
+    // crate. Extra creases keep flat-shading; they just land on the real curve.
     return [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.245 + 0.06 * (undercut - 1),
         innerTop: 0.45 + inletBias, outerTop: 0.46 + inletBias * 0.6 },
+      { z: 0.50, inner: 0.298, outer: outerFront * 0.97 + outerShoulder * 0.03,
+        innerBottom: 0.218 + 0.12 * (undercut - 1),
+        outerBottom: 0.158 + 0.05 * (undercut - 1),
+        innerTop: 0.448 + inletBias * 0.55,
+        outerTop: 0.455 + inletBias * 0.35 },
       { z: 0.22, inner: 0.29, outer: outerShoulder,
         innerBottom: 0.20 + 0.13 * (undercut - 1), outerBottom: 0.12,
         innerTop: shoulderTop, outerTop: shoulderTop - 0.015 },
+      { z: -0.38, inner: 0.28, outer: outerShoulder * 0.55 + outerWaist * 0.45,
+        innerBottom: 0.162 + 0.10 * (undercut - 1), outerBottom: 0.112,
+        innerTop: shoulderTop * 0.68 + (0.42 + 0.10 * (shoulder - 1)) * 0.32,
+        outerTop: (shoulderTop - 0.015) * 0.62 + (0.38 + 0.08 * (shoulder - 1)) * 0.38 },
       { z: -0.62, inner: 0.27, outer: outerWaist,
         innerBottom: 0.14 + 0.08 * (undercut - 1), outerBottom: 0.105,
         innerTop: 0.42 + 0.10 * (shoulder - 1),
         outerTop: 0.38 + 0.08 * (shoulder - 1) },
+      { z: -1.05, inner: 0.25, outer: outerWaist * 0.42 + outerTail * 0.58,
+        innerBottom: 0.134, outerBottom: 0.112,
+        innerTop: 0.355 + 0.07 * (shoulder - 1),
+        outerTop: 0.318 + 0.04 * (shoulder - 1) },
       { z: -1.48, inner: 0.23, outer: outerTail, innerBottom: 0.13,
         outerBottom: 0.12, innerTop: 0.30 + 0.05 * (shoulder - 1), outerTop: 0.27 },
     ];
@@ -1628,9 +1656,9 @@ const Car3D = (function () {
     }
 
     part("sidepods");
-    // --- Sidepods: four body stations create a deep inlet, undercut, downwash
-    // shoulder and coke-bottle tail. Geometry datums returned here anchor all
-    // paint, sponsor, ERS and cooling details below.
+    // --- Sidepods: seven body stations create a deep inlet, scooped undercut,
+    // downwash shoulder and coke-bottle tail. Geometry datums returned here
+    // anchor all paint, sponsor, ERS and cooling details below.
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
     // `fracH` reads `height` as a FRACTION of the pod's height at each station
     // instead of metres. The pod tapers front-to-rear, so a fixed metre height
@@ -1680,6 +1708,25 @@ const Car3D = (function () {
         { z: -1.58, x: side * (0.54 + floorCut * 0.35) * floorEdge,
           y: 0.145 + rideDY, w: 0.028, h: 0.055 },
         CARBON, null, SURFACES.carbon);
+    }
+    // 2026 floor leading-edge devices — up to five vortex teeth across the
+    // width (motorsport.tech Issue-12). Chase only: they sit under the nose
+    // and never enter the onboard frame.
+    if (!ckpt) {
+      for (const x of [-0.48, -0.24, 0, 0.24, 0.48]) {
+        addBox(out, x, 0.078 + rideDY, 0.82, 0.058, 0.030, 0.11, CARBON, SURFACES.carbon);
+      }
+    }
+    // 2026 rear floor-corner mouse-hole (`slot`). A dark cut ahead of the rear
+    // tyre — the regs allow a slotted spat here. Recipe-gated so the default
+    // body stays under the 2400 ceiling.
+    const aSlot = Math.max(0, Math.min(1, Math.round((aeroStyle && aeroStyle.slot) || 0)));
+    if (aSlot && !ckpt) {
+      for (const s of [-1, 1]) {
+        const ex = floorEdgeAt(-1.42);
+        addBox(out, s * (ex - 0.04), 0.095 + rideDY, -1.48, 0.10, 0.035, 0.16, INTAKE);
+        addBox(out, s * (ex + 0.02), 0.088 + rideDY, -1.48, 0.055, 0.018, 0.12, CARBON);
+      }
     }
 
     part("engineCover");
@@ -1882,7 +1929,9 @@ const Car3D = (function () {
           addBox(out, s*(inlet.x + dx*inlet.width*0.22), inlet.y, inlet.z + 0.003,
                  inlet.width * 0.34, inlet.height * 0.88, 0.06, INTAKE);
       } else {
-        addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.70, inlet.height * 0.68, 0.05, INTAKE);
+        // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
+        addBox(out, s * (inlet.x - s * inlet.width * 0.12), inlet.y + inlet.height * 0.08,
+               inlet.z, inlet.width * 0.48, inlet.height * 0.88, 0.05, INTAKE);
       }
       // FLOOR furniture hangs off the VISIBLE floor-edge line — the same span the
       // aero floorEdge draws above — NOT the sidepod bottom. Anchored to the pod
@@ -1936,6 +1985,25 @@ const Car3D = (function () {
       const cx = s * Math.max(0.16, p.x - 0.055);
       addBox(out, cx, p.top + 0.040, z, 0.060, 0.080, 0.105, CARBON);            // stack
       addBox(out, cx, p.top + 0.084, z - 0.010, 0.048, 0.014, 0.078, INTAKE);    // exit slot
+    }
+    // 2026 optional UPPER SIDEPOD DUCT (`duct`). The regs allow a ram on top
+    // of the pod — the Benetton-like tell that reads as a 2026 concept vs a
+    // 2022-25 scoop. 0 none · 1 slim letterbox · 2 proud scooped snorkel.
+    const aDuct = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.duct) || 0)));
+    if (aDuct > 0 && !ckpt) {
+      for (const s of [-1, 1]) {
+        const p = anchors.podAt(0.18);
+        const x = s * Math.max(0.22, p.x - 0.04);
+        if (aDuct === 1) {
+          addBox(out, x, p.top + 0.018, 0.20, 0.11, 0.026, 0.20, INTAKE);
+        } else {
+          addBeveledSpan(out,
+            { z: 0.38, x: x, y: p.top + 0.042, w: 0.10, h: 0.052, t: 0.55 },
+            { z: -0.02, x: s * Math.max(0.20, p.x - 0.08), y: p.top + 0.022, w: 0.08, h: 0.038, t: 0.70 },
+            0.008, CARBON);
+          addBox(out, x, p.top + 0.052, 0.36, 0.068, 0.020, 0.075, INTAKE);
+        }
+      }
     }
 
     part("livery");
@@ -2176,10 +2244,12 @@ const Car3D = (function () {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
       addBox(out, 0, 0.665, 0.47, 0.035, 0.27, 0.05, haloC, SURFACES.metal);   // front centre pillar — tall enough to meet the front arc's base (y 0.7875) instead of stopping 5.8cm short
       for (const s of [-1, 1]) {
-        addSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
-                     { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 }, haloC, null, SURFACES.metal);  // front arc
-        addSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
-                     { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 }, haloC, null, SURFACES.metal); // rear arc to collar
+        addBeveledSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
+                            { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
+                      0.012, haloC, null, SURFACES.metal);  // front arc
+        addBeveledSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
+                            { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 },
+                      0.012, haloC, null, SURFACES.metal); // rear arc to collar
       }
     }
 
@@ -2352,23 +2422,36 @@ const Car3D = (function () {
       // Main endplate: a swept plate rising up-and-outboard (the outwash flick) —
       // moderated in height so it reads as a real 3-D structure without towering
       // over the wing (it was ~1.5× too tall and looked detached from the plane).
-      addSpan(out, { z: 2.66, x: epX,                 y: 0.135, w: epW, h: PLATE.hF },
-                   { z: 1.98, x: epX + s*PLATE.kick,  y: 0.245, w: epW, h: PLATE.hR }, c2);
+      // `t` pinches the crown into a ridge so the plate is a cut fence, not a box.
+      addBeveledSpan(out,
+        { z: 2.66, x: epX,                y: 0.135, w: epW, h: PLATE.hF, t: 0.62 },
+        { z: 1.98, x: epX + s*PLATE.kick, y: 0.245, w: epW, h: PLATE.hR, t: 0.78 },
+        Math.min(0.014, epW * 0.28), c2);
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
       addBox(out, epX + s*(PLATE.footW * 0.23), 0.050, 2.30, PLATE.footW, 0.016, PLATE.footZ, c1);
+      // 2026 underwing fence — one carbon blade per side under the mid-span
+      // (FIA / RaceTeq: fences return under each half of the front wing).
+      addBeveledSpan(out,
+        { z: 2.58, x: s * (fwHalf * 0.52), y: 0.058, w: 0.012, h: 0.050, t: 0.50 },
+        { z: 2.20, x: s * (fwHalf * 0.70), y: 0.066, w: 0.010, h: 0.044, t: 0.68 },
+        0.005, CARBON);
       // Tall-plate variant carries a bridging spar across the crown, tying the
       // top of the arch back to the outer flap tip.
       if (PLATE.arch) {
-        addSpan(out, { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
-                     { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 }, c1);
+        addBeveledSpan(out,
+          { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
+          { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
+          0.008, c1);
       }
       // Canard / dive-plane cascade on the outer face of the endplate.
       const nCan = aCasc;
       for (let i = 0; i < nCan; i++) {
         const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
-        addSpan(out, { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.030, h: 0.12 },
-                     { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.030, h: 0.18 }, c1);
+        addBeveledSpan(out,
+          { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.018, h: 0.12, t: 0.55 },
+          { z: cz - 0.22, x: epX + s*0.05,        y: cy + 0.070, w: 0.018, h: 0.18, t: 0.70 },
+          0.008, c1);
       }
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
@@ -2382,14 +2465,38 @@ const Car3D = (function () {
     if (!ckpt && aVane > 0) {
       for (const s of [-1, 1]) {
         // Primary vane — always present.
-        addBox(out, s*0.73, 0.30, 0.98, 0.02, 0.22, 0.34, CARBON);
-        if (aVane >= 2) addBox(out, s*0.66, 0.26, 0.72, 0.02, 0.17, 0.30, CARBON);  // inner fence
+        addBeveledSpan(out,
+          { z: 1.15, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
+          { z: 0.81, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
+          0.006, CARBON);
+        if (aVane >= 2) addBeveledSpan(out,
+          { z: 0.87, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          { z: 0.57, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          0.006, CARBON);
         if (aVane >= 3) {
           // Curved triple cascade: a swept forward vane + a canted footplate vane.
-          addSpan(out, { z: 1.28, x: s*0.70, y: 0.28, w: 0.02, h: 0.20 },
-                       { z: 0.98, x: s*0.62, y: 0.24, w: 0.02, h: 0.26 }, CARBON);
+          addBeveledSpan(out,
+            { z: 1.28, x: s*0.70, y: 0.28, w: 0.02, h: 0.20 },
+            { z: 0.98, x: s*0.62, y: 0.24, w: 0.02, h: 0.26 },
+            0.008, CARBON);
           addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
         }
+      }
+    }
+    // 2026 in-wash WAKEBOARD (`board`) — the regulated floor-board / bargeboard
+    // return, inboard of the turning-vane cluster so the two never occupy the
+    // same volume. 0 none · 1 vertical fence · 2 fence + horizontal foot.
+    const aBoard = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.board) || 0)));
+    if (aBoard > 0 && !ckpt) {
+      for (const s of [-1, 1]) {
+        addBeveledSpan(out,
+          { z: 1.38, x: s * 0.48, y: 0.20, w: 0.014, h: aBoard === 2 ? 0.20 : 0.14, t: 0.45 },
+          { z: 0.92, x: s * 0.58, y: 0.24, w: 0.012, h: aBoard === 2 ? 0.16 : 0.12, t: 0.60 },
+          0.006, CARBON);
+        if (aBoard >= 2) addBeveledSpan(out,
+          { z: 1.22, x: s * 0.44, y: 0.145, w: 0.15, h: 0.016, t: 0.70 },
+          { z: 0.86, x: s * 0.56, y: 0.165, w: 0.12, h: 0.014, t: 0.80 },
+          0.005, CARBON);
       }
     }
 
@@ -2417,17 +2524,17 @@ const Car3D = (function () {
       // Tall SLIM swept endplates with a louvre cut-out cluster near the rear edge
       // and a painted team-color top rail along the crown.
       for (const s of [-1, 1]) {
-        addSpan(out,
-          { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.045, h: _ep.front.sy },
-          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.045, h: _ep.rear.sy },
-          DARK);
+        addBeveledSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.040, h: _ep.front.sy, t: 0.58 },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.040, h: _ep.rear.sy, t: 0.72 },
+          0.012, DARK);
         // Louvre detail: a stack of thin recessed slots near the top-rear corner.
         for (let i = 0; i < 4; i++)
           addBox(out, s*0.515, epCY + epSY*0.5 - 0.07 - i*0.06, -2.30, 0.018, 0.016, 0.18, INTAKE);
-        addSpan(out,
-          { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.050, h: 0.022 },
-          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.050, h: 0.022 },
-          c2, null, SURFACES.paint);
+        addBeveledSpan(out,
+          { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.046, h: 0.018, t: 0.70 },
+          { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.046, h: 0.018, t: 0.85 },
+          0.006, c2, null, SURFACES.paint);
       }
       // Clean swept two/three-element rear wing (leading edge low/forward →
       // trailing edge high/back). Main plane sits on the endplate centreline.
@@ -2445,7 +2552,7 @@ const Car3D = (function () {
           attachHalf: 0.50,
         }, col, SURFACES.paint);
       rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
-        0.51, 0.032, c1, 0.8);
+        0.51, 0.024, c1, 0.8);
       // The middle plane is ACTIVE AERO as well — see aeroFlapsGeom's "rearMid".
       // Only the mainplane above stays baked, which is exactly the 2026 rule:
       // every rear element except the bottom mainplane rotates.
@@ -2486,7 +2593,10 @@ const Car3D = (function () {
       // drawAeroFlaps() — see aeroFlapsGeom's "rearTop". Baking it here left the
       // highest plane on the car as the only one that could not move.
       if (aTvane) {
-        addBox(out, 0, epCY + 0.20, -1.98, 0.34, 0.02, 0.09, c2);     // T-wing (tracks the lowered wing)
+        addWingFoil(out, {
+          zLead: -1.935, yLead: epCY + 0.188, zTrail: -2.025, yTrail: epCY + 0.212,
+          half: 0.17, thick: 0.014, taper: 0.90, sweep: 0.018, rise: 0.006,
+        }, c2, SURFACES.paint);
         // T-wing mount: a slim central pylon down to the engine-cover ridge — without
         // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
         // visibly holding it up.
@@ -2495,11 +2605,11 @@ const Car3D = (function () {
       if (aBeam) {
         // Prominent beam wing slung low under the main plane, spanning the crash structure.
         rearWing(-2.36, 0.64 + rwLift * 0.4, -2.58, 0.68 + rwLift * 0.4,
-          0.46, 0.032, c1, 0.65);
+          0.46, 0.022, c1, 0.65);
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.022, c2, 1.15);
+        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, c2, 1.15);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
