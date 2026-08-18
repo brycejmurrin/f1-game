@@ -27,13 +27,14 @@ as 0 on the **road** VBO — cars were fine. Every road fragment read
 `vertex_index` on that ribbon also stayed 0 (`drawIndexed` and large
 `draw`), so a per-vertex storage array always returned the grass skirt at
 slot 0. Interpolators after location 3 are dropped. Interleaving
-`(mat,s,x,hw)` onto the pos VBO (stride 52) zeroed location 3 **and**
-broke pos fetch (dark gantry blit). Authored trk now rides a **second**
-vertex buffer (slot 2, stride 16, `@location(3) aMatTrk`); slot 0 stays
-stride 36. `fs_main` uses interpolated VS `matTrk` for markings (`useVsTrk`)
-— a per-fragment LUT overwrite nearest-binned `s` and chopped the dashes.
-The 32×32 LUT stays `buryRibbon` + fallback when `hw < 0.5`. Vertex colour
-stays the real albedo (packing into RGB greys the grass shoulders).
+`(mat,s,x,hw)` onto the pos VBO (stride 52) **and** a second stride-16
+vertex buffer at `@location(3)` both zeroed the attr **and** broke pos
+fetch (dark gantry blit, sky ~`(31,18,38)` vs day ~`(93,104,122)`). Slot 0
+stays stride 36. VS rebuilds `(mat, s, x, hw)` from the 32×32 centerline
+LUT; `fs_main` interpolates that (`useVsTrk`) instead of nearest-binning
+`s` per fragment (that chopped the dashes). LUT `trkFromWorld` stays
+`buryRibbon` + fallback when vertex `hw < 0.5`. Vertex colour stays the
+real albedo (packing into RGB greys the grass shoulders).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -206,7 +207,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 | **Instancing** | Full family; `TrackGraph.batches()` consumer | Full family (`createInstancedBatch` … `castShadowInstanced`) | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
 | **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
 | **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Ported (`applyMaterial` / `applyMaterialNormal`) | Shader | No new API |
-| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Slot-2 `aMatTrk` (stride 16) + interpolated VS trk; LUT for bury/fallback | Layout + shader | Second vertex buffer, not interleaved stride 52 |
+| **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Interpolated VS LUT trk (`useVsTrk`); no 4th vertex attr | Shader | `trkFromWorld` at VS, not per-fragment overwrite |
 | **Heat haze** | Composite `uHaze*` | Composite `dirtFx.yzw` + time | Shader | Composite uniform |
 | **SSR car-paint** | Scene `.a` tag in composite | Scene alpha tags car-paint (`select(alpha, 0.35, …)`) | Shader | Restore the `.a` path |
 | **SSAO denoise** | Separable blur | Shared 5-tap `BLUR` (H then V) | Shader | Same kernel as GLX `BLUR_FS` |

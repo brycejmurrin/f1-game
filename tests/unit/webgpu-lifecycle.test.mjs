@@ -885,10 +885,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(CHUNKS_SOURCE, /packedRoad/);
   assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
   assert.match(WGX_SOURCE, /o\.surfaceId/);
-  assert.match(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
-  assert.match(WGX_SOURCE, /MATTRK_LAYOUT/);
-  assert.match(WGX_SOURCE, /MATTRK_STRIDE = 16/);
-  assert.match(WGX_SOURCE, /setVertexBuffer\(2/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
+  assert.match(CHUNKS_SOURCE, /No 4th vertex attribute/);
   assert.match(CHUNKS_SOURCE, /fn trkFromWorld/);
   assert.match(CHUNKS_SOURCE, /12345/);
   assert.match(WGX_SOURCE, /_makeRoadLUT/);

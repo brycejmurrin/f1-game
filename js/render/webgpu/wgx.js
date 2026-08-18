@@ -244,25 +244,18 @@ const WGX = (function () {
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
-  // ── vertex layout: [pos3, nrm3, col3] stride 36 in slot 0 ──
-  // Interleaving mat+trk at stride 52 zeroed location 3 AND broke pos fetch.
-  // Authored (mat, s, x, hw) rides a SECOND vertex buffer (slot 2, stride 16)
-  // so slot 0 stays the proven 36-byte path. LUT stays buryRibbon fallback.
+  // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
+  // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
+  // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
+  // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
   const VERTEX_STRIDE = 36;
   const VERTEX_FLOATS = 9;
-  const MATTRK_STRIDE = 16;
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
-    ],
-  };
-  const MATTRK_LAYOUT = {
-    arrayStride: MATTRK_STRIDE,
-    attributes: [
-      { shaderLocation: 3, offset: 0, format: "float32x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -888,7 +881,7 @@ const WGX = (function () {
     let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
-    let identInstanceBuf = null, zeroTrkBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
+    let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
     // submit; one shared buffer left both draws seeing sparks only.
@@ -1234,9 +1227,6 @@ const WGX = (function () {
       _ident[0] = _ident[5] = _ident[10] = _ident[15] = 1;
       _ident[16] = _ident[17] = _ident[18] = 1;
       identInstanceBuf = _mkBuffer(_ident, GPUBufferUsage.VERTEX);
-      // Fallback slot-2 buffer (4096 verts of zeros). Road pieces always
-      // carry a real tbuf; this covers a missing attr on a small mesh.
-      zeroTrkBuf = _mkBuffer(new Float32Array(4096 * 4), GPUBufferUsage.VERTEX);
       // 16 vec4s: fs_main's road LUT probe always indexes 0..15. Dawn also
       // rejects a 0-byte storage binding. 512 B (not 256) so the mock-GPU
       // harness does not confuse this with the 256 B composite UBO.
@@ -1653,7 +1643,7 @@ const WGX = (function () {
       }
       p = device.createRenderPipeline({
         layout: litLayout,
-        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_POS_LAYOUT, INSTANCE_LAYOUT, MATTRK_LAYOUT] },
+        vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_POS_LAYOUT, INSTANCE_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
         // GLX default: CCW front, cull back. But WebGPU flips NDC-Y → framebuffer-Y
         // relative to WebGL (framebuffer origin is top-left, y-down), which REVERSES
@@ -2247,8 +2237,8 @@ const WGX = (function () {
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
         // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.
-        // mat+trk ride slot 2 (stride 16). Interleaved stride 52 on this VBO
-        // zeroed location 3 and broke pos fetch.
+        // Dawn zeros a 4th attr (and pos) even on piece VBOs — asphalt vs
+        // verge is classified from the LUT (abs(x) < hw - 0.45).
         inter[o + 6] = col[i * 3];
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
@@ -2424,16 +2414,15 @@ const WGX = (function () {
     }
     function _meshFromPull(vert, attr, count, indexFormat, shared) {
       const vbuf = _mkBuffer(vert, GPUBufferUsage.VERTEX);
-      const tbuf = _mkBuffer(attr && attr.length >= 4 ? attr : new Float32Array(count * 4), GPUBufferUsage.VERTEX);
       const a = shared || _makeAttrBG(attr);
-      return { vbuf, tbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
+      return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
     }
     function createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
       if (lut) _rememberRoadLut(lut);
-      let vbuf = null, ibuf = null, tbuf = null, sbuf = null, attrBG = null;
+      let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       try {
         if (pulled) {
           // 4095 = 1365 tris. Large non-indexed draws still saw vertex_index=0
@@ -2449,9 +2438,9 @@ const WGX = (function () {
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
               pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
             }
-            const head = pieces[0] || { vbuf: null, tbuf: null, sbuf: null, attrBG: null, count: 0 };
+            const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
             return {
-              _wgx: "mesh", vbuf: head.vbuf, tbuf: head.tbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
+              _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
             };
           }
@@ -2460,17 +2449,15 @@ const WGX = (function () {
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
         ibuf = _mkBuffer(b.idx, GPUBufferUsage.INDEX);
-        tbuf = _mkBuffer(b.attr, GPUBufferUsage.VERTEX);
         const a = lut || _makeAttrBG(b.attr);
         sbuf = a.sbuf; attrBG = a.attrBG;
       } catch (e) {
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
-        try { if (tbuf) tbuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);
-        return { _wgx: "mesh", vbuf: null, tbuf: null, ibuf: null, sbuf: null, attrBG: null, count: 0, indexFormat: b.indexFormat, chunks: null };
+        return { _wgx: "mesh", vbuf: null, ibuf: null, sbuf: null, attrBG: null, count: 0, indexFormat: b.indexFormat, chunks: null };
       }
-      return { _wgx: "mesh", vbuf, tbuf, ibuf, sbuf, attrBG, count: b.count, indexFormat: b.indexFormat, chunks: null };
+      return { _wgx: "mesh", vbuf, ibuf, sbuf, attrBG, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
     // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
     // index buffer, matching the DECAL shader vertex layout (js/render/webgpu/wgsl-fx.js).
@@ -2556,18 +2543,16 @@ const WGX = (function () {
           if (b.hasTrk) {
             const e = _expandPull(b.vert, b.attr, arr);
             const cv = _mkBuffer(e.vert, GPUBufferUsage.VERTEX);
-            const tbuf = _mkBuffer(e.attr, GPUBufferUsage.VERTEX);
             const a = lut || _makeAttrBG(e.attr);
             chunks.push({
-              vbuf: cv, tbuf, ibuf: null, count: e.count, indexFormat, min: bk.mn, max: bk.mx,
+              vbuf: cv, ibuf: null, count: e.count, indexFormat, min: bk.mn, max: bk.mx,
               sbuf: a.sbuf, attrBG: a.attrBG,
             });
           } else {
             const ibuf = _mkBuffer(arr, GPUBufferUsage.INDEX);
-            const tbuf = _mkBuffer(b.attr, GPUBufferUsage.VERTEX);
             const a = _makeAttrBG(b.attr);
             chunks.push({
-              ibuf, tbuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx,
+              ibuf, count: arr.length, indexFormat, min: bk.mn, max: bk.mx,
               sbuf: a.sbuf, attrBG: a.attrBG,
             });
           }
@@ -2578,8 +2563,7 @@ const WGX = (function () {
         // half-uploaded prop mesh must not pin buffers on a struggling device.
         try { vbuf.destroy(); } catch (_) { /* already invalid */ }
         for (const c of chunks) {
-          try { if (c.ibuf) c.ibuf.destroy(); } catch (_) { /* already invalid */ }
-          try { if (c.tbuf) c.tbuf.destroy(); } catch (_) { /* already invalid */ }
+          try { c.ibuf.destroy(); } catch (_) { /* already invalid */ }
           try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already invalid */ }
         }
         _allocFail("createChunkedMesh", e);
@@ -2696,7 +2680,6 @@ const WGX = (function () {
         return;
       }
       if (m.vbuf) m.vbuf.destroy();
-      if (m.tbuf) m.tbuf.destroy();
       if (m.sbuf) m.sbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
     }
@@ -2709,7 +2692,6 @@ const WGX = (function () {
           const c = m.chunks[i];
           try { if (c.ibuf) c.ibuf.destroy(); } catch (_) { /* already destroyed */ }
           try { if (c.vbuf && c.vbuf !== m.vbuf) c.vbuf.destroy(); } catch (_) { /* already destroyed */ }
-          try { if (c.tbuf) c.tbuf.destroy(); } catch (_) { /* already destroyed */ }
           try { if (c.sbuf) c.sbuf.destroy(); } catch (_) { /* already destroyed */ }
         }
       } else if (m.sbuf) m.sbuf.destroy();
@@ -3032,12 +3014,11 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
-    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance, slot 2 = mat+trk
-    // (stride 16). Group 2 = LUT / vid fallback storage.
-    function _bindLitVerts(pass, vbuf, instBuf, attrBG, tbuf) {
+    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
+    // Group 2 = mat+trk storage (vertex_index).
+    function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      pass.setVertexBuffer(2, tbuf || zeroTrkBuf);
       pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
     }
 
@@ -3074,12 +3055,12 @@ const WGX = (function () {
       if (mesh.pieces) {
         for (let i = 0; i < mesh.pieces.length; i++) {
           const p = mesh.pieces[i];
-          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, p.tbuf);
+          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
           _drawGeom(litPass, p);
         }
         return;
       }
-      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, mesh.tbuf);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
       _drawGeom(litPass, mesh);
     }
 
@@ -3100,12 +3081,12 @@ const WGX = (function () {
         if (mesh.pieces) {
           for (let i = 0; i < mesh.pieces.length; i++) {
             const p = mesh.pieces[i];
-            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, p.tbuf);
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
             _drawGeom(litPass, p);
           }
           return;
         }
-        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, mesh.tbuf);
+        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
         _drawGeom(litPass, mesh);
         return;
       }
@@ -3129,7 +3110,7 @@ const WGX = (function () {
           continue;
         }
         if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
-        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, ch.tbuf || mesh.tbuf);
+        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
         _drawGeom(litPass, ch);
         drew++;
         if (isNear) nearDraw++;
@@ -4175,7 +4156,7 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG, batch.tbuf);
+      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
       _drawGeom(litPass, batch, n);
     }
     function freeInstancedBatch(batch) {

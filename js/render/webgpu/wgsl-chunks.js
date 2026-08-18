@@ -630,7 +630,6 @@ fn vs_main(
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
-  @location(3) aMatTrk : vec4<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -647,18 +646,16 @@ fn vs_main(
   var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  // Authored (mat, s, x, hw) from slot 2 (stride 16). Interleaving onto the
-  // pos VBO (stride 52) zeroed location 3 AND broke pos fetch. LUT / vid
-  // only when hw is missing (terrain, zero tbuf, Dawn still zeroing slot 2).
-  var pulled = aMatTrk;
-  if (pulled.w < 0.5) {
-    if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
-    if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
-      let wt = trkFromWorld(wp.xyz);
-      if (wt.w > 0.5) {
-        let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
-        pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
-      }
+  // No 4th vertex attribute — Dawn zeros it (and pos fetch) even in a
+  // separate stride-16 slot (dark gantry blit, sky ~31,18,38). Rebuild
+  // mat+trk from the centerline LUT at the vertex; fs_main interpolates.
+  var pulled = vec4<f32>(0.0);
+  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
+  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
+    let wt = trkFromWorld(wp.xyz);
+    if (wt.w > 0.5) {
+      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
+      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
     }
   }
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
@@ -684,8 +681,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // Interpolated VS trk (authored aMatTrk, else LUT-at-vertex). Per-fragment
-  // LUT overwrite nearest-bins s and chops the dashed paint vs GLX.
+  // Interpolated VS trk (LUT-at-vertex). Per-fragment LUT overwrite
+  // nearest-bins s and chops the dashed paint vs GLX.
   let useVsTrk = isRoadDraw && in.matTrk.w > 0.5;
   let vTrk = select(fromWorld.xyz, in.matTrk.yzw, useVsTrk);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
