@@ -6526,8 +6526,11 @@ function render(dt) {
     const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
     if (_envInv) {
       frameSky.invViewProj = _envInv;
-      gfx.drawSky(frameSky);
+      // Same early-Z order as the main camera (opaque → sky). The 64² face
+      // is ~200× smaller, but the sky still filled every pixel the world
+      // then overwrote. Glow stays off on the probe (`false` below).
       drawWorldMeshes(frame, night, wet, _floodEmit, false);
+      gfx.drawSky(frameSky);
       gfx.envFaceEnd(_envFace);
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.

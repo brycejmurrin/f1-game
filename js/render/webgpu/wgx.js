@@ -3159,7 +3159,7 @@ const WGX = (function () {
     // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
-    // the world draws (drawSky + track meshes, NO cars) between begin/end — they record
+    // the world draws (track meshes then drawSky, NO cars) between begin/end — they record
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
     function envInit() {
       if (envCubeTex) return;
