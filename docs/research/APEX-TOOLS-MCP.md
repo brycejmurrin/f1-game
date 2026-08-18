@@ -5,9 +5,10 @@ working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.
 
 Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
-`tools/probe-mcp.py`. **Week-1 + week-2 + week-3 catalog implemented**
-(`tools/apex-tools-mcp.mjs` + `.sh`). Live Chromium is occupancy-gated;
-CI covers mock/`dryRun` only.
+`tools/probe-mcp.py`. **Catalog finished** (`tools/apex-tools-mcp.mjs` + `.sh` +
+`tools/apex-tools-mcp.json`). Live Chromium is occupancy-gated; CI covers
+mock/`dryRun` plus HTTP loopback. `.mcp.json` stdio → `serve`; HTTP is
+`serve-http` on `127.0.0.1:3713`.
 
 Measured 2026-08-18 (this container, loadavg ~0.1): `apex_eval` monza
 `a.info()` via `./tools/apex-tools-mcp.sh call` — `ok`, 12061 ms, lock
@@ -26,7 +27,10 @@ Live locked browser (2026-08-18): `apex_carshot` after `apex_status`
 (lock free, chrome down, `playwright.live === false`) — first boot died
 at `waitForFunction(__apex)` under `--use-gl=angle`; after pinning
 carshot to SwiftShader like `apex-eval`, `ok` in 16862 ms, 7.4 KB JPEG,
-lock released.
+lock released. `apex_agent` monza `world` 33020 ms `ok` (apiVersion 1);
+`apex_quick_validate` 3089 ms `QUICK-VALIDATE OK`; lock released after
+each. HTTP `127.0.0.1:3713/healthz` → `{ok:true, tools:30, bind:127.0.0.1}`.
+`apex_graph_parity` monza `BASE=HEAD~1` 1552 ms exact.
 
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
