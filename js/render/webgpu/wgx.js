@@ -1560,8 +1560,9 @@ const WGX = (function () {
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
       const dbC = db ? (db[0] | 0) : 0;
       const dbS = db ? (db[1] | 0) : 0;
+      const always = !!(opts && opts.depthAlways);
       const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3)
-                | ((dbC + 8) << 8) | ((dbS + 8) << 16);
+                | ((dbC + 8) << 8) | ((dbS + 8) << 16) | (always ? (1 << 24) : 0);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -1575,7 +1576,8 @@ const WGX = (function () {
         alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
       };
       const depthStencil = {
-        format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal",
+        format: DEPTH_FORMAT, depthWriteEnabled: !blend,
+        depthCompare: always ? "always" : "less-equal",
       };
       if (db) {
         depthStencil.depthBias = dbC;
@@ -2932,9 +2934,12 @@ const WGX = (function () {
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
     // draws second with negative bias. Push detail-bearing ground draws away.
     function _litOpts(opts) {
-      const o = opts || {};
+      const o = Object.assign({}, opts || {});
+      // Stamp the ribbon over coplanar terrain on this adapter (depth bias
+      // alone was not enough). Only road draws (surfaceId 16) use always.
+      if (o.surfaceId === 16) o.depthAlways = true;
       if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
-        return Object.assign({}, o, { depthBias: [3, 6] });
+        o.depthBias = [3, 6];
       return o;
     }
 

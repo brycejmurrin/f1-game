@@ -633,7 +633,10 @@ fn vs_main(
   if (matTrkArr[0].x != 12345.0 && pulled.x == 0.0 && pulled.z == 0.0) { pulled = matTrkArr[vid]; }
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
-    if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
+    if (wt.w > 0.5) {
+      let mid = select(9.0, 16.0, abs(wt.y) <= wt.z);
+      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
+    }
     wp.y = wp.y + 0.08;
   }
   o.matTrk = pulled;
@@ -658,9 +661,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fwWorld = abs(dpdx(fromWorld.yzw)) + abs(dpdy(fromWorld.yzw));
   let packedRoad = in.col.x > 1.5 && in.col.x < 40.0;
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
+  let useWorldTrk = isRoadDraw && fromWorld.w > 0.5;
   let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
-  let vMatId = select(select(in.matTrk.x, floor(in.col.x), packedRoad), D.mat2.z, D.mat2.z > 0.5);
+  // Classify from LUT |x| vs hw so grass shoulders stay MAT 9. Do not let
+  // DrawU.surfaceId=16 paint asphalt grain onto green verge albedo. Cars
+  // (ids 20+) still take the draw uniform.
+  let axW = abs(fromWorld.y);
+  let lutMat = select(select(0.0, 9.0, axW <= fromWorld.z + 2.4), 16.0, axW <= fromWorld.z);
+  let roadMat = select(16.0, lutMat, useWorldTrk && lutMat > 0.5);
+  let vMatId = select(
+    select(select(in.matTrk.x, floor(in.col.x), packedRoad), roadMat, isRoadDraw),
+    D.mat2.z, D.mat2.z >= 19.5);
   let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
@@ -785,6 +796,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let VoH = max(dot(V, H), 0.0);
 
   var albedo    = select(in.col, vec3<f32>(fract(in.col.x)), packedRoad);
+  // Dawn drops the 4th vertex attr on the ribbon, so interpolated colour can
+  // be a grass-shoulder sample. Asphalt fragments must not keep that green.
+  let greenVert = albedo.g > albedo.r + 0.015 && albedo.g > albedo.b;
+  albedo = select(albedo, vec3<f32>(0.16, 0.17, 0.20), i32(vMatId + 0.5) == 16 && greenVert);
   var emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
   var metalness = D.mat0.w;

@@ -862,8 +862,12 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
+  assert.match(WGX_SOURCE, /depthAlways/);
+  assert.match(WGX_SOURCE, /depthCompare: always \? "always" : "less-equal"/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /0\.16, 0\.17, 0\.20/);
+  assert.match(CHUNKS_SOURCE, /D\.mat2\.z >= 19\.5/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
