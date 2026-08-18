@@ -15,6 +15,7 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +25,9 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.3.0";
+const SERVER_VERSION = "1.4.0";
+const HTTP_HOST = "127.0.0.1";
+const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
 const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
 const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
@@ -755,6 +758,22 @@ const CATALOG = [
       },
     },
   },
+  {
+    name: "apex_graph_parity",
+    week: 4,
+    description: "graph-parity.cjs <id>|--all with required BASE=<ref>. Never vacuous HEAD-vs-clean.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        base: { type: "string", description: "Git ref for BASE= (required)." },
+        id: { type: "string" },
+        all: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -1045,9 +1064,31 @@ function buildArgv(name, args) {
       }
       return argv;
     }
+    case "apex_graph_parity": {
+      if (!args.base) {
+        badArgs(
+          "apex_graph_parity needs base",
+          'Pass {"base":"HEAD~1","id":"monza"}. Never omit BASE — a clean tree would pass vacuously.',
+        );
+      }
+      const argv = [...nodeTool("graph-parity.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) {
+          badArgs("apex_graph_parity needs id or all=true", 'Pass {"base":"HEAD~1","id":"monza"}.');
+        }
+        argv.push(String(args.id));
+      }
+      return argv;
+    }
     default:
       throw new Error(`no argv builder for ${name}`);
   }
+}
+
+function extraEnv(name, args) {
+  if (name === "apex_graph_parity") return { BASE: String(args.base) };
+  return {};
 }
 
 function parseOut(stdout) {
@@ -1066,13 +1107,13 @@ function parseOut(stdout) {
   }
 }
 
-function runSpawn(argv, { timeoutMs = 90000, allowExit = null } = {}) {
+function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
   const started = Date.now();
   const [cmd, ...args] = argv;
   const r = spawnSync(cmd, args, {
     encoding: "utf8",
     cwd: ROOT,
-    env: process.env,
+    env: { ...process.env, ...env },
     timeout: timeoutMs,
     maxBuffer: 8 * 1024 * 1024,
   });
@@ -1084,6 +1125,7 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null } = {}) {
     ok: exit === 0,
     exit,
     argv,
+    env: Object.keys(env).length ? env : undefined,
     stdout,
     stderr,
     out: parseOut(stdout),
@@ -1100,13 +1142,14 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null } = {}) {
   return toolResult(body, { isError: !body.ok });
 }
 
-function mockSuccess(name, argv) {
+function mockSuccess(name, argv, env = {}) {
   return toolResult({
     ok: true,
     mock: true,
     tool: name,
     exit: 0,
     argv,
+    env: Object.keys(env).length ? env : undefined,
     stdout: JSON.stringify({ ok: true, mock: true, tool: name }),
     stderr: "",
     out: { ok: true, mock: true, tool: name },
@@ -1258,6 +1301,15 @@ function pinOk(name, argv) {
       "Omit extra flags; the wrap always requests JSON.",
     );
   }
+  if (name === "apex_graph_parity") {
+    if (argv.includes("--url") || !argv.some((a) => a.endsWith("graph-parity.cjs"))) {
+      return refuse(
+        "pin_violated",
+        "apex_graph_parity must spawn graph-parity.cjs",
+        "Pass base plus id or all=true.",
+      );
+    }
+  }
   if (argv.includes("--url")) {
     return refuse(
       "pin_violated",
@@ -1268,12 +1320,13 @@ function pinOk(name, argv) {
   return null;
 }
 
-function dryRunBody(name, argv) {
+function dryRunBody(name, argv, env = {}) {
   return toolResult({
     ok: true,
     dryRun: true,
     exit: 0,
     argv,
+    env: Object.keys(env).length ? env : undefined,
     stdout: "",
     stderr: "",
     out: name === "apex_verify_change_fast"
@@ -1316,22 +1369,23 @@ function dispatch(name, args = {}) {
 
   const pinned = pinOk(name, argv);
   if (pinned) return pinned;
+  const env = extraEnv(name, args);
 
   if (args.dryRun) {
     if (kind === "browser" && !mockMode()) {
       const busy = occupancyRefuse();
       if (busy) return busy;
     }
-    return dryRunBody(name, argv);
+    return dryRunBody(name, argv, env);
   }
 
-  if (mockMode()) return mockSuccess(name, argv);
+  if (mockMode()) return mockSuccess(name, argv, env);
 
   if (kind === "browser") {
     const took = acquireLock(name);
     if (took) return took;
     try {
-      return runSpawn(argv, { timeoutMs: 180000 });
+      return runSpawn(argv, { timeoutMs: 180000, env });
     } finally {
       releaseLock();
     }
@@ -1340,10 +1394,11 @@ function dispatch(name, args = {}) {
   const allAudit = /_audit$/.test(name) && args.all;
   const longTree = name === "apex_verify_change_fast" || name === "apex_track_verts"
     || name === "apex_startline_snap" || name === "apex_startline_probe"
-    || name === "apex_rotate_markings_check" || allAudit || (name === "apex_aero_zone_turns" && args.all);
-  const timeoutMs = longTree ? 120000 : 60000;
+    || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
+    || allAudit || (name === "apex_aero_zone_turns" && args.all);
+  const timeoutMs = longTree ? 180000 : 60000;
   const allowExit = name === "apex_cache_bump_only" ? new Set([0, 1]) : null;
-  return runSpawn(argv, { timeoutMs, allowExit });
+  return runSpawn(argv, { timeoutMs, allowExit, env });
 }
 
 function listTools() {
@@ -1372,6 +1427,7 @@ Commands:
   list-tools
   call <apex_name> '<json>'
   serve                 # stdio MCP (.mcp.json → tools/apex-tools-mcp.sh serve)
+  serve-http            # 127.0.0.1:3713 /mcp + /healthz (never 0.0.0.0)
 
 Week-1 (no browser lock):
 ${w1}
@@ -1420,6 +1476,49 @@ function cmdCall(name, argsJson) {
   return result.isError ? 1 : 0;
 }
 
+function handleRpc(msg) {
+  const mid = msg.id;
+  const method = msg.method;
+  if (method == null || mid == null) return null;
+
+  if (method === "initialize") {
+    return {
+      jsonrpc: "2.0",
+      id: mid,
+      result: {
+        protocolVersion: PROTOCOL,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+        instructions:
+          "Apex tools MCP (apex_*). Tree tools are TRACK_VM / static gates. " +
+          "Browser tools boot harness Chromium after the browser lock. " +
+          "Never github.io — use TinyFish / deploy-research for Pages. " +
+          "chrome_* / tinyfish_* belong to probe-mcp. " +
+          "HTTP is 127.0.0.1:3713 only.",
+      },
+    };
+  }
+  if (method === "tools/list") {
+    return { jsonrpc: "2.0", id: mid, result: { tools: listTools() } };
+  }
+  if (method === "tools/call") {
+    const params = msg.params || {};
+    try {
+      return { jsonrpc: "2.0", id: mid, result: dispatch(params.name || "", params.arguments || {}) };
+    } catch (e) {
+      return {
+        jsonrpc: "2.0",
+        id: mid,
+        error: { code: -32000, message: String(e.message || e).slice(0, 2000) },
+      };
+    }
+  }
+  if (method === "ping") {
+    return { jsonrpc: "2.0", id: mid, result: {} };
+  }
+  return { jsonrpc: "2.0", id: mid, error: { code: -32601, message: `Method not found: ${method}` } };
+}
+
 function cmdServe() {
   const rl = require("readline").createInterface({
     input: process.stdin,
@@ -1434,57 +1533,70 @@ function cmdServe() {
     } catch {
       return;
     }
-    const mid = msg.id;
-    const method = msg.method;
-    if (method == null) return;
-    if (mid == null) return;
+    const out = handleRpc(msg);
+    if (out) writeRpc(out);
+  });
+  rl.on("close", () => process.exit(0));
+  return 0;
+}
 
-    if (method === "initialize") {
-      writeRpc({
-        jsonrpc: "2.0",
-        id: mid,
-        result: {
-          protocolVersion: PROTOCOL,
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
-          instructions:
-            "Apex tools MCP (apex_*). Tree tools are TRACK_VM / static gates. " +
-            "Browser tools boot harness Chromium after the browser lock. " +
-            "Never github.io — use TinyFish / deploy-research for Pages. " +
-            "chrome_* / tinyfish_* belong to probe-mcp.",
-        },
+function sendHttpJson(res, code, obj) {
+  const data = JSON.stringify(obj);
+  res.writeHead(code, {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(data),
+  });
+  res.end(data);
+}
+
+function cmdServeHttp() {
+  const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
+    ? Number(process.env.APEX_MCP_HTTP_PORT)
+    : HTTP_PORT_DEFAULT;
+  const srv = http.createServer((req, res) => {
+    const url = req.url || "/";
+    if (req.method === "GET" && (url === "/healthz" || url.startsWith("/healthz?"))) {
+      sendHttpJson(res, 200, {
+        ok: true,
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
+        tools: CATALOG.length,
+        bind: HTTP_HOST,
       });
       return;
     }
-    if (method === "tools/list") {
-      writeRpc({ jsonrpc: "2.0", id: mid, result: { tools: listTools() } });
+    if (req.method === "GET" && (url === "/tools" || url === "/mcp/tools")) {
+      sendHttpJson(res, 200, { tools: listTools() });
       return;
     }
-    if (method === "tools/call") {
-      const params = msg.params || {};
-      try {
-        const result = dispatch(params.name || "", params.arguments || {});
-        writeRpc({ jsonrpc: "2.0", id: mid, result });
-      } catch (e) {
-        writeRpc({
-          jsonrpc: "2.0",
-          id: mid,
-          error: { code: -32000, message: String(e.message || e).slice(0, 2000) },
-        });
-      }
+    if (req.method === "POST" && (url === "/mcp" || url === "/")) {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        let msg;
+        try {
+          msg = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        } catch {
+          sendHttpJson(res, 400, { error: "body must be JSON-RPC" });
+          return;
+        }
+        const out = handleRpc(msg);
+        if (!out) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        sendHttpJson(res, 200, out);
+      });
       return;
     }
-    if (method === "ping") {
-      writeRpc({ jsonrpc: "2.0", id: mid, result: {} });
-      return;
-    }
-    writeRpc({
-      jsonrpc: "2.0",
-      id: mid,
-      error: { code: -32601, message: `Method not found: ${method}` },
-    });
+    sendHttpJson(res, 404, { error: `no route ${req.method} ${url}` });
   });
-  rl.on("close", () => process.exit(0));
+  srv.listen(port, HTTP_HOST, () => {
+    const addr = srv.address();
+    const p = addr && typeof addr === "object" ? addr.port : port;
+    log(`apex-tools-mcp http ${HTTP_HOST}:${p}`);
+  });
   return 0;
 }
 
@@ -1495,10 +1607,11 @@ function main(argv) {
   if (cmd === "list-tools") return cmdListTools();
   if (cmd === "call") return cmdCall(argv[1], argv[2] || "{}");
   if (cmd === "serve") return cmdServe();
+  if (cmd === "serve-http") return cmdServeHttp();
   log(`unknown command: ${cmd}`);
   cmdHelp();
   return 2;
 }
 
 const code = main(process.argv.slice(2));
-if (process.argv[2] !== "serve") process.exitCode = code;
+if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;

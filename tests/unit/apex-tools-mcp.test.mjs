@@ -56,6 +56,7 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
 
 test(".mcp.json registers apex-tools as the fourth stdio server", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
@@ -64,6 +65,10 @@ test(".mcp.json registers apex-tools as the fourth stdio server", () => {
   ]);
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, catalog.stdio.args);
+  assert.equal(catalog.http.bind, "127.0.0.1");
+  assert.equal(catalog.http.port, 3713);
+  assert.deepEqual(catalog.http.args, ["serve-http"]);
 });
 
 test("help lists serve / list-tools / call / status", () => {
@@ -77,6 +82,7 @@ test("help lists serve / list-tools / call / status", () => {
   assert.match(r.stdout, /apex_select_specs/);
   assert.match(r.stdout, /apex_carshot/);
   assert.match(r.stdout, /apex_select_recall/);
+  assert.match(r.stdout, /serve-http/);
 });
 
 test("shell help exits 0", () => {
@@ -111,7 +117,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  assert.ok(names.length >= 29, names);
+  assert.ok(names.length >= 30, names);
   for (const n of names) {
     assert.match(n, /^apex_/);
     assert.doesNotMatch(n, /^chrome_/);
@@ -147,12 +153,12 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_startline_snap",
     "apex_startline_probe",
     "apex_aero_zone_turns",
+    "apex_graph_parity",
   ]) {
     assert.ok(names.includes(need), `missing ${need} in ${names}`);
   }
   for (const never of [
     "apex_test_bg",
-    "apex_graph_parity",
     "apex_bump_cache_apply",
     "tinyfish_deploy_check",
     "chrome_evaluate_script",
@@ -444,6 +450,76 @@ test("week-4 tree pins: recall / bump-only / markings / startline / aero", () =>
   const aero = callCli("apex_aero_zone_turns", { dryRun: true, id: "monza" });
   assert.equal(aero.status, 0, aero.stderr);
   assert.ok(JSON.parse(aero.stdout).argv.includes("monza"));
+
+  const gp = callCli("apex_graph_parity", { dryRun: true, base: "HEAD~1", id: "monza" });
+  assert.equal(gp.status, 0, gp.stderr);
+  const gpBody = JSON.parse(gp.stdout);
+  assert.match(gpBody.argv.join(" "), /graph-parity\.cjs/);
+  assert.equal(gpBody.env.BASE, "HEAD~1");
+  assert.ok(gpBody.argv.includes("monza"), gpBody.argv);
+
+  const gpMiss = callCli("apex_graph_parity", { dryRun: true, id: "monza" });
+  assert.equal(gpMiss.status, 1, gpMiss.stderr);
+  assert.equal(JSON.parse(gpMiss.stdout).error, "bad_args");
+});
+
+test("committed catalog JSON matches tools/list and never binds 0.0.0.0", () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
+  const r = spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT });
+  assert.equal(r.status, 0, r.stderr);
+  const names = JSON.parse(r.stdout).map((t) => t.name);
+  assert.deepEqual(names, catalog.tools);
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.match(src, /127\.0\.0\.1/);
+  assert.doesNotMatch(src, /listen\([^)]*0\.0\.0\.0/);
+  assert.match(src, /serve-http/);
+});
+
+test("serve-http /healthz and /mcp stay on loopback", async () => {
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, [MCP, "serve-http"], {
+    env: { ...process.env, APEX_MCP_HTTP_PORT: "0", APEX_MCP_MOCK: "1" },
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const port = await new Promise((resolve, reject) => {
+    let err = "";
+    const t = setTimeout(() => reject(new Error(`no listen: ${err}`)), 5000);
+    child.stderr.on("data", (chunk) => {
+      err += chunk;
+      const m = err.match(/apex-tools-mcp http 127\.0\.0\.1:(\d+)/);
+      if (m) {
+        clearTimeout(t);
+        resolve(Number(m[1]));
+      }
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => reject(new Error(`serve-http exited ${code}: ${err}`)));
+  });
+  try {
+    const health = await fetch(`http://127.0.0.1:${port}/healthz`);
+    assert.equal(health.status, 200);
+    const body = await health.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.bind, "127.0.0.1");
+    const rpc = await fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }),
+    });
+    assert.equal(rpc.status, 200);
+    const listed = await rpc.json();
+    const names = (listed.result.tools || []).map((t) => t.name);
+    assert.ok(names.includes("apex_graph_parity"), names);
+    assert.ok(names.every((n) => n.startsWith("apex_")));
+  } finally {
+    child.kill();
+  }
 });
 
 test("apex_cache_bump_only live classify stays ok when the CLI exits 1", () => {
