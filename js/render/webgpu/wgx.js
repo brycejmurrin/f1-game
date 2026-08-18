@@ -581,6 +581,7 @@ const WGX = (function () {
     // snapCam()/invalidateSoftPresent() bumps _softSceneGen so an in-flight pits
     // readback cannot satisfy awaitSoftPresent(); the waiter accepts the first
     // non-blank blit encoded at that generation (not a second encode after it).
+    // Never destroy a MAP_READ buffer to "skip" a blit — that hangs later maps.
     // WebGPU renders on a hidden canvas swapped in at boot.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
@@ -592,7 +593,6 @@ const WGX = (function () {
     let _softDisplayPending = false, _softDisplayEpoch = 0;
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
-    let _softDisplayCap = null;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1734,10 +1734,7 @@ const WGX = (function () {
         );
         _softBlitSeq++;
         _softDisplayPending = true;
-        const cap = { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch,
-          sceneGen: _softSceneGen, at: (typeof performance !== "undefined" && performance.now) ? performance.now() : 0 };
-        _softDisplayCap = cap;
-        return cap;
+        return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen };
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
         return null;
@@ -1746,9 +1743,7 @@ const WGX = (function () {
     function _softDisplayFinish(cap) {
       if (!cap) return;
       const { buf, bpr, w, h, seq, epoch, sceneGen } = cap;
-      const release = function () {
-        if (_softDisplayCap === cap) { _softDisplayPending = false; _softDisplayCap = null; }
-      };
+      const release = function () { _softDisplayPending = false; };
       if (!_displayCtx) {
         try { buf.destroy(); } catch (_) { /* device dying */ }
         release();
@@ -1809,8 +1804,7 @@ const WGX = (function () {
     function _softDisplayAbort(cap) {
       if (!cap) return;
       try { cap.buf.destroy(); } catch (_) { /* submit rejected / device dying */ }
-      if (_softDisplayCap === cap) { _softDisplayPending = false; _softDisplayCap = null; }
-      _softLastSkip = "abort";
+      _softDisplayPending = false;
     }
     function _softBlitNotify(seq) {
       _softBlitShown = seq;
@@ -1826,12 +1820,11 @@ const WGX = (function () {
     }
     function invalidateSoftPresent() {
       if (!_softGpu) return;
+      // Bump generation only. Do NOT destroy the in-flight MAP_READ buffer —
+      // that hangs the next mapAsync on SwiftShader (measured). Do NOT bump
+      // epoch either: the in-flight copy must be allowed to land so pending
+      // can clear; awaitSoftPresent ignores it when shownGen < needGen.
       _softSceneGen++;
-      // Drop an in-flight pits/gantry readback so it cannot paint after snapCam
-      // and so the next present() can encode the live camera without waiting
-      // for a multi-second SwiftShader mapAsync to settle.
-      _softDisplayEpoch++;
-      if (_softDisplayCap) _softDisplayAbort(_softDisplayCap);
     }
     function softPresentState() {
       return {
