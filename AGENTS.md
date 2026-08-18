@@ -211,6 +211,9 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `index.html` — shell: script tags, all static DOM, `?v=N` cache busting;
   `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
+- `types/globals.d.ts` + `jsconfig.json` — ambient IIFE globals for the editor
+  language service (`tsc -p jsconfig.json`, checkJs off; held by
+  `tests/unit/jsconfig-globals.test.mjs`)
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor)
   that encode the flat prohibitions above so a subagent cannot un-know them

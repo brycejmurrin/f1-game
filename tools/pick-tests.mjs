@@ -146,6 +146,7 @@ export const RULES = [
   [/^assets\//, ["api"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
+  [/^jsconfig\.json$/, ["tooling-fast"], "editor project root for the TypeScript language service"],
   [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
 ];
 
