@@ -193,6 +193,8 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 
+All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `"*"`).
+
 | Track | id | theme | default | status |
 |---|---|---|---|---|
 | Abu Dhabi | `abudhabi` | desert | night | ✅ |
@@ -219,22 +221,22 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 | Suzuka | `suzuka` | green | day | ✅ |
 | Las Vegas | `vegas` | street_night | night | ✅ |
 | Zandvoort | `zandvoort` | green | day | ✅ |
-| Buenos Aires | `buenos_aires` | green | day | ⬜ |
-| Catalunya | `catalunya` | modern | day | ⬜ |
-| Estoril | `estoril` | modern | day | ⬜ |
-| Hockenheim | `hockenheim` | green | day | ⬜ |
-| Indianapolis | `indianapolis` | modern | day | ⬜ |
-| Istanbul | `istanbul` | green | day | ⬜ |
-| Jacarepaguá | `jacarepagua` | modern | day | ⬜ |
-| Kyalami | `kyalami` | green | day | ⬜ |
-| Magny-Cours | `magny_cours` | green | day | ⬜ |
-| Mugello | `mugello` | green | day | ⬜ |
-| Nürburgring | `nurburgring` | green | day | ⬜ |
-| Paul Ricard | `paul_ricard` | modern | day | ⬜ |
-| Portimão | `portimao` | green | day | ⬜ |
-| Sepang | `sepang` | green | day | ⬜ |
-| Sochi | `sochi` | modern | day | ⬜ |
-| Watkins Glen | `watkins_glen` | green | day | ⬜ |
+| Buenos Aires | `buenos_aires` | green | day | ✅ |
+| Catalunya | `catalunya` | modern | day | ✅ |
+| Estoril | `estoril` | modern | day | ✅ |
+| Hockenheim | `hockenheim` | green | day | ✅ |
+| Indianapolis | `indianapolis` | modern | day | ✅ |
+| Istanbul | `istanbul` | green | day | ✅ |
+| Jacarepaguá | `jacarepagua` | modern | day | ✅ |
+| Kyalami | `kyalami` | green | day | ✅ |
+| Magny-Cours | `magny_cours` | green | day | ✅ |
+| Mugello | `mugello` | green | day | ✅ |
+| Nürburgring | `nurburgring` | green | day | ✅ |
+| Paul Ricard | `paul_ricard` | modern | day | ✅ |
+| Portimão | `portimao` | green | day | ✅ |
+| Sepang | `sepang` | green | day | ✅ |
+| Sochi | `sochi` | modern | day | ✅ |
+| Watkins Glen | `watkins_glen` | green | day | ✅ |
 
 ---
 
@@ -264,7 +266,7 @@ node .claude/skills/bake-lighting/merge-proposals.mjs
 `combos` keys are `tod|wx`. Values are sparse knob maps. Merge snaps against
 live `TUNE_DEFS` in `js/game/lighting.js` (ranges/steps there win over the
 table in this doc) and refuses unknown ids, out-of-range, or off-grid values.
-Do not restated a knob at its `TUNE_DEFS.def`, and do not restated a `"*"`
+Do not re-state a knob at its `TUNE_DEFS.def`, and do not re-state a `"*"`
 baseline (`carGloss` 0.35, the shipped HDR grade) unless this condition must
 override it.
 
