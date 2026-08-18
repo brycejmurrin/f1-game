@@ -62,17 +62,14 @@ not.
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`, `menu-`) is one file each and needs no map.
 
-**A family leaves this list when it leaves `css/`.** The title screen's mb-prefix
-family was here until its two
-classes — `.mb-stack` and `.mb-sub`, both of which dressed a single element
-inside a single button on the title screen — were replaced by `#mb-career > span`
-and `#mb-career-sub`. That is the `--sheet-w` move applied to a family instead of
-a width: a class that can only ever match one element is a context, and a context
-belongs in a selector. `tests/unit/component-inventory.test.mjs` is what makes the
-removal provable — it fails on a family named here that `css/` no longer defines,
-so a consolidation cannot be claimed without this table moving.
+**A family leaves this list when it leaves `css/`.** The title screen's old
+`.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and
+`#mb-career-sub`; `.mb-label` later came back as the hero button's visible
+word. `menu-` is the season-status chips on `#menu-status`. Unused
+`.ui-panel` / `.ui-kicker` / `.ui-value` / `.ui-muted` placeholders were
+removed rather than inventoried as dead.
 
 A family can also shrink without disappearing, and `cs-` did: the garage's
 preview bar had `.cs-view-btn` plus two variants that existed only to restate a
