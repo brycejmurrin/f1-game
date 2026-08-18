@@ -577,13 +577,24 @@ function updateTrackPreview() {
   // own caps authoritative for that frame. watchPreviewCard refits with real
   // numbers as soon as the card has a box.
   const measurable = !!(card && card.clientWidth > 0);
-  TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
+  const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
   watchPreviewCard(card);
-  // The live 3D flyby behind the sheet is the circuit preview. Keep this
-  // canvas as the click target for the track-detail lightbox, but do not
-  // stamp a 2D outline over the world — TrackMaps.draw stays on #track-detail.
-  const ctx = map.getContext("2d");
-  if (ctx) ctx.clearRect(0, 0, map.width, map.height);
+  // Corner markers/casing are drawn at ABSOLUTE canvas px (see TrackMaps.draw),
+  // tuned for the canvas's old fixed 520x300 HTML size. fitCanvas now sizes the
+  // drawing buffer itself to the measured CSS slot (so a narrow layout gets a
+  // narrow buffer), and a fixed-radius marker on a shrunk buffer reads 3-4x
+  // oversized relative to the track outline — measured on the live select
+  // screen at normal desktop widths, markers overlapping into an unreadable
+  // blob. Scale every absolute-px draw param by how far the fitted buffer sits
+  // below that 520x300 reference so markers keep the same box-relative size
+  // the old fixed-buffer-plus-CSS-shrink rendering always had.
+  const mk = Math.min(1, fit.w / 520, fit.h / 300);
+  TrackMaps.draw(map, t, {
+    color: TrackMaps.themeColor(t), startColor: "#e10600",
+    width: Math.max(2, Math.round(4 * mk)), pad: Math.max(10, Math.round(24 * mk)),
+    corners: true, cornerR: Math.max(4, Math.round(9 * mk)), cornerFont: Math.max(8, Math.round(11 * mk)),
+    sectors: true, drs: true
+  });
 }
 function openTrackDetail() {
   const t = Tracks.LIST[G.trackIdx];
