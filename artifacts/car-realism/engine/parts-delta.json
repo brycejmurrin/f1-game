@@ -1,0 +1,50 @@
+[
+  {
+    "optionId": "sig_mercedes_zero",
+    "visual": { "scoopLip": 2 }
+  },
+  {
+    "optionId": "sig_mclaren_pu",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "sig_alpine_pu",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "sig_racingbulls_pu",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "sig_haas_pu",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "sig_williams_pu",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "sig_cadillac_pu",
+    "visual": { "scoopLip": 2 }
+  },
+  {
+    "optionId": "manu_mercedes",
+    "visual": { "scoopLip": 2 }
+  },
+  {
+    "optionId": "manu_ferrari",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "manu_ford",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "manu_honda",
+    "visual": { "scoopLip": 1 }
+  },
+  {
+    "optionId": "manu_audi",
+    "visual": { "scoopLip": 2 }
+  }
+]
