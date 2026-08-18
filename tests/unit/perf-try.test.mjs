@@ -106,7 +106,7 @@ test("storage persists only deviations, and URL overrides the session", () => {
 
   const url = loadPerfTry({ search: "?perftry=none" });
   const U = vm.runInContext("PerfTry", url);
-  assert.deepEqual(U.active(), []);
+  assert.equal(U.active().length, 0, "perftry=none clears every flag");
   assert.equal(U.defines(), "");
 
   const all = loadPerfTry({
