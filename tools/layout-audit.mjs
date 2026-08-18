@@ -1114,8 +1114,31 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
           const d = document.documentElement.style;
           d.setProperty("--sat", i.t + "px"); d.setProperty("--sar", i.r + "px");
           d.setProperty("--sab", i.b + "px"); d.setProperty("--sal", i.l + "px");
+          // A real device exposes safe-area env() values before first layout.
+          // The audit injects equivalent tokens after opening the screen, so
+          // explicitly rerun the classifiers that would already have seen
+          // them on-device instead of depending on a later observer delivery.
+          if (window.SheetShape) SheetShape.reclassify();
         }, insets);
         await page.waitForTimeout(150);
+      }
+      // The circuit preview is refitted by the post-show frame/ResizeObserver
+      // path. Under parallel SwiftShader load the audit could sample between
+      // the placeholder draw and that refit, recording a transient 1x1 canvas
+      // as a permanent product failure. Wait for a non-placeholder, aspect-
+      // matched buffer; a real failure still falls through after the bound and
+      // is reported by PROBE unchanged.
+      if (screen.id.split("#")[0] === "select") {
+        await page.waitForFunction(() => {
+          const cv = document.getElementById("sel-preview-map");
+          if (!(cv instanceof HTMLCanvasElement) || cv.width <= 8 || cv.height <= 8) return false;
+          const r = cv.getBoundingClientRect();
+          const z = cv.currentCSSZoom || 1;
+          const bufferAspect = cv.width / cv.height;
+          const boxAspect = (r.width / z) / Math.max(1, r.height / z);
+          return Math.abs(bufferAspect - boxAspect) /
+            Math.max(bufferAspect, boxAspect, 0.001) < 0.03;
+        }, null, { polling: 50, timeout: 5000 }).catch(() => {});
       }
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
       if (wantShots) {

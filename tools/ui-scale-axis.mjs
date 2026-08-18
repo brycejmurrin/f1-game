@@ -17,7 +17,7 @@
 // percentage covers every cell at half the cost.
 
 export const SCALE_HELP =
-  "--scale=50,100,130,150   also audit at each interface size (%, default: the device default alone)";
+  "--scale=40,50,100,130,150,200   also audit at each interface size (%, default: the device default alone)";
 
 // No --scale= means "whatever this device defaults to", represented as `null`
 // (not a hard-coded 100): leave nothing stored so first paint uses the CSS
@@ -28,8 +28,8 @@ export function parseScales(argv) {
   if (!a) return [null];
   const out = a.slice("--scale=".length).split(",").filter(Boolean).map((s) => {
     const n = Number(s);
-    if (!Number.isFinite(n) || n < 50 || n > 200) {
-      throw new Error(`--scale: "${s}" is not a percentage between 50 and 200`);
+    if (!Number.isFinite(n) || n < 40 || n > 200) {
+      throw new Error(`--scale: "${s}" is not a percentage between 40 and 200`);
     }
     return n;
   });
