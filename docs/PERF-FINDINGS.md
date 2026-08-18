@@ -1040,6 +1040,25 @@ order per round, and report the MINIMUM as well as the median — the fastest a
 run has actually gone is the least contaminated estimate, which is the same
 argument `PerfGov._floorMs` already makes about frame intervals.
 
+### Added 2026-08-18 — hunt after the 08-17 board shipped
+
+Re-walked the 08-17 survey against cache **1388**, then merged deploy tip
+`11d972d2` (cache **1421**). Full board:
+[research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md).
+
+Boot wall **at 1421:** **153** `src=` tags, **5,909,851 B** (5.91 MB).
+`apex.js` + `agentview*` is **350,083 B** of eager dev/test surface.
+Circuit IIFE parse is still cheap; LIST `points` is already a lazy getter.
+
+**Taken on deploy after the 1388 write-up:** TLX shadow `count`,
+content-hash `?v=<sha256>` + `readyState !== "complete"`, typed
+accumulators, `massBlocked` grid, emitter `lo()` cache, baked PerfTry ON
+paths. Do not re-open those from the hunt file.
+
+**Still counting work:** WGX `_writeShadowModel` still uploads every
+shadow slot (lit path already has `_flushDrawUBO`). Optional: defer the
+350 KB agent surface (PWA memory).
+
 ## 4. Recorded negative results
 
 Do not re-investigate these; they were checked and are fine.
