@@ -81,6 +81,16 @@ test("single-option recipes stay within 1.6x the default triangle budget", () =>
   assert.deepEqual(over, [], `over 1.6x default ${base}: ${over.join(", ")}`);
 });
 
+test("2026 body keeps a scooped pod, floor teeth, under-fences and a beveled halo", () => {
+  assert.match(SRC, /z: 0\.50, inner: 0\.298/);
+  assert.match(SRC, /z: -0\.38, inner: 0\.28/);
+  assert.match(SRC, /z: -1\.05, inner: 0\.25/);
+  assert.match(SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
+  assert.match(SRC, /fwHalf \* 0\.52/);
+  assert.match(SRC, /addBeveledSpan\(out, \{ z: 0\.49, x: 0/);
+  assert.match(SRC, /inlet\.width \* 0\.48/);
+});
+
 test("factory SIGNATURE wings stay heavier than a stripped low-drag kit", () => {
   const byId = Object.fromEntries(Teams.LIST.map((t) => [t.id, t]));
   const factory = (id) => tris(Car3D.build(C1, C2, {

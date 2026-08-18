@@ -1364,17 +1364,33 @@ const Car3D = (function () {
     // letterbox. Only the front (inlet) station moves — the shoulder onward is
     // engine-recipe territory, so parts and team identity stay orthogonal.
     const inletBias = style ? (style.inlet || 0) : 0;
+    // Seven stations (was four). 2026 pods are a tall shoulder over a scooped
+    // undercut that pinches into the coke-bottle — four linear slabs read as a
+    // crate. Extra creases keep flat-shading; they just land on the real curve.
     return [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.245 + 0.06 * (undercut - 1),
         innerTop: 0.45 + inletBias, outerTop: 0.46 + inletBias * 0.6 },
+      { z: 0.50, inner: 0.298, outer: outerFront * 0.97 + outerShoulder * 0.03,
+        innerBottom: 0.218 + 0.12 * (undercut - 1),
+        outerBottom: 0.158 + 0.05 * (undercut - 1),
+        innerTop: 0.448 + inletBias * 0.55,
+        outerTop: 0.455 + inletBias * 0.35 },
       { z: 0.22, inner: 0.29, outer: outerShoulder,
         innerBottom: 0.20 + 0.13 * (undercut - 1), outerBottom: 0.12,
         innerTop: shoulderTop, outerTop: shoulderTop - 0.015 },
+      { z: -0.38, inner: 0.28, outer: outerShoulder * 0.55 + outerWaist * 0.45,
+        innerBottom: 0.162 + 0.10 * (undercut - 1), outerBottom: 0.112,
+        innerTop: shoulderTop * 0.68 + (0.42 + 0.10 * (shoulder - 1)) * 0.32,
+        outerTop: (shoulderTop - 0.015) * 0.62 + (0.38 + 0.08 * (shoulder - 1)) * 0.38 },
       { z: -0.62, inner: 0.27, outer: outerWaist,
         innerBottom: 0.14 + 0.08 * (undercut - 1), outerBottom: 0.105,
         innerTop: 0.42 + 0.10 * (shoulder - 1),
         outerTop: 0.38 + 0.08 * (shoulder - 1) },
+      { z: -1.05, inner: 0.25, outer: outerWaist * 0.42 + outerTail * 0.58,
+        innerBottom: 0.134, outerBottom: 0.112,
+        innerTop: 0.355 + 0.07 * (shoulder - 1),
+        outerTop: 0.318 + 0.04 * (shoulder - 1) },
       { z: -1.48, inner: 0.23, outer: outerTail, innerBottom: 0.13,
         outerBottom: 0.12, innerTop: 0.30 + 0.05 * (shoulder - 1), outerTop: 0.27 },
     ];
@@ -1635,9 +1651,9 @@ const Car3D = (function () {
     }
 
     part("sidepods");
-    // --- Sidepods: four body stations create a deep inlet, undercut, downwash
-    // shoulder and coke-bottle tail. Geometry datums returned here anchor all
-    // paint, sponsor, ERS and cooling details below.
+    // --- Sidepods: seven body stations create a deep inlet, scooped undercut,
+    // downwash shoulder and coke-bottle tail. Geometry datums returned here
+    // anchor all paint, sponsor, ERS and cooling details below.
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
     // `fracH` reads `height` as a FRACTION of the pod's height at each station
     // instead of metres. The pod tapers front-to-rear, so a fixed metre height
@@ -1687,6 +1703,14 @@ const Car3D = (function () {
         { z: -1.58, x: side * (0.54 + floorCut * 0.35) * floorEdge,
           y: 0.145 + rideDY, w: 0.028, h: 0.055 },
         CARBON, null, SURFACES.carbon);
+    }
+    // 2026 floor leading-edge devices — up to five vortex teeth across the
+    // width (motorsport.tech Issue-12). Chase only: they sit under the nose
+    // and never enter the onboard frame.
+    if (!ckpt) {
+      for (const x of [-0.48, -0.24, 0, 0.24, 0.48]) {
+        addBox(out, x, 0.078 + rideDY, 0.82, 0.058, 0.030, 0.11, CARBON, SURFACES.carbon);
+      }
     }
 
     part("engineCover");
@@ -1889,7 +1913,9 @@ const Car3D = (function () {
           addBox(out, s*(inlet.x + dx*inlet.width*0.22), inlet.y, inlet.z + 0.003,
                  inlet.width * 0.34, inlet.height * 0.88, 0.06, INTAKE);
       } else {
-        addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.70, inlet.height * 0.68, 0.05, INTAKE);
+        // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
+        addBox(out, s * (inlet.x - s * inlet.width * 0.12), inlet.y + inlet.height * 0.08,
+               inlet.z, inlet.width * 0.48, inlet.height * 0.88, 0.05, INTAKE);
       }
       // FLOOR furniture hangs off the VISIBLE floor-edge line — the same span the
       // aero floorEdge draws above — NOT the sidepod bottom. Anchored to the pod
@@ -2183,10 +2209,12 @@ const Car3D = (function () {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
       addBox(out, 0, 0.665, 0.47, 0.035, 0.27, 0.05, haloC, SURFACES.metal);   // front centre pillar — tall enough to meet the front arc's base (y 0.7875) instead of stopping 5.8cm short
       for (const s of [-1, 1]) {
-        addSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
-                     { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 }, haloC, null, SURFACES.metal);  // front arc
-        addSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
-                     { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 }, haloC, null, SURFACES.metal); // rear arc to collar
+        addBeveledSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
+                            { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
+                      0.012, haloC, null, SURFACES.metal);  // front arc
+        addBeveledSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
+                            { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 },
+                      0.012, haloC, null, SURFACES.metal); // rear arc to collar
       }
     }
 
@@ -2367,6 +2395,12 @@ const Car3D = (function () {
       // Footplate: the horizontal "foot" kicking outward along the endplate base
       // (the ground-effect seal that reads as a real front-wing foot).
       addBox(out, epX + s*(PLATE.footW * 0.23), 0.050, 2.30, PLATE.footW, 0.016, PLATE.footZ, c1);
+      // 2026 underwing fence — one carbon blade per side under the mid-span
+      // (FIA / RaceTeq: fences return under each half of the front wing).
+      addBeveledSpan(out,
+        { z: 2.58, x: s * (fwHalf * 0.52), y: 0.058, w: 0.012, h: 0.050, t: 0.50 },
+        { z: 2.20, x: s * (fwHalf * 0.70), y: 0.066, w: 0.010, h: 0.044, t: 0.68 },
+        0.005, CARBON);
       // Tall-plate variant carries a bridging spar across the crown, tying the
       // top of the arch back to the outer flap tip.
       if (PLATE.arch) {
