@@ -257,3 +257,23 @@ test("Circuit filters are not nested in a listbox and circuits expose button sta
   assert.match(menus, /row\.setAttribute\("aria-pressed"/);
   assert.doesNotMatch(menus, /row\.setAttribute\("role", "option"\)/);
 });
+
+test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
+  const files = [
+    "js/track/tracks.js",
+    "js/track/scenery-structures.js",
+    "js/track/scenery-nature.js",
+    "js/track/scenery-city.js",
+    "js/track/scenery-identity.js",
+  ];
+  for (const rel of files) {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    assert.doesNotMatch(src, /Log\.warn\("scenery", `[^`]*SUPPRESSED/,
+      rel + " still warns per suppressed prop");
+    assert.doesNotMatch(src, /Log\.warn\("track", `place SUPPRESSED/,
+      rel + " still warns per suppressed place()");
+  }
+  const tracks = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  assert.match(tracks, /const noteSuppressed = /);
+  assert.match(tracks, /: suppressed /);
+});

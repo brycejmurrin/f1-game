@@ -1328,6 +1328,17 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
     "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
 });
 
+test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
+  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\);/,
+    "GLX must keep the unclamped lateral footprint for mip");
+  assert.match(glx, /float mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/,
+    "GLX mip must match the WGX knee — not the clamped aaX");
+  assert.match(tsl, /fwX\.sub\(0\.10\)\.div\(0\.55\)\.oneMinus\(\)/,
+    "TLX mip must match the WGX knee — not the clamped aaX");
+});
+
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
   // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
   //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));

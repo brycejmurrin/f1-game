@@ -202,7 +202,9 @@ test("the per-peer events a host DOES own are still accepted from a guest", () =
   // would silently stop a host scoring its guests, and would look exactly like
   // this one from the outside.
   const { net, s } = started("host");
-  s.deliver("lap", { car: 1, lap: 2, t: 91.2 });
+  // Product LAP is {lap, time, best, code} (js/game.js reportLap) — not a
+  // wireId. sendersOwnDriver matches code OR driverId so a guest still scores.
+  s.deliver("lap", { lap: 2, time: 91.2, code: "D1" });
   assert.equal(net.peerLaps().length, 1, "a guest still reports its own laps to the host");
 });
 

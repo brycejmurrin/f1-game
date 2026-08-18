@@ -673,6 +673,14 @@ function create(G) {
       " · " + (team ? team.name.toUpperCase() : c.team.toUpperCase());
     if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
 
+    if (Career.conflicted()) {
+      const warn = el("div", "cr-card");
+      warn.appendChild(el("div", "cr-obj-line", "SAVE CONFLICT"));
+      warn.appendChild(el("p", "cr-note",
+        "Another tab wrote this career. Garage and R&D will not save here until you reload."));
+      left.appendChild(warn);
+    }
+
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
@@ -1269,6 +1277,7 @@ function create(G) {
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
+    G.season = G.store.get("season", null);
     G.refreshCareerButton();
     if (G.soundOn) GameAudio.uiSelect();
   };

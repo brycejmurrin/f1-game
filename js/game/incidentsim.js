@@ -328,7 +328,7 @@ const IncidentSim = (function () {
       promoted.push(i);
     }
     if (!promoted.length) return;
-    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen });
+    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen, elapsed: 0 });
     _seq++; _promoted += promoted.length; _lastKind = kind;
     Log.info("game", "IncidentSim start " + kind + " cars=" + promoted.length);
   }
@@ -357,6 +357,7 @@ const IncidentSim = (function () {
       for (const i of inc.cars.slice()) {
         const c = G.cars && G.cars[i];
         if (!c) { finishCar(inc, i); continue; }
+        if (c.retired || c.finished) { handbackCar(inc, i, true); continue; }
         let pose = null;
         try { pose = DebrisWorld.carBodyPose(i); } catch (e) { pose = null; }
         if (!pose || !fin(pose.x) || !fin(pose.z) || !fin(pose.qw)) { handbackCar(inc, i, true); continue; }
@@ -400,9 +401,10 @@ const IncidentSim = (function () {
         let st = (inc.settle.get(i) || 0);
         st = settling ? st + (fin(dt) ? dt : 1 / 60) : 0;
         inc.settle.set(i, st);
-        const windowUp = (_tick - inc.tick0) * (fin(dt) ? dt : 1 / 60) >= WINDOW_MAX_S;
+        const windowUp = (inc.elapsed || 0) >= WINDOW_MAX_S;
         if (st >= SETTLE_HOLD_S || windowUp) handbackCar(inc, i, false, pose);
       }
+      inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
     }
     _incidents = _incidents.filter((inc) => inc.cars.length);
   }

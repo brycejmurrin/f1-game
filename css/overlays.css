@@ -502,10 +502,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   letter-spacing: 0.06em;
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
-   cinematic view — readouts, minimap, cam/pause buttons and the touch pads —
-   leaving the restore eye. The METRICS overlay stays up so a debug session
-   can hide the HUD without losing the live readouts. */
+   cinematic view — readouts, start lights, announce, cam picker, cam/pause
+   buttons and the touch pads — leaving the restore eye. The METRICS overlay
+   stays up so a debug session can hide the HUD without losing the live
+   readouts (photo-mode HIDE HUD is the opposite: see body.pc-uihidden). */
 body.hud-hidden #hud,
+body.hud-hidden #lights,
+body.hud-hidden #announce,
+body.hud-hidden #campicker,
 body.hud-hidden #btn-cam,
 body.hud-hidden #pausebtn,
 body.hud-hidden .touchbtn { display: none !important; }
