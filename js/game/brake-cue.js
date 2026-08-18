@@ -8,8 +8,7 @@ const BrakeCue = (function () {
   const URGENCY_GATE = 0.12;            // below this the corner is already made
   const PERIOD_LO = 0.55, PERIOD_HI = 0.09;
   const SAMPLES = 4;
-
-  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  const clamp = M4.clamp;
 
   // v1 = OFF. v2..10 = CUE on, lookahead linear in seconds.
   function fromSlider(v) {

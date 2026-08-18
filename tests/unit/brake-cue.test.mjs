@@ -10,7 +10,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = fs.readFileSync(path.join(ROOT, "js/game/brake-cue.js"), "utf8")
   .replace(/^const\b/gm, "var");
-const ctx = { window: {}, performance: { now: () => 0 } };
+const ctx = {
+  window: {},
+  performance: { now: () => 0 },
+  M4: { clamp: (v, a, b) => (v < a ? a : v > b ? b : v) },
+};
 vm.runInNewContext(src, ctx);
 const { BrakeCue } = ctx;
 assert.ok(BrakeCue && BrakeCue.urgencyOf, "BrakeCue IIFE must assign the global");

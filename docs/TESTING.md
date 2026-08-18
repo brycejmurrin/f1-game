@@ -238,6 +238,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
 | `debris` | the Rapier debris side-world |
 | `steering` | presets, sliders, steering modes, gamepad |
+| `steering-unit` | braking CUE math in Node — slider 1 is OFF, urgency is 0..1 never a brake command |
 
 ### Track & scenery
 
