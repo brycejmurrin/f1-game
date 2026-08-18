@@ -22,7 +22,7 @@ SCREENS = [
   ("garage", "carsetup", "mb-garage"),
   ("career", "career", "mb-career"),
   ("select", "select", "mb-race"),
-  ("howto", "howtoplay", "mb-help"),
+  ("howto", "howtoplay", "mb-settings,pm-tab-more,pm-howto"),
   ("datahub", "datahub", "mb-data"),
   ("vsfriend", "vsfriend", "mb-vs"),
 ]
@@ -41,7 +41,7 @@ MEASURE = r"""async (args) => {
   const ov = document.getElementById('overlay');
   if (ov) ov.hidden = false;
   if (openBtn) {
-    document.getElementById(openBtn)?.click();
+    for (const id of String(openBtn).split(",")) document.getElementById(id.trim())?.click();
     await new Promise(r => setTimeout(r, 450));
     for (const a of document.getAnimations()) try { a.finish(); } catch {}
     await new Promise(r => setTimeout(r, 80));

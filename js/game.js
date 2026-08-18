@@ -7569,6 +7569,7 @@ function openCareerSlots() {
 // The title-screen button reads CONTINUE once a career exists, so the player can
 // tell at a glance whether pressing it resumes or starts something.
 function refreshCareerButton() {
+  seasonUi.refreshTitle();
   const btn = $("mb-career");
   if (!btn) return;
   const c = Career.data() || Career.load();

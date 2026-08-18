@@ -106,7 +106,9 @@ const SCREENS = [
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200); } },
   { id: "howtoplay", name: "How to play", root: "#howtoplay", open: async (p) => {
-      await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-tab-more");
+      await p.click("#pm-howto"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
   { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 }); } },
   // The VS FRIEND lobby is the densest sheet in the game — two multi-hundred-
