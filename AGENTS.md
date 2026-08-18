@@ -83,8 +83,8 @@ Session shape — this is what controls both wall time and waiting:
 7. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-8. Never bump `?v=N`/`version.json` mid-run — the bump is the LAST edit
-   before commit.
+8. Never bump content hashes / `version.json` mid-run — the bump is the LAST
+   edit before commit.
 
 ## Seeing the game (cheapest first)
 
@@ -210,8 +210,8 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
   class-count + body-node ratchets apply
-- `index.html` — shell: script tags, all static DOM, `?v=N` cache busting;
-  `sw.js` precache derives from the shell's tags
+- `index.html` — shell: script tags, all static DOM, per-file `?v=<sha256>`
+  plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor)
@@ -219,9 +219,11 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 
 ## Critical conventions
 
-- **Cache busting**: after ANY js/css change, bump every `?v=N` in
-  `index.html` to max+1 AND set `version.json` to the same N
-  (`.claude/skills/bump-cache`). Last edit before commit, never mid-run.
+- **Cache busting**: after ANY js/css change, run
+  `node tools/bump-cache.mjs --apply` (`.claude/skills/bump-cache`). Each
+  asset URL carries a 12-char content hash; `version.json` and
+  `<meta name="apex-build">` advance together as the shell/SW generation.
+  Last edit before commit, never mid-run. Docs/tools-only deltas need no bump.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
