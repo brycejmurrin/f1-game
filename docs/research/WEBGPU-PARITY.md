@@ -9,11 +9,11 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off (no history resolve — do not
-enable the Halton jitter alone); SAA mixes geometric N with a uniform-CF
-object-space peel hoist on all three backends (material/wall bump stays
-out of SAA — WGSL uniform-CF on WGX, `Nsaa` snapshot on GLX/TLX); TLX
-MSAA stays off (no resolved depth for post). Desktop GLX MSAA is 4×
-like WGX (WebGPU forbids 2).
+enable the Halton jitter alone); TLX MSAA stays off (no resolved depth
+for post). SAA mixes geometric N with a uniform-CF peel hoist on all
+three backends (material/wall bump stays out of SAA). Desktop GLX MSAA
+is 4× like WGX. Every baked MAT layer (walls included) is hoisted to
+`textureSample` so pack aniso matches GLX `texture()`.
 Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX

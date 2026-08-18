@@ -126,7 +126,8 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   uniform CF and mixes that variance with geometric N by `carPaint`
   (`dpdx` after a non-uniform matId branch is illegal WGSL). GLX/TLX
   now snapshot the same pre-material N — wall bump stays out of SAA
-  on all three backends.
+  on all three backends. Every baked MAT layer is hoisted with
+  `textureSample` (aniso 4) so brick/concrete match GLX `texture()`.
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed

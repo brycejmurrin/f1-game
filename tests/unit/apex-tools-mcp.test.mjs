@@ -109,9 +109,14 @@ test("apex_status reports the chrome-devtools stdio known gap", () => {
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.match(body.knownGap.chromeDevtoolsStdio, /3712/);
+  assert.match(body.knownGap.hostPlaywrightMcp, /@playwright\/mcp/);
   assert.match(body.knownGap.playwrightMcpStdio, /playwright/);
   assert.ok(body.knownGap.outsideLock.includes("layout-audit"));
   assert.ok(body.knownGap.outsideLock.includes("playwright-mcp"));
+  assert.equal(body.playwright.live, false);
+  assert.equal(body.playwright.suite, false);
+  assert.equal(body.playwright.hostMcp, false);
+  assert.equal(body.playwright.hostBrowser, false);
 });
 
 test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only", () => {
@@ -292,10 +297,33 @@ const UI_VIEWPORTS = "ios-iphone-landscape";
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
 const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
 
-test("playwright occupancy matches `playwright test` tokens, not MCP JSON", () => {
-  const src = fs.readFileSync(MCP, "utf8");
-  assert.doesNotMatch(src, /playwright\.\*test/);
-  assert.match(src, /playwright\\s\+test/);
+test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
+  const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/playwright-occupancy.mjs");
+  assert.equal(
+    classifyPlaywrightLine("4321 /usr/bin/npx playwright test --reporter=line")?.kind,
+    "suite",
+  );
+  assert.equal(
+    classifyPlaywrightLine('12 /exec-daemon/cursor-exec-daemon --mcp-config {"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}'),
+    null,
+    "Cursor --mcp-config JSON is not a live Playwright process",
+  );
+  assert.equal(
+    classifyPlaywrightLine("88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless")?.kind,
+    "hostMcp",
+  );
+  assert.equal(
+    classifyPlaywrightLine("99 /opt/google/chrome/chrome --user-data-dir=/workspace/.playwright-mcp --headless")?.kind,
+    "hostBrowser",
+  );
+  const scan = scanPlaywrightLines([
+    "1 /exec-daemon/cursor-exec-daemon --mcp-config {\"playwright\":{}}",
+    "2 node /x/@playwright/mcp/cli.js",
+  ].join("\n"));
+  assert.equal(scan.live, true);
+  assert.equal(scan.hostMcp, true);
+  assert.equal(scan.suite, false);
+  assert.deepEqual(scan.pids, [2]);
 });
 
 test("apex_ui_survey dryRun freezes the alias recipe and never --url", () => {
@@ -604,7 +632,7 @@ test("week-2 dryRun refuses lock_held by a live PID (no Chromium)", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
   try {
-    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "lock_held");
@@ -618,7 +646,7 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: 999999999, tool: "dead", since: 1 }));
   try {
-    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const body = JSON.parse(r.stdout);
     assert.equal(body.ok, true);
@@ -634,7 +662,7 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
   fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
   try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
@@ -647,6 +675,18 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   }
 });
 
+test("week-2 dryRun refuses host Playwright MCP from APEX_MCP_PS", () => {
+  const r = callCli(
+    "apex_eval",
+    { track: "monza", expr: "1", dryRun: true },
+    { APEX_MCP_MOCK: "0", APEX_MCP_PS: "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n" },
+  );
+  assert.equal(r.status, 1, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "playwright_live");
+  assert.match(body.message, /Playwright MCP/);
+});
+
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
   fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
   let prev = null;
@@ -656,7 +696,10 @@ test("a live Node-only test-bg group does not impersonate Playwright", () => {
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
   }));
   try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
+      APEX_MCP_MOCK: "0",
+      APEX_MCP_PS: "1 bash\n",
+    });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
   } finally {
@@ -697,7 +740,7 @@ test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () =>
     const r = callCli(
       "apex_eval",
       { track: "monza", expr: "1", dryRun: true },
-      { APEX_MCP_MOCK: "0", PROBE_CHROME_PORT: String(port) },
+      { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", PROBE_CHROME_PORT: String(port) },
     );
     assert.equal(r.status, 1, r.stderr + r.stdout);
     const body = JSON.parse(r.stdout);

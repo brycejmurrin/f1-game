@@ -20,7 +20,8 @@ Curvature / PACE semantics → `physics-contract-auditor`. Same-red on tip →
 `worktree-regression-check`. Parent keeps edits, cache bump, and deploy FF.
 
 Skills (workflows) live in `.claude/skills/`. Canonical rules live in
-`AGENTS.md`. New agents must be listed here and remain trackable
+`AGENTS.md`. Which CLIs are wrapped as `apex_*`: `docs/AGENT-SURFACE.md`.
+New agents must be listed here and remain trackable
 (`.gitignore` allowlists `!.claude/agents/`).
 
 Frontmatter (Cursor `https://cursor.com/docs/subagents`): `name` (matches the
