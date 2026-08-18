@@ -58,6 +58,7 @@ test("resolveScreen aliases map onto the catalog", () => {
   assert.equal(resolveScreen("carsetup"), "garage");
   assert.equal(resolveScreen("overlay"), "title");
   assert.equal(resolveScreen("help"), "howtoplay");
+  assert.equal(resolveScreen("pausemenu"), "pause");
   assert.throws(() => resolveScreen("not-a-screen"), /unknown screen/);
 });
 
@@ -119,6 +120,8 @@ test("css-play --list prints screen ids without Chromium", () => {
   assert.match(r.stdout, /title/);
   assert.match(r.stdout, /settings/);
   assert.match(r.stdout, /#pmsettings/);
+  assert.match(r.stdout, /pause/);
+  assert.match(r.stdout, /#pausemenu/);
 });
 
 test("the tool uses harness.mjs and never bumps cache", () => {

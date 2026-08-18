@@ -32,6 +32,7 @@ Catalog (`node tools/css-play.mjs --list`):
 | datahub | `#datahub` | `#mb-data` |
 | howtoplay | `#howtoplay` | `#mb-help` |
 | vsfriend | `#vsfriend` | `#mb-vs` |
+| pause | `#pausemenu` | `__apex.race` → `#pausebtn` |
 
 Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
 garage, `help` → howtoplay, `vs` → vsfriend.

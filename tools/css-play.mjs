@@ -46,6 +46,7 @@ export const SCREENS = {
   datahub: { name: "F1 data hub", root: "#datahub", clicks: ["#mb-data"] },
   howtoplay: { name: "How to play", root: "#howtoplay", clicks: ["#mb-help"] },
   vsfriend: { name: "VS friend lobby", root: "#vsfriend", clicks: ["#mb-vs"] },
+  pause: { name: "Pause menu", root: "#pausemenu", clicks: ["#pausebtn"], race: "monza" },
 };
 
 const ALIASES = {
@@ -56,6 +57,8 @@ const ALIASES = {
   carsetup: "garage",
   help: "howtoplay",
   vs: "vsfriend",
+  paused: "pause",
+  pausemenu: "pause",
 };
 
 export function resolveScreen(id) {
@@ -144,7 +147,7 @@ Usage:
   node tools/css-play.mjs settings --inject ".sheet{max-height:80vh}" --json
 
 Flags:
-  --screen ID       title|select|garage|settings|career|datahub|howtoplay|vsfriend
+  --screen ID       title|select|garage|settings|career|datahub|howtoplay|vsfriend|pause
   --sel CSS         extra querySelectorAll hits in the DOM dump
   --css css/FILE    hot-swap that stylesheet from disk (?play=<mtime>, no cache bump)
   --inject CSS      overlay <style id="apex-css-play"> after the screen opens
@@ -339,6 +342,20 @@ export async function runCssPlay(opts) {
     });
     if (opts.scale != null && !Number.isNaN(opts.scale)) {
       await page.evaluate((n) => window.__apex.uiScale(n), opts.scale);
+    }
+    if (def.race) {
+      await page.evaluate(async (id) => {
+        await window.__apex.race(id);
+        window.__apex.go();
+        window.__apex.headless(true);
+        const g = document.querySelector("#game");
+        if (g) g.style.visibility = "hidden";
+      }, def.race);
+      await page.waitForFunction((id) => {
+        const info = window.__apex.info();
+        return info && (info.state === "race" || info.state === "count") && info.track === id;
+      }, def.race, { polling: 100, timeout: 40000 });
+      await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 15000 });
     }
     for (const sel of clicks) await page.click(sel);
     await waitOpen(page, root);
