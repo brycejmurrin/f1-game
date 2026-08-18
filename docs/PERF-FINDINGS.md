@@ -744,6 +744,15 @@ switch **cannot remove a single road or terrain triangle** from the probe — it
 reaches props and glass only. That makes it a synergy argument for chunking the
 ribbons, not an independent item.
 
+The probe face also drew sky **before** the world (`js/game.js` env-probe
+block). The main camera is already opaque → sky → glow. **Taken 2026-08-18:**
+the probe now draws world then sky, same early-Z order. No glow on the probe.
+
+Do **not** copy the probe's 300 m cull onto the chase cam. A 20 m building is
+still ~18 px at 900 m / ~1280 px; that is a look change. `cullDist = farPlane`
+is also not look-identical: frustum far-plane *corners* sit farther from the
+eye than `farPlane` (`far / cos(halfFov)`).
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
@@ -836,11 +845,18 @@ cost is quadratic in prop count specifically. Measured trivial today: ~420k
 inner iterations on vegas (~4–25 ms of a 4059 ms build), 419 on monza. Below the
 bar that reverted `nodeGrid`. Worth doing when the skyline gets denser.
 
+> **SUPERSEDED 2026-08-18.** `massBlocked` now uses a 24 m XZ grid
+> (`MASS_CELL`, incremental `massGridInsert` on `massAdd`). SAT stays exact;
+> only candidate gathering is culled.
+
 **Emitter ring recomputation** (`js/track/geom.js`) — `addCyl` calls `lo(a0)` /
 `lo(a1)` three times each per segment where two suffice; same in `addCone` and
 `addFrustum`. The `addBox` half of this finding measured 1–4 %, so expect less.
 Keep the angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π, so
 wrapping changes the last segment's coordinates.
+
+> **SUPERSEDED 2026-08-18.** `addCyl` / `addCone` / `addFrustum` cache ring
+> ends once per segment. Angle stays `(i+1)/seg*6.2832`.
 
 **Typed accumulators for the props buffers** (`js/track/tracks.js`) — `pos`,
 `nrm`, `col`, `mat`, `idx` are plain arrays grown by `push`, ~27 M push
@@ -848,6 +864,11 @@ arguments on vegas. Reported at 15–31 %. Three hard edges if attempted: a
 variadic `push()` shim measured SLOWER than native (the win needs fixed arity);
 `idx` must be `Uint32Array`; and `TrackModels.validateGeometry` gates on
 `Array.isArray(geo.pos)`, so the props mesh ships EMPTY if that is missed.
+
+> **NOT TAKEN 2026-08-18.** The three hard edges still hold. Emitters
+> (`emit`, `addBox`) use `.push()`; a variadic shim is slower than native;
+> changing `validateGeometry` without a lockstep hash re-check on vegas/monza
+> can ship an empty props mesh. Leave the plain arrays.
 
 **Non-passive capture-phase `wheel` listener on `window`**
 (`js/game/menunav.js`) — flagged by the audit as "the single highest-leverage
@@ -875,6 +896,13 @@ treatment. Left alone.
 `begin()`, `drawSky()` and the composite. The file already has the pattern to
 fix it (`_frameToken`). Honest arithmetic: ~0.05 ms on a 16.7 ms budget, so
 hygiene rather than a win.
+
+> **TAKEN 2026-08-18 (GLX).** `uf1` / `_litUf` / `_skyUf` / `_compUf` skip
+> equal tuner-knob re-uploads. `envFaceBegin()` + the main `begin()` share
+> the same LIGHTING TUNER scalars in one game frame; WebGL uniforms persist
+> on the program. View / eye / env / lights / time / grainTime still upload
+> every call. WGX writes a whole UBO per `begin()` — no per-field skip.
+> Do not invent a millisecond claim from this.
 
 ### Added 2026-08-14, second round
 
@@ -938,6 +966,9 @@ unprovable part — the wrap expression can differ from the raw delta by ~1 ulp.
 **This is NOT the "merge the two loops" idea §3 already declined**; it is the
 missing guard on each, independently, and it is ~10x the size that entry
 estimated.
+
+> **SUPERSEDED 2026-08-18.** Both scans now pre-reject before wrap (windows
+> 34.1 m and 6.5 m), same form as `pairContact`. Do not re-implement.
 
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is

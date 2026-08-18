@@ -36,6 +36,34 @@ test("late sky is the only world draw order", () => {
   assert.match(game, /drawWorldMeshes\(frame, night, wet, _floodEmit, false\)/);
   assert.match(game, /gfx\.drawSky\(frameSky\)/);
   assert.match(game, /if \(frame\.lights && !_studioRig\) gfx\.drawGlow\(frame\.lights, LT\.glareStr\)/);
+  // Env-probe face uses the same opaque → sky order as the main camera.
+  assert.match(game, /frameSky\.invViewProj = _envInv;[\s\S]{0,280}?drawWorldMeshes\(frame, night, wet, _floodEmit, false\);[\s\S]{0,80}?gfx\.drawSky\(frameSky\);[\s\S]{0,40}?gfx\.envFaceEnd/);
+});
+
+test("GLX skips equal tuner-uniform re-uploads", () => {
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /const _litUf = Object\.create\(null\), _skyUf = Object\.create\(null\)/);
+  assert.match(glx, /function uf1\(loc, cache, key, v\)/);
+  assert.match(glx, /uf1\(litU\.uBounceK/);
+  assert.match(glx, /uf1\(skyU\.uSkyGrad/);
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /const _compUf = Object\.create\(null\)/);
+  assert.match(post, /uf1\(compU\.uContrast/);
+  // Per-frame values still upload unconditionally.
+  assert.match(post, /gl\.uniform1f\(compU\.uGrainTime/);
+});
+
+test("already-landed leftovers stay in the product path", () => {
+  const game = read("js/game.js");
+  assert.match(game, /Cheap reject before wrap — same pattern as pairContact/);
+  assert.match(game, /Cheap reject before wrap — pairContact form/);
+  const tracks = read("js/track/tracks.js");
+  assert.match(tracks, /const MASS_CELL = 24/);
+  assert.match(tracks, /massGridInsert/);
+  const geom = read("js/track/geom.js");
+  assert.match(geom, /lo\(a0\)\/lo\(a1\) once each/);
+  assert.match(geom, /\(i \+ 1\) \/ seg \* 6\.2832/);
+  assert.doesNotMatch(geom, /\(i \+ 1\) % seg/);
 });
 
 test("env-probe radial cull is 300 m without a toggle", () => {
