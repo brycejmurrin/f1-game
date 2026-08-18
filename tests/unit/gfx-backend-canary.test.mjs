@@ -572,8 +572,8 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  assert.match(src.slice(drawSky, drawSky + 1100), /softwareGL && sky\.fallbackNode/,
-    "software GL must arm the zenith-only fallback, not the full SKY_FS node");
+  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\) && sky\.fallbackNode/,
+    "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
@@ -612,6 +612,8 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "backend must expose capturePixels for gfx-probe frame.png");
   assert.match(src, /readRenderTargetPixelsAsync/,
     "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  assert.match(src, /function drawInstanced[\s\S]{0,400}if \(softGpu\) return/,
+    "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
   assert.match(src, /renderer\.setRenderTarget\(softOutRT\)/,
     "bind softOutRT immediately after init so shadow prime / env-dummy restore it, not null");
   const envEnd = src.indexOf("envFaceEnd(face)");

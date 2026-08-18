@@ -1097,10 +1097,13 @@ slot 5; `DrawIndexed` with count>1 failed validation — `createInstancedBatch`
 now always allocates `instanceColor` to the instance cap. TLX now
 soft-presents like WGX on software adapters (`#game` stays 2D; three
 renders into `softOutRT`; `readRenderTargetPixelsAsync` → `putImageData`;
-never `setRenderTarget(null)` / `getCurrentTexture()`). Probe with
-`--backend three --tlx-webgpu --lavapipe` and wait on
-`GLX.awaitSoftPresent`. ForceGL (`--backend three`) remains the SwiftShader
-WebGL2 path.
+never `setRenderTarget(null)` / `getCurrentTexture()`). InstancedMesh
+draws are skipped on that path: Dawn binds a 16-vertex `color`/`trk`
+buffer as instance-rate and a 1-instance dummy at slot 5, which
+invalidates the whole encoder and leaves only the beige clear.
+`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`
+and does not race a second `capturePixels`. ForceGL (`--backend three`)
+remains the SwiftShader WebGL2 path.
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

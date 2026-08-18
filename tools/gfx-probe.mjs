@@ -271,6 +271,10 @@ async function runProbeAttempt(attemptNum) {
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
       log("canvas", "visible #game canvas.png saved");
 
+      // TLX's blit already used mapAsync on softOutRT. A second
+      // capturePixels races that readback and times out on Lavapipe
+      // (~90 s) without adding a better picture than #game.
+      if (!opts.tlxWebgpu) {
       let frameCap = null;
       try {
         frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
@@ -301,6 +305,7 @@ async function runProbeAttempt(attemptNum) {
         log("capture", `capturePixels ${frameCap.width}x${frameCap.height} meanLuma=${frameCap.meanLuma.toFixed(1)} maxLuma=${frameCap.maxLuma}`);
       } catch (e) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
+      }
       }
     } else {
       await retryStep("screenshot-canvas", () =>

@@ -894,6 +894,12 @@ const TLX = (function () {
       }
 
       function drawInstanced(batch, opts) {
+        // Software WebGPU: InstancedMesh + per-vertex color/trk makes Dawn
+        // bind a 16-vertex vec3 as instance-rate (slot 2, 192 B vs count*12)
+        // and a 1-instance dummy at slot 5. One failed draw invalidates the
+        // whole encoder — car/road/sky never land in softOutRT. Skip the
+        // instanced scenery on that path; real GPUs keep the batches.
+        if (softGpu) return;
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
@@ -916,6 +922,7 @@ const TLX = (function () {
       }
 
       function castShadowInstanced(batch) {
+        if (softGpu) return;
         if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch);
       }
 
@@ -1788,7 +1795,7 @@ const TLX = (function () {
           // against the HDR target so every pixel is horizon beige. Arm the
           // zenith-only fallback; real GPUs keep the procedural dome.
           // skyState().on stays true (M5) because a backgroundNode is set.
-          scene.backgroundNode = (softwareGL && sky.fallbackNode)
+          scene.backgroundNode = ((softwareGL || softGpu) && sky.fallbackNode)
             ? sky.fallbackNode : sky.node;
           // three lazily builds a NodeMaterial around backgroundNode. Pin it
           // so getForRenderCacheKey does not hash child-node ids (the same
