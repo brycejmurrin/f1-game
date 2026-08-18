@@ -1563,11 +1563,9 @@ const WGX = (function () {
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
       const dbC = db ? (db[0] | 0) : 0;
       const dbS = db ? (db[1] | 0) : 0;
-      // #region agent log
-      const depthAlways = !!(opts && opts._dbgDepthAlways);
-      // #endregion
+      // Bias offset +32 so road [-8,-16] stays unique (old +8 collided signs).
       const key = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (samples << 3)
-                | ((dbC + 32) << 8) | ((dbS + 32) << 16) | (depthAlways ? (1 << 24) : 0);
+                | ((dbC + 32) << 8) | ((dbS + 32) << 16);
       let p = _litPipelines.get(key);
       if (p) return p;
       const target = {
@@ -1581,11 +1579,9 @@ const WGX = (function () {
         alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
       };
       const depthStencil = {
-        format: DEPTH_FORMAT,
-        depthWriteEnabled: depthAlways ? false : !blend,
-        depthCompare: depthAlways ? "always" : "less-equal",
+        format: DEPTH_FORMAT, depthWriteEnabled: !blend, depthCompare: "less-equal",
       };
-      if (db && !depthAlways) {
+      if (db) {
         depthStencil.depthBias = dbC;
         depthStencil.depthBiasSlopeScale = dbS;
         depthStencil.depthBiasClamp = 0;

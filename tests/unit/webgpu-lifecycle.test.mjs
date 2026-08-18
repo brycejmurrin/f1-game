@@ -853,7 +853,9 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /_makeRoadLUT/);
   assert.match(WGX_SOURCE, /_roadLutBG/);
   assert.match(WGX_SOURCE, /out\[0\] = 12345/);
-  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 52/);
+  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 36/);
+  assert.match(WGX_SOURCE, /shaderLocation: 0/);
+  assert.doesNotMatch(WGX_SOURCE, /shaderLocation: 3, offset: 36/);
   assert.match(WGX_SOURCE, /_expandPull/);
   assert.match(WGX_SOURCE, /hasTrk/);
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
