@@ -5433,10 +5433,10 @@ const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05 };
 const _wmFloorD = { roughness: 0.98, specular: 0.05 };
 const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
 const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
-const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-6, -12] };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-6, -12] };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-6, -12] };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-6, -12] };
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at

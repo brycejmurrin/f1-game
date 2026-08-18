@@ -11,8 +11,26 @@ MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off; some FX/noise LOD details.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
-(`matTexLod`) are ported to match GLX `lit.js` (were the main “bare tarmac”
-deltas once matTex/markings already shipped).
+(`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`
+had been sampling `pos.xy / parentSize` (dest pixels over src dim) so every
+MAT/env mip was a zoomed top-left corner — tarmac read as a washed smear vs
+GLX `generateMipmap`. Blit UVs now use dest size; `matTexLod` uses a geometric
+mean so chase-grazing no longer jumps to mip 8. ASPHALT (MAT 16) is now
+sampled in `fs_main` with `textureSample` (implicit LOD + anisotropy, same
+as GLX `texture()`) before any non-uniform branch; other layers still use
+`textureSampleLevel`. Pack upload is `writeTexture` of raw RGBA8 bytes —
+`copyExternalImageToTexture` into `rgba8unorm` linearises the mean-128
+asphalt scan and breaks `albedo * tex * 2.0`. 2026-08-17 later: a 4th
+per-vertex attribute (and even `pos.w` of a packed float32x4) was delivered
+as 0 on the **road** VBO — cars were fine. Every road fragment read
+`matId=0` / `trk=0`, so asphalt never ran and `roadMarkings` gated off.
+`vertex_index` on that ribbon also stayed 0 (`drawIndexed` and large
+`draw`), so a per-vertex storage array always returned the grass skirt at
+slot 0. Interpolators after location 3 are dropped. WGX now uploads a
+world-XZ centerline LUT (`_makeRoadLUT`, magic 12345) on group 2;
+`trkFromWorld` rebuilds `(mat, s, x, hw)` from `wpos` so asphalt + paint
+do not depend on the broken attribute. Vertex colour stays the real
+albedo (packing into RGB greys the grass shoulders).
 See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
@@ -499,9 +517,10 @@ No API research left:
   blend already exists on glow.
 - **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
   into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
-- **`trk` / road markings** — extend `VERTEX_LAYOUT` with `@location(4) trk: vec3`.
-  Today's "always stride 40" comment has to give; meshes without `trk` keep
-  a zero-filled extra float[3] or a second pipeline.
+- **`trk` / road markings** — `rgba32float` texture `@group(2)` +
+  `textureLoad` at `vertex_index`. A 4th vertex attribute (and packed
+  `pos.w`) was dropped on the road VBO; vertex-stage storage failed
+  validation. The ribbon had been shading FLAT with paint gated off.
 - **Heat haze / car-paint SSR** — composite / SSR-consume ports from
   `js/render/shaders/post.js`.
 
