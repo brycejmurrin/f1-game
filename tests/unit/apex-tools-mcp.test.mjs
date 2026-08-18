@@ -63,6 +63,7 @@ test(".mcp.json registers apex-tools as the fourth stdio server", () => {
     "probe",
     "tinyfish",
   ]);
+  assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, catalog.stdio.args);
@@ -71,14 +72,12 @@ test(".mcp.json registers apex-tools as the fourth stdio server", () => {
   assert.deepEqual(catalog.http.args, ["serve-http"]);
 });
 
-test(".cursor/mcp.json is the Cursor CLI/IDE catalog and locksteps apex-tools", () => {
+test(".cursor/mcp.json locksteps the root catalog (Cloud/Claude load .mcp.json)", () => {
   const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
   const rootCfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cursorCfg.mcpServers).sort(), Object.keys(rootCfg.mcpServers).sort());
-  const apex = cursorCfg.mcpServers["apex-tools"];
-  assert.equal(apex.type, "stdio");
-  assert.equal(apex.command, rootCfg.mcpServers["apex-tools"].command);
-  assert.deepEqual(apex.args, rootCfg.mcpServers["apex-tools"].args);
+  assert.deepEqual(cursorCfg.mcpServers["apex-tools"], rootCfg.mcpServers["apex-tools"]);
+  assert.equal(rootCfg.mcpServers["apex-tools"].type, "stdio");
 });
 
 test("help lists serve / list-tools / call / status", () => {
