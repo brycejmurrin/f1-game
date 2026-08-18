@@ -254,8 +254,8 @@ function applyThreePath(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
     if (btn) btn.textContent = "THREE PATH: " + threePathLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
-    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in unit harness */ }
+    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
     return true;
   }
   return false;
@@ -293,8 +293,8 @@ function applyShotMode(next, opts) {
   if (readBackend() === "webgpu" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
     if (btn) btn.textContent = "SCREENSHOTS: " + shotModeLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
-    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in unit harness */ }
+    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
     return true;
   }
   return false;
@@ -411,15 +411,15 @@ function initPresentControls() {
   paintPresent();
   try { window.addEventListener("apex-gfx-live", paintPresent); } catch (_) { /* no window */ }
   pathBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     applyThreePath(cycleOf(THREE_PATHS, readThreePath()));
   };
   shotBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     applyShotMode(cycleOf(SHOT_MODES, readShotMode()));
   };
   saveBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     saveScreenshot();
   };
 }
