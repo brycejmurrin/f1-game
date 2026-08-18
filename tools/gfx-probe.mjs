@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
 //
-// WGX on software adapters: primary gate is visible #game after
+// Software adapters (WGX + TLX WebGPU): primary gate is visible #game after
 // GLX.awaitSoftPresent() (soft-present 2D blit). capturePixels readback →
 // frame.png is optional and runs AFTER the visible check. Playwright uses
 // tools/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
@@ -194,6 +194,7 @@ async function runProbeAttempt(attemptNum) {
       } else {
         localStorage.setItem("apex26.gfxBackend", "three");
         localStorage.setItem("apex26.tlxForceGL", wantTlxGpu ? "0" : "1");
+        if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", "1");
       }
     }, [opts.backend, opts.lite, opts.tlxWebgpu]);
 
@@ -246,12 +247,13 @@ async function runProbeAttempt(attemptNum) {
     const canvasPath = join(opts.outDir, "canvas.png");
     const pagePath = join(opts.outDir, "page-hud.png");
 
-    if (opts.backend === "webgpu") {
+    if (opts.backend === "webgpu" || opts.tlxWebgpu) {
       // Visible #game is the 2D soft-present blit — check it BEFORE capturePixels
       // (concurrent mapAsync readbacks on SwiftShader can poison the device).
+      // TLX WebGPU uses the same WGX-style blit (softOutRT → putImageData).
       await retryStep("soft-present", () => page.evaluate(async () => {
         if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) {
-          throw new Error("no GLX.awaitSoftPresent on WGX");
+          throw new Error("no GLX.awaitSoftPresent on software-WebGPU backend");
         }
         await GLX.awaitSoftPresent(60000);
         const g = document.getElementById("game");
@@ -301,30 +303,6 @@ async function runProbeAttempt(attemptNum) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
       }
     } else {
-      // TLX WebGPU on software adapters: the native swapchain does not
-      // composite (same Dawn limit as WGX). three has no soft-present blit,
-      // so #game stays black even when the device is live — do NOT treat
-      // that as a probe failure. Visible TLX pixels are the ForceGL path.
-      // WGX uses awaitSoftPresent (branch above). Log luma for the record.
-      if (opts.tlxWebgpu) {
-        const luma = await page.evaluate(() => {
-          const g = document.getElementById("game");
-          if (!g) return { maxLuma: -1 };
-          const tmp = document.createElement("canvas");
-          tmp.width = Math.min(64, g.width || 64);
-          tmp.height = Math.min(64, g.height || 64);
-          const ctx = tmp.getContext("2d");
-          ctx.drawImage(g, 0, 0, tmp.width, tmp.height);
-          const id = ctx.getImageData(0, 0, tmp.width, tmp.height);
-          let max = 0;
-          for (let i = 0; i < id.data.length; i += 4) {
-            const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
-            if (l > max) max = l;
-          }
-          return { maxLuma: max, w: g.width, h: g.height };
-        });
-        log("tlx-webgpu-pixels", "swapchain luma (software adapters stay 0 — no TLX soft-present)", luma);
-      }
       await retryStep("screenshot-canvas", () =>
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
     }

@@ -1093,12 +1093,14 @@ probe three's own WebGPU backend in-container: `--backend three --tlx-webgpu
 --lavapipe` (Dawn via the Mesa ICD; still not a real-GPU pixel oracle).
 Lavapipe **does** boot three's WebGPU path (SwiftShader Dawn still dies on
 `mappedAtCreation`). A missing `instanceColor` left a 12-byte dummy at
-slot 5; `DrawIndexed` with count>1 failed validation and `#game` stayed
-black — `createInstancedBatch` now always allocates `instanceColor` to
-the instance cap. Visible `#game` still stays black: three has no
-WGX-style soft-present blit, and software Dawn never composites the
-native swapchain. Use ForceGL for visible TLX pixels; use
-`--tlx-webgpu --lavapipe` for lifecycle / validation only.
+slot 5; `DrawIndexed` with count>1 failed validation — `createInstancedBatch`
+now always allocates `instanceColor` to the instance cap. TLX now
+soft-presents like WGX on software adapters (`#game` stays 2D; three
+renders into `softOutRT`; `readRenderTargetPixelsAsync` → `putImageData`;
+never `setRenderTarget(null)` / `getCurrentTexture()`). Probe with
+`--backend three --tlx-webgpu --lavapipe` and wait on
+`GLX.awaitSoftPresent`. ForceGL (`--backend three`) remains the SwiftShader
+WebGL2 path.
 Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

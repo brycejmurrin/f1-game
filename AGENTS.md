@@ -113,7 +113,8 @@ a non-blank visible blit.
 | **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
 | **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
 | **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL`); three's WebGPU dies on SwiftShader `mappedAtCreation` |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | Force WebGL2 (`tlxForceGL`) |
+| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit on `#game` (Lavapipe). SwiftShader Dawn still dies on three `mappedAtCreation` |
 
 Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
 §Measured. Env packages + install: §Cursor Cloud below.

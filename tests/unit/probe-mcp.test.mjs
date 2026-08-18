@@ -237,6 +237,10 @@ test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe
   assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
   assert.match(src, /WEBGPU_LAVAPE_CHROMIUM_ARGS/);
   assert.match(src, /WEBGPU_LAVAPE_ENV/);
+  assert.match(src, /opts\.backend === "webgpu" \|\| opts\.tlxWebgpu/,
+    "--tlx-webgpu must wait on GLX.awaitSoftPresent like the WGX path");
+  assert.doesNotMatch(src, /no TLX soft-present/,
+    "do not excuse a black TLX WebGPU #game — soft-present is the gate");
 });
 
 test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {

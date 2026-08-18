@@ -198,6 +198,54 @@ const TLX = (function () {
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
       const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
 
+      // ── SOFTWARE WEBGPU SOFT-PRESENT (WGX _softGpu 1:1) ───────────────────
+      // Dawn on SwiftShader/Lavapipe EXECUTES shader work but the native
+      // swapchain never composites — #game stays black, and the first
+      // getCurrentTexture() call breaks mapAsync device-wide. WGX renders
+      // into a COPY_SRC texture and putImageData-blits onto a 2D #game.
+      // three's WebGPURenderer claims its canvas as webgpu, so we split:
+      // #game stays 2D (this page canvas), three renders on a hidden
+      // canvas, present() never setRenderTarget(null), FXAA lands in
+      // softOutRT, readRenderTargetPixelsAsync → putImageData.
+      const _pageCanvas = canvas;
+      let displayCtx = null;
+      let softGpu = false;
+      let softOutRT = null;
+      if (!forceWebGL && typeof navigator !== "undefined" && navigator.gpu) {
+        try {
+          const ad = await navigator.gpu.requestAdapter();
+          const info = (ad && ad.info) || null;
+          const blob = [info && info.device, info && info.vendor,
+            info && info.architecture, info && info.description]
+            .filter(Boolean).join(" ").toLowerCase();
+          const infoEmpty = !info || !(info.device || info.vendor || info.architecture);
+          softGpu = !!(ad && (ad.isFallbackAdapter || infoEmpty
+            || /HeadlessChrome/i.test(ua)
+            || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(blob)));
+        } catch (_) { softGpu = false; }
+        try {
+          if (!softGpu && sessionStorage.getItem("apex26.wgxCapture") === "1") softGpu = true;
+          if (!softGpu && localStorage.getItem("apex26.tlxSoftPresent") === "1") softGpu = true;
+        } catch (_) { /* harness */ }
+      }
+      if (softGpu && typeof document !== "undefined") {
+        const gpuCanvas = document.createElement("canvas");
+        gpuCanvas.setAttribute("aria-hidden", "true");
+        if (gpuCanvas.style) {
+          gpuCanvas.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none";
+        }
+        try { if (document.body) document.body.appendChild(gpuCanvas); } catch (_) { /* harness */ }
+        try {
+          displayCtx = _pageCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+        } catch (_) { displayCtx = null; }
+        if (displayCtx) {
+          canvas = gpuCanvas;
+          try { Log.info("gfx", "[TLX] software WebGPU — soft-present 2D blit on #game"); } catch (_) {}
+        } else {
+          softGpu = false;
+        }
+      }
+
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
       // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
@@ -261,6 +309,21 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      // Allocate the offscreen LDR dest BEFORE shadow prime / env-dummy
+      // clears. Those factories restore getRenderTarget() — if that is
+      // null, three's WebGPU backend calls getCurrentTexture() and
+      // mapAsync dies for the rest of the device (WGX measured this).
+      if (softGpu) {
+        try {
+          softOutRT = new THREE.RenderTarget(1, 1, {
+            type: THREE.UnsignedByteType, depthBuffer: false, format: THREE.RGBAFormat,
+          });
+          softOutRT.texture.generateMipmaps = false;
+          softOutRT.texture.colorSpace = THREE.NoColorSpace;
+          softOutRT.texture.name = "TLXSoftPresent";
+          renderer.setRenderTarget(softOutRT);
+        } catch (_) { softOutRT = null; }
+      }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -451,7 +514,11 @@ const TLX = (function () {
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
-          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile, softwareGL });
+          // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
+          // and returns false once the hidden canvas is a WebGPU context).
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, {
+            renderer, mobileTier, isMobile, softwareGL: softwareGL || softGpu,
+          });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
@@ -472,7 +539,8 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode });
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
+              softDest: function () { return softOutRT; } });
           if (post && !post.enabled()) post = null;
           // Phone + no renderable float target: ACES/FXAA on 8-bit is the
           // pale-ground look. Direct-to-canvas (M7) is the working picture.
@@ -1143,8 +1211,8 @@ const TLX = (function () {
       if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("resize", markCssDirty);
         window.addEventListener("orientationchange", markCssDirty);
-        if (typeof ResizeObserver === "function" && canvas) {
-          try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+        if (typeof ResizeObserver === "function" && _pageCanvas) {
+          try { new ResizeObserver(markCssDirty).observe(_pageCanvas); } catch (_) {}
         }
       }
       function resize() {
@@ -1153,9 +1221,10 @@ const TLX = (function () {
         // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
+        // Soft-present: the hidden GPU canvas is 1×1 CSS — layout is #game.
         if (cssDirty || cssW <= 0 || cssH <= 0) {
-          cssW = canvas.clientWidth;
-          cssH = canvas.clientHeight;
+          cssW = _pageCanvas.clientWidth;
+          cssH = _pageCanvas.clientHeight;
           cssDirty = false;
         }
         const cw = cssW || 1;
@@ -1166,10 +1235,100 @@ const TLX = (function () {
         if (w !== W || h !== H) {
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
+          if (softOutRT) {
+            try { softOutRT.setSize(w, h); } catch (_) { /* device dying */ }
+            try { _pageCanvas.width = w; _pageCanvas.height = h; } catch (_) { /* harness */ }
+          }
           // M8: the post targets track the scaled backing size (PerfGov
           // renderScale changes land here through setRenderScale -> resize).
           if (post) post.resize(w, h);
         }
+      }
+
+      // Soft-present blit — WGX _softDisplayFinish, via three's
+      // readRenderTargetPixelsAsync (copyTextureToBuffer + mapAsync). The
+      // returned buffer keeps Dawn's 256-byte row padding.
+      let _softImg = null, _softBlitGen = 0, _softBlitBusy = false, _softBlitPend = false;
+      const _softWaiters = [];
+      function _softNotify() {
+        _softBlitGen++;
+        const ws = _softWaiters.splice(0);
+        for (let i = 0; i < ws.length; i++) {
+          try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+        }
+      }
+      function _packSoftRows(buf, w, h) {
+        const src = buf && buf.buffer
+          ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+          : null;
+        if (!src) return null;
+        const bpp = 4;
+        const bpr = Math.max(w * bpp, ((w * bpp + 255) & ~255));
+        if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+          _softImg = displayCtx.createImageData(w, h);
+        }
+        const dst = _softImg.data;
+        let maxPx = 0;
+        const tight = src.length >= h * w * bpp && src.length < h * bpr;
+        const rowBytes = tight ? w * bpp : bpr;
+        for (let y = 0; y < h; y++) {
+          const s = y * rowBytes, d = y * w * bpp;
+          for (let x = 0; x < w; x++) {
+            const si = s + x * bpp, di = d + x * bpp;
+            const r = src[si], g = src[si + 1], b = src[si + 2];
+            dst[di] = r; dst[di + 1] = g; dst[di + 2] = b; dst[di + 3] = 255;
+            const l = r + g + b;
+            if (l > maxPx) maxPx = l;
+          }
+        }
+        return maxPx;
+      }
+      function queueSoftBlit() {
+        if (!softGpu || !displayCtx || !softOutRT || !renderer.readRenderTargetPixelsAsync) return;
+        if (_softBlitBusy) { _softBlitPend = true; return; }
+        _softBlitBusy = true;
+        const w = W, h = H, dest = softOutRT;
+        renderer.readRenderTargetPixelsAsync(dest, 0, 0, w, h).then(function (buf) {
+          try {
+            const maxPx = _packSoftRows(buf, w, h);
+            if (maxPx >= 8) {
+              displayCtx.putImageData(_softImg, 0, 0);
+              _softNotify();
+            }
+          } catch (_) { /* blit failed */ }
+          _softBlitBusy = false;
+          if (_softBlitPend) { _softBlitPend = false; queueSoftBlit(); }
+        }).catch(function (e) {
+          _softBlitBusy = false;
+          try { Log.warn("gfx", "TLX soft-present blit failed —", e); } catch (_) {}
+        });
+      }
+      function awaitSoftPresent(timeoutMs) {
+        if (!softGpu || !displayCtx) return Promise.resolve(_softBlitGen);
+        if (_softBlitGen > 0) return Promise.resolve(_softBlitGen);
+        const start = _softBlitGen;
+        const ms = timeoutMs != null ? timeoutMs : 15000;
+        return new Promise(function (resolve, reject) {
+          const timer = setTimeout(function () {
+            reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+          }, ms);
+          _softWaiters.push(function (gen) {
+            if (gen > start) {
+              try { clearTimeout(timer); } catch (_) { /* harness */ }
+              resolve(gen);
+            }
+          });
+        });
+      }
+      function capturePixels() {
+        if (!softGpu || !softOutRT || !renderer.readRenderTargetPixelsAsync) {
+          return Promise.reject(new Error("TLX capturePixels needs software-WebGPU soft-present"));
+        }
+        const w = W, h = H;
+        return renderer.readRenderTargetPixelsAsync(softOutRT, 0, 0, w, h).then(function (buf) {
+          _packSoftRows(buf, w, h);
+          return { data: _softImg ? _softImg.data : null, width: w, height: h };
+        });
       }
 
       const noopMesh = () => ({ __tlx: true, count: 0 });
@@ -1203,6 +1362,8 @@ const TLX = (function () {
         // SwiftShader. Never fabricates: gpuMs mirrors three's own resolved
         // renderer.info.render.timestamp (already in ms), populated async in
         // present() only while the timer is on.
+        awaitSoftPresent,
+        capturePixels,
         gpuTimer(on) {
           const sup = _gpuSupported();
           if (on !== undefined) {
@@ -1426,13 +1587,13 @@ const TLX = (function () {
           // each waitForFunction poll sat behind a SwiftShader frame).
           // Clear the face and count it; the main present still paints the
           // canvas. Real GPUs keep the full world capture.
-          if (softwareGL) {
+          if (softwareGL || softGpu) {
             try {
               renderer.setRenderTarget(envRT, face & 7);
               renderer.setClearColor(0x000000, 1);
               renderer.clear();
             } catch (_) { /* a probe face must never strand the frame */ }
-            renderer.setRenderTarget(null);
+            renderer.setRenderTarget(softOutRT || null);
             drawList.length = 0;
             _dMatUsed = 0;
             poolUsed = 0;
@@ -1477,7 +1638,7 @@ const TLX = (function () {
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
           if (softwareGL) scene.backgroundNode = prevSky;
-          renderer.setRenderTarget(null);
+          renderer.setRenderTarget(softOutRT || null);
           if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws
           _dMatUsed = 0;
@@ -1801,7 +1962,9 @@ const TLX = (function () {
           };
           const paintCanvas = () => {
             pinSkyMaterial();
-            renderer.setRenderTarget(null);
+            // Software WebGPU: never the swapchain (getCurrentTexture
+            // breaks mapAsync device-wide — WGX measured this).
+            renderer.setRenderTarget(softOutRT || null);
             renderer.render(scene, camera);
           };
           const dropTo = (mode, mat) => {
@@ -1850,6 +2013,7 @@ const TLX = (function () {
             try { paintCanvas(); painted = true; }
             catch (e) { persistFail(e); refuseTab(); }
           }
+          if (painted && softGpu) queueSoftBlit();
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // M7 staged release, final stage: the render above created the GPU
           // buffers for any first-drawn chunked mesh — drop its shared vertex
@@ -1945,7 +2109,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL, softGpu,
             };
           },
           materialCacheSize() { return matCache.size; },

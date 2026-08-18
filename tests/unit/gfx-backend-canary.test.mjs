@@ -588,6 +588,44 @@ test("TLX pins the sky material before the HDR scene render, not only the canvas
     "HDR target render must pin the TSL sky or a missed compile leaves the Color clear");
 });
 
+test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () => {
+  // Dawn on SwiftShader/Lavapipe executes shaders but the native swapchain
+  // never composites, and the first getCurrentTexture() breaks mapAsync
+  // device-wide. TLX must sniff the adapter (info fields are not JSON-
+  // enumerable), keep #game as 2D, render into softOutRT, and blit.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
+    "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
+  assert.match(src, /info\.vendor/,
+    "adapter.info fields are not enumerable — read vendor/device/architecture directly");
+  assert.match(src, /swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/,
+    "sniff regex must match WGX's software-adapter list");
+  assert.match(src, /apex26\.wgxCapture/,
+    "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)");
+  assert.match(src, /_pageCanvas\.getContext\("2d"/,
+    "#game stays 2D; three renders on a hidden canvas");
+  assert.match(src, /softDest:\s*function\s*\(\)\s*\{\s*return softOutRT/,
+    "post chain must receive softDest so FXAA never targets the swapchain");
+  assert.match(src, /awaitSoftPresent/,
+    "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
+  assert.match(src, /capturePixels/,
+    "backend must expose capturePixels for gfx-probe frame.png");
+  assert.match(src, /readRenderTargetPixelsAsync/,
+    "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  assert.match(src, /renderer\.setRenderTarget\(softOutRT\)/,
+    "bind softOutRT immediately after init so shadow prime / env-dummy restore it, not null");
+  const envEnd = src.indexOf("envFaceEnd(face)");
+  assert.notEqual(envEnd, -1, "envFaceEnd moved");
+  const envBody = src.slice(envEnd, envEnd + 2800);
+  assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
+    "envFaceEnd must not restore the swapchain on the software-WebGPU path");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(post, /ctx\.softDest/,
+    "tlx-post must honour ctx.softDest for the FXAA / viz dest");
+  assert.match(post, /if\s*\(\s*!dest\s*\)/,
+    "finally must skip setRenderTarget(null) when a soft dest is bound");
+});
+
 test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
   // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
   // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
