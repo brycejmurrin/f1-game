@@ -826,20 +826,6 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    active panel. High UI sizes must not spend more than one primary control
    row on that navigation (redesign contract). */
 #pmsettings-inner { --fit-at: 300px; }
-.sheet-head canvas[data-sheet-track] {
-  flex: 0 0 auto;
-  width: min(42%, 10rem);
-  height: auto;
-  max-height: 4.8rem;
-  object-fit: contain;
-  border-radius: var(--r-sm);
-  background: rgba(0, 0, 0, 0.28);
-  pointer-events: none;
-}
-.sheet[data-density="compact"] .sheet-head canvas[data-sheet-track] {
-  width: min(30%, 6.5rem);
-  max-height: 3.2rem;
-}
 @media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;

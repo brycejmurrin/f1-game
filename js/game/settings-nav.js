@@ -1,7 +1,6 @@
 /* SettingsNav — category tabs for the pause/title Settings sheet.
-   The module owns tab/panel state, keyboard behavior, and the live circuit
-   outline in the sheet head (no extra shell node — the canvas is created
-   here). game.js still owns availability and all individual controls. */
+   The module owns only tab/panel state and keyboard behavior; game.js still
+   owns availability and all individual controls. */
 const SettingsNav = (function () {
   "use strict";
   const IDS = ["controls", "display", "more"];
@@ -37,20 +36,6 @@ const SettingsNav = (function () {
       const body = document.getElementById("pm-category-tabs").parentElement;
       if (body) body.scrollTop = 0;
       if (window.ScrollFade) ScrollFade.refresh();
-      paintPreview();
-    }
-
-    function paintPreview() {
-      const head = document.querySelector("#pmsettings-inner > .sheet-head");
-      if (!head || typeof TrackMaps === "undefined" || typeof Tracks === "undefined") return;
-      let idx = store.get("track", 0);
-      const id = store.get("trackId", null);
-      if (id) {
-        const found = Tracks.LIST.findIndex((t) => t.id === id);
-        if (found >= 0) idx = found;
-      }
-      if (!(idx >= 0 && idx < Tracks.LIST.length)) idx = 0;
-      TrackMaps.paintHead(head, Tracks.LIST[idx]);
     }
 
     IDS.forEach((id, index) => {
