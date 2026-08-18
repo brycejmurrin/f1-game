@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1367">
+<meta name="apex-build" content="1368">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -20,8 +20,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=561c2b49ddba" as="style">
-<link rel="preload" href="css/components.css?v=6d48f213dfbc" as="style">
+<link rel="preload" href="css/tokens.css?v=d65299656c01" as="style">
+<link rel="preload" href="css/components.css?v=5455917d4a75" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -39,15 +39,15 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=561c2b49ddba">
-<link rel="stylesheet" href="css/components.css?v=6d48f213dfbc">
+<link rel="stylesheet" href="css/tokens.css?v=d65299656c01">
+<link rel="stylesheet" href="css/components.css?v=5455917d4a75">
 <link rel="stylesheet" href="css/tuner.css?v=c2105f72f07a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=fa8c0129335b">
 <link rel="stylesheet" href="css/carsetup.css?v=3805ca35dc15" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ed56d72144a6" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=46538fb8e309" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=852572fe00b6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
-<link rel="stylesheet" href="css/track-detail.css?v=24a876db901a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=b697169cdb3d" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=20193ca1d064" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=8db2d90ea4d4" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -353,9 +353,9 @@
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
       <div id="pm-category-tabs" role="tablist" aria-label="Settings categories">
-        <button id="pm-tab-controls" class="active" type="button" role="tab"
+        <button id="pm-tab-controls" class="active" type="button" role="tab" aria-label="Controls"
           aria-selected="true" aria-controls="pm-panel-controls" tabindex="0">CONTROLS</button>
-        <button id="pm-tab-display" type="button" role="tab"
+        <button id="pm-tab-display" type="button" role="tab" aria-label="Display"
           aria-selected="false" aria-controls="pm-panel-display" tabindex="-1">DISPLAY</button>
         <button id="pm-tab-performance" type="button" role="tab" aria-label="Performance"
           aria-selected="false" aria-controls="pm-panel-performance" tabindex="-1">PERF</button>
@@ -1729,9 +1729,9 @@
 <script crossorigin="anonymous" src="js/game/input.js?v=bf94c2b9ac87"></script>
 <script crossorigin="anonymous" src="js/game/audio.js?v=62b34f37828e"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
-<script crossorigin="anonymous" src="js/game/spotify.js?v=6cec36ae052c"></script>
+<script crossorigin="anonymous" src="js/game/spotify.js?v=ca27755313c8"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=c3f9234e7375"></script>
-<script crossorigin="anonymous" src="js/data/api.js?v=5163fde4e6c3"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=0ae8ad9a200d"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=b07960e0ac73"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=97093360fa39"></script>
 <script crossorigin="anonymous" src="js/data/schedule.js?v=755234e3b02f"></script>
@@ -1753,7 +1753,7 @@
 <script crossorigin="anonymous" src="js/game/particles.js?v=90aaaca0f4d8"></script>
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=cce133b55ea5"></script>
 <script crossorigin="anonymous" src="js/game/store.js?v=0f55b200ad29"></script>
-<script crossorigin="anonymous" src="js/game/career.js?v=d96fef241449"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=ce2d77c828a6"></script>
 <script crossorigin="anonymous" src="js/game/season-cal.js?v=86edb3762e23"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=b5d98ad9f09f"></script>
@@ -1762,7 +1762,7 @@
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=2d288d0b996f"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=687721ac4f80"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=6fce52ff05fa"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=aee58f08138d"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
@@ -1803,5 +1803,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=97852ab04e82"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=ad860eea86bc"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=db35d92a7c80"></script>
-<script crossorigin="anonymous" src="js/game.js?v=9a734e8c6761"></script>
+<script crossorigin="anonymous" src="js/game.js?v=ca5f2c43bbca"></script>
 </body></html>

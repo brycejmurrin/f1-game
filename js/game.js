@@ -7215,11 +7215,10 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
-  requestAnimationFrame(tick);
-  try { tickBody(now); }
+  try { tickBody(now); requestAnimationFrame(tick); }
   catch (e) {
     // Report the REAL error once (cross-origin window.onerror shows only a bare
-    // "Script error."). rAF above already re-scheduled, so this won't spin-crash.
+    // "Script error."). A deterministic fault stops instead of repeating at 60 Hz.
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }
@@ -7416,12 +7415,12 @@ function applyScale(key, prop, inputId) {
   const input = $(inputId); if (input) input.value = String(pct);
   const out = $(inputId + "-v"); if (out) out.textContent = scaleLabel(pct);
 }
+let uiScalePreviewRaf = 0;
 function applyUiScale()  {
   applyScale("uiScale",  "--ui-scale",  "pm-uiscale");
-  // Picker/detail maps size from local CSS boxes inside zoomed sheets — refresh
-  // so a drag of UI SIZE never leaves a stale bitmap stretched into a new slot.
-  requestAnimationFrame(function () {
-    try { updateTrackPreview(); } catch (e) { /* menus not ready */ }
+  if (uiScalePreviewRaf) return; // coalesce slider input; hidden select refreshes on open
+  uiScalePreviewRaf = requestAnimationFrame(function () { uiScalePreviewRaf = 0;
+    try { if (els.select && !els.select.hidden) updateTrackPreview(); } catch (e) { /* menus not ready */ }
   });
 }
 function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }

@@ -187,6 +187,7 @@ function makeGpuHarness(opts = {}) {
       };
     },
   };
+  const windowListeners = new Map();
   const context = vm.createContext({
     console,
     Float32Array,
@@ -203,7 +204,12 @@ function makeGpuHarness(opts = {}) {
     // cannot hold the test runner open.
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
-    window: { devicePixelRatio: 1 },
+    window: {
+      devicePixelRatio: 1,
+      ...(opts.watchCss ? {
+        addEventListener(type, fn) { windowListeners.set(type, fn); },
+      } : {}),
+    },
     localStorage: stored ? {
       getItem: (k) => (stored.has(k) ? stored.get(k) : null),
       setItem: (k, v) => { stored.set(k, String(v)); },
@@ -285,10 +291,40 @@ function makeGpuHarness(opts = {}) {
     failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
+    fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
   };
 }
+
+test("WebGPU caches canvas layout reads until a resize invalidates them", async () => {
+  const h = makeGpuHarness({ watchCss: true });
+  let reads = 0;
+  Object.defineProperty(h.canvas, "clientWidth", {
+    configurable: true, get() { reads++; return 320; },
+  });
+  Object.defineProperty(h.canvas, "clientHeight", {
+    configurable: true, get() { reads++; return 180; },
+  });
+  const gfx = await h.create();
+  const afterCreate = reads;
+
+  gfx.resize();
+  gfx.resize();
+  assert.equal(reads, afterCreate, "unchanged frames must not force canvas layout reads");
+
+  h.fireWindow("resize");
+  gfx.resize();
+  assert.equal(reads, afterCreate + 2, "a real resize refreshes width and height once");
+});
+
+test("software-present pipelines match the rgba8 attachment format", () => {
+  assert.match(WGX_SOURCE, /const _presentFormat = _softGpu \? LDR_FORMAT : format/);
+  assert.match(WGX_SOURCE, /targets: \[\{ format: _presentFormat \}\]/,
+    "tonemap blit must target the actual currentView format");
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*_presentFormat/,
+    "FXAA must target the same soft-present attachment format");
+});
 
 test("post resize keeps old resources valid and cleans partial texture allocation", async () => {
   const h = makeGpuHarness();

@@ -79,6 +79,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
 
   const context = vm.createContext({
     URL,
+    AbortController,
     Request,
     Response,
     caches,
@@ -246,6 +247,28 @@ test("a never-settling optional fetch cannot block service-worker installation",
   await harness.lifecycleEvent("install").done();
   assert.equal(harness.skipped, 1);
   assert.equal(harness.stores.get("apex26-321").has(`${ORIGIN}/assets/icon.png`), false);
+});
+
+test("timed-out optional fetches are aborted before the pool advances", async () => {
+  const ordinary = installFetch();
+  let aborted = 0;
+  const harness = createHarness({
+    immediateTimeoutMs: 4000,
+    fetchImpl: (request, init = {}) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (!url.pathname.endsWith("/assets/icon.png")) return ordinary(request);
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          aborted++;
+          reject(new Error("aborted"));
+        }, { once: true });
+      });
+    },
+  });
+
+  await harness.lifecycleEvent("install").done();
+  assert.equal(aborted, 1);
+  assert.equal(harness.skipped, 1);
 });
 
 test("install icons have declared PNG dimensions and are seeded for offline use", async () => {

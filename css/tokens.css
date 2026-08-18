@@ -203,9 +203,11 @@
      smaller on purpose: that viewport is ~393px tall and four steps of 4px is a
      whole list row. Everything stays well clear of the WCAG 2.5.8 AA floor
      (24px), which is the number that is actually a requirement. */
-  --tap: 44px;      /* minimum interactive box */
-  --chip-h: 40px;   /* chips are secondary — one step below --tap */
-  --tap-sm: 30px;   /* paired micro-toggles only — never a lone control */
+  /* The second branch preserves WCAG's 24px PAINTED floor when UI SIZE zooms
+     the sheet below 100%. At 40%, for example, 60 local px paint as 24px. */
+  --tap: max(44px, calc(24px / var(--ui-scale)));      /* minimum interactive box */
+  --chip-h: max(40px, calc(24px / var(--ui-scale)));   /* chips are secondary */
+  --tap-sm: max(30px, calc(24px / var(--ui-scale)));   /* paired micro-toggles */
   /* THE WCAG FLOOR, AND THE ONE LENGTH HERE THAT DIVIDES BY THE SCALE.
      The note below is right that a size token must NOT pre-multiply — a zoomed
      subtree already scales what it inherits, and doing both double-counts. A
@@ -402,9 +404,9 @@
    is the test game.js applies via Input.touchControlsNeeded(), where it sets
    the `desktop` class on <body>. */
 body:not(.desktop) {
-  --tap: 52px;
-  --chip-h: 46px;
-  --tap-sm: 36px;
+  --tap: max(52px, calc(24px / var(--ui-scale)));
+  --chip-h: max(46px, calc(24px / var(--ui-scale)));
+  --tap-sm: max(36px, calc(24px / var(--ui-scale)));
   /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */
   --label: 14px;
 }
