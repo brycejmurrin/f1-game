@@ -2234,9 +2234,28 @@ const TLX = (function () {
               // canvas fallback left the HDR scene target on the Color
               // clear whenever the lazy compile missed (software GL).
               pinSkyMaterial();
-              renderer.setRenderTarget(post.sceneTarget());
-              renderer.render(scene, camera);
-              post.present(opts, _postF);
+              // Second HDR attachment carries the 0.35 car-paint tag.
+              // Armed only here: env faces and the canvas fallback are
+              // single-target (mrtNode + setMRT would emit 2 locations).
+              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
+              if (_hadMrt) {
+                renderer.setMRT(TSL.mrt({
+                  output: TSL.output,
+                  ssrTag: TSL.float(1),
+                }));
+              }
+              try {
+                renderer.setRenderTarget(post.sceneTarget());
+                renderer.render(scene, camera);
+                post.present(opts, _postF);
+              } finally {
+                if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+                if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+                if (_hadMrt) renderer.setMRT(_prevMrt || null);
+              }
               if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
             } else {
               paintCanvas();

@@ -56,7 +56,7 @@
   function lit(THREE, TSL, ctx) {
     const {
       Fn, If, Loop, Break, uniform, uniformArray, attribute, texture, cubeTexture,
-      float, int, vec2, vec3, vec4,
+      float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
@@ -84,7 +84,10 @@
       m.fog = false;
       m.vertexColors = false;
       m.premultipliedAlpha = false;
-      m.customProgramCacheKey = _pinKeys[key] || (_pinKeys[key] = () => key);
+      // Key must change when mrtNode is armed: HDR writes 2 attachments,
+      // env cube / canvas write 1. A pinned constant key would reuse the
+      // wrong program and fail WebGPU validation on the cube.
+      m.customProgramCacheKey = () => key + (m.mrtNode ? "-mrt" : "");
     }
 
     // ── M4: the tlx-shadow.js subsystem (null/absent -> no shadow code is
@@ -1449,9 +1452,9 @@
      * opaque path (required so SrcAlpha does not ghost the body) makes
      * isOpaque() FALSE, so whatever sits in output.a is coverage. Putting
      * the tag there painted the body at 35% over the road. opacityNode and
-     * output.a are both the real material alpha (tlxAlpha). Car SSR on this
-     * backend therefore sees scene alpha 1 (no tag) until a second target
-     * can carry the mask; road SSR is unchanged.
+     * output.a are both the real material alpha (tlxAlpha). The 0.35 tag
+     * rides a second HDR attachment (`ssrTag`) via mrtNode, armed only
+     * for the main scene pass — the env cube is a single-target RT.
      *
      * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
      * every variant must bind the SAME node-graph OBJECTS, not a fresh
@@ -1465,7 +1468,8 @@
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Two graphs total: chunked reads
      * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out}
+    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out, mrt}
+    const _mats = [];
     let _sharedPos = null;
     function sharedFragment(chunked) {
       const idx = chunked ? 1 : 0;
@@ -1491,9 +1495,15 @@
         // r185 NodeBuilder.isOpaque() is false for NoBlending, so output.a
         // is coverage: a 0.35 tag ghosts painted bodywork against the road
         // (GLX writes the tag with blending OFF and an opaque canvas).
+        const out = vec4(packed.rgb, matU.alpha);
         g = _sharedGraph[idx] = {
           rgb: packed.rgb, a: packed.a, opacity: matU.alpha,
-          out: vec4(packed.rgb, matU.alpha),
+          out,
+          // Named to match sceneRT.textures[1].name. Env / canvas RTs have
+          // no such texture, so MRTNode.setup skips this output.
+          mrt: (SSR_TAG && typeof mrt === "function")
+            ? mrt({ output: out, ssrTag: packed.a })
+            : null,
         };
       }
       return g;
@@ -1513,7 +1523,9 @@
       ud.tlxClearcoat = val(o.clearcoat, 0.0);
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
+      ud.tlxChunked   = !!o.chunked;
       const packed = sharedFragment(!!o.chunked);
+      _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
       // here is what made three.js cars invisible (see factory comment).
@@ -1620,6 +1632,17 @@
     // cube while rendering INTO the probe (feedback-loop guard) and back at the
     // live cube for the main pass. No-op when there's no cube node.
     function setEnvCube(tex) { if (envCubeNode && tex) envCubeNode.value = tex; }
+    // Arm the second HDR attachment (ssrTag) only for the main scene render.
+    // Env faces and the canvas fallback must keep mrtNode null — same
+    // material, one color target.
+    function setSsrMrt(on) {
+      if (!SSR_TAG) return;
+      for (let i = 0; i < _mats.length; i++) {
+        const m = _mats[i];
+        const g = sharedFragment(!!m.userData.tlxChunked);
+        m.mrtNode = on && g.mrt ? g.mrt : null;
+      }
+    }
 
     // Adopt a loaded asset pack (js/render/assets.js). The texture nodes were
     // bound to the placeholders at factory time, so — exactly like setEnvCube
@@ -1643,7 +1666,7 @@
     }
 
     return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube,
-             setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
+             setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });
