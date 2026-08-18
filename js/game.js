@@ -3015,7 +3015,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -5475,14 +5475,14 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
 // from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
 // per-variant reused objects mutated in place each call (never a stale key).
-const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05 };
-const _wmFloorD = { roughness: 0.98, specular: 0.05 };
-const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
-const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
@@ -7358,12 +7358,11 @@ function enableTilt() {
 }
 
 function firstGesture() {
-  GameAudio.init();
   GameAudio.setEnabled(soundOn);
   GameAudio.setMusicEnabled(musicEnabled);
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
-  if (soundOn) GameAudio.startMusic(-1);
+  if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {
@@ -7627,7 +7626,7 @@ els.selBack.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
 };
 els.selPreviewMap.onclick = openTrackDetail;
-$("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
+$("track-detail-close").onclick = closeTrackDetail;
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
@@ -7655,7 +7654,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -8158,7 +8157,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including menus.js, via G.openGarage.
 function openGarage(from) {
-  if (from === "menu") GameAudio.init();
+  if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   // Fresh camera every visit: a garage that reopened on the last angle someone

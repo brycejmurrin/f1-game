@@ -41,8 +41,9 @@
  * GLX's snap-cache cadence. The WebGL2 fallback backend keeps pcssEnabled
  * false (texelFetch on sampler2DShadow is invalid GLSL; the compare-off
  * route there needs a depth-in-color caster pass — see
- * docs/research/TLX-PCSS-RESEARCH.md), so tsl-lit keeps the fixed R = 3
- * radius on that path, which is also GLX's own no-blocker fallback look.
+ * docs/research/TLX-PCSS-RESEARCH.md). Desktop WebGL2 writes TSL.depth into
+ * an R16F color attachment and textureLoads that (texelFetch is legal on a
+ * color texture). Phones and software GL keep the fixed-R look.
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.shadowSys = (THREE, TSL, ctx) => ({ S, sunTex, … })
@@ -117,33 +118,45 @@
      * pipeline pays the same) + a compare-mode DepthTexture the lit pass
      * samples. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
      * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
-    function makeDepthTarget(size, name) {
+    function makeDepthTarget(size, name, hdrColor) {
       const depthTexture = new THREE.DepthTexture(size, size);
       depthTexture.name = name;
       depthTexture.compareFunction = THREE.LessEqualCompare;
       depthTexture.minFilter = THREE.LinearFilter;
       depthTexture.magFilter = THREE.LinearFilter;
       // wrap defaults to ClampToEdge — matches GLX
-      const rt = new THREE.RenderTarget(size, size, { depthTexture });
+      const opts = { depthTexture };
+      if (hdrColor) {
+        // Desktop WebGL2 PCSS: color holds window depth (TSL.depth) so the
+        // blocker pass can texelFetch a plain texture. R16F matches GLX.
+        opts.type = THREE.HalfFloatType;
+        opts.format = THREE.RedFormat;
+      }
+      const rt = new THREE.RenderTarget(size, size, opts);
       rt.texture.name = name + ".color";
       rt.texture.generateMipmaps = false;
       return rt;
     }
 
-    const sunRT = makeDepthTarget(SUN_SIZE, "TLXSunShadow");
+    const isWebGPU = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    // Phones stay on the fixed-R look (GLX mobile compromise). Software GL
+    // is fill-bound and never builds the blocker (tlxForceGL path).
+    const colorPcss = !isWebGPU && !isMobile && !softwareGL && !!TSL.depth;
+    const sunRT = makeDepthTarget(SUN_SIZE, "TLXSunShadow", colorPcss);
     const carRT = isMobile ? null : makeDepthTarget(CAR_SIZE, "TLXCarShadow");
     const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow");
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
 
-    // ── PCSS blocker map (header note): 512² R16F min-of-4 downsample of the
-    // sun depth, WebGPU only — textureLoad is the sampler-free depth read the
-    // WebGL backend cannot express. Guarded end to end: any construction
-    // failure leaves pcssEnabled false and the fixed-R look.
+    // ── PCSS blocker map (header note): 512² R16F min-of-4 downsample.
+    // WebGPU: textureLoad the compare-mode depth texture (no sampler).
+    // Desktop WebGL2: textureLoad the R16F color attachment the sun pass
+    // writes TSL.depth into. Guarded: any construction failure leaves the
+    // fixed-R look.
     const BLOCKER_SIZE = 512;
     let blockerRT = null, blockerQuad = null;
-    if (sunRT && renderer.backend && renderer.backend.isWebGPUBackend) {
+    if (sunRT && (isWebGPU || colorPcss)) {
       try {
         blockerRT = new THREE.RenderTarget(BLOCKER_SIZE, BLOCKER_SIZE, {
           format: THREE.RedFormat, type: THREE.HalfFloatType,
@@ -154,15 +167,19 @@
         const bmat = new THREE.MeshBasicNodeMaterial();
         bmat.fog = false;
         bmat.lights = false;
-        bmat.customProgramCacheKey = () => "tlx-blocker";
+        bmat.customProgramCacheKey = () => colorPcss ? "tlx-blocker-gl" : "tlx-blocker";
         // k source texels per dest texel; taps at the block centre ±1 source
         // texel — texel-exact GLX BLOCKER_FS (its vUV lands on the block
         // centre and uSrcTexel offsets one source texel with NEAREST).
         const k = SUN_SIZE / BLOCKER_SIZE;
         const lo = (k >> 1) - 1, hi = (k >> 1) + 1;
+        const srcTex = colorPcss ? sunRT.texture : sunRT.depthTexture;
         bmat.colorNode = TSL.Fn(() => {
           const ip = TSL.ivec2(TSL.screenCoordinate.xy).mul(TSL.int(k)).toVar();
-          const tap = (x, y) => TSL.textureLoad(sunRT.depthTexture, ip.add(TSL.ivec2(x, y)), TSL.int(0));
+          const tap = (x, y) => {
+            const raw = TSL.textureLoad(srcTex, ip.add(TSL.ivec2(x, y)), TSL.int(0));
+            return colorPcss ? raw.x : raw;
+          };
           const d = TSL.min(TSL.min(tap(lo, lo), tap(hi, lo)),
                             TSL.min(tap(lo, hi), tap(hi, hi)));
           return TSL.vec4(d, 0.0, 0.0, 1.0);
@@ -197,7 +214,9 @@
     // sky, geometry unaffected because each lit draw re-enables the mask).
     // The maps' color attachments are throwaway, so writing black is free.
     const depthMat = new THREE.MeshBasicNodeMaterial();
-    depthMat.colorNode = TSL.vec3(0.0);
+    // Desktop WebGL2 PCSS reads this color as window depth. Other paths
+    // throw the color attachment away (black is free).
+    depthMat.colorNode = colorPcss ? TSL.vec4(TSL.depth, 0.0, 0.0, 1.0) : TSL.vec3(0.0);
     depthMat.side = THREE.DoubleSide;
     depthMat.fog = false;
     depthMat.lights = false;
@@ -395,7 +414,7 @@
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,
       lampTex: lampRT ? lampRT.depthTexture : null,
-      // Blocker map for tsl-lit's penumbra search (WebGPU only, header note).
+      // Blocker map for tsl-lit's penumbra search (WebGPU + desktop WebGL2).
       // Presence gates the SHADER branch at build; S.pcssEnabled gates the
       // UNIFORM at runtime so a later blocker failure degrades live.
       blockerTex: blockerRT ? blockerRT.texture : null,

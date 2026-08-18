@@ -171,9 +171,9 @@
       shadowCtr:      uniform(new THREE.Vector3()),   // gliding fade anchor (frame.shadowCtr)
       // SHADOW SOFTEN (uPcssPen parity). Consumed by the blocker-search branch
       // below when the shadow system built its WebGPU blocker map
-      // (SHD.blockerTex, tlx-shadow.js header); on the WebGL2 fallback backend
-      // there is no blocker map, the branch is not compiled, and the sun PCF
-      // keeps the fixed radius `R = 3.0` — GLX's own uPcss-off look. pcssOn is
+      // (SHD.blockerTex, tlx-shadow.js header); phones / software GL have no
+      // blocker map and keep the fixed radius `R = 3.0`. Desktop WebGL2 and
+      // WebGPU compile the blocker-scaled branch. pcssOn is
       // the RUNTIME gate (glx.js uPcss 1:1): updateFrame re-reads
       // S.pcssEnabled each frame so a live blocker failure degrades cleanly.
       pcssPen:        uniform(80.0),
@@ -400,9 +400,8 @@
             // camera the receiver-blocker gap scales the Poisson radius —
             // crisp at the contact point, soft where the caster is far.
             // Compiled only when the shadow system built its blocker map
-            // (WebGPU backend, tlx-shadow.js header); gated at runtime on
-            // pcssOn like GLX's uPcss. Fixed R = 3.0 otherwise — GLX's own
-            // blocker-off radius.
+            // (WebGPU or desktop WebGL2); gated at runtime on pcssOn like
+            // GLX's uPcss. Fixed R = 3.0 otherwise — GLX's blocker-off radius.
             const R = float(3.0).toVar();
             if (SHD.blockerTex) {
               If(nearLod.and(U.pcssOn.greaterThan(0.5)), () => {

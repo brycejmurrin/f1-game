@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 // gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
 //
-// WGX on software adapters: primary gate is visible #game after
-// GLX.awaitSoftPresent() (soft-present 2D blit). THREE pins tlxForceGL=1
-// (SETTINGS ▸ THREE PATH: WEBGL2) and uses the same awaitSoftPresent /
-// capturePixels façade. capturePixels readback → frame.png is optional
-// and runs AFTER the visible check. Playwright uses
+// Software adapters (WGX + TLX WebGPU): primary gate is visible #game /
+// #game-soft after GLX.awaitSoftPresent() (soft-present 2D blit). THREE
+// pins tlxForceGL=1 unless --tlx-webgpu. capturePixels readback →
+// frame.png is optional and runs AFTER the visible check. Playwright uses
 // tools/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
 //
 // Usage:
 //   node tools/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]
+//                            [--tlx-webgpu] [--lavapipe]
 //                            [--retries N] [--retry-delay MS]
 //                            [trackId] [--cam orbit|eye|park] [--out DIR]
+//
+// --backend three defaults to apex26.tlxForceGL=1 (SwiftShader WebGL2 — the
+// spec pin). --tlx-webgpu unpins that (apex26.tlxForceGL=0) and launches with
+// the Dawn flags so three's WebGPU backend can claim the canvas. SwiftShader
+// Dawn still dies on three's mappedAtCreation uploads; pair --tlx-webgpu with
+// --lavapipe (Mesa ICD + WEBGPU_LAVAPE_*) for a software WebGPU TLX probe.
 //
 // Logs go to stderr (live) and <out>/probe.log (always). Final JSON on stdout.
 
@@ -19,7 +25,8 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  startStaticServer, launchChromium, shutdown, sleep, WEBGPU_CHROMIUM_ARGS,
+  startStaticServer, launchChromium, shutdown, sleep,
+  WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV,
 } from "./harness.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,6 +42,11 @@ function parseArgs(argv) {
     cam: "park",
     lite: false,
     iphone: false,
+    lite: false,
+    iphone: false,
+    tod: null,
+    tlxWebgpu: false,
+    lavapipe: false,
     outDir: null,
     retries: 2,
     retryDelayMs: 3000,
@@ -48,14 +60,21 @@ function parseArgs(argv) {
     else if (a === "--out") { o.outDir = next(); skip.add(o.outDir); }
     else if (a === "--retries") o.retries = Math.max(1, parseInt(next(), 10) || 1);
     else if (a === "--retry-delay") o.retryDelayMs = Math.max(0, parseInt(next(), 10) || 0);
+    else if (a === "--tod") { o.tod = next(); skip.add(o.tod); }
     else if (a === "--lite") o.lite = true;
     else if (a === "--iphone") o.iphone = true;
+    else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
+    else if (a === "--lavapipe") o.lavapipe = true;
     else if (a === "--help" || a === "-h") {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
   node tools/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]
+                           [--tod day|dusk|dawn|night] [--tlx-webgpu] [--lavapipe]
                            [--retries N] [--retry-delay MS]
                            [track] [--cam orbit|eye|park] [--out DIR]
+
+  --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
+  --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
 
   stderr + <out>/probe.log: phased progress; stdout: final JSON result.`);
       process.exit(0);
@@ -66,7 +85,8 @@ function parseArgs(argv) {
   }
   if (!o.outDir) {
     o.outDir = join("artifacts", "tmp", "gfx-probe",
-      `${o.backend}${o.lite ? "-lite" : ""}${o.iphone ? "-iphone" : ""}-${o.track}`);
+      `${o.backend}${o.lite ? "-lite" : ""}${o.iphone ? "-iphone" : ""}` +
+      `${o.tlxWebgpu ? "-tlxgpu" : ""}${o.lavapipe ? "-lvp" : ""}-${o.track}`);
   }
   return o;
 }
@@ -120,12 +140,26 @@ async function runProbeAttempt(attemptNum) {
   const srv = await startStaticServer(ROOT);
   log("attempt", `${attemptNum}/${opts.retries} — server ${srv.url}`);
 
-  const launchArgs = opts.backend === "webgpu"
-    ? [...WEBGPU_CHROMIUM_ARGS]
-    : ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
-  log("browser", "launch", { args: launchArgs.length });
+  let launchArgs;
+  let launchEnv;
+  if (opts.lavapipe) {
+    launchArgs = [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"];
+    launchEnv = { ...process.env, ...WEBGPU_LAVAPE_ENV };
+  } else if (opts.backend === "webgpu" || opts.tlxWebgpu) {
+    launchArgs = [...WEBGPU_CHROMIUM_ARGS];
+  } else {
+    launchArgs = ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+  }
+  log("browser", "launch", {
+    args: launchArgs.length,
+    lavapipe: opts.lavapipe,
+    tlxWebgpu: opts.tlxWebgpu,
+  });
 
-  const browser = await launchChromium({ args: launchArgs });
+  const browser = await launchChromium({
+    args: launchArgs,
+    ...(launchEnv ? { env: launchEnv } : {}),
+  });
   const consoleLines = [];
   try {
     const viewport = opts.iphone
@@ -149,7 +183,7 @@ async function runProbeAttempt(attemptNum) {
       consoleLines.push(`[pageerror] ${String(e).slice(0, 400)}`);
     });
 
-    await page.addInitScript(([be, wantLite]) => {
+    await page.addInitScript(([be, wantLite, wantTlxGpu]) => {
       localStorage.removeItem("apex26.gfxWgxFail");
       localStorage.removeItem("apex26.gfxWgxLevel");
       localStorage.removeItem("apex26.gfxBackendProbe");
@@ -164,9 +198,10 @@ async function runProbeAttempt(attemptNum) {
         else localStorage.removeItem("apex26.gfxWgxLite");
       } else {
         localStorage.setItem("apex26.gfxBackend", "three");
-        localStorage.setItem("apex26.tlxForceGL", "1");
+        localStorage.setItem("apex26.tlxForceGL", wantTlxGpu ? "0" : "1");
+        if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", "1");
       }
-    }, [opts.backend, opts.lite]);
+    }, [opts.backend, opts.lite, opts.tlxWebgpu]);
 
     const url = srv.url + "index.html";
     await retryStep("goto", () => page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 }));
@@ -184,8 +219,12 @@ async function runProbeAttempt(attemptNum) {
     });
     log("assets", "loadModels done");
 
-    await page.evaluate((id) => { __apex.race(id); __apex.go(); }, opts.track);
-    log("race", `started track=${opts.track}`);
+    await page.evaluate(({ id, tod }) => {
+      if (tod) __apex.race(id, tod, "dry");
+      else __apex.race(id);
+      __apex.go();
+    }, { id: opts.track, tod: opts.tod });
+    log("race", `started track=${opts.track}` + (opts.tod ? ` tod=${opts.tod}` : ""));
 
     await retryStep("track-ready", () => page.waitForFunction(
       () => { try { return !!__apex.info().track; } catch { return false; } },
@@ -217,12 +256,13 @@ async function runProbeAttempt(attemptNum) {
     const canvasPath = join(opts.outDir, "canvas.png");
     const pagePath = join(opts.outDir, "page-hud.png");
 
-    if (opts.backend === "webgpu") {
+    if (opts.backend === "webgpu" || opts.tlxWebgpu) {
       // Visible #game is the 2D soft-present blit — check it BEFORE capturePixels
       // (concurrent mapAsync readbacks on SwiftShader can poison the device).
+      // TLX WebGPU uses the same WGX-style blit (softOutRT → putImageData).
       await retryStep("soft-present", () => page.evaluate(async () => {
         if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) {
-          throw new Error("no GLX.awaitSoftPresent on WGX");
+          throw new Error("no GLX.awaitSoftPresent on software-WebGPU backend");
         }
         await GLX.awaitSoftPresent(60000);
         const g = document.getElementById("game");
@@ -240,6 +280,10 @@ async function runProbeAttempt(attemptNum) {
         page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
       log("canvas", "visible #game canvas.png saved");
 
+      // TLX's blit already used mapAsync on softOutRT. A second
+      // capturePixels races that readback and times out on Lavapipe
+      // (~90 s) without adding a better picture than #game.
+      if (!opts.tlxWebgpu) {
       let frameCap = null;
       try {
         frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
@@ -270,6 +314,7 @@ async function runProbeAttempt(attemptNum) {
         log("capture", `capturePixels ${frameCap.width}x${frameCap.height} meanLuma=${frameCap.meanLuma.toFixed(1)} maxLuma=${frameCap.maxLuma}`);
       } catch (e) {
         log("capture", "skipped (optional GPU readback)", { error: String(e.message || e).slice(0, 120) });
+      }
       }
     } else {
       await retryStep("soft-present", () => page.evaluate(async () => {
@@ -318,6 +363,8 @@ async function runProbeAttempt(attemptNum) {
       const diag = __apex.diag({ download: false });
       const env = diag.env || {};
       const view = __apex.render({ what: "view", cols: 80, rows: 24 });
+      const lutSrc = (typeof WGX !== "undefined" && WGX.roadLutReady) ? WGX
+        : ((typeof GLX !== "undefined" && GLX.roadLutReady) ? GLX : null);
       return {
         backend: env.backend,
         pick: (() => { try { return localStorage.getItem("apex26.gfxBackend"); } catch { return null; } })(),
@@ -330,6 +377,7 @@ async function runProbeAttempt(attemptNum) {
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,
         coveragePct: view && view.coveragePct,
+        roadLutReady: lutSrc ? lutSrc.roadLutReady() : null,
       };
     });
 
@@ -359,6 +407,7 @@ let lastError = null;
 
 log("start", JSON.stringify({
   backend: opts.backend, track: opts.track, lite: opts.lite, iphone: opts.iphone,
+  tlxWebgpu: opts.tlxWebgpu, lavapipe: opts.lavapipe,
   cam: opts.cam, outDir: opts.outDir, retries: opts.retries,
 }));
 
@@ -373,6 +422,8 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       backend: opts.backend,
       lite: opts.lite,
       iphone: opts.iphone,
+      tlxWebgpu: opts.tlxWebgpu,
+      lavapipe: opts.lavapipe,
       cam: opts.cam,
       logPath,
       ...payload,
@@ -401,6 +452,8 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       backend: opts.backend,
       lite: opts.lite,
       iphone: opts.iphone,
+      tlxWebgpu: opts.tlxWebgpu,
+      lavapipe: opts.lavapipe,
       cam: opts.cam,
       logPath,
       error: String(e.message || e),

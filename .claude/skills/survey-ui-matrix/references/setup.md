@@ -4,13 +4,24 @@ Load this before the first measurement. The SKILL.md index is the axes only.
 
 ## The setup ritual — all four steps, in order
 
+Playwright MCP (preferred for resize / a11y / CSS):
+
+```
+browser_navigate   http://127.0.0.1:3456/index.html
+browser_resize     width: 852, height: 393
+browser_evaluate   hide #game + __apex.headless(true)  (body below)
+browser_snapshot   boxes: true
+```
+
+Chrome DevTools MCP (emulate string; `resize_page` is unreliable here):
+
 ```
 mcp__chrome-devtools__emulate      viewport: "852x393x3,mobile,touch,landscape"
 mcp__chrome-devtools__navigate_page  http://localhost:3456/index.html
 ```
 
 Start the server first (`python3 -m http.server 3456`), then in
-`evaluate_script`:
+`browser_evaluate` / `evaluate_script`:
 
 ```js
 await new Promise(r => { const t = setInterval(() => {
@@ -56,8 +67,8 @@ on a desktop pointer. `build` catches a stale cache.
   while a Playwright suite is. Write reports under `artifacts/` (or
   negotiate MCP roots).
 
-**`resize_page` does not reliably take on this page** — use `emulate` with
-the full descriptor string.
+**Chrome `resize_page` does not reliably take on this page** — use `emulate`
+with the full descriptor string, or Playwright MCP `browser_resize`.
 
 **Serve on a port the test suite is not using** (3457) so a survey cannot
 interfere with a run in flight. Chrome setup / park-before-Playwright:

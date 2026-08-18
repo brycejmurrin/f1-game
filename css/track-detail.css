@@ -72,7 +72,11 @@
 #track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.08em; text-transform: uppercase; }
 .tdc-close-btn {
   background: none; border: 1px solid rgba(255,255,255,0.2); color: #aaa;
-  border-radius: 50%; width: 36px; height: 36px; font-size: 16px;
+  border-radius: 50%;
+  /* Same floor as every other door — 36px was under --tap on both pointers
+     (measured 2026-08-18 Playwright MCP at 852x393: 36x36). WCAG 24 is met;
+     the house ladder is not. */
+  width: var(--tap); height: var(--tap); font-size: 16px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; padding: 0; line-height: 1;
   transition: border-color 0.15s, color 0.15s;

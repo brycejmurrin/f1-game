@@ -46,6 +46,22 @@ function knobApplies(d, mode) { return !d.modes || d.modes.indexOf(mode) !== -1;
 function applyLive() {
   if (G.player && G.track) G.snapGameCam();
 }
+function selectCamMode(index, focus) {
+  G.setCamMode(index);
+  applyLive();
+  refreshCamTunePanel();
+  if (focus) $("ct-tab-" + CAM_MODES[index].id).focus();
+}
+function camTabKey(index, e) {
+  let next = null;
+  if (e.key === "ArrowRight") next = (index + 1) % CAM_MODES.length;
+  else if (e.key === "ArrowLeft") next = (index - 1 + CAM_MODES.length) % CAM_MODES.length;
+  else if (e.key === "Home") next = 0;
+  else if (e.key === "End") next = CAM_MODES.length - 1;
+  if (next == null) return;
+  e.preventDefault(); e.stopPropagation();
+  selectCamMode(next, true);
+}
 
 function buildCamTunePanel() {
   const host = $("ct-rows"), modes = $("ct-modes");
@@ -56,8 +72,11 @@ function buildCamTunePanel() {
       CAM_MODES.forEach((c, i) => {
         const b = document.createElement("button");
         b.type = "button"; b.className = "lt-tab"; b.dataset.mode = c.id;
+        b.id = "ct-tab-" + c.id;
         b.textContent = c.label; b.setAttribute("role", "tab");
-        b.onclick = () => { G.setCamMode(i); applyLive(); refreshCamTunePanel(); };
+        b.setAttribute("aria-controls", "ct-rows");
+        b.onclick = () => selectCamMode(i, false);
+        b.onkeydown = (e) => camTabKey(i, e);
         modes.appendChild(b);
       });
     }
@@ -106,6 +125,8 @@ function updateCtProfileLabel() {
     // the active camera was invisible to assistive tech (the lighting tuner
     // already sets aria-selected; this matches it).
     b.setAttribute("aria-selected", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+    if (on) $("ct-rows").setAttribute("aria-labelledby", b.id);
   }
 }
 function refreshCamTunePanel() {

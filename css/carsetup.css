@@ -453,14 +453,16 @@
   align-self: stretch;
 }
 #cs-options.cs-liv-grid .cs-opt-name {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: var(--fs-micro);
   line-height: 1.15;
   text-align: center;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100%;
+  /* Wrap, do not ellipsis on one line: the name IS the information
+     (measured 2026-08-18: "Stealth Papaya" needed 91px in a 69px cell). */
 }
 #cs-options.cs-liv-grid .cs-opt-tag { display: none; }
 #cs-options.cs-liv-grid .cs-liv-edit,

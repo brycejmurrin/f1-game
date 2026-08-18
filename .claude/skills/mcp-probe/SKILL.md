@@ -36,7 +36,7 @@ this skill for a version.json STALE check.
 | Local CLI wrap (`verify-track`, `--fast`, shot/eval) | `apex-tools` / `./tools/apex-tools-mcp.sh` — not `chrome_*` |
 | Live canvas / `__apex` / screenshot | Chrome via probe (`http://127.0.0.1`, not github.io) |
 | Deployed artifact / public web | tinyfish / `deploy-research` subagent |
-| UI matrix (canvas hidden) | `survey-ui-matrix` |
+| UI matrix (canvas hidden) | `survey-ui-matrix` — Playwright MCP `browser_resize` / `browser_snapshot` / `browser_evaluate` via `tools/playwright-mcp.sh` |
 | Batch CI screenshots | `playwright-probe` |
 | Deep MCP playbook | `docs/research/CHROME-DEVTOOLS-MCP.md` |
 

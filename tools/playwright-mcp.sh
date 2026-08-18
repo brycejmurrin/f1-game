@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# playwright-mcp.sh — Cursor / Cloud entry for official @playwright/mcp.
+# .mcp.json / .cursor/mcp.json → command tools/playwright-mcp.sh args ["run"]
+#
+# Interactive UI survey (resize / a11y snapshot / evaluate CSS+DOM).
+# Not a CI gate. Never run while chrome-devtools MCP or a Playwright *test*
+# group is live (AGENTS.md). Park to about:blank before test-bg.
+#
+# Pin is the network fallback so a fresh machine cannot silently run a
+# different MCP release than CI/tests saw (same class as chrome-devtools-mcp.sh).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Audited live in this repository on 2026-08-18.
+MCP_NPM_PACKAGE="@playwright/mcp@0.0.79"
+PROFILE="$ROOT/scratch/playwright-mcp"
+OUTDIR="$ROOT/artifacts/playwright-mcp"
+
+cmd_help() {
+  cat <<EOF
+playwright-mcp.sh — official @playwright/mcp (${MCP_NPM_PACKAGE})
+
+Commands:
+  help
+  status
+  run                 # stdio MCP (.mcp.json → tools/playwright-mcp.sh run)
+
+Pinned: isolated Chromium, headless, profile under scratch/playwright-mcp,
+shots under artifacts/playwright-mcp. Stdio only — never --port / 0.0.0.0.
+
+Tools that matter for UI survey: browser_navigate, browser_resize,
+browser_snapshot (DOM/a11y tree), browser_evaluate (CSS / getComputedStyle /
+getBoundingClientRect), browser_take_screenshot.
+
+Loopback only for the game (http://127.0.0.1). github.io stays TinyFish.
+Park about:blank before any Playwright test group.
+EOF
+}
+
+cmd_status() {
+  echo "Package: ${MCP_NPM_PACKAGE}"
+  echo "Profile: ${PROFILE}"
+  echo "Out:     ${OUTDIR}"
+  if [[ -x /opt/google/chrome/chrome ]]; then
+    echo "Chrome:  /opt/google/chrome/chrome"
+  elif compgen -G "/opt/pw-browsers/chromium-*/chrome-linux64/chrome" >/dev/null; then
+    echo "Chrome:  $(compgen -G "/opt/pw-browsers/chromium-*/chrome-linux64/chrome" | head -1)"
+  else
+    echo "Chrome:  (playwright default)"
+  fi
+  echo "Bin:     npx ${MCP_NPM_PACKAGE}"
+}
+
+cmd_run() {
+  mkdir -p "$PROFILE" "$OUTDIR"
+  # Isolated so two agents do not share a locked user-data-dir.
+  # --no-sandbox: this Cloud image is already a container.
+  exec npx --yes "$MCP_NPM_PACKAGE" \
+    --isolated \
+    --headless \
+    --browser chromium \
+    --no-sandbox \
+    --user-data-dir "$PROFILE" \
+    --output-dir "$OUTDIR" \
+    "$@"
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  help|--help|-h) cmd_help ;;
+  status) cmd_status ;;
+  run) cmd_run "$@" ;;
+  *)
+    echo "unknown command: $cmd" >&2
+    cmd_help
+    exit 2
+    ;;
+esac

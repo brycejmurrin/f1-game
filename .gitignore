@@ -13,6 +13,7 @@ node_modules
 # Regenerable output
 scratch/
 artifacts/
+.playwright-mcp/
 # Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
 tools/_*.cjs

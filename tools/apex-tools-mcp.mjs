@@ -2,8 +2,8 @@
 /**
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
- * Fourth .mcp.json server (beside tinyfish / chrome-devtools / probe). Never
- * chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * Fifth .mcp.json server (beside tinyfish / chrome-devtools / probe /
+ * playwright). Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md
  *
  *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve
@@ -40,11 +40,13 @@ const UI_VIEWPORTS = "ios-iphone-landscape";
 const UI_JOBS = 1;
 
 // Design §Locking known gap — v1 mutex is MCP-owned. chrome-devtools stdio
-// does not answer :3712/healthz. apex_status reports it; it does not close it.
+// and playwright MCP do not answer :3712/healthz. apex_status reports them.
 const KNOWN_GAP = {
   chromeDevtoolsStdio:
     "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
-  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
+  playwrightMcpStdio:
+    "Cursor .mcp.json playwright (@playwright/mcp) is a fifth browser and does not answer :3712/healthz",
+  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs", "playwright-mcp"],
 };
 
 function toolKind(entry) {
@@ -203,17 +205,21 @@ function playwrightLive() {
 
 function testBgStatus() {
   if (!fs.existsSync(TEST_BG_STATE)) {
-    return { recorded: false, running: [], runs: [] };
+    return { recorded: false, running: [], browserRunning: [], runs: [] };
   }
   let state;
   try {
     state = JSON.parse(fs.readFileSync(TEST_BG_STATE, "utf8"));
   } catch {
-    return { recorded: true, running: [], runs: [], error: "unreadable" };
+    return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
   const runs = Array.isArray(state.runs) ? state.runs : [];
   const running = runs.filter((run) => alive(run.pid));
-  return { recorded: true, mode: state.mode, running, runs };
+  // Missing metadata is treated as browser-active for old state files. New
+  // test-bg records distinguish Node-only groups so they do not block a dry
+  // browser-tool plan or make tooling-fast fail while testing this guard.
+  const browserRunning = running.filter((run) => run.browser !== false);
+  return { recorded: true, mode: state.mode, running, browserRunning, runs };
 }
 
 function lockInfo() {
@@ -257,7 +263,7 @@ function occupancyRefuse() {
   }
   const bg = testBgStatus();
   const pw = playwrightLive();
-  if (bg.running.length || pw.live) {
+  if (bg.browserRunning.length || pw.live) {
     return refuse(
       "playwright_live",
       "A Playwright group or `playwright test` process is live.",

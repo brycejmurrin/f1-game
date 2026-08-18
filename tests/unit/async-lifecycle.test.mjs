@@ -8,12 +8,88 @@ const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.ur
 const musicSource = await readFile(new URL("../../js/game/music-lib.js", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
 const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
+const audioPanelSource = await readFile(new URL("../../js/game/audio-panel.js", import.meta.url), "utf8");
 
 function deferred() {
   let resolve, reject;
   const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }
+
+function audioPanelHarness() {
+  const nodes = new Map();
+  const element = () => ({
+    hidden: false, disabled: false, value: "", textContent: "", innerHTML: "",
+    classList: { toggle() {} }, setAttribute() {}, closest() { return this; },
+  });
+  const $ = (id) => {
+    if (!nodes.has(id)) nodes.set(id, element());
+    return nodes.get(id);
+  };
+  const calls = [];
+  const writes = new Map();
+  const GameAudio = {
+    init() { calls.push("init"); },
+    setEnabled(v) { calls.push(`enabled:${v}`); },
+    setMusicEnabled(v) { calls.push(`music:${v}`); },
+    setSfxEnabled(v) { calls.push(`sfx:${v}`); },
+    setMusicVolume(v) { return v; }, setSfxVolume(v) { return v; },
+    startMusic(v) { calls.push(`start:${v}`); },
+    stopMusic() { calls.push("stopMusic"); }, stopEngine() { calls.push("stopEngine"); },
+    sourceCounts() { return { builtin: 3, user: 0 }; }, musicSource() { return "all"; },
+    setMusicSource(v) { return v; }, trackName() { return ""; },
+    uiTick() {}, skipTrack() {}, prevTrack() {},
+  };
+  const G = {
+    $, els: { soundbtn: $("soundbtn") },
+    store: {
+      get(_key, fallback) { return fallback; },
+      set(key, value) { writes.set(key, value); },
+    },
+    soundOn: false, musicEnabled: true, state: "menu",
+  };
+  const context = vm.createContext({ GameAudio, Log: { info() {} } });
+  vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
+    { filename: "js/game/audio-panel.js" });
+  return { panel: context.__panel.create(G), G, nodes, calls, writes };
+}
+
+test("audio boot restore keeps saved master sound off when music is on", () => {
+  const { panel, G, calls, writes } = audioPanelHarness();
+  panel.init();
+
+  assert.equal(G.soundOn, false);
+  assert.equal(G.musicEnabled, true);
+  assert.equal(writes.get("sound"), false);
+  assert.equal(writes.get("music"), true);
+  assert.equal(calls.includes("init"), false);
+  assert.equal(calls.includes("start:-1"), false);
+});
+
+test("the sound button unlocks WebAudio synchronously after enabling its master", () => {
+  const { panel, G, nodes, calls } = audioPanelHarness();
+  panel.init();
+  calls.length = 0;
+
+  nodes.get("soundbtn").onclick();
+
+  assert.equal(G.soundOn, true);
+  assert.deepEqual(calls.slice(0, 3), ["enabled:true", "init", "start:-1"]);
+});
+
+test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
+  for (const id of ["as-music-on", "as-sound-on"]) {
+    const { panel, G, nodes, calls } = audioPanelHarness();
+    panel.init();
+    calls.length = 0;
+
+    nodes.get(id).onclick({ stopPropagation() {} });
+
+    assert.equal(G.soundOn, true, `${id} should lift the master`);
+    assert.deepEqual(calls.slice(0, 2), ["enabled:true", "init"],
+      `${id} should enable before synchronously unlocking WebAudio`);
+  }
+});
 
 test("a stopped QR attempt disposes a camera stream that arrives late", async () => {
   const media = deferred();
