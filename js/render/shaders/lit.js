@@ -533,9 +533,13 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   float s = vTrk.x, x = vTrk.y;
   const vec3 paint = vec3(0.95, 0.95, 0.97);
 
-  // Lateral filter width. Clamped: at a grazing angle fwidth explodes and an
-  // unclamped band would smear the line into a wide grey wash.
-  float aaX = clamp(fwidth(x), 1e-4, 0.30);
+  // Lateral filter width. Clamped for the band only: at a grazing angle
+  // fwidth explodes and an unclamped smoothstep would smear into a wash.
+  // Mip fade uses the RAW footprint (fwX) — feeding the clamp made mip
+  // exactly 0 whenever fw hit 0.30 (routine on phone chase), so every
+  // edge/centre line vanished while WGX on the same device still showed paint.
+  float fwX = max(fwidth(x), 1e-4);
+  float aaX = min(fwX, 0.30);
 
   // Edge lines — a 0.20 m band just inside each tarmac edge (matches the old
   // -w .. -w+0.2 vertex columns).
@@ -552,7 +556,7 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
 
   // As a marking goes sub-pixel, fade its amplitude rather than let a
   // half-covered band strobe — the standard minification response.
-  float mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  float mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   float m = max(edge, band * dash) * mip;
 
   albedo = mix(albedo, paint, m);

@@ -847,7 +847,7 @@ function qualiNetWaiting() {
   // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
   // so somebody who dropped during qualifying stops being waited on.
   const rivals = qualiRivalDriverIds();
-  if (!rivals.length) return !(qualiPeers.size > 0);
+  if (!rivals.length) return false;
   return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
 
@@ -894,7 +894,7 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
-  openQuali();                    // clears the gate FIRST, so arm it after
+  openQuali(true);                // fresh sim — do not restore a career grid
   qualiNetDone = done || null;
   refreshQualiGate();
 }
@@ -915,7 +915,7 @@ function onPeerQuali(d) {
   if (d && d.driverId != null) qualiLive.delete(d.driverId);
   if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
   if (!isQuali()) return;
-  const mine = player && player.best < Infinity ? player.best : 0;
+  const mine = player && player.lastLap > 0 ? player.lastLap : (player && player.best < Infinity ? player.best : 0);
   quali.simulate(qualiDriven(mine));
   if (!$("quali").hidden) quali.build();
   refreshQualiGate();
@@ -2694,7 +2694,7 @@ function endRace(forcedOrder) {
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
     cars = qualiField || cars;
-    const myLap = player.best < Infinity ? player.best : 0;
+    const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
     if (myLap > 0) netReportQuali(player.driverId, myLap);
@@ -3113,7 +3113,7 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
-  quali.clear();   // last weekend's classification is not this one's grid
+  quali.clear(true);   // leave the title without this weekend's grid
   qualiPeers.clear();
   qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
   // …and drop the career championship alias with it, so STANDINGS on the title
@@ -4854,7 +4854,7 @@ function updateCar(c, dt, ranked) {
   if (c.human && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
-    if (ds < -0.03 && c.speed > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
+    if (ds < -0.03 && c.speed > vStd(15)) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
@@ -5031,7 +5031,7 @@ function coast(c, dt) {
   // pace ~0.55. Pace-scale the floor, and never speed the car up. If already
   // below the floor (finished crawling), keep scrubbing toward 0 — the old
   // Math.min(speed, max(floor, …)) left cars stuck at their finish speed.
-  const floor = 24 * Math.max(PACE, 0.05);
+  const floor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
   const next = c.speed - 20 * dt;
   c.speed = c.speed > floor ? Math.max(floor, next) : Math.max(0, next);
   c.s = wrapS(c.s + c.speed * dt);
@@ -7867,7 +7867,7 @@ $("rs-go").onclick = () => {
   if (steerMode === "tilt") enableTilt();
   // Championship GO follows qualiNext (sprint GP legs skip a second quali).
   // One-off GO still follows gridFromQuali / the QUALIFYING chip.
-  if ((isChampionship() && SeasonCal.qualiNext(season)) || (!isChampionship() && gridFromQuali())) openQuali();
+  if ((isChampionship() && SeasonCal.qualiNext(season) && !quali.results()) || (!isChampionship() && gridFromQuali() && !quali.results())) openQuali();
   else startRace();
 };
 
@@ -7875,7 +7875,7 @@ $("rs-go").onclick = () => {
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-function openQuali() {
+function openQuali(fresh) {
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
@@ -7886,7 +7886,7 @@ function openQuali() {
   qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
-  quali.simulate(0);              // provisional: everyone simulated, including you
+  if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
   quali.open();
 }

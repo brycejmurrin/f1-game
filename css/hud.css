@@ -452,6 +452,13 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
 body.pc-uihidden #lighting-inner { display: none !important; }
 body.pc-uihidden #game-metrics { display: none !important; }
+body.pc-uihidden #hud,
+body.pc-uihidden #lights,
+body.pc-uihidden #announce,
+body.pc-uihidden #campicker,
+body.pc-uihidden #btn-cam,
+body.pc-uihidden #pausebtn,
+body.pc-uihidden .touchbtn { display: none !important; }
 #pc-restore {
   position: fixed;
   zoom: var(--ui-scale);

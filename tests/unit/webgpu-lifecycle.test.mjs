@@ -930,7 +930,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && !isCarDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
   assert.match(CHUNKS_SOURCE, /let isCarDraw = D\.mat2\.z >= 19\.5 && D\.mat2\.z <= 27\.5;/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
-  assert.match(WGX_SOURCE, /o\.buryRibbon/);
+  assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);

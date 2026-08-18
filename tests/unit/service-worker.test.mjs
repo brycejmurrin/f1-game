@@ -392,6 +392,20 @@ test("an online navigate timeout does not serve a stale cached shell", async () 
   assert.equal((await nav.responsePromise).status, 0);
 });
 
+test("an online cache-first miss timeout does not hang", async () => {
+  const harness = createHarness({
+    immediateTimeoutMs: 4000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise(() => {}),
+  });
+  const ev = harness.fetchEvent({
+    method: "GET",
+    mode: "same-origin",
+    url: `${ORIGIN}/js/game.js?v=1`,
+  });
+  assert.equal((await ev.responsePromise).status, 0);
+});
+
 test("a cache-bust navigation never falls back to the generic cached shell", async () => {
   const harness = createHarness({ fetchImpl: async () => new Response("server error", { status: 500 }) });
   harness.stores.set("apex26-old", new Map([

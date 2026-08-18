@@ -3011,7 +3011,7 @@ const WGX = (function () {
       d[base + 26] = o.surfaceId != null ? o.surfaceId : 0;
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
-      d[base + 27] = (o.buryRibbon || (o.detail || 0) > 0.1) ? 1 : 0;
+      d[base + 27] = o.buryRibbon ? 1 : 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws

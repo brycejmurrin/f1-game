@@ -713,7 +713,8 @@
       const x = float(trkIn.y).toVar();
       const hw = float(trkIn.z).toVar();
       // Hoisted derivatives — see the note above.
-      const aaX = clamp(fwidth(x), 1e-4, 0.30).toVar();
+      const fwX = max(fwidth(x), 1e-4).toVar();
+      const aaX = min(fwX, 0.30).toVar();
       const aaS = clamp(fwidth(s).div(7.0), 1e-4, 0.24).toVar();
       const albedo = vec3(albedoIn).toVar();
       const rough = float(roughIn).toVar();
@@ -730,7 +731,7 @@
 
       // Sub-pixel minification: fade amplitude rather than let a half-covered
       // band strobe.
-      const mip = clamp(aaX.sub(0.06).div(0.24).oneMinus(), 0.0, 1.0).toVar();
+      const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
       // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
       // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
       const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();

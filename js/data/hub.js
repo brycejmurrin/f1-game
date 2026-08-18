@@ -390,6 +390,14 @@ const DataHub = (function () {
         sel.meetingKey = ses.meetingKey;
         sel.year = ses.year || YEARS[0];
         sel.selAt = Date.now();
+      } else if (!sel.pinned) {
+        // latestSession resolved empty — the previous key is not "current".
+        // Keep polling a finished session as if it were live is how LIVE sat
+        // on a stale POS/TEAM after the weekend ended.
+        sel.meta = null;
+        sel.sessionKey = null;
+        sel.meetingKey = null;
+        sel.selAt = 0;
       }
       return sel.meta;
     });

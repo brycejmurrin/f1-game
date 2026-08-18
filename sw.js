@@ -287,15 +287,19 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
+    const network = fetch(req);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
     try {
-      const res = await fetch(req);
+      const res = await Promise.race([network, timeout]);
       if (res && res.ok) {
         const cache = await caches.open(await currentCacheName());
         await cache.put(req, res.clone());
+        return res;
       }
-      return res;
-    } catch (_) {
-      return Response.error();
-    }
+      const online = typeof navigator !== "undefined" && navigator.onLine;
+      if (res == null && online) return Response.error();
+      if (res) return res;
+    } catch (_) { /* network rejected */ }
+    return Response.error();
   })());
 });
