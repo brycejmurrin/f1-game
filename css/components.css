@@ -689,18 +689,24 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 
 /* ---------- dialog sheets (pause menu, settings, results, …) ---------- */
-/* Every one of these is `.screen > .sheet`; only the width differs. */
-#pausemenu   { --sheet-w: 420px; }
+/* Every one of these is `.screen > .sheet`. --sheet-w is the width cap;
+   --fit-at (where set) inherits onto the inner .sheet so classifyFit can
+   shrink the sheet at 200% UI size. Landscape is a viewport fact. */
+#pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
 #pmsettings  { --sheet-w: 760px; }
-#results     { --sheet-w: 600px; }
-#standings   { --sheet-w: 560px; }
+#results     { --sheet-w: 600px; --fit-at: 300px; }
+#standings   { --sheet-w: 560px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
 #advanced    { --sheet-w: 820px; }
-#audioset    { --sheet-w: 460px; }
-#race-settings { --sheet-w: 560px; }
+#audioset    { --sheet-w: 460px; --fit-at: 300px; }
+#race-settings { --sheet-w: 560px; --fit-at: 300px; }
+@media (orientation: landscape) {
+  #results, #standings, #race-settings, #audioset { --fit-at: 220px; }
+  #pausemenu { --fit-at: 180px; }
+}
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
    was two narrow columns and still ran 171px past the fold; the sheet is capped
    by the safe-area width anyway, so this only ever spends room that exists. */
