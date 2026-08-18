@@ -117,7 +117,6 @@
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
-
     const PI = 3.14159265359;
 
     /* ── frame + tune uniforms ────────────────────────────────────────────────
@@ -640,7 +639,7 @@
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
-    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeo]) => {
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
@@ -648,10 +647,7 @@
         .and(matTexInPack(mid))
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
-      // Axis from the GEOMETRIC varying (GLX matTexUV uses vNrm), not the
-      // already-bumped N — a brick bump flipping the dominant axis rotates
-      // the scan 90° against the procedural grain.
-      const uv = matTexUV(mid, nGeo, wp).toVar();
+      const uv = matTexUV(mid, N, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
@@ -902,21 +898,22 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
-    function buildFragment(matU, chunked) {
+    function buildFragment(matU, chunked, instanced) {
       return Fn(() => {
         // ── STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         //    shared varying-derived node BEFORE any conditional use. ──────────
         const wp = vec3(positionWorld).toVar();               // vWorldPos
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
-        const albedoIn = vec3(attribute("color", "vec3")).toVar();   // vCol
-        // Flat like GLX `flat out float vMat` — a smooth interpolate of
-        // brick(2)/glass(3) on a shared edge smears ids. FLAG wave stays
-        // on the per-vertex attribute (fract(aMat) is a VS weight).
-        const matFlat = varying(attribute("mat", "float"), "vMatFlat");
-        matFlat.setInterpolation(THREE.InterpolationSamplingType.FLAT,
-          THREE.InterpolationSamplingMode.FIRST);
-        const matA = float(matFlat).toVar();                         // vMat
+        const vertexColor = vec3(attribute("color", "vec3")).toVar();
+        const albedoIn = instanced
+          ? vertexColor.mul(attribute("instanceTint", "vec3")).toVar()
+          : vertexColor;                                             // vCol
+        // Smooth attribute, same as before the garage-blank regression.
+        // GLX is `flat out float vMat`; a TSL `varying().setInterpolation(FLAT)`
+        // compiled but the garage turntable drew nothing (software GL / three
+        // r185). FLAG wave still reads the per-vertex attribute in the VS.
+        const matA = float(attribute("mat", "float")).toVar();       // vMat
         // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
         // non-chunked mesh. Anchored here with the other varyings per the
         // standing rule, because roadMarkings() takes derivatives of it.
@@ -1023,7 +1020,7 @@
         // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nvary));
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard
@@ -1184,8 +1181,8 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: U.lampFog is 0 by day,
-              // so skip the accumulate (uniform CF — safe for TSL→WGSL).
+              // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
+              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
@@ -1478,13 +1475,14 @@
      * compileAsync path. The scalars therefore become materialReference
      * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
-     * between classic material instances). Two graphs total: chunked reads
-     * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out, mrt}
+     * between classic material instances). Three graphs total: chunked reads
+     * no `trk` attribute, and instanced multiplies canonical vertex colour by
+     * its placement tint (see buildFragment header). */
+    const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
-    function sharedFragment(chunked) {
-      const idx = chunked ? 1 : 0;
+    function sharedFragment(chunked, instanced) {
+      const idx = instanced ? 2 : (chunked ? 1 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
         const matU = {
@@ -1498,7 +1496,7 @@
           carPaint:  materialReference("userData.tlxCarPaint", "float"),
           sparkle:   materialReference("userData.tlxSparkle", "float"),
         };
-        const packed = buildFragment(matU, chunked);
+        const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
@@ -1536,7 +1534,8 @@
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
       ud.tlxChunked   = !!o.chunked;
-      const packed = sharedFragment(!!o.chunked);
+      ud.tlxInstanced = !!o.instanced;
+      const packed = sharedFragment(!!o.chunked, !!o.instanced);
       _mats.push(m);
       m.colorNode = packed.rgb;
       // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
@@ -1544,7 +1543,7 @@
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
-      pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
+      pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;

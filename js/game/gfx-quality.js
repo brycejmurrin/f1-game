@@ -487,9 +487,9 @@ function initReset() {
   const slot = rendererSlot(anchor);
   const host = slot && slot.parentNode;
   if (!host || document.getElementById("pm-renderer-reset")) return;
-  // Injected, not written into index.html: same reason PerfTry / CockpitOpts
-  // generate their SETTINGS rows — the shell's DOM-node ratchet counts tags
-  // in the file, and this button mints no new CSS class.
+  // Injected, not written into index.html: same reason CockpitOpts generates
+  // its SETTINGS rows — the shell's DOM-node ratchet counts tags in the file,
+  // and this button mints no new CSS class.
   const btn = document.createElement("button");
   btn.id = "pm-renderer-reset";
   btn.textContent = "RESET RENDERER";

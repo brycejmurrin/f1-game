@@ -219,7 +219,7 @@ async function bootWorker(baseUrl) {
   });
   const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
   await page.goto(baseUrl);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
   return { browser, page };
 }
 

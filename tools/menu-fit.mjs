@@ -285,7 +285,7 @@ async function shot(page, file) {
             }, SAFE_CSS);
           }
           await page.goto(srv.url);
-          await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+          await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
           // Before the setup body, not after: a screen laid out at one size and
           // then rescaled measures a reflow, and a reflow is not what the player
           // sees on a page they open at their chosen size.

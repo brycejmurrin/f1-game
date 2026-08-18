@@ -95,7 +95,7 @@ async function captureBackend(backend) {
       } catch (_) {}
     }, backend);
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, { polling: 100, timeout: 30_000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 30_000 });
 
     // Models resident BEFORE the build so scenery bakedModel() emits identically.
     await page.evaluate(async () => {
@@ -104,7 +104,7 @@ async function captureBackend(backend) {
       }
     });
     await page.evaluate((id) => window.__apex.race(id), safeTrackId);
-    await page.waitForFunction(() => window.__apex.info().track != null, { polling: 100, timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await sleep(1200);
 
     const state = await page.evaluate(({ frac, cam, az, el, dist, side, tod }) => {

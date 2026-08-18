@@ -20,7 +20,7 @@ async function startLiveRace(page) {
   await page.locator("#rs-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    { timeout: 10_000 }
+    null, { timeout: 10_000 }
   );
   await page.evaluate(() => window.__apex.go());
 }

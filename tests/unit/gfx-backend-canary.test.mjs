@@ -949,26 +949,74 @@ test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opac
     "_unstrideRgba / capturePixels must force opaque alpha too");
 });
 
-test("TLX InstancedMesh always allocates instanceColor to the instance cap", () => {
+test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint", () => {
   // three WebGPU binds a 1-instance dummy color buffer when instanceColor is
   // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
-  // Deploy's fix: an InstancedBufferAttribute named `color` on the geometry
-  // (`_instColorAttr`). Do NOT also set imesh.instanceColor — NodeMaterial
-  // multiplies that into colorNode and binds a second 12-byte dummy at slot 5.
+  // A dedicated instanceTint avoids that path without replacing canonical
+  // per-vertex `color` (brown trunks / billboard frames must survive).
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = src.indexOf("function createInstancedBatch");
   assert.notEqual(at, -1, "createInstancedBatch moved");
   const body = src.slice(at, at + 2200);
   assert.match(body, /_instColorAttr\(\s*imesh/,
-    "every batch must get an instanced color attribute, not only when colors[] is present");
+    "every batch must get an instanced tint, not only when colors[] is present");
   assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
     "do not also set imesh.instanceColor — that is the slot-5 dummy-buffer trap");
+  const attrAt = src.indexOf("function _instColorAttr");
+  const attrBody = src.slice(attrAt, attrAt + 1200);
+  assert.match(attrBody, /setAttribute\(\s*"instanceTint"/,
+    "placement colour must use its own instance-rate attribute");
+  assert.doesNotMatch(attrBody, /setAttribute\(\s*"color"/,
+    "instancing must not overwrite canonical per-vertex colour");
+  const lit = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(lit, /vertexColor\.mul\(attribute\(\s*"instanceTint"/,
+    "the instanced lit graph must multiply base colour by placement tint");
+  assert.match(lit, /tlx-lit-instanced/,
+    "the extra attribute requires its own stable program family");
   const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const cast = shadow.indexOf("function castInstanced");
   assert.notEqual(cast, -1, "castInstanced moved");
   const castBody = shadow.slice(cast, cast + 1800);
   assert.doesNotMatch(castBody, /m\.instanceColor\s*=/,
-    "shadow InstancedMesh must not set instanceColor — the lit geo already has instanced color");
+    "shadow InstancedMesh must not set instanceColor — the lit geo already has instanceTint");
+});
+
+test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
+  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
+    const at = src.indexOf("function cullInstances");
+    assert.notEqual(at, -1, `${file}: cullInstances moved`);
+    const body = src.slice(at, at + 2800);
+    assert.doesNotMatch(body, /_cullSig[01]/,
+      `${file}: a second cached count cannot restore a second physical transform pack`);
+    assert.match(body, /_cullPlanes/,
+      `${file}: resident pack must be identified by its complete frustum`);
+    assert.match(body, /k\s*<\s*4/,
+      `${file}: compare x/y/z/d, not the old x/d-only collision-prone hash`);
+    assert.match(body, /_cullN\b/,
+      `${file}: the resident pack's count should be cached with it`);
+  }
+  const glShadow = read("js/render/glx/shadow.js");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
+    "GLX full-set shadow restore must invalidate the resident cull pack");
+  assert.match(wgx, /count === undefined[^]*?writeBuffer\([^]*?batch\._cullPlanes\s*=\s*null/,
+    "WGX full-set shadow restore must invalidate the resident cull pack");
+});
+
+test("TLX instanced shadows consume the light-frustum packed slice", () => {
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = src.indexOf("function castShadowInstanced");
+  assert.notEqual(at, -1, "TLX castShadowInstanced moved");
+  assert.match(src.slice(at, at + 350), /castInstanced\(batch,\s*count\)/,
+    "TLX wrapper must forward game.js's culled count");
+  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const castAt = shadow.indexOf("function castInstanced");
+  const body = shadow.slice(castAt, castAt + 2600);
+  assert.match(body, /culled[^]*?batch\.packMatrices/,
+    "explicit count must copy the light-frustum packed transforms");
+  assert.match(body, /m\.count\s*=\s*n/,
+    "shadow draw count must be the culled count, not batch.instances");
 });
 
 test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () => {
@@ -1200,18 +1248,14 @@ test("WGX SAA widens roughness before wet like GLX", () => {
     "wet must recompute a after polishing, like GLX lit.js");
 });
 
-test("TLX FS mat is flat, baked UVs use Nvary, corrugation AA is hc*7.5", () => {
+test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)", () => {
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tsl, /varying\(attribute\("mat", "float"\), "vMatFlat"\)/,
-    "FS classification must be a flat varying, not a smooth attribute");
-  assert.match(tsl, /InterpolationSamplingType\.FLAT/,
-    "flat interpolation must be set (brick/glass shared edges smear otherwise)");
+  assert.match(tsl, /const matA = float\(attribute\("mat", "float"\)\)\.toVar\(\)/,
+    "FS must read attribute(mat) directly — varying()+FLAT made the garage car vanish");
+  assert.doesNotMatch(tsl, /InterpolationSamplingType\.FLAT/,
+    "do not setInterpolation(FLAT) on mat — three r185 compiled it and drew nothing");
   assert.match(tsl, /const matA = attribute\("mat", "float"\)/,
     "FLAG VS wave must keep the per-vertex attribute (fract(aMat) weight)");
-  assert.match(tsl, /matTexUV\(mid, nGeo, wp\)/,
-    "baked normal UVs must key off geometric N, not the bumped shading N");
-  assert.match(tsl, /applyMaterialTexNormal\(surfaceId, N, wp, vd, Nvary\)/,
-    "call site must pass Nvary as the UV axis");
   assert.match(tsl, /const ridgePhase0 = hc\.mul\(7\.5\)/,
     "corrugation fwidth must match GLX hc*7.5, not abs(hc)*5.5");
 });
@@ -1259,6 +1303,14 @@ test("Gfx seam lists instancing on all three backends", () => {
   const gfx = read("js/render/gfx.js");
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
     "gfx.js must not still say TLX exports instancing as undefined");
+});
+
+test("TLX garage (no proj) paints the canvas, not the HDR scene target", () => {
+  // Setup preview only sends viewProj. The HDR RT stayed black on software
+  // GL (viz=scene was empty) so the turntable vanished while GLX was fine.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(src, /if \(post && _postF\.proj\)/,
+    "post chain must require begin() proj — garage frames must not render into sceneRT");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {

@@ -251,9 +251,9 @@ async function renderScene(browser, port, scene, outPath) {
   const errs = [];
   page.on("console", (m) => { if (m.type() === "error") errs.push(m.text().slice(0, 90)); });
   await page.goto(`http://127.0.0.1:${port}/`);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
   await page.evaluate((t) => window.__apex.race(t), scene.track);
-  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, { timeout: 25000 });
+  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { timeout: 25000 });
   await page.evaluate((t) => window.__apex.setTimeOfDay(t), scene.tod);
   await page.evaluate((w) => window.__apex.weather(w), scene.wx);
   await page.evaluate((f) => window.__apex.park(f), scene.frac);

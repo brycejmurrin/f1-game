@@ -9,7 +9,8 @@ const DataLastRace = (function () {
           wrap.appendChild(emptyMsg("No race results yet — the season hasn't started."));
           return wrap;
         }
-        const head = el("div", "dh-lr-head");
+        const head = el("div");
+        head.id = "dh-lr-head";
         head.appendChild(el("div", "dh-lr-name", race.name || "Grand Prix"));
         const meta = [];
         if (race.round !== null && race.round !== undefined) meta.push("Round " + race.round);

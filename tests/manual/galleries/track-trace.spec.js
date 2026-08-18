@@ -27,7 +27,7 @@ test.describe(`track trace: ${TRACK}`, () => {
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
 
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 10_000 });
 
     // Load the circuit and hold the follow camera for the whole tour.
     const loaded = await page.evaluate((id) => {
@@ -40,7 +40,7 @@ test.describe(`track trace: ${TRACK}`, () => {
 
     await page.waitForFunction(
       () => window.__apex.info().track != null,
-      { timeout: 15_000 }
+      null, { timeout: 15_000 }
     );
 
     for (let i = 0; i < FRAMES; i++) {

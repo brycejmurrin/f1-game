@@ -30,7 +30,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 640, height: 500 } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
   await page.goto(`${URL}/tools/carview.html?team=${TEAM}&hud=0`, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15000 });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: 15000 });
   const opts = await page.evaluate(() => Parts.CATALOG.find(c => c.id === 'aero').options.map(o => o.id));
   const defaults = await page.evaluate(() => Object.assign({}, Parts.DEFAULTS));
   const rows = [];

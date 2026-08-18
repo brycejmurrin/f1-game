@@ -17,19 +17,28 @@ Remaining honest look deltas (audited 2026-08-18 against source):
   is false for `NoBlending`, so `output.a` is coverage). The tag now lives
   on a second HDR attachment (`ssrTag` / `mrtNode`), armed only for the
   main scene pass — env cube and canvas fallback stay single-target.
+- **TLX FS `mat` stays smooth** and baked wall UVs still key off the
+  shading N. A TSL `varying().setInterpolation(FLAT)` compiled on three
+  r185 / software GL but the garage turntable drew nothing. Garage frames
+  (no `proj`) also must paint the canvas, not the HDR scene target.
+  GLX remains `flat out float vMat`.
 - **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
   ribbon VBOs). Not portable without reopening that defect.
 - **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
   `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
   reopens terrain-over-road on SwiftShader.
+- **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
+  WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
+  `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
+  `roadChunkLamps` (WebGL2 only); `pcssPen` on three.js phones / software GL.
 
 Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
 (no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
-fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX FS
-`mat` is `flat`; TLX baked wall UVs use geometric `Nvary`; TLX corrugation
-AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking mip uses
-unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso / desktop
-GLX 4× MSAA / peel-then-bump stay matched.
+fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX
+corrugation AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking
+mip uses unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso /
+desktop GLX 4× MSAA / peel-then-bump stay matched. TLX flat-`mat` and
+geometric baked UVs were reverted — they blanked the garage car.
 
 SAA mixes geometric N with a uniform-CF peel hoist on all three backends
 (material/wall bump stays out of SAA). Every baked MAT layer (walls
@@ -39,6 +48,9 @@ Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
 `carGloss` streak; TLX desktop WebGL2 has a color-depth PCSS blocker.
+2026-08-18: the old pause-menu PerfTry GLSL flags (`flareGate`, `lampFogGate`)
+and the 300 m `envCull` are now the baked product path on GLX/WGX/TLX — no
+toggle, no `OPT_*` overlay. Late sky (opaque → sky → glow) is unconditional.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
 (`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`

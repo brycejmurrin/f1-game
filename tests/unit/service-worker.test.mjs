@@ -378,6 +378,19 @@ test("navigation and version 5xx responses fall back to healthy cached entries",
   assert.equal(await (await version.responsePromise).json().then((v) => v.build), 320);
 });
 
+test("an online version.json fetch reject does not serve a stale precache", async () => {
+  const harness = createHarness({
+    navigator: { onLine: true },
+    fetchImpl: () => Promise.reject(new TypeError("Failed to fetch")),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/version.json`, new Response('{"build":320}', { status: 200 })],
+  ]));
+
+  const version = harness.fetchEvent(new Request(`${ORIGIN}/version.json?_=${Date.now()}`));
+  assert.equal((await version.responsePromise).status, 0);
+});
+
 test("an online navigate timeout does not serve a stale cached shell", async () => {
   const harness = createHarness({
     immediateTimeoutMs: 3000,

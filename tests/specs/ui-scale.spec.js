@@ -31,7 +31,7 @@ const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary pl
 // Players can still dial 115 via SETTINGS ▸ DISPLAY, so the guard must keep
 // seeing it. Touch used to *ship* at 115; that default dropped after the type
 // floor made phones read as "zoomed in".
-const SCALES = [50, 100, 115, 130, 150];
+const SCALES = [50, 100, 115, 130, 150, 200];
 
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].
@@ -61,7 +61,7 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "teampicker", "race-setting
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 30_000 });
 }
 
 async function toTitle(page) {
@@ -218,6 +218,58 @@ test.describe("UI scale", () => {
     expect(+(await read()).ui).toBeGreaterThan(0.5);
   });
 
+  test("200% keeps title navigation reachable on phones and browser-zoom equivalents", async ({ page }) => {
+    const shapes = [
+      ["phone portrait", { width: 393, height: 659 }],
+      ["phone landscape", { width: 734, height: 343 }],
+      // 1920x937 content area at 200% browser zoom is approximately 960x469
+      // CSS pixels. Browser zoom changes this viewport; DPR/render resolution do not.
+      ["desktop at 200% browser zoom", { width: 960, height: 469 }],
+    ];
+
+    for (const [name, viewport] of shapes) {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
+        null, { polling: 100, timeout: 30_000 });
+      await page.evaluate(() => window.__apex.uiScale(200));
+      await page.waitForFunction(() => document.body.dataset.density === "compact",
+        null, { polling: 100, timeout: 5_000 });
+
+      const scale = await page.evaluate(() => ({
+        requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
+        geometry: getComputedStyle(document.getElementById("menu-buttons")).zoom,
+        raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
+      }));
+      expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
+      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
+      expect(+scale.geometry, `${name}: compact geometry is capped`).toBeCloseTo(1.25, 2);
+      expect(scale.raceFont * +scale.geometry,
+        `${name}: control text still paints at the requested 200%`).toBeGreaterThanOrEqual(33);
+
+      // A real locator click asks Chromium to scroll the control into view. The
+      // old nested 2x geometry timed out here in phone portrait even though the
+      // DOM-only fit probe declared the screen clean.
+      const target = await page.evaluate(async () => {
+        const menu = document.getElementById("menu-buttons");
+        const race = document.getElementById("mb-race");
+        race.scrollIntoView({ block: "center" });
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const r = race.getBoundingClientRect();
+        const m = menu.getBoundingClientRect();
+        return {
+          scrollable: menu.scrollHeight > menu.clientHeight + 1,
+          inside: r.top >= m.top - 1 && r.bottom <= m.bottom + 1,
+          x: r.left + r.width / 2, y: r.top + r.height / 2,
+        };
+      });
+      expect(target.inside, `${name}: RACE can be scrolled fully into view`).toBe(true);
+      await page.mouse.click(target.x, target.y);
+      await expect(page.locator("#select")).toBeVisible();
+    }
+  });
+
   // applyScale() (js/game.js) runs on every boot, reading straight from
   // localStorage — the slider's own oninput can't produce an out-of-range value
   // (the native <input type=range> clamps .value on assignment), but a value
@@ -296,7 +348,7 @@ test.describe("UI scale", () => {
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("#pm-tab-display")).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(page.locator("#pm-tab-performance")).toBeFocused();
+    await expect(page.locator("#pm-tab-more")).toBeFocused();
 
     await page.setViewportSize({ width: 390, height: 844 });
     const narrow = await page.evaluate(() => {
@@ -310,8 +362,8 @@ test.describe("UI scale", () => {
 
     await page.locator("#pm-tab-display").focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#pm-tab-performance")).toBeFocused();
-    await expect(page.locator("#pm-panel-performance")).toBeVisible();
+    await expect(page.locator("#pm-tab-more")).toBeFocused();
+    await expect(page.locator("#pm-panel-more")).toBeVisible();
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one
@@ -332,7 +384,7 @@ test.describe("UI scale", () => {
     // 16.4 s with both fixed. The wait was the dominant term by a long way —
     // far more than the 30 s it costs when driven outside the runner, because
     // Playwright's own polling is on the same starved rAF clock.
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 60_000 });
     await page.evaluate(() => {
       // HEADLESS, because this test measures getBoundingClientRect on four DOM
       // clusters and never looks at a pixel. Leaving the GL draw on made it cost

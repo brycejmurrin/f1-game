@@ -159,6 +159,41 @@ test("RTC inbox pressure drops state snapshots, never reliable events", () => {
   }
 });
 
+test("RTC disconnects instead of dropping reliable events when its inbox overflows", () => {
+  let pcClosed = 0;
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() { pcClosed++; }
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+    const closed = [];
+    ep.onClose((why) => closed.push(why));
+
+    for (let i = 0; i < 257; i++) event.onmessage({ data: "e" + i });
+
+    assert.equal(ep.status, "closed");
+    assert.deepEqual(closed, ["overflow"], "overflow must be explicit to the session");
+    assert.equal(pcClosed, 1);
+    assert.equal(ep.stats().queued, 0, "closing releases the retained payloads");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // ICE configuration
 // ---------------------------------------------------------------------------
@@ -353,6 +388,26 @@ test("garbage and truncated codes are rejected with a usable message", async () 
   const truncated = await NetHandshake.decodeCode("APEX1.z.####");
   assert.equal(truncated.ok, false);
   assert.equal(truncated.error, "corrupt_code");
+  assert.equal((await NetHandshake.decodeCode("APEX1.x.e30")).ok, false,
+    "unknown envelopes must not bypass the plain-payload size policy");
+});
+
+test("invite decoding rejects oversized encoded and plain payloads before use", async () => {
+  const tooLong = "APEX1.p." + "A".repeat(512 * 1024 + 1);
+  assert.equal((await NetHandshake.decodeCode(tooLong)).ok, false,
+    "encoded input must be bounded before atob allocates it");
+
+  // Still below the encoded ceiling, but above the decoded JSON/SDP ceiling.
+  const plain = JSON.stringify({ k: "offer", pad: "x".repeat(270 * 1024) });
+  const encoded = Buffer.from(plain).toString("base64url");
+  assert.ok(encoded.length < 512 * 1024, "fixture must exercise the decoded cap");
+  assert.equal((await NetHandshake.decodeCode("APEX1.p." + encoded)).ok, false);
+
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  for (const id of ["vs-answer-in", "vs-invite-in"]) {
+    assert.match(html, new RegExp(`<textarea id="${id}"[^>]*maxlength="524288"`),
+      `${id} must enforce the same encoded ceiling before script runs`);
+  }
 });
 
 test("whitespace from a sloppy copy/paste is tolerated", async () => {

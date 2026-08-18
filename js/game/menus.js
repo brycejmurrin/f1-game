@@ -133,6 +133,19 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
 const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]];
+let trackQuery = "";
+
+function applyTrackSearch(value) {
+  trackQuery = String(value || "").trim().toLocaleLowerCase();
+  const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
+  for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
+  for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
+    head.hidden = !rows.some((row) => row.dataset.trackGroup === head.dataset.trackGroup && !row.hidden);
+  }
+  const empty = document.getElementById("sel-track-empty");
+  if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  ScrollFadeRefresh();
+}
 
 function setTrackFilter(id, focus) {
   trackFilter = id;
@@ -148,15 +161,14 @@ function trackFilterBar() {
   const bar = document.createElement("div");
   bar.id = "sel-track-filter";
   bar.className = "sel-chip-row";
-  bar.setAttribute("role", "tablist");
-  bar.setAttribute("aria-label", "Circuit filter");
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Circuit list controls");
   trackFilters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "sel-chip" + (trackFilter === id ? " active" : "");
     b.dataset.filter = id;
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", trackFilter === id ? "true" : "false");
+    b.setAttribute("aria-pressed", trackFilter === id ? "true" : "false");
     b.tabIndex = trackFilter === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
@@ -175,6 +187,15 @@ function trackFilterBar() {
     };
     bar.appendChild(b);
   });
+  const search = document.createElement("input");
+  search.id = "sel-track-search";
+  search.type = "search";
+  search.value = trackQuery;
+  search.placeholder = "Search circuit or country";
+  search.setAttribute("aria-label", "Search circuits");
+  search.autocomplete = "off";
+  search.oninput = () => applyTrackSearch(search.value);
+  bar.appendChild(search);
   return bar;
 }
 
@@ -253,12 +274,16 @@ function buildSelect() {
         group = g;
         const head = document.createElement("div");
         head.className = "track-group-head";
+        head.dataset.trackGroup = g;
         head.textContent = g;
         els.selTracks.appendChild(head);
       }
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.dataset.trackIdx = String(i);
+      row.dataset.trackGroup = g;
+      row.dataset.search = [t.name, t.country, t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+        .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-label", t.name);
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
 
@@ -303,6 +328,13 @@ function buildSelect() {
       };
       els.selTracks.appendChild(row);
     });
+    const empty = document.createElement("p");
+    empty.id = "sel-track-empty";
+    empty.className = "season-upcoming-head";
+    empty.textContent = "NO CIRCUITS MATCH";
+    empty.hidden = true;
+    els.selTracks.appendChild(empty);
+    applyTrackSearch(trackQuery);
     updateTrackPreview();
   }
 }
@@ -396,6 +428,47 @@ function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
+  /* Render the caption before measuring the map slot. planPreview subtracts
+     #sel-preview-info's real height from the section budget; measuring an empty
+     caption let the map claim the whole compact band, then the text written
+     below it was clipped until some later resize happened to refit the card. */
+  els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
+  els.selPreviewGp.textContent = t.gp || "";
+  const crns = TrackMaps.corners(t);
+  const turns = crns.length;
+  els.selPreviewMeta.textContent = [
+    t.country,
+    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
+    turns ? turns + " turns" : ""
+  ].filter(Boolean).join("  ·  ");
+  if (G.timeTrial) {
+    const board = ttBoard(t.id);
+    const rec = board.length ? board[0].t : Infinity;
+    els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
+  } else if (G.seasonMode) {
+    els.selPreviewRec.textContent = G.season && !SeasonCal.canRace(G.season)
+      ? "Final standings · " + SeasonCal.rounds() + " rounds"
+      : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
+  } else {
+    els.selPreviewRec.textContent = "";
+  }
+  const factsEl = document.getElementById("sel-preview-facts");
+  if (factsEl) {
+    const dir = TrackMaps.direction(t);
+    const elev = TrackMaps.elevRange(t);
+    const facts = [];
+    const dz = TrackMaps.drsZones(t);
+    if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
+    if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
+    if (dz && dz.length) facts.push('<span class="spf-fact spf-drs">' + dz.length + " DRS zone" + (dz.length > 1 ? "s" : "") + "</span>");
+    if (crns.length) {
+      const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
+      facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
+    }
+    factsEl.innerHTML = facts.join("");
+  }
+  drawElevProfile(document.getElementById("sel-preview-elev"), t);
+
   // Size the bitmap to the circuit's own aspect inside the CSS slot. A fixed
   // 520×300 canvas displayed under max-height caps (or UI zoom reshaping the
   // card) was getting CSS-squashed; fitCanvas + object-fit:contain keep the
@@ -437,17 +510,32 @@ function updateTrackPreview() {
   // these report LOCAL (pre-zoom) px. Mixing the two subtracted a 1.75x-sized
   // caption and label from a 1x-sized column budget at UI SIZE 175%, drove the
   // budget negative and collapsed every map onto its floor (measured 36x72).
-  const plan = TrackMaps.planPreview({
-    aspect: a,
-    cardInnerW: card ? card.clientWidth - padX : 260,
-    // The scrolling section is the honest ceiling: the card grows to its
-    // content, so bounding the map by the CARD's own height is circular.
-    sectionH: section ? section.clientHeight : 0,
-    labelH: label ? label.offsetHeight : 0,
-    infoH: info ? info.offsetHeight : 0,
-    padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
-    gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0
-  });
+  const sheet = card && card.closest(".sheet");
+  const stacked = !!(sheet && sheet.dataset.pair !== "on");
+  const cardInnerW = card ? card.clientWidth - padX : 260;
+  const chipH = sheet ? px(getComputedStyle(sheet).getPropertyValue("--chip-h")) || 40 : 40;
+  /* In every stacked layout CSS makes the preview a thumbnail band beside its
+     caption. planPreview's 120px floor belongs to a full preview column, so use
+     the band's own token-based caps here and preserve the circuit aspect inside
+     them. One-and-a-half chip rows stays useful at 100% without overrunning the
+     band when a late density measurement switches a 200% sheet to compact. */
+  const plan = stacked
+    ? {
+      shape: "beside",
+      slotW: Math.min(cardInnerW * 0.42, chipH * 3),
+      slotH: chipH * 1.5
+    }
+    : TrackMaps.planPreview({
+      aspect: a,
+      cardInnerW: cardInnerW,
+      // The scrolling section is the honest ceiling: the card grows to its
+      // content, so bounding the map by the CARD's own height is circular.
+      sectionH: section ? section.clientHeight : 0,
+      labelH: label ? label.offsetHeight : 0,
+      infoH: info ? info.offsetHeight : 0,
+      padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
+      gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0
+    });
   if (card && plan.shape === "beside") {
     card.setAttribute("data-map-shape", "beside");
     void map.offsetWidth;
@@ -489,51 +577,6 @@ function updateTrackPreview() {
     corners: true, cornerR: Math.max(4, Math.round(9 * mk)), cornerFont: Math.max(8, Math.round(11 * mk)),
     sectors: true, drs: true
   });
-  els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
-  els.selPreviewGp.textContent = t.gp || "";
-  const crns = TrackMaps.corners(t);
-  const turns = crns.length;
-  els.selPreviewMeta.textContent = [
-    t.country,
-    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
-    turns ? turns + " turns" : ""
-  ].filter(Boolean).join("  ·  ");
-  // THE CAPTION IS THIS FUNCTION'S, in every mode. The season branch used to write
-  // "Round n of N" in buildSelect() AFTER calling us — which held only until the
-  // next preview refresh, and there is always a next one: the card re-measures on
-  // resize and again when the deferred flyby build lands. So the season select
-  // screen blanked its own round counter a beat after showing it. Rendering it
-  // here, where the `else` that wiped it lives, is the fix.
-  if (G.timeTrial) {
-    const board = ttBoard(t.id);
-    const rec = board.length ? board[0].t : Infinity;
-    els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
-  } else if (G.seasonMode) {
-    els.selPreviewRec.textContent = G.season && !SeasonCal.canRace(G.season)
-      ? "Final standings · " + SeasonCal.rounds() + " rounds"
-      : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
-  } else {
-    els.selPreviewRec.textContent = "";
-  }
-  // Track facts: direction arrow, elevation badge, slowest corner callout
-  const factsEl = document.getElementById("sel-preview-facts");
-  if (factsEl) {
-    const dir = TrackMaps.direction(t);
-    const elev = TrackMaps.elevRange(t);
-    const facts = [];
-    const dz = TrackMaps.drsZones(t);
-    if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
-    if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
-    if (dz && dz.length) facts.push('<span class="spf-fact spf-drs">' + dz.length + " DRS zone" + (dz.length > 1 ? "s" : "") + "</span>");
-    if (crns.length) {
-      const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
-      facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
-    }
-    factsEl.innerHTML = facts.join("");
-  }
-
-  // Elevation profile chart (shown only when there is meaningful elevation data)
-  drawElevProfile(document.getElementById("sel-preview-elev"), t);
 }
 function openTrackDetail() {
   const t = Tracks.LIST[G.trackIdx];

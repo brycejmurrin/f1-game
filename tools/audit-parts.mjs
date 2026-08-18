@@ -61,7 +61,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 720, height: 560 } });
   page.on("pageerror", (error) => console.log("PAGEERR", error.message));
   await page.goto(`${URL}/tools/carview.html?team=${TEAM}&hud=0`, { waitUntil: "load" });
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, { timeout: 15_000 });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: 15_000 });
 
   const audit = await page.evaluate((fallbackTeam) => {
     const teams = Teams.LIST.filter((team) => Parts.FACTORY_PRESETS[team.id]);

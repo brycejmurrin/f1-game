@@ -1015,7 +1015,7 @@ function create(G) {
     // hides it, so the reset overwrote the rule on the very next line and the
     // seat never blocked anything. The rule was right, the button just never
     // heard about it. Set the reset first and let the rule have the last word.
-    $("cr-go").disabled = !!st.hire;
+    $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
   }
 
@@ -1279,6 +1279,7 @@ function create(G) {
     G.flow = "gp"; G.session = "race";
     G.season = G.store.get("season", null);
     G.refreshCareerButton();
+    { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();
   };
   $("cr-garage").onclick = () => { close(); G.openGarage("career"); };

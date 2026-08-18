@@ -57,7 +57,7 @@ async function main() {
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
   await page.goto(srv.url, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.__apex != null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 30000 });
 
   const probe = await page.evaluate(evaluateLiveProbe);
 

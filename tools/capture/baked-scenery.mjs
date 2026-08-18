@@ -90,7 +90,7 @@ const browser = await launchChromium({
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 await page.goto(srv.url);
-await page.waitForFunction(() => window.__apex != null, { timeout: 10_000 });
+await page.waitForFunction(() => window.__apex != null, null, { timeout: 10_000 });
 
 const manifest = { outDir, models: null, shots: [] };
 

@@ -137,3 +137,29 @@ test("Worker rate-limits room creation before allocating more Durable Objects", 
   assert.equal(last.headers.get("retry-after"), "60");
   assert.equal(ids, 20, "limited requests must not resolve or create a Durable Object");
 });
+
+test("Worker rate-bucket storage is hard-capped under fresh address churn", async () => {
+  const stub = { fetch: async () => new Response('{"ok":true}', { status: 200 }) };
+  const env = { ROOM: { idFromName(code) { return code; }, get() { return stub; } } };
+  const target = "2001:db8:rate::1";
+  const post = (ip) => worker.fetch(new Request("https://relay.test/r/ABCDEF/offer", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+    body: JSON.stringify({ payload: "x" }),
+  }), env);
+
+  for (let i = 0; i < 20; i++) assert.equal((await post(target)).status, 200);
+  assert.equal((await post(target)).status, 429, "the target bucket starts exhausted");
+
+  // More than the configured 4,096 fresh buckets must evict the oldest one;
+  // the old implementation retained every fresh entry and this remained 429.
+  for (let i = 0; i < 4110; i++) {
+    const ip = `2001:db8:churn::${i.toString(16)}`;
+    const res = await worker.fetch(new Request("https://relay.test/r/ABCDEF/offer", {
+      method: "GET", headers: { "cf-connecting-ip": ip },
+    }), env);
+    assert.equal(res.status, 200);
+  }
+  assert.equal((await post(target)).status, 200,
+    "the least-recently-used bucket must have been evicted to enforce the cap");
+});

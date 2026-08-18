@@ -537,6 +537,8 @@ interface GameCtx {
   readonly wireId: (c: CarState) => number;
   /** UI SIZE / HUD SIZE — see __apex.uiScale. */
   readonly setScale: (key: string, prop: string, v: number) => ScaleState;
+  /** Publish current race state to the HUD/minimap immediately. */
+  readonly refreshHud: (force?: boolean) => void;
 
   // ── The waiting room reuses the real menus rather than reimplementing them ─
   readonly setNetRoom: (on: boolean) => void;
@@ -547,6 +549,7 @@ interface GameCtx {
   readonly onPeerQuali: (d: unknown) => void;
   readonly onPeerQualiLive: (d: unknown) => void;
   readonly openQualiForNet: (done: () => void) => void;
+  readonly refreshQualiGate: () => void;
   raceQuali: boolean;
   readonly openGarageFrom: (from?: string) => void;
   readonly startRace: () => void;
@@ -554,6 +557,7 @@ interface GameCtx {
   readonly update: (dt: number) => void;
   /** Arc position wrapped into [0, track.total). */
   readonly wrapS: (s: number) => number;
+  readonly quitToMenu: () => void;
 }
 
 // ── Module.create(G) ─────────────────────────────────────────────────────────

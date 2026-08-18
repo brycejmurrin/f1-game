@@ -21,13 +21,14 @@ test.describe.configure({ timeout: 360_000 });
 
 async function openImageTuner(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
+  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }
@@ -37,6 +38,7 @@ async function reopenImageTuner(page) {
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
+  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }

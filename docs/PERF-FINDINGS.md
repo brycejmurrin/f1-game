@@ -733,81 +733,37 @@ standalone bug fix worth landing on its own.
 ### Stale entry corrected: the env-probe cull already shipped
 
 §3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
-shipped as **`PerfTry.envCull`**, `ENV_CULL_M = 300`, `js/render/glx.js:912-922`,
-default OFF, applied as a `min` and never an override, with the counted
-justification in `js/game/perf-try.js`. What remains true is the sharpener:
+is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx.js`
+`envFaceBegin`, applied as a `min` and never an override, with the same cap
+on WGX and TLX. The pause-menu `PerfTry.envCull` toggle is gone — these were
+renderer A/B flags, not lighting knobs, so they were not moved into the
+lighting tuner. What remains true is the
+sharpener:
 `frame.cullDist` is read in exactly one place, inside the chunked path, so the
 switch **cannot remove a single road or terrain triangle** from the probe — it
 reaches props and glass only. That makes it a synergy argument for chunking the
 ribbons, not an independent item.
 
+The probe face also drew sky **before** the world (`js/game.js` env-probe
+block). The main camera is already opaque → sky → glow. **Taken 2026-08-18:**
+the probe now draws world then sky, same early-Z order. No glow on the probe.
+
+Do **not** copy the probe's 300 m cull onto the chase cam. A 20 m building is
+still ~18 px at 900 m / ~1280 px; that is a look change. `cullDist = farPlane`
+is also not look-identical: frustum far-plane *corners* sit farther from the
+eye than `farPlane` (`far / cos(halfFov)`).
+
+> **TAKEN 2026-08-18 (look-identical half).** Clear-day `cullDist` is now
+> the far-corner distance (`farPlane * hypot(1, tan(fovY/2)*hypot(1,aspect))`),
+> a sphere that contains the frustum. Fog / tier-3 still win when tighter.
+> Not 300 m.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
 
-**Env probe inherits the main camera's `cullDist`** (`js/render/glx.js`,
-`envFaceBegin`). It swaps `viewProj` and `eye` but not `cullDist`, which
-`js/game.js` sets to 0 (no radial cull) below PerfGov tier 3 — so a 64×64
-reflection target re-draws the city through a 900 m frustum, potentially
-hundreds of chunk draw calls for 4096 pixels of blurred reflection. This is the
-only finding where the win is draw-call submission rather than a shaved
-constant, and game.js already calls this pass "the biggest per-frame load
-multiplier" — the mitigation that shipped halved its *rate*, not its *reach*.
-
-**NO LONGER AN ESTIMATE (2026-08-14).** "Potentially hundreds of chunk draws"
-was a guess; the reach is now COUNTED by `tools/chunk-reach.cjs`, which is the
-method this document argues for made repeatable —
-replicate `createChunkedMesh`'s 72 m centroid binning in the Node VM build
-harness (`tools/track-build-vm.cjs`) and count what survives, at 12 stations a
-lap. Over a full 6-face cube the probe sees every direction, so its coverage is
-exactly a SPHERE of the far radius and the count is orientation-independent —
-which is what makes this measurable without a GPU at all:
-
-| probe far | vegas chunks / indices | spa | monza |
-|---|---|---|---|
-| **900 m (shipped)** | **238.3 / 1,256,344** | **373.6 / 344,888** | **195.1 / 516,647** |
-| 400 m | 63.2 / 492,715 | 98.4 / 141,175 | 64.4 / 204,214 |
-| 300 m | 45.3 / 376,791 | 64.6 / 110,233 | 43.8 / 141,843 |
-| 200 m | 29.8 / 267,784 | 33.5 / 67,938 | 26.8 / 85,366 |
-
-A 300 m probe cull removes **68-72% of the indices and 78-83% of the chunks**,
-and the three circuits agree closely despite very different scenery (spa is
-1594 small tree chunks over 207 k tris; vegas is 914 large building chunks over
-885 k tris). That consistency is the useful part — it is a property of the
-radius, not of a circuit.
-
-The sub-pixel argument for why 300 m is defensible: a face is 90 deg across 64
-pixels = 1.41 deg per pixel. A 20 m building subtends atan(20/300) = 3.8 deg
-(~2.7 px) at 300 m, and atan(20/900) = 1.27 deg (**0.9 px**) at 900 m — under
-one pixel, in a target that is then mipmapped and blurred for a car-paint
-reflection. Everything between 300 m and 900 m is paying full vertex cost to
-move less than a pixel.
-
-**This is NOT bit-identical**, unlike everything else taken today, so it does
-not get taken the same way: it belongs behind a `PerfTry` default-OFF switch
-(`js/game/perf-try.js`) where it can be A/B'd on real hardware, which is the
-mechanism that already exists for exactly this class of change.
-
-Everything below was the original note on why this box could not settle it, and
-stays because the negative results are still true of frame TIMING here:
-
-- Counting `drawChunked` CALLS separates the passes (1 env / 2 main per frame)
-  but not the chunks inside them, which is where the cost is. Useless.
-- Frame timing under SwiftShader is worse than useless — it is **misleading in
-  the optimistic direction**. Measured baseline on vegas parked, 640x360:
-  **2872 ms median frame** (p25 2751, p75 3216). At 0.35 fps the frame is
-  dominated by SOFTWARE RASTERISATION of ~1.8 M verts, so any change that
-  removes geometry posts a large win that a real GPU — where the bottleneck is
-  submission, not fill — would not repeat. A number from that harness would
-  have looked like strong evidence and been worth nothing.
-
-A patch was written and reverted unmeasured: save/restore `frame.cullDist`
-alongside `viewProj` and `eye`, with a 220 m probe cull. It is defensible on its
-face — the save/restore triple is plainly incomplete — but it is not purely a
-correctness fix, because narrowing the cull CHANGES what the reflection
-contains. Shipping a visible behaviour change whose benefit cannot be measured
-here is the trade this document exists to warn against, so it was reverted
-rather than shipped on plausibility. It needs a real GPU and a frame capture.
+The env-probe 300 m cull and world-then-sky order already shipped — see
+**Stale entry corrected** above. Do not re-open that item from this list.
 
 **Two full-field O(n²) AI scans** at `js/game.js` — traffic awareness and
 lateral separation, ~370 lines apart. The second loop's window (`|Δp| ≤ 6.5`)
@@ -833,11 +789,18 @@ cost is quadratic in prop count specifically. Measured trivial today: ~420k
 inner iterations on vegas (~4–25 ms of a 4059 ms build), 419 on monza. Below the
 bar that reverted `nodeGrid`. Worth doing when the skyline gets denser.
 
+> **SUPERSEDED 2026-08-18.** `massBlocked` now uses a 24 m XZ grid
+> (`MASS_CELL`, incremental `massGridInsert` on `massAdd`). SAT stays exact;
+> only candidate gathering is culled.
+
 **Emitter ring recomputation** (`js/track/geom.js`) — `addCyl` calls `lo(a0)` /
 `lo(a1)` three times each per segment where two suffice; same in `addCone` and
 `addFrustum`. The `addBox` half of this finding measured 1–4 %, so expect less.
 Keep the angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π, so
 wrapping changes the last segment's coordinates.
+
+> **SUPERSEDED 2026-08-18.** `addCyl` / `addCone` / `addFrustum` cache ring
+> ends once per segment. Angle stays `(i+1)/seg*6.2832`.
 
 **Typed accumulators for the props buffers** (`js/track/tracks.js`) — `pos`,
 `nrm`, `col`, `mat`, `idx` are plain arrays grown by `push`, ~27 M push
@@ -845,6 +808,13 @@ arguments on vegas. Reported at 15–31 %. Three hard edges if attempted: a
 variadic `push()` shim measured SLOWER than native (the win needs fixed arity);
 `idx` must be `Uint32Array`; and `TrackModels.validateGeometry` gates on
 `Array.isArray(geo.pos)`, so the props mesh ships EMPTY if that is missed.
+
+> **TAKEN 2026-08-18.** `TrackModels.scratch()` / `makeAccum` grow
+> Float64 (pos/nrm/col/mat — same values as the old Array fuse) and
+> Uint32 (`idx`) with named-arity `push` (not rest/arguments).
+> `sealGeometry` copies to exact-length typed arrays before
+> `validateGeometry`, which now accepts `BYTES_PER_ELEMENT` views as
+> well as `Array.isArray`. Stages from `emptyBuffer()` stay plain arrays.
 
 **Non-passive capture-phase `wheel` listener on `window`**
 (`js/game/menunav.js`) — flagged by the audit as "the single highest-leverage
@@ -873,6 +843,13 @@ treatment. Left alone.
 fix it (`_frameToken`). Honest arithmetic: ~0.05 ms on a 16.7 ms budget, so
 hygiene rather than a win.
 
+> **TAKEN 2026-08-18 (GLX).** `uf1` / `_litUf` / `_skyUf` / `_compUf` skip
+> equal tuner-knob re-uploads. `envFaceBegin()` + the main `begin()` share
+> the same LIGHTING TUNER scalars in one game frame; WebGL uniforms persist
+> on the program. View / eye / env / lights / time / grainTime still upload
+> every call. WGX writes a whole UBO per `begin()` — no per-field skip.
+> Do not invent a millisecond claim from this.
+
 ### Added 2026-08-14, second round
 
 Ranked as above. **Provenance note:** the counts below came out of a read-only
@@ -896,7 +873,7 @@ sphere of radius R, so these are **lower** bounds):
 | provably outside the ±80 m shadow ortho | **89 %** | **88 %** | **89 %** |
 
 > **SUPERSEDED 2026-08-17 (render-audit follow-ups).** Camera-pass road AND
-> terrain now lazy-build `*Chunked` under default-ON `PerfTry.envCull` +
+> terrain now lazy-build `*Chunked` under the baked 300 m env-probe cull +
 > `PerfGov.tier() < 3` (`js/game.js` drawWorldMeshes). Shadow ribbons already
 > chunked independently. The table above remains a valid *pre-chunk* reach
 > measurement; do not re-derive “unreachable” from it.
@@ -907,8 +884,9 @@ Three things make this worth writing down rather than doing:
    light-frustum test is exactly the one `castShadowChunked` already applies to
    props, and a triangle outside the ortho writes no depth. But chunking
    reorders submission *within* the mesh, so coplanar LEQUAL ties inside the
-   road could flip — the class `perf-try.js`'s unwired `floorLast` note already
-   flags. That needs a rendered lap, not a frame.
+   road could flip — the class of change `floorLast` would have been (draw the
+   base floor last among opaque world meshes) already flags. That needs a
+   rendered lap, not a frame.
 2. **The fix already exists in the tree and is unreachable.** `js/game.js`
    lazily builds `track.meshes.roadChunked` and draws it via `drawChunked` —
    but only under `LT.roadChunkLamps && LT.perChunkLights`, a *lamp* feature
@@ -916,9 +894,9 @@ Three things make this worth writing down rather than doing:
    in §2: a fix that existed and had not been copied across.
    (**Also superseded:** envCull now opens the camera path without lamp knobs.)
 3. **It sharpens a §3 entry above.** `frameCullDist` is read in exactly one
-   place, inside the chunked path. `draw()` never reads it — so `PerfTry.envCull`,
-   the switch built for the env-probe reach, **cannot remove a single ribbon
-   triangle from the probe.** It only ever touched props and glass.
+   place, inside the chunked path. `draw()` never reads it — so the 300 m
+   env-probe cull **cannot remove a single ribbon triangle from the probe.**
+   It only ever touched props and glass.
 
 **Two `Δprog` wraps with no pre-reject, where `pairContact` has one.**
 `pairContact` opens with an exact cheap reject before its two float modulos,
@@ -934,6 +912,9 @@ unprovable part — the wrap expression can differ from the raw delta by ~1 ulp.
 **This is NOT the "merge the two loops" idea §3 already declined**; it is the
 missing guard on each, independently, and it is ~10x the size that entry
 estimated.
+
+> **SUPERSEDED 2026-08-18.** Both scans now pre-reject before wrap (windows
+> 34.1 m and 6.5 m), same form as `pairContact`. Do not re-implement.
 
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
@@ -966,7 +947,7 @@ wall plus eager top-level work.
 > (web.dev, *Deep dive into the murky waters of script loading*), and GitHub
 > Pages serves HTTP/2, so they multiplex on one connection. Only EXECUTION is
 > serial and ordered. This also kills `defer` as a lever from a second
-> direction, on top of the nine `readyState === "loading"` guards below:
+> direction, on top of the eight `readyState === "loading"` guards below:
 > `defer` cannot fix a serialisation that is not happening.
 
 **The `?v=N` bump throws away Chrome's code cache for all 148 scripts, every
@@ -1000,16 +981,16 @@ player reaches.
 
 **`defer` is not the one-attribute change it looks like.** Every external tag
 sits at the very end of `<body>` with no markup after it, and deferred classic
-scripts keep document order — so it reads as free. It is not: **nine**
+scripts keep document order — so it reads as free. It is not: **eight**
 self-initialising modules guard on
 `if (document.readyState === "loading") …DOMContentLoaded… else init();`
 — enumerate them with `grep -rl 'readyState === "loading"' js/`, which gives
 `js/game/ariastate.js`, `gfx-quality.js`, `menunav.js`, `music-lib.js`,
-`perf-try.js`, `scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
+`scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
 Parser-blocking,
-`readyState` is `"loading"`, so all nine defer `init()` until after the whole
+`readyState` is `"loading"`, so all eight defer `init()` until after the whole
 wall has run — which `sheetshape.js` states as a deliberate choice. Under
-`defer`, `readyState` is `"interactive"` and all nine take the `else` branch and
+`defer`, `readyState` is `"interactive"` and all eight take the `else` branch and
 initialise **mid-wall**, so a module at tag 50 can init before one it reads at
 tag 100 exists. The prepared form of the change is
 `readyState !== "complete"`, which is behaviour-preserving today and correct
