@@ -88,16 +88,43 @@ Every call accepts `dryRun`. `--plan` is not a separate tool: `dryRun` on
 `dryRun` / mock of that tool **must not** emit `test-bg` or a group name as
 something to start.
 
-Leave out of both weeks (agents already have them as CLIs): `select-specs`,
-`assets.mjs verify`, `carshot`, `wgx-shot`, `quick-validate`, `float-audit` /
-`clip-audit`.
-
 ---
 
 ## Week-2 (lock first)
 
 `apex_eval`, `apex_shot`, `apex_survey_track`, `apex_gfx_probe`,
 `apex_wgx_validate`, `apex_wgx_capture`, `apex_ui_survey`, `apex_agent`.
+
+---
+
+## Week-3 (more catalog)
+
+Tree (no lock — same gate as week-1):
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_select_specs` | `select-specs.mjs --since <ref> --json` | Requires `since`. Never `--bg`. |
+| `apex_assets_verify` | `assets.mjs verify` | Never `bake*` / `fetch` / `import-pack` |
+| `apex_float_audit` | `float-audit.cjs <id>\|--all --json` | Never `--clip` / `--foliage` |
+| `apex_clip_audit` | `clip-audit.cjs <id>\|--all --json` | No `--depth` / `--adj` (CLI defaults) |
+| `apex_coplanar_audit` | `coplanar-audit.cjs <id>\|--all --json` | No `--gap` / `--area` / `--fight` |
+| `apex_track_verts` | `track-verts.cjs` or `--diff <path>` | `--diff` path must stay under `artifacts/` or `scratch/` |
+
+Browser (lock + occupancy, same as week-2):
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_carshot` | `car/carshot.mjs [az] [tod] [teamIdx] [out]` | `out` under `artifacts/` / `scratch/` |
+| `apex_wgx_shot` | `wgx-shot.mjs [track] [--lite] [--cam] [--out]` | No `--url`. `out` contained. |
+| `apex_quick_validate` | `quick-validate.mjs` | **No port** (self-boots) |
+
+Output paths on every wrap (`--out`, carshot dest, `--diff`) are refused with
+`path_escaped` unless they resolve under `artifacts/` or `scratch/`.
+Dispatch keys off `kind` (`tree` vs `browser`), not the week-1 name set — a
+new tree tool must not take the lock.
+
+Still not wrapped (use the CLI): `select-recall`, `wgx-gallery`, `graph-parity`
+(needs `BASE=`), HTTP `:3713`.
 
 All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 
