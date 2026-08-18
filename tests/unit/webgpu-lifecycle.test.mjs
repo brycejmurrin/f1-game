@@ -919,7 +919,9 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, \(authored && attrBG\) \? attrBG : \(_roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
+  assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);

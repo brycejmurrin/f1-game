@@ -1236,6 +1236,10 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
     "binary refine must be 4 like GLX, not 5");
   assert.match(post, /min\(gateSrc \/ 0\.20, 1\.0\)/,
     "SSR pass must apply the dry-sheen fade once so COMPOSITE can trust .a");
+  assert.match(post, /let ssrWet = U\.lift\.w/,
+    "COMPOSITE must declare wetness (U.lift.w) before the SSR consume gate");
+  assert.equal((post.match(/let gateSrc = /g) || []).length, 1,
+    "SSR dry-sheen fade must declare gateSrc once — a merge leftover redeclares it and Dawn refuses the module");
 });
 
 test("WGX SAA widens roughness before wet like GLX", () => {
