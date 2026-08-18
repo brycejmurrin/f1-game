@@ -17,6 +17,11 @@ Week-3 live tree (same container, no Chromium): `apex_select_specs`
 `since=HEAD~8` 322 ms `ok`; `apex_assets_verify` 40 ms `verify: OK`;
 `apex_float_audit` monza 895 ms `clusters: 0`.
 
+Week-4 live tree: `apex_select_recall` 739 ms `ok` (5 cases, no silent
+miss); `apex_cache_bump_only` since=HEAD~1 28 ms `ok` with CLI exit 1
+(`pure:false`, empty diff); `apex_aero_zone_turns` monza 78 ms;
+`apex_startline_snap` monza 30 ms.
+
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
 
