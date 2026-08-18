@@ -630,6 +630,7 @@ fn vs_main(
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
+  @location(3) aMatTrk : vec4<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -646,12 +647,17 @@ fn vs_main(
   var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  // No 4th vertex attribute — Dawn zeroed it (and broke pos fetch) on large
-  // ribbon VBOs. Road pieces read authored mat+trk from storage[vid].
-  var pulled = vec4<f32>(0.0);
-  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
-  // Road pieces bind authored mat+trk (group 2, vertex_index). Do not
-  // overwrite with the world LUT — nearest-bin s/x warps paint + tarmac.
+  // Piece VBOs carry authored (mat, s, x, hw) at location 3. The full-ribbon
+  // VBO used to zero that attr (and pos). LUT fills in only when hw is 0.
+  var pulled = aMatTrk;
+  if (matTrkArr[0].x != 12345.0 && pulled.w < 0.5) { pulled = matTrkArr[vid]; }
+  if (D.mat2.z > 15.5 && D.mat2.z < 16.5 && pulled.w < 0.5) {
+    let wt = trkFromWorld(wp.xyz);
+    if (wt.w > 0.5) {
+      let mid = select(16.0, pulled.x, pulled.x > 0.5);
+      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
+    }
+  }
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
   o.matTrk = pulled;

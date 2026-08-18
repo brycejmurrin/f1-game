@@ -244,25 +244,20 @@ const WGX = (function () {
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
-  // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
-  // mat+trk do NOT ride a 4th vertex attribute on the road VBO — Dawn
-  // delivered 0 for that attr (and for vertex_index on drawIndexed). Cars
-  // (small VBOs) are fine. The ribbon's mat+trk live in a group-2 spatial
-  // LUT (world XZ → nearest centerline sample); fs_main reconstructs
-  // (mat, s, x, hw) from wpos so markings and asphalt do not depend on
-  // the broken attribute. Shared-index ribbons still expand so the
-  // storage[vid] fallback stays 1:1 on adapters where vertex_index works.
-  // CRITICAL: keeping a float32x4 @location(3) on large ribbon VBOs also
-  // broke position fetch on SwiftShader-Dawn (road rasterized to a thin
-  // depth band only). Stride must stay 36 with three attributes.
-  const VERTEX_STRIDE = 36;
-  const VERTEX_FLOATS = 9;
+  // ── vertex layout: [pos3, nrm3, col3, matTrk4], stride 52 (piece VBOs) ──
+  // A 4th attr on the FULL ribbon VBO zeroed (and broke pos fetch) on
+  // SwiftShader-Dawn. Pieces are 4095 verts — small enough that location 3
+  // carries authored (mat, s, x, hw) like GLX aMat/aTrk. The world LUT
+  // stays group 2 for buryRibbon and as a VS fallback when aMatTrk.w==0.
+  const VERTEX_STRIDE = 52;
+  const VERTEX_FLOATS = 13;
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
+      { shaderLocation: 3, offset: 36, format: "float32x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -2224,7 +2219,7 @@ const WGX = (function () {
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
+    // Interleave [pos3, nrm3, col3, matTrk4] (stride 52) + a side array for LUT.
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -2243,14 +2238,18 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        // Raw RGB. Packing MAT into col.x interpolates 16→0 across the
-        // asphalt lip and sawtooths the tarmac. Dawn zeros a 4th vertex
-        // attr; road pieces bind authored mat+trk as group-2 storage.
+        // Raw RGB + authored mat+trk in the VBO (piece-sized, stride 52).
+        // Do not pack MAT into col.x — that interpolates 16→0 and sawtooths.
         inter[o + 6] = col[i * 3];
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
-        attr[i * 4] = mat ? mat[i] : 0;
+        const mid = mat ? mat[i] : 0;
+        inter[o + 9] = mid;
+        attr[i * 4] = mid;
         if (trk) {
+          inter[o + 10] = trk[i * 3];
+          inter[o + 11] = trk[i * 3 + 1];
+          inter[o + 12] = trk[i * 3 + 2];
           attr[i * 4 + 1] = trk[i * 3];
           attr[i * 4 + 2] = trk[i * 3 + 1];
           attr[i * 4 + 3] = trk[i * 3 + 2];
@@ -2444,8 +2443,7 @@ const WGX = (function () {
               if (n <= 0) continue;
               const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
-              // Per-vertex attr — do not share the world LUT (that warps s).
-              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat));
+              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
             return {
@@ -2453,7 +2451,7 @@ const WGX = (function () {
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
             };
           }
-          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat);
+          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat, lut);
           return Object.assign({ _wgx: "mesh" }, m);
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
@@ -3023,16 +3021,12 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
-    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
+    // Slot 0 = pos/nrm/col/matTrk (stride 52), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index).
-    function _bindLitVerts(pass, vbuf, instBuf, attrBG, o) {
+    function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      // Road pieces bind authored mat+trk. The world LUT is buryRibbon only.
-      let g2 = attrBG || zeroAttrBG;
-      if (o && o.buryRibbon && _roadLutBG) g2 = _roadLutBG;
-      if (o && o.surfaceId === 16 && attrBG) g2 = attrBG;
-      pass.setBindGroup(2, g2);
+      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
     }
 
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
@@ -3068,12 +3062,12 @@ const WGX = (function () {
       if (mesh.pieces) {
         for (let i = 0; i < mesh.pieces.length; i++) {
           const p = mesh.pieces[i];
-          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o);
+          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
           _drawGeom(litPass, p);
         }
         return;
       }
-      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
       _drawGeom(litPass, mesh);
     }
 
@@ -3094,12 +3088,12 @@ const WGX = (function () {
         if (mesh.pieces) {
           for (let i = 0; i < mesh.pieces.length; i++) {
             const p = mesh.pieces[i];
-            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o);
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
             _drawGeom(litPass, p);
           }
           return;
         }
-        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o);
+        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
         _drawGeom(litPass, mesh);
         return;
       }
@@ -3123,7 +3117,7 @@ const WGX = (function () {
           continue;
         }
         if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
-        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o);
+        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
         _drawGeom(litPass, ch);
         drew++;
         if (isNear) nearDraw++;
@@ -4169,7 +4163,7 @@ const WGX = (function () {
       litPass.setBindGroup(0, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG, o);
+      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
       _drawGeom(litPass, batch, n);
     }
     function freeInstancedBatch(batch) {
