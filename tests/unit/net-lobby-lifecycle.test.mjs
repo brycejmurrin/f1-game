@@ -79,6 +79,11 @@ function harness({ wakeLock, prefetchIce, scanFactory } = {}) {
   };
 }
 
+test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
+  assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
+  assert.match(SOURCE, /if \(!sessions\.size\) \{ clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
+});
+
 test("a newer join operation prevents a late host continuation", async () => {
   const ice = deferred();
   const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });

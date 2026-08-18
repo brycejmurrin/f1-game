@@ -2,13 +2,13 @@
 
    SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
-   storage, same shape as CockpitOpts / PerfTry.
+   storage, same shape as CockpitOpts.
 
-   WHY ITS OWN FILE. This is not a perf experiment (those reload) and not a
-   quality tier. The overlay is DOM the player asked for, so it lives next to
-   the other injected SETTINGS buttons (CockpitOpts, PerfTry) rather than
-   growing js/game.js. The panel is created at runtime — no index.html node,
-   no new CSS class (inline styles on a <pre id="game-metrics">).
+   WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
+   player asked for, so it lives next to the other injected SETTINGS buttons
+   (CockpitOpts) rather than growing js/game.js. The panel is created at
+   runtime — no index.html node, no new CSS class (inline styles on a
+   <pre id="game-metrics">).
 
    Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
    per frame. Turning ON raises the Log BUFFER to debug for the session so

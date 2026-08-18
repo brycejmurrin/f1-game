@@ -50,6 +50,9 @@ Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
 `carGloss` streak; TLX desktop WebGL2 has a color-depth PCSS blocker.
+2026-08-18: the old pause-menu PerfTry GLSL flags (`flareGate`, `lampFogGate`)
+and the 300 m `envCull` are now the baked product path on GLX/WGX/TLX — no
+toggle, no `OPT_*` overlay. Late sky (opaque → sky → glow) is unconditional.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
 (`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`

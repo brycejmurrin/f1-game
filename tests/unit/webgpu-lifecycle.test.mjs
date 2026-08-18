@@ -861,9 +861,13 @@ test("WGX god-ray and env probe match GLX gates", () => {
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
   assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
   assert.match(WGX_SOURCE, /!f\.noEnv/);
-  // Env probe respects PerfTry.envCull (300 m cap).
-  assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
+  // Env probe always applies the 300 m radial cap (baked ON).
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+  assert.doesNotMatch(WGX_SOURCE, /_perfWgsl|typeof PerfTry|PerfTry\./);
+  assert.doesNotMatch(CHUNKS_SOURCE, /OPT_LAMPFOGGATE/);
+  assert.match(CHUNKS_SOURCE, /if \(F\.params8\.x > 0\.0\)/);
+  assert.doesNotMatch(POST_SOURCE, /OPT_FLAREGATE/);
+  assert.match(POST_SOURCE, /flareStr > 0\.0 && sunUV\.x >= 0\.0 && sunUV\.x <= 1\.0/);
 });
 
 test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {

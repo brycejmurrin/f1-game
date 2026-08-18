@@ -72,7 +72,6 @@
     const depthT = texture(ctx.sceneDepthTex);
     const dirtT = texture(ctx.dirtTex || ctx.blackTex);
     const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
-
     /** Fullscreen overwrite pass material (POST_VS role is three's QuadMesh). */
     const _pinKeys = Object.create(null);
     function passMaterial(fragNode, key) {
@@ -880,7 +879,14 @@
 
         // Lens flare js/render/shaders/post.js: DEPTH-OCCLUDED procedural streaks +
         // ghosts — fades when geometry covers the sun's screen point.
-        const sunVis = smoothstep(0.9990, 0.9999, depthAt(C.sunUV)).toVar();
+        // Skip the depth fetch when the flare is off or the sun is off-screen
+        // (uniform CF). Matches GLX post.js / WGSL composite.
+        const sunVis = float(0.0).toVar();
+        If(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)), () => {
+          sunVis.assign(smoothstep(0.9990, 0.9999, depthAt(C.sunUV)));
+        });
         const flare = vec3(0.0).toVar();
         If(C.flareStr.greaterThan(0.0).and(sunVis.greaterThan(0.0))
           .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))

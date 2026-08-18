@@ -692,7 +692,7 @@ const TLX = (function () {
       // NO sRGB anywhere — NoColorSpace on the cube, the calibration invariant.
       const ENV_SIZE = 64;
       // Probe draw-distance, metres — GLX ENV_CULL_M. A 64px face is ~1.4 deg/px;
-      // uncapped the cube re-draws the 900 m city. PerfTry.envCull (default ON).
+      // uncapped the cube re-draws the 900 m city. Baked ON (was PerfTry.envCull).
       const ENV_CULL_M = 300;
       let envRT = null, envDummy = null;
       try {
@@ -1735,11 +1735,7 @@ const TLX = (function () {
           _envFrame = frame;
           _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
           frame.viewProj = _envVPArr; frame.eye = eye;
-          if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-            frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-          } else {
-            frame.cullDist = 0;
-          }
+          frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
           // Probe runs BEFORE gfx.begin(); without this the cube bakes the
           // previous frame's sun/fog (or factory defaults on the first faces).
           if (lit.updateFrame) lit.updateFrame(frame);
@@ -1755,7 +1751,7 @@ const TLX = (function () {
           // Materialise the world draw-list (sky background node + track meshes
           // — game.js issued NO car/FX draws in the probe pass) into the face.
           // Chunked records cull against the face frustum; radial cap is the
-          // mutated frame.cullDist (ENV_CULL_M when envCull is on).
+          // mutated frame.cullDist (ENV_CULL_M, baked ON).
           const faceVP = _envVPArr;
           const faceCull = (_envFrame && _envFrame.cullDist) || 0;
           const faceEye = (_envFrame && _envFrame.eye) || null;

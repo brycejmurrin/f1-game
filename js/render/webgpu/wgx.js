@@ -1099,12 +1099,12 @@ const WGX = (function () {
 
       // Sky pipeline — renders into the LIT pass (SCENE_FORMAT). Depth write OFF,
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
-      // early sky paints the clear background, and PerfTry.skyLate (default ON)
-      // still only fills pixels the world left at the far plane — GLX parity
-      // (js/render/shaders/sky.js + glx.js drawSky depthMask false / LEQUAL).
-      // Was "always": correct only for sky-FIRST. After skyLate shipped ON, a late
-      // sky with ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors /
-      // melted world; cars still visible because they draw after the sky).
+      // early sky paints the clear background, and late sky (opaque → sky →
+      // glow) still only fills pixels the world left at the far plane — GLX
+      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
+      // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
+      // / melted world; cars still visible because they draw after the sky).
       // EXPLICIT shared layout — skyBindGroup is set with BOTH pipelines
       // (drawSky picks the MS variant when the lit pass is multisampled), and
       // two `layout:"auto"` pipelines are NEVER bind-group compatible, even
@@ -3161,7 +3161,7 @@ const WGX = (function () {
     // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
-    // the world draws (drawSky + track meshes, NO cars) between begin/end — they record
+    // the world draws (track meshes then drawSky, NO cars) between begin/end — they record
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
     function envInit() {
       if (envCubeTex) return;
@@ -3205,14 +3205,10 @@ const WGX = (function () {
       _envFrame = frame;
       _envSvVP = svVP; _envSvEye = svEye; _envSvCull = svCull;
       frame.viewProj = _envVP; frame.eye = eye;
-      // Radial cull for the probe (GLX envFaceBegin + PerfTry.envCull): without
-      // this a 64² reflection target re-draws the whole 900 m city. Cap at 300 m
-      // when envCull is on; keep a tighter main-camera cull when present.
-      if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-        frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
-      } else {
-        frame.cullDist = 0;
-      }
+      // Radial cull for the probe (GLX envFaceBegin): without this a 64²
+      // reflection target re-draws the whole 900 m city. Cap at 300 m; keep
+      // a tighter main-camera cull when present.
+      frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
       _writeFrame(frame);
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       _envEncoder = device.createCommandEncoder();

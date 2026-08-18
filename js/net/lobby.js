@@ -235,7 +235,7 @@ const NetLobby = (function () {
         } else {
           say("A player left. The rest of you are still in.");
         }
-        renderRoom();
+        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
       return transport;
     }
@@ -1065,6 +1065,7 @@ const NetLobby = (function () {
         G.flow = "gp";
         G.session = "race";
         G.startRace();
+        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         return;
