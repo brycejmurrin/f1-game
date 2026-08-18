@@ -23,7 +23,14 @@ knocked four knobs' own defaults off their grids; the guard caught it.
 
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
 sampled file list) gives all 183 knobs a consumer on the shipping (GLX) path —
-**zero unwired**. The classification, and the invalidation each class needs to
+**zero unwired**. The deferred backends are no longer excluded: `node tools/tune-backend-audit.mjs`
+checks name presence plus missing-`tune` fallbacks on GLX / WGX / TLX
+(`tests/unit/tune-backend-parity.test.mjs`). Recorded GLX-only knobs:
+`perChunkLights`, `roadChunkLamps`. SETTINGS steppers that are not TUNE_DEFS
+(GRAPHICS / RENDERER / THREE PATH / SCREENSHOTS) live in `js/game/gfx-quality.js`
+and apply to whichever backend is bound.
+
+The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):
 
 The audit below was run against the 178 that existed then; the three added

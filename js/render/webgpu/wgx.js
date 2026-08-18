@@ -2810,7 +2810,7 @@ const WGX = (function () {
       // pack the raw knob, do not remap.
       d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
-      d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
+      d[82] = (T && T.carReflect != null) ? T.carReflect : 0.05;
       d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
@@ -3461,7 +3461,7 @@ const WGX = (function () {
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
-      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0;
+      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0.05;
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
       if (_ssrReady && ssrBG && frameHaveProj &&
