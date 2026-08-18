@@ -26,6 +26,32 @@ column.
 | **chrome-devtools** | (upstream) | Interactive live canvas / DOM / heap. | `tools/chrome-devtools-mcp.sh` |
 | **tinyfish** | (upstream) | Deployed Pages / public web. | `./tools/tinyfish-mcp.sh deploy-check --tip` |
 
+**Cloud / desktop global catalog.** Cloud Agents do **not** read
+`~/.cursor/mcp.json`. Add servers at https://cursor.com/agents (MCP
+dropdown). This session already has host `apex-tools-mcp` from there.
+
+Paste **probe** (stdio). That is how Cloud gets `chrome_*` and `tinyfish_*`.
+Do **not** add TinyFish as `http://127.0.0.1:3711/mcp` in the Cloud dropdown —
+HTTP MCP is proxied outside the VM, so loopback never hits the local proxy.
+Do **not** add `playwright` (already a host server). Skip `chrome-devtools`
+unless you want a second Chromium; never run it with host `browser_*`.
+
+```json
+{
+  "mcpServers": {
+    "probe": {
+      "command": "python3",
+      "args": ["tools/probe-mcp.py", "serve"]
+    }
+  }
+}
+```
+
+Desktop `~/.cursor/mcp.json` can add the same, plus local TinyFish HTTP
+after `./tools/tinyfish-mcp.sh ensure`. Put `${workspaceFolder}/` in front
+of `tools/...` there — a bare relative path is resolved from the home
+config, not the repo. Project `.cursor/mcp.json` wins on duplicate names.
+
 **Host catalog** (Cursor Cloud / desktop injects these; they are **not** in
 repo `.mcp.json` — do not add them there):
 
