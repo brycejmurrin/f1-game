@@ -1440,16 +1440,17 @@
      *   doubleSided, depthBias:[factor,units], noAlphaWrite (M8), chunked
      * (drawChunked keeps depthWrite TRUE even when alpha<1 — GLX asymmetry).
      *
-     * SSR TAG ≠ OPACITY. The fragment writes 0.35 into alpha so the post
-     * chain can mask car paint (js/render/shaders/lit.js). That channel must
-     * NOT be assigned to opacityNode: NodeMaterial.setupDiffuseColor multiplies
-     * diffuseColor.a by opacityNode, and r185 NodeBuilder.isOpaque() is
-     * `transparent===false && blending===NormalBlending` — our NoBlending
+     * SSR TAG ≠ OPACITY ≠ OUTPUT ALPHA. The fragment still computes the
+     * 0.35 car-paint tag (js/render/shaders/lit.js) as packed.a, but that
+     * channel must not reach three's output. NodeMaterial.setupDiffuseColor
+     * multiplies diffuseColor.a by opacityNode, and r185 NodeBuilder.isOpaque()
+     * is `transparent===false && blending===NormalBlending` — our NoBlending
      * opaque path (required so SrcAlpha does not ghost the body) makes
-     * isOpaque() FALSE, so the 0.35 is left as coverage. Painted panels
-     * vanish; tyres/carbon/glass stay at alpha 1. outputNode carries the
-     * vec4 (lit RGB + tag) and replaces basicOutput; opacityNode is the
-     * real material alpha (tlxAlpha).
+     * isOpaque() FALSE, so whatever sits in output.a is coverage. Putting
+     * the tag there painted the body at 35% over the road. opacityNode and
+     * output.a are both the real material alpha (tlxAlpha). Car SSR on this
+     * backend therefore sees scene alpha 1 (no tag) until a second target
+     * can carry the mask; road SSR is unchanged.
      *
      * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
      * every variant must bind the SAME node-graph OBJECTS, not a fresh
@@ -1484,9 +1485,14 @@
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
         // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
-        // `out` is the vec4 written to the HDR target (RGB + tag).
+        // `out` is RGB + that real alpha. packed.a still holds the SSR tag
+        // for a future MRT; it must NOT be the vec4 written to the target.
+        // r185 NodeBuilder.isOpaque() is false for NoBlending, so output.a
+        // is coverage: a 0.35 tag ghosts painted bodywork against the road
+        // (GLX writes the tag with blending OFF and an opaque canvas).
         g = _sharedGraph[idx] = {
-          rgb: packed.rgb, a: packed.a, opacity: matU.alpha, out: packed,
+          rgb: packed.rgb, a: packed.a, opacity: matU.alpha,
+          out: vec4(packed.rgb, matU.alpha),
         };
       }
       return g;

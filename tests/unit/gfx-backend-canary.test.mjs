@@ -791,7 +791,11 @@ test("the SSR tag is not three's opacity socket — that is what made cars vanis
   assert.match(src, /opacityNode\s*=\s*packed\.opacity/,
     "opacityNode must be the real tlxAlpha, not the SSR channel");
   assert.match(src, /outputNode\s*=\s*packed\.out/,
-    "outputNode must carry the lit vec4 (RGB + tag) so the tag still reaches SSR");
+    "outputNode must be the shared-graph vec4 (RGB + real alpha)");
+  assert.match(src, /out:\s*vec4\(packed\.rgb,\s*matU\.alpha\)/,
+    "output.a must be tlxAlpha — the 0.35 tag is coverage on NoBlending");
+  assert.doesNotMatch(src, /out:\s*packed(?:\s|,|\})/,
+    "do not emit packed (RGB + tag) as the written vec4");
   assert.match(src, /opacity:\s*matU\.alpha/,
     "shared graph must expose matU.alpha as the opacity socket");
   assert.match(src, /m\.fog\s*=\s*false/,
