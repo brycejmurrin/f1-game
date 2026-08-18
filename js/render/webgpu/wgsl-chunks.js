@@ -707,10 +707,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
   // wheel/body draws) — GLX LIT_FS gl_FrontFacing branch (js/render/shaders/lit.js).
-  if (!ff) { N = -N; }
-  // Road ribbon: buildRoad writes upOf = cross(right, tangent). Expanded
-  // winding makes the tops back-facing under frontFace cw, so the line
-  // above would light the underside. Keep N pointing track-up.
+  // Skip that on the road. buildRoad writes upOf = cross(right, tangent)
+  // (track-up). _expandPull swaps winding so Dawn rasterizes the tops, which
+  // makes them back-facing under frontFace cw — the ff flip would invert
+  // authored +Y and light the underside (featureless grey + horizon rim).
+  if (!ff && !isRoadDraw) { N = -N; }
   if (isRoadDraw && N.y < 0.0) { N = -N; }
   applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, roadNrmPack, roadPackOn);
 
