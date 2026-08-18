@@ -273,7 +273,7 @@ function. The 2026-08 parity pass (recipes in
 - baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
 - lamp shadows, instancing family, `drawParticles`
 - Poisson-8 PCSS + far 4-tap, tunable lamp-fog, world-space god-ray + lamp vol
-- MSAA 2× (color `resolveTarget` + manual MS-depth resolve for SSAO)
+- MSAA 4× (color `resolveTarget` + manual MS-depth resolve for SSAO; WebGPU forbids 2)
 - env-probe / 2d / array mip chains (blit; WebGPU has no `generateMipmap`)
 - `applyMaterial*` / `roadMarkings` / heat haze / car-paint SSR scene-alpha tag
 - SSAO denoise + god-ray separable 5-tap blur (GLX `BLUR_FS`)

@@ -13,6 +13,7 @@ node_modules
 # Regenerable output
 scratch/
 artifacts/
+# Playwright MCP user-data-dir (repo playwright-mcp.sh + host occupancy)
 .playwright-mcp/
 # Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs

@@ -568,6 +568,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(5) U         : uniform  CompositeU
   //      @binding(6) dirtTex   : texture_2d<f32>   LENS DIRT grime map
   //      @binding(7) depthTex  : texture_depth_2d  scene depth (bilateral AO + flare occ)
+  //      @binding(8) ssrPostTex: texture_2d<f32>   this-frame SSR (same-present consume)
   //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
@@ -592,9 +593,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, hdrGradeOn)
   //                                          w = GLX uHdrGradeOn: 1 only when an
   //                                          HDR-grade knob is off-neutral
-  //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
-  //      gamma       : vec4<f32>  off 192   (RGB gamma, _pad)
-  //      gain        : vec4<f32>  off 208   (RGB gain, _pad)
+  //      lift        : vec4<f32>  off 176   (RGB lift, wetness)
+  //      gamma       : vec4<f32>  off 192   (RGB gamma, reflect / wet-road SSR)
+  //      gain        : vec4<f32>  off 208   (RGB gain, carReflect)
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
   //                                          TONE CURVE knobs; defaults 2.51/0.03/
   //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
@@ -632,6 +633,7 @@ struct CompositeU {
 @group(0) @binding(5) var<uniform> U : CompositeU;
 @group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
 @group(0) @binding(7) var depthTex  : texture_depth_2d;
+@group(0) @binding(8) var ssrPostTex : texture_2d<f32>;  // this-frame SSR (GLX composite consume)
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
@@ -772,7 +774,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       }
     }
   }
-  var c = textureSampleLevel(sceneTex, samp, sceneUV, 0.0).rgb;
+  let sceneS = textureSampleLevel(sceneTex, samp, sceneUV, 0.0);
+  var c = sceneS.rgb;
+  let sceneA = sceneS.a;
   let caDir = in.uv - vec2<f32>(0.5);
 
   // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
@@ -838,6 +842,27 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     aoV = textureSampleLevel(ssaoTex, samp, in.uv, 0.0).r;
   }
   c = c * aoV;
+
+  // Same-frame SSR consume (GLX COMPOSITE_FS). present() wrote ssrPostTex
+  // from this frame's HDR+depth; LIT no longer samples last frame. Road
+  // uses wetness * reflect; lacquer uses the 0.35 car-paint alpha tag.
+  let ssrWet = U.lift.w;
+  let ssrRefl = U.gamma.w;
+  let ssrCar = U.gain.w;
+  if (ssrRefl > 0.001 || ssrCar > 0.001) {
+    let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
+    if (ssr.a > 0.001) {
+      let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
+      let roadK = (1.0 - carPx) * ssrWet * ssrRefl;
+      let carK = carPx * ssrCar;
+      let ssrK = ssr.a * max(roadK, carK);
+      if (ssrK > 0.001) {
+        let dark = select(0.10, 0.22, carPx > 0.5);
+        let sat = select(0.92, 0.88, carPx > 0.5);
+        c = mix(c, c * dark + ssr.rgb * sat, clamp(ssrK, 0.0, 0.85));
+      }
+    }
+  }
 
   // Volumetric shafts (additive, unscaled — strength is in the GODRAY pass).
   c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;
@@ -1053,7 +1078,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(2) sceneSamp : sampler            LINEAR clamp (scene colour)
   //      @binding(3) depthSamp : sampler            NON-filtering clamp (depth)
   //      @binding(4) U         : uniform  SsrU
-  //    UNIFORM SsrU (192 B):
+  //    UNIFORM SsrU (208 B):
   //      invProj   : mat4x4<f32>  off   0   (clip[0..1 z] -> view; WebGPU-convention)
   //      proj      : mat4x4<f32>  off  64   (view -> clip; projects the marched ray)
   //      upVS      : vec4<f32>    off 128   (xyz world-up in view space,
@@ -1069,6 +1094,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          w = near-fade start in view-space z,
   //                                          GLX uSsrNear, def -2.5; the low
   //                                          onboard eye passes -1.0)
+  //      gloss     : vec4<f32>    off 192   (x = carGloss, GLX uCarGloss def 1.0;
+  //                                          yzw pad). Drives the car SSR streak
+  //                                          width: carSoft = clamp((1.4-gloss)*0.5).
   // ════════════════════════════════════════════════════════════════════════
   const SSR = `
 struct SsrU {
@@ -1078,6 +1106,7 @@ struct SsrU {
   p0        : vec4<f32>,
   reflSkyLo : vec4<f32>,
   reflSkyHi : vec4<f32>,
+  gloss     : vec4<f32>,
 };
 @group(0) @binding(0) var sceneTex  : texture_2d<f32>;
 @group(0) @binding(1) var depthTex  : texture_depth_2d;
@@ -1188,6 +1217,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   var found = false;
   var hitUV = vec2<f32>(0.0);
   var hitEdge = 0.0;
+  var hitDist = 0.0;
   for (var i = 0; i < 24; i = i + 1) {
     prevPos = pos;
     pos = pos + R * stepLen;
@@ -1217,6 +1247,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
         if (dot(hN, upVSn) > 0.55) { continue; }
       }
       hitUV = huv;
+      hitDist = length(b - P);
       let e = abs(hitUV - vec2<f32>(0.5)) * 2.0;
       hitEdge = 1.0 - pow(max(e.x, e.y), 4.0);   // screen-edge fade
       found = true;
@@ -1233,7 +1264,30 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // the glossy-here/matte-there patching. Hold cover constant and blend the
   // content by the hit's own screen-edge confidence.
   let conf = select(0.0, clamp(hitEdge, 0.0, 1.0), found);
-  var reflCol = mix(skyRefl, textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb, conf);
+  // Vertical light-smear (GLX COMPOSITE_FS / TLX tsl-post): wet roads and
+  // lacquer stretch reflected lights into a gloss-driven streak. WGX used to
+  // take a single tap, so CAR GLOSS was a dead slider and night lamps sat
+  // as hard dots. uv is y-DOWN; GLX vUV.y is y-UP.
+  var hitCol = vec3<f32>(0.0);
+  if (found) {
+    let carSoft = clamp((1.4 - U.gloss.x) * 0.5, 0.0, 1.0);
+    let yUp = 1.0 - in.uv.y;
+    var streak = select(
+      strength * (0.010 + 0.022 * clamp((yCut - yUp) / yCut, 0.0, 1.0)),
+      carReflect * (0.006 + 0.030 * carSoft),
+      carDom);
+    streak = streak * mix(0.3, 1.6, clamp(hitDist / 25.0, 0.0, 1.0));
+    let w0 = 0.30; let w1 = 0.24; let w2 = 0.15; let w3 = 0.08; let w4 = 0.04;
+    hitCol  = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb * w0;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 0.5), 0.0).rgb * w1;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.0), 0.0).rgb * w2;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.6), 0.0).rgb * w3;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 2.3), 0.0).rgb * w4;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 0.5), 0.0).rgb * w1;
+    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 1.0), 0.0).rgb * w2;
+    hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+  }
+  var reflCol = mix(skyRefl, hitCol, conf);
   // Road: constant cover; car: confidence-scaled (falls through to lit env on miss).
   let cover = select(0.60, conf, carDom);
   // Soft-clip the reflected HDR colour before it's substituted (caps the mirror
@@ -1283,7 +1337,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     GODRAY_UNIFORM_BYTES: 288,      // GodrayU (world-space march + lamp vol)
     COMPOSITE_UNIFORM_BYTES: 256,   // CompositeU (16×vec4) — +HDR grading + ACES tone curve + LENS DIRT
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
-    SSR_UNIFORM_BYTES: 192,         // SsrU  (2×mat4 128 + 4×vec4 64)
+    SSR_UNIFORM_BYTES: 208,         // SsrU  (2×mat4 128 + 5×vec4 80)
     // chain description
     PASS_ORDER,
   };

@@ -35,10 +35,10 @@
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.sky = (THREE, TSL, ctx) =>
  *         ({ node, fallbackNode, uniforms, update })
- * fallbackNode is zenith-only (no ray reconstruction). tlx.js arms it on
- * software GL: the full SKY_FS node either misses (fog Color → beige void)
- * or reconstructs rays badly against the HDR target (horizon fill). Real
- * GPUs keep `node`.
+ * fallbackNode is a zenith→horizon screen-Y mix (no ray reconstruction).
+ * tlx.js arms it on software GL: the full SKY_FS node either misses
+ * (fog Color → beige void) or reconstructs rays badly against the HDR
+ * target. Real GPUs keep `node`.
  * ctx = { chunks } (TLXShaders.chunks(THREE, TSL); optional — ignoise falls
  * back to a local copy). NEVER touches THREE/TSL at script eval — three
  * exists only inside TLX.create().
@@ -433,10 +433,14 @@
       return vec4(c, 1.0);
     })();
 
-    // Cheap miss-path for software GL (tlx.js drawSky). Same zenith uniform
-    // the full node reads — no screenUV / invViewProj, so a SwiftShader HDR
-    // target cannot collapse the dome to the horizon colour.
-    const fallbackNode = Fn(() => vec4(U.zenith, 1.0))();
+    // Cheap miss-path for software GL (tlx.js drawSky). No invViewProj ray —
+    // a SwiftShader HDR target used to collapse the full node to fog beige
+    // or a flat zenith lid. Mix the same zenith/horizon uniforms the full
+    // node reads, keyed on screen Y (top-left origin on both backends).
+    const fallbackNode = Fn(() => {
+      const t = smoothstep(0.08, 0.88, screenUV.y);
+      return vec4(mix(U.zenith, U.horizon, t), 1.0);
+    })();
 
     return { node, fallbackNode, uniforms: U, update };
   }

@@ -112,22 +112,32 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
-- **GLX:** full reference — MSAA 2× desktop, PCSS, car/lamp shadows,
-  TrackGraph instancing, MAT arrays.
+- **GLX:** full reference — MSAA 4× desktop (2 then 0 if the HDR format
+  cannot), PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+  SAA snapshots N after peel and before wall/MAT bump so brick/concrete
+  match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
-  remaining gap = TAA scaffold off (`_TAA_ENABLED = false`). Env cube uses a
-  dedicated 4×-aniso sampler (binding 14) so grazing clearcoat matches GLX.
-  Car-paint flake / orange-peel interpolate `objPos` (object space, same
-  34/29 + 130/111 and 220 Hz `hash21` as GLX). SSAO taps the GLX/TLX `K[0..7]`
-  fan and skips those taps when strength is 0. `applyHdrGrade` is gated on
-  `tone1.w` like GLX `uHdrGradeOn` / TLX `hdrGradeOn`.
+  remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
+  history resolve is sub-pixel shimmer). Env cube uses a dedicated 4×-aniso
+  sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
+  SSAO uses the GLX/TLX `K[0..7]` fan and skips taps at strength 0.
+  `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the
+  same present() (not next-frame LIT). SAA hoists object-space peel in
+  uniform CF and mixes that variance with geometric N by `carPaint`
+  (`dpdx` after a non-uniform matId branch is illegal WGSL). GLX/TLX
+  now snapshot the same pre-material N — wall bump stays out of SAA
+  on all three backends. Every baked MAT layer is hoisted with
+  `textureSample` (aniso 4) so brick/concrete match GLX `texture()`.
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed
   so descriptor-copy overwrites GLX’s dead closures (`backend-surface-parity`
   guard).
 - **TLX:** TrackGraph instancing via `THREE.InstancedMesh`; PCSS blocker map
-  on the WebGPU path (`tlx-shadow.js`); MSAA still off + FXAA; 8-bit post
+  on WebGPU (`textureLoad` depth) and desktop WebGL2 (R16F `TSL.depth` color);
+  phones / software GL keep fixed `R = 3.0`. Software sky fallback is a
+  zenith→horizon mix, not a flat lid. MSAA still off + FXAA (three does not
+  expose a resolved depth for the post chain); 8-bit post
   stays on when half-float is missing (GLX RGBA8 path), env cube 4× aniso.
   THREE PATH: WEBGPU must not call `getContext("webgl2")` on `#game` after
   `renderer.init()` — three lazy-configures the swapchain on first present,

@@ -107,7 +107,7 @@
     /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
-    function makeBlur() {
+    function makeBlur(key) {
       const tex = texture(ctx.blackTex);
       const U = { dir: uniform(new THREE.Vector2()) };
       const mat = passMaterial(Fn(() => {
@@ -121,11 +121,15 @@
         s.addAssign(tex.sample(TL(vUV.add(o2))).rgb.mul(0.0702702703));
         s.addAssign(tex.sample(TL(vUV.sub(o2))).rgb.mul(0.0702702703));
         return vec4(s, 1.0);
-      })(), "tlx-post-blur");
+      })(), key);
       return { mat, tex, U };
     }
-    const blurAO = makeBlur();
-    const blurGR = makeBlur();
+    // These are the same graph shape but NOT the same bindings. Reusing one
+    // customProgramCacheKey makes three retain blurAO's texture-node binding
+    // when blurGR compiles, so the god-ray chain blurs the near-white AO buffer
+    // and the composite adds it across the whole frame.
+    const blurAO = makeBlur("tlx-post-blur-ao");
+    const blurGR = makeBlur("tlx-post-blur-godray");
 
     /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);

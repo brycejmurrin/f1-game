@@ -7,7 +7,7 @@ description: Use when driving the LIVE working-tree canvas or the DEPLOYED site 
 
 Two upstream MCP servers sit alongside the Playwright suite: **Chrome DevTools MCP**
 (working tree, canvas-visible) and **tinyfish** (deployed GitHub Pages / public
-web). The test suite is 112 Playwright specs + 109 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
+web). The test suite is 112 Playwright specs + 110 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
 
 ## Entry
 
@@ -31,12 +31,15 @@ catalog is empty, use `./tools/apex-tools-mcp.sh call`, the wrappers above, or
 subagent `deploy-research` for `version.json` / public web. Do not attach
 this skill for a version.json STALE check.
 
+Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs TinyFish vs host playwright).
+
 | Need | Use |
 |---|---|
 | Local CLI wrap (`verify-track`, `--fast`, shot/eval) | `apex-tools` / `./tools/apex-tools-mcp.sh` — not `chrome_*` |
 | Live canvas / `__apex` / screenshot | Chrome via probe (`http://127.0.0.1`, not github.io) |
 | Deployed artifact / public web | tinyfish / `deploy-research` subagent |
-| UI matrix (canvas hidden) | `survey-ui-matrix` — Playwright MCP `browser_resize` / `browser_snapshot` / `browser_evaluate` via `tools/playwright-mcp.sh` |
+| Interactive host Chromium | repo MCP **playwright** (`browser_*` via `tools/playwright-mcp.sh`) — never with this Chrome |
+| UI matrix (canvas hidden) | `survey-ui-matrix` — `browser_resize` / `browser_snapshot` / `browser_evaluate` |
 | Batch CI screenshots | `playwright-probe` |
 | Deep MCP playbook | `docs/research/CHROME-DEVTOOLS-MCP.md` |
 

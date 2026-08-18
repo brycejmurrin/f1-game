@@ -2107,22 +2107,35 @@ function getPlayerWheelMeshes() {
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
 // straight into a scratch matrix (no per-frame allocation), then into world.
-function getFieldWheelMeshes() {
-  return putBoundedMesh(wheelMeshCache, wheelMeshOrder, "field:1:1:1", () => {
-    const band = Car3D.TYRE_BAND[1];
-    const caliper = Car3D.BRAKE_CALIPER[1];
-    const front = Car3D.buildWheelLayers(0.32, band, caliper, undefined, false);
-    const rear = Car3D.buildWheelLayers(0.38, band, caliper, undefined, false);
-    return {
-      F: gfx.createMesh(front.rotating),
-      R: gfx.createMesh(rear.rotating),
-      FFixed: gfx.createMesh(front.fixed),
-      RFixed: gfx.createMesh(rear.fixed),
-    };
-  }, WHEEL_MESH_CACHE_MAX, freeWheelPair);
+// Factory tyre/brake/rim per team — the old baked AI wheel look — but as a
+// planted spinning pair, not glued to the chassis. Own cache so garage swaps
+// cannot evict the field (WHEEL_MESH_CACHE_MAX is a player-parts bound).
+const fieldWheelCache = {};
+function getFieldWheelMeshes(team) {
+  const vt = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
+  let mesh = fieldWheelCache[key];
+  if (mesh) return mesh;
+  const tyre = vt._visual && vt._visual.tyres;
+  const brake = vt._visual && vt._visual.brakes;
+  const wheel = vt._visual && vt._visual.wheels;
+  const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
+  const caliper = brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes];
+  const rim = brake && brake.rim;
+  const grooved = !!(tyre && tyre.grooved);
+  const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved, tyre, brake, wheel);
+  const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved, tyre, brake, wheel);
+  mesh = {
+    F: gfx.createMesh(front.rotating),
+    R: gfx.createMesh(rear.rotating),
+    FFixed: gfx.createMesh(front.fixed),
+    RFixed: gfx.createMesh(rear.fixed),
+  };
+  fieldWheelCache[key] = mesh;
+  return mesh;
 }
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
-  const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes();
+  const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
   const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
   const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
@@ -2189,6 +2202,7 @@ async function loadCarModel(url) {
     cockpitBodyOrder.length = 0;
     for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
     wheelMeshOrder.length = 0;
+    for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
     return true;
   } catch (e) { return false; }
 }
