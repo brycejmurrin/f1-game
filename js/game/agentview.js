@@ -300,10 +300,10 @@ const AgentView = (function () {
           turn: "T" + (i + 1),
           frac: +(wrapS(s) / total).toFixed(4),
           s: r1(wrapS(s)),
-          // POSITIVE CURVATURE IS A LEFT-HAND TURN. The comment on
-          // spline.js's curvatureRaw says "+ = right" and this table used to
-          // agree with it; both were wrong, and every corner on every circuit
-          // came back with the opposite hand. Measured, not derived: park on
+          // POSITIVE CURVATURE IS A LEFT-HAND TURN. spline.js's curvatureRaw
+          // used to say "+ = right" and this table used to agree with it; both
+          // were wrong, and every corner on every circuit came back with the
+          // opposite hand. Measured, not derived: park on
           // the centreline before a corner, drive with ZERO steer, and watch
           // which way you run wide — you always run wide to the OUTSIDE, so a
           // right-hander pushes you to negative lateral. Monza T1 (k = +0.037)

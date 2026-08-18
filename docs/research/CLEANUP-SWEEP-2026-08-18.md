@@ -1,0 +1,89 @@
+# Cleanup sweep — 2026-08-18
+
+Six read-only explore agents tagged the tree for **bugs**, **removals**,
+**splits**, and **stale docs**. A second pass then verified the high-confidence
+deletes before they landed. This file is the consolidation, not a licence to
+rewrite working systems.
+
+The shipped game tree is already tight: 166/166 `js/` files match
+`tools/manifest.cjs`, 11/11 CSS files match the shell, 0 dead CSS classes,
+232/232 test files reach a `test:*` group, `check-gctx` and `scan-globals`
+are clean. Cleanup here is subtractive hygiene plus a next-extraction map.
+
+---
+
+## Landed in this change
+
+| Tag | Path | Why |
+|---|---|---|
+| **REMOVE** | `tests/helpers/seed-log.cjs` | Duplicate of `seed-log.mjs`. Zero imports. |
+| **REMOVE** | `artifacts/cleanup-survey/*` | Incomplete survey (2 of 11 files) tracked despite `artifacts/` being gitignored. |
+| **CONSOLIDATE** | `js/track/mesh.js` `bankingProfile` | Local `wrap01` now aliases `TrackSpace.wrap01` (space.js already precedes mesh.js). |
+| **STALE** | `js/game/agentview.js` | `curvatureRaw` no longer claims `+ = right`. |
+| **STALE** | `.claude/skills/pwa-cache-service-worker/SKILL.md` | `test-bg.mjs` has no `service-worker` group; the gate is `npm run test:service-worker`. |
+| **STALE** | `README.md` `test:fast` | Not a ~3 min subset on SwiftShader. |
+| **STALE** | `docs/COMPONENTS.md` | Class count 508 → 505 (inventory method). |
+| **STALE** | `tests/specs/props-over-road.spec.js` header | Dropped the frozen "15 circuits fully clean (incl. cota)" claim. |
+| **STALE** | `docs/ARCHITECTURE-REVIEW.md` §7 | Curvature sign settled; throttle never-fail and coplanar roster floor marked fixed; 08-17 survey items that have landed are no longer listed as open. |
+
+No cache bump: `mesh.js` / `agentview.js` are the only `js/` edits, so a bump is
+required before this ships — last edit before commit.
+
+---
+
+## Tagged, then **kept** (false or load-bearing)
+
+| First-pass tag | Path | Why it stays |
+|---|---|---|
+| REMOVE | `SceneryThemes.variant` | **False dead.** `tests/unit/scenery-kits.test.mjs` calls `Themes.variant`. |
+| REMOVE | `ATM.coolNight` / `warmNight` / `rivieraDay`, `COL.desertSand` | Documented authoring packs in `docs/SCENERY-API.md`. Unused by current circuits, still part of the scenery `api`. |
+| REMOVE | scenery API `house`, `gridshellCanopy`, `underpassPortal`, `bakedModels` | Frozen 111-member contract (`scenery-api-contract.test.mjs`). |
+| REMOVE | entire `spike/` | Adoption provenance; cited from `docs/README.md`, `debrisworld.js`, `tlx.js`. |
+| REMOVE | `docs/archive/`, `docs/superpowers/` | Provenance. Research/archive exemption is intentional. |
+| REMOVE | `vendor/three-…/BloomNode.js` | Spike + optional SW precache. Production TLX uses a custom bloom. |
+| SPLIT | `index.html` | Formal UPHOLD: tag-derived `sw.js` precache; stay under the ~1,400 Lighthouse band. |
+| CONSOLIDATE | GLX / WGX / TLX shader stacks | Intentional parity. Mock tests cannot replace live GPU validation. |
+| REMOVE | unused circuit `segs` | Documented fallback when `CircuitPaths` is missing. |
+
+---
+
+## Open defects (not fixed here)
+
+Player-visible or contract bugs. Geometry and product-rule work, not cleanup.
+
+| Tag | Where | Notes |
+|---|---|---|
+| **BUG** | Indianapolis / COTA props-over-road | Standing `structure` groups over the racing line. Re-measure before editing. |
+| **BUG** | Montreal casino footbridge pier | Foundation spec left red (~2.72 m float vs 0.05 m). |
+| **BUG** | `IncidentSim` wall-clamp skip | Product question: should `wallAt` remain an outer bound during R2? |
+| **BUG** | `modelGroup` preflight | Checks declared bounds, not emitted geometry (COTA amphitheater class). |
+| **BUG** | `__apex.scene()` behind-camera bearing | Spec wants `> 120°`; Monza measures ~108°. Settle the convention first. |
+| **BUG** | Singapore / Silverstone / Shanghai / Abu Dhabi | Direct `TrackGeom.*` bypasses scenery-api shift/mirror/on-track guards. |
+| **TECH-DEBT** | Vegas ~1.81 M prop verts | `verify-track` reports, does not fail. |
+| **TECH-DEBT** | Banked `groundY` probes | Zandvoort + ~12 foundation specs still sample centreline `node.y` only. |
+
+---
+
+## Next extractions (do not do without a dedicated pass)
+
+`js/game.js` is **8599 / 8600**. Rank by **boundary crossings**, not line count
+(`docs/ARCHITECTURE.md`). New files are hyphenated IIFEs + manifest + script
+tag + cache bump.
+
+| Action | New file | ~LOC | Risk | Why wait |
+|---|---|---|---|---|
+| **SPLIT** | `js/game/race-setup.js` | ~200–650 | low–med | Pre-race / quali / garage DOM. Cleanest ratchet relief. Needs `test:modes` + menu specs. |
+| **SPLIT** | `js/game/garage-preview.js` | ~530 | med | Turntable render path; shares `gfx` / mesh caches. |
+| **CONSOLIDATE** | photo-mode state → `photomode.js` | ~240 | low | Leftover after the first photo extraction. |
+| **LEAVE** | `updateCar`, `render()`, `G` façade, `apex.js` | — | extreme | Hot path / ratchet-as-drift-alarm. |
+
+Do **not** extract collisions or `updateCar` unless physics work is the task.
+
+---
+
+## Agent-surface / tools (no deletes)
+
+Forwarders (`tools/ui-mcp-survey.mjs`, `.claude/skills/playwright-probe/shot.mjs`)
+and the official/wrapper MCP pairs stay: `agent-surface.test.mjs` locksteps them.
+WGX probe variants (`validate` / `capture` / `shot` / `gfx-probe`) each caught
+a distinct boot defect — collapsing them is not cleanup.

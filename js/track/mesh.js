@@ -223,7 +223,7 @@ const TrackMesh = (function () {
       const dress = def._sceneryShift || 0;
       const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
       const turns = (def.turns && def.turns.length) ? def.turns : null;
-      const wrap01 = (f) => (((f % 1) + 1) % 1);
+      const wrap01 = TrackSpace.wrap01;
       const centre = new Array(zones.length).fill(null);
       const taken = new Set();
 

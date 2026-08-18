@@ -185,12 +185,15 @@ Four decisions that solve their problem unusually well:
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
-**2026-08-17 parallel survey** (new candidates, not yet worked): see
-[`research/SURVEY-BUGS-PERF-2026-08-17.md`](research/SURVEY-BUGS-PERF-2026-08-17.md)
-— WGX shared-`writeBuffer` before submit, career finished-season `trackIdx =
--1`, Singapore `lapMirror` portal supports, VSC/SC player pace, net contact vs
-`predict()`, GLX env-probe frustum restore, TLX `fwidth` in non-uniform TSL
-`If`. Items below remain the standing register until a fix wave absorbs them.
+**2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
+the next intended `game.js` extractions in
+[`research/CLEANUP-SWEEP-2026-08-18.md`](research/CLEANUP-SWEEP-2026-08-18.md).
+
+**2026-08-17 parallel survey** (provenance; several items absorbed): see
+[`research/SURVEY-BUGS-PERF-2026-08-17.md`](research/SURVEY-BUGS-PERF-2026-08-17.md).
+Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
+`lapMirror` portal remaps have landed in code. Remaining survey leftovers live
+on the 08-18 perf-hunt board, not this register.
 
 - **Montreal: a bridge support floats 2.72 m off the ground** against a 0.05 m
   allowance (`tests/specs/montreal-foundation.spec.js`). Deliberately left
@@ -246,11 +249,12 @@ journal; this is what remains.
   dialog regression above owns "Tab cannot escape the track-detail dialog" — so
   the file is worth one pass rather than two separate fixes. It is the only
   failure in `test:ui`, which otherwise runs 100/100.
-- **`props-over-road` is red on COTA and Indianapolis** — `cota` 4.65 m and
-  `indianapolis` 4.74 m over the road against a 0.2 m cap
-  (`tests/specs/props-over-road.spec.js`). COTA is one of the 15 circuits that
-  spec's own header calls "fully clean (max=0)", so this is a regression, not a
-  residual.
+- **`props-over-road` is red on COTA and Indianapolis** — last located
+  offenders were the Austin360 Amphitheater (`cota`) and an infield
+  `structure` group (`indianapolis`) against a 0.2 m cap
+  (`tests/specs/props-over-road.spec.js`). Re-measure with
+  `tools/measure-props-over-road.mjs` before editing geometry; the spec header
+  no longer claims a frozen "15 circuits fully clean" list.
 
   **Both offenders are located and are the same class: a big bespoke
   `structure`, not foliage, barriers or lighting.** Measured with
@@ -349,22 +353,13 @@ here and their narratives are in the archived journal — so what is left is wha
 survived a fix wave, plus what that session's own gates surfaced. Listed
 most-load-bearing first.
 
-- **A possible curvature-sign inconsistency**, flagged independently by three
-  surveyors. The measured convention is `+k = LEFT` (`js/track/spline.js`, the
-  `bankingProfile` fix, `js/game.js`, and the agent `CONVENTIONS` string all
-  agree), but a stale `findCorners` header (`js/track/mesh.js`) reads
-  `+ = right`, and several sites encode that reading: `buildKerbs` (which feeds
-  `onKerb()` physics), the tyre-barrier pass and corner/braking signage in
-  `tracks.js`, and the agent camera's outside-of-corner azimuth in
-  `js/game/apex.js` (`cinematic()`/`tourShots`). They are mutually consistent,
-  which is why nothing caught it — and the tracks ship with passing autopilot
-  laps and visual specs, so the physics-facing signs are most likely correct and
-  the *comments* are the drift. **Do not flip any sign without a rendered lap
-  that shows kerbs/barriers on the wrong side** — settle it by observation, not
-  by grep. If real, it puts kerbs and tyre walls on the inside of every corner.
-  The 2026-08-13 barrier fix stayed deliberately **vertical only** for this
-  reason: it moved wall heights onto the banking pivot and touched no lateral
-  term and no sign.
+- **Curvature-sign convention — SETTLED (`+k = LEFT`).** `js/track/spline.js`
+  `curvatureRaw`, `findCorners` / `buildKerbs` in `js/track/mesh.js`,
+  `js/game.js`, and the agent `CONVENTIONS` string all agree. Historical
+  "+ = right" wording was comment drift; the physics-facing signs were already
+  the measured convention. **Still do not flip any sign without a rendered
+  lap** — the 2026-08-13 barrier fix stayed deliberately vertical-only for
+  that reason.
 - **The wall clamp is bypassed while `IncidentSim` owns the car.** A wall hit of
   severity ≥34 hands the car to the incident window, and the ownership check in
   `js/game.js`'s barrier step then skips the clamp entirely — so the player
@@ -426,17 +421,17 @@ most-load-bearing first.
   (`ahead.pts` v^2/R) with a matching speed bound — Monza 251 -> 1543 m,
   Interlagos 1119 m, spec 5/5 green, floors untouched.
 
-- **Test-quality gaps** (from the whole-`tests/` read). One true never-fail:
-  `tests/specs/ui-button-touch.spec.js`'s "throttle button visible" wraps its only
-  `expect` in `if (count > 0)`, so a missing button passes. `menu-survey` and
-  `parts-catalog` join the known `ui-audit` gallery as assertion-light. The banked-reference measurement error (fixed in the Monza and
-  Spa foundation specs with a local `Tracks.banking()` term) is still latent in
-  **Zandvoort's** foundation spec and ~12 others whose probes miss a bankZone —
-  the durable `groundY`/`overRoad` fix above is what retires the whole class.
-  `tests/unit/coplanar-faces.test.mjs` kept the `>= 24` roster floor its sibling
-  `prop-clipping.test.mjs` tightened to `=== roster`, so its sweep can silently
-  drop 16 circuits. The lone `.test.cjs` suite is invisible to the doc-count
-  regexes.
+- **Test-quality gaps** (from the whole-`tests/` read). The
+  `ui-button-touch` "throttle button visible" never-fail (`if (count > 0)`
+  around its only `expect`) is **FIXED** — the expect is now unconditional.
+  `menu-survey` and `parts-catalog` still join the known `ui-audit` gallery as
+  assertion-light. The banked-reference measurement error (fixed in the Monza
+  and Spa foundation specs with a local `Tracks.banking()` term) is still
+  latent in **Zandvoort's** foundation spec and ~12 others whose probes miss a
+  bankZone — the durable `groundY`/`overRoad` fix above is what retires the
+  whole class. `tests/unit/coplanar-faces.test.mjs` now pins the sweep length
+  to the circuit roster (the old `>= 24` floor is gone). The lone `.test.cjs`
+  suite is invisible to the doc-count regexes.
 - **A lapped driver's LIVE row — FIXED (2026-08-13).** `intervals()` now passes
   "+1 LAP"/"+2 LAPS" through as a string (null was indistinguishable from
   missing data) and `live.js` renders a string `timeDiff` as a bar-less
