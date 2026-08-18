@@ -5,13 +5,17 @@ working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.
 
 Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
-`tools/probe-mcp.py`. **Week-1 + week-2 catalog implemented**
+`tools/probe-mcp.py`. **Week-1 + week-2 + week-3 catalog implemented**
 (`tools/apex-tools-mcp.mjs` + `.sh`). Live Chromium is occupancy-gated;
 CI covers mock/`dryRun` only.
 
 Measured 2026-08-18 (this container, loadavg ~0.1): `apex_eval` monza
 `a.info()` via `./tools/apex-tools-mcp.sh call` — `ok`, 12061 ms, lock
 released after. `apex_status` then `playwright.live === false`.
+
+Week-3 live tree (same container, no Chromium): `apex_select_specs`
+`since=HEAD~8` 322 ms `ok`; `apex_assets_verify` 40 ms `verify: OK`;
+`apex_float_audit` monza 895 ms `clusters: 0`.
 
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
@@ -213,3 +217,6 @@ Assert:
   `github_io_blocked` (no fetch)
 - `isError` preserved on tool failure (not a JSON-RPC `error`)
 - stdout is JSON-RPC only (no log lines)
+- week-3: `select-specs` requires `--since --json`; `assets verify` never
+  bake; float/clip pin `--json` and default tunables; tree tools ignore
+  the lock; `path_escaped` / `port_not_supported`
