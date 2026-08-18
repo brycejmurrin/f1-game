@@ -1098,7 +1098,18 @@ needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
 THREE PATH: WEBGPU can 2D-blit the LDR target (`readRenderTargetPixelsAsync`)
-but large `mappedAtCreation` uploads can still refuse on SwiftShader. Index:
+but large `mappedAtCreation` uploads can still refuse on SwiftShader.
+
+**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
+`detectSoftwareGL()` called `#game.getContext("webgl2")` after
+`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
+`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
+context type per canvas for life. Live probe: `data-engine=three.js r185
+webgpu` AND `getContext("webgpu")===null` AND a live WebGL2 context on
+`#game`. Fix: sniff GL only when `forceWebGL`; the WebGPU path uses
+`_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`) so
+Dawn slots 2/5 match the instance count. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

@@ -123,6 +123,11 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 - **TLX:** TrackGraph instancing via `THREE.InstancedMesh`; PCSS blocker map
   on the WebGPU path (`tlx-shadow.js`); MSAA still off + FXAA; heavier post
   RTs on phone; GLSL→TSL look mostly ported with residual diffs possible.
+  THREE PATH: WEBGPU must not call `getContext("webgl2")` on `#game` after
+  `renderer.init()` — three lazy-configures the swapchain on first present,
+  and a canvas is bound to one context type for life (that sniff was the
+  `configure` null throw on SwiftShader). Instanced props use a geometry
+  `InstancedBufferAttribute` named `color`, not `imesh.instanceColor`.
 
 ## Related
 

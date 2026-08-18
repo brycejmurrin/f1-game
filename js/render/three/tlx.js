@@ -239,10 +239,9 @@ const TLX = (function () {
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       const _softPresentWaiters = [];
-      // Layout/CSS size follows the VISIBLE canvas. Soft-present steals
-      // id="game" onto a 2D overlay AFTER renderer.init() — giving three a
-      // fresh 1×1 hidden canvas first made GPUCanvasContext.configure null
-      // (mcp-probe 2026-08-18, THREE PATH: WEBGPU on SwiftShader).
+      // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
+      // 2D overlay — never getContext("2d") on #game (one context type per
+      // canvas for life; three's WebGPU configure is lazy on first present).
       let _layoutCanvas = canvas;
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
@@ -308,10 +307,11 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
-      // Soft-present overlay: a NEW 2D canvas. Do not steal id="game" or
-      // restyle three's node — that made GPUCanvasContext.configure null
-      // (mcp-probe 2026-08-18). SAVE SCREENSHOT reads capturePixels() when
-      // softPresent() is true, so a black native #game is fine.
+      // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
+      // or call getContext("2d"|"webgl2") on three's node — init() has not
+      // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
+      // capturePixels() when softPresent() is true, so a black native #game
+      // is fine.
       if (_softBlit && typeof document !== "undefined" && canvas && canvas.parentNode) {
         _gpuCanvas = canvas;
         _displayCanvas = document.createElement("canvas");
@@ -347,9 +347,19 @@ const TLX = (function () {
           return fam + "|" + attrs + "|" + idx + "|" + inst;
         };
       }
-      // SwiftShader / llvmpipe / WARP: the WebGL2 context already exists
-      // after init() (three claimed the canvas). Used to shrink shadow maps
-      // — see tlx-shadow.js. Real GPUs keep the authored 2048/1024/512.
+      // SwiftShader / llvmpipe / WARP: shrink shadow maps (tlx-shadow.js).
+      // Real GPUs keep the authored 2048/1024/512.
+      //
+      // CRITICAL: renderer.init() does NOT claim #game. r185.1 WebGPUBackend
+      // init() requests the device, then updateSize() only deletes the
+      // canvas-target cache. getContext("webgpu")+configure() is lazy — first
+      // present() / setRenderTarget(null). A canvas is bound to one context
+      // type for LIFE (MDN HTMLCanvasElement.getContext). Sniffing WebGL2 on
+      // #game here is what made configure() throw on null (mcp-probe
+      // 2026-08-18: data-engine already "three.js r185 webgpu",
+      // getContext("webgpu")===null, getContext("webgl2") a live context).
+      // Adapter.info already classified SwiftShader (_softAdapter). The
+      // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
           const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
@@ -360,7 +370,7 @@ const TLX = (function () {
           return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = detectSoftwareGL();
+      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
@@ -769,35 +779,42 @@ const TLX = (function () {
         return m;
       }
       const _instMat = new THREE.Matrix4();
-      const _instColor = new THREE.Color();
       const _instAlive = new Set();   // InstancedMesh objects shown this frame
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
 
-      function _ensureInstanceColor(imesh, cap) {
+      function _instColorAttr(imesh, cap) {
         const need = Math.max(1, cap | 0);
-        if (imesh.instanceColor && imesh.instanceColor.count >= need) return;
-        // WebGPU validates instanceColor GPUBuffer against imesh.count.
-        // setColorAt() lazily allocated a 1-instance buffer (12 bytes) while
-        // count was 4–6 — Dawn: "Instance range requires a larger buffer
-        // than the bound buffer size of the vertex buffer at slot 5"
-        // (mcp-probe THREE PATH: WEBGPU, 2026-08-18).
-        imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
-        imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        const geo = imesh.geometry;
+        if (!geo) return null;
+        const attr = geo.getAttribute("color");
+        if (attr && attr.isInstancedBufferAttribute && attr.count >= need) return attr;
+        // Per-vertex `color` (buildGeometry) is ~16×vec3 = 192 B on a typical
+        // prop. TSL attribute("color") + InstancedMesh is uploaded with
+        // instance stepMode on WebGPU — Dawn then wants count*12 bytes
+        // (mcp-probe: 566 instances → 6792 vs 192 at slot 2). Put an
+        // InstancedBufferAttribute of size `cap` on the geometry and do NOT
+        // also set imesh.instanceColor: NodeMaterial multiplies instanceColor
+        // into colorNode (three NodeMaterial.js), which bound a second
+        // instance-rate slot (slot 5, 12 B when setColorAt lazily allocated 1).
+        const next = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
+        next.setUsage(THREE.DynamicDrawUsage);
+        next.array.fill(1);
+        geo.setAttribute("color", next);
+        return next;
       }
       function _writeInstanceMatrices(imesh, matrices, colors, n) {
         const cap = imesh.userData.tlxInstCap || n;
-        if (colors && colors.length) _ensureInstanceColor(imesh, cap);
         const drawN = Math.min(n, cap);
+        const col = _instColorAttr(imesh, cap);
         for (let i = 0; i < drawN; i++) {
           _instMat.fromArray(matrices, i * 16);
           imesh.setMatrixAt(i, _instMat);
-          if (colors && colors.length && imesh.instanceColor) {
-            _instColor.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-            imesh.setColorAt(i, _instColor);
+          if (colors && colors.length && col) {
+            col.setXYZ(i, colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
           }
         }
         imesh.instanceMatrix.needsUpdate = true;
-        if (imesh.instanceColor) imesh.instanceColor.needsUpdate = true;
+        if (col) col.needsUpdate = true;
         imesh.count = drawN;
       }
 
@@ -812,8 +829,7 @@ const TLX = (function () {
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         imesh.userData.tlxInstCap = n;
-        _ensureInstanceColor(imesh, n);
-        imesh.instanceColor.array.fill(1);
+        _instColorAttr(imesh, n);
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;
         scene.add(imesh);

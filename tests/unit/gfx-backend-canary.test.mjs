@@ -618,9 +618,22 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /never getCurrentTexture/);
   assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
   assert.match(tlx, /await renderer\.init\(\);[\s\S]{0,900}game-soft/);
-  assert.match(tlx, /function _ensureInstanceColor/);
-  assert.match(tlx, /instanceColor\.array\.fill\(1\)/);
+  assert.match(tlx, /function _instColorAttr/);
+  assert.match(tlx, /isInstancedBufferAttribute/);
+  assert.match(tlx, /do NOT\s+also set imesh\.instanceColor/);
   assert.match(post, /ldrTarget: \(\) => ldrRT/);
+});
+
+test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
+  const tlx = read("js/render/three/tlx.js");
+  // MDN: one context type per canvas for life. three r185.1 configure() is
+  // lazy on first present(); sniffing WebGL2 on #game after init() made
+  // getContext("webgpu") return null (mcp-probe 2026-08-18).
+  assert.match(tlx, /const softwareGL = forceWebGL \? detectSoftwareGL\(\) : !!_softAdapter;/);
+  const initAt = tlx.indexOf("await renderer.init();");
+  const sniffAt = tlx.indexOf("const softwareGL = forceWebGL ? detectSoftwareGL()");
+  assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
+  assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
 
 /* ── TLX canvas opacity — the "transparent cars on iPhone" guard ─────────
