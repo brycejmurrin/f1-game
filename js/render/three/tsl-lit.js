@@ -623,8 +623,19 @@
     // Tile coordinate + this layer's world scale. Scale 0 = "no baked layer for
     // this material", which the callers test before sampling (GLASS and FLAG
     // are deliberately never baked — see tools/assets.mjs SCALES).
-    const matTexScaleOf = (mid) => U.matTexScale.element(int(mid));
-    const matTexUV = (mid, N, wp) => select(matWallLike(mid),
+    //
+    // Pack layers are MAT 1..16. Car surfaces are 20-27 (car3d.js SURFACES).
+    // GLX matTexUV and WGX matTexUV both refuse mid>16 BEFORE indexing the
+    // 17-layer array. TLX used to sample `.depth(int(mid))` and
+    // `uMatTexScale[mid]` raw — OOB on every painted/tyre/carbon fragment.
+    // SwiftShader/WebGL then returns black (or discards), so the whole car
+    // vanishes while the road (MAT 16) still draws. Clamp the layer for the
+    // hoisted sample (derivative_uniformity forbids an early-out around it)
+    // and keep the apply-gate on the REAL id so cars stay procedural.
+    const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
+    const matTexInPack = (mid) => mid.greaterThanEqual(1.0).and(mid.lessThanEqual(16.0));
+    const matTexScaleOf = (mid) => U.matTexScale.element(int(matTexLayer(mid)));
+    const matTexUV = (mid, N, wp) => select(matWallLike(matTexLayer(mid)),
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
@@ -632,15 +643,18 @@
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
-      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      const live = U.matTexMix.greaterThan(0.001)
+        .and(matTexInPack(mid))
+        .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
       const uv = matTexUV(mid, N, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
       // inside those Ifs are the same WGSL derivative_uniformity error as
-      // a hoisted-too-late fwidth (roadMarkings / WGX fs_main).
-      const nt = matNormalNode.sample(uv).depth(int(mid));
+      // a hoisted-too-late fwidth (roadMarkings / WGX fs_main). Layer is
+      // clamped: car ids 20-27 must not index past the 17-deep pack.
+      const nt = matNormalNode.sample(uv).depth(int(matTexLayer(mid)));
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
@@ -661,10 +675,12 @@
       const rough = float(roughIn).toVar();
       const wp = vec3(wpIn).toVar();
       const far = clamp(vd.sub(90.0).div(170.0).oneMinus(), 0.0, 1.0).toVar();
-      const live = U.matTexMix.greaterThan(0.001).and(matTexScaleOf(mid).greaterThan(0.0));
+      const live = U.matTexMix.greaterThan(0.001)
+        .and(matTexInPack(mid))
+        .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + sample BEFORE the live/far gate (implicit derivatives).
       const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp).toVar();
-      const t = matAlbedoNode.sample(uv).depth(int(mid));
+      const t = matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)));
       If(live.and(far.greaterThan(0.001)), () => {
         // Multiplicative, exactly as GLX: the per-track tarmac tint, the
         // racing-line rubber wear and the per-vertex grain all have to survive.

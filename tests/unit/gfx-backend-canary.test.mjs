@@ -741,6 +741,23 @@ test("the alpha tag that makes canvas opacity load-bearing still exists", () => 
     "still ghost the cars before touching the guards below");
 });
 
+test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
+  // The baked array is 17 layers (MAT 0..16). Car surfaces are 20-27.
+  // GLX/WGX refuse mid>16 before the fetch. TLX used to sample layer=mid
+  // on every car fragment; SwiftShader returns black and the car vanishes
+  // while the road (MAT 16) still draws.
+  const glxLit = read("js/render/shaders/lit.js");
+  assert.match(glxLit, /mid <= 0 \|\| mid > 16/,
+    "GLX matTexUV lost its 1..16 pack gate — re-derive the TLX clamp");
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.match(src, /matTexInPack/,
+    "TLX must name the 1..16 pack gate so car ids cannot enable a live sample");
+  assert.match(src, /lessThanEqual\(16\.0\)/,
+    "the pack gate must refuse mid>16 (car surfaces 20-27)");
+  assert.match(src, /depth\(int\(matTexLayer\(mid\)\)\)/,
+    "the hoisted array sample must clamp the layer, not pass raw mid");
+});
+
 test("the SSR tag is not three's opacity socket — that is what made cars vanish", () => {
   // NodeMaterial.setupDiffuseColor does diffuseColor.a *= opacityNode.
   // NodeBuilder.isOpaque() is (transparent===false && blending===NormalBlending).
