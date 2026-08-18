@@ -81,6 +81,38 @@ test("single-option recipes stay within 1.6x the default triangle budget", () =>
   assert.deepEqual(over, [], `over 1.6x default ${base}: ${over.join(", ")}`);
 });
 
+test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () => {
+  const bare = Car3D.build(C1, C2, { noWheels: true });
+  const probe = (visual) => Car3D.build(C1, C2, {
+    noWheels: true,
+    parts: { aero: 1, _visual: { aero: Object.assign({ id: "probe", tier: 1 }, visual) } },
+  });
+  const same = (a, b) => a.idx.length === b.idx.length
+    && a.pos.every((v, i) => Math.abs(v - b.pos[i]) < 1e-6);
+  const neutral = {
+    lvl: 2, beam: 0, drs: 0, vane: 1, plate: 1, casc: null, swan: 0, tvane: null,
+    duct: 0, board: 0, slot: 0,
+    frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
+    rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
+  };
+  assert.ok(same(probe(neutral), bare), "neutral 2026 knobs must match the default body");
+  assert.ok(!same(probe({ ...neutral, duct: 2 }), bare), "duct 2 should add the upper ram");
+  assert.ok(!same(probe({ ...neutral, board: 2 }), bare), "board 2 should add the wakeboard");
+  assert.ok(!same(probe({ ...neutral, slot: 1 }), bare), "slot 1 should cut the floor corner");
+  const aero = Parts.CATALOG.find((c) => c.id === "aero").options;
+  for (const id of ["wake_board", "pod_duct", "reg26_concept"]) {
+    assert.ok(aero.some((o) => o.id === id), `missing aero option ${id}`);
+  }
+  const prints = new Map();
+  for (const opt of aero) {
+    const key = JSON.stringify(Object.fromEntries(
+      Object.keys(opt.visual || {}).sort().map((k) => [k, opt.visual[k]])));
+    const prev = prints.get(key);
+    assert.equal(prev, undefined, `duplicate aero recipe ${prev} vs ${opt.id}`);
+    prints.set(key, opt.id);
+  }
+});
+
 test("2026 body keeps a scooped pod, floor teeth, under-fences and a beveled halo", () => {
   assert.match(SRC, /z: 0\.50, inner: 0\.298/);
   assert.match(SRC, /z: -0\.38, inner: 0\.28/);

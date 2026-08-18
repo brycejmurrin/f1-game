@@ -380,7 +380,8 @@ const CEILINGS = {
   // 2757 -> 2766: thinner foil sections (~25%) + foil T-wing + beveled vanes.
   // 2766 -> 2800: 2026 realism — extra sidepod stations, floor LE teeth,
   // underwing fences, reverse-P inlet, beveled halo. Still under 2400/1500.
-  "js/car/car3d.js": 2800,
+  // 2800 -> 2851: recipe-gated duct / wakeboard / floor-slot kits.
+  "js/car/car3d.js": 2851,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

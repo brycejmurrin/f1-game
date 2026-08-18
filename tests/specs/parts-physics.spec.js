@@ -1253,6 +1253,7 @@ test.describe("Parts module — visual recipes", () => {
       const out = { inert: {}, active: {} };
       const KNOBS = [
         ["aero", "plate", 2], ["aero", "casc", 3], ["aero", "swan", 1], ["aero", "tvane", 1],
+        ["aero", "duct", 2], ["aero", "board", 2], ["aero", "slot", 1],
         ["engine", "chimney", 3], ["brakes", "scoop", 2], ["ers", "conduit", 2], ["fuel", "filler", 2],
         ["exhaust", "pipes", 3], ["exhaust", "bore", 1.3], ["exhaust", "flare", 1],
         ["exhaust", "wastegate", 2], ["exhaust", "wrap", 1],

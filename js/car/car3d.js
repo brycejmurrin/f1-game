@@ -1182,6 +1182,11 @@ const Car3D = (function () {
       lvl, beam: tier === 2 ? 1 : 0, drs: 0,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
+      // 2026 body-kit knobs. All default 0 so older recipes stay byte-identical.
+      // duct 0|1|2  upper sidepod ram (none / letterbox / scooped snorkel)
+      // board 0|1|2 in-wash wakeboard ahead of the pod (none / fence / fence+foot)
+      // slot  0|1   rear floor-corner mouse-hole
+      duct: 0, board: 0, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
@@ -1712,6 +1717,17 @@ const Car3D = (function () {
         addBox(out, x, 0.078 + rideDY, 0.82, 0.058, 0.030, 0.11, CARBON, SURFACES.carbon);
       }
     }
+    // 2026 rear floor-corner mouse-hole (`slot`). A dark cut ahead of the rear
+    // tyre — the regs allow a slotted spat here. Recipe-gated so the default
+    // body stays under the 2400 ceiling.
+    const aSlot = Math.max(0, Math.min(1, Math.round((aeroStyle && aeroStyle.slot) || 0)));
+    if (aSlot && !ckpt) {
+      for (const s of [-1, 1]) {
+        const ex = floorEdgeAt(-1.42);
+        addBox(out, s * (ex - 0.04), 0.095 + rideDY, -1.48, 0.10, 0.035, 0.16, INTAKE);
+        addBox(out, s * (ex + 0.02), 0.088 + rideDY, -1.48, 0.055, 0.018, 0.12, CARBON);
+      }
+    }
 
     part("engineCover");
     // --- Airbox + engine cover: sit BEHIND the driver, so they're skipped in
@@ -1969,6 +1985,25 @@ const Car3D = (function () {
       const cx = s * Math.max(0.16, p.x - 0.055);
       addBox(out, cx, p.top + 0.040, z, 0.060, 0.080, 0.105, CARBON);            // stack
       addBox(out, cx, p.top + 0.084, z - 0.010, 0.048, 0.014, 0.078, INTAKE);    // exit slot
+    }
+    // 2026 optional UPPER SIDEPOD DUCT (`duct`). The regs allow a ram on top
+    // of the pod — the Benetton-like tell that reads as a 2026 concept vs a
+    // 2022-25 scoop. 0 none · 1 slim letterbox · 2 proud scooped snorkel.
+    const aDuct = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.duct) || 0)));
+    if (aDuct > 0 && !ckpt) {
+      for (const s of [-1, 1]) {
+        const p = anchors.podAt(0.18);
+        const x = s * Math.max(0.22, p.x - 0.04);
+        if (aDuct === 1) {
+          addBox(out, x, p.top + 0.018, 0.20, 0.11, 0.026, 0.20, INTAKE);
+        } else {
+          addBeveledSpan(out,
+            { z: 0.38, x: x, y: p.top + 0.042, w: 0.10, h: 0.052, t: 0.55 },
+            { z: -0.02, x: s * Math.max(0.20, p.x - 0.08), y: p.top + 0.022, w: 0.08, h: 0.038, t: 0.70 },
+            0.008, CARBON);
+          addBox(out, x, p.top + 0.052, 0.36, 0.068, 0.020, 0.075, INTAKE);
+        }
+      }
     }
 
     part("livery");
@@ -2446,6 +2481,22 @@ const Car3D = (function () {
             0.008, CARBON);
           addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
         }
+      }
+    }
+    // 2026 in-wash WAKEBOARD (`board`) — the regulated floor-board / bargeboard
+    // return, inboard of the turning-vane cluster so the two never occupy the
+    // same volume. 0 none · 1 vertical fence · 2 fence + horizontal foot.
+    const aBoard = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.board) || 0)));
+    if (aBoard > 0 && !ckpt) {
+      for (const s of [-1, 1]) {
+        addBeveledSpan(out,
+          { z: 1.38, x: s * 0.48, y: 0.20, w: 0.014, h: aBoard === 2 ? 0.20 : 0.14, t: 0.45 },
+          { z: 0.92, x: s * 0.58, y: 0.24, w: 0.012, h: aBoard === 2 ? 0.16 : 0.12, t: 0.60 },
+          0.006, CARBON);
+        if (aBoard >= 2) addBeveledSpan(out,
+          { z: 1.22, x: s * 0.44, y: 0.145, w: 0.15, h: 0.016, t: 0.70 },
+          { z: 0.86, x: s * 0.56, y: 0.165, w: 0.12, h: 0.014, t: 0.80 },
+          0.005, CARBON);
       }
     }
 
