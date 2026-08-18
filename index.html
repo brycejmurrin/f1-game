@@ -330,11 +330,11 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2></div>
     <div class="sheet-body pane stack">
-      <button id="pm-resume" autofocus>RESUME</button>
-      <button id="pm-restart">RESTART RACE</button>
-      <button id="pm-settings">SETTINGS&hellip;</button>
-      <button id="pm-standings" hidden>STANDINGS</button>
-      <button id="pm-quit">QUIT TO MENU</button>
+      <button id="pm-resume" type="button" autofocus>RESUME</button>
+      <button id="pm-restart" type="button">RESTART RACE</button>
+      <button id="pm-settings" type="button">SETTINGS&hellip;</button>
+      <button id="pm-standings" type="button" hidden>STANDINGS</button>
+      <button id="pm-quit" type="button">QUIT TO MENU</button>
       <!-- Which build am I actually running? index.html carries no ?v= of its
            own, so a stale shell or service-worker cache can serve old JS with no
            visible sign — a bug report and a fix can then disagree for hours with
@@ -364,9 +364,9 @@
         <section id="pm-panel-controls" class="pm-group" role="tabpanel"
           aria-labelledby="pm-tab-controls" tabindex="0">
           <h3 class="pm-group-h">DRIVING CONTROLS</h3>
-          <button id="pm-steer">STEER: TILT</button>
-          <button id="pm-calib">RECALIBRATE TILT</button>
-          <button id="pm-gears">GEARS: AUTO</button>
+          <button id="pm-steer" type="button">STEER: TILT</button>
+          <button id="pm-calib" type="button">RECALIBRATE TILT</button>
+          <button id="pm-gears" type="button">GEARS: AUTO</button>
           <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
                an activation zone. It sits with GEARS because it is the same kind
                of choice: how much of the car you operate yourself. It was in RACE
@@ -377,12 +377,12 @@
                MANUAL by default: the button IS the mechanic. AUTO exists because
                inside a zone X-mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
-          <button id="pm-aero">ACTIVE AERO: MANUAL</button>
+          <button id="pm-aero" type="button">ACTIVE AERO: MANUAL</button>
         </section>
         <section id="pm-panel-display" class="pm-group" role="tabpanel"
           aria-labelledby="pm-tab-display" tabindex="0" hidden>
           <h3 class="pm-group-h">DISPLAY</h3>
-          <button id="pm-hidehud">HIDE HUD</button>
+          <button id="pm-hidehud" type="button">HIDE HUD</button>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
                SheetShape) sit INSIDE this range, so a notch can flip arrangement
                not just size. MEASURED garage portrait: two columns at 80%,
@@ -394,11 +394,11 @@
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-          <button id="pm-res">RESOLUTION: AUTO</button>
-          <button id="pm-renderer">RENDERER: WEBGL2</button>
+          <button id="pm-res" type="button">RESOLUTION: AUTO</button>
+          <button id="pm-renderer" type="button">RENDERER: WEBGL2</button>
           <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
                by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
-          <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+          <button id="pm-gfx" type="button" hidden>GRAPHICS: HIGH</button>
         </section>
         <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
           aria-labelledby="pm-tab-more" tabindex="0" hidden>
@@ -411,12 +411,12 @@
         </nav>
       </div>
     </div>
-    <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
+    <div class="sheet-foot"><button id="pm-settings-close" type="button" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
 <!-- main menu -->
-<div id="overlay" class="grain">
+<nav id="overlay" class="grain" aria-label="Apex 26 main menu">
   <!-- Branding and small print are ONE block, in ONE grid row.
        They used to be two blocks stacked in two rows with the button column
        beside them. A grid distributes a row's spare height across its rows, and
@@ -440,7 +440,7 @@
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
-  <div id="menu-buttons">
+  <div id="menu-buttons" aria-label="Game modes and tools">
     <!-- Inline Lucide icons (ISC — assets/icons/lucide-LICENSE.txt). stroke=currentColor
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
@@ -448,12 +448,12 @@
          a 24-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
-    <div id="menu-hero">
+    <div id="menu-hero" role="group" aria-label="Career mode">
     <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
-    <div id="menu-primary" class="balanced-row">
+    <div id="menu-primary" class="balanced-row" role="group" aria-label="Quick race modes">
     <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg>RACE</button>
     <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>TIME TRIAL</button>
     <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>RACE A FRIEND</button>
@@ -461,7 +461,7 @@
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
-    <div id="menu-secondary" class="balanced-row">
+    <div id="menu-secondary" class="balanced-row" role="group" aria-label="Game tools">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
@@ -469,7 +469,7 @@
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
     </div>
   </div>
-</div>
+</nav>
 
 <!-- select screen — two panes: WHO you are on the left, WHERE you race on the
      right. The circuit preview is PINNED at the top of the right pane and only
