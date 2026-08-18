@@ -85,7 +85,9 @@ export function shellNodes() {
 // UI redesign: the one-off Last Race heading moved from a class to a stable ID.
 // 536 → 534: unused .ui-panel / .ui-kicker / .ui-value / .ui-muted
 // placeholders (no html/js consumer) removed from css/menus.css.
-const CLASS_CEILING = 534;
+// 534 → 532: .menu-status-item / .menu-status-label left with the
+// title-screen dashboard chrome.
+const CLASS_CEILING = 532;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -108,7 +110,8 @@ const CLASS_CEILING = 534;
 // +10 2026-08-18: title-screen #menu-status season chips (3 items).
 // +8 2026-08-18: Adaptive Buttons moved onto the simple sheet; BRAKE CUE
 // slider + How-to-Play key chips + brake-cue.js script tag. Still under ~1400.
-const NODE_CEILING = 1220;
+// −10 2026-08-18: #menu-status chips removed with the dashboard chrome.
+const NODE_CEILING = 1210;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
