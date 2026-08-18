@@ -228,6 +228,17 @@ function defines() {
   return s;
 }
 
+/* Overlay PerfTry onto authored WGSL `const OPT_* = true;` lines. As-authored
+   the consts stay true so `wgx-validate --static` (no PerfTry) still compiles
+   the default-ON path. Runtime WGX create() runs this so an OFF toggle actually
+   recompiles WGX, instead of only flipping the GLX #define. */
+function withWgslConsts(src) {
+  if (typeof src !== "string") return src;
+  return src
+    .replace(/const OPT_FLAREGATE = true;/, "const OPT_FLAREGATE = " + on("flareGate") + ";")
+    .replace(/const OPT_LAMPFOGGATE = true;/, "const OPT_LAMPFOGGATE = " + on("lampFogGate") + ";");
+}
+
 /* ── The UI ────────────────────────────────────────────────────────────────
    Rows are GENERATED here, not written into index.html, for the same reason
    the lighting tuner generates its rows from TUNE_DEFS: the shell carries a
@@ -240,7 +251,12 @@ function defines() {
    It also mints NO new CSS class: the buttons carry no class, exactly like
    their neighbours (#pm-res, #pm-renderer, #pm-gfx), so the class ceiling is
    untouched too. */
-const LABELS = { skyLate: "SKY LATE", flareGate: "FLARE GATE", lampFogGate: "LAMP FOG GATE" };
+const LABELS = {
+  skyLate: "SKY LATE",
+  flareGate: "FLARE GATE",
+  envCull: "ENV CULL",
+  lampFogGate: "LAMP FOG GATE",
+};
 
 function labelFor(k) { return LABELS[k] || k.replace(/([A-Z])/g, " $1").toUpperCase(); }
 
@@ -256,7 +272,7 @@ function initUI() {
   // out of DISPLAY means the ordinary rendering controls stay short and the
   // deliberately specialist switches are not mistaken for daily settings.
   const host = document.getElementById("pm-panel-performance");
-  if (!host) return;
+  if (!host || document.getElementById("pm-try-skyLate")) return;
 
   const head = document.createElement("h3");
   head.className = "pm-group-h";          // existing class, nothing new minted
@@ -268,7 +284,7 @@ function initUI() {
   // micro font, 0.6 opacity). Reused rather than minting a `pm-note` that does
   // not exist in css/ and would have rendered unstyled at body size.
   note.className = "adv-help";
-  note.textContent = "Counted coverage/reach switches and pure gates default ON; the rest stay OFF until you measure them on YOUR hardware. Changing one reloads the page.";
+  note.textContent = "All four switches ship ON (counted coverage/reach, or a bit-identical gate). Turn one OFF to A/B on your hardware. Changing one reloads the page so shaders recompile.";
   host.appendChild(note);
 
   for (const k of Object.keys(FLAGS)) {
@@ -301,11 +317,12 @@ function list() {
   for (const k in FLAGS) {
     out[k] = {
       on: on(k), def: !!FLAGS[k].def, glsl: !!FLAGS[k].glsl,
+      backends: FLAGS[k].glsl ? "glx,wgx,tlx (shader const / #define)" : "glx,wgx,tlx",
       what: FLAGS[k].what, why: FLAGS[k].why, watch: FLAGS[k].watch,
     };
   }
   return out;
 }
 
-return { FLAGS, on, set, defines, list, reload: load, active: () => Object.keys(_on) };
+return { FLAGS, on, set, defines, withWgslConsts, list, reload: load, active: () => Object.keys(_on) };
 })();

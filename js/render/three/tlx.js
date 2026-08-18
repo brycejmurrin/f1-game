@@ -1200,8 +1200,13 @@ const TLX = (function () {
       // envReady — until then uEnvStr stays 0 and the cube reads black.
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
+      let _envFrame = null, _envSvCull = 0, _envEye = null, _envCullM = 0;
       const _envInvArr = new Float32Array(16);
       const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+      function _restoreEnvCull() {
+        if (_envFrame) { _envFrame.cullDist = _envSvCull; _envFrame = null; }
+        _envEye = null;
+      }
       function ensureEnvCam() {
         if (envCubeCam || !envRT) return;
         // CubeCamera(near, far, renderTarget): its 6 children are the face
@@ -1700,15 +1705,27 @@ const TLX = (function () {
           _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
           _envInvVP.copy(_envVP).invert();
           _envInvVP.toArray(_envInvArr);
+          // PerfTry.envCull (GLX envFaceBegin / WGX): a 64² cube must not
+          // re-draw the 900 m city. Save/restore frame.cullDist; radial cap
+          // is a MIN of the live camera cull when that is already tighter.
+          _envFrame = frame;
+          _envEye = eye;
+          _envSvCull = (frame.cullDist > 0) ? frame.cullDist : 0;
+          if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
+            _envCullM = _envSvCull > 0 ? Math.min(_envSvCull, 300) : 300;
+            frame.cullDist = _envCullM;
+          } else {
+            _envCullM = 0;
+          }
           return _envInvArr;
         },
         envFaceEnd(face) {
-          if (!envRT || !envCubeCam || !_envActive) { _envActive = false; return; }
+          if (!envRT || !envCubeCam || !_envActive) { _envActive = false; _restoreEnvCull(); return; }
           const faceCam = envCubeCam.children[face & 7];
           // Materialise the world draw-list (sky background node + track meshes
           // — game.js issued NO car/FX draws in the probe pass) into the face.
-          // Chunked records cull against the face frustum with cullDist=0 (no
-          // radial cap in the probe pass — GLX frameCullDist stays 0 here).
+          // Chunked records cull against the face frustum + PerfTry.envCull
+          // radial cap (GLX/WGX envFaceBegin). Restore frame.cullDist after.
           const faceVP = _envVP.elements;   // set in envFaceBegin for this face
           // Software GL: six world presents into a 64px cube miss the 360 s
           // test budget even after skipping city+sky (measured 2026-08-17:
@@ -1729,6 +1746,7 @@ const TLX = (function () {
             _envActive = false;
             envFacesMask |= 1 << (face & 7);
             if (envFacesMask === 63) { envFacesMask = 0; envReady = true; }
+            _restoreEnvCull();
             return;
           }
           poolUsed = 0;
@@ -1744,7 +1762,7 @@ const TLX = (function () {
               // (measured 2026-08-17: six full Monza presents into the cube
               // after M5 had already left the GPU process at 387%).
               if (softwareGL || !chunkedSys) continue;
-              const n = chunkedSys.cull(rec.chunked, faceVP, null, 0);
+              const n = chunkedSys.cull(rec.chunked, faceVP, _envEye, _envCullM);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
               continue;
@@ -1786,6 +1804,7 @@ const TLX = (function () {
               catch (_) { /* backend without cube-mip helper: lod 0 still works */ }
             }
           }
+          _restoreEnvCull();
         },
         envProbeReady() { return envReady; },
         // New track/session: the cube still holds the OLD circuit — hold the

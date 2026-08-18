@@ -851,6 +851,14 @@ test("WGX god-ray and env probe match GLX gates", () => {
   // Env probe respects PerfTry.envCull (300 m cap).
   assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+  // GLSL-only flags used to be a lie on WGX: overlay authored OPT_* consts.
+  assert.match(WGX_SOURCE, /function _perfWgsl\(/);
+  assert.match(WGX_SOURCE, /_perfWgsl\(WGSLChunks\.LIT\)/);
+  assert.match(WGX_SOURCE, /createShaderModule\(\{ code: _perfWgsl\(code\) \}\)/);
+  assert.match(CHUNKS_SOURCE, /const OPT_LAMPFOGGATE = true;/);
+  assert.match(CHUNKS_SOURCE, /if \(!OPT_LAMPFOGGATE \|\| F\.params8\.x > 0\.0\)/);
+  assert.match(POST_SOURCE, /const OPT_FLAREGATE = true;/);
+  assert.match(POST_SOURCE, /if \(OPT_FLAREGATE\)/);
 });
 
 test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {

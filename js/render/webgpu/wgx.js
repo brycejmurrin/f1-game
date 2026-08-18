@@ -206,6 +206,15 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
+  // PerfTry GLSL flags become WGSL module consts (authored `= true` so
+  // wgx-validate --static still compiles). Overlay the live toggle at create.
+  function _perfWgsl(src) {
+    try {
+      return (typeof PerfTry !== "undefined" && PerfTry.withWgslConsts)
+        ? PerfTry.withWgslConsts(src) : src;
+    } catch (_) { return src; }
+  }
+
   // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
   const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
@@ -1074,7 +1083,7 @@ const WGX = (function () {
       });
       litLayout = device.createPipelineLayout({ bindGroupLayouts: [g0Layout, g1Layout, g2Layout] });
 
-      litModule  = device.createShaderModule({ code: WGSLChunks.LIT });
+      litModule  = device.createShaderModule({ code: _perfWgsl(WGSLChunks.LIT) });
       skyModule  = device.createShaderModule({ code: WGSLChunks.SKY });
       blitModule = device.createShaderModule({ code: WGSLChunks.BLIT });
 
@@ -1326,7 +1335,7 @@ const WGX = (function () {
       try {
         pointSampler = device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
         const fsPipe = (code, fmt, blend) => {
-          const mod = device.createShaderModule({ code });
+          const mod = device.createShaderModule({ code: _perfWgsl(code) });
           const target = blend ? { format: fmt, blend } : { format: fmt };
           return device.createRenderPipeline({
             layout: "auto",

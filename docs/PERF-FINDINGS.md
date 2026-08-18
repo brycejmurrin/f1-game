@@ -734,8 +734,11 @@ standalone bug fix worth landing on its own.
 
 §3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
 shipped as **`PerfTry.envCull`**, `ENV_CULL_M = 300`, `js/render/glx.js:912-922`,
-default OFF, applied as a `min` and never an override, with the counted
-justification in `js/game/perf-try.js`. What remains true is the sharpener:
+default ON (counted reach), applied as a `min` and never an override, with the
+counted justification in `js/game/perf-try.js`. TLX's probe used to hard-code
+`cullDist=0` (stale comment: "GLX frameCullDist stays 0") — 2026-08-18 it
+honours the same 300 m cap + save/restore as GLX/WGX. What remains true is the
+sharpener:
 `frame.cullDist` is read in exactly one place, inside the chunked path, so the
 switch **cannot remove a single road or terrain triangle** from the probe — it
 reaches props and glass only. That makes it a synergy argument for chunking the

@@ -452,6 +452,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   //      Light   :  64 B/light × 48 = 3072 B storage (see WGX.LIGHT_STRIDE_BYTES)
   //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
   const LIT = `
+const OPT_LAMPFOGGATE = true;
 struct FrameU {
   viewProj   : mat4x4<f32>,   // off   0
   eye        : vec4<f32>,     // off  64  (xyz eye)
@@ -1136,8 +1137,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
     // PerfTry.lampFogGate / GLX OPT_LAMPFOGGATE: F.params8.x = uLampFog is 0 in
     // daylight, so the only consumer is gated — skip the accumulate on day frames.
-    // Uniform CF (params8.x), safe for WGSL.
-    if (F.params8.x > 0.0) {
+    // Uniform CF (params8.x / module const), safe for WGSL. OFF compiles the
+    // ungated accumulate so the pause-menu toggle is not a GLX-only lie.
+    if (!OPT_LAMPFOGGATE || F.params8.x > 0.0) {
       lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
     }
     let spotD = mix(bleed, 1.0, beam);
