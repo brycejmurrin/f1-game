@@ -102,10 +102,7 @@ const CEILING = {
   // duplicate landscape `padding` when they moved onto body[data-width].
   // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
   // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
-  // 2026-08-18: 467 -> 473 after eedad021 restored the title-screen color
-  // system — leftover landmark `padding`/`gap` in css/menus.css, not the
-  // 479 peak from 1a3975c5.
-  rawSpacing: 473,
+  rawSpacing: 467,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
