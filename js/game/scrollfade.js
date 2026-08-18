@@ -25,7 +25,7 @@ window.ScrollFade = (function () {
   // all. Matching the class covers those and anything added later for free.
   // The rest are the scroll regions that are NOT panes.
   const SEL = [
-    ".pane", "#sel-body", ".panel-scroll", ".scroll-y",
+    ".pane", ".panel-scroll", ".scroll-y",
     ".dh-content", "#track-detail-body",
     // The TITLE screen. It only scrolls when the button column outgrows the
     // window — a short landscape phone, or UI SIZE turned up — but when it does
@@ -53,6 +53,13 @@ window.ScrollFade = (function () {
   // scrollHeight read forces a fresh reflow — one per region rather than one for
   // the batch, and this now runs over every .pane on every menu mutation.
   function measure(el) {
+    // overflow:hidden still reports scrollHeight > clientHeight. Painting a
+    // thumb there made Circuit Select look like two vertical catalogues:
+    // the clipped sheet body plus #sel-tracks.pane (the real list).
+    const oy = getComputedStyle(el).overflowY;
+    if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") {
+      return { el, max: 0, scrollable: false, top: 0, thumb: 0, track: el.clientHeight };
+    }
     const scrollH = el.scrollHeight, track = el.clientHeight;
     const max = scrollH - track;
     const scrollable = max > EDGE;

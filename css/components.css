@@ -680,7 +680,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pmsettings  { --sheet-w: 760px; }
 #results     { --sheet-w: 600px; }
 #standings   { --sheet-w: 560px; }
-#howtoplay   { --sheet-w: 700px; }
+/* Help uses a term rail beside a readable description column. At the old 700px
+   cap long explanations wrapped heavily; 1000px uses available desktop width
+   while viewport fitting still protects constrained/high-scale sheets. */
+#howtoplay   { --sheet-w: 1000px; }
 #advanced    { --sheet-w: 820px; }
 #audioset    { --sheet-w: 460px; }
 #race-settings { --sheet-w: 560px; }

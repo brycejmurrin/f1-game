@@ -60,6 +60,11 @@ test("circuit select stacked uses one list scroller", () => {
     "the track list fills leftover body height from a zero basis");
   assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
     "wide preview column fits instead of scrolling as a second document");
+  assert.doesNotMatch(read("js/game/scrollfade.js"), /"\.pane", "#sel-body"/);
+  assert.doesNotMatch(read("js/game/menunav.js"), /\.pane,#sel-body/);
+  assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
+  assert.match(read("js/game/scrollfade.js"), /overflowY/,
+    "fade thumbs require overflow-y auto/scroll, not hidden content height");
 });
 
 test("garage stacked categories are a horizontal strip", () => {
@@ -227,4 +232,28 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.match(camera, /return \{ refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker\.hide \}/);
   assert.match(game, /function quitToMenu\(\) \{[\s\S]*?hideCamPicker\(\)/);
   assert.match(game, /function setPaused\(p\) \{[\s\S]*?hideCamPicker\(\)/);
+});
+
+test("How to Play exposes pinned semantic jump landmarks", () => {
+  const html = read("index.html");
+  const css = read("css/overlays.css");
+  const components = read("css/components.css");
+  assert.match(html, /id="htp-contents"[^>]*aria-label="How to play sections"/);
+  for (const id of ["controls", "racing", "setup", "modes", "friends"]) {
+    assert.match(html, new RegExp(`href="#htp-${id}"`));
+    assert.match(html, new RegExp(`<dt id="htp-${id}">`));
+  }
+  assert.match(css, /#htp-contents\s*\{[\s\S]*?overflow-x:\s*auto/);
+  assert.match(css, /#htp-contents a\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
+  assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--red\)/);
+  assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
+  assert.doesNotMatch(css, /#howtoplay dl\s*\{[^}]*max-content minmax\(0, 1fr\) max-content/,
+    "help rows must not synchronize two unrelated answers");
+  assert.match(components, /#howtoplay\s*\{\s*--sheet-w:\s*1000px/);
+});
+
+test("compact Career keeps its mode context instead of ellipsizing it", () => {
+  const css = read("css/career.css");
+  assert.match(css, /#cr-inner\[data-density="compact"\] #cr-sub\s*\{[\s\S]*?white-space:\s*normal/);
+  assert.match(css, /#cr-inner\[data-density="compact"\] #cr-sub\s*\{[\s\S]*?text-overflow:\s*clip/);
 });

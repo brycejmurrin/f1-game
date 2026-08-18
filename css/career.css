@@ -118,7 +118,9 @@
   flex: 1 1 100%; flex-direction: row; align-items: baseline; gap: var(--gap);
 }
 #cr-inner[data-density="compact"] #cr-sub {
-  font-size: var(--fs-micro);
+  flex: 1 1 180px; min-width: 0;
+  font-size: var(--fs-micro); line-height: 1.2;
+  white-space: normal; overflow: visible; text-overflow: clip;
 }
 #cr-inner[data-density="compact"] #cr-meters {
   width: 100%; margin-left: 0; display: grid;

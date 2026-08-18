@@ -96,7 +96,9 @@ const CLASS_CEILING = 536;
 // 1160 = category-based Settings navigation: tab buttons + panels.
 // Still well below 1,400. The PERF tab / PerfTry script were removed
 // when those switches baked ON; NODE_CEILING stays a max, not a target.
-const NODE_CEILING = 1161;
+// +3 2026-08-18: five How-to-Play landmark links and their labelled navigation
+// replace the former undifferentiated long sheet without adding wrapper headings.
+const NODE_CEILING = 1164;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

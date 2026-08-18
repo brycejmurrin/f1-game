@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1410">
+<meta name="apex-build" content="1413">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=b961025bbc77" as="style">
+<link rel="preload" href="css/components.css?v=f4cf7875c30f" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,15 +40,15 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=b961025bbc77">
+<link rel="stylesheet" href="css/components.css?v=f4cf7875c30f">
 <link rel="stylesheet" href="css/tuner.css?v=0757f8663e28" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=b0b375fd271b">
 <link rel="stylesheet" href="css/carsetup.css?v=cf2ebcd8b4ca" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=e8d9b410729b" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=39f5a494f72a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
 <link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=a41cbe1570e2" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=91f2e42053f4" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -1126,9 +1126,18 @@
 <!-- how to play -->
 <dialog id="howtoplay" class="screen dim" data-esc-close="htp-close" aria-labelledby="dlg-howtoplay" hidden>
   <div id="howtoplay-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-howtoplay">HOW TO PLAY</h2></div>
+    <div class="sheet-head">
+      <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
+      <nav id="htp-contents" aria-label="How to play sections">
+        <a href="#htp-controls">CONTROLS</a>
+        <a href="#htp-racing">RACING</a>
+        <a href="#htp-setup">SETUP</a>
+        <a href="#htp-modes">MODES</a>
+        <a href="#htp-friends">FRIENDS</a>
+      </nav>
+    </div>
     <dl class="sheet-body pane">
-      <dt>PC / KEYBOARD</dt>
+      <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>
         Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
         Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
@@ -1142,7 +1151,7 @@
       </dd>
       <dt>TOUCH / MOBILE</dt>
       <dd>Pick <span class="key">STEER</span> in <span class="key">SETTINGS</span> (pause &rarr; SETTINGS): TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In touch mode the car accelerates for you &mdash; just steer and brake; BUTTONS mode has its own <span class="key">GAS</span> pedal</dd>
-      <dt>&#9889; BOOST</dt>
+      <dt id="htp-racing">&#9889; BOOST</dt>
       <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
       <dt>&#8646; ACTIVE AERO</dt>
       <dd>The 2026 moveable wings. <span class="key">Z-MODE</span> is the default: flaps shut, maximum downforce. Press <span class="key">Z</span> (or tap <span class="key">AERO</span>) in an <span class="key">ACTIVATION ZONE</span> for <span class="key">X-MODE</span> &mdash; the top elements of both wings rotate flat, cutting drag for a higher top speed but giving up grip. It slams shut the moment you brake or leave the zone. Costs no energy: unlike BOOST and OVERTAKE you pay for it in cornering, not charge.
@@ -1152,7 +1161,7 @@
       <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 electrical overtaking aid that replaced DRS. Because it IS the overtaking aid it carries DRS's safety rules: nothing on the opening lap (it wakes when the leader starts lap 2) and nothing under a caution. The chip reads <span class="key">NO OVERTAKE</span> when it is switched off rather than merely unarmed</dd>
       <dt>GEARS</dt>
       <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span>. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
-      <dt>&#127909; CAMERA</dt>
+      <dt id="htp-setup">&#127909; CAMERA</dt>
       <dd>Tap the <span class="key">CAM</span> button (top-right) to open the picker &mdash; 13 modes from CHASE and COCKPIT to HELI, TRACKSIDE and CINEMATIC &mdash; or press <span class="key">C</span> to cycle them. Your choice is remembered</dd>
       <dt>&#9881; SETTINGS</dt>
       <dd>Pause (<span class="key">P</span> / <span class="key">Esc</span> or the <span class="key">&#10074;&#10074;</span> button) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
@@ -1164,7 +1173,7 @@
       <dd>In <span class="key">SETTINGS</span> open <span class="key">MUSIC &amp; SOUND</span> for the music and effects switches, their volumes, and what is playing &mdash; or <span class="key">HIDE HUD</span> for a clean cinematic view (the small eye icon brings it back)</dd>
       <dt>TRACK LIMITS</dt>
       <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
-      <dt>RACE</dt>
+      <dt id="htp-modes">RACE</dt>
       <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
       <dt>SEASON</dt>
       <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
@@ -1183,7 +1192,7 @@
       <dd>Championship weekends start with one flying lap. DRIVE MY LAP to set
         your own time, or SIMULATE to take the modelled one &mdash; either way the
         sheet is the grid you start from. You cannot do both</dd>
-      <dt>&#128101; RACE A FRIEND</dt>
+      <dt id="htp-friends">&#128101; RACE A FRIEND</dt>
       <dd>Two players, one race, no server. The host makes an invite code, the
         guest sends one back, and those two pastes ARE the connection &mdash; so
         anything you can send a message on will do. In the same room, scan the QR
@@ -1757,12 +1766,12 @@
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=987588b2c761"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=06fdcc035ce3"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=1b224ed8b12d"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=fb5b15f7d6bc"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=eaf9b3f6f824"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>

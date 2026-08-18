@@ -49,15 +49,13 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const list = document.getElementById("sel-tracks");
     return inner && inner.dataset.pair !== "on" && list && list.getBoundingClientRect().height > 80;
   }, null, { polling: 100, timeout: 5_000 });
+  await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedSel = await page.evaluate(() => {
     const body = document.getElementById("sel-body");
     const list = document.getElementById("sel-tracks");
     const preview = document.getElementById("sel-track-section");
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
-    input.focus(); input.value = "spa";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    const rows = [...document.querySelectorAll("#sel-tracks .track-row")];
-    return {
+    const out = {
       pair: document.getElementById("sel-inner").dataset.pair,
       bodyOY: getComputedStyle(body).overflowY,
       listOY: getComputedStyle(list).overflowY,
@@ -67,13 +65,21 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       previewH: preview.getBoundingClientRect().height,
       previewTop: preview.getBoundingClientRect().top,
       listTop: list.getBoundingClientRect().top,
-      active: document.activeElement === input,
-      shown: rows.filter((row) => !row.hidden).length,
+      bodySf: body.classList.contains("sf-scroll"),
+      listSf: list.classList.contains("sf-scroll"),
+      innerSf: [...document.querySelectorAll("#sel-inner .sf-scroll")].map((el) => el.id),
     };
+    input.focus(); input.value = "spa";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const shown = [...document.querySelectorAll("#sel-tracks .track-row")]
+      .filter((row) => !row.hidden).length;
+    return { ...out, active: document.activeElement === input, shown };
   });
   expect(stackedSel.pair).not.toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOY);
+  expect(stackedSel.bodySf).toBe(false);
+  expect(stackedSel.innerSf).toEqual(["sel-tracks"]);
   expect(stackedSel.listMaxH).toBe("none");
   expect(stackedSel.listH).toBeGreaterThan(80);
   expect(stackedSel.listH / stackedSel.bodyH).toBeGreaterThan(0.45);
@@ -111,6 +117,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(tabs.selected).toBe(1);
   expect(tabs.controls).toBe("cs-options");
   expect(tabs.labelled).toBe(tabs.selectedId);
+  await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedGarage = await page.evaluate(() => {
     const tabsEl = document.getElementById("cs-tabs");
     const opts = document.getElementById("cs-options");
@@ -122,6 +129,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       tabsOX: tcs.overflowX,
       optsOY: getComputedStyle(opts).overflowY,
       bodyOY: getComputedStyle(body).overflowY,
+      tabsSf: tabsEl.classList.contains("sf-scroll"),
+      optsSf: opts.classList.contains("sf-scroll"),
       role: tabsEl.getAttribute("role"),
     };
   });
@@ -130,6 +139,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
   expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
   expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
+  expect(stackedGarage.tabsSf).toBe(false);
   expect(stackedGarage.role).toBe("tablist");
   await page.evaluate(() => /** @type {HTMLElement} */ (document.querySelector('#cs-tabs [role="tab"]')).focus());
   await page.keyboard.press("End");
@@ -260,4 +270,42 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     document.getElementById("pausebtn").click();
   });
   expect(await page.evaluate(() => document.getElementById("campicker").hidden)).toBe(true);
+});
+
+test("How to Play contents rail jumps within its single scroller", async ({ page }) => {
+  await waitReady(page);
+  await page.setViewportSize({ width: 860, height: 560 });
+  await page.click("#mb-help");
+  await page.waitForSelector("#howtoplay:not([hidden])");
+
+  const before = await page.evaluate(() => {
+    const nav = document.getElementById("htp-contents").getBoundingClientRect();
+    const body = document.querySelector("#howtoplay .sheet-body").getBoundingClientRect();
+    return {
+      links: document.querySelectorAll("#htp-contents a").length,
+      navAboveBody: nav.bottom <= body.top + 1,
+      bodyOverflow: getComputedStyle(document.querySelector("#howtoplay .sheet-body")).overflowY,
+    };
+  });
+  expect(before.links).toBe(5);
+  expect(before.navAboveBody).toBe(true);
+  expect(["auto", "scroll", "overlay"]).toContain(before.bodyOverflow);
+
+  await page.click('#htp-contents a[href="#htp-friends"]');
+  await page.waitForFunction(() => {
+    const body = document.querySelector("#howtoplay .sheet-body");
+    const target = document.getElementById("htp-friends");
+    if (!body || !target) return false;
+    const br = body.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    return body.scrollTop > 0 && tr.top >= br.top - 1 && tr.bottom <= br.bottom + 1;
+  }, null, { polling: 100, timeout: 5_000 });
+  const after = await page.evaluate(() => {
+    const link = document.querySelector('#htp-contents a[href="#htp-friends"]');
+    return {
+      heading: document.getElementById("htp-friends")?.textContent || "",
+      activeColor: getComputedStyle(link).backgroundColor,
+    };
+  });
+  expect(after.heading).toContain("RACE A FRIEND");
 });
