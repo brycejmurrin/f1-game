@@ -250,6 +250,11 @@
         m.frustumCulled = false;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.userData.tlxInstCap = batch.instances;
+        // Match the lit InstancedMesh: WebGPU binds instanceColor at slot 5.
+        // A missing / 1-instance buffer fails Dawn when count > 1 (mcp-probe).
+        m.instanceColor = new THREE.InstancedBufferAttribute(
+          new Float32Array(batch.instances * 3), 3);
+        m.instanceColor.array.fill(1);
         iPool[iUsed] = m;
         castScene.add(m);
       }

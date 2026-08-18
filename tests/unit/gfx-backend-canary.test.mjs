@@ -617,6 +617,9 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /_softBlit = !forceWebGL && _capPref !== "0"/);
   assert.match(tlx, /never getCurrentTexture/);
   assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
+  assert.match(tlx, /await renderer\.init\(\);[\s\S]{0,900}game-soft/);
+  assert.match(tlx, /function _ensureInstanceColor/);
+  assert.match(tlx, /instanceColor\.array\.fill\(1\)/);
   assert.match(post, /ldrTarget: \(\) => ldrRT/);
 });
 

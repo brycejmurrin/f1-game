@@ -239,19 +239,11 @@ const TLX = (function () {
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       const _softPresentWaiters = [];
-      if (_softBlit && typeof document !== "undefined") {
-        _displayCanvas = canvas;
-        _gpuCanvas = document.createElement("canvas");
-        _gpuCanvas.setAttribute("aria-hidden", "true");
-        if (_gpuCanvas.style) {
-          _gpuCanvas.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none";
-        }
-        if (document.body) document.body.appendChild(_gpuCanvas);
-        try { _displayCtx = _displayCanvas.getContext("2d", { willReadFrequently: true }); }
-        catch (_) { _displayCtx = null; /* 2D claim failed; capturePixels can still read the RT */ }
-        canvas = _gpuCanvas;
-      }
-      const _layoutCanvas = _displayCanvas || canvas;
+      // Layout/CSS size follows the VISIBLE canvas. Soft-present steals
+      // id="game" onto a 2D overlay AFTER renderer.init() — giving three a
+      // fresh 1×1 hidden canvas first made GPUCanvasContext.configure null
+      // (mcp-probe 2026-08-18, THREE PATH: WEBGPU on SwiftShader).
+      let _layoutCanvas = canvas;
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
@@ -316,6 +308,22 @@ const TLX = (function () {
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      // Soft-present overlay: a NEW 2D canvas. Do not steal id="game" or
+      // restyle three's node — that made GPUCanvasContext.configure null
+      // (mcp-probe 2026-08-18). SAVE SCREENSHOT reads capturePixels() when
+      // softPresent() is true, so a black native #game is fine.
+      if (_softBlit && typeof document !== "undefined" && canvas && canvas.parentNode) {
+        _gpuCanvas = canvas;
+        _displayCanvas = document.createElement("canvas");
+        _displayCanvas.id = "game-soft";
+        _displayCanvas.setAttribute("aria-hidden", "true");
+        if (_displayCanvas.style) {
+          _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
+        }
+        canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+        try { _displayCtx = _displayCanvas.getContext("2d", { willReadFrequently: true }); }
+        catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
+      }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -765,18 +773,32 @@ const TLX = (function () {
       const _instAlive = new Set();   // InstancedMesh objects shown this frame
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
 
+      function _ensureInstanceColor(imesh, cap) {
+        const need = Math.max(1, cap | 0);
+        if (imesh.instanceColor && imesh.instanceColor.count >= need) return;
+        // WebGPU validates instanceColor GPUBuffer against imesh.count.
+        // setColorAt() lazily allocated a 1-instance buffer (12 bytes) while
+        // count was 4–6 — Dawn: "Instance range requires a larger buffer
+        // than the bound buffer size of the vertex buffer at slot 5"
+        // (mcp-probe THREE PATH: WEBGPU, 2026-08-18).
+        imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
+        imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+      }
       function _writeInstanceMatrices(imesh, matrices, colors, n) {
-        for (let i = 0; i < n; i++) {
+        const cap = imesh.userData.tlxInstCap || n;
+        if (colors && colors.length) _ensureInstanceColor(imesh, cap);
+        const drawN = Math.min(n, cap);
+        for (let i = 0; i < drawN; i++) {
           _instMat.fromArray(matrices, i * 16);
           imesh.setMatrixAt(i, _instMat);
-          if (colors && colors.length && imesh.setColorAt) {
+          if (colors && colors.length && imesh.instanceColor) {
             _instColor.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
             imesh.setColorAt(i, _instColor);
           }
         }
         imesh.instanceMatrix.needsUpdate = true;
         if (imesh.instanceColor) imesh.instanceColor.needsUpdate = true;
-        imesh.count = n;
+        imesh.count = drawN;
       }
 
       function createInstancedBatch(data, matrices, colors, opts) {
@@ -790,10 +812,8 @@ const TLX = (function () {
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         imesh.userData.tlxInstCap = n;
-        if (colors && colors.length) {
-          imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-          imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        }
+        _ensureInstanceColor(imesh, n);
+        imesh.instanceColor.array.fill(1);
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;
         scene.add(imesh);

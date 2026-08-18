@@ -360,7 +360,22 @@ function saveScreenshot() {
       }
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
       let href = null;
-      if (g && typeof g.toDataURL === "function") {
+      const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
+      // Soft-present #game is the native WebGPU swapchain (often black). Prefer
+      // capturePixels (LDR copyTextureToBuffer) when the 2D blit is armed.
+      if (soft && typeof GLX.capturePixels === "function") {
+        try {
+          const cap = await GLX.capturePixels();
+          const c = document.createElement("canvas");
+          c.width = cap.width; c.height = cap.height;
+          const ctx2 = c.getContext && c.getContext("2d");
+          if (ctx2 && typeof ctx2.putImageData === "function") {
+            ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+            href = c.toDataURL("image/png");
+          }
+        } catch (_) { href = null; /* fall through to #game */ }
+      }
+      if (!href && g && typeof g.toDataURL === "function") {
         try { href = g.toDataURL("image/png"); } catch (_) { href = null; }
       }
       if (!href && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
