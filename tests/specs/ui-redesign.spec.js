@@ -311,7 +311,22 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.panelPainted).toBe(true);
   expect(settings.navH).toBeLessThan(settings.bodyH);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
-  await page.evaluate(() => document.getElementById("pm-settings-close").click());
+  await page.evaluate(() => {
+    document.getElementById("pm-tab-more").click();
+    document.getElementById("pm-advanced").click();
+  });
+  await page.waitForSelector("#advanced:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const advanced = await page.evaluate(() => {
+    const inner = document.getElementById("advanced-inner");
+    return { fit: inner.dataset.fit, h: inner.getBoundingClientRect().height };
+  });
+  expect(advanced.fit, "advanced 200% short landscape").toBe("on");
+  expect(advanced.h).toBeGreaterThan(80);
+  await page.evaluate(() => {
+    document.getElementById("adv-close").click();
+    document.getElementById("pm-settings-close").click();
+  });
 
   // Last Race: reproduce the production table shape at phone portrait width.
   await page.setViewportSize({ width: 393, height: 844 });

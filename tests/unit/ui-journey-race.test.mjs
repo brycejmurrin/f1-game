@@ -77,9 +77,13 @@ test("photo-mode restore eye is #pc-restore when controls are hidden", () => {
 test("compact race HUD uses body density, not orientation + max-height queries", () => {
   const hud = read("css/hud.css");
   const overlays = read("css/overlays.css");
+  const responsive = read("css/responsive.css");
   const added = hud + "\n" + overlays;
   assert.doesNotMatch(added, /orientation:\s*landscape\)\s*and\s*\(max-height:/,
     "race-layer hunks must not add orientation + max-height layout queries");
+  assert.doesNotMatch(stripComments(responsive),
+    /orientation:\s*landscape\)\s*and\s*\(max-height:\s*560px\)/,
+    "short-landscape HUD shrink moved to body[data-density] in hud.css");
   assert.match(hud, /body\[data-density="compact"\] #minimap/);
   assert.match(hud, /body\[data-density="compact"\] \.hud-gaps \{[^}]*var\(--sal\) \/ var\(--hud-z\)/);
   assert.match(hud, /body\[data-density="compact"\] #hud-sectors/);

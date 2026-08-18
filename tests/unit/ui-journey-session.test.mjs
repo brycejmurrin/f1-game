@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
-const SESSION = ["results", "standings", "race-settings", "pausemenu", "audioset"];
+const SESSION = ["results", "standings", "race-settings", "pausemenu", "audioset",
+  "advanced", "customize"];
 
 /** `#id { … --fit-at: … }` or a grouped selector list that includes `#id`. */
 function fitAtBlocks(css, id) {
@@ -37,6 +38,8 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
   assert.match(css, /#standings\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#race-settings\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#audioset\s*\{[^}]*--fit-at:\s*300px/);
+  assert.match(css, /#advanced\s*\{[^}]*--fit-at:\s*300px/);
+  assert.match(css, /#customize\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#pausemenu\s*\{[^}]*--fit-at:\s*260px/,
     "pause is a short button stack — slightly smaller floor than Settings");
 });
@@ -49,6 +52,8 @@ test("landscape --fit-at uses a viewport orientation query", () => {
   assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#standings[\s\S]*--fit-at:\s*220px/);
   assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#race-settings[\s\S]*--fit-at:\s*220px/);
   assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#audioset[\s\S]*--fit-at:\s*220px/);
+  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#advanced[\s\S]*--fit-at:\s*220px/);
+  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#customize[\s\S]*--fit-at:\s*220px/);
   assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#pausemenu\s*\{[^}]*--fit-at:\s*180px/);
 });
 

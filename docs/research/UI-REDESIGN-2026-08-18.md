@@ -294,12 +294,15 @@ one obvious scroll region.
    `#standings`, `#race-settings`, `#audioset`, `#pausemenu`) declare `--fit-at`;
    `#standings-body` uses leftover sheet-grid height (`min-height: 0`, no `55svh`).
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
-   **In progress (2026-08-18).** Compact HUD keys on `body[data-density]`
+   **Done (2026-08-18).** Compact HUD keys on `body[data-density]`
    (`#minimap` 96px, tighter gaps) and still zooms with `--hud-z`, never
    `--ui-scale`. `#campicker` stands down while a dim sheet is open. Photo-mode
    restore remains `#pc-restore`. `prefers-reduced-motion` also kills tach/OT
-   pulses. Leftover: `css/responsive.css` still has a landscape `max-height:
-   560px` HUD shrink (overlays layer wins on 852×393).
+   pulses. Advanced steering and My Team declare `--fit-at` like the other
+   session sheets. The leftover short-landscape HUD shrink in
+   `css/responsive.css` is gone — density in `css/hud.css` owns it.
+   `css/tokens.css` still tightens `--pad/--gap/--gut` on that viewport query
+   for `#overlay`, which is not a `.sheet`.
 6. Final matrix: all screens, scales, inputs, screenshots, performance and
    accessibility checks; then cache/version bump as the final production edit.
 

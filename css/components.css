@@ -700,17 +700,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
-#advanced    { --sheet-w: 820px; }
+#advanced    { --sheet-w: 820px; --fit-at: 300px; }
 #audioset    { --sheet-w: 460px; --fit-at: 300px; }
 #race-settings { --sheet-w: 560px; --fit-at: 300px; }
 @media (orientation: landscape) {
-  #results, #standings, #race-settings, #audioset { --fit-at: 220px; }
+  #results, #standings, #race-settings, #audioset, #advanced, #customize { --fit-at: 220px; }
   #pausemenu { --fit-at: 180px; }
 }
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
    was two narrow columns and still ran 171px past the fold; the sheet is capped
    by the safe-area width anyway, so this only ever spends room that exists. */
-#customize   { --sheet-w: 760px; }
+#customize   { --sheet-w: 760px; --fit-at: 300px; }
 /* THE ONE THAT WAS MISSING. #vsfriend was the only dialog in the game with no
    --sheet-w, so it fell through to the generic 520px fallback in `.sheet` — the
    second-narrowest number in this table, on the screen with a TWO-COLUMN layout
