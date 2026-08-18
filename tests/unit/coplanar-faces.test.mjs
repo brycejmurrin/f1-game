@@ -77,6 +77,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 //
 // 2026-08-17 pine S4 remesh: hockenheim 53→54 (one new spot from scaled
 // forestEdge canopies). monza 12→11, istanbul 6→5, mugello 1→0 — lower.
+//
+// zandvoort 3 → 5 (2026-08-18): e1c1cb2f dropped sceneryStartFrac so
+// dressing matches the real S/F. The shift re-seats existing dunes /
+// grandstands; coplanar-audit --why is still 5 same-facing `trk` spots
+// (maxArea 16.7 m², minGap 0). No new defect class. Cap raised to the
+// measured count so it stops lying about the tree.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
