@@ -925,6 +925,43 @@ test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
     "do not rebuild an even 2π ring — that is the look gap vs GLX/TLX");
 });
 
+test("HDR grade is gated on all three backends when knobs are neutral", () => {
+  // applyHdrGrade at shipped defaults is an identity that still costs ~20 ALU
+  // + transcendentals per full-res pixel. GLX/TLX skip it; WGX used to always
+  // run it (and the max(c,0) clamp is the only non-identity).
+  const glx = read("js/render/shaders/post.js");
+  assert.match(glx, /if \(uHdrGradeOn > 0\.5\) c = applyHdrGrade\(c\)/,
+    "GLX composite must keep the uHdrGradeOn gate");
+  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgsl, /if \(U\.tone1\.w > 0\.5\) \{ c = applyHdrGrade\(c\); \}/,
+    "WGX must gate applyHdrGrade on tone1.w (hdrGradeOn)");
+  assert.doesNotMatch(wgsl, /^\s*c = applyHdrGrade\(c\);/m,
+    "do not always run applyHdrGrade — that is the skip-path drift vs GLX/TLX");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /s\[43\] = _hg \? 1 : 0/,
+    "WGX must pack hdrGradeOn into the tone1.w pad");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /hdrGradeOn\.greaterThan\(0\.5\)/,
+    "TLX composite must keep the hdrGradeOn gate");
+  const tlxPost = read("js/render/three/tlx-post.js");
+  assert.match(tlxPost, /C\.hdrGradeOn\.value = _hg \? 1 : 0/,
+    "TLX must still compute the same off-neutral _hg mask as GLX");
+});
+
+test("SSAO tap setup is skipped when strength is 0 on all three backends", () => {
+  // Contact shadows keep the pass live at aoStr=0; the 8 dependent depth
+  // fetches must not still run. strength/uStrength is a uniform.
+  const glx = read("js/render/shaders/post.js");
+  assert.match(glx, /if \(uStrength > 0\.0\)/,
+    "GLX SSAO must keep the uStrength tap gate");
+  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgsl, /if \(strength > 0\.0\)/,
+    "WGX SSAO must skip the 8-tap loop when AO strength is 0");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /ssaoU\.strength\.greaterThan\(0\.0\)/,
+    "TLX SSAO must skip the 8-tap loop when AO strength is 0");
+});
+
 test("Gfx seam lists instancing on all three backends", () => {
   const gfx = read("js/render/gfx.js");
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,

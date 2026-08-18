@@ -311,25 +311,28 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let N = select(vec3<f32>(0.0, 0.0, 1.0), crN / crL, crL > 1e-6);
   let dCentre = ssaoDepth(in.uv);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
-  // Screen-space radius shrinks with distance so world reach stays ~constant.
-  let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
-  // Per-pixel rotation turns banding into noise (uses the frag coord).
-  let ang = fract(sin(dot(in.pos.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453) * 6.2832;
-  let ca = cos(ang);
-  let sa = sin(ang);
-
+  // uStrength == 0 is supported: the pass still runs contact shadows
+  // (haveAO arms on aoStr > 0 || contactStr > 0). Skip the 8 dependent
+  // depth taps + the sin/cos rotation when AO itself is off — same as
+  // GLX SSAO_FS (js/render/shaders/post.js). strength is a uniform.
   var occ = 0.0;
-  for (var i = 0; i < 8; i = i + 1) {
-    // GLX/TLX fan (not an even 2π ring) + the same per-pixel rotation.
-    let kb = SSAO_K[i];
-    let k  = vec2<f32>(kb.x * ca - kb.y * sa, kb.x * sa + kb.y * ca);
-    let suv = clamp(in.uv + k * scr, vec2<f32>(0.001), vec2<f32>(0.999));
-    let S = ssaoViewPos(suv);
-    let V = S - P;
-    let len = length(V);
-    let ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
-    let range = smoothstep(radius, radius * 0.4, len);
-    occ = occ + ndv * range;
+  if (strength > 0.0) {
+    let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
+    let ang = fract(sin(dot(in.pos.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453) * 6.2832;
+    let ca = cos(ang);
+    let sa = sin(ang);
+    for (var i = 0; i < 8; i = i + 1) {
+      // GLX/TLX fan (not an even 2π ring) + the same per-pixel rotation.
+      let kb = SSAO_K[i];
+      let k  = vec2<f32>(kb.x * ca - kb.y * sa, kb.x * sa + kb.y * ca);
+      let suv = clamp(in.uv + k * scr, vec2<f32>(0.001), vec2<f32>(0.999));
+      let S = ssaoViewPos(suv);
+      let V = S - P;
+      let len = length(V);
+      let ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
+      let range = smoothstep(radius, radius * 0.4, len);
+      occ = occ + ndv * range;
+    }
   }
   var ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * strength;
 
@@ -586,7 +589,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                                     (GLX folds car speed in)
   //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, flareStreak)
   //      tone0       : vec4<f32>  off 144   (blacks, shadows, midtones, highlights)
-  //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, _pad)
+  //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, hdrGradeOn)
+  //                                          w = GLX uHdrGradeOn: 1 only when an
+  //                                          HDR-grade knob is off-neutral
   //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
   //      gamma       : vec4<f32>  off 192   (RGB gamma, _pad)
   //      gain        : vec4<f32>  off 208   (RGB gain, _pad)
@@ -887,7 +892,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
 
   // Professional HDR grade runs after linear-light composition and before ACES.
-  c = applyHdrGrade(c);
+  // Gated: at neutral knobs the block is an identity that still cost ~20 ALU.
+  // tone1.w is GLX uHdrGradeOn (1 only when a knob is off-neutral).
+  if (U.tone1.w > 0.5) { c = applyHdrGrade(c); }
 
   // Filmic tonemap (shared leaf) + colour grade. White point scales the knee.
   // ACES TONE CURVE knobs (aces.xyzw = a,b,c,d; tuneFx.z = e). Defaults reproduce

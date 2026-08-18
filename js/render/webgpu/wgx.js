@@ -3672,7 +3672,18 @@ const WGX = (function () {
         s[39] = (T && T.highlights != null) ? T.highlights : 0;                           // tone0
         s[40] = (T && T.whites     != null) ? T.whites     : 0;
         s[41] = (T && T.toe        != null) ? T.toe        : 0;
-        s[42] = (T && T.shoulder   != null) ? T.shoulder   : 0; s[43] = 0;                 // tone1
+        s[42] = (T && T.shoulder   != null) ? T.shoulder   : 0;
+        // tone1.w = hdrGradeOn (GLX uHdrGradeOn / TLX C.hdrGradeOn). Skip the
+        // lift/gamma/gain/tone ALU when every knob is the shipped neutral.
+        const _hg = T && (
+          (T.blacks || 0) !== 0 || (T.shadows || 0) !== 0 || (T.midtones || 0) !== 0 ||
+          (T.highlights || 0) !== 0 || (T.whites || 0) !== 0 || (T.toe || 0) !== 0 ||
+          (T.shoulder || 0) !== 0 || (T.liftR || 0) !== 0 || (T.liftG || 0) !== 0 ||
+          (T.liftB || 0) !== 0 || (T.gammaR != null && T.gammaR !== 1) ||
+          (T.gammaG != null && T.gammaG !== 1) || (T.gammaB != null && T.gammaB !== 1) ||
+          (T.gainR != null && T.gainR !== 1) || (T.gainG != null && T.gainG !== 1) ||
+          (T.gainB != null && T.gainB !== 1));
+        s[43] = _hg ? 1 : 0;
         s[44] = (T && T.liftR      != null) ? T.liftR      : 0;
         s[45] = (T && T.liftG      != null) ? T.liftG      : 0;
         s[46] = (T && T.liftB      != null) ? T.liftB      : 0; s[47] = 0;                 // lift

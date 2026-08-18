@@ -575,7 +575,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[62], 0.75, "haze.v must occupy dirtFx.z (float 62)");
   assert.equal(composite[63], 0.5, "haze.str must occupy dirtFx.w (float 63)");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
-  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
+  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 1],
+    "tone1 is whites/toe/shoulder/hdrGradeOn — off-neutral knobs must arm the gate");
   assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
   assert.deepEqual(composite.slice(48, 52), [11, 12, 13, 0], "gamma must occupy floats 48..51");
   assert.deepEqual(composite.slice(52, 56), [14, 15, 16, 0], "gain must occupy floats 52..55");
