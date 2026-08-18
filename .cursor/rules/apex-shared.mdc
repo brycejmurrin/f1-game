@@ -11,12 +11,13 @@ alwaysApply: true
   (shared with Claude Code). Do not add `.cursor/skills/` or `.cursor/agents/`
   unless a file is explicitly Cursor-only.
 - **Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
-  live canvas → `mcp-probe`. Do not attach `mcp-probe` for a version.json check.
+  live canvas → `mcp-probe`; host browser → `playwright`. Do not attach
+  `mcp-probe` for a version.json check.
 - **MCP:** Keep `apex-tools` in root `.mcp.json` (and `.cursor/mcp.json`).
   Cloud host catalog often does **not** auto-load it — then
   `tools/apex-tools-mcp.sh`, `tools/playwright-mcp.sh`, `tools/tinyfish-mcp.sh`,
-  `tools/probe-mcp.py`. Never run Chrome MCP while Playwright is running;
-  never hand a subagent a browser test group.
+  `tools/probe-mcp.py`. Map: `docs/AGENT-SURFACE.md`. Never run Chrome MCP
+  while Playwright is running; never hand a subagent a browser test group.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Path-scoped rules
   under `.cursor/rules/` (e.g. `render-wgx`, `render-tlx`) attach by globs.
