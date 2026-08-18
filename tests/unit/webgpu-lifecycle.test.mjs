@@ -1053,7 +1053,13 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
-  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(/);
+  assert.match(WGX_SOURCE, /if \(_softBlitInFlight\) return null/,
+    "only one soft-present mapAsync in flight — late pits readbacks must not overwrite #game");
+  assert.match(WGX_SOURCE, /seq: _softBlitSeq/);
+  assert.match(WGX_SOURCE, /const after = _softBlitSeq/,
+    "awaitSoftPresent waits for an encode issued after the call, not the in-flight blit");
+  assert.match(WGX_SOURCE, /seq > after/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(

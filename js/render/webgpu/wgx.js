@@ -575,13 +575,20 @@ const WGX = (function () {
     // Soft-present path: final pass → softPresentTex (COPY_SRC) → ephemeral staging
     // buffer readback (_softDisplayEncode/_softDisplayFinish) → putImageData on
     // visible #game 2D context. Never getCurrentTexture() on software — first call
-    // breaks mapAsync device-wide. awaitSoftPresent() resolves only after a blit
-    // with maxPx >= 8. WebGPU renders on a hidden canvas swapped in at boot.
+    // breaks mapAsync device-wide. ONE mapAsync in flight (mirror capturePixels):
+    // a later present() skips the 2D copy so SwiftShader cannot complete an older
+    // readback after a newer one and leave #game on a pits/gantry frame.
+    // awaitSoftPresent() resolves only after a blit with maxPx >= 8 that was
+    // encoded AFTER the wait started. WebGPU renders on a hidden canvas swapped
+    // in at boot.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
     let _softBlitGen = 0;
+    let _softBlitSeq = 0;
+    let _softBlitShown = 0;
+    let _softBlitInFlight = false;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1704,6 +1711,7 @@ const WGX = (function () {
     }
     function _softDisplayEncode() {
       if (!_softGpu || !_displayCtx || !softPresentTex || !encoder) return null;
+      if (_softBlitInFlight) return null;
       try {
         const w = width, h = height;
         const bpr = (w * 4 + 255) & ~255;
@@ -1715,12 +1723,18 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: bpr, rowsPerImage: h },
           [w, h, 1]
         );
-        return { buf, bpr, w, h };
+        _softBlitSeq++;
+        _softBlitInFlight = true;
+        return { buf, bpr, w, h, seq: _softBlitSeq };
       } catch (_) { return null; }
     }
     function _softDisplayFinish(cap) {
-      if (!cap || !_displayCtx) return;
-      const { buf, bpr, w, h } = cap;
+      if (!cap || !_displayCtx) {
+        if (cap) _softBlitInFlight = false;
+        return;
+      }
+      const { buf, bpr, w, h, seq } = cap;
+      const released = function () { _softBlitInFlight = false; };
       const finish = function () {
         try {
           buf.mapAsync(GPUMapMode.READ).then(function () {
@@ -1740,44 +1754,57 @@ const WGX = (function () {
                   if ((r + g + b) > maxPx) maxPx = r + g + b;
                 }
               }
-              if (maxPx >= 8) {
+              if (maxPx >= 8 && seq === _softBlitSeq) {
                 _displayCtx.putImageData(img, 0, 0);
-                _softBlitNotify();
+                _softBlitNotify(seq);
               }
             } catch (_) { /* 2D blit failed */ }
             try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
+            released();
           }).catch(function () {
             try { buf.destroy(); } catch (_) { /* device dying */ }
+            released();
           });
         } catch (_) {
           try { buf.destroy(); } catch (_) { /* device dying */ }
+          released();
         }
       };
       try {
         device.queue.onSubmittedWorkDone().then(finish, finish);
       } catch (_) { finish(); }
     }
-    function _softBlitNotify() {
-      _softBlitGen++;
+    function _softBlitNotify(seq) {
+      _softBlitShown = seq;
+      _softBlitGen = seq;
+      const keep = [];
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
-        try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+        try {
+          if (!ws[i](seq)) keep.push(ws[i]);
+        } catch (_) { /* harness waiter */ }
       }
+      for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
     }
     function awaitSoftPresent(timeoutMs) {
       if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
-      const start = _softBlitGen;
-      if (_softBlitGen > start) return Promise.resolve(_softBlitGen);
+      // Snapshot the last *issued* encode. A waiter must see a later encode
+      // complete — otherwise park()+snapCam() resolves on the in-flight pits
+      // blit that was submitted before the camera moved.
+      const after = _softBlitSeq;
+      if (_softBlitShown > after) return Promise.resolve(_softBlitShown);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
         const timer = setTimeout(function () {
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
-        _softPresentWaiters.push(function (gen) {
-          if (gen > start) {
+        _softPresentWaiters.push(function (seq) {
+          if (seq > after) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
-            resolve(gen);
+            resolve(seq);
+            return true;
           }
+          return false;
         });
       });
     }
