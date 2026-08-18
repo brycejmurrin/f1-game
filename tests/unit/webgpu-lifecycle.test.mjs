@@ -869,6 +869,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
   assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
+  assert.match(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
+  assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
   assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 8\.0, tangOk\)/);
   assert.match(CHUNKS_SOURCE, /if \(D\.mat2\.w > 0\.5 && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
