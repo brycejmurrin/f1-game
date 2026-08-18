@@ -1613,7 +1613,7 @@ const WGX = (function () {
       const noAW  = !!(opts && opts.noAlphaWrite);
       // Optional always-pass (opts.decal). The road must NOT use this —
       // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
-      // punch a LUT hole; the road uses less-equal + a small away-bias
+      // punch a LUT hole; the road uses less-equal (no GL-sized bias)
       // and still writes depth so skyLate cannot erase it.
       const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
@@ -2247,7 +2247,10 @@ const WGX = (function () {
         // is the MAT id, fract is albedo — fs_main packedRoad. Stamping every
         // fragment MAT 16 painted kerbs/grass/skirts as asphalt (chopped ribbon).
         const cr = col[i * 3];
-        inter[o + 6] = (trk && mat) ? (mat[i] || 0) + Math.min(Math.max(cr, 0), 0.999) : cr;
+        // Pack asphalt only. Grass/kerb/skirt stay unpacked vertex colour
+        // (FLAT) — packing them as MAT 9/0 made the verge a noisy grey slab.
+        inter[o + 6] = (trk && mat && mat[i] === 16)
+          ? 16 + Math.min(Math.max(cr, 0), 0.999) : cr;
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
         attr[i * 4] = mat ? mat[i] : 0;
@@ -3046,7 +3049,7 @@ const WGX = (function () {
         // decal/always-pass and do NOT keep GL [-8,-16] — those bury tyres.
         // No road bias: later car draws win the contact; buryRibbon terrain
         // sits behind so LUT misses cannot punch holes in the tarmac.
-        extra.doubleSided = false;
+        extra.doubleSided = true;
         extra.depthBias = null;
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
