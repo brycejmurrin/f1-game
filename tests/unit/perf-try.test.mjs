@@ -63,7 +63,9 @@ test("already-landed leftovers stay in the product path", () => {
   const geom = read("js/track/geom.js");
   assert.match(geom, /lo\(a0\)\/lo\(a1\) once each/);
   assert.match(geom, /\(i \+ 1\) \/ seg \* 6\.2832/);
-  assert.doesNotMatch(geom, /\(i \+ 1\) % seg/);
+  // Angle wrap via %seg moves the last edge (6.2832 ≠ 2π). Integer %seg on
+  // a ring-vertex table (addMountain) is the correct close and is allowed.
+  assert.doesNotMatch(geom, /(?:a1|ring)\([^)]*%\s*seg/);
 });
 
 test("env-probe radial cull is 300 m without a toggle", () => {
