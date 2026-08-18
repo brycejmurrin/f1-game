@@ -126,6 +126,15 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   assert.doesNotMatch(code, /\.dispose\s*\(/);
 });
 
+test("TLX decal programs share a material map reference, not the first car's texture node", () => {
+  const fx = read("js/render/three/tsl-fx.js");
+  assert.match(fx, /materialReference\("map", "texture"\)/);
+  assert.match(fx, /m\.map = tex/);
+  assert.match(fx, /const _decalGraph = \[null, null\]/);
+  assert.doesNotMatch(fx, /const smp = texture\(tex\)/,
+    "a per-texture node cannot sit behind the shared tlx-fx-decal program key");
+});
+
 test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {
   const game = read("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);

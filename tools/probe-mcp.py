@@ -482,7 +482,11 @@ def cmd_status(_: argparse.Namespace) -> int:
         text=True,
     )
     print((t.stdout or t.stderr).rstrip() or f"exit {t.returncode}")
-    return 0 if r.returncode == 0 and t.returncode == 0 else 1
+    if t.returncode != 0:
+        print("WARN: tinyfish DOWN — run tools/tinyfish-mcp.sh ensure", file=sys.stderr)
+    # Chrome wrapper status is enough for Cloud `probe status` to be usable
+    # before tinyfish setup. TinyFish DOWN is a warning, not a hard fail.
+    return 0 if r.returncode == 0 else 1
 
 
 def cmd_list_tools(_: argparse.Namespace) -> int:

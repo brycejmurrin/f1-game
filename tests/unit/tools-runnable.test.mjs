@@ -116,6 +116,8 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "bash", args: [path.join(TOOLS, "tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
     { cmd: "python3", args: [path.join(TOOLS, "probe-mcp.py"), "help"], want: /chrome_/ },
     { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /apex_/ },
+    { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /smoke/ },
+    { cmd: process.execPath, args: [path.join(TOOLS, "mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
     { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /browser_resize/ },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);

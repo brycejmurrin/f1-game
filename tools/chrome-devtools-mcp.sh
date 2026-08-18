@@ -123,10 +123,10 @@ cmd_build() {
   echo "Syncing devtools-frontend submodule (shallow, no nested deps)…"
   git submodule update --init --depth 1
   echo "Running prepare…"
-  npx tsx scripts/prepare.ts
+  npx --yes tsx scripts/prepare.ts
   echo "Compiling…"
-  npx tsc
-  npx tsx scripts/post-build.ts
+  npx --yes tsc
+  npx --yes tsx scripts/post-build.ts
   chmod +x build/src/bin/chrome-devtools-mcp.js 2>/dev/null || true
   if local_ok; then
     echo "Built OK: $BIN"

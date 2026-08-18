@@ -53,8 +53,8 @@
 (function () {
   function fx(THREE, TSL /*, ctx */) {
     const {
-      Fn, uniform, attribute, texture,
-      float, vec2, vec3,
+      Fn, uniform, attribute, texture, materialReference,
+      float, vec2, vec3, vec4,
       positionGeometry, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, mix, smoothstep, abs,
     } = TSL;
@@ -193,6 +193,26 @@
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
+    // One graph per glow mode. The texture is a material reference so every
+    // cached decal material can share the program while still sampling its own
+    // `map`. Building texture(tex) per material under the shared cache key made
+    // three retain the first decal's TextureNode binding for every later car.
+    const _decalGraph = [null, null];
+    function sharedDecal(glow) {
+      const gi = glow ? 1 : 0;
+      let packed = _decalGraph[gi];
+      if (!packed) {
+        packed = _decalGraph[gi] = Fn(() => {
+          const t = materialReference("map", "texture").toVar();
+          const N = normalize(vec3(normalWorld).toVar());
+          const ndl = max(dot(N, U.sunDir), 0.0);
+          const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
+          const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
+          return vec4(rgb, t.a);
+        })();
+      }
+      return packed;
+    }
     // Frame stamp per cached decal material — same guard as tlx.js materialFor.
     // drawList holds material REFERENCES flushed at present(); FIFO eviction of
     // an in-use entry mid-frame disposed the car's sponsor marks while later
@@ -216,15 +236,10 @@
         }
         m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal-" + glow });   // GLX: cull off, depth write off
         m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
-        const smp = texture(tex);                // samples the mesh "uv" attribute
-        m.colorNode = Fn(() => {
-          const t = smp.toVar();                                  // anchor
-          const N = normalize(vec3(normalWorld).toVar());         // anchor
-          const ndl = max(dot(N, U.sunDir), 0.0);
-          const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
-          return t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
-        })();
-        m.opacityNode = smp.a;
+        m.map = tex;
+        const packed = sharedDecal(glow);
+        m.colorNode = packed.rgb;
+        m.opacityNode = packed.a;
         decalCache.set(key, m);
       }
       if (m) m.__tlxFrame = _decalFrame;

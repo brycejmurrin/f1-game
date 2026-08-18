@@ -42,6 +42,20 @@ test(".mcp.json registers probe as the unified stdio bridge", () => {
   assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
 });
 
+test("probe-mcp status stays usable when tinyfish is down", () => {
+  const src = fs.readFileSync(PROBE, "utf8");
+  assert.match(src, /tinyfish DOWN/);
+  assert.match(src, /return 0 if r\.returncode == 0 else 1/);
+  const r = spawnSync("python3", [PROBE, "status"], {
+    encoding: "utf8",
+    cwd: ROOT,
+    timeout: 20000,
+  });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /=== chrome-devtools ===/);
+  assert.match(r.stdout, /=== tinyfish ===/);
+});
+
 test("probe-mcp help lists serve / list-tools / call / status", () => {
   const r = spawnSync("python3", [PROBE, "help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
