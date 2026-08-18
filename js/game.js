@@ -3311,27 +3311,12 @@ function update(dt) {
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
   updateCaution(dt);
 
-  // race ends when the player finishes, or shortly after the winner does, or
-  // at a hard time cap so it can never hang
+  // Race-control owns the finish policy as well as neutralisation rules. In a
+  // human race an AI/other player crossing first must NOT start a 3.5 s result
+  // countdown while somebody is still driving. The hard time cap remains the
+  // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    // EVERY human home, not just "the" player — with a second driver on track
-    // the race must not end the moment the first of them crosses the line.
-    // Identical to the old `player.finished` whenever there is exactly one.
-    let anyHuman = false, allHumansDone = true;
-    for (const c of cars) {
-      if (!c.human) continue;
-      anyHuman = true;
-      // Retired counts as done. A driver whose race is over should see the
-      // classification, not sit in the gravel watching the rest of the field.
-      if (!c.finished && !c.retired) { allHumansDone = false; break; }
-    }
-    if (anyHuman && allHumansDone) resultT = 2.2;
-    else {
-      let anyFin = false;
-      for (let i = 0; i < cars.length; i++) if (cars[i].finished) { anyFin = true; break; }
-      if (anyFin) resultT = 3.5;
-      else if (raceT > 360 * lapsTarget) resultT = 0.1;
-    }
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
   }
   if (resultT > 0) {
     resultT -= dt;

@@ -120,6 +120,12 @@ function buildResults(order) {
     rb.className = "res-settle-v"; rb.textContent = Math.round(st.rep) + " / 100";
     rep.append(ra, rb);
     box.appendChild(rep);
+    if (st.unsaved) {
+      const unsaved = document.createElement("div");
+      unsaved.className = "res-settle-unsaved";
+      unsaved.textContent = "SESSION ONLY — this result has not been saved to this device.";
+      box.appendChild(unsaved);
+    }
     els.resultsTable.appendChild(box);
   }
 

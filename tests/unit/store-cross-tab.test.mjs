@@ -32,14 +32,17 @@ const SRC = readFileSync(join(ROOT, "js/game/store.js"), "utf8");
 /** Load store.js over a fake localStorage + window, returning the pieces a test
  *  needs: the module's `store`, the disk behind it, and the `storage` handler it
  *  installed (null if it installed none — which is itself a failure). */
-function load() {
+function load(writeError = null) {
   const disk = new Map();
   const listeners = new Map();
   const sandbox = {
     Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console,
     localStorage: {
       getItem: (k) => (disk.has(k) ? disk.get(k) : null),
-      setItem: (k, v) => { disk.set(k, String(v)); },
+      setItem: (k, v) => {
+        if (writeError) { const e = new Error("blocked"); e.name = writeError; throw e; }
+        disk.set(k, String(v));
+      },
       removeItem: (k) => { disk.delete(k); },
     },
     // store.js logs through Log and reads Teams for the season roster; neither
@@ -54,6 +57,20 @@ function load() {
   const GameStore = vm.runInContext("GameStore", ctx);
   return { store: GameStore.store, disk, onStorage: listeners.get("storage") || null };
 }
+
+test("write reports session success separately from reload durability", () => {
+  const { store } = load("QuotaExceededError");
+  const changes = [];
+  store.subscribe((change) => changes.push(change));
+  const result = store.write("career.driver.0", { money: 900 });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    ok: true, durable: false, reason: "QuotaExceededError",
+  });
+  assert.equal(store.get("career.driver.0", null).money, 900,
+    "a failed disk write must still preserve the live session");
+  assert.equal(changes.at(-1).durable, false,
+    "the UI observer must receive the durability failure");
+});
 
 /** What the browser hands a `storage` listener for a foreign write. */
 const evt = (key, newValue) => ({ key, newValue, storageArea: null });

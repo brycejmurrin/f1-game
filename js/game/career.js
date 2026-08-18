@@ -252,9 +252,16 @@ function load() {
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
-  return save();
+  save();
+  return career;
 }
 function setLive() { store.set("careerSlot", slotFlavour + ":" + slotIdx); }
+let lastSave = { ok: true, durable: true, reason: null };
+function writeResult(key, value) {
+  if (typeof store.write === "function") return store.write(key, value);
+  const durable = store.set(key, value) !== false;
+  return { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
+}
 function save() {
   if (career) {
     // A storage event invalidates GameStore's parsed cache, but this module owns a
@@ -262,12 +269,16 @@ function save() {
     // from another tab. There is no meaningful merge for two diverged seasons;
     // refusing the stale write is the only lossless choice.
     const now = currentRevision();
-    if (careerConflict || (careerRevision != null && now !== careerRevision)) return career;
-    store.set(liveSlotKey(), career);
+    if (careerConflict || (careerRevision != null && now !== careerRevision)) {
+      lastSave = { ok: false, durable: false, reason: "conflict" };
+      return career;
+    }
+    lastSave = writeResult(liveSlotKey(), career);
     armRevision();
   }
   return career;
 }
+function saveStatus() { save(); return Object.assign({}, lastSave); }
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
@@ -911,10 +922,11 @@ function settleRound(order, player) {
   // A sponsor pays after the round is on the books, because that round is what
   // closes its window.
   const sponsorPay = settleSponsor();
-  save();
+  const persisted = saveStatus();
   Log.info("game", "Career.settleRound pos=" + pos + (dnf ? " dnf=" + dnf : ""));
   return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
-           money: career.money, rep: career.rep };
+           money: career.money, rep: career.rep, save: persisted,
+           unsaved: !persisted.durable };
 }
 
 // ---------- the grid, as career sees it ----------
@@ -1391,7 +1403,7 @@ return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
-  data, active, inCareer, conflicted, engage, load, save, clear, start, state, rnd, hash,
+  data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,
