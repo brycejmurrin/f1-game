@@ -5,7 +5,8 @@ working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.
 
 Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
-`tools/probe-mcp.py`. **Not implemented.**
+`tools/probe-mcp.py`. **Week-1 implemented** (`tools/apex-tools-mcp.mjs` +
+`.sh`); week-2 browser tools + lock still open.
 
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.

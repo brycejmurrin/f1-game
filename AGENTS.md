@@ -178,11 +178,12 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
 **MCP on Cloud.** Cursor Cloud does not auto-load repo `.mcp.json`. The host
-catalog is not the game's `probe` / `tinyfish` / `chrome-devtools` servers.
-Default Cloud path: `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind
-working tree is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent
-`deploy-research`. Do not attach `mcp-probe` for a `version.json` check.
-Never run Chrome MCP while Playwright is running.
+catalog is not the game's `apex-tools` / `probe` / `tinyfish` / `chrome-devtools`
+servers. Default Cloud path: `./tools/apex-tools-mcp.sh` (week-1 `apex_*` CLI
+wraps), `./tools/tinyfish-mcp.sh` (`deploy-check --tip` so a behind working tree
+is not a Pages miss), `python3 tools/probe-mcp.py`, or subagent `deploy-research`.
+Do not attach `mcp-probe` for a `version.json` check. Never run Chrome MCP while
+Playwright is running.
 
 ## Layout
 
