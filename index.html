@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1440">
+<meta name="apex-build" content="1441">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=59bc219eba5f" as="style">
+<link rel="preload" href="css/components.css?v=e02c9a943064" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,16 +40,16 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=59bc219eba5f">
-<link rel="stylesheet" href="css/tuner.css?v=3a059b0920b2" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=7715531d4161">
+<link rel="stylesheet" href="css/components.css?v=e02c9a943064">
+<link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=d381cd778850">
 <link rel="stylesheet" href="css/carsetup.css?v=727b355fd1bf" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=7be98806b5c7" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=37367486eb05" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=60b635197def">
-<link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=91f2e42053f4" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=3a107477654a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=af3b5a880848">
+<link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=920e853fb9f8" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=0fdfe263e6cb" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
