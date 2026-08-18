@@ -244,20 +244,18 @@ const WGX = (function () {
   const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
 
-  // ── vertex layout: [pos3, nrm3, col3, matTrk4], stride 52 (piece VBOs) ──
-  // A 4th attr on the FULL ribbon VBO zeroed (and broke pos fetch) on
-  // SwiftShader-Dawn. Pieces are 4095 verts — small enough that location 3
-  // carries authored (mat, s, x, hw) like GLX aMat/aTrk. The world LUT
-  // stays group 2 for buryRibbon and as a VS fallback when aMatTrk.w==0.
-  const VERTEX_STRIDE = 52;
-  const VERTEX_FLOATS = 13;
+  // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
+  // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
+  // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
+  // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
+  const VERTEX_STRIDE = 36;
+  const VERTEX_FLOATS = 9;
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
-      { shaderLocation: 3, offset: 36, format: "float32x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -2219,7 +2217,7 @@ const WGX = (function () {
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3, matTrk4] (stride 52) + a side array for LUT.
+    // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -2238,18 +2236,14 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        // Raw RGB + authored mat+trk in the VBO (piece-sized, stride 52).
-        // Do not pack MAT into col.x — that interpolates 16→0 and sawtooths.
+        // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.
+        // Dawn zeros a 4th attr (and pos) even on piece VBOs — asphalt vs
+        // verge is classified from the LUT (abs(x) < hw - 0.45).
         inter[o + 6] = col[i * 3];
         inter[o + 7] = col[i * 3 + 1];
         inter[o + 8] = col[i * 3 + 2];
-        const mid = mat ? mat[i] : 0;
-        inter[o + 9] = mid;
-        attr[i * 4] = mid;
+        attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
-          inter[o + 10] = trk[i * 3];
-          inter[o + 11] = trk[i * 3 + 1];
-          inter[o + 12] = trk[i * 3 + 2];
           attr[i * 4 + 1] = trk[i * 3];
           attr[i * 4 + 2] = trk[i * 3 + 1];
           attr[i * 4 + 3] = trk[i * 3 + 2];
@@ -2315,11 +2309,10 @@ const WGX = (function () {
       });
       return { sbuf, attrBG };
     }
-    // World-XZ spatial LUT for buryRibbon only (floor/terrain hole). Road
-    // pieces bind a per-vertex mat+trk array (vertex_index on 4095-vert
-    // non-indexed draws). Sharing this LUT on the ribbon reconstructed s/x
-    // from a 32×32 XZ grid and warped paint + tarmac. Magic 12345 marks a
-    // LUT vs a dummy/attr buffer.
+    // World-XZ spatial LUT (64×64×16). Group-2 used to be a per-vertex
+    // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
+    // vertex attr zeros (and breaks pos) even on piece VBOs. Magic 12345
+    // marks a LUT vs a dummy/attr buffer.
     function _makeRoadLUT(pos, trk, matArr) {
       const posA = toF32(pos), trkA = toF32(trk);
       const vCount = (posA.length / 3) | 0;
@@ -2344,14 +2337,16 @@ const WGX = (function () {
         return _makeAttrBG(null);
       }
       raw.sort((a, b) => a.s - b.s);
-      const MAX_S = 2000;
+      // Denser than 2000/32² — nearest-bin s/x was the warped paint. Cap
+      // still fits one storage buffer; cells keep 16 along-track samples.
+      const MAX_S = 8000;
       const step = Math.max(1, Math.ceil(raw.length / MAX_S));
       const samples = [];
       for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);
       const pad = 24;
       minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
       const extX = Math.max(maxX - minX, 1), extZ = Math.max(maxZ - minZ, 1);
-      const GW = 32, GH = 32, SLOT = 16;
+      const GW = 64, GH = 64, SLOT = 16;
       const cells = new Array(GW * GH);
       for (let i = 0; i < cells.length; i++) cells[i] = [];
       const bin = (s, gx, gz) => {
@@ -3021,7 +3016,7 @@ const WGX = (function () {
       if (!drawUBO || _drawSlot <= 0) return;
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
-    // Slot 0 = pos/nrm/col/matTrk (stride 52), slot 1 = instance.
+    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index).
     function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
       pass.setVertexBuffer(0, vbuf);

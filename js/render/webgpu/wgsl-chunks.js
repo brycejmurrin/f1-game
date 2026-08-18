@@ -516,7 +516,7 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(14) var envCubeSamp : sampler;            // 4× aniso, GLX env cube
 @group(1) @binding(0) var<uniform> D : DrawU;
 @group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
-// Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
+// Reconstruct (mat, s, x, hw) from world XZ via the 64×64×16 centerline LUT
 // uploaded by WGX._makeRoadLUT. Magic 12345 distinguishes a LUT from the
 // dummy / per-vertex attr buffer. Uniform 16-iteration loop — no data-
 // dependent break — so the caller may take dpdx of the result.
@@ -630,7 +630,6 @@ fn vs_main(
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
-  @location(3) aMatTrk : vec4<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -647,14 +646,14 @@ fn vs_main(
   var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  // Piece VBOs carry authored (mat, s, x, hw) at location 3. The full-ribbon
-  // VBO used to zero that attr (and pos). LUT fills in only when hw is 0.
-  var pulled = aMatTrk;
-  if (matTrkArr[0].x != 12345.0 && pulled.w < 0.5) { pulled = matTrkArr[vid]; }
-  if (D.mat2.z > 15.5 && D.mat2.z < 16.5 && pulled.w < 0.5) {
+  // No 4th vertex attribute — Dawn zeros it (and pos fetch) even on
+  // 4095-vert pieces. Rebuild mat+trk from the centerline LUT.
+  var pulled = vec4<f32>(0.0);
+  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
+  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) {
-      let mid = select(16.0, pulled.x, pulled.x > 0.5);
+      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
       pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
     }
   }
@@ -678,14 +677,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
   let fromWorld = trkFromWorld(in.wpos);
+  // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
+  let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // Authored VS (s, x, hw, mat) on the ribbon — GLX aTrk / aMat parity.
-  let vTrk = in.matTrk.yzw;
-  let classified = in.matTrk.x;
+  let useWorldTrk = isRoadDraw && fromWorld.w > 0.5;
+  let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
+  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
+  let classified = select(in.matTrk.x, select(0.0, 16.0, lutAsphalt), useWorldTrk);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = fwTrkAttr;
+  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
   // branches. textureSample gets implicit LOD + anisotropy — the GLX
