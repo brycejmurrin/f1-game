@@ -131,6 +131,9 @@ test("postStep clamps lateral x to wallAt during takeover", () => {
     trackFrom: () => ({ s: 100, x: 12 }),
     worldFromTrack: (s, x) => ({ x, z: 0 }),
   });
+  // Last-good snap is taken at promote. A 20 m Rapier jump from px=0 trips
+  // the teleport bound and hands back before the wall clamp runs.
+  cars[0].px = 18; cars[1].px = 18;
   sim.notifyCar(cars[0], cars[1], 30);
   sim.preStep(1 / 60);
   assert.equal(sim.status().owned, 2);
