@@ -1613,8 +1613,8 @@ const WGX = (function () {
       const noAW  = !!(opts && opts.noAlphaWrite);
       // Optional always-pass (opts.decal). The road must NOT use this —
       // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
-      // punch a LUT hole; the road uses less-equal (no GL-sized bias) and
-      // still writes depth so skyLate cannot erase it.
+      // punch a LUT hole; the road uses less-equal + a small away-bias
+      // and still writes depth so skyLate cannot erase it.
       const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
@@ -3038,11 +3038,12 @@ const WGX = (function () {
         // CCW after that flip and were culled to a pair of edge lines.
         // Do NOT mark decal/always-pass: that stamps ribbon depth over
         // walls and tyres drawn later (they look sunk into the tarmac).
-        // Do NOT keep the GL polygonOffset([-8, -16]) either — WebGPU's
-        // slope-scale at chase-cam grazing angles pulls the ribbon through
-        // tyres and fence feet. Floor/terrain already punch a LUT hole.
+        // Do NOT keep the GL polygonOffset([-8, -16]) — WebGPU's slope-scale
+        // at chase-cam grazing angles pulls the ribbon through tyres and
+        // fence feet. Push the ribbon slightly AWAY instead so later car
+        // and prop draws win the contact. Floor/terrain punch a LUT hole.
         extra.doubleSided = true;
-        extra.depthBias = null;
+        extra.depthBias = [2, 4];
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
     }
