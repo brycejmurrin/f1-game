@@ -53,4 +53,24 @@ if ! bash "$ROOT/tools/install-browsers.sh"; then
   exit 1
 fi
 
+# TinyFish is never baked. Cloud: dashboard secret TINYFISH_API_KEY, or
+# gitignored scratch/tinyfish-mcp-server/.env. deploy-check --tip fails without it.
+if [[ -z "${TINYFISH_API_KEY:-}" && ! -f "$ROOT/scratch/tinyfish-mcp-server/.env" ]]; then
+  echo "NOTE: TINYFISH_API_KEY unset — TinyFish deploy-check --tip will fail until the Cloud secret or scratch .env is set"
+fi
+
+# Best-effort chrome-devtools MCP clone (gitignored scratch/). Persist by
+# Save-ing the environment snapshot — a live clone dies on cold boot.
+# APEX_SKIP_CHROME_MCP_CLONE=1 keeps the npx pin only.
+if [[ "${APEX_SKIP_CHROME_MCP_CLONE:-}" != "1" ]]; then
+  if [[ -f "$ROOT/scratch/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js" ]]; then
+    echo "chrome-devtools MCP clone already built"
+  else
+    echo "Cloning chrome-devtools MCP (best-effort; npx pin remains if this fails)…"
+    if ! bash "$ROOT/tools/chrome-devtools-mcp.sh" clone; then
+      echo "WARN: chrome-devtools clone failed; verify uses npx chrome-devtools-mcp@1.7.0" >&2
+    fi
+  fi
+fi
+
 echo "OK: cloud-agent install complete"

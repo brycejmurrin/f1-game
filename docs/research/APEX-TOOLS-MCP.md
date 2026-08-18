@@ -196,15 +196,18 @@ Refuse (typed `{ok:false, error, message, fix}`) if any of:
    → `3712`, each health-checked. Week-2 uses harness Chromium, not the
    daemon; do not share it.
 3. **A Playwright group is live** — `artifacts/logs/test-bg.json` +
-   `alive(pid)` **and** a process-table check for `playwright test`.
-   `test-bg --status` misses orphans.
+   `alive(pid)` **and** a process-table check for `playwright test`,
+   `@playwright/mcp`, or Chromium with a `playwright-mcp` user-data-dir
+   (not Cursor `--mcp-config` JSON). `test-bg --status` misses orphans.
 
 **Known gap (document, do not pretend to close):** Cursor’s `.mcp.json`
 `chrome-devtools` stdio server is a **third** browser and does **not** answer
 `:3712/healthz`. `layout-audit` / `cdmcp-*` / a raw `node tools/apex-eval.mjs`
 from a shell also sit outside the lock unless they take it. v1 mutex is
-MCP-owned; `/healthz` + test-bg + `playwright test` are the known other
-occupants. One-sided is acceptable if `apex_status` reports all three.
+MCP-owned; `/healthz` + test-bg + `playwright test` + host `@playwright/mcp`
+are the known other occupants. One-sided is acceptable if `apex_status`
+reports them (`playwright.suite` / `hostMcp` / `hostBrowser`). Cursor
+`--mcp-config {"playwright":...}` is not occupancy.
 
 ---
 
@@ -219,7 +222,7 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 | `test-shards.sh` | Blocking concurrent groups |
 | `bump-cache --apply` / `--at` / `--merge` | Writes `index.html` / `version.json`; last edit before commit |
 | `rtc-e2e` / `rtc-e2e-3p` / `rtc-e2e-room` / `nostr-probe` | Real network / minutes / host stack |
-| TinyFish keys / `tinyfish-mcp.sh` / `.env` | Probe owns `tinyfish_*`; baked-key path is guard-asserted |
+| TinyFish keys / `tinyfish-mcp.sh` / `.env` | Probe owns `tinyfish_*`; key is never baked (shell or gitignored `.env`; Cloud dashboard secret) |
 | `chrome_*` / `tinyfish_*` names or passthrough | Mixing catalogs is how apex-wrap shipped 0 tools |
 | `lighting-tuner-sweep`, `lighting-campaign/`, `ab-lighting`, `physics-tune-sweep` | Long, sharded, resumable; not a one-shot MCP call |
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
@@ -247,8 +250,9 @@ Fourth server in both catalogs: root `.mcp.json` (Claude Code) and
 
 ## Tests
 
-`tests/unit/apex-tools-mcp.test.mjs` in `TOOLING_FAST_FILES` (next to
-`probe-mcp.test.mjs`). `APEX_MCP_MOCK=1`. No Chromium.
+`tests/unit/apex-tools-mcp.test.mjs` + `tests/unit/mcp-smoke.test.mjs` in
+`TOOLING_FAST_FILES` (next to `probe-mcp.test.mjs`). `APEX_MCP_MOCK=1` /
+`--dry-run`. No Chromium.
 
 Assert:
 

@@ -188,10 +188,13 @@ serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
 Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
 servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
 host catalog is empty (this Cloud dashboard often is), fall back to
-`./tools/apex-tools-mcp.sh call`. TinyFish: `./tools/tinyfish-mcp.sh
-deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`. Do not attach
-`mcp-probe` for a `version.json` check. Never run Chrome MCP while Playwright
-is running.
+`./tools/apex-tools-mcp.sh call`. Smoke the four wrappers (no Chromium):
+`./tools/apex-tools-mcp.sh smoke`. TinyFish key is never baked — set
+`TINYFISH_API_KEY` (dashboard secret or `scratch/tinyfish-mcp-server/.env`).
+`./tools/tinyfish-mcp.sh deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`.
+`apex_status` occupancy includes host Playwright MCP (`browser_*`); close it
+before a browser wrap. Do not attach `mcp-probe` for a `version.json` check.
+Never run Chrome MCP while Playwright is running.
 
 ## Layout
 

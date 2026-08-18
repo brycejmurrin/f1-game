@@ -6,10 +6,11 @@
  * chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md
  *
- *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve
+ *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve | smoke
  *   node tools/apex-tools-mcp.mjs call apex_pick_tests '{"dryRun":true}'
  *   ./tools/apex-tools-mcp.sh call apex_status '{}'
  *   ./tools/apex-tools-mcp.sh call apex_select_specs '{"since":"HEAD~1"}'
+ *   ./tools/apex-tools-mcp.sh smoke
  *
  * APEX_MCP_MOCK=1 freezes the catalog and returns fake results (no spawn).
  */
@@ -20,12 +21,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { emptyPlaywright, scanPlaywrightLines } from "./playwright-occupancy.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.4.1";
+const SERVER_VERSION = "1.4.2";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -44,6 +46,8 @@ const UI_JOBS = 1;
 const KNOWN_GAP = {
   chromeDevtoolsStdio:
     "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
+  hostPlaywrightMcp:
+    "Host playwright browser_* / @playwright/mcp Chromium does not take apex-browser.lock; occupancy matches @playwright/mcp argv and a playwright-mcp user-data-dir. Cursor --mcp-config JSON is ignored.",
   outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
 };
 
@@ -187,18 +191,9 @@ function daemonPort() {
 }
 
 function playwrightLive() {
-  // Process-table check for orphans invisible to test-bg --status.
-  // Token match only: `playwright test` — NOT a substring that hits Cursor's
-  // exec-daemon --mcp-config {"playwright":...} line.
   const r = spawnSync("ps", ["-eo", "pid,args"], { encoding: "utf8", timeout: 5000 });
-  if (r.status !== 0) return { live: false, pids: [] };
-  const pids = [];
-  for (const line of r.stdout.split("\n")) {
-    if (!/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(line)) continue;
-    const m = line.trim().match(/^(\d+)\s/);
-    if (m) pids.push(Number(m[1]));
-  }
-  return { live: pids.length > 0, pids };
+  if (r.status !== 0) return emptyPlaywright();
+  return scanPlaywrightLines(r.stdout);
 }
 
 function testBgStatus() {
@@ -258,10 +253,15 @@ function occupancyRefuse() {
   const bg = testBgStatus();
   const pw = playwrightLive();
   if (bg.running.length || pw.live) {
+    const who = [
+      bg.running.length ? "test-bg" : null,
+      pw.suite ? "`playwright test`" : null,
+      pw.hostMcp || pw.hostBrowser ? "host Playwright MCP (`browser_*`)" : null,
+    ].filter(Boolean).join(" + ");
     return refuse(
       "playwright_live",
-      "A Playwright group or `playwright test` process is live.",
-      "Wait for test-bg to finish (`node tools/test-bg.mjs --status`). Do not share Chromium with apex_* browser tools.",
+      `${who || "A Playwright process"} is live.`,
+      "Wait for test-bg (`node tools/test-bg.mjs --status`) or close the host MCP browser (`browser_close`) before apex_* browser tools.",
     );
   }
   return null;
@@ -1172,7 +1172,7 @@ function handleStatus(args = {}) {
       lock: { held: false },
       chromeDaemon: { up: false, port: null },
       testBg: { recorded: false, running: [] },
-      playwright: { live: false, pids: [] },
+      playwright: emptyPlaywright(),
       loadavg: os.loadavg(),
       knownGap: KNOWN_GAP,
     });
@@ -1429,6 +1429,7 @@ Commands:
   status
   list-tools
   call <apex_name> '<json>'
+  smoke                 # four-server shell probe (tools/mcp-smoke.mjs; no Chromium)
   serve                 # stdio MCP (.mcp.json → tools/apex-tools-mcp.sh serve)
   serve-http            # 127.0.0.1:3713 /mcp + /healthz (never 0.0.0.0)
 
@@ -1609,6 +1610,13 @@ function main(argv) {
   if (cmd === "status") return cmdStatus();
   if (cmd === "list-tools") return cmdListTools();
   if (cmd === "call") return cmdCall(argv[1], argv[2] || "{}");
+  if (cmd === "smoke") {
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/mcp-smoke.mjs"), ...argv.slice(1)], {
+      stdio: "inherit",
+      cwd: ROOT,
+    });
+    return r.status ?? 2;
+  }
   if (cmd === "serve") return cmdServe();
   if (cmd === "serve-http") return cmdServeHttp();
   log(`unknown command: ${cmd}`);

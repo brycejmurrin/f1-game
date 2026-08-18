@@ -106,7 +106,12 @@ test("apex_status reports the chrome-devtools stdio known gap", () => {
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.match(body.knownGap.chromeDevtoolsStdio, /3712/);
+  assert.match(body.knownGap.hostPlaywrightMcp, /@playwright\/mcp/);
   assert.ok(body.knownGap.outsideLock.includes("layout-audit"));
+  assert.equal(body.playwright.live, false);
+  assert.equal(body.playwright.suite, false);
+  assert.equal(body.playwright.hostMcp, false);
+  assert.equal(body.playwright.hostBrowser, false);
 });
 
 test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only", () => {
@@ -287,10 +292,33 @@ const UI_VIEWPORTS = "ios-iphone-landscape";
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
 const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
 
-test("playwright occupancy matches `playwright test` tokens, not MCP JSON", () => {
-  const src = fs.readFileSync(MCP, "utf8");
-  assert.doesNotMatch(src, /playwright\.\*test/);
-  assert.match(src, /playwright\\s\+test/);
+test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
+  const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/playwright-occupancy.mjs");
+  assert.equal(
+    classifyPlaywrightLine("4321 /usr/bin/npx playwright test tests/specs/tiny.spec.js")?.kind,
+    "suite",
+  );
+  assert.equal(
+    classifyPlaywrightLine('12 /exec-daemon/cursor-exec-daemon --mcp-config {"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}'),
+    null,
+    "Cursor --mcp-config JSON is not a live Playwright process",
+  );
+  assert.equal(
+    classifyPlaywrightLine("88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless")?.kind,
+    "hostMcp",
+  );
+  assert.equal(
+    classifyPlaywrightLine("99 /opt/google/chrome/chrome --user-data-dir=/workspace/.playwright-mcp --headless")?.kind,
+    "hostBrowser",
+  );
+  const scan = scanPlaywrightLines([
+    "1 /exec-daemon/cursor-exec-daemon --mcp-config {\"playwright\":{}}",
+    "2 node /x/@playwright/mcp/cli.js",
+  ].join("\n"));
+  assert.equal(scan.live, true);
+  assert.equal(scan.hostMcp, true);
+  assert.equal(scan.suite, false);
+  assert.deepEqual(scan.pids, [2]);
 });
 
 test("apex_ui_survey dryRun freezes the alias recipe and never --url", () => {

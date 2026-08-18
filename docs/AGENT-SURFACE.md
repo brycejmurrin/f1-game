@@ -56,8 +56,19 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | Interactive host browser | host MCP **playwright** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 
-Call `apex_status` before any `apex_*` browser tool. Never run Chrome MCP
+Call `apex_status` before any `apex_*` browser tool. Occupancy treats host
+Playwright MCP (`@playwright/mcp` / `.playwright-mcp` Chromium) as live —
+close `browser_*` (`browser_close`) before a browser wrap. Cursor's
+`--mcp-config {"playwright":...}` line is ignored. Never run Chrome MCP
 while Playwright is running.
+
+One command that pokes the four **repo** servers via wrappers (no Chromium;
+missing TinyFish key / chrome clone = warn):
+
+```sh
+./tools/apex-tools-mcp.sh smoke
+node tools/mcp-smoke.mjs --dry-run
+```
 
 ## Layers
 
@@ -76,7 +87,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI; `—` means the wrap exists and the skill index does not pair it.
+names the CLI.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -94,11 +105,11 @@ names the CLI; `—` means the wrap exists and the skill index does not pair it.
 | `apex_float_audit` | `float-audit.cjs` | tree | survey-track |
 | `apex_clip_audit` | `clip-audit.cjs` | tree | scenery-dress |
 | `apex_coplanar_audit` | `coplanar-audit.cjs` | tree | scenery-dress |
-| `apex_track_verts` | `track-verts.cjs` | tree | — |
-| `apex_rotate_markings_check` | `rotate-markings.cjs` | tree | — |
-| `apex_startline_snap` | `startline-snap.cjs` | tree | — |
-| `apex_startline_probe` | `startline-probe.cjs` | tree | — |
-| `apex_aero_zone_turns` | `aero-zone-turns.cjs` | tree | — |
+| `apex_track_verts` | `track-verts.cjs` | tree | debug-tracks |
+| `apex_rotate_markings_check` | `rotate-markings.cjs` | tree | new-track |
+| `apex_startline_snap` | `startline-snap.cjs` | tree | new-track |
+| `apex_startline_probe` | `startline-probe.cjs` | tree | debug-tracks |
+| `apex_aero_zone_turns` | `aero-zone-turns.cjs` | tree | debug-tracks |
 | `apex_graph_parity` | `graph-parity.cjs` | tree | scenery-dress |
 | `apex_eval` | `apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `agent.mjs` | browser | agent-view |
@@ -162,4 +173,5 @@ Host catalog empty (this Cloud dashboard often is):
 ```
 
 `dryRun: true` prints argv and spawns nothing. Browser wraps take the lock —
-`apex_status` first.
+`apex_status` first. `./tools/apex-tools-mcp.sh smoke` checks the four repo
+wrappers without taking the lock.

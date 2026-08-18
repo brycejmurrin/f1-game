@@ -124,6 +124,13 @@ test("tinyfish-rpc live-build extracts N from nested version.json RPC", () => {
   assert.equal(r.stdout.trim(), "1262");
 });
 
+test("chrome-devtools-mcp.sh clone/build never prompts npx", () => {
+  const src = fs.readFileSync(CD_SH, "utf8");
+  assert.match(src, /npx --yes tsx/);
+  assert.match(src, /npx --yes tsc/);
+  assert.doesNotMatch(src, /^\s*npx tsx /m);
+});
+
 test("chrome-devtools-mcp.sh help lists clone / verify / run", () => {
   const r = spawnSync("bash", [CD_SH, "help"], { encoding: "utf8" });
   // help is the default unknown-path; script exits 1 with usage on bad cmd —

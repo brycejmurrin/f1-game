@@ -45,7 +45,7 @@ test("wrap map names match tools/apex-tools-mcp.json", () => {
   assert.deepEqual(mapped, listed, "AGENT-SURFACE wrap table drifted from apex-tools-mcp.json");
 });
 
-test("every wrap row has a real CLI (or built-in) and a real skill or —", () => {
+test("every wrap row has a real CLI (or built-in) and a real skill", () => {
   const doc = fs.readFileSync(DOC, "utf8");
   const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
   const missing = [];
@@ -58,10 +58,10 @@ test("every wrap row has a real CLI (or built-in) and a real skill or —", () =
       if (!fs.existsSync(file)) missing.push(`${mcp} CLI ${cli}`);
     }
     const skill = stripTick(skillRaw);
-    if (skill !== "—" && skill !== "-") {
-      const dir = path.join(SKILLS, skill);
-      if (!fs.existsSync(path.join(dir, "SKILL.md"))) missing.push(`${mcp} skill ${skill}`);
-    }
+    assert.notEqual(skill, "—", `${mcp} wrap row must name a skill`);
+    assert.notEqual(skill, "-", `${mcp} wrap row must name a skill`);
+    const dir = path.join(SKILLS, skill);
+    if (!fs.existsSync(path.join(dir, "SKILL.md"))) missing.push(`${mcp} skill ${skill}`);
   }
   assert.deepEqual(missing, [], "wrap map points at a missing CLI or skill");
 });
@@ -93,6 +93,15 @@ test("never-wrap table names the load-bearing refuses", () => {
     assert.match(never, new RegExp(need.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
       `never-wrap table must name ${need}`);
   }
+});
+
+test("mcp-smoke is a CLI, not an apex_* wrap", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  assert.match(doc, /mcp-smoke/);
+  assert.match(read("tools/README.md"), /mcp-smoke\.mjs/);
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  assert.ok(!catalog.tools.includes("apex_mcp_smoke"));
+  assert.ok(!catalog.tools.includes("apex_smoke"));
 });
 
 test("indexes point at AGENT-SURFACE.md", () => {
