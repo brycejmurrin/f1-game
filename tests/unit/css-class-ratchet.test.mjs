@@ -83,7 +83,9 @@ export function shellNodes() {
 // went entirely.
 // 537 after .sel-section (one element, one declaration) became #sel-track-section.
 // UI redesign: the one-off Last Race heading moved from a class to a stable ID.
-const CLASS_CEILING = 536;
+// 536 → 534: unused .ui-panel / .ui-kicker / .ui-value / .ui-muted
+// placeholders (no html/js consumer) removed from css/menus.css.
+const CLASS_CEILING = 534;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -103,7 +105,8 @@ const CLASS_CEILING = 536;
 // +30 2026-08-18: How to Play CONTROLS grew a CONTROLLER row and accurate
 // keyboard / phone / camera copy (key chips + the missing pad mapping).
 // Still well under Lighthouse's ~1,400 error band.
-const NODE_CEILING = 1202;
+// +10 2026-08-18: title-screen #menu-status season chips (3 items).
+const NODE_CEILING = 1212;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

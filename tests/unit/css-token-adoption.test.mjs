@@ -92,7 +92,9 @@ const CEILING = {
   // `font-size: 11px` on the title eyebrow (already red on deploy tip).
   // 2026-08-18: 4 → 5. 0ccd1b4c dashboard/season menu composition added another
   // sub-floor literal on the union.
-  subFloorFontSize: 5,
+  // 2026-08-18: 5 → 3. 864f5b32 / 8e01353c tokenised the title-screen menu
+  // and locked the win back to the pre-redesign floor.
+  subFloorFontSize: 3,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
   // (data, hud, overlays, track-detail) were migrated in the same pass — but
@@ -109,7 +111,8 @@ const CEILING = {
   // 2026-08-18: 467 → 476. Same 8d82b062 title-menu block added nine raw
   // padding/gap/margin decls (brand clamp, #subtitle, #menu-meta, button stacks).
   // 2026-08-18: 476 → 490. 0ccd1b4c dashboard/season menu block (+14 in menus.css).
-  rawSpacing: 490,
+  // 2026-08-18: 490 → 467. Title-screen tokenisation restored the 467 lock.
+  rawSpacing: 467,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
