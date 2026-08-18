@@ -57,6 +57,9 @@ const Log = (function () {
     "audio",     // WebAudio synth (js/game/audio.js)
     "assets",    // baked asset pack (js/render/assets.js)
     "apex",      // the __apex dev API itself (js/game/apex.js)
+    "car",       // car mesh, parts, liveries (js/car/**)
+    "ui",        // menus, HUD, screens (js/game/*ui*, hud, menus)
+    "input",     // steering, gamepad, touch (js/game/input.js)
   ];
 
   const RING = 500;                 // records retained; oldest evicted first

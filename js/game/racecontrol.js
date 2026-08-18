@@ -45,7 +45,13 @@ const RaceControl = (() => {
     return { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "" };
   }
 
+  function logFlag(prev, next) {
+    if (prev === next) return;
+    Log.info("game", "RaceControl flag " + LABEL[prev] + " -> " + LABEL[next]);
+  }
+
   function create(G) {
+    Log.info("game", "RaceControl.create");
     const { store } = G;
     let caution = blank();
     let queryT = 0;
@@ -134,9 +140,11 @@ const RaceControl = (() => {
         const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
         if (caution.sinceT >= cap) {
           capHoldLevel = caution.level;   // what capped — see the re-raise gate below
+          const prev = caution.level;
           caution.level = 0; caution.sector = -1; caution.frac = 0;
           caution.cause = ""; caution.sinceT = 0;
           capHoldT = CAP_REARM_HOLD;
+          logFlag(prev, 0);
           publish();
           return;
         }
@@ -152,13 +160,17 @@ const RaceControl = (() => {
         // safety-car pile has to fly, or the race runs green through a real
         // SC-worthy event for the length of the hold.
         if (capHoldT > 0 && desired <= capHoldLevel) { publish(); return; }
+        const prev = caution.level;
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
+        logFlag(prev, desired);
       } else if (desired < caution.level) {
         if (caution.sinceT >= MIN_HOLD) {
+          const prev = caution.level;
           caution.level = desired;
           caution.sector = desired === 1 ? (dsector >= 0 ? dsector : (hz.worst && hz.worst.sector >= 0 ? hz.worst.sector : 0)) : -1;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
+          logFlag(prev, desired);
         }
       } else if (desired === 1 && dsector >= 0) {
         caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
@@ -171,6 +183,7 @@ const RaceControl = (() => {
     // host says, rather than running its own hold timers over someone else's flag.
     function apply(d) {
       if (!d) return false;
+      const prev = caution.level;
       caution.level = d.level | 0;
       caution.sector = d.sector != null ? d.sector : -1;
       caution.frac = d.frac || 0;
@@ -178,6 +191,7 @@ const RaceControl = (() => {
       caution.total = d.total || 0;
       if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice();
       caution.sinceT = d.sinceT || 0;
+      logFlag(prev, caution.level);
       return true;
     }
 

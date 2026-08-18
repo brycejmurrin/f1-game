@@ -138,6 +138,8 @@ function arm(cars, opts) {
   const o = opts || {};
   const scale = LEVELS[o.level] || 0;
   const seed = o.seed >>> 0, round = o.round | 0;
+  Log.info("game", "Reliability.arm scale=" + scale + " n=" + (cars && cars.length));
+  let planned = 0;
   for (const c of cars) {
     c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null;
     if (!scale) continue;
@@ -146,7 +148,10 @@ function arm(cars, opts) {
     c.dnfAt = AT_LO + draw(seed, "dnfAt", round, who) * (AT_HI - AT_LO);
     c.dnfWhy = REASONS[Math.min(REASONS.length - 1,
       Math.floor(draw(seed, "dnfWhy", round, who) * REASONS.length))];
+    planned++;
+    Log.info("game", "Reliability DNF plan " + who + " why=" + c.dnfWhy);
   }
+  if (planned) Log.info("game", "Reliability.arm planned=" + planned);
   return cars;
 }
 

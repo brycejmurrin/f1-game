@@ -11,7 +11,7 @@ const CarMesh = (function () {
   "use strict";
 
 let _gfx = null;            // renderer handle, set once by init()
-function init(gfx) { _gfx = gfx; }
+function init(gfx) { Log.info("game", "CarMesh.init"); _gfx = gfx; }
 
 // ---------- Car decals (team logo + sponsor textures on the bodywork) ----------
 // ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);

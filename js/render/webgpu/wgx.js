@@ -578,6 +578,7 @@ const WGX = (function () {
       }
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
+      try { Log.info("gfx", "WGX soft-present on"); } catch (_) { /* harness */ }
     }
     function _wgxEscalate(why) {
       if (_outProbeOff) {
@@ -4230,6 +4231,7 @@ const WGX = (function () {
 
     const noop = function () {};
     _runtimeReady = true;
+    try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
 
     return {
       // ── Lifecycle / capability ──

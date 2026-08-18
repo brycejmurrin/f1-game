@@ -152,6 +152,7 @@ window.TopModal = (function () {
   }
 
   function init() {
+    Log.info("ui", "TopModal.init");
     scan();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);

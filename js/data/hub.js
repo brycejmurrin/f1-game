@@ -227,6 +227,7 @@ const DataHub = (function () {
   function open() {
     if (!root) return;
     returnFocus = document.activeElement;
+    Log.info("data", "hub open");
     root.hidden = false;
     openFlag = true;
     showTab(active);
@@ -235,6 +236,7 @@ const DataHub = (function () {
 
   function close() {
     if (!root) return;
+    Log.info("data", "hub close");
     stopLiveAuto();
     closeTelemPopup();
     root.hidden = true;
@@ -272,6 +274,8 @@ const DataHub = (function () {
     const st = state[id];
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
     if (st && st.node && (Date.now() - st.at) < maxAge) {
+      // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
+      if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " stale");
       clear(contentEl);
       contentEl.appendChild(st.node);
       contentEl.appendChild(footnote(st.at));
@@ -283,16 +287,19 @@ const DataHub = (function () {
 
   function loadTab(id) {
     const myGen = (gen[id] = (gen[id] || 0) + 1);
+    lastEmpty = "";
+    Log.info("data", "tab " + id + " load");
     clear(contentEl);
     contentEl.appendChild(spinner());
 
     tabDef(id).load().then(function (node) {
       if (gen[id] !== myGen) return;
+      Log.info("data", "tab " + id + " done");
       state[id] = { node: node, at: Date.now() };
       if (openFlag && active === id) showTab(id);
     }, function (err) {
       if (gen[id] !== myGen) return;
-      Log.warn("data", "apex26: data hub tab failed", id, err);
+      Log.warn("data", "tab " + id + " fail");
       state[id] = null;
       if (openFlag && active === id) {
         clear(contentEl);
@@ -331,7 +338,12 @@ const DataHub = (function () {
     return el("div", "dh-footnote", txt);
   }
 
+  let lastEmpty = "";
   function emptyMsg(text) {
+    if (lastEmpty !== active) {
+      lastEmpty = active;
+      Log.info("data", "tab " + active + " empty");
+    }
     return el("div", "dh-empty", text);
   }
 

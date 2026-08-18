@@ -243,6 +243,7 @@ window.SheetShape = (function () {
   }
 
   function init() {
+    Log.info("ui", "SheetShape.init");
     if (typeof ResizeObserver === "function") {
       ro = new ResizeObserver((entries) => {
         for (const e of entries) {

@@ -42,6 +42,7 @@ const NetLobby = (function () {
   const CONNECT_TIMEOUT_MS = 60000;
 
   function create(G) {
+    Log.info("net", "lobby create");
     const $ = (id) => document.getElementById(id);
     // CONNECTED transports, one per guest, keyed by the id the host minted for
     // that invite. `transport` below is the one currently being NEGOTIATED —
@@ -218,6 +219,7 @@ const NetLobby = (function () {
         if (s) { try { s.close(); } catch (e) {} }
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
+        Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
@@ -396,6 +398,7 @@ const NetLobby = (function () {
         const dead = st && (st.ice === "failed" || st.connection === "failed");
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
+          Log.warn("net", "connect fail " + secs + "s");
           say(failureMsg(st, secs), true);
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
@@ -415,6 +418,7 @@ const NetLobby = (function () {
     function onConnected(id, t) {
       id = id != null ? id : PEER_ONE;
       t = t || transport;
+      Log.info("net", "peer join " + id);
       say("Connected.");
       transports.set(id, t);
       if (transport === t) { transport = null; pendingId = null; }
@@ -563,6 +567,7 @@ const NetLobby = (function () {
     function openRoom() {
       selfReady = false;
       _ready.clear();
+      Log.info("net", "lobby room");
       show("room");
       // The lobby is a dialog over the menu, and the room is where both players
       // now wait — so it must survive the screens it opens.
@@ -1750,6 +1755,7 @@ const NetLobby = (function () {
     function open() {
       invalidateOperations();
       holdWake();
+      Log.info("net", "lobby open");
       // Start fetching relay credentials NOW if a credentials URL is
       // configured — connecting comes seconds later, and the fetch usually
       // wins that race, so the first connection attempt already carries relay
@@ -1786,6 +1792,7 @@ const NetLobby = (function () {
     function close() {
       invalidateOperations();
       clearInterval(pollTimer);
+      Log.info("net", "lobby close");
       // Leaving the screen with the camera still running is the failure this
       // module is most careful about — close() is also the SUCCESS path, since
       // the race starts by closing the lobby.

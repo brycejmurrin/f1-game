@@ -75,6 +75,7 @@ const AgentView = (function () {
   }
 
   function create(G) {
+    Log.info("game", "AgentView.create");
     const { wrapS, gripMult, LONG_GRIP, update, els, camVantage } = G;
 
     // Scratch matrices for rendering an arbitrary camera to text — so frame()

@@ -83,6 +83,7 @@ const NetScan = (function () {
     }
 
     function stop() {
+      const wasLive = !stopped && !!stream;
       generation++;
       stopped = true;
       clearInterval(timer);
@@ -95,6 +96,7 @@ const NetScan = (function () {
       }
       if (video) { try { video.srcObject = null; } catch (e) {} video = null; }
       onCode = null;
+      if (wasLive) Log.info("net", "scan stop");
     }
 
     function tick() {
@@ -128,12 +130,14 @@ const NetScan = (function () {
       const attempt = generation;
       const cancelled = () => ({ ok: false, error: "cancelled", message: "Camera scan cancelled." });
       if (!supported()) {
+        Log.info("net", "scan unsupported");
         return { ok: false, error: "unsupported",
                  message: "This browser cannot use the camera, so paste the code instead." };
       }
       try { await loadDecoder(); }
       catch (e) {
         if (attempt !== generation) return cancelled();
+        Log.warn("net", "scan fail no_decoder");
         return { ok: false, error: "no_decoder",
                  message: "Could not load the QR reader — paste the code instead." };
       }
@@ -151,6 +155,8 @@ const NetScan = (function () {
       } catch (e) {
         if (attempt !== generation) return cancelled();
         const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        if (denied) Log.info("net", "scan denied");
+        else Log.warn("net", "scan fail no_camera");
         return {
           ok: false,
           error: denied ? "denied" : "no_camera",
@@ -175,6 +181,7 @@ const NetScan = (function () {
       }
       if (!ctx) {
         stop();
+        Log.warn("net", "scan fail no_canvas");
         return { ok: false, error: "no_canvas", message: "Could not start the QR reader — paste the code instead." };
       }
       video.srcObject = stream;
@@ -187,6 +194,7 @@ const NetScan = (function () {
         return cancelled();
       }
       timer = setInterval(tick, DECODE_EVERY_MS);
+      Log.info("net", "scan start");
       return { ok: true };
     }
 

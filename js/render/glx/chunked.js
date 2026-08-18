@@ -348,6 +348,7 @@ const GLXChunked = (function () {
       return p;
     }
 
+    Log.info("gfx", "GLX chunked init");
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
              // exported so callers outside the draw path can run the SAME cull
              // test the GPU path runs, rather than reimplementing it and drifting

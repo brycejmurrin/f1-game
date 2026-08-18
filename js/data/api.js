@@ -155,6 +155,27 @@ const F1API = (function () {
 
   /* ---------- queued, cached fetch ---------- */
 
+  function endpointName(url) {
+    const noQ = String(url || "").split("?")[0];
+    if (/driverstandings/i.test(noQ)) return "driverstandings";
+    if (/constructorstandings/i.test(noQ)) return "constructorstandings";
+    if (/\/last\/results/i.test(noQ)) return "last-results";
+    if (/\/meetings/i.test(noQ)) return "meetings";
+    if (/\/sessions/i.test(noQ)) return "sessions";
+    if (/\/position/i.test(noQ)) return "position";
+    if (/\/intervals/i.test(noQ)) return "intervals";
+    if (/\/drivers/i.test(noQ)) return "drivers";
+    if (/\/laps/i.test(noQ)) return "laps";
+    if (/\/car_data/i.test(noQ)) return "car_data";
+    if (/\/location/i.test(noQ)) return "location";
+    if (/\/stints/i.test(noQ)) return "stints";
+    if (/\/pits/i.test(noQ)) return "pits";
+    if (/\/weather/i.test(noQ)) return "weather";
+    if (/\d{4}\.json$/i.test(noQ)) return "schedule";
+    const last = noQ.split("/").filter(Boolean).pop() || "api";
+    return last.replace(/\.json$/i, "").slice(0, 32);
+  }
+
   function fetchTimed(url) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     let timer = null;
@@ -212,6 +233,8 @@ const F1API = (function () {
 
   function request(url, ttl, options) {
     const cache = !options || options.cache !== false;
+    const quiet = ttl <= 0 || (options && options.cache === false);
+    const name = endpointName(url);
     // ttl <= 0: bypass cache read (still write on success) so live AUTO can
     // refresh every 30 s instead of being stuck behind TTL_LATEST (10 min).
     const hit = cache ? readCache(url) : null;
@@ -228,6 +251,7 @@ const F1API = (function () {
       })
       .then(function (json) {
         if (cache) writeCache(url, json);
+        if (!quiet) Log.info("data", "fetch " + name + " ok");
         return json;
       })
       .catch(function (err) {
@@ -235,9 +259,10 @@ const F1API = (function () {
         // makes LIVE look "updated" while silently serving old classification.
         const msg = (err && err.message) || "";
         if (hit && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
-          Log.warn("data", "apex26: fetch failed, serving stale cache for " + url, err);
+          Log.warn("data", "fetch " + name + " fail stale");
           return hit.data;
         }
+        Log.warn("data", "fetch " + name + " fail");
         throw err;
       });
 

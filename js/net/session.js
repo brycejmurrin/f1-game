@@ -77,6 +77,7 @@ const NetSession = (function () {
     opts = opts || {};
     const transport = opts.transport;
     if (!transport) throw new Error("NetSession needs a transport");
+    Log.info("net", "session create");
     const cfg = Object.assign({}, DEFAULTS, opts);
     const CH_STATE = NetTransport.STATE;
     const CH_EVENT = NetTransport.EVENT;
@@ -175,7 +176,13 @@ const NetSession = (function () {
       if (channel === CH_STATE) onStateBytes(data, lastNow);
       else onEventJson(data);
     });
-    transport.onClose(() => { if (alive) { alive = false; fire(closeHandlers, "transport"); } });
+    transport.onClose(() => {
+      if (alive) {
+        alive = false;
+        Log.info("net", "session close transport");
+        fire(closeHandlers, "transport");
+      }
+    });
 
     function fire(list, arg) {
       for (const fn of list) { try { fn(arg); } catch (e) {} }
@@ -209,6 +216,7 @@ const NetSession = (function () {
         try { transport.close(); } catch (e) { /* ignored: a transport that
           throws on close is already gone, and this path exists precisely
           because the peer stopped answering. Nothing left to report to. */ }
+        Log.info("net", "session close timeout");
         fire(closeHandlers, "timeout");
       }
       return alive;
@@ -255,6 +263,7 @@ const NetSession = (function () {
         if (!alive) return;
         alive = false;
         try { transport.close(); } catch (e) {}
+        Log.info("net", "session close");
         fire(closeHandlers, "local");
       },
       stats: () => ({

@@ -31,6 +31,7 @@
 "use strict";
 const LightStore = (() => {
   function create(G) {
+    Log.info("game", "LightStore.create");
     const { TUNE_DEFS, LT } = LightTune;
     const { store, clamp } = G;
 
@@ -138,6 +139,7 @@ const LightStore = (() => {
     // changes (via applyRaceSettings), so the right profile is live for both the
     // tuner panel and actual racing.
     function apply(fromApplyRace) {
+      if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
       const L = layers();
       let rebuilt = false, reapply = false, reinit = false;
       for (const d of TUNE_DEFS) {
