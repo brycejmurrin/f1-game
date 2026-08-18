@@ -240,7 +240,7 @@ const TLX = (function () {
         } catch (_) { displayCtx = null; }
         if (displayCtx) {
           canvas = gpuCanvas;
-          try { Log.info("gfx", "[TLX] software WebGPU — soft-present 2D blit on #game"); } catch (_) {}
+          try { Log.info("gfx", "[TLX] software WebGPU — soft-present 2D blit on #game"); } catch (_) { /* Log optional */ }
         } else {
           softGpu = false;
         }
@@ -1300,7 +1300,7 @@ const TLX = (function () {
           if (_softBlitPend) { _softBlitPend = false; queueSoftBlit(); }
         }).catch(function (e) {
           _softBlitBusy = false;
-          try { Log.warn("gfx", "TLX soft-present blit failed —", e); } catch (_) {}
+          try { Log.warn("gfx", "TLX soft-present blit failed —", e); } catch (_) { /* Log optional */ }
         });
       }
       function awaitSoftPresent(timeoutMs) {

@@ -637,6 +637,11 @@ test("TLX InstancedMesh always allocates instanceColor to the instance cap", () 
     "instanceColor must be allocated for every batch, not only when colors[] is present");
   assert.doesNotMatch(body, /if\s*\(\s*colors && colors\.length\s*\)\s*\{[\s\S]{0,200}instanceColor/,
     "do not gate instanceColor allocation on colors[] — that is the WebGPU dummy-buffer trap");
+  const shadow = read("js/render/three/tlx-shadow.js");
+  const cast = shadow.indexOf("function castInstanced");
+  assert.notEqual(cast, -1, "castInstanced moved");
+  assert.match(shadow.slice(cast, cast + 1800), /instanceColor\s*=\s*new THREE\.InstancedBufferAttribute/,
+    "shadow InstancedMesh must also allocate instanceColor — a 12-byte dummy poisons the whole frame encoder");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
