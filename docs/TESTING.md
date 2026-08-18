@@ -1100,7 +1100,8 @@ snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
 THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
 `mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
 does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
-those backends; they must not silently bind GLX.
+those backends (phones and Safari included — lite stack, 8-bit swapchain);
+they must not silently bind GLX. THREE PATH: WEBGL2 remains the CI pin.
 
 **TLX WebGPU `configure` null was a self-poison (2026-08-18).**
 `detectSoftwareGL()` called `#game.getContext("webgl2")` after

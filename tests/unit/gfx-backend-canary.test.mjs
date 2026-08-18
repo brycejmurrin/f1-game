@@ -51,10 +51,12 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
-test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
+test("TLX AUTO uses WebGPU on Safari/phones with a lite swapchain", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false\s*: !!\(isMobile \|\| isWebKit\)/);
+  assert.match(src, /forceWebGL = _glPin === "1"/);
+  assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
+  assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
 });
@@ -757,8 +759,8 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
   assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
-  assert.match(tlx, /antialias:\s*forceWebGL \? !isMobile : \(!isMobile && !_softAdapter\)/,
-    "WebGPU software path must not ask for canvas MSAA 4");
+  assert.match(tlx, /antialias:\s*forceWebGL \? !isMobile : !_liteGpu/,
+    "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
 });
 
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {

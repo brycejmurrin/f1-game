@@ -335,7 +335,7 @@ function presentStatus() {
       }
       return "THREE.JS is pinned to WebGPU. AUTO 2D-blits the LDR target on software GPUs so screenshots work. SCREENSHOTS: NATIVE leaves the swapchain black." + live;
     }
-    return "THREE.JS AUTO: phones and Safari use WebGL2. Desktop (including software WebGPU) stays on three's WebGPU backend; AUTO 2D-blits the LDR target so screenshots work.";
+    return "THREE.JS AUTO: three's WebGPU backend (phones and Safari included — 8-bit swapchain, no MSAA 4). Software GPUs 2D-blit the LDR target so screenshots work. THREE PATH: WEBGL2 is the escape hatch.";
   }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
@@ -426,7 +426,7 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO = WebGPU on desktop (2D blit on software GPUs); phones/Safari stay WebGL2. WEBGL2 = the CI pin. WEBGPU = force three's WebGPU.");
+    "three.js GPU path. AUTO = WebGPU everywhere navigator.gpu exists (phones/Safari use a lite stack). WEBGL2 = the CI pin / escape hatch. WEBGPU = force three's WebGPU.");
   const shotBtn = addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",

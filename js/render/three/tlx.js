@@ -162,33 +162,18 @@ const TLX = (function () {
       // encode anywhere (js/render/shaders/chunks.js).
       THREE.ColorManagement.enabled = false;
 
-      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" = allow
-      // WebGPU, UNSET = the phone/desktop split below. ─────────────────────────
-      //
-      // PHONES DEFAULT TO WebGL2, and that default is the point of this block.
-      // iOS 26+ Safari ships navigator.gpu, so on an iPhone three picks its
-      // WebGPU backend — and WebKit's WebGPU is documented-unstable through
-      // 26.x (black frames, crashes, throughput below its own WebGL2; still
-      // being patched in the 27 beta). three's automatic fallback does NOT
-      // cover that: getFallback fires only when WebGPU is ABSENT, never when it
-      // is present and broken, so "three falls back by itself" is true for an
-      // old Android and false for exactly the device this shipped for.
-      // The WebGL2 half is also the better-tested half of TLX — every milestone
-      // was developed and CI-gated through this same pin, and tsl-lit.js's
-      // STANDING RULE (the toVar anchors) was measured against GLSL codegen,
-      // not WGSL. Desktop keeps auto-pick: Chrome/Edge WebGPU is where the
-      // backend wins, and a desktop that renders garbage is one tap from the
-      // RENDERER button, which a phone under a jetsam kill is not.
-      // "1" is still the CI/SwiftShader repro pin the specs set
-      // (tests/specs/tlx-probes.spec.js) and behaves exactly as before; "0" is
-      // the escape hatch for deliberately exercising WebGPU on a real phone.
+      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" /
+      // UNSET = WebGPU (three falls back to WebGL2 only if navigator.gpu is
+      // ABSENT). iOS 26+ Safari and Android Chrome expose navigator.gpu;
+      // WGX already boots there on a lite stack (low-power, MSAA 1, 8-bit
+      // swapchain — WebKit #269582). AUTO used to pin WebGL2 on phones and
+      // WebKit "just in case"; SETTINGS ▸ THREE.JS now stays on WebGPU
+      // the same way SETTINGS ▸ WEBGPU does. THREE PATH: WEBGL2 is still
+      // the CI pin (`tlx-probes`) and the escape hatch. The boot canary
+      // (apex26.gfxBackendProbe) reverts a jetsam kill.
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      // Unset pin: WebKit (Safari Mac + every iOS browser) → WebGL2. three's
-      // getFallback fires only when navigator.gpu is ABSENT; Safari 26 exposes
-      // it (user-enabled) and then WebGPURenderer paints black / throws.
-      // Chromium desktop keeps auto-pick. `apex26.tlxForceGL` "1"/"0" overrides.
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
@@ -196,8 +181,9 @@ const TLX = (function () {
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX).
       // mappedAtCreation uploads are shimmed to queue.writeBuffer after init
       // (Dawn's mappable pool dies on the first large mesh; PlayCanvas #6676).
-      // Phones / WebKit still pin WebGL2: Safari exposes navigator.gpu and
-      // then paints black. `apex26.tlxForceGL` "1"/"0" overrides.
+      // Phones / WebKit take the same WebGPU path with WGX-lite caps
+      // (8-bit canvas, no MSAA 4, low-power). `apex26.tlxForceGL` "1" is
+      // the only AUTO override that forces WebGL2.
       let _softAdapter = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
@@ -216,9 +202,9 @@ const TLX = (function () {
               || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
           }
         }
-      } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO stays phone/WebKit only */ }
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false
-        : !!(isMobile || isWebKit);
+      } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still takes WebGPU */ }
+      const forceWebGL = _glPin === "1";
+      const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
       // NATIVE ("0") keeps three's swapchain so SETTINGS can show why software
@@ -301,8 +287,15 @@ const TLX = (function () {
         // the jetsam budget that made GLX write the same line. Desktop keeps it
         // for the post-less fallback path (a broken post factory renders the
         // world straight to the canvas, where the samples do work).
-        // Software WebGPU: MSAA-4 resolve has come back blank (WGX forces 1).
-        antialias: forceWebGL ? !isMobile : (!isMobile && !_softAdapter),
+        // Lite WebGPU (phone / WebKit / software): MSAA-4 resolve has come
+        // back blank (WGX forces 1).
+        antialias: forceWebGL ? !isMobile : !_liteGpu,
+        // WebKit #269582: a float swapchain crashed / painted black through
+        // iOS 26.x. HDR stays in offscreen targets (tlx-post); only the
+        // canvas format downgrades. Same as WGX_LITE → bgra8unorm.
+        ...(!forceWebGL && (isMobile || isWebKit)
+          ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
+          : {}),
         forceWebGL,
       });
       renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
@@ -355,7 +348,7 @@ const TLX = (function () {
           };
           _dev.__apexWriteBuf = true;
         }
-        if (_softAdapter) {
+        if (_liteGpu) {
           try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
         }
       }
@@ -2179,7 +2172,8 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL, softAdapter: _softAdapter,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
+              softwareGL, softAdapter: _softAdapter,
               softBlit: _softBlit, capPref: _capPref,
             };
           },
