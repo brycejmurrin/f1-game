@@ -1105,6 +1105,7 @@ function rolloverHire(dStand) {
 
 // Take the pending offer: pay the new figure and re-sign for a year.
 function renewHire(years) {
+  if (!career || careerConflict) return false;
   const hire = career.roster && career.roster[0];
   if (!hire || !hire.pending || hire.pending.kind !== "renew") return false;
   hire.salary = hire.pending.ask;
@@ -1116,7 +1117,7 @@ function renewHire(years) {
 // Sign somebody else from the market. The seat is empty either way once a
 // contract has expired, so this is also how a "left" is resolved.
 function hireDriver(code, years) {
-  if (career.flavour !== "myteam") return false;
+  if (!career || careerConflict || career.flavour !== "myteam") return false;
   const a = FREE_AGENTS.find((x) => x.code === code);
   if (!a) return false;
   career.roster = [{ name: a.name, code: a.code, num: a.num, tier: a.tier,
@@ -1199,7 +1200,8 @@ function weakerSeat(team) {
 // economy for a second season instead of arriving with a car already maxed out.
 // RENEWING does not touch the garage — a career should not be punished for loyalty.
 function acceptOffer(i) {
-  const o = career && career.offers ? career.offers[i | 0] : null;
+  if (!career || careerConflict) return null;
+  const o = career.offers ? career.offers[i | 0] : null;
   const team = o && Teams.LIST.find((t) => t.id === o.teamId);
   if (!team) return null;
   if (team.id !== career.team) {
@@ -1234,7 +1236,7 @@ function codeOf(id) {
 // market are drawn against the season that just finished (and hash on the year
 // that just finished), so `year++` and the standings reset come last.
 function rollover() {
-  if (!career) return null;
+  if (!career || careerConflict) return null;
   const dStand = driverStandings(), tStand = teamStandings();
   const me = seasonDriverId(career.team, career.seat);
   const myRow = dStand.find((r) => r.id === me);

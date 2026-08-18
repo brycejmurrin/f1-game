@@ -327,7 +327,11 @@ const DataLive = (function () {
       function posOf(p) { return (p.pos === null || p.pos === undefined) ? 999 : p.pos; }
 
       function renderRows() {
-        for (const k in sortBtns) sortBtns[k].classList.toggle("dh-active", k === liveOpts.sort);
+        for (const k in sortBtns) {
+          const on = k === liveOpts.sort;
+          sortBtns[k].classList.toggle("dh-active", on);
+          sortBtns[k].setAttribute("aria-pressed", on ? "true" : "false");
+        }
         clear(rows);
         const list = positions.slice();
         if (liveOpts.sort === "team") {

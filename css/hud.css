@@ -496,6 +496,7 @@ body.pc-uihidden #hud-restore { display: none !important; }
 body.lt-open #hud,
 body.lt-open #lights,
 body.lt-open #announce,
+body.lt-open #campicker,
 body.lt-open #btn-cam,
 body.lt-open #pausebtn,
 body.lt-open .touchbtn { display: none !important; }

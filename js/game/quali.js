@@ -244,7 +244,9 @@ function create(G) {
   function persistOrder() {
     const s = G.season;
     if (!s || !classification) return;
-    s.qualiOrder = classification.map((r) => r.driverId);
+    s.qualiOrder = classification.map((r) => ({
+      id: r.driverId, t: r.t, human: !!r.human,
+    }));
     try {
       if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
       else if (G.store) G.store.set("season", s);
@@ -252,12 +254,18 @@ function create(G) {
   }
 
   function restoreFromSeason() {
-    const ids = G.season && G.season.qualiOrder;
-    if (classification || !Array.isArray(ids) || !ids.length) return;
-    classification = ids.map((driverId, i) => ({
-      driverId, pos: i + 1, t: 0, gap: 0, code: "", name: "", team: null,
-      isPlayer: false, human: false,
-    }));
+    const raw = G.season && G.season.qualiOrder;
+    if (classification || !Array.isArray(raw) || !raw.length) return;
+    classification = raw.map((entry, i) => {
+      const obj = entry && typeof entry === "object";
+      return {
+        driverId: obj ? entry.id : entry,
+        pos: i + 1,
+        t: obj && entry.t > 0 ? entry.t : 0,
+        gap: 0, code: "", name: "", team: null,
+        isPlayer: false, human: !!(obj && entry.human),
+      };
+    });
   }
 
   function simulate(driven) {
@@ -296,11 +304,20 @@ function create(G) {
   }
   function results() {
     restoreFromSeason();
-    return classification
-      ? classification.map(({ car, ...row }) => row)   // drop the live car ref
-      : null;
+    if (!classification || !classification.some((r) => r.t > 0)) return null;
+    return classification.map(({ car, ...row }) => row);   // drop the live car ref
   }
-  function clear() { classification = null; }
+  function clear() {
+    classification = null;
+    const s = G.season;
+    if (s && s.qualiOrder) {
+      delete s.qualiOrder;
+      try {
+        if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
+        else if (G.store) G.store.set("season", s);
+      } catch (_) { /* persist is best-effort */ }
+    }
+  }
 
   // ---------- the sheet ----------
 

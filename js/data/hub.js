@@ -383,7 +383,7 @@ const DataHub = (function () {
     // follow a new session after the previous one ends.
     if (have && sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
-    return F1API.latestSession().then(function (ses) {
+    return F1API.latestSession(0).then(function (ses) {
       if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;

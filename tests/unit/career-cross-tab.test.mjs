@@ -75,6 +75,10 @@ test("a conflicted career refuses grant/research so RAM does not drift from disk
   assert.equal(Career.conflicted(), true);
   assert.equal(Career.grant(50), null);
   assert.equal(Career.research({ id: "wing", cost: 1 }), false);
+  assert.equal(Career.acceptOffer(0), null);
+  assert.equal(Career.rollover(), null);
+  assert.equal(Career.renewHire(1), false);
+  assert.equal(Career.hireDriver("VER", 1), false);
   assert.equal(Career.data().money, money);
   assert.equal(Career.data().owned.indexOf("wing"), -1);
 });

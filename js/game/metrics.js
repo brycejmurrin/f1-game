@@ -51,7 +51,7 @@ const PANEL_STYLE = "position:fixed;right:8px;" +
   "border-radius:6px;pointer-events:none;white-space:pre;text-align:left;" +
   "max-width:min(46ch,calc(100vw - 16px));" +
   "max-height:min(28em,calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - 80px * var(--hud-scale, 1) - 96px));" +
-  "overflow:hidden;text-shadow:0 1px 0 #000";
+  "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 0 #000";
 
 function qFlag(re) {
   try { return re.exec(location.search); } catch (_) { return null; }

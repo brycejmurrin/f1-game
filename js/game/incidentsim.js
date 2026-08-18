@@ -401,10 +401,10 @@ const IncidentSim = (function () {
         let st = (inc.settle.get(i) || 0);
         st = settling ? st + (fin(dt) ? dt : 1 / 60) : 0;
         inc.settle.set(i, st);
-        inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
-        const windowUp = inc.elapsed >= WINDOW_MAX_S;
+        const windowUp = (inc.elapsed || 0) >= WINDOW_MAX_S;
         if (st >= SETTLE_HOLD_S || windowUp) handbackCar(inc, i, false, pose);
       }
+      inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
     }
     _incidents = _incidents.filter((inc) => inc.cars.length);
   }

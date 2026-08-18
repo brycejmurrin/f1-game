@@ -68,7 +68,8 @@ window.CamModes = (function () {
         }
       };
       const show = () => {
-        if (document.body.classList.contains("hud-hidden")) return;
+        if (document.body.classList.contains("hud-hidden") ||
+            document.body.classList.contains("lt-open")) return;
         if (!el) build();
         sync();
         el.hidden = false;

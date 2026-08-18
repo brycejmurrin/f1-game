@@ -103,6 +103,18 @@ test("default config unchanged: a relV=30 pair still resolves as r2", () => {
   assert.equal(sim.status().lastKind, "r2");
 });
 
+test("incident window scales with time, not car count", () => {
+  // elapsed used to increment inside the per-car loop, so a 2-car shunt
+  // hit WINDOW_MAX_S (3 s) at 1.5 s. Increment once per incident.
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 10, vz: 0 };
+  const { sim, cars } = load({ pose });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2);
+  for (let i = 0; i < 120; i++) sim.postStep(1 / 60);
+  assert.equal(sim.status().owned, 2, "two-car window still open at 2 s");
+});
+
 test("postStep hands a finished car back instead of tracking it", () => {
   const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: 0 };
   const { sim, cars } = load({ pose });

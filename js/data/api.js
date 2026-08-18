@@ -432,8 +432,8 @@ const F1API = (function () {
     return out;
   }
 
-  function latestSession() {
-    return request(OPENF1 + "/sessions?session_key=latest", TTL_LATEST).then(function (list) {
+  function latestSession(ttl) {
+    return request(OPENF1 + "/sessions?session_key=latest", ttl == null ? TTL_LATEST : ttl).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
       const s = mapSession(a[a.length - 1]);

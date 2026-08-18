@@ -3462,7 +3462,8 @@ const WGX = (function () {
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
-      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0;
+      const _carRefl = o.carReflect != null ? o.carReflect
+        : ((T && T.carReflect != null) ? T.carReflect : 0);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
       if (_ssrReady && ssrBG && frameHaveProj &&
@@ -3696,7 +3697,8 @@ const WGX = (function () {
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
         s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
-        s[55] = (T && T.carReflect != null) ? T.carReflect : 0.05;                        // gain.w = carReflect
+        s[55] = o.carReflect != null ? o.carReflect
+          : ((T && T.carReflect != null) ? T.carReflect : 0.05);                           // gain.w = carReflect
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;
