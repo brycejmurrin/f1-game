@@ -98,13 +98,14 @@
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
-#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
+#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; }
-/* Four modes normally settle into 2x2, but the row is content-driven: feature
-   availability can hide/add an action without leaving a half-empty grid cell. */
+/* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
+   doors on one line; a lone last child (STANDINGS season) still fills the row
+   via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
 #menu-primary {
-  --balance-basis: 45%;
-  --balance-min: 40%;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
   gap: calc(var(--gap) * 0.7);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
@@ -135,15 +136,16 @@
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
-  --balance-basis: 45%;
-  --balance-min: 40%;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
   gap: calc(var(--gap) * 0.55);
 }
 /* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
    keeps the normal four controls as two pairs, and lets a visible fifth action
-   fill its final line without a state-specific selector. */
+   fill its final line without a state-specific selector. width:100% (not auto)
+   so a long label wraps inside its half instead of widening its cell. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; }
-#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
+#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -266,25 +268,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 @media (orientation: landscape) {
   :where(body[data-density="compact"]) #overlay {
-    /* minmax(0, auto) on the BRAND column, for the reason #menu-primary states
-       above: an `auto` track refuses to shrink below its longest word, so the
-       column is sized by whatever prose it happens to contain and the button
-       column is pushed along by it. Measured at 734x343 with the landscape
-       safe-area insets injected (l/r 59px, as tools/layout-audit.mjs does):
-       brand took 348px, +32 gap, +300 of buttons = 680 in a 600px content box,
-       and #menu-buttons hung 13px past #overlay — which clips, since #overlay
-       is overflow-x: hidden.
-       The trigger was raising #disclaimer to the --fs-micro floor: a longer
-       line of the same words, in a track with no shrink floor. But the fault
-       was always in the track, not the type — this block's own comment records
-       the pair already outrunning vw at UI SIZE 150% (measured R=884 on 852).
-       A shrink floor lets the brand column wrap its prose instead, which is
-       what the disclaimer and subtitle are for; the button column is
-       fixed-width (min(42vwz, 300px)) and so keeps its size either way. */
-    grid-template-columns: minmax(0, auto) auto;
+    /* Equal shrinkable tracks. auto+auto sized the brand by its longest word
+       and the doors by a px cap, so the pair was never even and outran vw
+       when zoomed. 1fr 1fr shares leftover; children use 42vwz so paint
+       width tracks the viewport and --ui-scale together. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     justify-content: center;
     justify-content: safe center;
-    align-content: center; justify-items: start;
+    align-content: center; justify-items: stretch;
     /* Re-stating `safe center` because this block re-declares align-content and
        would otherwise take the base rule's overflow bug back — see there.
        Same for justify-content: at UI SIZE 150% the brand+button pair can be
@@ -294,10 +285,16 @@ body { --compact-at: 600px; --wide-at: 620px; }
     column-gap: 32px;
   }
   :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  :where(body[data-density="compact"]) #menu-brand,
+  :where(body[data-density="compact"]) #menu-buttons {
+    width: min(calc(42 * var(--vwz)), 100%);
+    min-width: 0;
+    max-width: 100%;
+  }
   :where(body[data-density="compact"]) #menu-buttons {
     grid-column: 2; grid-row: 1;
     align-self: stretch;
-    width: auto;
+    justify-items: stretch;
   }
   :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
@@ -308,7 +305,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
      150% without touching type size (brand+46vw+gap measured ~872 on 852). */
   :where(body[data-density="compact"]) #menu-hero,
   :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 300px); }
+  :where(body[data-density="compact"]) #menu-secondary { width: 100%; }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
