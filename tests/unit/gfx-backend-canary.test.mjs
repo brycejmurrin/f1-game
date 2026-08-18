@@ -51,10 +51,15 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
-test("TLX AUTO uses WebGPU on Safari/phones with a lite swapchain", () => {
+test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1"/);
+  assert.match(src, /apex26\.tlxAutoGL/);
+  assert.match(src, /_autoStayGL/);
+  assert.match(src, /forceWebGL = _glPin === "1" \|\| \(_glPin !== "0" && \(!_hasGpu \|\| _autoStayGL\)\)/);
+  assert.match(src, /async function bootRenderer/);
+  assert.match(src, /AUTO WebGPU init failed — three WebGL2/);
+  assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
@@ -253,6 +258,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBound": "webgl2",
     "apex26.ctxLostReloads": "2",
     "apex26.wgxCapture": "0",
+    "apex26.tlxAutoGL": "1",
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
@@ -264,6 +270,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.ok(G.RENDERER_SS_KEYS.includes("apex26.ctxLostReloads"));
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.wgxCapture"), "SCREENSHOTS pref is renderer state");
   assert.ok(G.RENDERER_SS_KEYS.includes("apex26.wgxCapture"));
+  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.tlxAutoGL"), "AUTO stay-GL latch is renderer state");
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
@@ -282,6 +289,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
   assert.equal(ss.getItem("apex26.gfxBound"), null);
   assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
+  assert.equal(ss.getItem("apex26.tlxAutoGL"), null);
   assert.equal(G.readBackend(), "webgl2");
 });
 
@@ -535,7 +543,10 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
 });
 
 test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
-  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2" },
+    ss: { "apex26.tlxAutoGL": "1" },
+  });
   assert.ok(a.byId["pm-three-path"], "THREE PATH button");
   assert.ok(a.byId["pm-screenshots"], "SCREENSHOTS button");
   assert.ok(a.byId["pm-save-shot"], "SAVE SCREENSHOT button");
@@ -547,6 +558,7 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   a.byId["pm-three-path"].onclick();
   assert.equal(a.G.readThreePath(), "webgl2");
   assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
+  assert.equal(a.ss.getItem("apex26.tlxAutoGL"), null, "THREE PATH cycle drops the AUTO stay-GL latch");
   assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
   assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
 
@@ -607,6 +619,8 @@ test("presentStatus names the three screenshot paths in plain language", () => {
   assert.match(G.presentStatus(), /pinned to WebGPU/);
   G.applyThreePath("webgl2", { noReload: true });
   assert.match(G.presentStatus(), /pinned to WebGL2/);
+  G.applyThreePath("auto", { noReload: true });
+  assert.match(G.presentStatus(), /stays on three's WebGL2/);
 });
 
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {

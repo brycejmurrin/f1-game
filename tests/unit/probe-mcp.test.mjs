@@ -305,15 +305,20 @@ process.stdin.on("data", chunk => {
   }
 });
 
-test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {
-  // tlx.js auto-picks three's WebGPU backend on Chromium desktop. Under
-  // SwiftShader that path dies in three's own buffer upload, so the default
-  // pin matches tests/specs/tlx-probes.spec.js rather than handing back a
-  // broken renderer that reads as a TLX regression.
+test("probe --backend three pins three to WebGL2 unless --tlx-webgpu / --tlx-auto", () => {
+  // Default pin matches tests/specs/tlx-probes.spec.js (CI WebGL2).
+  // --tlx-webgpu forces three's WebGPU path; --tlx-auto leaves the pin unset.
+  // --tlx-auto-gl is AUTO after the stay-GL latch (three WebGL2, still TLX).
   assert.match(dryRun("--backend", "three")[1].arguments.function,
     /apex26\.tlxForceGL", "1"/);
   assert.match(dryRun("--backend", "three", "--tlx-webgpu")[1].arguments.function,
     /apex26\.tlxForceGL", "0"/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto")[1].arguments.function,
+    /removeItem\("apex26\.tlxForceGL"\)/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto-gl")[1].arguments.function,
+    /apex26\.tlxAutoGL", "1"/);
+  assert.match(dryRun("--backend", "three", "--tlx-auto-gl")[1].arguments.function,
+    /removeItem\("apex26\.tlxForceGL"\)/);
   // The pin is three-only: it must not appear for the other backends.
   for (const b of ["webgl2", "webgpu"]) {
     assert.doesNotMatch(dryRun("--backend", b)[1].arguments.function, /tlxForceGL/);

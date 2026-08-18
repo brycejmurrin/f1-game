@@ -106,7 +106,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO uses three's WebGPU wherever `navigator.gpu` exists, including iPhone Safari (lite stack: 8-bit swapchain, no MSAA 4, low-power — same as WGX_LITE / WebKit #269582). Software GPUs 2D-blit the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 is the CI pin / escape hatch. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO tries three's WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE). AUTO may land on **three** WebGL2 — no `navigator.gpu`, `apex26.tlxAutoGL=1` after this tab lost WebGPU, or `init()` threw before `#game` was claimed. That is still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
@@ -129,8 +129,10 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   `configure` null throw on SwiftShader). Instanced props use a geometry
   `InstancedBufferAttribute` named `color`, not `imesh.instanceColor`.
   Software adapters stay on WebGPU (soft-present + writeBuffer shim); they
-  must not silently bind GLX. Phones and Safari AUTO use the same WebGPU
-  path with a lite swapchain (`UnsignedByteType`, no MSAA 4, low-power).
+  must not silently bind GLX. AUTO may then take three WebGL2 (`tlxAutoGL`)
+  without writing `gfxClaimFail`. Phones and Safari AUTO try the same
+  WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
+  low-power).
 
 ## Related
 

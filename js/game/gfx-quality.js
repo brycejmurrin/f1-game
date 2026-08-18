@@ -205,7 +205,7 @@ const RENDERER_LS_KEYS = [
   "apex26.tlxForceGL", "apex26.tlxViz",
   "apex26.wgxCapture",
 ];
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL"];
 
 function clearRendererStorage() {
   const removed = [];
@@ -249,6 +249,7 @@ function applyThreePath(next, opts) {
     if (next === "webgl2") localStorage.setItem("apex26.tlxForceGL", "1");
     else if (next === "webgpu") localStorage.setItem("apex26.tlxForceGL", "0");
     else localStorage.removeItem("apex26.tlxForceGL");
+    try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) { /* AUTO stay-GL latch is session-only */ }
   } catch (_) { /* preference still paints from the in-memory read on next boot if storage is blocked */ }
   paintPresent();
   if (readBackend() === "three" && !(opts && opts.noReload)) {
@@ -335,7 +336,7 @@ function presentStatus() {
       }
       return "THREE.JS is pinned to WebGPU. AUTO 2D-blits the LDR target on software GPUs so screenshots work. SCREENSHOTS: NATIVE leaves the swapchain black." + live;
     }
-    return "THREE.JS AUTO: three's WebGPU backend (phones and Safari included — 8-bit swapchain, no MSAA 4). Software GPUs 2D-blit the LDR target so screenshots work. THREE PATH: WEBGL2 is the escape hatch.";
+    return "THREE.JS AUTO: tries WebGPU when navigator.gpu exists (phones/Safari use a lite stack). If WebGPU is missing or this tab already lost it, AUTO stays on three's WebGL2 — not game WEBGL2. THREE PATH: WEBGL2 / WEBGPU pins one path.";
   }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
@@ -426,7 +427,7 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO = WebGPU everywhere navigator.gpu exists (phones/Safari use a lite stack). WEBGL2 = the CI pin / escape hatch. WEBGPU = force three's WebGPU.");
+    "three.js GPU path. AUTO tries WebGPU, then three WebGL2 if GPU is missing or this tab already lost WebGPU. WEBGL2 = pin three WebGL2. WEBGPU = pin three WebGPU (no silent WebGL).");
   const shotBtn = addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",

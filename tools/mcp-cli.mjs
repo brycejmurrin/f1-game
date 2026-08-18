@@ -78,7 +78,7 @@ const WRAPPER = process.env.APEX_MCP_WRAPPER || path.join(ROOT, "tools/chrome-de
 // about:blank, or WebGPU is missing no matter which Chrome flags are set.
 function parseProbeArgs(argv) {
   const o = { url: "http://127.0.0.1:3456/", backend: null, wait: 6000,
-              evalSrc: null, console: null, json: false, tlxWebgpu: false, lite: false,
+              evalSrc: null, console: null, json: false, tlxWebgpu: false, tlxAuto: false, tlxAutoGl: false, lite: false,
               dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -86,6 +86,8 @@ function parseProbeArgs(argv) {
     if (a === "--url") o.url = next();
     else if (a === "--backend") o.backend = next();
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
+    else if (a === "--tlx-auto") o.tlxAuto = true;
+    else if (a === "--tlx-auto-gl") o.tlxAutoGl = true;
     else if (a === "--lite") o.lite = true;
     else if (a === "--wait") o.wait = Number(next());
     else if (a === "--eval") o.evalSrc = next();
@@ -115,10 +117,22 @@ function backendInitScript(pick, o) {
     if (o.lite) lines.push(`localStorage.setItem("apex26.gfxWgxLite", "1");`);
     else lines.push(`localStorage.removeItem("apex26.gfxWgxLite");`);
   } else if (pick === "three") {
-    const tlxPin = o.tlxWebgpu
-      ? `localStorage.setItem("apex26.tlxForceGL", "0");`
-      : `localStorage.setItem("apex26.tlxForceGL", "1");`;
-    lines.push(tlxPin);
+    // Default pin is the CI WebGL2 path. --tlx-webgpu forces WebGPU.
+    // --tlx-auto leaves the pin UNSET so we measure THREE PATH: AUTO.
+    // --tlx-auto-gl is AUTO after a stay-GL latch (three WebGL2, still TLX).
+    if (o.tlxAutoGl) {
+      lines.push(`localStorage.removeItem("apex26.tlxForceGL");`);
+      lines.push(`try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) {}`);
+    } else if (o.tlxAuto) {
+      lines.push(`localStorage.removeItem("apex26.tlxForceGL");`);
+      lines.push(`try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) {}`);
+    } else {
+      const tlxPin = o.tlxWebgpu
+        ? `localStorage.setItem("apex26.tlxForceGL", "0");`
+        : `localStorage.setItem("apex26.tlxForceGL", "1");`;
+      lines.push(tlxPin);
+      lines.push(`try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) {}`);
+    }
   }
   return lines.join("\n");
 }
@@ -168,7 +182,9 @@ probe flags:
   --backend NAME     webgl2 | three | webgpu — sets the pick, then RELOADS
   --lite             with --backend webgpu, force WGX_LITE (phone/WebKit stack)
   --tlx-webgpu       with --backend three, take three's WebGPU path (default is
-                     the WebGL2 pin the specs use; WebGPU three dies on SwiftShader)
+                     the WebGL2 pin the specs use)
+  --tlx-auto         with --backend three, leave tlxForceGL unset (THREE PATH: AUTO)
+  --tlx-auto-gl      AUTO + session tlxAutoGL=1 (three WebGL2, still TLX)
   --wait MS          settle before evaluating (default 6000; a boot needs ~9000)
   --eval FILE|SRC|-  body of an async fn; return a string (JSON.stringify it)
   --console [RE]     print console messages, optionally filtered by regex
