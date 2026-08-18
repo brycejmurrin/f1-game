@@ -741,10 +741,45 @@ test("the alpha tag that makes canvas opacity load-bearing still exists", () => 
     "still ghost the cars before touching the guards below");
 });
 
+test("the SSR tag is not three's opacity socket — that is what made cars vanish", () => {
+  // NodeMaterial.setupDiffuseColor does diffuseColor.a *= opacityNode.
+  // NodeBuilder.isOpaque() is (transparent===false && blending===NormalBlending).
+  // Opaque car paint uses NoBlending so the tag writes verbatim (GLX parity),
+  // which makes isOpaque() FALSE, so a 0.35 opacityNode is left as coverage:
+  // painted bodywork disappears; tyres/carbon/glass (alpha 1) stay. The tag
+  // belongs on outputNode; opacityNode is the real material alpha.
+  const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  assert.doesNotMatch(src, /opacityNode\s*=\s*packed\.a/,
+    "opacityNode = packed.a feeds the 0.35 paint tag into three as coverage");
+  assert.match(src, /opacityNode\s*=\s*packed\.opacity/,
+    "opacityNode must be the real tlxAlpha, not the SSR channel");
+  assert.match(src, /outputNode\s*=\s*packed\.out/,
+    "outputNode must carry the lit vec4 (RGB + tag) so the tag still reaches SSR");
+  assert.match(src, /opacity:\s*matU\.alpha/,
+    "shared graph must expose matU.alpha as the opacity socket");
+  assert.match(src, /m\.fog\s*=\s*false/,
+    "three scene-fog on top of the lit fog stack darkens bodywork a second time");
+  assert.match(src, /m\.premultipliedAlpha\s*=\s*false/,
+    "premultiply would scale RGB by the tag if it ever re-enters the output");
+});
+
+test("three still treats NoBlending as non-opaque (why the tag cannot live in opacityNode)", () => {
+  // Makes the assertion above NECESSARY. If isOpaque() starts ignoring
+  // blending, NoBlending would force alpha back to 1 and the outputNode
+  // split would be tidy rather than load-bearing — worth knowing which.
+  assert.match(THREE_BUNDLE,
+    /isOpaque\(\)\{const \w+=this\.material;return!1===\w+\.transparent&&\w+\.blending===\w+&&!1===\w+\.alphaToCoverage\}/,
+    "bundled three isOpaque() no longer requires NormalBlending — re-derive " +
+    "whether NoBlending + opacityNode=tag still ghosts cars");
+});
+
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
   assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
     "TLX must pass alpha:false — three's WebGPU backend turns it into " +
     'alphaMode "opaque"');
+  assert.match(rendererParams(), /(^|[{,\s])premultipliedAlpha:\s*false/,
+    "TLX must pass premultipliedAlpha:false — default true premultiplies the " +
+    "SSR tag into car RGB");
 });
 
 test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {

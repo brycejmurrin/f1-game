@@ -78,6 +78,13 @@
     const _pinKeys = Object.create(null);
     function pinProgram(m, key) {
       m.lights = false;
+      // Lit already does its own fog / albedo. three's NodeMaterial fog
+      // (default true) and vertexColors would run on top of colorNode and
+      // double-darken bodywork; premultiply would then scale that by the
+      // SSR tag if it ever leaked back into opacity.
+      m.fog = false;
+      m.vertexColors = false;
+      m.premultipliedAlpha = false;
       m.customProgramCacheKey = _pinKeys[key] || (_pinKeys[key] = () => key);
     }
 
@@ -1412,10 +1419,21 @@
 
     /* ── material factory ─────────────────────────────────────────────────────
      * makeMaterial(opts) -> THREE.MeshBasicNodeMaterial with the full lit
-     * fragment as colorNode/opacityNode. opts carries the GLX per-draw scalars
+     * fragment as colorNode + outputNode. opts carries the GLX per-draw scalars
      * (defaults = glx.js litMaterial defaults) plus flags:
      *   doubleSided, depthBias:[factor,units], noAlphaWrite (M8), chunked
      * (drawChunked keeps depthWrite TRUE even when alpha<1 — GLX asymmetry).
+     *
+     * SSR TAG ≠ OPACITY. The fragment writes 0.35 into alpha so the post
+     * chain can mask car paint (js/render/shaders/lit.js). That channel must
+     * NOT be assigned to opacityNode: NodeMaterial.setupDiffuseColor multiplies
+     * diffuseColor.a by opacityNode, and r185 NodeBuilder.isOpaque() is
+     * `transparent===false && blending===NormalBlending` — our NoBlending
+     * opaque path (required so SrcAlpha does not ghost the body) makes
+     * isOpaque() FALSE, so the 0.35 is left as coverage. Painted panels
+     * vanish; tyres/carbon/glass stay at alpha 1. outputNode carries the
+     * vec4 (lit RGB + tag) and replaces basicOutput; opacityNode is the
+     * real material alpha (tlxAlpha).
      *
      * PROGRAM SHARING (the 90-second-track-load fix, measured 2026-08-17):
      * every variant must bind the SAME node-graph OBJECTS, not a fresh
@@ -1429,7 +1447,7 @@
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Two graphs total: chunked reads
      * no `trk` attribute (see buildFragment header). */
-    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a}
+    const _sharedGraph = [null, null];   // [plain, chunked] -> {rgb, a, opacity, out}
     let _sharedPos = null;
     function sharedFragment(chunked) {
       const idx = chunked ? 1 : 0;
@@ -1449,7 +1467,11 @@
         const packed = buildFragment(matU, chunked);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
-        g = _sharedGraph[idx] = { rgb: packed.rgb, a: packed.a };
+        // `opacity` is the REAL material alpha (never the 0.35 SSR tag).
+        // `out` is the vec4 written to the HDR target (RGB + tag).
+        g = _sharedGraph[idx] = {
+          rgb: packed.rgb, a: packed.a, opacity: matU.alpha, out: packed,
+        };
       }
       return g;
     }
@@ -1470,7 +1492,10 @@
       ud.tlxSparkle   = val(o.sparkle, 1.0);
       const packed = sharedFragment(!!o.chunked);
       m.colorNode = packed.rgb;
-      m.opacityNode = packed.a;
+      // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
+      // here is what made three.js cars invisible (see factory comment).
+      m.opacityNode = packed.opacity;
+      m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
       pinProgram(m, o.chunked ? "tlx-lit-ch" : "tlx-lit");
       m.transparent = alpha < 1;

@@ -285,6 +285,10 @@ const TLX = (function () {
         const renderer = new THREE.WebGPURenderer({
           canvas,
           alpha: false,
+          // Straight alpha. Default true would premultiply the SSR car-paint
+          // tag (0.35) into RGB on any path that still writes that channel,
+          // which is the other half of "the car vanished on three.js".
+          premultipliedAlpha: false,
           ...(glCtx ? { context: glCtx } : {}),
           // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
           // the context-level AA path". This is NOT the scene target's MSAA
