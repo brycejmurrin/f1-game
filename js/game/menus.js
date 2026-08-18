@@ -170,9 +170,6 @@ function trackFilterBar() {
     b.className = "sel-chip" + (trackFilter === id ? " active" : "");
     b.dataset.filter = id;
     b.setAttribute("aria-pressed", trackFilter === id ? "true" : "false");
-    // Keep the legacy pressed state for styling/tests while exposing the
-    // single-selection semantics to assistive technology and roving focus.
-    b.setAttribute("aria-selected", trackFilter === id ? "true" : "false");
     b.tabIndex = trackFilter === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
