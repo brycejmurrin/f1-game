@@ -226,6 +226,19 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
   assert.deepEqual(noBackend.map((c) => c.name), ["new_page", "evaluate_script"]);
 });
 
+test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe ICD", () => {
+  // gfx-probe used to hard-pin apex26.tlxForceGL=1, so three's WebGPU path
+  // was unreachable from the screenshot tool. --tlx-webgpu matches mcp-cli;
+  // --lavapipe is the Cloud software-WebGPU adapter (SwiftShader Dawn dies
+  // on three's mappedAtCreation uploads).
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx-probe.mjs"), "utf8");
+  assert.match(src, /--tlx-webgpu/);
+  assert.match(src, /--lavapipe/);
+  assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
+  assert.match(src, /WEBGPU_LAVAPE_CHROMIUM_ARGS/);
+  assert.match(src, /WEBGPU_LAVAPE_ENV/);
+});
+
 test("probe --backend three pins three to WebGL2 unless --tlx-webgpu", () => {
   // tlx.js auto-picks three's WebGPU backend on Chromium desktop. Under
   // SwiftShader that path dies in three's own buffer upload, so the default
