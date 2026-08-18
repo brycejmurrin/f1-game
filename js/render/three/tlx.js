@@ -31,8 +31,9 @@
  *   LightTune.TUNE_DEFS, same as GLX (js/render/gfx.js contract note).
  *
  * M1 STATUS: renderer lifecycle is real (dynamic import, WebGPURenderer with
- * WebGL2 fallback, resize/renderScale, clear-to-fogColor begin/present so the
- * no-track menu path at js/game.js works); every other contract member is
+ * WebGL2 fallback, resize/renderScale, Color-clear begin/present — skyZenith
+ * when the frame has one, else fogColor for the no-track menu path at
+ * js/game.js); every other contract member is
  * present as a SAFE no-op so game.js can issue the full frame protocol without
  * crashing. M2+ replace the no-ops subsystem by subsystem.
  *
@@ -68,9 +69,12 @@
  * the node reconstructs the per-pixel view ray from frameSky.invViewProj
  * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
  * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
- * path keeps the flat fogColor clear, and the env-probe double-call (M9)
- * just overwrites uniforms (last drawSky before render wins). Post chain
- * is live (M8, tlx-post.js).
+ * path keeps the flat Color clear (skyZenith when the frame has one, else
+ * fogColor). A missed TSL sky (software-GL compile miss, HDR-target skip)
+ * must not fall through to dusk fog (~beige [0.68,0.64,0.54]) or the whole
+ * frame reads as a washed void. The env-probe double-call (M9) just
+ * overwrites uniforms (last drawSky before render wins). Post chain is
+ * live (M8, tlx-post.js).
  *
  * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
  * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into
@@ -1521,7 +1525,13 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
           _instAlive.clear();
-          const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
+          // Color fallback when TSL backgroundNode misses. Fog at dusk is a
+          // beige (~0.68,0.64,0.54) that filled every software-GL probe as a
+          // washed void; zenith is the sky the node would have drawn. Menu
+          // frames without skyZenith still clear to fogColor.
+          const z = frame && frame.skyZenith;
+          const f = (z && z.length >= 3) ? z
+            : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
           // Camera from the game's column-major matrices. Main path supplies
           // proj + invProj + viewProj (view = invProj * viewProj); the
@@ -1585,7 +1595,7 @@ const TLX = (function () {
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
           // M5: sky is opt-in PER FRAME — a frame that issues no drawSky
-          // (menus, no-track) keeps the flat fogColor clear above.
+          // (menus, no-track) keeps the flat Color clear above (zenith/fog).
           scene.backgroundNode = null;
           drawList.length = 0;
           _dMatUsed = 0;
@@ -1600,6 +1610,11 @@ const TLX = (function () {
         drawSky(frameSky) {
           if (!sky || !frameSky) return;
           sky.update(frameSky);
+          // Keep the Color fallback in lockstep with the node: if this
+          // frame's TSL sky fails to compile into the HDR target, the clear
+          // is still zenith, not leftover fog from a previous menu frame.
+          const z = frameSky.zenith || frameSky.skyZenith;
+          if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
           scene.backgroundNode = sky.node;
           // three lazily builds a NodeMaterial around backgroundNode. Pin it
           // so getForRenderCacheKey does not hash child-node ids (the same
@@ -1795,6 +1810,11 @@ const TLX = (function () {
           let painted = false;
           try {
             if (post) {
+              // Same pin as paintCanvas(): three lazily builds the
+              // backgroundNode material on first render. Pinning only the
+              // canvas fallback left the HDR scene target on the Color
+              // clear whenever the lazy compile missed (software GL).
+              pinSkyMaterial();
               renderer.setRenderTarget(post.sceneTarget());
               renderer.render(scene, camera);
               post.present(opts, _postF);

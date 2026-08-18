@@ -553,6 +553,37 @@ test("TLX asks for an opaque canvas on the WebGPU backend", () => {
     'alphaMode "opaque"');
 });
 
+test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is not beige)", () => {
+  // scene.background is the fallback when backgroundNode misses (software-GL
+  // TSL compile, HDR-target skip). Clearing to fogColor made every dusk
+  // probe a washed beige void ([0.68,0.64,0.54]). Zenith is the sky the
+  // node would have drawn; fog stays the no-track menu fallback only.
+  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const begin = src.indexOf("begin(frame)");
+  assert.notEqual(begin, -1, "begin(frame) moved");
+  const body = src.slice(begin, begin + 900);
+  assert.match(body, /skyZenith/, "begin() must read frame.skyZenith for the Color fallback");
+  assert.match(body, /background\.setRGB/, "begin() still sets scene.background");
+  const zAt = body.indexOf("skyZenith");
+  const fogAssign = body.indexOf("fogColor) || [0.04");
+  assert.ok(zAt >= 0 && fogAssign > zAt,
+    "zenith must be preferred; fogColor is the no-zenith fallback");
+  const drawSky = src.indexOf("drawSky(frameSky)");
+  assert.notEqual(drawSky, -1, "drawSky moved");
+  assert.match(src.slice(drawSky, drawSky + 700), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
+    "drawSky must keep the Color fallback in lockstep with the sky node");
+});
+
+test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
+  const src = read("js/render/three/tlx.js");
+  const present = src.indexOf("present(opts)");
+  const hdr = src.indexOf("post.sceneTarget()", present);
+  assert.ok(present > 0 && hdr > present, "HDR present path moved");
+  const pinBefore = src.lastIndexOf("pinSkyMaterial()", hdr);
+  assert.ok(pinBefore > present && pinBefore < hdr,
+    "HDR target render must pin the TSL sky or a missed compile leaves the Color clear");
+});
+
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
   // scene.matrixWorldAutoUpdate is false; three uploads matrixWorld as the
   // model matrix. Writing only `.matrix` left cars/flaps/shadows at identity —

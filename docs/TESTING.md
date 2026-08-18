@@ -1087,10 +1087,22 @@ visible `#game` via a 2D blit (auto on software adapters +
 `awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
-three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
-`AGENTS.md` §Seeing the game / §Cursor Cloud;
+snapshot Saved. Default `--backend three` stays on WebGL2 (`tlxForceGL=1`)
+because three's WebGPU path dies on SwiftShader `mappedAtCreation`. To
+probe three's own WebGPU backend in-container: `--backend three --tlx-webgpu
+--lavapipe` (Dawn via the Mesa ICD; still not a real-GPU pixel oracle).
+Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**TLX software-GL washout was fog-as-clear (2026-08-18).** Dusk
+`fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
+`scene.background`; when the TSL `backgroundNode` missed (software-GL
+compile, HDR-target skip) the whole frame was that beige — kill-fog did
+not help because density was never the path. World frames now clear to
+`skyZenith` (menu / no-zenith still uses fog). Same box, GLX was never
+this washed: it draws the sky as a real fullscreen mesh into the HDR
+buffer. Real-GPU TLX (user device) already looked correct; this is the
+software-probe miss path, not a color-management change.
 
 **Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
 `bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
