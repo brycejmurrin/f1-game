@@ -86,6 +86,8 @@ const CEILING = {
   // readout is a peripheral glance during a lap rather than menu chrome a
   // stopped player reads, and at --fs-micro it rendered as a banner beside the
   // minimap. Same class of exception as #hud-speed's raw 34px.
+  // 2026-08-18: 1a3975c5 briefly added two 10px #subtitle eyebrows (3→5);
+  // eedad021 restored the color system and those decls left (back to 3).
   subFloorFontSize: 3,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
