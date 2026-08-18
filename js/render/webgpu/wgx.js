@@ -2243,7 +2243,13 @@ const WGX = (function () {
         const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
+        // Pack mat into col.x on the ribbon (Dawn zeros a 4th attr). floor(col.x)
+        // is the MAT id, fract is albedo — fs_main packedRoad. Stamping every
+        // fragment MAT 16 painted kerbs/grass/skirts as asphalt (chopped ribbon).
+        const cr = col[i * 3];
+        inter[o + 6] = (trk && mat) ? (mat[i] || 0) + Math.min(Math.max(cr, 0), 0.999) : cr;
+        inter[o + 7] = col[i * 3 + 1];
+        inter[o + 8] = col[i * 3 + 2];
         attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
           attr[i * 4 + 1] = trk[i * 3];
@@ -3031,19 +3037,17 @@ const WGX = (function () {
     function _litOpts(opts) {
       const o = opts || {};
       const extra = {};
-      if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
+      if (o.buryRibbon) extra.depthBias = [5, 10];
+      if (!extra.depthBias && !o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
         extra.depthBias = [3, 6];
       if (o.surfaceId === 16) {
-        // WGX frontFace is cw (NDC-Y vs GLX). The road strip's top faces land
-        // CCW after that flip and were culled to a pair of edge lines.
-        // Do NOT mark decal/always-pass: that stamps ribbon depth over
-        // walls and tyres drawn later (they look sunk into the tarmac).
-        // Do NOT keep the GL polygonOffset([-8, -16]) — WebGPU's slope-scale
-        // at chase-cam grazing angles pulls the ribbon through tyres and
-        // fence feet. Push the ribbon slightly AWAY instead so later car
-        // and prop draws win the contact. Floor/terrain punch a LUT hole.
-        extra.doubleSided = true;
-        extra.depthBias = [2, 4];
+        // Winding is already swapped in _expandPull; doubleSided lets the
+        // underside/skirts z-fight the top (chopped asphalt). Do NOT mark
+        // decal/always-pass and do NOT keep GL [-8,-16] — those bury tyres.
+        // No road bias: later car draws win the contact; buryRibbon terrain
+        // sits behind so LUT misses cannot punch holes in the tarmac.
+        extra.doubleSided = false;
+        extra.depthBias = null;
       }
       return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
     }

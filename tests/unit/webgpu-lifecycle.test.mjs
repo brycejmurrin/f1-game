@@ -905,7 +905,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
-  assert.match(WGX_SOURCE, /extra\.depthBias = \[2, 4\];/);
+  assert.match(WGX_SOURCE, /extra\.doubleSided = false;/);
+  assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
+  assert.match(WGX_SOURCE, /Pack mat into col\.x on the ribbon/);
+  assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
   assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
   assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);

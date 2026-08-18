@@ -647,7 +647,11 @@ fn vs_main(
   if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
-    if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
+    if (wt.w > 0.5) {
+      let packed = col.x > 1.5 && col.x < 40.0;
+      let mid = select(0.0, floor(col.x), packed);
+      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
+    }
     // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
     // fight and then buried cars, AI, and fence feet in the tarmac.
   }
@@ -675,7 +679,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
   let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
   let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
-  let vMatId = select(select(in.matTrk.x, floor(in.col.x), packedRoad), D.mat2.z, D.mat2.z > 0.5);
+  let classified = select(in.matTrk.x, floor(in.col.x), packedRoad);
+  // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
+  // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
+  let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
