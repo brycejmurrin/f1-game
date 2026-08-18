@@ -976,7 +976,7 @@ const browser = await launchChromium({
 // and opening the next one — 10 loads instead of 120.
 const OVERLAY_IDS = ["select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
   // The panels reached from SETTINGS, plus the mid-session music player. Left off
   // this list they stay open into the NEXT cell and swallow its clicks — which is
   // how fourteen consecutive cells came back "SKIPPED: page.click timeout" from

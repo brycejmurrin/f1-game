@@ -28,6 +28,7 @@ async function openImageTuner(page) {
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
+  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }
@@ -37,6 +38,7 @@ async function reopenImageTuner(page) {
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();
   await page.locator("#pmsettings").waitFor({ state: "visible" });
+  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-lighting").click();
   await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
 }

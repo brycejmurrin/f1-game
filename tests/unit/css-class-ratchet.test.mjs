@@ -82,7 +82,8 @@ export function shellNodes() {
 // on the buttons' own ids, and .cs-cam-lbl (a duplicate of an inherited value)
 // went entirely.
 // 537 after .sel-section (one element, one declaration) became #sel-track-section.
-const CLASS_CEILING = 537;
+// UI redesign: the one-off Last Race heading moved from a class to a stable ID.
+const CLASS_CEILING = 536;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under

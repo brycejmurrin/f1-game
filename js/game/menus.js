@@ -133,6 +133,19 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
 const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]];
+let trackQuery = "";
+
+function applyTrackSearch(value) {
+  trackQuery = String(value || "").trim().toLocaleLowerCase();
+  const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
+  for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
+  for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
+    head.hidden = !rows.some((row) => row.dataset.trackGroup === head.dataset.trackGroup && !row.hidden);
+  }
+  const empty = document.getElementById("sel-track-empty");
+  if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  ScrollFadeRefresh();
+}
 
 function setTrackFilter(id, focus) {
   trackFilter = id;
@@ -148,15 +161,14 @@ function trackFilterBar() {
   const bar = document.createElement("div");
   bar.id = "sel-track-filter";
   bar.className = "sel-chip-row";
-  bar.setAttribute("role", "tablist");
-  bar.setAttribute("aria-label", "Circuit filter");
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Circuit list controls");
   trackFilters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "sel-chip" + (trackFilter === id ? " active" : "");
     b.dataset.filter = id;
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", trackFilter === id ? "true" : "false");
+    b.setAttribute("aria-pressed", trackFilter === id ? "true" : "false");
     b.tabIndex = trackFilter === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
@@ -175,6 +187,15 @@ function trackFilterBar() {
     };
     bar.appendChild(b);
   });
+  const search = document.createElement("input");
+  search.id = "sel-track-search";
+  search.type = "search";
+  search.value = trackQuery;
+  search.placeholder = "Search circuit or country";
+  search.setAttribute("aria-label", "Search circuits");
+  search.autocomplete = "off";
+  search.oninput = () => applyTrackSearch(search.value);
+  bar.appendChild(search);
   return bar;
 }
 
@@ -253,12 +274,16 @@ function buildSelect() {
         group = g;
         const head = document.createElement("div");
         head.className = "track-group-head";
+        head.dataset.trackGroup = g;
         head.textContent = g;
         els.selTracks.appendChild(head);
       }
       const row = document.createElement("button");
       row.className = "track-row" + (i === G.trackIdx ? " active" : "");
       row.dataset.trackIdx = String(i);
+      row.dataset.trackGroup = g;
+      row.dataset.search = [t.name, t.country, t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+        .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-label", t.name);
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
 
@@ -303,6 +328,13 @@ function buildSelect() {
       };
       els.selTracks.appendChild(row);
     });
+    const empty = document.createElement("p");
+    empty.id = "sel-track-empty";
+    empty.className = "season-upcoming-head";
+    empty.textContent = "NO CIRCUITS MATCH";
+    empty.hidden = true;
+    els.selTracks.appendChild(empty);
+    applyTrackSearch(trackQuery);
     updateTrackPreview();
   }
 }

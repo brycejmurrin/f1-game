@@ -98,6 +98,37 @@ let csLivEditId = null;    // id of the custom livery being edited in-place (nul
 // and return early from buildSetup instead of running the option-row loop.
 const PSEUDO_CATS = ["team", "livery"];
 
+function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
+
+function activateCsCat(id, focus) {
+  if (csActiveCat !== id) {
+    csActiveCat = id;
+    if (G.soundOn) GameAudio.uiTick();
+    buildSetup();
+    const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
+  }
+  if (focus) {
+    const tab = document.getElementById(csTabId(id));
+    if (tab) {
+      tab.focus();
+      tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }
+}
+
+function csTabKey(id, e) {
+  const tabs = Array.from($("cs-tabs").querySelectorAll('[role="tab"]'));
+  const at = tabs.findIndex((tab) => tab.dataset.csCat === id);
+  let next = null;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % tabs.length;
+  else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (at - 1 + tabs.length) % tabs.length;
+  else if (e.key === "Home") next = 0;
+  else if (e.key === "End") next = tabs.length - 1;
+  if (next == null || !tabs[next]) return;
+  e.preventDefault(); e.stopPropagation();
+  activateCsCat(tabs[next].dataset.csCat, true);
+}
+
 // One tab button, whatever kind. The three kinds (parts / TEAM & DRIVER /
 // LIVERY) were drifting into three near-identical copies of this block, so the
 // activation behaviour now lives in one place. `flagged` paints the "upgraded"
@@ -106,16 +137,16 @@ function pseudoTab(id, label, sub, flagged) {
   const tab = document.createElement("button");
   tab.className = "cs-tab" + (csActiveCat === id ? " active" : "") + (flagged ? " upgraded" : "");
   tab.dataset.csCat = id;
+  tab.id = csTabId(id);
+  tab.setAttribute("role", "tab");
+  tab.setAttribute("aria-controls", "cs-options");
+  tab.setAttribute("aria-selected", csActiveCat === id ? "true" : "false");
+  tab.tabIndex = csActiveCat === id ? 0 : -1;
   const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = label;
   const cur = document.createElement("span"); cur.className = "cs-tab-cur"; cur.textContent = sub || "";
   tab.append(lbl, cur);
-  tab.onclick = () => {
-    if (csActiveCat === id) return;
-    csActiveCat = id;
-    if (G.soundOn) GameAudio.uiTick();
-    buildSetup();
-    const t = $("cs-options"); if (t) t.scrollTop = 0;
-  };
+  tab.onclick = () => activateCsCat(id, false);
+  tab.onkeydown = (e) => csTabKey(id, e);
   return tab;
 }
 
@@ -134,6 +165,7 @@ function csLabel(text) {
 // controls write straight to the store on click, exactly as the select screen
 // did — picking here IS picking your entry for the next race.
 function buildTeamOptions(optsEl, team) {
+  const careerLocked = typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
   optsEl.appendChild(csLabel("TEAM"));
 
   // The same sheet the select screen used to open (#teampicker), reached from
@@ -142,6 +174,8 @@ function buildTeamOptions(optsEl, team) {
   card.className = "team-card";
   card.id = "cs-team-card";
   card.setAttribute("aria-haspopup", "dialog");
+  card.disabled = !!careerLocked;
+  if (careerLocked) card.title = "Your team is fixed by your active career contract";
   const body = document.createElement("span"); body.className = "tm-body";
   const name = document.createElement("span"); name.className = "tm-name"; name.textContent = team.name;
   const sub = document.createElement("span"); sub.className = "tm-sub";
@@ -167,8 +201,9 @@ function buildTeamOptions(optsEl, team) {
     const taken = (G.peerSeats ? G.peerSeats() : [])
       .some((s) => s.team === team.id && s.driver === i);
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
-    b.disabled = taken;
+    b.disabled = taken || careerLocked;
     if (taken) b.title = "Taken by the other player";
+    else if (careerLocked) b.title = "Your seat is fixed by your active career contract";
     b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.dataset.csDriver = String(i);
     b.textContent = "#" + d.num + " " + d.name + (taken ? "  · TAKEN" : "");
@@ -268,6 +303,8 @@ function buildSetup() {
   // ---- Category tabs (one row, horizontally scrollable) ----
   const tabs = $("cs-tabs");
   tabs.textContent = "";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Garage categories");
   // TEAM leads: it gates which parts are even offered (supplier exclusives, see
   // Parts.isOptionAvailable) and which liveries exist, so it is genuinely
   // upstream of everything below it.
@@ -300,6 +337,9 @@ function buildSetup() {
   // ---- Options list for the active category ----
   const optsEl = $("cs-options");
   optsEl.textContent = "";
+  optsEl.setAttribute("role", "tabpanel");
+  optsEl.setAttribute("aria-labelledby", csTabId(csActiveCat));
+  optsEl.tabIndex = 0;
   // LIVERY adds this grid; TEAM and the part cats must not inherit it.
   // Measured 2026-08-18 Playwright MCP: switching LIVERY → TEAM left
   // `cs-liv-grid` on #cs-options, so #cs-team-card painted 91×64 with

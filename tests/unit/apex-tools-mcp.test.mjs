@@ -64,12 +64,13 @@ test(".mcp.json registers apex-tools and playwright in the five-server catalog",
     "probe",
     "tinyfish",
   ]);
-  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
+  assert.equal(cfg.mcpServers.playwright.command, "bash");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
-  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
+  assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, catalog.stdio.args);
+  assert.equal(catalog.stdio.command, "bash");
   assert.equal(catalog.http.bind, "127.0.0.1");
   assert.equal(catalog.http.port, 3713);
   assert.deepEqual(catalog.http.args, ["serve-http"]);

@@ -784,9 +784,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   padding-bottom: calc(var(--gap) * 0.6);
   background: var(--bg);
 }
-/* Three labels fit without truncation once the sheet has this much LOCAL room.
-   Below it the 2-col wrap keeps CONTROLS and DISPLAY legible. */
-@container sheet (min-width: 420px) and (max-width: 519px) {
+/* Three labels (Controls / Display / More) fit without truncation once the
+   sheet has this much LOCAL room. Below it the 2-col wrap keeps CONTROLS and
+   DISPLAY legible. Do not paint a 4th track until a Performance tab exists. */
+@container sheet (min-width: 380px) and (max-width: 519px) {
   #pm-category-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 #pm-category-tabs > button {

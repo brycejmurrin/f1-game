@@ -201,6 +201,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       });
       await page.locator("#pm-settings").click();
       await page.locator("#pmsettings").waitFor({ state: "visible" });
+      await page.locator("#pm-tab-more").click();
       await page.locator("#pm-advanced").click();
       await page.locator("#advanced").waitFor({ state: "visible" });
       await shot(page, `${orient}-14-advanced-steering`);
@@ -319,6 +320,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       });
       await page.locator("#pm-settings").click();
       await page.locator("#pmsettings").waitFor({ state: "visible" });
+      await page.locator("#pm-tab-more").click();
       await page.locator("#pm-advanced").click();
       await page.locator("#advanced").waitFor({ state: "visible" });
       await page.locator("#adv-more").click();

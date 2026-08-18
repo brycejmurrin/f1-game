@@ -663,6 +663,12 @@ body.hud-hidden #hud-restore { display: block; }
    needs no z-index of its own (`:modal` outranks every z value — see
    js/game/uilayers.js / topmodal.js for the ladder). */
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
+#vsfriend #vs-pick > .bigbtn {
+  /* .bigbtn's menu-sized 78vw width is resolved against the viewport and then
+     zoomed again inside a sheet. At 200% it painted wider than #vs-body. These
+     are sheet actions, so size them from their actual container. */
+  width: 100%; max-width: none; margin: 0; box-sizing: border-box;
+}
 #vsfriend .vs-hint {
   margin: 4px 0 0;
   font-size: var(--fs-micro);
@@ -852,6 +858,32 @@ body.hud-hidden #hud-restore { display: block; }
   text-transform: uppercase;
 }
 #vsfriend #vs-code-entry { margin-top: calc(var(--gap) * 0.5); }
+
+/* Compact multiplayer is an information-dense workflow, not a splash screen.
+   Give the body the height previously spent on a second action bar and keep the
+   escape action in the title band. This matters most at UI SIZE 200%, where a
+   landscape phone has only ~170 local vertical pixels. */
+#vsfriend .sheet[data-density="compact"] { position: relative; }
+#vsfriend .sheet[data-density="compact"] > #vs-head {
+  padding-right: calc(var(--pad) + var(--tap));
+}
+#vsfriend .sheet[data-density="compact"] > .sheet-foot {
+  position: absolute; top: calc(var(--pad) * 0.18); right: var(--pad); z-index: 3;
+  display: block; padding: 0; background: none;
+}
+#vsfriend .sheet[data-density="compact"] > .sheet-foot::before { display: none; }
+#vsfriend .sheet[data-density="compact"] #vs-close {
+  min-width: var(--tap); min-height: var(--tap-min); padding: 0 var(--gap);
+  font-size: var(--fs-micro); line-height: 1;
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick > .bigbtn {
+  min-height: var(--tap-min); padding: var(--gap); font-size: var(--fs-2);
+}
+#vsfriend .sheet[data-density="compact"] #vs-pick > .vs-hint,
+#vsfriend .sheet[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
 
 /* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
    ~390px to spend, and a preview that needs scrolling is a preview you cannot
