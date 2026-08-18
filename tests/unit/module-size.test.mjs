@@ -326,6 +326,7 @@ const CEILINGS = {
   // 8605 -> 8599: extract street OT/defend/tow/queue-brake/sep/wall into AiDrive.
   // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
   // 8601 -> 8600: factory aero/ERS on AI + houseStyle call sites (net −1).
+  // Union with snapGameCam soft-present invalidate measured 8600.
   "js/game.js": 8600,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
