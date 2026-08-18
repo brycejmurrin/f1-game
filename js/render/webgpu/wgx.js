@@ -3081,6 +3081,17 @@ const WGX = (function () {
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       if (!mesh.chunks) {
+        // hasTrk roads are createMesh pieces (chunks=null). Drawing only
+        // mesh.vbuf here left 4095 verts — the rest of the ribbon vanished
+        // and terrain showed through (chopped asphalt).
+        if (mesh.pieces) {
+          for (let i = 0; i < mesh.pieces.length; i++) {
+            const p = mesh.pieces[i];
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+            _drawGeom(litPass, p);
+          }
+          return;
+        }
         _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
         _drawGeom(litPass, mesh);
         return;
@@ -3818,6 +3829,14 @@ const WGX = (function () {
       if (_shadowSetModel(model) < 0) return;
       shadowPass.setVertexBuffer(1, identInstanceBuf);
       if (!mesh.chunks) {
+        if (mesh.pieces) {
+          for (let i = 0; i < mesh.pieces.length; i++) {
+            const p = mesh.pieces[i];
+            shadowPass.setVertexBuffer(0, p.vbuf);
+            _drawGeom(shadowPass, p);
+          }
+          return;
+        }
         shadowPass.setVertexBuffer(0, mesh.vbuf);
         _drawGeom(shadowPass, mesh);
         return;
