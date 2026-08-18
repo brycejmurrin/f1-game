@@ -192,11 +192,12 @@ const TLX = (function () {
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
-      // Software WebGPU (SwiftShader / Lavapipe) never composites a visible
-      // swapchain and three's own mappedAtCreation uploads die there. AUTO
-      // therefore pins WebGL2 — same fields WGX reads (non-enumerable
-      // GPUAdapterInfo). THREE PATH: WEBGPU (`tlxForceGL=0`) still allows
-      // the black path so SETTINGS can demonstrate it.
+      // Software WebGPU never composites a visible swapchain — AUTO keeps
+      // three's WebGPU backend and 2D-blits the LDR target (same as WGX).
+      // mappedAtCreation uploads are shimmed to queue.writeBuffer after init
+      // (Dawn's mappable pool dies on the first large mesh; PlayCanvas #6676).
+      // Phones / WebKit still pin WebGL2: Safari exposes navigator.gpu and
+      // then paints black. `apex26.tlxForceGL` "1"/"0" overrides.
       let _softAdapter = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
@@ -217,7 +218,7 @@ const TLX = (function () {
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO stays phone/WebKit only */ }
       const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false
-        : !!(isMobile || isWebKit || _softAdapter);
+        : !!(isMobile || isWebKit);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
       // NATIVE ("0") keeps three's swapchain so SETTINGS can show why software
@@ -300,13 +301,64 @@ const TLX = (function () {
         // the jetsam budget that made GLX write the same line. Desktop keeps it
         // for the post-less fallback path (a broken post factory renders the
         // world straight to the canvas, where the samples do work).
-        antialias: !isMobile,
+        // Software WebGPU: MSAA-4 resolve has come back blank (WGX forces 1).
+        antialias: forceWebGL ? !isMobile : (!isMobile && !_softAdapter),
         forceWebGL,
       });
       renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
       await renderer.init();
+      // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
+      // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
+      // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
+      // upload exhausts it and EVERY later createBuffer (even 24 B) throws
+      // (mcp-probe 2026-08-18; same class as WGX _mkBuffer / PlayCanvas #6676).
+      // Rewrite those creates to unmapped + queue.writeBuffer. Readback
+      // (mapAsync) is unchanged — those buffers are not mappedAtCreation.
+      if (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) {
+        const _dev = renderer.backend.device;
+        if (!_dev.__apexWriteBuf && typeof _dev.createBuffer === "function") {
+          const _origCreate = _dev.createBuffer.bind(_dev);
+          const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
+            ? GPUBufferUsage.COPY_DST : 0x0008;
+          _dev.createBuffer = function (desc) {
+            if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
+            const size = desc.size | 0;
+            const buf = _origCreate({
+              size,
+              usage: (desc.usage | COPY_DST),
+              label: desc.label,
+            });
+            let staging = new ArrayBuffer(size);
+            const parts = [];
+            buf.getMappedRange = function (offset, mapSize) {
+              const o = offset | 0;
+              const n = mapSize == null ? (size - o) : (mapSize | 0);
+              if (o === 0 && n === size) return staging;
+              const part = new ArrayBuffer(n);
+              parts.push({ o, part });
+              return part;
+            };
+            buf.unmap = function () {
+              try {
+                for (let i = 0; i < parts.length; i++) {
+                  const p = parts[i];
+                  new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+                }
+                if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
+              } catch (_) { /* one failed upload must not take down present() */ }
+              staging = null;
+              parts.length = 0;
+            };
+            return buf;
+          };
+          _dev.__apexWriteBuf = true;
+        }
+        if (_softAdapter) {
+          try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
+        }
+      }
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
       // or call getContext("2d"|"webgl2") on three's node — init() has not
       // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads

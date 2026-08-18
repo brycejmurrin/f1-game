@@ -916,29 +916,20 @@ test("desktop harness still takes the full WGX stack (GLX-parity)", async () => 
   assert.equal(gfx.lampShadowState().enabled, true);
 });
 
-test("software / empty-info adapter refuses create (white-canvas gate)", async () => {
+test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () => {
   const h = makeGpuHarness({ softAdapter: true });
   const gfx = await h.create();
-  assert.equal(gfx, null);
-  const fail = h.WGX.lastFailure();
-  assert.ok(fail && /software WebGPU adapter/i.test(fail.reason), fail && fail.reason);
-});
-
-test("software adapter allowed via apex26.gfxWgxAllowSoftware (MSAA 1)", async () => {
-  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
-  const h = makeGpuHarness({ softAdapter: true, storage: stored });
-  const gfx = await h.create();
-  assert.ok(gfx, "escape hatch must still boot WGX");
+  assert.ok(gfx, "SETTINGS ▸ WEBGPU must stay on WGX on software adapters");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+  assert.equal(h.WGX.lastFailure(), null);
 });
 
 test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
   // Chrome Lavapipe headed: adapter.info stringifies as "{}" but .architecture is
   // "swiftshader". Missing this misclassified hardware and skipped soft-present.
-  const stored = new Map([["apex26.gfxWgxAllowSoftware", "1"]]);
-  const h = makeGpuHarness({ softAdapterNonEnum: true, storage: stored });
+  const h = makeGpuHarness({ softAdapterNonEnum: true });
   const gfx = await h.create();
-  assert.ok(gfx, "non-enumerable swiftshader arch must still boot with allowSoftware");
+  assert.ok(gfx, "non-enumerable swiftshader arch must still boot WGX");
   assert.equal(gfx.msaa(), 1);
   assert.match(WGX_SOURCE, /infoBlob = \[dev, ven, arch, desc\]/,
     "adapter sniff must read GPUAdapterInfo fields directly, not JSON.stringify only");

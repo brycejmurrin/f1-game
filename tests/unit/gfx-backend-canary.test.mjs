@@ -54,7 +54,7 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
 test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false\s*: !!\(isMobile \|\| isWebKit \|\| _softAdapter\)/);
+  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false\s*: !!\(isMobile \|\| isWebKit\)/);
   assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
 });
@@ -617,7 +617,10 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /_softBlit = !forceWebGL && _capPref !== "0"/);
   assert.match(tlx, /never getCurrentTexture/);
   assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
-  assert.match(tlx, /await renderer\.init\(\);[\s\S]{0,900}game-soft/);
+  assert.match(tlx, /await renderer\.init\(\);/);
+  assert.match(tlx, /game-soft/);
+  assert.match(tlx, /__apexWriteBuf/);
+  assert.match(tlx, /queue\.writeBuffer\(buf, 0, staging\)/);
   assert.match(tlx, /function _instColorAttr/);
   assert.match(tlx, /isInstancedBufferAttribute/);
   assert.match(tlx, /do NOT[\s\S]{0,40}also set imesh\.instanceColor/);
@@ -753,8 +756,9 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // Not cosmetic either: three's antialias becomes samples>0 on the DEFAULT
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
-  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's");
-  assert.match(tlx, /antialias:\s*!isMobile,\s*forceWebGL/, "renderer AA must track the context's");
+  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
+  assert.match(tlx, /antialias:\s*forceWebGL \? !isMobile : \(!isMobile && !_softAdapter\)/,
+    "WebGPU software path must not ask for canvas MSAA 4");
 });
 
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {

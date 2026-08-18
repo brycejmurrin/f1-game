@@ -106,7 +106,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO pins WebGL2 on phones, Safari, and software GPUs (SwiftShader/Lavapipe — three's WebGPU still dies on large `mappedAtCreation` uploads). THREE PATH: WEBGL2 is the CI pin. THREE PATH: WEBGPU + SCREENSHOTS AUTO/2D BLIT copies the LDR target onto `#game` via `readRenderTargetPixelsAsync` (`copyTextureToBuffer` + `mapAsync`; never `getCurrentTexture()`). SCREENSHOTS: NATIVE leaves the swapchain black. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO uses three's WebGPU on desktop (phones/Safari stay WebGL2). Software GPUs 2D-blit the LDR target (`readRenderTargetPixelsAsync`). `mappedAtCreation` uploads are rewritten to `queue.writeBuffer` so SwiftShader does not exhaust Dawn's mappable pool. THREE PATH: WEBGL2 is the CI pin. SCREENSHOTS: NATIVE leaves the swapchain black. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
@@ -128,6 +128,8 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   and a canvas is bound to one context type for life (that sniff was the
   `configure` null throw on SwiftShader). Instanced props use a geometry
   `InstancedBufferAttribute` named `color`, not `imesh.instanceColor`.
+  Software adapters stay on WebGPU (soft-present + writeBuffer shim); they
+  must not silently bind GLX.
 
 ## Related
 

@@ -406,12 +406,10 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
-      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
-      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
-      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
-      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
-      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
-      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Software / headless adapters: the native swapchain never composites
+      // (black #game) but the 2D soft-present blit does. SETTINGS ▸ WEBGPU
+      // must stay on WGX here — refusing used to silently bind GLX.
+      // `apex26.gfxWgxAllowSoftware` is a legacy no-op (tools still set it).
       // Sync signals only — never await requestAdapterInfo() (has hung create()
       // with no timeout on Dawn/SwiftShader).
       let _softAdapterLocal = false;
@@ -433,13 +431,8 @@ const WGX = (function () {
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
-      let _allowSoft = false;
-      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
-      if (_softAdapter && !_allowSoft) {
-        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
-      }
-      // sampleCount 4 resolveTarget frames have also come back blank on
-      // software when the escape hatch is set — force MSAA 1.
+      // sampleCount 4 resolveTarget frames come back blank on software —
+      // force MSAA 1. Soft-present (not a GLX fallback) is the visible path.
       if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already

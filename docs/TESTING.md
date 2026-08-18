@@ -1097,8 +1097,10 @@ visible `#game` via a 2D blit (auto on software adapters +
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
-THREE PATH: WEBGPU can 2D-blit the LDR target (`readRenderTargetPixelsAsync`)
-but large `mappedAtCreation` uploads can still refuse on SwiftShader.
+THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
+`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
+does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
+those backends; they must not silently bind GLX.
 
 **TLX WebGPU `configure` null was a self-poison (2026-08-18).**
 `detectSoftwareGL()` called `#game.getContext("webgl2")` after
